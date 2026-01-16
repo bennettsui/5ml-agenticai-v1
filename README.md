@@ -53,3 +53,7 @@ TBD
 ## Contact
 
 5 Miles Lab - Building the future of agentic AI
+
+## Status
+
+Deployed on Fly.io - Testing GitHub Actions with updated token.
