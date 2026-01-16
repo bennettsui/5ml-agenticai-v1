@@ -1,4 +1,4 @@
-app = "5ml-core-hk"  # 這個要跟你在 Fly 建 app 時的名字一致
+app = "5ml-agenticai-v1"  # 這個要跟你在 Fly 建 app 時的名字一致
 
 primary_region = "hkg"
 
