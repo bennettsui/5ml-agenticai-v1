@@ -1,22 +1,30 @@
-app = "5ml-agenticai-v1"  # 這個要跟你在 Fly 建 app 時的名字一致
-
-primary_region = "hkg"
+# Fly.io Configuration
+app = "5ml-agenticai-v1"
+primary_region = "iad"
 
 [build]
-  # 用 Dockerfile 的話可以寫 builder，暫時讓 Fly 自己偵測 Node app
+builder = "heroku"
 
 [env]
-  PORT = "8080"
+PORT = "8080"
 
 [[services]]
-  internal_port = 8080
-  processes = ["app"]
-  protocol = "tcp"
+internal_port = 8080
+protocol = "tcp"
 
-  [[services.ports]]
-    handlers = ["http"]
-    port = 80
+[[services.ports]]
+port = 80
+handlers = ["http"]
 
-  [[services.ports]]
-    handlers = ["tls", "http"]
-    port = 443
+[[services.ports]]
+port = 443
+handlers = ["tls", "http"]
+
+[checks]
+[checks.http_check]
+grace_period = "5s"
+interval = 10000
+method = "get"
+path = "/health"
+protocol = "http"
+timeout = 5000
