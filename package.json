@@ -1,13 +1,17 @@
 {
-  "name": "5ml-core",
+  "name": "5ml-agenticai-v1",
   "version": "1.0.0",
+  "description": "5ML Agentic AI Platform v1",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
-    "dotenv": "^16.0.0",
-    "express": "^4.19.0"
+    "express": "^4.19.0",
+    "dotenv": "^16.0.0"
   }
 }
