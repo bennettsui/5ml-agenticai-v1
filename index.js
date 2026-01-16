@@ -100,6 +100,76 @@ ${brief}
 });
 
 // ==========================================
+// GitHub Webhook Endpoint
+// ==========================================
+app.post('/webhook/github', async (req, res) => {
+  try {
+    const { verifyGitHubSignature } = require('./webhook');
+
+    // 驗證 GitHub webhook
+    if (!verifyGitHubSignature(req, process.env.GITHUB_WEBHOOK_SECRET || 'test')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const event = req.headers['x-github-event'];
+
+    // 只處理 Issue 事件
+    if (event !== 'issues') {
+      return res.status(200).json({ message: 'Ignored event type' });
+    }
+
+    const { action, issue, repository } = req.body;
+
+    // 只處理 opened 或 edited 事件
+    if (action !== 'opened' && action !== 'edited') {
+      return res.status(200).json({ message: 'Action not processed' });
+    }
+
+    console.log(`📌 Webhook: Issue #${issue.number} from ${repository.name}`);
+
+    // 從 issue title 和 body 提取信息
+    const client_name = repository.name;
+    const brief = issue.body || issue.title;
+
+    // 調用 Claude 分析
+    const response = await client.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 1000,
+      messages: [
+        {
+          role: 'user',
+          content: `分析下列 GitHub Issue 並提供建議。
+
+**Repository**: ${client_name}
+**Issue Title**: ${issue.title}
+**Issue Body**:
+${brief}
+
+請用 Markdown 格式返回分析結果。`,
+        },
+      ],
+    });
+
+    const analysis = response.content[0].type === 'text'
+      ? response.content[0].text
+      : 'Analysis failed';
+
+    console.log('✅ Webhook analysis complete');
+
+    // 返回成功（GitHub 只需要 200 OK）
+    res.status(200).json({
+      success: true,
+      issue_number: issue.number,
+      analysis_preview: analysis.substring(0, 100) + '...',
+    });
+
+  } catch (error) {
+    console.error('❌ Webhook error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
@@ -111,6 +181,7 @@ app.listen(port, () => {
 ║  📍 Port: ${port}                           ║
 ║  🏥 Health: GET /health               ║
 ║  📊 Analyze: POST /analyze             ║
+║  🪝 Webhook: POST /webhook/github     ║
 ║  🌍 Region: IAD (Ashburn, Virginia)   ║
 ╚════════════════════════════════════════╝
   `);
