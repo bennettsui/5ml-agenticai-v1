@@ -1,5 +1,5 @@
 app = "5ml-agenticai-v1"
-primary_region = "hkg"
+primary_region = "iad"
 
 [build]
 builder = "heroku"
