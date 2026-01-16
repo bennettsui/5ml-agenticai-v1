@@ -11,6 +11,8 @@ RUN npm ci
 # Copy application code
 COPY index.js .
 COPY webhook.js .
+COPY db.js .
+COPY agents/ ./agents/
 
 # Expose port
 EXPOSE 8080

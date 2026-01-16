@@ -170,6 +170,106 @@ ${brief}
 });
 
 // ==========================================
+// Agent Endpoints
+// ==========================================
+
+// Creative Agent
+app.post('/agents/creative', async (req, res) => {
+  try {
+    const { client_name, brief } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { analyzeCreative } = require('./agents/creativeAgent');
+    const analysis = await analyzeCreative(client_name, brief);
+
+    res.json({
+      success: true,
+      agent: 'creative',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Creative agent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// SEO Agent
+app.post('/agents/seo', async (req, res) => {
+  try {
+    const { client_name, brief } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { analyzeSEO } = require('./agents/seoAgent');
+    const analysis = await analyzeSEO(client_name, brief);
+
+    res.json({
+      success: true,
+      agent: 'seo',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('SEO agent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Social Media Agent
+app.post('/agents/social', async (req, res) => {
+  try {
+    const { client_name, brief } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { analyzeSocial } = require('./agents/socialAgent');
+    const analysis = await analyzeSocial(client_name, brief);
+
+    res.json({
+      success: true,
+      agent: 'social',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Social agent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all available agents
+app.get('/agents', (req, res) => {
+  res.json({
+    available_agents: [
+      {
+        name: 'creative',
+        endpoint: 'POST /agents/creative',
+        description: 'Creative strategy analysis'
+      },
+      {
+        name: 'seo',
+        endpoint: 'POST /agents/seo',
+        description: 'SEO strategy analysis'
+      },
+      {
+        name: 'social',
+        endpoint: 'POST /agents/social',
+        description: 'Social media strategy analysis'
+      }
+    ],
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
@@ -182,6 +282,7 @@ app.listen(port, () => {
 ║  🏥 Health: GET /health               ║
 ║  📊 Analyze: POST /analyze             ║
 ║  🪝 Webhook: POST /webhook/github     ║
+║  🤖 Agents: GET /agents               ║
 ║  🌍 Region: IAD (Ashburn, Virginia)   ║
 ╚════════════════════════════════════════╝
   `);
