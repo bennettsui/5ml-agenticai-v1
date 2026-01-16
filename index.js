@@ -9,6 +9,11 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects } = require('./db');
+
+// 啟動時初始化數據庫
+initDatabase();
+
 // ==========================================
 // Health Check Endpoint
 // ==========================================
@@ -83,9 +88,14 @@ ${brief}
       analysis = { raw: content.text };
     }
 
+    // 保存到數據庫
+    const project_id = await saveProject(client_name, brief, industry);
+    await saveAnalysis(project_id, 'general', analysis);
+
     // Return result
     res.json({
       success: true,
+      project_id,
       client_name,
       analysis,
       timestamp: new Date().toISOString(),
@@ -270,6 +280,43 @@ app.get('/agents', (req, res) => {
 });
 
 // ==========================================
+// Database Query Endpoints
+// ==========================================
+
+// Get all projects
+app.get('/projects', async (req, res) => {
+  try {
+    const limit = req.query.limit || 10;
+    const projects = await getAllProjects(limit);
+    res.json({
+      success: true,
+      count: projects.length,
+      projects,
+    });
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get project details + analyses
+app.get('/projects/:project_id', async (req, res) => {
+  try {
+    const { project_id } = req.params;
+    const analyses = await getProjectAnalyses(project_id);
+    res.json({
+      success: true,
+      project_id,
+      analysis_count: analyses.length,
+      analyses,
+    });
+  } catch (error) {
+    console.error('Error fetching project:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
@@ -283,6 +330,7 @@ app.listen(port, () => {
 ║  📊 Analyze: POST /analyze             ║
 ║  🪝 Webhook: POST /webhook/github     ║
 ║  🤖 Agents: GET /agents               ║
+║  💾 Projects: GET /projects           ║
 ║  🌍 Region: IAD (Ashburn, Virginia)   ║
 ╚════════════════════════════════════════╝
   `);
