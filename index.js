@@ -41,7 +41,7 @@ app.post('/analyze', async (req, res) => {
 
     // Call Claude
     const response = await client.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-3-haiku-20240307',
       max_tokens: 1000,
       messages: [
         {
