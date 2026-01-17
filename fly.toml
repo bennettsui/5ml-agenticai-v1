@@ -2,7 +2,7 @@ app = "5ml-agenticai-v1"
 primary_region = "iad"
 
 [build]
-builder = "heroku"
+dockerfile = "./Dockerfile"
 
 [env]
 PORT = "8080"
