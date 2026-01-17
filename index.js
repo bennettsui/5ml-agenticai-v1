@@ -279,24 +279,53 @@ app.post('/agents/social', async (req, res) => {
   }
 });
 
+// Research Agent (Perplexity)
+app.post('/agents/research', async (req, res) => {
+  try {
+    const { client_name, brief } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { analyzeResearch } = require('./agents/researchAgent');
+    const analysis = await analyzeResearch(client_name, brief);
+
+    res.json({
+      success: true,
+      agent: 'research',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Research agent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all available agents
 app.get('/agents', (req, res) => {
   res.json({
     available_agents: [
       {
         name: 'creative',
-        endpoint: 'POST /agents/creative',
+        endpoint: '/agents/creative',
         description: 'Creative strategy analysis'
       },
       {
         name: 'seo',
-        endpoint: 'POST /agents/seo',
+        endpoint: '/agents/seo',
         description: 'SEO strategy analysis'
       },
       {
         name: 'social',
-        endpoint: 'POST /agents/social',
+        endpoint: '/agents/social',
         description: 'Social media strategy analysis'
+      },
+      {
+        name: 'research',
+        endpoint: '/agents/research',
+        description: '🔍 Web research with Perplexity AI'
       }
     ],
     timestamp: new Date().toISOString(),
