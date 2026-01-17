@@ -221,6 +221,11 @@
     <header>
       <h1>🚀 5ML Agentic AI Platform</h1>
       <p class="subtitle">Claude-powered multi-agent analysis system</p>
+      <p class="subtitle" style="margin-top: 10px;">
+        <a href="/api-docs" target="_blank" style="color: #667eea; text-decoration: none; font-weight: 600;">
+          📚 API Documentation
+        </a>
+      </p>
     </header>
 
     <div class="tabs">
@@ -269,6 +274,17 @@
         <div class="form-group">
           <label for="agentBrief">Brief</label>
           <textarea id="agentBrief" placeholder="Describe the project requirements..." required></textarea>
+        </div>
+        <!-- Model Selection (only for Research Agent) -->
+        <div class="form-group" id="modelSelectionGroup" style="display: none;">
+          <label for="modelSelect">Model</label>
+          <select id="modelSelect">
+            <option value="perplexity">Perplexity Sonar Pro (Web Research)</option>
+            <option value="claude">Claude 3 Haiku (Knowledge-based)</option>
+          </select>
+          <small style="color: #666; display: block; margin-top: 5px;">
+            💡 Perplexity provides real-time web data. Claude uses its training knowledge.
+          </small>
         </div>
         <button class="btn" onclick="runAgent()">Run Analysis</button>
         <div class="loading" id="agentLoading">Analyzing... ⏳</div>
@@ -382,14 +398,24 @@
 
     // Global variable to track selected agent
     let selectedAgentEndpoint = '';
+    let selectedAgentName = '';
 
     // Select agent
     function selectAgent(name, endpoint) {
       selectedAgentEndpoint = endpoint;
+      selectedAgentName = name;
       document.getElementById('selectedAgentName').textContent = `${name.toUpperCase()} Agent`;
       document.getElementById('agentForm').style.display = 'block';
       document.getElementById('agentResult').classList.remove('show');
       document.getElementById('agentError').classList.remove('show');
+
+      // Show model selection only for Research Agent
+      const modelSelectionGroup = document.getElementById('modelSelectionGroup');
+      if (name === 'research') {
+        modelSelectionGroup.style.display = 'block';
+      } else {
+        modelSelectionGroup.style.display = 'none';
+      }
 
       // Scroll to form
       document.getElementById('agentForm').scrollIntoView({ behavior: 'smooth' });
@@ -418,11 +444,17 @@
     }
 
     function getModelInfo(agent, analysis) {
+      // Check if model info is in _meta
+      if (analysis._meta && analysis._meta.model) {
+        return analysis._meta.model;
+      }
+
+      // Fallback to default model names
       const models = {
         'creative': 'Claude 3 Haiku',
         'seo': 'Claude 3 Haiku' + (analysis._enhanced_with_web_research ? ' + Perplexity Sonar Pro (Web Enhanced)' : ''),
         'social': 'Claude 3 Haiku' + (analysis._enhanced_with_web_research ? ' + Perplexity Sonar Pro (Web Enhanced)' : ''),
-        'research': 'Perplexity Sonar Pro (Advanced Search)'
+        'research': 'Perplexity Sonar Pro or Claude 3 Haiku'
       };
       return models[agent] || 'AI Model';
     }
@@ -493,10 +525,19 @@
       agentResult.classList.remove('show');
 
       try {
+        // Build request body
+        const requestBody = { client_name: clientName, brief };
+
+        // Add model selection for Research Agent
+        if (selectedAgentName === 'research') {
+          const modelSelect = document.getElementById('modelSelect').value;
+          requestBody.use_perplexity = (modelSelect === 'perplexity');
+        }
+
         const response = await fetch(selectedAgentEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ client_name: clientName, brief }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) throw new Error('Agent analysis failed');

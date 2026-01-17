@@ -1,10 +1,17 @@
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
+const { specs, swaggerUi } = require('./swagger');
 require('dotenv').config();
 
 const app = express();
 app.use(express.json());
 app.use(express.static('public'));
+
+// Swagger API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: '5ML Agentic AI API Documentation',
+}));
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -30,6 +37,35 @@ app.get('/', (req, res) => {
 // ==========================================
 // Health Check Endpoint
 // ==========================================
+
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check endpoint
+ *     tags: [Health]
+ *     description: Returns the system health status and basic information
+ *     responses:
+ *       200:
+ *         description: System is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: ok
+ *                 service:
+ *                   type: string
+ *                   example: 5ML Agentic AI Platform v1
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                 region:
+ *                   type: string
+ *                   example: iad
+ */
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -42,6 +78,40 @@ app.get('/health', (req, res) => {
 // ==========================================
 // Main Analysis Endpoint
 // ==========================================
+
+/**
+ * @swagger
+ * /analyze:
+ *   post:
+ *     summary: General AI analysis
+ *     tags: [Analysis]
+ *     description: Performs comprehensive AI analysis using Claude for marketing projects
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AnalysisRequest'
+ *     responses:
+ *       200:
+ *         description: Analysis completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AnalysisResponse'
+ *       400:
+ *         description: Missing required fields
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 app.post('/analyze', async (req, res) => {
   try {
     console.log('📋 Received analysis request:', req.body);
@@ -207,7 +277,35 @@ ${brief}
 // Agent Endpoints
 // ==========================================
 
-// Creative Agent
+/**
+ * @swagger
+ * /agents/creative:
+ *   post:
+ *     summary: Creative strategy analysis
+ *     tags: [Agents]
+ *     description: Analyzes creative strategy using Claude AI - provides creative concepts, visual direction, tone of voice
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AgentRequest'
+ *     responses:
+ *       200:
+ *         description: Creative analysis completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AgentResponse'
+ *       400:
+ *         description: Missing required fields
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ */
 app.post('/agents/creative', async (req, res) => {
   try {
     const { client_name, brief } = req.body;
@@ -231,7 +329,31 @@ app.post('/agents/creative', async (req, res) => {
   }
 });
 
-// SEO Agent
+/**
+ * @swagger
+ * /agents/seo:
+ *   post:
+ *     summary: SEO strategy analysis
+ *     tags: [Agents]
+ *     description: Analyzes SEO strategy using Claude AI + Perplexity (when available) - provides keyword targets, content strategy, technical SEO recommendations with current trends
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AgentRequest'
+ *     responses:
+ *       200:
+ *         description: SEO analysis completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AgentResponse'
+ *       400:
+ *         description: Missing required fields
+ *       500:
+ *         description: Server error
+ */
 app.post('/agents/seo', async (req, res) => {
   try {
     const { client_name, brief } = req.body;
@@ -255,7 +377,31 @@ app.post('/agents/seo', async (req, res) => {
   }
 });
 
-// Social Media Agent
+/**
+ * @swagger
+ * /agents/social:
+ *   post:
+ *     summary: Social media strategy analysis
+ *     tags: [Agents]
+ *     description: Analyzes social media strategy using Claude AI + Perplexity (when available) - provides platform recommendations, content pillars, engagement strategies with trending formats
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AgentRequest'
+ *     responses:
+ *       200:
+ *         description: Social media analysis completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AgentResponse'
+ *       400:
+ *         description: Missing required fields
+ *       500:
+ *         description: Server error
+ */
 app.post('/agents/social', async (req, res) => {
   try {
     const { client_name, brief } = req.body;
@@ -279,16 +425,42 @@ app.post('/agents/social', async (req, res) => {
   }
 });
 
-// Research Agent (Perplexity)
+/**
+ * @swagger
+ * /agents/research:
+ *   post:
+ *     summary: Web research with Perplexity AI
+ *     tags: [Agents]
+ *     description: Performs comprehensive web-based research using Perplexity Sonar Pro - provides market insights, competitor analysis, current trends, opportunities and risks with real-time web data
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AgentRequest'
+ *     responses:
+ *       200:
+ *         description: Research analysis completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AgentResponse'
+ *       400:
+ *         description: Missing required fields or PERPLEXITY_API_KEY not configured
+ *       500:
+ *         description: Server error
+ */
 app.post('/agents/research', async (req, res) => {
   try {
-    const { client_name, brief } = req.body;
+    const { client_name, brief, use_perplexity } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeResearch } = require('./agents/researchAgent');
-    const analysis = await analyzeResearch(client_name, brief);
+    const analysis = await analyzeResearch(client_name, brief, {
+      usePerplexity: use_perplexity !== false, // Default to true
+    });
 
     res.json({
       success: true,
@@ -303,7 +475,21 @@ app.post('/agents/research', async (req, res) => {
   }
 });
 
-// Get all available agents
+/**
+ * @swagger
+ * /agents:
+ *   get:
+ *     summary: List all available AI agents
+ *     tags: [Agents]
+ *     description: Returns a list of all specialized AI agents and their endpoints
+ *     responses:
+ *       200:
+ *         description: List of available agents
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AgentList'
+ */
 app.get('/agents', (req, res) => {
   res.json({
     available_agents: [
@@ -336,7 +522,27 @@ app.get('/agents', (req, res) => {
 // Database Query Endpoints
 // ==========================================
 
-// Get all projects
+/**
+ * @swagger
+ * /projects:
+ *   get:
+ *     summary: Get all projects
+ *     tags: [Projects]
+ *     description: Returns a list of all projects stored in the database with their analyses
+ *     responses:
+ *       200:
+ *         description: List of projects
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ProjectList'
+ *       503:
+ *         description: Database not configured
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 app.get('/projects', async (req, res) => {
   try {
     if (!process.env.DATABASE_URL) {

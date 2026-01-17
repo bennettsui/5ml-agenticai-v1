@@ -12,6 +12,7 @@ RUN npm ci
 COPY index.js .
 COPY webhook.js .
 COPY db.js .
+COPY swagger.js .
 COPY agents/ ./agents/
 COPY services/ ./services/
 COPY public/ ./public/
