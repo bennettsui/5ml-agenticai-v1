@@ -420,9 +420,9 @@
     function getModelInfo(agent, analysis) {
       const models = {
         'creative': 'Claude 3 Haiku',
-        'seo': 'Claude 3 Haiku' + (analysis._enhanced_with_web_research ? ' + Perplexity (Web Enhanced)' : ''),
-        'social': 'Claude 3 Haiku' + (analysis._enhanced_with_web_research ? ' + Perplexity (Web Enhanced)' : ''),
-        'research': 'Perplexity Sonar Large (Reasoning Mode)'
+        'seo': 'Claude 3 Haiku' + (analysis._enhanced_with_web_research ? ' + Perplexity Sonar Pro (Web Enhanced)' : ''),
+        'social': 'Claude 3 Haiku' + (analysis._enhanced_with_web_research ? ' + Perplexity Sonar Pro (Web Enhanced)' : ''),
+        'research': 'Perplexity Sonar Pro (Advanced Search)'
       };
       return models[agent] || 'AI Model';
     }
