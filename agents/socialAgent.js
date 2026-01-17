@@ -1,10 +1,37 @@
 const Anthropic = require('@anthropic-ai/sdk');
+const perplexityService = require('../services/perplexityService');
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 async function analyzeSocial(client_name, brief) {
+  let webResearch = null;
+
+  // Optionally use Perplexity for current social media trends
+  if (perplexityService.isAvailable()) {
+    try {
+      console.log('🔍 Gathering current social media trends via Perplexity...');
+      const researchResult = await perplexityService.research(
+        `Current social media trends, viral content strategies, and platform algorithm updates for: ${brief}. Focus on what's working now in 2026.`,
+        {
+          searchRecency: 'week',
+          maxTokens: 800,
+          systemPrompt: 'You are a social media strategist. Provide current, actionable insights about social media trends, viral content, and platform updates.'
+        }
+      );
+      webResearch = researchResult.content;
+      console.log('✅ Web research completed');
+    } catch (error) {
+      console.warn('⚠️ Web research unavailable, using Claude-only analysis:', error.message);
+    }
+  }
+
+  // Build prompt with optional web research context
+  const contextNote = webResearch
+    ? `\n\n**最新社交媒體趨勢 (來自網絡研究)**:\n${webResearch}\n\n請結合以上最新趨勢和你的專業知識來提供建議。`
+    : '';
+
   const response = await client.messages.create({
     model: 'claude-3-haiku-20240307',
     max_tokens: 1000,
@@ -14,7 +41,7 @@ async function analyzeSocial(client_name, brief) {
         content: `你是一個社交媒體策略師。請為以下項目提供社交媒體策略。
 
 **客户**: ${client_name}
-**簡報**: ${brief}
+**簡報**: ${brief}${contextNote}
 
 請返回 JSON 格式（只返回 JSON，不需要其他文本）:
 {
@@ -22,7 +49,8 @@ async function analyzeSocial(client_name, brief) {
   "content_pillars": ["支柱1", "支柱2"],
   "posting_frequency": "每周次數",
   "engagement_strategy": "互動策略描述",
-  "hashtag_strategy": ["hashtag1", "hashtag2"]
+  "hashtag_strategy": ["hashtag1", "hashtag2"],
+  "trending_formats": ["格式1", "格式2"]
 }`,
       },
     ],
@@ -31,7 +59,14 @@ async function analyzeSocial(client_name, brief) {
   const text = response.content[0].text;
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
+    const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
+
+    // Add metadata about web research
+    if (webResearch) {
+      analysis._enhanced_with_web_research = true;
+    }
+
+    return analysis;
   } catch {
     return { raw: text };
   }

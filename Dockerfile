@@ -13,6 +13,7 @@ COPY index.js .
 COPY webhook.js .
 COPY db.js .
 COPY agents/ ./agents/
+COPY services/ ./services/
 COPY public/ ./public/
 
 # Expose port
