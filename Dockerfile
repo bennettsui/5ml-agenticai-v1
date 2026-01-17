@@ -1,19 +1,21 @@
-# Use Node.js LTS version
 FROM node:18-alpine
 
-# Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install --only=production
-# Copy application files
-COPY . .
+RUN npm ci
+
+# Copy application code
+COPY index.js .
+COPY webhook.js .
+COPY db.js .
+COPY agents/ ./agents/
 
 # Expose port
-EXPOSE 3000
+EXPOSE 8080
 
-# Start the application
+# Start application
 CMD ["node", "index.js"]
