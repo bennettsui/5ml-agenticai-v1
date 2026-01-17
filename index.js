@@ -452,13 +452,15 @@ app.post('/agents/social', async (req, res) => {
  */
 app.post('/agents/research', async (req, res) => {
   try {
-    const { client_name, brief } = req.body;
+    const { client_name, brief, use_perplexity } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeResearch } = require('./agents/researchAgent');
-    const analysis = await analyzeResearch(client_name, brief);
+    const analysis = await analyzeResearch(client_name, brief, {
+      usePerplexity: use_perplexity !== false, // Default to true
+    });
 
     res.json({
       success: true,
