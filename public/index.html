@@ -352,22 +352,41 @@
     async function loadProjects() {
       const projectsLoading = document.getElementById('projectsLoading');
       const projectsList = document.getElementById('projectsList');
+      const projectsError = document.getElementById('projectsError');
       projectsLoading.classList.add('show');
+      projectsError.classList.remove('show');
 
       try {
         const response = await fetch('/projects');
         const data = await response.json();
-        projectsList.innerHTML = data.projects.map(p => `
-          <div class="project-item">
-            <h3>${p.client_name}</h3>
-            <p><strong>ID:</strong> ${p.project_id}</p>
-            <p><strong>Brief:</strong> ${p.brief.substring(0, 100)}...</p>
-            <p><strong>Created:</strong> ${new Date(p.created_at).toLocaleString()}</p>
-          </div>
-        `).join('');
+
+        if (!data.success || !data.projects) {
+          projectsList.innerHTML = `
+            <div class="project-item">
+              <h3>⚠️ Database Not Configured</h3>
+              <p>${data.message || 'Set DATABASE_URL to enable project history'}</p>
+            </div>
+          `;
+        } else if (data.projects.length === 0) {
+          projectsList.innerHTML = `
+            <div class="project-item">
+              <h3>📭 No Projects Yet</h3>
+              <p>Run an analysis to create your first project!</p>
+            </div>
+          `;
+        } else {
+          projectsList.innerHTML = data.projects.map(p => `
+            <div class="project-item">
+              <h3>${p.client_name}</h3>
+              <p><strong>ID:</strong> ${p.project_id}</p>
+              <p><strong>Brief:</strong> ${p.brief.substring(0, 100)}...</p>
+              <p><strong>Created:</strong> ${new Date(p.created_at).toLocaleString()}</p>
+            </div>
+          `).join('');
+        }
       } catch (error) {
-        document.getElementById('projectsError').textContent = `Error loading projects: ${error.message}`;
-        document.getElementById('projectsError').classList.add('show');
+        projectsError.textContent = `Error loading projects: ${error.message}`;
+        projectsError.classList.add('show');
       } finally {
         projectsLoading.classList.remove('show');
       }
