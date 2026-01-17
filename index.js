@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const app = express();
 app.use(express.json());
+app.use(express.static('public'));
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -13,6 +14,13 @@ const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProje
 
 // 啟動時初始化數據庫
 initDatabase();
+
+// ==========================================
+// Static Files & Dashboard
+// ==========================================
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/public/index.html');
+});
 
 // ==========================================
 // Health Check Endpoint
