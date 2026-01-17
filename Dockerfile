@@ -13,6 +13,7 @@ COPY index.js .
 COPY webhook.js .
 COPY db.js .
 COPY agents/ ./agents/
+COPY public/ ./public/
 
 # Expose port
 EXPOSE 8080
