@@ -21,6 +21,7 @@ handlers = ["tls", "http"]
 
 [checks]
 [checks.http_check]
+type = "http"
 grace_period = "5s"
 interval = 10000
 method = "get"
