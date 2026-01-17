@@ -258,6 +258,23 @@
       <h2>Available Agents</h2>
       <div class="agents-grid" id="agentsGrid"></div>
       <div class="error" id="agentsError"></div>
+
+      <!-- Agent Input Form (hidden initially) -->
+      <div id="agentForm" style="display: none; margin-top: 30px;">
+        <h3 id="selectedAgentName"></h3>
+        <div class="form-group">
+          <label for="agentClient">Client Name</label>
+          <input type="text" id="agentClient" placeholder="e.g., 5ML Agency" required>
+        </div>
+        <div class="form-group">
+          <label for="agentBrief">Brief</label>
+          <textarea id="agentBrief" placeholder="Describe the project requirements..." required></textarea>
+        </div>
+        <button class="btn" onclick="runAgent()">Run Analysis</button>
+        <div class="loading" id="agentLoading">Analyzing... ⏳</div>
+        <div class="error" id="agentError"></div>
+        <div class="result-box" id="agentResult"><pre id="agentResultContent"></pre></div>
+      </div>
     </div>
 
     <!-- Projects Tab -->
@@ -336,7 +353,7 @@
         const data = await response.json();
         const grid = document.getElementById('agentsGrid');
         grid.innerHTML = data.available_agents.map(agent => `
-          <div class="agent-card" onclick="selectAgent('${agent.name}')">
+          <div class="agent-card" onclick="selectAgent('${agent.name}', '${agent.endpoint}')">
             <h3>${agent.name.toUpperCase()}</h3>
             <p>${agent.description}</p>
             <small>${agent.endpoint}</small>
@@ -345,6 +362,59 @@
       } catch (error) {
         document.getElementById('agentsError').textContent = `Error loading agents: ${error.message}`;
         document.getElementById('agentsError').classList.add('show');
+      }
+    }
+
+    // Global variable to track selected agent
+    let selectedAgentEndpoint = '';
+
+    // Select agent
+    function selectAgent(name, endpoint) {
+      selectedAgentEndpoint = endpoint;
+      document.getElementById('selectedAgentName').textContent = `${name.toUpperCase()} Agent`;
+      document.getElementById('agentForm').style.display = 'block';
+      document.getElementById('agentResult').classList.remove('show');
+      document.getElementById('agentError').classList.remove('show');
+
+      // Scroll to form
+      document.getElementById('agentForm').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Run agent analysis
+    async function runAgent() {
+      const clientName = document.getElementById('agentClient').value;
+      const brief = document.getElementById('agentBrief').value;
+
+      if (!clientName || !brief) {
+        alert('Please fill in both client name and brief');
+        return;
+      }
+
+      const agentLoading = document.getElementById('agentLoading');
+      const agentError = document.getElementById('agentError');
+      const agentResult = document.getElementById('agentResult');
+
+      agentLoading.classList.add('show');
+      agentError.classList.remove('show');
+      agentResult.classList.remove('show');
+
+      try {
+        const response = await fetch(selectedAgentEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_name: clientName, brief }),
+        });
+
+        if (!response.ok) throw new Error('Agent analysis failed');
+
+        const data = await response.json();
+        document.getElementById('agentResultContent').textContent = JSON.stringify(data, null, 2);
+        agentResult.classList.add('show');
+      } catch (error) {
+        agentError.textContent = `Error: ${error.message}`;
+        agentError.classList.add('show');
+      } finally {
+        agentLoading.classList.remove('show');
       }
     }
 
