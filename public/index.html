@@ -250,7 +250,7 @@
       </form>
       <div class="loading" id="analyzeLoading">Analyzing... ⏳</div>
       <div class="error" id="analyzeError"></div>
-      <div class="result-box" id="analyzeResult"><pre id="analyzeResultContent"></pre></div>
+      <div class="result-box" id="analyzeResult"><div id="analyzeResultContent"></div></div>
     </div>
 
     <!-- Agents Tab -->
@@ -273,7 +273,7 @@
         <button class="btn" onclick="runAgent()">Run Analysis</button>
         <div class="loading" id="agentLoading">Analyzing... ⏳</div>
         <div class="error" id="agentError"></div>
-        <div class="result-box" id="agentResult"><pre id="agentResultContent"></pre></div>
+        <div class="result-box" id="agentResult"><div id="agentResultContent"></div></div>
       </div>
     </div>
 
@@ -336,7 +336,22 @@
         if (!response.ok) throw new Error('Analysis failed');
 
         const data = await response.json();
-        document.getElementById('analyzeResultContent').textContent = JSON.stringify(data, null, 2);
+
+        // Format analyze results nicely
+        const resultContent = document.getElementById('analyzeResultContent');
+        let html = `<div style="background: #e3f2fd; padding: 12px; border-radius: 6px; margin-bottom: 20px;">
+          <strong>🤖 Analysis Type:</strong> General<br>
+          <strong>💡 Model:</strong> Claude 3 Haiku<br>
+          <strong>📊 Client:</strong> ${data.client_name || 'N/A'}<br>
+          ${data.project_id ? `<strong>🆔 Project ID:</strong> ${data.project_id}<br>` : ''}
+          ${data.timestamp ? `<strong>🕒 Time:</strong> ${new Date(data.timestamp).toLocaleString()}<br>` : ''}
+        </div>`;
+
+        if (data.analysis) {
+          html += formatObject(data.analysis, 0);
+        }
+
+        resultContent.innerHTML = html;
         analyzeResult.classList.add('show');
       } catch (error) {
         analyzeError.textContent = `Error: ${error.message}`;
@@ -380,6 +395,85 @@
       document.getElementById('agentForm').scrollIntoView({ behavior: 'smooth' });
     }
 
+    // Format analysis results for display
+    function formatAnalysisResult(data) {
+      let html = '';
+
+      // Show model info
+      if (data.agent) {
+        const modelInfo = getModelInfo(data.agent, data.analysis);
+        html += `<div style="background: #e3f2fd; padding: 12px; border-radius: 6px; margin-bottom: 20px;">
+          <strong>🤖 Agent:</strong> ${data.agent.toUpperCase()}<br>
+          <strong>💡 Model:</strong> ${modelInfo}<br>
+          ${data.timestamp ? `<strong>🕒 Time:</strong> ${new Date(data.timestamp).toLocaleString()}<br>` : ''}
+        </div>`;
+      }
+
+      // Format analysis content
+      if (data.analysis) {
+        html += formatObject(data.analysis, 0);
+      }
+
+      return html;
+    }
+
+    function getModelInfo(agent, analysis) {
+      const models = {
+        'creative': 'Claude 3 Haiku',
+        'seo': 'Claude 3 Haiku' + (analysis._enhanced_with_web_research ? ' + Perplexity (Web Enhanced)' : ''),
+        'social': 'Claude 3 Haiku' + (analysis._enhanced_with_web_research ? ' + Perplexity (Web Enhanced)' : ''),
+        'research': 'Perplexity Sonar Large (Reasoning Mode)'
+      };
+      return models[agent] || 'AI Model';
+    }
+
+    function formatObject(obj, level = 0) {
+      let html = '';
+      const indent = level * 20;
+
+      for (const [key, value] of Object.entries(obj)) {
+        // Skip internal metadata
+        if (key.startsWith('_')) continue;
+
+        const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+        if (Array.isArray(value)) {
+          html += `<div style="margin-left: ${indent}px; margin-bottom: 15px;">
+            <strong style="color: #667eea; font-size: 16px;">📋 ${displayKey}:</strong>
+            <ul style="margin-top: 8px; padding-left: 20px;">
+              ${value.map(item => `<li style="margin-bottom: 5px;">${formatValue(item)}</li>`).join('')}
+            </ul>
+          </div>`;
+        } else if (typeof value === 'object' && value !== null) {
+          html += `<div style="margin-left: ${indent}px; margin-bottom: 15px;">
+            <strong style="color: #667eea; font-size: 16px;">📁 ${displayKey}:</strong>
+            <div style="margin-top: 8px;">
+              ${formatObject(value, level + 1)}
+            </div>
+          </div>`;
+        } else {
+          html += `<div style="margin-left: ${indent}px; margin-bottom: 12px;">
+            <strong style="color: #667eea;">✓ ${displayKey}:</strong><br>
+            <div style="margin-top: 5px; padding: 8px; background: #f5f5f5; border-radius: 4px;">
+              ${formatValue(value)}
+            </div>
+          </div>`;
+        }
+      }
+
+      return html;
+    }
+
+    function formatValue(value) {
+      if (typeof value === 'string') {
+        return value.replace(/\n/g, '<br>');
+      }
+      if (typeof value === 'object') {
+        return formatObject(value, 0);
+      }
+      return String(value);
+    }
+
     // Run agent analysis
     async function runAgent() {
       const clientName = document.getElementById('agentClient').value;
@@ -408,7 +502,10 @@
         if (!response.ok) throw new Error('Agent analysis failed');
 
         const data = await response.json();
-        document.getElementById('agentResultContent').textContent = JSON.stringify(data, null, 2);
+
+        // Use formatted display instead of raw JSON
+        const resultContent = document.getElementById('agentResultContent');
+        resultContent.innerHTML = formatAnalysisResult(data);
         agentResult.classList.add('show');
       } catch (error) {
         agentError.textContent = `Error: ${error.message}`;
