@@ -31,7 +31,7 @@ class PerplexityService {
     }
 
     const {
-      model = 'llama-3.1-sonar-large-128k-online', // Use large model for better reasoning
+      model = 'sonar-pro', // Updated to current Perplexity API model (2026)
       maxTokens = 2000,
       temperature = 0.2,
       systemPrompt = 'You are a research analyst. Provide comprehensive, factual analysis based on current web information.',
