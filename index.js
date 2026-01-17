@@ -1,7 +1,6 @@
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
-const swaggerUi = require('swagger-ui-express');
-const swaggerSpec = require('./swagger');
+const { specs, swaggerUi } = require('./swagger');
 require('dotenv').config();
 
 const app = express();
@@ -9,7 +8,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Swagger API Documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
   customCss: '.swagger-ui .topbar { display: none }',
   customSiteTitle: '5ML Agentic AI API Documentation',
 }));

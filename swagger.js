@@ -1,4 +1,5 @@
 const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
 
 const options = {
   definition: {
@@ -6,9 +7,10 @@ const options = {
     info: {
       title: '5ML Agentic AI Platform API',
       version: '1.0.0',
-      description: 'AI-powered multi-agent analysis system with Claude and Perplexity integration',
+      description: 'Claude-powered multi-agent analysis system with Perplexity AI integration',
       contact: {
-        name: '5ML Agency',
+        name: '5ML Lab',
+        url: 'https://5miles.io',
       },
     },
     servers: [
@@ -212,6 +214,6 @@ const options = {
   apis: ['./index.js'], // Path to the API routes
 };
 
-const swaggerSpec = swaggerJsdoc(options);
+const specs = swaggerJsdoc(options);
 
-module.exports = swaggerSpec;
+module.exports = { specs, swaggerUi };
