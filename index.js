@@ -12,8 +12,13 @@ const client = new Anthropic({
 
 const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects } = require('./db');
 
-// 啟動時初始化數據庫
-initDatabase();
+// 啟動時初始化數據庫 (optional)
+if (process.env.DATABASE_URL) {
+  initDatabase();
+  console.log('📊 Database initialization started');
+} else {
+  console.log('⚠️ DATABASE_URL not set - running without database');
+}
 
 // ==========================================
 // Static Files & Dashboard
@@ -96,9 +101,19 @@ ${brief}
       analysis = { raw: content.text };
     }
 
-    // 保存到數據庫
-    const project_id = await saveProject(client_name, brief, industry);
-    await saveAnalysis(project_id, 'general', analysis);
+    // 保存到數據庫 (optional - won't fail if DB not configured)
+    let project_id = null;
+    try {
+      if (process.env.DATABASE_URL) {
+        project_id = await saveProject(client_name, brief, industry);
+        await saveAnalysis(project_id, 'general', analysis);
+        console.log('✅ Saved to database');
+      } else {
+        console.log('⚠️ Database not configured - skipping save');
+      }
+    } catch (dbError) {
+      console.error('⚠️ Database save failed (continuing anyway):', dbError.message);
+    }
 
     // Return result
     res.json({
@@ -295,6 +310,13 @@ app.get('/agents', (req, res) => {
 // Get all projects
 app.get('/projects', async (req, res) => {
   try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured',
+        message: 'Set DATABASE_URL to enable project history'
+      });
+    }
     const limit = req.query.limit || 10;
     const projects = await getAllProjects(limit);
     res.json({
@@ -311,6 +333,13 @@ app.get('/projects', async (req, res) => {
 // Get project details + analyses
 app.get('/projects/:project_id', async (req, res) => {
   try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured',
+        message: 'Set DATABASE_URL to enable project history'
+      });
+    }
     const { project_id } = req.params;
     const analyses = await getProjectAnalyses(project_id);
     res.json({
