@@ -186,21 +186,21 @@ export default function ReceiptProcessor() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Receipt to P&L Automation</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Receipt to P&L Automation</h1>
+          <p className="mt-2 text-slate-600 dark:text-slate-400">
             Upload receipts from Dropbox and get a complete P&L statement in under 3 minutes
           </p>
         </div>
 
         {/* Input Form */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="clientName" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="clientName" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Client Name
               </label>
               <input
@@ -208,14 +208,14 @@ export default function ReceiptProcessor() {
                 id="clientName"
                 value={clientName}
                 onChange={(e) => setClientName(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border"
+                className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                 placeholder="Man's Accounting Firm"
                 required
               />
             </div>
 
             <div>
-              <label htmlFor="dropboxUrl" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="dropboxUrl" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Dropbox Shared Folder URL
               </label>
               <div className="mt-1 relative">
@@ -224,21 +224,21 @@ export default function ReceiptProcessor() {
                   id="dropboxUrl"
                   value={dropboxUrl}
                   onChange={(e) => setDropboxUrl(e.target.value)}
-                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border"
+                  className="block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                   placeholder="https://www.dropbox.com/sh/abc123..."
                   required
                   disabled={isProcessing}
                 />
-                <Upload className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
+                <Upload className="absolute right-3 top-2.5 h-5 w-5 text-slate-400 dark:text-slate-500" />
               </div>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 Share your Dropbox folder and paste the link here
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="periodStart" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="periodStart" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Period Start (Optional)
                 </label>
                 <input
@@ -246,13 +246,13 @@ export default function ReceiptProcessor() {
                   id="periodStart"
                   value={periodStart}
                   onChange={(e) => setPeriodStart(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border"
+                  className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                   disabled={isProcessing}
                 />
               </div>
 
               <div>
-                <label htmlFor="periodEnd" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="periodEnd" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Period End (Optional)
                 </label>
                 <input
@@ -260,7 +260,7 @@ export default function ReceiptProcessor() {
                   id="periodEnd"
                   value={periodEnd}
                   onChange={(e) => setPeriodEnd(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border"
+                  className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                   disabled={isProcessing}
                 />
               </div>
@@ -269,7 +269,7 @@ export default function ReceiptProcessor() {
             <button
               type="submit"
               disabled={isProcessing}
-              className="w-full flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="w-full flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-slate-400 disabled:cursor-not-allowed dark:bg-blue-600 dark:hover:bg-blue-700"
             >
               {isProcessing ? (
                 <>
@@ -286,12 +286,12 @@ export default function ReceiptProcessor() {
           </form>
 
           {error && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
+            <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
               <div className="flex">
-                <AlertCircle className="h-5 w-5 text-red-400" />
+                <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">Error</h3>
-                  <p className="mt-1 text-sm text-red-700">{error}</p>
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Error</h3>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
                 </div>
               </div>
             </div>
@@ -300,9 +300,9 @@ export default function ReceiptProcessor() {
 
         {/* Processing Status */}
         {batchStatus && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">Processing Status</h2>
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Processing Status</h2>
               <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${getStatusColor(batchStatus.status)}`}>
                 {getStatusIcon(batchStatus.status)}
                 <span className="text-sm font-medium capitalize">{batchStatus.status}</span>
@@ -311,41 +311,41 @@ export default function ReceiptProcessor() {
 
             {/* Progress Bar */}
             <div className="mb-6">
-              <div className="flex justify-between text-sm text-gray-600 mb-2">
+              <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400 mb-2">
                 <span>Progress</span>
                 <span>{batchStatus.progress}%</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
                 <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${batchStatus.progress}%` }}
                 />
               </div>
-              <div className="mt-2 text-sm text-gray-600">
+              <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
                 {batchStatus.processed_receipts} / {batchStatus.total_receipts} receipts processed
                 {batchStatus.failed_receipts > 0 && (
-                  <span className="text-red-600 ml-2">({batchStatus.failed_receipts} failed)</span>
+                  <span className="text-red-600 dark:text-red-400 ml-2">({batchStatus.failed_receipts} failed)</span>
                 )}
               </div>
             </div>
 
             {/* Statistics */}
             <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-gray-600">Total Amount</div>
-                <div className="text-2xl font-bold text-gray-900">
+              <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                <div className="text-sm text-slate-600 dark:text-slate-400">Total Amount</div>
+                <div className="text-2xl font-bold text-slate-900 dark:text-white">
                   HKD {batchStatus.total_amount?.toFixed(2) || '0.00'}
                 </div>
               </div>
-              <div className="bg-green-50 rounded-lg p-4">
-                <div className="text-sm text-gray-600">Deductible</div>
-                <div className="text-2xl font-bold text-green-600">
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+                <div className="text-sm text-slate-600 dark:text-slate-400">Deductible</div>
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                   HKD {batchStatus.deductible_amount?.toFixed(2) || '0.00'}
                 </div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-gray-600">Non-Deductible</div>
-                <div className="text-2xl font-bold text-gray-600">
+              <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                <div className="text-sm text-slate-600 dark:text-slate-400">Non-Deductible</div>
+                <div className="text-2xl font-bold text-slate-600 dark:text-slate-300">
                   HKD {((batchStatus.total_amount || 0) - (batchStatus.deductible_amount || 0)).toFixed(2)}
                 </div>
               </div>
@@ -354,19 +354,19 @@ export default function ReceiptProcessor() {
             {/* Recent Logs */}
             {batchStatus.recent_logs && batchStatus.recent_logs.length > 0 && (
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Recent Activity</h3>
-                <div className="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
+                <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Recent Activity</h3>
+                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 max-h-48 overflow-y-auto">
                   <div className="space-y-2">
                     {batchStatus.recent_logs.map((log, index) => (
                       <div key={index} className="text-sm">
                         <span className={`font-medium ${
-                          log.log_level === 'error' ? 'text-red-600' :
-                          log.log_level === 'warning' ? 'text-yellow-600' :
-                          'text-gray-600'
+                          log.log_level === 'error' ? 'text-red-600 dark:text-red-400' :
+                          log.log_level === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                          'text-slate-600 dark:text-slate-400'
                         }`}>
                           [{log.step}]
                         </span>
-                        <span className="text-gray-700 ml-2">{log.message}</span>
+                        <span className="text-slate-700 dark:text-slate-300 ml-2">{log.message}</span>
                       </div>
                     ))}
                   </div>
@@ -387,12 +387,12 @@ export default function ReceiptProcessor() {
 
             {/* Failed State */}
             {batchStatus.status === 'failed' && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
                 <div className="flex">
-                  <AlertCircle className="h-5 w-5 text-red-400" />
+                  <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800">Processing Failed</h3>
-                    <p className="mt-1 text-sm text-red-700">
+                    <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Processing Failed</h3>
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">
                       Please check the logs above and try again. If the problem persists, contact support.
                     </p>
                   </div>
@@ -403,17 +403,17 @@ export default function ReceiptProcessor() {
         )}
 
         {/* Info Section */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="text-sm font-medium text-blue-800 mb-2">How it works</h3>
-          <ol className="list-decimal list-inside space-y-2 text-sm text-blue-700">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+          <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">How it works</h3>
+          <ol className="list-decimal list-inside space-y-2 text-sm text-blue-700 dark:text-blue-400">
             <li>Share your Dropbox folder containing receipt images (JPG, PNG, WEBP)</li>
             <li>Paste the shared link above and click "Process Receipts"</li>
             <li>Our AI extracts data from receipts using Claude Vision (supports Chinese + English)</li>
             <li>Receipts are automatically categorized with HK IRD compliance checks</li>
             <li>Download your complete P&L Excel report in under 3 minutes</li>
           </ol>
-          <div className="mt-4 pt-4 border-t border-blue-200">
-            <p className="text-xs text-blue-600">
+          <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
+            <p className="text-xs text-blue-600 dark:text-blue-400">
               <strong>Privacy:</strong> Images are processed securely and deleted immediately after export.
               All data stored in Hong Kong-compliant database with 7-year retention.
             </p>

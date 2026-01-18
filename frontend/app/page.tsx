@@ -38,22 +38,22 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 shadow-sm">
+      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-                <Layers className="w-8 h-8 text-blue-600" />
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                <Layers className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                 5ML Agentic AI Platform
               </h1>
-              <p className="text-slate-600 mt-2">
+              <p className="text-slate-600 dark:text-slate-400 mt-2">
                 Multi-layer AI orchestration with specialized agents and use cases
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <div className="px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+              <div className="px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-sm font-medium">
                 ● System Online
               </div>
             </div>
@@ -65,10 +65,10 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Hero Section */}
         <div className="text-center mb-12">
-          <h2 className="text-2xl font-bold text-slate-900 mb-3">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
             Choose a Use Case
           </h2>
-          <p className="text-slate-600 max-w-2xl mx-auto">
+          <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
             Select from our production-ready AI solutions or explore the platform capabilities
           </p>
         </div>
@@ -83,7 +83,7 @@ export default function Home() {
                 href={useCase.href}
                 className="group block"
               >
-                <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden h-full border border-slate-200 hover:border-blue-300">
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden h-full border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600">
                   {/* Card Header with Gradient */}
                   <div className={`bg-gradient-to-br ${useCase.color} p-6 text-white`}>
                     <div className="flex items-start justify-between">
@@ -103,19 +103,19 @@ export default function Home() {
                   {/* Card Body */}
                   <div className="p-6">
                     <div className="space-y-2">
-                      <h4 className="text-sm font-semibold text-slate-700 mb-3">
+                      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
                         Key Features:
                       </h4>
                       {useCase.features.map((feature, idx) => (
-                        <div key={idx} className="flex items-center gap-2 text-sm text-slate-600">
-                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                        <div key={idx} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                          <div className="w-1.5 h-1.5 bg-blue-500 dark:bg-blue-400 rounded-full"></div>
                           {feature}
                         </div>
                       ))}
                     </div>
 
                     <div className="mt-6">
-                      <div className="flex items-center justify-between text-blue-600 group-hover:text-blue-700 font-medium text-sm">
+                      <div className="flex items-center justify-between text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300 font-medium text-sm">
                         <span>Open Use Case</span>
                         <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -130,23 +130,23 @@ export default function Home() {
         </div>
 
         {/* System Info */}
-        <div className="mt-16 bg-white rounded-xl shadow-md p-8 border border-slate-200">
-          <h3 className="text-lg font-bold text-slate-900 mb-4">Platform Information</h3>
+        <div className="mt-16 bg-white dark:bg-slate-800 rounded-xl shadow-md p-8 border border-slate-200 dark:border-slate-700">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Platform Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <div className="text-sm text-slate-600 mb-1">Active Agents</div>
-              <div className="text-2xl font-bold text-slate-900">8</div>
-              <div className="text-xs text-slate-500 mt-1">Creative, SEO, Social, Research, OCR, Categorizer, +2</div>
+              <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Active Agents</div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">8</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Creative, SEO, Social, Research, OCR, Categorizer, +2</div>
             </div>
             <div>
-              <div className="text-sm text-slate-600 mb-1">Use Cases</div>
-              <div className="text-2xl font-bold text-slate-900">{useCases.length}</div>
-              <div className="text-xs text-slate-500 mt-1">Production-ready AI solutions</div>
+              <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Use Cases</div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">{useCases.length}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Production-ready AI solutions</div>
             </div>
             <div>
-              <div className="text-sm text-slate-600 mb-1">System Status</div>
-              <div className="text-2xl font-bold text-green-600">Operational</div>
-              <div className="text-xs text-slate-500 mt-1">All services running</div>
+              <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">System Status</div>
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">Operational</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">All services running</div>
             </div>
           </div>
         </div>
@@ -155,7 +155,7 @@ export default function Home() {
         <div className="mt-8 text-center">
           <a
             href="/api-docs"
-            className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -166,9 +166,9 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-16 bg-white border-t border-slate-200">
+      <footer className="mt-16 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center text-sm text-slate-500">
+          <div className="text-center text-sm text-slate-500 dark:text-slate-400">
             <p>5ML Agentic AI Platform v1.0 • Powered by Claude, DeepSeek, and Perplexity</p>
             <p className="mt-2">Deployed on Fly.io • Region: IAD (Ashburn, Virginia)</p>
           </div>
