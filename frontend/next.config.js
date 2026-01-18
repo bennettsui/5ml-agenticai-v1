@@ -6,7 +6,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  basePath: '/dashboard',
+  // Removed basePath to allow all routes (dashboard, use-cases, etc.)
   // Static export - API calls will go to same domain
 };
 
