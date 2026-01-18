@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>5ML Agentic AI Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 60px;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.95;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
+        }
+
+        .card-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            margin-bottom: 25px;
+        }
+
+        .card h2 {
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+            color: #2d3748;
+        }
+
+        .card p {
+            color: #718096;
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .card-features {
+            list-style: none;
+        }
+
+        .card-features li {
+            color: #4a5568;
+            margin-bottom: 10px;
+            padding-left: 25px;
+            position: relative;
+            font-size: 0.95rem;
+        }
+
+        .card-features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+        }
+
+        .footer p {
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+
+        .footer a {
+            color: white;
+            text-decoration: none;
+            opacity: 0.9;
+            transition: opacity 0.3s ease;
+        }
+
+        .footer a:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+
+        .status-badge {
+            display: inline-block;
+            background: #48bb78;
+            color: white;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-top: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .header p {
+                font-size: 1rem;
+            }
+
+            .cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 5ML Agentic AI Platform</h1>
+            <p>Multi-layer AI orchestration for marketing & business intelligence</p>
+        </div>
+
+        <div class="cards">
+            <a href="/dashboard" class="card">
+                <div class="card-icon">📊</div>
+                <h2>Dashboard</h2>
+                <p>Professional analytics and monitoring dashboard</p>
+                <ul class="card-features">
+                    <li>7-layer architecture visualization</li>
+                    <li>Real-time usage analytics</li>
+                    <li>Agent performance metrics</li>
+                    <li>Project management</li>
+                    <li>Interactive agent testing</li>
+                </ul>
+                <span class="status-badge">✓ Production Ready</span>
+            </a>
+
+            <a href="/sandbox.html" class="card">
+                <div class="card-icon">🧪</div>
+                <h2>Sandbox</h2>
+                <p>Test and experiment with AI agents</p>
+                <ul class="card-features">
+                    <li>Test all 4 specialized agents</li>
+                    <li>Model selection (DeepSeek, Claude, Perplexity)</li>
+                    <li>Live JSON response viewer</li>
+                    <li>Quick prototyping environment</li>
+                    <li>No authentication required</li>
+                </ul>
+                <span class="status-badge">✓ Active</span>
+            </a>
+
+            <a href="/api-docs" class="card">
+                <div class="card-icon">📚</div>
+                <h2>API Documentation</h2>
+                <p>Comprehensive API reference and interactive testing</p>
+                <ul class="card-features">
+                    <li>Swagger/OpenAPI 3.0 docs</li>
+                    <li>Interactive API testing</li>
+                    <li>Full endpoint reference</li>
+                    <li>Request/response examples</li>
+                    <li>Authentication guide</li>
+                </ul>
+                <span class="status-badge">✓ Updated</span>
+            </a>
+        </div>
+
+        <div class="footer">
+            <p><strong>Version:</strong> 1.0.0 | <strong>Region:</strong> IAD (Ashburn, Virginia)</p>
+            <p>
+                <a href="/health" target="_blank">Health Check</a> |
+                <a href="https://github.com/bennettsui/5ml-agenticai-v1" target="_blank">GitHub</a> |
+                Built with ❤️ by 5 Miles Lab
+            </p>
+        </div>
+    </div>
+</body>
+</html>

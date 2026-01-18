@@ -25,7 +25,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects } = require('./db');
+const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -38,13 +38,13 @@ if (process.env.DATABASE_URL) {
 // ==========================================
 // Static Files & Dashboard
 // ==========================================
-// Redirect root to dashboard
+// Serve navigation landing page
 app.get('/', (req, res) => {
-  res.redirect('/dashboard');
+  res.sendFile(__dirname + '/public/navigation.html');
 });
 
-// Serve legacy dashboard if needed
-app.get('/legacy', (req, res) => {
+// Serve sandbox (legacy dashboard)
+app.get('/sandbox.html', (req, res) => {
   res.sendFile(__dirname + '/public/index.html');
 });
 
@@ -658,6 +658,138 @@ app.get('/projects/:project_id', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching project:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Analytics Endpoints
+// ==========================================
+
+/**
+ * @swagger
+ * /analytics:
+ *   get:
+ *     summary: Get platform analytics
+ *     tags: [Analytics]
+ *     description: Returns analytics data including agent usage, model distribution, and token statistics
+ *     responses:
+ *       200:
+ *         description: Analytics data
+ *       503:
+ *         description: Database not configured
+ */
+app.get('/analytics', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured',
+        message: 'Set DATABASE_URL to enable analytics'
+      });
+    }
+
+    const analytics = await getAnalytics();
+    res.json({
+      success: true,
+      ...analytics,
+    });
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /analytics/agents:
+ *   get:
+ *     summary: Get agent performance metrics
+ *     tags: [Analytics]
+ *     description: Returns performance statistics for each agent
+ *     responses:
+ *       200:
+ *         description: Agent performance data
+ *       503:
+ *         description: Database not configured
+ */
+app.get('/analytics/agents', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured',
+        message: 'Set DATABASE_URL to enable analytics'
+      });
+    }
+
+    const performance = await getAgentPerformance();
+    res.json({
+      success: true,
+      agents: performance,
+    });
+  } catch (error) {
+    console.error('Error fetching agent performance:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /stats:
+ *   get:
+ *     summary: Get platform statistics
+ *     tags: [Analytics]
+ *     description: Returns basic platform statistics for the overview page
+ *     responses:
+ *       200:
+ *         description: Platform stats
+ */
+app.get('/stats', async (req, res) => {
+  try {
+    const stats = {
+      agents: [
+        { id: 'creative', name: 'Creative Agent', description: 'Brand concepts & visual direction', status: 'active' },
+        { id: 'seo', name: 'SEO Agent', description: 'Search optimization with web research', status: 'active' },
+        { id: 'social', name: 'Social Media Agent', description: 'Social strategy & trending formats', status: 'active' },
+        { id: 'research', name: 'Research Agent', description: 'Market intelligence & insights', status: 'active' },
+      ],
+      models: [
+        { id: 'deepseek', name: 'DeepSeek Reasoner', type: 'primary', status: 'available' },
+        { id: 'haiku', name: 'Claude Haiku', type: 'fallback', status: 'available' },
+        { id: 'sonnet', name: 'Claude Sonnet', type: 'advanced', status: 'available' },
+        { id: 'perplexity', name: 'Perplexity Sonar Pro', type: 'research', status: 'available' },
+      ],
+      layers: {
+        total: 7,
+        active: 5,
+        planned: 2,
+        completion: 71,
+      },
+    };
+
+    // Add database stats if available
+    if (process.env.DATABASE_URL) {
+      try {
+        const analytics = await getAnalytics();
+        stats.database = {
+          projects: analytics.totalProjects,
+          analyses: analytics.totalAnalyses,
+          status: 'connected',
+        };
+      } catch (error) {
+        stats.database = { status: 'error' };
+      }
+    } else {
+      stats.database = { status: 'not_configured' };
+    }
+
+    res.json({
+      success: true,
+      ...stats,
+    });
+  } catch (error) {
+    console.error('Error fetching stats:', error);
     res.status(500).json({ error: error.message });
   }
 });

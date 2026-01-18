@@ -5,12 +5,13 @@ import ArchitectureViz from '@/components/ArchitectureViz';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import AgentTesting from '@/components/AgentTesting';
 import ProjectManagement from '@/components/ProjectManagement';
+import PlatformOverview from '@/components/PlatformOverview';
 import { LayoutDashboard, Layers, Activity, FlaskConical, FolderKanban } from 'lucide-react';
 
 type Tab = 'overview' | 'architecture' | 'analytics' | 'agents' | 'projects';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<Tab>('architecture');
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
 
   const tabs = [
     { id: 'overview' as Tab, label: 'Overview', icon: LayoutDashboard },
@@ -72,29 +73,7 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'overview' && (
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-bold mb-4">Platform Overview</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                  <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">4</div>
-                  <div className="text-sm text-slate-600 dark:text-slate-400">Specialized Agents</div>
-                </div>
-                <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <div className="text-3xl font-bold text-green-600 dark:text-green-400">7</div>
-                  <div className="text-sm text-slate-600 dark:text-slate-400">Architecture Layers</div>
-                </div>
-                <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                  <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">3</div>
-                  <div className="text-sm text-slate-600 dark:text-slate-400">AI Providers</div>
-                </div>
-              </div>
-            </div>
-            <ArchitectureViz />
-          </div>
-        )}
-
+        {activeTab === 'overview' && <PlatformOverview />}
         {activeTab === 'architecture' && <ArchitectureViz />}
         {activeTab === 'analytics' && <AnalyticsDashboard />}
         {activeTab === 'agents' && <AgentTesting />}
