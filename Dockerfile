@@ -2,11 +2,21 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Copy backend package files
 COPY package*.json ./
 
-# Install dependencies
+# Install backend dependencies
 RUN npm ci
+
+# Copy frontend and build it
+COPY frontend/package*.json ./frontend/
+WORKDIR /app/frontend
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# Go back to app root
+WORKDIR /app
 
 # Copy application code
 COPY index.js .
@@ -17,6 +27,7 @@ COPY agents/ ./agents/
 COPY services/ ./services/
 COPY utils/ ./utils/
 COPY public/ ./public/
+COPY knowledge/ ./knowledge/
 
 # Expose port
 EXPOSE 8080

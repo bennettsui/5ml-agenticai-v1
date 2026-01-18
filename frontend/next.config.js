@@ -1,14 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:8080/:path*',
-      },
-    ];
+  output: 'export',
+  distDir: 'out',
+  images: {
+    unoptimized: true,
   },
+  basePath: '/dashboard',
+  // Static export - API calls will go to same domain
 };
 
 module.exports = nextConfig;
