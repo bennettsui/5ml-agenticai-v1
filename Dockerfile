@@ -15,6 +15,7 @@ COPY db.js .
 COPY swagger.js .
 COPY agents/ ./agents/
 COPY services/ ./services/
+COPY utils/ ./utils/
 COPY public/ ./public/
 
 # Expose port
