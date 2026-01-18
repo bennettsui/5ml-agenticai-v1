@@ -9,17 +9,18 @@ const app = express();
 const path = require('path');
 app.use(express.json());
 
-// Serve Next.js dashboard at /dashboard
-app.use('/dashboard', express.static(path.join(__dirname, 'frontend/out')));
-
-// Serve legacy dashboard at root
-app.use(express.static('public'));
-
-// Swagger API Documentation
+// Swagger API Documentation (before static files)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
   customCss: '.swagger-ui .topbar { display: none }',
   customSiteTitle: '5ML Agentic AI API Documentation',
 }));
+
+// Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
+const nextJsPath = path.join(__dirname, 'frontend/out');
+app.use(express.static(nextJsPath));
+
+// Serve legacy dashboard at /sandbox
+app.use('/sandbox', express.static('public'));
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -803,6 +804,37 @@ const receiptTrackingRoutes = require('./use-cases/mans-company-receipt-tracking
 app.use('/api/receipts', receiptTrackingRoutes);
 
 console.log('✅ Receipt tracking routes loaded: /api/receipts');
+
+// ==========================================
+// Next.js Client-Side Routing Fallback
+// ==========================================
+// Handle client-side routing - serve index.html for Next.js routes
+app.get('*', (req, res, next) => {
+  // Skip API routes and static files
+  if (req.path.startsWith('/api') ||
+      req.path.startsWith('/ws') ||
+      req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/)) {
+    return next();
+  }
+
+  // For Next.js routes, try to serve the corresponding HTML file
+  const nextJsPath = path.join(__dirname, 'frontend/out');
+  const htmlPath = path.join(nextJsPath, req.path, 'index.html');
+  const directHtmlPath = path.join(nextJsPath, req.path + '.html');
+
+  // Check if path/index.html exists
+  const fs = require('fs');
+  if (fs.existsSync(htmlPath)) {
+    return res.sendFile(htmlPath);
+  }
+  // Check if path.html exists
+  if (fs.existsSync(directHtmlPath)) {
+    return res.sendFile(directHtmlPath);
+  }
+
+  // Otherwise continue to next middleware
+  next();
+});
 
 // ==========================================
 // WebSocket Server
