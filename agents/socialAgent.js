@@ -128,7 +128,7 @@ async function analyzeWithDeepSeek(client_name, brief, webResearch, modelSelecti
     // Track DeepSeek usage
     modelsUsed.push({
       model: getModelDisplayName(modelSelection),
-      model_id: 'deepseek-reasoner',
+      model_id: 'deepseek-chat',
       usage: result.usage || {}
     });
 

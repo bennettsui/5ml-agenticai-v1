@@ -9,7 +9,7 @@ class DeepSeekService {
   constructor() {
     this.apiKey = process.env.DEEPSEEK_API_KEY;
     this.baseURL = 'https://api.deepseek.com';
-    this.model = 'deepseek-reasoner';
+    this.model = 'deepseek-chat';
   }
 
   isAvailable() {
