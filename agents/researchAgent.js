@@ -1,5 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const perplexityService = require('../services/perplexityService');
+const { getClaudeModel, getModelDisplayName, shouldUsePerplexity } = require('../utils/modelHelper');
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -11,10 +12,10 @@ const client = new Anthropic({
  */
 
 async function analyzeResearch(client_name, brief, options = {}) {
-  const { usePerplexity = true } = options;
+  const { model: modelSelection = 'haiku' } = options;
 
   // Try Perplexity first if requested and available
-  if (usePerplexity && perplexityService.isAvailable()) {
+  if (shouldUsePerplexity(modelSelection)) {
     try {
       console.log('🔍 Using Perplexity for web-based research...');
       return await researchWithPerplexity(client_name, brief);
@@ -25,7 +26,7 @@ async function analyzeResearch(client_name, brief, options = {}) {
 
   // Fallback to Claude-based research
   console.log('🤖 Using Claude for knowledge-based research...');
-  return await researchWithClaude(client_name, brief);
+  return await researchWithClaude(client_name, brief, modelSelection);
 }
 
 async function researchWithPerplexity(client_name, brief) {
@@ -71,10 +72,12 @@ Return response in JSON format with keys: market_insights, competitor_analysis, 
   };
 }
 
-async function researchWithClaude(client_name, brief) {
+async function researchWithClaude(client_name, brief, modelSelection = 'haiku') {
+  const claudeModel = getClaudeModel(modelSelection);
+
   const response = await client.messages.create({
-    model: 'claude-3-haiku-20240307',
-    max_tokens: 1500,
+    model: claudeModel,
+    max_tokens: modelSelection === 'sonnet' ? 2000 : 1500,
     messages: [
       {
         role: 'user',
@@ -104,14 +107,14 @@ async function researchWithClaude(client_name, brief) {
     return {
       ...analysis,
       _meta: {
-        model: 'Claude 3 Haiku',
+        model: getModelDisplayName(modelSelection),
       }
     };
   } catch {
     return {
       raw: text,
       _meta: {
-        model: 'Claude 3 Haiku',
+        model: getModelDisplayName(modelSelection),
       }
     };
   }
