@@ -5,3 +5,7 @@ node_modules/
 dist/
 .env.local
 .env.*.local
+
+# Frontend build output
+frontend/out/
+frontend/.next/

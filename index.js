@@ -6,7 +6,13 @@ const deepseekService = require('./services/deepseekService');
 require('dotenv').config();
 
 const app = express();
+const path = require('path');
 app.use(express.json());
+
+// Serve Next.js dashboard at /dashboard
+app.use('/dashboard', express.static(path.join(__dirname, 'frontend/out')));
+
+// Serve legacy dashboard at root
 app.use(express.static('public'));
 
 // Swagger API Documentation
@@ -32,7 +38,13 @@ if (process.env.DATABASE_URL) {
 // ==========================================
 // Static Files & Dashboard
 // ==========================================
+// Redirect root to dashboard
 app.get('/', (req, res) => {
+  res.redirect('/dashboard');
+});
+
+// Serve legacy dashboard if needed
+app.get('/legacy', (req, res) => {
   res.sendFile(__dirname + '/public/index.html');
 });
 
