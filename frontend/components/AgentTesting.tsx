@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Search, Share2, TrendingUp, Loader2 } from 'lucide-react';
+import { Sparkles, Search, Share2, TrendingUp, Loader2, BarChart3 } from 'lucide-react';
 
 interface Agent {
   id: string;
@@ -45,6 +45,14 @@ const agents: Agent[] = [
     description: 'Comprehensive market research with web-based insights',
     capabilities: ['Market insights', 'Competitor analysis', 'Trend monitoring', 'Opportunities', 'Risk assessment'],
   },
+  {
+    id: 'analyze',
+    name: 'Analyze Agent',
+    icon: BarChart3,
+    color: 'indigo',
+    description: 'Data analysis and business intelligence with actionable insights',
+    capabilities: ['Data analysis', 'Business metrics', 'Performance tracking', 'Predictive insights', 'ROI analysis'],
+  },
 ];
 
 const models = [
@@ -59,6 +67,7 @@ const colorClasses: Record<string, { bg: string; border: string; icon: string; b
   blue: { bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-700', icon: 'text-blue-600 dark:text-blue-400', button: 'bg-blue-600 hover:bg-blue-700' },
   green: { bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-700', icon: 'text-green-600 dark:text-green-400', button: 'bg-green-600 hover:bg-green-700' },
   orange: { bg: 'bg-orange-50 dark:bg-orange-900/20', border: 'border-orange-200 dark:border-orange-700', icon: 'text-orange-600 dark:text-orange-400', button: 'bg-orange-600 hover:bg-orange-700' },
+  indigo: { bg: 'bg-indigo-50 dark:bg-indigo-900/20', border: 'border-indigo-200 dark:border-indigo-700', icon: 'text-indigo-600 dark:text-indigo-400', button: 'bg-indigo-600 hover:bg-indigo-700' },
 };
 
 export default function AgentTesting() {
@@ -106,7 +115,7 @@ export default function AgentTesting() {
       {/* Agent Selection */}
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
         <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Select an Agent</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {agents.map((agent) => {
             const Icon = agent.icon;
             const colors = colorClasses[agent.color];
@@ -226,7 +235,7 @@ export default function AgentTesting() {
               </select>
             </div>
 
-            {(selectedAgent === 'seo' || selectedAgent === 'social' || selectedAgent === 'research') && (
+            {(selectedAgent === 'seo' || selectedAgent === 'social' || selectedAgent === 'research' || selectedAgent === 'analyze') && (
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
