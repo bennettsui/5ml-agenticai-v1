@@ -7,11 +7,14 @@ const client = new Anthropic({
 
 async function analyzeCreative(client_name, brief, options = {}) {
   const { model: modelSelection = 'haiku' } = options;
-  const claudeModel = getClaudeModel(modelSelection);
+
+  // Creative agent doesn't use Perplexity - fall back to Haiku
+  const effectiveModel = modelSelection === 'perplexity' ? 'haiku' : modelSelection;
+  const claudeModel = getClaudeModel(effectiveModel);
 
   const response = await client.messages.create({
     model: claudeModel,
-    max_tokens: modelSelection === 'sonnet' ? 2000 : 1000,
+    max_tokens: effectiveModel === 'sonnet' ? 2000 : 1000,
     messages: [
       {
         role: 'user',
@@ -40,14 +43,16 @@ async function analyzeCreative(client_name, brief, options = {}) {
     return {
       ...analysis,
       _meta: {
-        model: getModelDisplayName(modelSelection)
+        model: getModelDisplayName(effectiveModel),
+        note: modelSelection === 'perplexity' ? 'Creative agent uses Claude (Perplexity not applicable)' : undefined
       }
     };
   } catch {
     return {
       raw: text,
       _meta: {
-        model: getModelDisplayName(modelSelection)
+        model: getModelDisplayName(effectiveModel),
+        note: modelSelection === 'perplexity' ? 'Creative agent uses Claude (Perplexity not applicable)' : undefined
       }
     };
   }
