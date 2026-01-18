@@ -1,6 +1,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const perplexityService = require('../services/perplexityService');
-const { getClaudeModel, getModelDisplayName, shouldUsePerplexity } = require('../utils/modelHelper');
+const { getClaudeModel, getModelDisplayName, shouldUsePerplexity, shouldUseDeepSeek } = require('../utils/modelHelper');
+const deepseekService = require('../services/deepseekService');
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -8,11 +9,11 @@ const client = new Anthropic({
 
 /**
  * Research Agent
- * Uses Perplexity AI for web-based research, or Claude for knowledge-based analysis
+ * Uses Perplexity AI for web-based research, DeepSeek, or Claude for knowledge-based analysis
  */
 
 async function analyzeResearch(client_name, brief, options = {}) {
-  const { model: modelSelection = 'haiku' } = options;
+  const { model: modelSelection = 'deepseek' } = options;
 
   // Try Perplexity first if requested and available
   if (shouldUsePerplexity(modelSelection)) {
@@ -20,7 +21,17 @@ async function analyzeResearch(client_name, brief, options = {}) {
       console.log('🔍 Using Perplexity for web-based research...');
       return await researchWithPerplexity(client_name, brief);
     } catch (error) {
-      console.warn('⚠️ Perplexity unavailable, falling back to Claude:', error.message);
+      console.warn('⚠️ Perplexity unavailable, falling back to DeepSeek:', error.message);
+    }
+  }
+
+  // Use DeepSeek if selected and available
+  if (shouldUseDeepSeek(modelSelection)) {
+    try {
+      console.log('🤖 Using DeepSeek for knowledge-based research...');
+      return await researchWithDeepSeek(client_name, brief, modelSelection);
+    } catch (error) {
+      console.warn('⚠️ DeepSeek unavailable, falling back to Claude:', error.message);
     }
   }
 
@@ -117,6 +128,54 @@ async function researchWithClaude(client_name, brief, modelSelection = 'haiku') 
         model: getModelDisplayName(modelSelection),
       }
     };
+  }
+}
+
+async function researchWithDeepSeek(client_name, brief, modelSelection) {
+  const systemPrompt = '你是一個研究分析師。請為以下項目進行全面的研究分析。';
+  const userPrompt = `**客户**: ${client_name}
+**簡報**: ${brief}
+
+請返回 JSON 格式（只返回 JSON，不需要其他文本）:
+{
+  "market_insights": ["洞察1", "洞察2", "洞察3"],
+  "competitor_analysis": ["競爭者1分析", "競爭者2分析"],
+  "trends": ["趨勢1", "趨勢2", "趨勢3"],
+  "opportunities": ["機會1", "機會2"],
+  "risks": ["風險1", "風險2"],
+  "recommendations": ["建議1", "建議2"]
+}`;
+
+  try {
+    const result = await deepseekService.analyze(systemPrompt, userPrompt, {
+      maxTokens: 2000,
+    });
+
+    const text = result.content;
+
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
+
+      return {
+        ...analysis,
+        _meta: {
+          model: getModelDisplayName(modelSelection),
+          usage: result.usage
+        }
+      };
+    } catch {
+      return {
+        raw: text,
+        _meta: {
+          model: getModelDisplayName(modelSelection),
+          usage: result.usage
+        }
+      };
+    }
+  } catch (error) {
+    console.error('DeepSeek error, falling back to Claude Haiku:', error.message);
+    return await researchWithClaude(client_name, brief, 'haiku');
   }
 }
 

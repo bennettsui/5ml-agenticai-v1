@@ -282,12 +282,13 @@
         <div class="form-group" id="modelSelectionGroup">
           <label for="modelSelect">AI Model</label>
           <select id="modelSelect">
+            <option value="deepseek">DeepSeek Chat (Default - Fast & Affordable)</option>
             <option value="haiku">Claude 3 Haiku (Fast & Cost-effective)</option>
             <option value="sonnet">Claude 3.5 Sonnet (Balanced)</option>
             <option value="perplexity">Perplexity Sonar Pro (Web Research)</option>
           </select>
           <small id="modelHint" style="color: #666; display: block; margin-top: 5px;">
-            💡 Haiku is fastest. Sonnet is more capable. Perplexity provides real-time web data.
+            💡 DeepSeek is default. Haiku is fast. Sonnet is more capable. Perplexity provides real-time web data.
           </small>
         </div>
         <button class="btn" onclick="runAgent()">Run Analysis</button>
@@ -424,12 +425,12 @@
     function updateModelHint(agentName) {
       const modelHint = document.getElementById('modelHint');
       const hints = {
-        'creative': '💡 Haiku for quick ideas. Sonnet for deeper creative concepts. Perplexity for trend research.',
-        'seo': '💡 Haiku for basic SEO. Sonnet for strategy. Perplexity for latest algorithm updates.',
-        'social': '💡 Haiku for quick posts. Sonnet for campaigns. Perplexity for viral trends.',
-        'research': '💡 Haiku for knowledge-based. Sonnet for complex analysis. Perplexity for real-time data.'
+        'creative': '💡 DeepSeek (default) is fast & affordable. Haiku for quick ideas. Sonnet for deeper concepts. Perplexity for trend research.',
+        'seo': '💡 DeepSeek (default) is cost-effective. Haiku for basic SEO. Sonnet for strategy. Perplexity for latest algorithm updates.',
+        'social': '💡 DeepSeek (default) is economical. Haiku for quick posts. Sonnet for campaigns. Perplexity for viral trends.',
+        'research': '💡 DeepSeek (default) for knowledge-based. Haiku is fast. Sonnet for complex analysis. Perplexity for real-time data.'
       };
-      modelHint.textContent = hints[agentName] || '💡 Choose the best model for your needs.';
+      modelHint.textContent = hints[agentName] || '💡 DeepSeek is the default model - fast and affordable.';
     }
 
     // Format analysis results for display
