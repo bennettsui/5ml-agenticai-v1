@@ -257,7 +257,7 @@
         <div class="form-group">
           <label for="analyzeModelSelect">AI Model</label>
           <select id="analyzeModelSelect">
-            <option value="deepseek">DeepSeek Chat (Default - Fast & Affordable)</option>
+            <option value="deepseek">DeepSeek Reasoner (Default - Fast & Affordable)</option>
             <option value="haiku">Claude 3 Haiku (Fast & Cost-effective)</option>
             <option value="sonnet">Claude 3.5 Sonnet (Balanced)</option>
             <option value="perplexity">Perplexity Sonar Pro (Web Research)</option>
@@ -294,7 +294,7 @@
         <div class="form-group" id="modelSelectionGroup">
           <label for="modelSelect">AI Model</label>
           <select id="modelSelect">
-            <option value="deepseek">DeepSeek Chat (Default - Fast & Affordable)</option>
+            <option value="deepseek">DeepSeek Reasoner (Default - Fast & Affordable)</option>
             <option value="haiku">Claude 3 Haiku (Fast & Cost-effective)</option>
             <option value="sonnet">Claude 3.5 Sonnet (Balanced)</option>
             <option value="perplexity">Perplexity Sonar Pro (Web Research)</option>
@@ -373,7 +373,7 @@
 
         // Format analyze results nicely
         const resultContent = document.getElementById('analyzeResultContent');
-        const modelName = data.analysis?._meta?.model || 'DeepSeek Chat';
+        const modelName = data.analysis?._meta?.model || 'DeepSeek Reasoner';
         let html = `<div style="background: #e3f2fd; padding: 12px; border-radius: 6px; margin-bottom: 20px;">
           <strong>🤖 Analysis Type:</strong> General<br>
           <strong>💡 Model:</strong> ${modelName}<br>

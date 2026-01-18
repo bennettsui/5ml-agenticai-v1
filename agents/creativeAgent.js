@@ -99,7 +99,7 @@ async function analyzeWithDeepSeek(client_name, brief, modelSelection, no_fallba
 
     modelsUsed.push({
       model: getModelDisplayName(modelSelection),
-      model_id: 'deepseek-chat',
+      model_id: 'deepseek-reasoner',
       usage: result.usage || {}
     });
 
