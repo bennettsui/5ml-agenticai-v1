@@ -8,7 +8,7 @@ const axios = require('axios');
 class DeepSeekService {
   constructor() {
     this.apiKey = process.env.DEEPSEEK_API_KEY;
-    this.baseURL = 'https://api.deepseek.com/v1';
+    this.baseURL = 'https://api.deepseek.com';
     this.model = 'deepseek-reasoner';
   }
 
