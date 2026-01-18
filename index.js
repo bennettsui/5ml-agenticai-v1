@@ -805,11 +805,22 @@ app.use('/api/receipts', receiptTrackingRoutes);
 console.log('✅ Receipt tracking routes loaded: /api/receipts');
 
 // ==========================================
+// WebSocket Server
+// ==========================================
+const http = require('http');
+const wsServer = require('./services/websocket-server');
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
 
-app.listen(port, () => {
+const server = http.createServer(app);
+
+// Initialize WebSocket server
+wsServer.initialize(server);
+
+server.listen(port, () => {
   console.log(`
 ╔════════════════════════════════════════╗
 ║  🚀 5ML Agentic AI Platform v1         ║
@@ -819,6 +830,8 @@ app.listen(port, () => {
 ║  🪝 Webhook: POST /webhook/github     ║
 ║  🤖 Agents: GET /agents               ║
 ║  💾 Projects: GET /projects           ║
+║  📝 Receipts: POST /api/receipts      ║
+║  🔌 WebSocket: ws://localhost:${port}/ws   ║
 ║  🌍 Region: IAD (Ashburn, Virginia)   ║
 ╚════════════════════════════════════════╝
   `);
