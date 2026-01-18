@@ -21,7 +21,7 @@ async function testDeepSeek() {
     const response = await axios.post(
       'https://api.deepseek.com/chat/completions',
       {
-        model: 'deepseek-reasoner',
+        model: 'deepseek-chat',
         messages: [
           { role: 'user', content: '9.11 and 9.8, which is greater?' }
         ]
