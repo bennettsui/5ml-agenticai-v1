@@ -1,0 +1,289 @@
+{
+  "version": "1.0.0",
+  "locale": "zh-HK",
+  "currency": "HKD",
+  "categories": [
+    {
+      "id": "5100",
+      "name": "Office Supplies",
+      "name_zh": "辦公用品",
+      "description": "Office equipment, stationery, supplies",
+      "deductible": true,
+      "patterns": {
+        "vendors": [
+          "office depot",
+          "staples",
+          "商務印書館",
+          "三聯書店",
+          "文具店"
+        ],
+        "keywords": [
+          "paper",
+          "printer",
+          "ink",
+          "toner",
+          "pen",
+          "pencil",
+          "folder",
+          "notebook",
+          "envelope",
+          "stapler",
+          "紙張",
+          "打印機",
+          "墨盒",
+          "文具",
+          "筆",
+          "文件夾"
+        ],
+        "exclude_keywords": []
+      },
+      "examples": [
+        "A4 printing paper (5 reams)",
+        "HP ink cartridges",
+        "Office desk supplies",
+        "打印紙及文具"
+      ]
+    },
+    {
+      "id": "5200",
+      "name": "Travel & Transportation",
+      "name_zh": "交通及旅遊",
+      "description": "Business travel, transportation, accommodation",
+      "deductible": true,
+      "patterns": {
+        "vendors": [
+          "mtr",
+          "港鐵",
+          "taxi",
+          "的士",
+          "grab",
+          "uber",
+          "cathay pacific",
+          "hong kong airlines",
+          "hotel",
+          "酒店"
+        ],
+        "keywords": [
+          "train",
+          "flight",
+          "airplane",
+          "hotel",
+          "accommodation",
+          "parking",
+          "toll",
+          "fuel",
+          "petrol",
+          "octopus",
+          "火車",
+          "飛機",
+          "住宿",
+          "停車",
+          "汽油",
+          "八達通"
+        ],
+        "exclude_keywords": [
+          "personal",
+          "vacation",
+          "holiday"
+        ]
+      },
+      "examples": [
+        "MTR business trip to Kowloon",
+        "Taxi to client meeting",
+        "Hotel for business conference",
+        "出差交通費"
+      ]
+    },
+    {
+      "id": "5300",
+      "name": "Meals & Entertainment",
+      "name_zh": "餐飲及招待",
+      "description": "Business meals, client entertainment (HKD 300/meal limit)",
+      "deductible": true,
+      "deduction_limit": {
+        "amount": 300,
+        "currency": "HKD",
+        "per": "meal",
+        "description": "IRD meal deduction limit"
+      },
+      "patterns": {
+        "vendors": [
+          "restaurant",
+          "cafe",
+          "茶餐廳",
+          "大家樂",
+          "美心",
+          "翠華",
+          "麥當勞",
+          "肯德基",
+          "starbucks",
+          "pacific coffee"
+        ],
+        "keywords": [
+          "lunch",
+          "dinner",
+          "breakfast",
+          "meal",
+          "food",
+          "beverage",
+          "coffee",
+          "tea",
+          "午餐",
+          "晚餐",
+          "早餐",
+          "飲料",
+          "咖啡",
+          "茶"
+        ],
+        "exclude_keywords": [
+          "groceries",
+          "supermarket"
+        ]
+      },
+      "compliance_rules": [
+        "Maximum HKD 300 per meal for tax deduction",
+        "Must be business-related (client meetings, business discussions)",
+        "Personal meals not deductible"
+      ],
+      "examples": [
+        "Client lunch at Tsui Wah",
+        "Business meeting coffee",
+        "Team dinner (business discussion)",
+        "客戶午餐"
+      ]
+    },
+    {
+      "id": "5400",
+      "name": "Rent & Utilities",
+      "name_zh": "租金及水電",
+      "description": "Office rent, utilities, internet, phone",
+      "deductible": true,
+      "patterns": {
+        "vendors": [
+          "hk electric",
+          "港燈",
+          "clp",
+          "中電",
+          "water supplies",
+          "水務署",
+          "hkbn",
+          "netvigator",
+          "pccw",
+          "hong kong telecom"
+        ],
+        "keywords": [
+          "rent",
+          "electricity",
+          "water",
+          "gas",
+          "internet",
+          "broadband",
+          "telephone",
+          "mobile",
+          "租金",
+          "電費",
+          "水費",
+          "煤氣",
+          "網絡",
+          "電話"
+        ],
+        "exclude_keywords": []
+      },
+      "examples": [
+        "Office rent - January 2026",
+        "HK Electric - office",
+        "PCCW internet service",
+        "辦公室租金"
+      ]
+    },
+    {
+      "id": "5500",
+      "name": "Professional Services",
+      "name_zh": "專業服務",
+      "description": "Legal, accounting, consulting, IT services",
+      "deductible": true,
+      "patterns": {
+        "vendors": [
+          "law firm",
+          "accounting",
+          "consultant",
+          "律師行",
+          "會計師",
+          "顧問"
+        ],
+        "keywords": [
+          "legal",
+          "accounting",
+          "audit",
+          "consulting",
+          "advisory",
+          "professional",
+          "license",
+          "subscription",
+          "software",
+          "法律",
+          "會計",
+          "審計",
+          "顧問",
+          "專業",
+          "軟件",
+          "訂閱"
+        ],
+        "exclude_keywords": []
+      },
+      "examples": [
+        "Legal consultation fee",
+        "Accounting services",
+        "Software subscription (Adobe)",
+        "專業顧問費"
+      ]
+    },
+    {
+      "id": "9999",
+      "name": "Personal Expenses",
+      "name_zh": "個人開支",
+      "description": "Non-deductible personal expenses",
+      "deductible": false,
+      "patterns": {
+        "vendors": [
+          "supermarket",
+          "百佳",
+          "惠康",
+          "personal",
+          "個人"
+        ],
+        "keywords": [
+          "personal",
+          "groceries",
+          "supermarket",
+          "clothing",
+          "entertainment",
+          "個人",
+          "超市",
+          "衣服",
+          "娛樂"
+        ],
+        "exclude_keywords": []
+      },
+      "examples": [
+        "Personal groceries",
+        "Personal clothing",
+        "Personal entertainment",
+        "個人購物"
+      ]
+    }
+  ],
+  "default_category": {
+    "id": "5500",
+    "name": "Professional Services",
+    "confidence_penalty": 0.2,
+    "description": "Default category when no match found"
+  },
+  "matching_rules": {
+    "vendor_match_weight": 0.4,
+    "keyword_match_weight": 0.3,
+    "amount_pattern_weight": 0.2,
+    "description_match_weight": 0.1,
+    "minimum_confidence": 0.6
+  }
+}

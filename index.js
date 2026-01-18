@@ -795,6 +795,16 @@ app.get('/stats', async (req, res) => {
 });
 
 // ==========================================
+// Use Case Routes
+// ==========================================
+
+// Man's Accounting Firm - Receipt Tracking
+const receiptTrackingRoutes = require('./use-cases/mans-company-receipt-tracking/api/routes');
+app.use('/api/receipts', receiptTrackingRoutes);
+
+console.log('✅ Receipt tracking routes loaded: /api/receipts');
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
