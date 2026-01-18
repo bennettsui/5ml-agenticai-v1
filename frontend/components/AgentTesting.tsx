@@ -81,7 +81,7 @@ export default function AgentTesting() {
     setResult(null);
 
     try {
-      const response = await fetch(`/api/agents/${selectedAgent}`, {
+      const response = await fetch(`/agents/${selectedAgent}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

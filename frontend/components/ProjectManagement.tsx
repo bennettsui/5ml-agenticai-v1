@@ -33,38 +33,23 @@ export default function ProjectManagement() {
 
   const fetchProjects = async () => {
     try {
-      const response = await fetch('/api/projects?limit=50');
+      const response = await fetch('/projects?limit=50');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
-      setProjects(data.projects || []);
+
+      // Map database schema to component interface
+      const mappedProjects = (data.projects || []).map((p: any) => ({
+        ...p,
+        analysis_count: parseInt(p.analysis_count) || 0,
+      }));
+
+      setProjects(mappedProjects);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
-      // Demo data for testing
-      setProjects([
-        {
-          project_id: '1',
-          client_name: 'Tesla Motors',
-          industry: 'Electric Vehicles',
-          brief: 'Launch campaign for new Model Y variant',
-          created_at: '2026-01-15T10:30:00Z',
-          analysis_count: 3,
-        },
-        {
-          project_id: '2',
-          client_name: 'Nike Taiwan',
-          industry: 'Sports Apparel',
-          brief: 'Social media strategy for Chinese New Year',
-          created_at: '2026-01-14T14:20:00Z',
-          analysis_count: 2,
-        },
-        {
-          project_id: '3',
-          client_name: 'Starbucks Asia',
-          industry: 'Food & Beverage',
-          brief: 'Market research for new tea product line',
-          created_at: '2026-01-12T09:15:00Z',
-          analysis_count: 4,
-        },
-      ]);
+      // Show empty state if database not available
+      setProjects([]);
     } finally {
       setLoading(false);
     }
@@ -74,21 +59,25 @@ export default function ProjectManagement() {
     setLoadingAnalyses(true);
     setSelectedProject(projectId);
     try {
-      const response = await fetch(`/api/projects/${projectId}`);
+      const response = await fetch(`/projects/${projectId}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
-      setAnalyses(data.analyses || []);
+
+      // Map database analyses to component interface
+      const mappedAnalyses = (data.analyses || []).map((a: any) => ({
+        analysis_id: a.id,
+        agent_type: a.agent_type,
+        model_used: a.analysis_data?._meta?.model || 'Unknown',
+        created_at: a.created_at,
+        result: a.analysis_data,
+      }));
+
+      setAnalyses(mappedAnalyses);
     } catch (error) {
       console.error('Failed to fetch analyses:', error);
-      // Demo data
-      setAnalyses([
-        {
-          analysis_id: '1',
-          agent_type: 'creative',
-          model_used: 'DeepSeek Reasoner',
-          created_at: '2026-01-15T10:35:00Z',
-          result: { creative_concepts: ['Concept 1', 'Concept 2'] },
-        },
-      ]);
+      setAnalyses([]);
     } finally {
       setLoadingAnalyses(false);
     }
