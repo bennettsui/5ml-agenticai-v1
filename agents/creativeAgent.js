@@ -7,11 +7,12 @@ const client = new Anthropic({
 });
 
 async function analyzeCreative(client_name, brief, options = {}) {
-  const { model: modelSelection = 'deepseek' } = options;
+  const { model: modelSelection = 'deepseek', no_fallback = false } = options;
+  const modelsUsed = [];
 
   // Use DeepSeek if selected and available
   if (shouldUseDeepSeek(modelSelection)) {
-    return await analyzeWithDeepSeek(client_name, brief, modelSelection);
+    return await analyzeWithDeepSeek(client_name, brief, modelSelection, no_fallback, modelsUsed);
   }
 
   // Creative agent doesn't use Perplexity - fall back to DeepSeek
@@ -42,6 +43,17 @@ async function analyzeCreative(client_name, brief, options = {}) {
   });
 
   const text = response.content[0].text;
+
+  modelsUsed.push({
+    model: getModelDisplayName(effectiveModel),
+    model_id: claudeModel,
+    usage: {
+      input_tokens: response.usage?.input_tokens || 0,
+      output_tokens: response.usage?.output_tokens || 0,
+      total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0)
+    }
+  });
+
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
@@ -49,7 +61,7 @@ async function analyzeCreative(client_name, brief, options = {}) {
     return {
       ...analysis,
       _meta: {
-        model: getModelDisplayName(effectiveModel),
+        models_used: modelsUsed,
         note: modelSelection === 'perplexity' ? 'Creative agent uses Claude (Perplexity not applicable)' : undefined
       }
     };
@@ -57,14 +69,14 @@ async function analyzeCreative(client_name, brief, options = {}) {
     return {
       raw: text,
       _meta: {
-        model: getModelDisplayName(effectiveModel),
+        models_used: modelsUsed,
         note: modelSelection === 'perplexity' ? 'Creative agent uses Claude (Perplexity not applicable)' : undefined
       }
     };
   }
 }
 
-async function analyzeWithDeepSeek(client_name, brief, modelSelection) {
+async function analyzeWithDeepSeek(client_name, brief, modelSelection, no_fallback = false, modelsUsed = []) {
   const systemPrompt = '你是一個創意總監。請為以下項目提供創意建議。';
   const userPrompt = `**客户**: ${client_name}
 **簡報**: ${brief}
@@ -85,6 +97,12 @@ async function analyzeWithDeepSeek(client_name, brief, modelSelection) {
 
     const text = result.content;
 
+    modelsUsed.push({
+      model: getModelDisplayName(modelSelection),
+      model_id: 'deepseek-chat',
+      usage: result.usage || {}
+    });
+
     try {
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
@@ -92,23 +110,28 @@ async function analyzeWithDeepSeek(client_name, brief, modelSelection) {
       return {
         ...analysis,
         _meta: {
-          model: getModelDisplayName(modelSelection),
-          usage: result.usage
+          models_used: modelsUsed
         }
       };
     } catch {
       return {
         raw: text,
         _meta: {
-          model: getModelDisplayName(modelSelection),
-          usage: result.usage
+          models_used: modelsUsed
         }
       };
     }
   } catch (error) {
-    console.error('DeepSeek error, falling back to Claude Haiku:', error.message);
+    console.error('DeepSeek error:', error.message);
+
+    // If no_fallback is true, throw the error instead of falling back
+    if (no_fallback) {
+      throw new Error(`DeepSeek API error: ${error.message}`);
+    }
+
     // Fallback to Claude Haiku
-    return await analyzeCreative(client_name, brief, { model: 'haiku' });
+    console.log('Falling back to Claude Haiku...');
+    return await analyzeCreative(client_name, brief, { model: 'haiku', no_fallback: false });
   }
 }
 
