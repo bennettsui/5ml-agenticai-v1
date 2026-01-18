@@ -8,7 +8,7 @@ const perplexityService = require('../services/perplexityService');
 // Map frontend model selection to actual model names
 const MODEL_MAP = {
   'haiku': 'claude-3-haiku-20240307',
-  'sonnet': 'claude-3-5-sonnet-20241022',
+  'sonnet': 'claude-3-5-sonnet-20240620',
   'perplexity': 'sonar-pro'
 };
 
