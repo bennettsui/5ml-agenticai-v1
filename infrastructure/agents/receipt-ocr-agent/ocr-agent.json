@@ -1,0 +1,79 @@
+{
+  "agent_id": "receipt-ocr-agent",
+  "name": "Receipt OCR Agent",
+  "version": "1.0.0",
+  "description": "Reusable OCR agent for extracting structured data from receipt images using Claude Vision API. Supports Hong Kong receipts with Chinese and English text.",
+  "type": "infrastructure",
+  "reusable": true,
+  "capabilities": [
+    "image_processing",
+    "ocr",
+    "multilingual_extraction",
+    "data_standardization"
+  ],
+  "supported_languages": [
+    "en",
+    "zh-HK",
+    "zh-CN"
+  ],
+  "supported_currencies": [
+    "HKD",
+    "USD",
+    "CNY",
+    "EUR",
+    "GBP"
+  ],
+  "model": {
+    "primary": "claude-3-5-sonnet-20241022",
+    "fallback": "claude-3-haiku-20240307",
+    "vision_enabled": true
+  },
+  "input": {
+    "image": {
+      "type": "string",
+      "description": "Base64-encoded image or file path",
+      "formats": ["jpg", "jpeg", "png", "webp"],
+      "max_size_mb": 5
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "locale": {
+          "type": "string",
+          "default": "zh-HK",
+          "description": "Expected receipt locale"
+        },
+        "extract_line_items": {
+          "type": "boolean",
+          "default": false,
+          "description": "Extract individual line items"
+        }
+      }
+    }
+  },
+  "output": {
+    "type": "object",
+    "schema": {
+      "extracted": {
+        "date": "ISO 8601 date string",
+        "vendor": "string",
+        "amount": "number",
+        "currency": "string (ISO 4217)",
+        "description": "string",
+        "tax_amount": "number (optional)",
+        "line_items": "array (optional)"
+      },
+      "confidence": "number (0-1)",
+      "raw_text": "string (optional)",
+      "warnings": "array of strings (optional)"
+    }
+  },
+  "cost_estimation": {
+    "per_image": "$0.004-0.005 USD",
+    "monthly_500_images": "~$2-2.5 USD"
+  },
+  "performance": {
+    "avg_processing_time": "2-4 seconds",
+    "accuracy": "92-98%"
+  }
+}

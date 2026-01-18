@@ -1,0 +1,239 @@
+{
+  "version": "1.0.0",
+  "jurisdiction": "Hong Kong SAR",
+  "authority": "Inland Revenue Department (IRD)",
+  "last_updated": "2026-01-18",
+  "rules": [
+    {
+      "rule_id": "HK-001",
+      "category": "Currency",
+      "title": "Currency Standardization",
+      "description": "All amounts must be recorded in Hong Kong Dollars (HKD)",
+      "severity": "error",
+      "auto_fix": true,
+      "implementation": {
+        "check": "Verify currency field is HKD",
+        "fix": "Convert foreign currencies to HKD at transaction date rate",
+        "fallback": "Use average monthly exchange rate if transaction date rate unavailable"
+      },
+      "examples": [
+        {
+          "input": { "amount": 100, "currency": "USD" },
+          "output": { "amount": 780, "currency": "HKD", "exchange_rate": 7.8 }
+        }
+      ]
+    },
+    {
+      "rule_id": "HK-002",
+      "category": "Meals & Entertainment",
+      "title": "Meal Deduction Limit",
+      "description": "Business meals limited to HKD 300 per meal for tax deduction",
+      "severity": "warning",
+      "auto_fix": false,
+      "limit": {
+        "amount": 300,
+        "currency": "HKD",
+        "per": "meal"
+      },
+      "implementation": {
+        "check": "If category is 5300 (Meals) and amount > 300, flag for review",
+        "action": "Split amount: HKD 300 deductible, excess non-deductible",
+        "manual_review": "Require justification if amount > 500"
+      },
+      "examples": [
+        {
+          "scenario": "Client lunch HKD 450",
+          "deductible": 300,
+          "non_deductible": 150,
+          "note": "Excess amount treated as personal expense"
+        }
+      ]
+    },
+    {
+      "rule_id": "HK-003",
+      "category": "Documentation",
+      "title": "Receipt Retention Period",
+      "description": "Business receipts must be retained for 7 years from end of transaction year",
+      "severity": "info",
+      "retention_years": 7,
+      "implementation": {
+        "check": "Add retention_until date to receipt metadata",
+        "calculation": "transaction_year + 7 years",
+        "storage": "Secure digital storage with backup"
+      },
+      "examples": [
+        {
+          "transaction_date": "2026-01-18",
+          "retention_until": "2033-12-31",
+          "note": "Keep until end of 2033"
+        }
+      ]
+    },
+    {
+      "rule_id": "HK-004",
+      "category": "Account Codes",
+      "title": "Hong Kong Standard Account Codes",
+      "description": "Use HK standard expense account codes (5000-5999 for operating expenses)",
+      "severity": "error",
+      "auto_fix": true,
+      "account_code_ranges": {
+        "5000-5099": "Cost of Goods Sold",
+        "5100-5199": "Office & Administrative",
+        "5200-5299": "Travel & Transportation",
+        "5300-5399": "Meals & Entertainment",
+        "5400-5499": "Premises & Utilities",
+        "5500-5599": "Professional Services",
+        "5600-5699": "Marketing & Advertising",
+        "5700-5799": "Finance Costs",
+        "5800-5899": "Depreciation",
+        "5900-5999": "Other Operating Expenses",
+        "9000-9999": "Non-deductible Expenses"
+      },
+      "implementation": {
+        "check": "Validate account code in range 5000-9999",
+        "mapping": "Use category_mapping.json for code assignment"
+      }
+    },
+    {
+      "rule_id": "HK-005",
+      "category": "Deductibility",
+      "title": "Business Purpose Requirement",
+      "description": "Expenses must be incurred wholly and exclusively for business purposes",
+      "severity": "warning",
+      "auto_fix": false,
+      "implementation": {
+        "check": "Flag personal expenses for exclusion",
+        "keywords": {
+          "non_deductible": [
+            "personal",
+            "private",
+            "家用",
+            "個人",
+            "entertainment (non-business)",
+            "vacation",
+            "holiday"
+          ]
+        },
+        "action": "Route to account code 9999 (Personal Expenses)"
+      },
+      "examples": [
+        {
+          "description": "Personal groceries at ParknShop",
+          "deductible": false,
+          "category": "9999 - Personal Expenses"
+        },
+        {
+          "description": "Client meeting at restaurant",
+          "deductible": true,
+          "category": "5300 - Meals & Entertainment"
+        }
+      ]
+    },
+    {
+      "rule_id": "HK-006",
+      "category": "Data Format",
+      "title": "Date Format Standardization",
+      "description": "All dates must be in ISO 8601 format (YYYY-MM-DD)",
+      "severity": "error",
+      "auto_fix": true,
+      "implementation": {
+        "check": "Validate date matches regex: ^\\d{4}-\\d{2}-\\d{2}$",
+        "conversion": {
+          "DD/MM/YYYY": "Common HK format, convert to YYYY-MM-DD",
+          "DD-MM-YYYY": "Alternative format, convert to YYYY-MM-DD",
+          "YYYY年MM月DD日": "Chinese format, convert to YYYY-MM-DD"
+        }
+      }
+    },
+    {
+      "rule_id": "HK-007",
+      "category": "GST/VAT",
+      "title": "No GST in Hong Kong",
+      "description": "Hong Kong has no Goods and Services Tax (GST) or Value Added Tax (VAT)",
+      "severity": "info",
+      "implementation": {
+        "check": "If tax_amount field exists and > 0 for HK receipts, flag as error",
+        "note": "Tax amounts should be 0 for Hong Kong transactions",
+        "exception": "Foreign receipts may include GST/VAT, record separately"
+      }
+    },
+    {
+      "rule_id": "HK-008",
+      "category": "Duplicates",
+      "title": "Duplicate Receipt Detection",
+      "description": "Prevent duplicate expense claims",
+      "severity": "error",
+      "auto_fix": false,
+      "implementation": {
+        "check": "Compare: vendor, date, amount (±5% tolerance)",
+        "hash": "Create receipt hash: SHA256(vendor + date + amount)",
+        "action": "Flag potential duplicates for manual review"
+      }
+    },
+    {
+      "rule_id": "HK-009",
+      "category": "Amount Validation",
+      "title": "Reasonable Amount Checks",
+      "description": "Flag unusually high amounts for review",
+      "severity": "warning",
+      "auto_fix": false,
+      "thresholds": {
+        "5100": { "category": "Office Supplies", "max": 5000 },
+        "5200": { "category": "Travel", "max": 10000 },
+        "5300": { "category": "Meals", "max": 2000 },
+        "5400": { "category": "Rent & Utilities", "max": 50000 },
+        "5500": { "category": "Professional Services", "max": 20000 }
+      },
+      "implementation": {
+        "check": "If amount > category threshold, require manual approval",
+        "action": "Add approval_required flag to transaction"
+      }
+    },
+    {
+      "rule_id": "HK-010",
+      "category": "Vendor Validation",
+      "title": "Vendor Name Requirements",
+      "description": "Vendor name must be present and meaningful",
+      "severity": "error",
+      "auto_fix": false,
+      "implementation": {
+        "check": "Vendor field not empty and length > 2 characters",
+        "reject": [
+          "N/A",
+          "Unknown",
+          "未知",
+          "***",
+          "---"
+        ],
+        "action": "Flag for manual vendor name entry if invalid"
+      }
+    }
+  ],
+  "compliance_checks": {
+    "pre_processing": [
+      "HK-006",
+      "HK-010"
+    ],
+    "categorization": [
+      "HK-004",
+      "HK-005"
+    ],
+    "post_processing": [
+      "HK-001",
+      "HK-002",
+      "HK-007",
+      "HK-008",
+      "HK-009"
+    ],
+    "reporting": [
+      "HK-003"
+    ]
+  },
+  "auto_fix_enabled": true,
+  "strict_mode": false,
+  "alert_thresholds": {
+    "error_count": 5,
+    "warning_count": 10,
+    "action": "Notify accountant for review"
+  }
+}
