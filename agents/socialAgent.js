@@ -1,15 +1,17 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const perplexityService = require('../services/perplexityService');
+const { getClaudeModel, getModelDisplayName, shouldUsePerplexity } = require('../utils/modelHelper');
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-async function analyzeSocial(client_name, brief) {
+async function analyzeSocial(client_name, brief, options = {}) {
+  const { model: modelSelection = 'haiku' } = options;
   let webResearch = null;
 
   // Optionally use Perplexity for current social media trends
-  if (perplexityService.isAvailable()) {
+  if (shouldUsePerplexity(modelSelection)) {
     try {
       console.log('🔍 Gathering current social media trends via Perplexity...');
       const researchResult = await perplexityService.research(
@@ -32,9 +34,11 @@ async function analyzeSocial(client_name, brief) {
     ? `\n\n**最新社交媒體趨勢 (來自網絡研究)**:\n${webResearch}\n\n請結合以上最新趨勢和你的專業知識來提供建議。`
     : '';
 
+  const claudeModel = getClaudeModel(modelSelection);
+
   const response = await client.messages.create({
-    model: 'claude-3-haiku-20240307',
-    max_tokens: 1000,
+    model: claudeModel,
+    max_tokens: modelSelection === 'sonnet' ? 2000 : 1000,
     messages: [
       {
         role: 'user',
@@ -61,14 +65,21 @@ async function analyzeSocial(client_name, brief) {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
 
-    // Add metadata about web research
-    if (webResearch) {
-      analysis._enhanced_with_web_research = true;
-    }
-
-    return analysis;
+    return {
+      ...analysis,
+      _meta: {
+        model: getModelDisplayName(modelSelection),
+        enhanced_with_web_research: !!webResearch
+      }
+    };
   } catch {
-    return { raw: text };
+    return {
+      raw: text,
+      _meta: {
+        model: getModelDisplayName(modelSelection),
+        enhanced_with_web_research: !!webResearch
+      }
+    };
   }
 }
 

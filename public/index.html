@@ -275,15 +275,16 @@
           <label for="agentBrief">Brief</label>
           <textarea id="agentBrief" placeholder="Describe the project requirements..." required></textarea>
         </div>
-        <!-- Model Selection (only for Research Agent) -->
-        <div class="form-group" id="modelSelectionGroup" style="display: none;">
-          <label for="modelSelect">Model</label>
+        <!-- Model Selection (for all agents) -->
+        <div class="form-group" id="modelSelectionGroup">
+          <label for="modelSelect">AI Model</label>
           <select id="modelSelect">
+            <option value="haiku">Claude 3 Haiku (Fast & Cost-effective)</option>
+            <option value="sonnet">Claude 3.5 Sonnet (Balanced)</option>
             <option value="perplexity">Perplexity Sonar Pro (Web Research)</option>
-            <option value="claude">Claude 3 Haiku (Knowledge-based)</option>
           </select>
-          <small style="color: #666; display: block; margin-top: 5px;">
-            💡 Perplexity provides real-time web data. Claude uses its training knowledge.
+          <small id="modelHint" style="color: #666; display: block; margin-top: 5px;">
+            💡 Haiku is fastest. Sonnet is more capable. Perplexity provides real-time web data.
           </small>
         </div>
         <button class="btn" onclick="runAgent()">Run Analysis</button>
@@ -409,16 +410,23 @@
       document.getElementById('agentResult').classList.remove('show');
       document.getElementById('agentError').classList.remove('show');
 
-      // Show model selection only for Research Agent
-      const modelSelectionGroup = document.getElementById('modelSelectionGroup');
-      if (name === 'research') {
-        modelSelectionGroup.style.display = 'block';
-      } else {
-        modelSelectionGroup.style.display = 'none';
-      }
+      // Update model hint based on agent type
+      updateModelHint(name);
 
       // Scroll to form
       document.getElementById('agentForm').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Update model hint based on agent
+    function updateModelHint(agentName) {
+      const modelHint = document.getElementById('modelHint');
+      const hints = {
+        'creative': '💡 Haiku for quick ideas. Sonnet for deeper creative concepts. Perplexity for trend research.',
+        'seo': '💡 Haiku for basic SEO. Sonnet for strategy. Perplexity for latest algorithm updates.',
+        'social': '💡 Haiku for quick posts. Sonnet for campaigns. Perplexity for viral trends.',
+        'research': '💡 Haiku for knowledge-based. Sonnet for complex analysis. Perplexity for real-time data.'
+      };
+      modelHint.textContent = hints[agentName] || '💡 Choose the best model for your needs.';
     }
 
     // Format analysis results for display
@@ -525,14 +533,13 @@
       agentResult.classList.remove('show');
 
       try {
-        // Build request body
-        const requestBody = { client_name: clientName, brief };
-
-        // Add model selection for Research Agent
-        if (selectedAgentName === 'research') {
-          const modelSelect = document.getElementById('modelSelect').value;
-          requestBody.use_perplexity = (modelSelect === 'perplexity');
-        }
+        // Build request body with model selection
+        const modelSelect = document.getElementById('modelSelect').value;
+        const requestBody = {
+          client_name: clientName,
+          brief,
+          model: modelSelect  // Pass model selection to backend
+        };
 
         const response = await fetch(selectedAgentEndpoint, {
           method: 'POST',

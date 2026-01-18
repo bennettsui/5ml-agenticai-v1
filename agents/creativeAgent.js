@@ -1,13 +1,17 @@
 const Anthropic = require('@anthropic-ai/sdk');
+const { getClaudeModel, getModelDisplayName } = require('../utils/modelHelper');
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-async function analyzeCreative(client_name, brief) {
+async function analyzeCreative(client_name, brief, options = {}) {
+  const { model: modelSelection = 'haiku' } = options;
+  const claudeModel = getClaudeModel(modelSelection);
+
   const response = await client.messages.create({
-    model: 'claude-3-haiku-20240307',
-    max_tokens: 1000,
+    model: claudeModel,
+    max_tokens: modelSelection === 'sonnet' ? 2000 : 1000,
     messages: [
       {
         role: 'user',
@@ -31,9 +35,21 @@ async function analyzeCreative(client_name, brief) {
   const text = response.content[0].text;
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
+    const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
+
+    return {
+      ...analysis,
+      _meta: {
+        model: getModelDisplayName(modelSelection)
+      }
+    };
   } catch {
-    return { raw: text };
+    return {
+      raw: text,
+      _meta: {
+        model: getModelDisplayName(modelSelection)
+      }
+    };
   }
 }
 

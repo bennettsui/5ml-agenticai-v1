@@ -308,13 +308,13 @@ ${brief}
  */
 app.post('/agents/creative', async (req, res) => {
   try {
-    const { client_name, brief } = req.body;
+    const { client_name, brief, model } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeCreative } = require('./agents/creativeAgent');
-    const analysis = await analyzeCreative(client_name, brief);
+    const analysis = await analyzeCreative(client_name, brief, { model });
 
     res.json({
       success: true,
@@ -356,13 +356,13 @@ app.post('/agents/creative', async (req, res) => {
  */
 app.post('/agents/seo', async (req, res) => {
   try {
-    const { client_name, brief } = req.body;
+    const { client_name, brief, model } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeSEO } = require('./agents/seoAgent');
-    const analysis = await analyzeSEO(client_name, brief);
+    const analysis = await analyzeSEO(client_name, brief, { model });
 
     res.json({
       success: true,
@@ -404,13 +404,13 @@ app.post('/agents/seo', async (req, res) => {
  */
 app.post('/agents/social', async (req, res) => {
   try {
-    const { client_name, brief } = req.body;
+    const { client_name, brief, model } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeSocial } = require('./agents/socialAgent');
-    const analysis = await analyzeSocial(client_name, brief);
+    const analysis = await analyzeSocial(client_name, brief, { model });
 
     res.json({
       success: true,
@@ -452,15 +452,13 @@ app.post('/agents/social', async (req, res) => {
  */
 app.post('/agents/research', async (req, res) => {
   try {
-    const { client_name, brief, use_perplexity } = req.body;
+    const { client_name, brief, model } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeResearch } = require('./agents/researchAgent');
-    const analysis = await analyzeResearch(client_name, brief, {
-      usePerplexity: use_perplexity !== false, // Default to true
-    });
+    const analysis = await analyzeResearch(client_name, brief, { model });
 
     res.json({
       success: true,
