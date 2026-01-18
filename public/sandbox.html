@@ -455,7 +455,8 @@
           body: JSON.stringify({
             client_name: clientName,
             brief: brief,
-            model: model
+            model: model,
+            no_fallback: true  // Sandbox tests each model independently
           })
         });
 
@@ -531,7 +532,33 @@
         html += `<div class="result-field" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">`;
         html += `<div class="result-field-label">Model Info</div>`;
         html += `<div class="result-field-value">`;
-        html += `<div><strong>Model:</strong> ${data._meta.model || 'Unknown'}</div>`;
+
+        // Display models_used array if present
+        if (data._meta.models_used && Array.isArray(data._meta.models_used)) {
+          html += `<div><strong>Models Used:</strong></div>`;
+          data._meta.models_used.forEach((modelInfo, index) => {
+            html += `<div style="margin-left: 15px; margin-top: 8px;">`;
+            html += `<div><strong>${index + 1}. ${modelInfo.model}</strong> (${modelInfo.model_id})</div>`;
+            if (modelInfo.usage) {
+              html += `<div style="color: #6b7280; font-size: 0.85rem; margin-top: 3px;">`;
+              if (modelInfo.usage.input_tokens !== undefined) {
+                html += `Input: ${modelInfo.usage.input_tokens} tokens, `;
+                html += `Output: ${modelInfo.usage.output_tokens} tokens, `;
+                html += `Total: ${modelInfo.usage.total_tokens} tokens`;
+              } else if (modelInfo.usage.prompt_tokens !== undefined) {
+                html += `Prompt: ${modelInfo.usage.prompt_tokens} tokens, `;
+                html += `Completion: ${modelInfo.usage.completion_tokens} tokens, `;
+                html += `Total: ${modelInfo.usage.total_tokens} tokens`;
+              }
+              html += `</div>`;
+            }
+            html += `</div>`;
+          });
+        } else if (data._meta.model) {
+          // Fallback to old single model display
+          html += `<div><strong>Model:</strong> ${data._meta.model}</div>`;
+        }
+
         if (data._meta.enhanced_with_web_research) {
           html += `<div style="color: #059669; margin-top: 5px;">✓ Enhanced with web research</div>`;
         }

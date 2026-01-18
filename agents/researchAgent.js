@@ -13,14 +13,18 @@ const client = new Anthropic({
  */
 
 async function analyzeResearch(client_name, brief, options = {}) {
-  const { model: modelSelection = 'deepseek' } = options;
+  const { model: modelSelection = 'deepseek', no_fallback = false } = options;
+  const modelsUsed = [];
 
   // Try Perplexity first if requested and available
   if (shouldUsePerplexity(modelSelection)) {
     try {
       console.log('🔍 Using Perplexity for web-based research...');
-      return await researchWithPerplexity(client_name, brief);
+      return await researchWithPerplexity(client_name, brief, modelsUsed);
     } catch (error) {
+      if (no_fallback) {
+        throw new Error(`Perplexity API error: ${error.message}`);
+      }
       console.warn('⚠️ Perplexity unavailable, falling back to DeepSeek:', error.message);
     }
   }
@@ -29,18 +33,21 @@ async function analyzeResearch(client_name, brief, options = {}) {
   if (shouldUseDeepSeek(modelSelection)) {
     try {
       console.log('🤖 Using DeepSeek for knowledge-based research...');
-      return await researchWithDeepSeek(client_name, brief, modelSelection);
+      return await researchWithDeepSeek(client_name, brief, modelSelection, no_fallback, modelsUsed);
     } catch (error) {
+      if (no_fallback) {
+        throw new Error(`DeepSeek API error: ${error.message}`);
+      }
       console.warn('⚠️ DeepSeek unavailable, falling back to Claude:', error.message);
     }
   }
 
   // Fallback to Claude-based research
   console.log('🤖 Using Claude for knowledge-based research...');
-  return await researchWithClaude(client_name, brief, modelSelection);
+  return await researchWithClaude(client_name, brief, modelSelection, modelsUsed);
 }
 
-async function researchWithPerplexity(client_name, brief) {
+async function researchWithPerplexity(client_name, brief, modelsUsed = []) {
   const query = `Conduct comprehensive research for the following project:
 
 **Client**: ${client_name}
@@ -73,17 +80,23 @@ Return response in JSON format with keys: market_insights, competitor_analysis, 
     }
   );
 
+  // Track Perplexity usage
+  modelsUsed.push({
+    model: 'Perplexity Sonar Pro',
+    model_id: 'sonar-pro',
+    usage: result.usage || {}
+  });
+
   return {
     ...result.data,
     _meta: {
-      model: 'Perplexity Sonar Pro',
+      models_used: modelsUsed,
       sources: result.sources,
-      usage: result.usage,
     }
   };
 }
 
-async function researchWithClaude(client_name, brief, modelSelection = 'haiku') {
+async function researchWithClaude(client_name, brief, modelSelection = 'haiku', modelsUsed = []) {
   const claudeModel = getClaudeModel(modelSelection);
 
   const response = await client.messages.create({
@@ -110,6 +123,17 @@ async function researchWithClaude(client_name, brief, modelSelection = 'haiku') 
     ],
   });
 
+  // Track Claude usage
+  modelsUsed.push({
+    model: getModelDisplayName(modelSelection),
+    model_id: claudeModel,
+    usage: {
+      input_tokens: response.usage?.input_tokens || 0,
+      output_tokens: response.usage?.output_tokens || 0,
+      total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0)
+    }
+  });
+
   const text = response.content[0].text;
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -118,20 +142,20 @@ async function researchWithClaude(client_name, brief, modelSelection = 'haiku') 
     return {
       ...analysis,
       _meta: {
-        model: getModelDisplayName(modelSelection),
+        models_used: modelsUsed,
       }
     };
   } catch {
     return {
       raw: text,
       _meta: {
-        model: getModelDisplayName(modelSelection),
+        models_used: modelsUsed,
       }
     };
   }
 }
 
-async function researchWithDeepSeek(client_name, brief, modelSelection) {
+async function researchWithDeepSeek(client_name, brief, modelSelection, no_fallback = false, modelsUsed = []) {
   const systemPrompt = '你是一個研究分析師。請為以下項目進行全面的研究分析。';
   const userPrompt = `**客户**: ${client_name}
 **簡報**: ${brief}
@@ -151,6 +175,13 @@ async function researchWithDeepSeek(client_name, brief, modelSelection) {
       maxTokens: 2000,
     });
 
+    // Track DeepSeek usage
+    modelsUsed.push({
+      model: getModelDisplayName(modelSelection),
+      model_id: 'deepseek-reasoner',
+      usage: result.usage || {}
+    });
+
     const text = result.content;
 
     try {
@@ -160,22 +191,23 @@ async function researchWithDeepSeek(client_name, brief, modelSelection) {
       return {
         ...analysis,
         _meta: {
-          model: getModelDisplayName(modelSelection),
-          usage: result.usage
+          models_used: modelsUsed
         }
       };
     } catch {
       return {
         raw: text,
         _meta: {
-          model: getModelDisplayName(modelSelection),
-          usage: result.usage
+          models_used: modelsUsed
         }
       };
     }
   } catch (error) {
+    if (no_fallback) {
+      throw new Error(`DeepSeek API error: ${error.message}`);
+    }
     console.error('DeepSeek error, falling back to Claude Haiku:', error.message);
-    return await researchWithClaude(client_name, brief, 'haiku');
+    return await researchWithClaude(client_name, brief, 'haiku', modelsUsed);
   }
 }
 

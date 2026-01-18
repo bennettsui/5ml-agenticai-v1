@@ -8,7 +8,8 @@ const client = new Anthropic({
 });
 
 async function analyzeSEO(client_name, brief, options = {}) {
-  const { model: modelSelection = 'deepseek' } = options;
+  const { model: modelSelection = 'deepseek', no_fallback = false } = options;
+  const modelsUsed = [];
   let webResearch = null;
 
   // Optionally use Perplexity for current SEO trends and competitor analysis
@@ -32,7 +33,7 @@ async function analyzeSEO(client_name, brief, options = {}) {
 
   // Use DeepSeek if selected and available
   if (shouldUseDeepSeek(modelSelection)) {
-    return await analyzeWithDeepSeek(client_name, brief, webResearch, modelSelection);
+    return await analyzeWithDeepSeek(client_name, brief, webResearch, modelSelection, no_fallback, modelsUsed);
   }
 
   // Build prompt with optional web research context
@@ -66,6 +67,17 @@ async function analyzeSEO(client_name, brief, options = {}) {
     ],
   });
 
+  // Track Claude usage
+  modelsUsed.push({
+    model: getModelDisplayName(modelSelection),
+    model_id: claudeModel,
+    usage: {
+      input_tokens: response.usage?.input_tokens || 0,
+      output_tokens: response.usage?.output_tokens || 0,
+      total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0)
+    }
+  });
+
   const text = response.content[0].text;
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -74,7 +86,7 @@ async function analyzeSEO(client_name, brief, options = {}) {
     return {
       ...analysis,
       _meta: {
-        model: getModelDisplayName(modelSelection),
+        models_used: modelsUsed,
         enhanced_with_web_research: !!webResearch
       }
     };
@@ -82,14 +94,14 @@ async function analyzeSEO(client_name, brief, options = {}) {
     return {
       raw: text,
       _meta: {
-        model: getModelDisplayName(modelSelection),
+        models_used: modelsUsed,
         enhanced_with_web_research: !!webResearch
       }
     };
   }
 }
 
-async function analyzeWithDeepSeek(client_name, brief, webResearch, modelSelection) {
+async function analyzeWithDeepSeek(client_name, brief, webResearch, modelSelection, no_fallback = false, modelsUsed = []) {
   const contextNote = webResearch
     ? `\n\n**最新 SEO 資訊 (來自網絡研究)**:\n${webResearch}\n\n請結合以上最新資訊和你的專業知識來提供建議。`
     : '';
@@ -113,6 +125,13 @@ async function analyzeWithDeepSeek(client_name, brief, webResearch, modelSelecti
       maxTokens: 1500,
     });
 
+    // Track DeepSeek usage
+    modelsUsed.push({
+      model: getModelDisplayName(modelSelection),
+      model_id: 'deepseek-reasoner',
+      usage: result.usage || {}
+    });
+
     const text = result.content;
 
     try {
@@ -122,24 +141,25 @@ async function analyzeWithDeepSeek(client_name, brief, webResearch, modelSelecti
       return {
         ...analysis,
         _meta: {
-          model: getModelDisplayName(modelSelection),
-          enhanced_with_web_research: !!webResearch,
-          usage: result.usage
+          models_used: modelsUsed,
+          enhanced_with_web_research: !!webResearch
         }
       };
     } catch {
       return {
         raw: text,
         _meta: {
-          model: getModelDisplayName(modelSelection),
-          enhanced_with_web_research: !!webResearch,
-          usage: result.usage
+          models_used: modelsUsed,
+          enhanced_with_web_research: !!webResearch
         }
       };
     }
   } catch (error) {
+    if (no_fallback) {
+      throw new Error(`DeepSeek API error: ${error.message}`);
+    }
     console.error('DeepSeek error, falling back to Claude Haiku:', error.message);
-    return await analyzeSEO(client_name, brief, { model: 'haiku' });
+    return await analyzeSEO(client_name, brief, { model: 'haiku', no_fallback: false });
   }
 }
 
