@@ -1,6 +1,8 @@
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
 const { specs, swaggerUi } = require('./swagger');
+const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
+const deepseekService = require('./services/deepseekService');
 require('dotenv').config();
 
 const app = express();
@@ -116,7 +118,7 @@ app.post('/analyze', async (req, res) => {
   try {
     console.log('📋 Received analysis request:', req.body);
 
-    const { client_name, brief, industry } = req.body;
+    const { client_name, brief, industry, model: modelSelection = 'deepseek' } = req.body;
 
     // Validate input
     if (!client_name || !brief) {
@@ -125,16 +127,70 @@ app.post('/analyze', async (req, res) => {
       });
     }
 
-    console.log('🔄 Calling Claude API...');
+    let analysis;
 
-    // Call Claude
-    const response = await client.messages.create({
-      model: 'claude-3-haiku-20240307',
-      max_tokens: 1000,
-      messages: [
-        {
-          role: 'user',
-          content: `你是一個行銷策略顧問。請分析以下項目簡報並用 JSON 格式回覆。
+    // Use DeepSeek if selected and available
+    if (shouldUseDeepSeek(modelSelection)) {
+      console.log('🔄 Calling DeepSeek API...');
+
+      const systemPrompt = '你是一個行銷策略顧問。請分析以下項目簡報並用 JSON 格式回覆。';
+      const userPrompt = `**客户名称**: ${client_name}
+**行业**: ${industry || '未指定'}
+**简报内容**:
+${brief}
+
+請返回下列 JSON 格式的分析結果（只返回 JSON，不需要其他文本）:
+{
+  "key_objectives": ["目標1", "目標2", "目標3"],
+  "target_audience": "目標受眾描述",
+  "recommended_channels": ["社交媒體", "內容行銷", "..."],
+  "success_metrics": ["metric1", "metric2"],
+  "risks": ["風險1", "風險2"]
+}`;
+
+      try {
+        const result = await deepseekService.analyze(systemPrompt, userPrompt, {
+          maxTokens: 1500,
+        });
+
+        const text = result.content;
+        try {
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
+          analysis._meta = {
+            model: getModelDisplayName(modelSelection),
+            usage: result.usage
+          };
+        } catch {
+          analysis = {
+            raw: text,
+            _meta: {
+              model: getModelDisplayName(modelSelection),
+              usage: result.usage
+            }
+          };
+        }
+        console.log('✅ DeepSeek API response successful');
+      } catch (error) {
+        console.error('DeepSeek error, falling back to Claude Haiku:', error.message);
+        // Fallback will be handled below
+        analysis = null;
+      }
+    }
+
+    // Use Claude if DeepSeek wasn't used or failed
+    if (!analysis) {
+      console.log('🔄 Calling Claude API...');
+      const effectiveModel = modelSelection === 'perplexity' ? 'deepseek' : modelSelection;
+      const claudeModel = getClaudeModel(effectiveModel);
+
+      const response = await client.messages.create({
+        model: claudeModel,
+        max_tokens: effectiveModel === 'sonnet' ? 2000 : 1000,
+        messages: [
+          {
+            role: 'user',
+            content: `你是一個行銷策略顧問。請分析以下項目簡報並用 JSON 格式回覆。
 
 **客户名称**: ${client_name}
 **行业**: ${industry || '未指定'}
@@ -149,26 +205,33 @@ ${brief}
   "success_metrics": ["metric1", "metric2"],
   "risks": ["風險1", "風險2"]
 }`,
-        },
-      ],
-    });
+          },
+        ],
+      });
 
-    console.log('✅ Claude API response successful');
+      console.log('✅ Claude API response successful');
 
-    // Parse response
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Unexpected response type');
-    }
+      const content = response.content[0];
+      if (content.type !== 'text') {
+        throw new Error('Unexpected response type');
+      }
 
-    let analysis;
-    try {
-      // Try to extract JSON from response
-      const jsonMatch = content.text.match(/\{[\s\S]*\}/);
-      analysis = jsonMatch ? JSON.parse(jsonMatch) : { raw: content.text };
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      analysis = { raw: content.text };
+      try {
+        const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+        analysis = jsonMatch ? JSON.parse(jsonMatch) : { raw: content.text };
+        analysis._meta = {
+          model: getModelDisplayName(effectiveModel),
+          note: modelSelection === 'perplexity' ? 'General analysis uses Claude (Perplexity not applicable)' : undefined
+        };
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        analysis = {
+          raw: content.text,
+          _meta: {
+            model: getModelDisplayName(effectiveModel)
+          }
+        };
+      }
     }
 
     // 保存到數據庫 (optional - won't fail if DB not configured)

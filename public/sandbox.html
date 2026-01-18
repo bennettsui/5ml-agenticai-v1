@@ -148,6 +148,10 @@
       color: #333;
     }
 
+    .model-name.deepseek {
+      color: #ea580c;
+    }
+
     .model-name.haiku {
       color: #2563eb;
     }
@@ -326,6 +330,25 @@
     </div>
 
     <div class="results-container">
+      <!-- DeepSeek Chat -->
+      <div class="model-result">
+        <div class="model-header">
+          <h2 class="model-name deepseek">DeepSeek Chat</h2>
+          <div class="status-indicator" id="status-deepseek"></div>
+        </div>
+        <div class="model-stats">
+          <div class="stat">
+            <span>⚡️</span>
+            <span id="time-deepseek">—</span>
+          </div>
+        </div>
+        <div class="model-output" id="output-deepseek">
+          <div class="empty-state">
+            <p>Ready to test</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Claude 3 Haiku -->
       <div class="model-result">
         <div class="model-header">
@@ -400,7 +423,7 @@
       testButton.disabled = true;
       testButton.textContent = '⏳ Testing...';
 
-      const models = ['haiku', 'sonnet', 'perplexity'];
+      const models = ['deepseek', 'haiku', 'sonnet', 'perplexity'];
 
       // Test all models in parallel
       await Promise.all(models.map(model => testModel(agent, clientName, brief, model)));

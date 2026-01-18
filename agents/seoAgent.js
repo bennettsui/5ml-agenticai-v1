@@ -1,13 +1,14 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const perplexityService = require('../services/perplexityService');
-const { getClaudeModel, getModelDisplayName, shouldUsePerplexity } = require('../utils/modelHelper');
+const { getClaudeModel, getModelDisplayName, shouldUsePerplexity, shouldUseDeepSeek } = require('../utils/modelHelper');
+const deepseekService = require('../services/deepseekService');
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 async function analyzeSEO(client_name, brief, options = {}) {
-  const { model: modelSelection = 'haiku' } = options;
+  const { model: modelSelection = 'deepseek' } = options;
   let webResearch = null;
 
   // Optionally use Perplexity for current SEO trends and competitor analysis
@@ -27,6 +28,11 @@ async function analyzeSEO(client_name, brief, options = {}) {
     } catch (error) {
       console.warn('⚠️ Web research unavailable, using Claude-only analysis:', error.message);
     }
+  }
+
+  // Use DeepSeek if selected and available
+  if (shouldUseDeepSeek(modelSelection)) {
+    return await analyzeWithDeepSeek(client_name, brief, webResearch, modelSelection);
   }
 
   // Build prompt with optional web research context
@@ -80,6 +86,60 @@ async function analyzeSEO(client_name, brief, options = {}) {
         enhanced_with_web_research: !!webResearch
       }
     };
+  }
+}
+
+async function analyzeWithDeepSeek(client_name, brief, webResearch, modelSelection) {
+  const contextNote = webResearch
+    ? `\n\n**最新 SEO 資訊 (來自網絡研究)**:\n${webResearch}\n\n請結合以上最新資訊和你的專業知識來提供建議。`
+    : '';
+
+  const systemPrompt = '你是一個 SEO 專家。請為以下項目提供 SEO 策略。';
+  const userPrompt = `**客户**: ${client_name}
+**簡報**: ${brief}${contextNote}
+
+請返回 JSON 格式（只返回 JSON，不需要其他文本）:
+{
+  "target_keywords": ["關鍵詞1", "關鍵詞2"],
+  "content_strategy": "內容策略描述",
+  "technical_seo": ["技術1", "技術2"],
+  "backlink_opportunities": ["機會1", "機會2"],
+  "timeline_months": 6,
+  "current_trends": ["趨勢1", "趨勢2"]
+}`;
+
+  try {
+    const result = await deepseekService.analyze(systemPrompt, userPrompt, {
+      maxTokens: 1500,
+    });
+
+    const text = result.content;
+
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
+
+      return {
+        ...analysis,
+        _meta: {
+          model: getModelDisplayName(modelSelection),
+          enhanced_with_web_research: !!webResearch,
+          usage: result.usage
+        }
+      };
+    } catch {
+      return {
+        raw: text,
+        _meta: {
+          model: getModelDisplayName(modelSelection),
+          enhanced_with_web_research: !!webResearch,
+          usage: result.usage
+        }
+      };
+    }
+  } catch (error) {
+    console.error('DeepSeek error, falling back to Claude Haiku:', error.message);
+    return await analyzeSEO(client_name, brief, { model: 'haiku' });
   }
 }
 
