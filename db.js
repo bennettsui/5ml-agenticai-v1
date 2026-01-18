@@ -84,7 +84,14 @@ async function getProjectAnalyses(project_id) {
 async function getAllProjects(limit = 10) {
   try {
     const result = await pool.query(
-      'SELECT * FROM projects ORDER BY created_at DESC LIMIT $1',
+      `SELECT
+        p.*,
+        COUNT(a.id) as analysis_count
+      FROM projects p
+      LEFT JOIN analyses a ON p.project_id = a.project_id
+      GROUP BY p.id, p.project_id, p.client_name, p.brief, p.industry, p.created_at
+      ORDER BY p.created_at DESC
+      LIMIT $1`,
       [limit]
     );
     return result.rows;
