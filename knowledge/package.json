@@ -1,0 +1,36 @@
+{
+  "name": "@5ml/knowledge-management",
+  "version": "1.0.0",
+  "description": "Layer 4: Knowledge Management for 5ML Agentic AI Platform",
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "knowledge-management",
+    "vector-search",
+    "semantic-search",
+    "embeddings",
+    "rag"
+  ],
+  "author": "5ML Platform Team",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "pg": "^8.11.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.10.0",
+    "@types/uuid": "^9.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "pdf-parse": "^1.1.1"
+  },
+  "optionalDependencies": {
+    "pdf-parse": "^1.1.1"
+  }
+}
