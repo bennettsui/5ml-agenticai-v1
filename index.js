@@ -573,9 +573,9 @@ app.post('/agents/social', async (req, res) => {
  * @swagger
  * /agents/research:
  *   post:
- *     summary: Web research with Perplexity AI
+ *     summary: Brand Research Agent - Real-time brand status scan and asset audit
  *     tags: [Agents]
- *     description: Performs comprehensive web-based research using Perplexity Sonar Pro - provides market insights, competitor analysis, current trends, opportunities and risks with real-time web data
+ *     description: Combines real-time intelligence with brand asset auditing. Provides data sufficiency check, dynamic scanning (3-month news, campaigns), product/pricing analysis, positioning verification, VOC analysis, 3Cs framework, SWOT analysis, and strategic diagnosis with reasoning tracking.
  *     requestBody:
  *       required: true
  *       content:
@@ -584,13 +584,13 @@ app.post('/agents/social', async (req, res) => {
  *             $ref: '#/components/schemas/AgentRequest'
  *     responses:
  *       200:
- *         description: Research analysis completed
+ *         description: Brand research analysis completed
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/AgentResponse'
  *       400:
- *         description: Missing required fields or PERPLEXITY_API_KEY not configured
+ *         description: Missing required fields
  *       500:
  *         description: Server error
  */
@@ -666,7 +666,7 @@ app.get('/agents', (req, res) => {
       {
         name: 'research',
         endpoint: '/agents/research',
-        description: '🔍 Web research with Perplexity AI'
+        description: 'Brand Research Agent - Real-time brand status scan and asset audit'
       }
     ],
     timestamp: new Date().toISOString(),
@@ -1036,18 +1036,29 @@ app.get('*', (req, res, next) => {
   }
 
   // For Next.js routes, try to serve the corresponding HTML file
+  const fs = require('fs');
   const nextJsPath = path.join(__dirname, 'frontend/out');
-  const htmlPath = path.join(nextJsPath, req.path, 'index.html');
-  const directHtmlPath = path.join(nextJsPath, req.path + '.html');
+
+  // Remove trailing slash for path lookups
+  const cleanPath = req.path.endsWith('/') && req.path !== '/'
+    ? req.path.slice(0, -1)
+    : req.path;
+
+  const htmlPath = path.join(nextJsPath, cleanPath, 'index.html');
+  const directHtmlPath = path.join(nextJsPath, cleanPath + '.html');
 
   // Check if path/index.html exists
-  const fs = require('fs');
   if (fs.existsSync(htmlPath)) {
     return res.sendFile(htmlPath);
   }
   // Check if path.html exists
   if (fs.existsSync(directHtmlPath)) {
     return res.sendFile(directHtmlPath);
+  }
+
+  // If original path had trailing slash and we didn't find anything, redirect to without trailing slash
+  if (req.path.endsWith('/') && req.path !== '/') {
+    return res.redirect(301, cleanPath);
   }
 
   // Otherwise continue to next middleware
