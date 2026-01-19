@@ -148,28 +148,50 @@ export default function ModelSandbox() {
   const formatOutput = (data: any) => {
     if (!data) return null;
 
+    // Handle raw text output
+    if (data.raw) {
+      return (
+        <div className="prose prose-sm dark:prose-invert max-w-none">
+          <pre className="whitespace-pre-wrap bg-slate-50 dark:bg-slate-900 p-4 rounded-lg text-xs leading-relaxed">
+            {data.raw}
+          </pre>
+        </div>
+      );
+    }
+
     const entries = Object.entries(data).filter(([key]) => key !== '_meta');
 
     return (
-      <div className="space-y-3">
-        {entries.map(([key, value]) => (
-          <div key={key}>
-            <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-1">
-              {key.replace(/_/g, ' ')}
+      <div className="space-y-4">
+        {entries.map(([key, value], index) => (
+          <div
+            key={key}
+            className={`${index > 0 ? 'pt-4 border-t border-slate-100 dark:border-slate-700' : ''}`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400"></div>
+              <div className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                {key.replace(/_/g, ' ')}
+              </div>
             </div>
-            <div className="text-sm text-slate-900 dark:text-white">
+            <div className="ml-3.5 text-sm text-slate-900 dark:text-white leading-relaxed">
               {Array.isArray(value) ? (
-                <ul className="list-disc list-inside space-y-1">
+                <ul className="space-y-2">
                   {value.map((item, idx) => (
-                    <li key={idx}>{String(item)}</li>
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-slate-400 dark:text-slate-600 mt-0.5">•</span>
+                      <span className="flex-1">{String(item)}</span>
+                    </li>
                   ))}
                 </ul>
-              ) : typeof value === 'object' ? (
-                <pre className="text-xs bg-slate-100 dark:bg-slate-800 p-2 rounded overflow-auto">
-                  {JSON.stringify(value, null, 2)}
-                </pre>
+              ) : typeof value === 'object' && value !== null ? (
+                <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                  <pre className="text-xs overflow-auto leading-relaxed">
+                    {JSON.stringify(value, null, 2)}
+                  </pre>
+                </div>
               ) : (
-                <p>{String(value)}</p>
+                <p className="text-slate-800 dark:text-slate-200">{String(value)}</p>
               )}
             </div>
           </div>
