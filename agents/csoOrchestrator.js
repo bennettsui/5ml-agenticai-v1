@@ -190,8 +190,11 @@ async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
       }
     }
 
-    // Merge gathered data
-    existingData = { ...existingData, ...gatheredData };
+    // Merge gathered data with existing data
+    const allData = { ...existingData, ...gatheredData };
+
+    // Update for synthesis step
+    Object.assign(existingData, gatheredData);
   }
 
   // Step 3: Synthesize Holistic Diagnosis
