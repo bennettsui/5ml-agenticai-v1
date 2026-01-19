@@ -1,15 +1,30 @@
 const { Pool } = require('pg');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
+// Configure SSL based on environment and DATABASE_URL
+const getDatabaseConfig = () => {
+  const config = {
+    connectionString: process.env.DATABASE_URL,
+  };
+
+  // Only enable SSL for production databases (not localhost)
+  if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost')) {
+    config.ssl = {
+      rejectUnauthorized: false,
+    };
+  }
+
+  return config;
+};
+
+const pool = new Pool(getDatabaseConfig());
 
 // 初始化數據庫表
 async function initDatabase() {
   try {
+    // Test connection first
+    await pool.query('SELECT NOW()');
+    console.log('✅ Database connection established');
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS projects (
         id SERIAL PRIMARY KEY,
@@ -32,9 +47,12 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_analysis_project ON analyses(project_id);
       CREATE INDEX IF NOT EXISTS idx_analysis_agent ON analyses(agent_type);
     `);
-    console.log('✅ Database initialized');
+    console.log('✅ Database schema initialized');
   } catch (error) {
-    console.error('❌ Database initialization error:', error);
+    console.error('❌ Database initialization error:', error.message);
+    console.error('Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
+    console.error('SSL enabled:', getDatabaseConfig().ssl ? 'Yes' : 'No');
+    // Don't throw - allow app to start even if DB init fails
   }
 }
 
