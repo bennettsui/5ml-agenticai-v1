@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Home, Beaker, Sparkles } from 'lucide-react';
 import AgentTesting from '@/components/AgentTesting';
+import ModelSandbox from '@/components/ModelSandbox';
 
 type Tab = 'agents' | 'sandbox';
 
@@ -73,15 +74,7 @@ export default function SocialAgentsPage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'agents' && <AgentTesting />}
-        {activeTab === 'sandbox' && (
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden" style={{ height: 'calc(100vh - 200px)' }}>
-            <iframe
-              src="/sandbox.html"
-              className="w-full h-full border-0"
-              title="Model Sandbox - Compare AI Models Side by Side"
-            />
-          </div>
-        )}
+        {activeTab === 'sandbox' && <ModelSandbox />}
       </main>
     </div>
   );
