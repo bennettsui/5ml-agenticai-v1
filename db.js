@@ -511,6 +511,32 @@ async function deleteConversation(conversation_id) {
   }
 }
 
+async function deleteBrand(brand_name) {
+  try {
+    // Delete all conversations for this brand first
+    await pool.query('DELETE FROM conversations WHERE brand_name = $1', [brand_name]);
+
+    // Delete the brand
+    await pool.query('DELETE FROM brands WHERE brand_name = $1', [brand_name]);
+  } catch (error) {
+    console.error('Error deleting brand:', error);
+    throw error;
+  }
+}
+
+async function deleteProject(brand_name, initial_brief) {
+  try {
+    // Delete all conversations for this specific project (brand + brief)
+    await pool.query(
+      'DELETE FROM conversations WHERE brand_name = $1 AND initial_brief = $2',
+      [brand_name, initial_brief]
+    );
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    throw error;
+  }
+}
+
 async function getProjectsByBrand(brand_name) {
   try {
     // Get all unique briefs for the brand with aggregated data
@@ -589,6 +615,8 @@ module.exports = {
   getConversationsByBrand,
   getConversation,
   deleteConversation,
+  deleteBrand,
+  deleteProject,
   getProjectsByBrand,
   getConversationsByBrandAndBrief,
 };

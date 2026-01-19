@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Beaker, Loader2, Clock, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, History } from 'lucide-react';
+import { Beaker, Loader2, Clock, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, History, Trash2 } from 'lucide-react';
 
 interface ModelResult {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -113,6 +113,29 @@ export default function ModelSandbox() {
       await fetch('/api/sandbox/tests', { method: 'DELETE' });
     } catch (error) {
       console.error('Failed to clear history from database:', error);
+    }
+  };
+
+  const deleteTest = async (testId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!confirm('Are you sure you want to delete this test?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/sandbox/tests/${testId}`, { method: 'DELETE' });
+      const data = await response.json();
+
+      if (data.success) {
+        setHistory(prev => prev.filter(entry => entry.id !== testId));
+        if (expandedHistory === testId) {
+          setExpandedHistory(null);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete test:', error);
+      alert('Failed to delete test');
     }
   };
 
@@ -625,7 +648,7 @@ export default function ModelSandbox() {
             {history.map((entry, index) => (
               <div
                 key={entry.id}
-                className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
+                className="group border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
               >
                 {/* History Item Header */}
                 <button
@@ -650,7 +673,7 @@ export default function ModelSandbox() {
                       {entry.clientName}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     {/* Success/Error counts */}
                     <div className="flex items-center gap-1 text-xs">
                       <span className="text-green-600 dark:text-green-400">
@@ -660,11 +683,20 @@ export default function ModelSandbox() {
                         {Object.values(entry.results).filter(r => r.status === 'error').length} ✗
                       </span>
                     </div>
-                    {expandedHistory === entry.id ? (
-                      <ChevronUp className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => deleteTest(entry.id, e)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded"
+                        title="Delete test"
+                      >
+                        <Trash2 size={14} className="text-red-600 dark:text-red-400" />
+                      </button>
+                      {expandedHistory === entry.id ? (
+                        <ChevronUp className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                      )}
+                    </div>
                   </div>
                 </button>
 

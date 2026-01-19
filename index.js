@@ -26,7 +26,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, getProjectsByBrand, getConversationsByBrandAndBrief } = require('./db');
+const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -878,6 +878,41 @@ app.delete('/api/conversation/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting conversation:', error);
     res.status(500).json({ error: 'Failed to delete conversation' });
+  }
+});
+
+// Delete a brand (and all its conversations)
+app.delete('/api/brands/:brand_name', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    await deleteBrand(req.params.brand_name);
+    res.json({ success: true, message: 'Brand deleted' });
+  } catch (error) {
+    console.error('Error deleting brand:', error);
+    res.status(500).json({ error: 'Failed to delete brand' });
+  }
+});
+
+// Delete a project (all conversations for a brand + brief)
+app.delete('/api/brands/:brand_name/projects', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const brief = req.query.brief;
+    if (!brief) {
+      return res.status(400).json({ error: 'Brief parameter required' });
+    }
+
+    await deleteProject(req.params.brand_name, brief);
+    res.json({ success: true, message: 'Project deleted' });
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    res.status(500).json({ error: 'Failed to delete project' });
   }
 });
 

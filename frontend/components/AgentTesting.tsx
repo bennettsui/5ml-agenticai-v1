@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Sparkles, Search, Share2, TrendingUp, Loader2, Building2, Plus, Clock, ChevronDown, ChevronUp, Send, User, Bot, History } from 'lucide-react';
+import { Sparkles, Search, Share2, TrendingUp, Loader2, Building2, Plus, Clock, ChevronDown, ChevronUp, Send, User, Bot, History, Trash2 } from 'lucide-react';
 
 interface Agent {
   id: string;
@@ -369,6 +369,63 @@ export default function AgentTesting() {
     }
   };
 
+  const handleDeleteBrand = async (brandName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!confirm(`Are you sure you want to delete "${brandName}" and all its projects? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/brands/${encodeURIComponent(brandName)}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await loadBrands();
+        if (selectedBrand?.brand_name === brandName) {
+          setSelectedBrand(null);
+          setSelectedProject(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting brand:', error);
+      alert('Failed to delete brand');
+    }
+  };
+
+  const handleDeleteProject = async (brief: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!confirm('Are you sure you want to delete this project and all its conversations? This cannot be undone.')) {
+      return;
+    }
+
+    if (!selectedBrand) return;
+
+    try {
+      const response = await fetch(
+        `/api/brands/${encodeURIComponent(selectedBrand.brand_name)}/projects?brief=${encodeURIComponent(brief)}`,
+        {
+          method: 'DELETE',
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        await loadProjects(selectedBrand.brand_name);
+        if (selectedProject?.brief === brief) {
+          setSelectedProject(null);
+          setActiveTab('projects');
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      alert('Failed to delete project');
+    }
+  };
+
   const sendMessageToAgent = async (agentId: string) => {
     const message = agentInputs[agentId]?.trim();
     if (!message || !selectedBrand || !selectedProject) return;
@@ -544,16 +601,16 @@ export default function AgentTesting() {
               </div>
             ) : (
               filteredBrands.map((brand) => (
-                <button
+                <div
                   key={brand.brand_id}
-                  onClick={() => handleBrandSelect(brand)}
                   className={`
-                    p-4 rounded-lg border-2 transition-all text-left
+                    relative group p-4 rounded-lg border-2 transition-all cursor-pointer
                     ${selectedBrand?.brand_id === brand.brand_id
                       ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-500 shadow-md'
                       : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:border-primary-300'
                     }
                   `}
+                  onClick={() => handleBrandSelect(brand)}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div>
@@ -562,6 +619,13 @@ export default function AgentTesting() {
                         <p className="text-xs text-slate-600 dark:text-slate-400">{brand.industry}</p>
                       )}
                     </div>
+                    <button
+                      onClick={(e) => handleDeleteBrand(brand.brand_name, e)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded"
+                      title="Delete brand"
+                    >
+                      <Trash2 size={14} className="text-red-600 dark:text-red-400" />
+                    </button>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
                     <span>{brand.usage_count || 0} runs</span>
@@ -570,7 +634,7 @@ export default function AgentTesting() {
                       {new Date(brand.updated_at).toLocaleDateString()}
                     </span>
                   </div>
-                </button>
+                </div>
               ))
             )}
           </div>
@@ -682,7 +746,7 @@ export default function AgentTesting() {
                         return (
                           <div
                             key={idx}
-                            className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-primary-500 dark:hover:border-primary-500 transition-colors cursor-pointer"
+                            className="group p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-primary-500 dark:hover:border-primary-500 transition-colors cursor-pointer"
                             onClick={() => handleSelectProject(project)}
                           >
                             <div className="flex items-start justify-between mb-2">
@@ -699,7 +763,16 @@ export default function AgentTesting() {
                                   </span>
                                 </div>
                               </div>
-                              <ChevronDown size={18} className="text-slate-400 transform -rotate-90" />
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={(e) => handleDeleteProject(project.brief, e)}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded"
+                                  title="Delete project"
+                                >
+                                  <Trash2 size={14} className="text-red-600 dark:text-red-400" />
+                                </button>
+                                <ChevronDown size={18} className="text-slate-400 transform -rotate-90" />
+                              </div>
                             </div>
                           </div>
                         );
