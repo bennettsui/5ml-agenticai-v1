@@ -46,6 +46,19 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_project_client ON projects(client_name);
       CREATE INDEX IF NOT EXISTS idx_analysis_project ON analyses(project_id);
       CREATE INDEX IF NOT EXISTS idx_analysis_agent ON analyses(agent_type);
+
+      CREATE TABLE IF NOT EXISTS sandbox_tests (
+        id SERIAL PRIMARY KEY,
+        test_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        agent_type VARCHAR(50) NOT NULL,
+        client_name VARCHAR(255) NOT NULL,
+        brief TEXT NOT NULL,
+        results JSONB NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sandbox_agent ON sandbox_tests(agent_type);
+      CREATE INDEX IF NOT EXISTS idx_sandbox_created ON sandbox_tests(created_at DESC);
     `);
     console.log('✅ Database schema initialized');
   } catch (error) {
@@ -207,6 +220,51 @@ async function getAgentPerformance() {
   }
 }
 
+// Sandbox test history functions
+async function saveSandboxTest(agent_type, client_name, brief, results) {
+  try {
+    const result = await pool.query(
+      'INSERT INTO sandbox_tests (agent_type, client_name, brief, results) VALUES ($1, $2, $3, $4) RETURNING test_id, created_at',
+      [agent_type, client_name, brief, JSON.stringify(results)]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving sandbox test:', error);
+    throw error;
+  }
+}
+
+async function getSandboxTests(limit = 50) {
+  try {
+    const result = await pool.query(
+      'SELECT test_id, agent_type, client_name, brief, results, created_at FROM sandbox_tests ORDER BY created_at DESC LIMIT $1',
+      [limit]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching sandbox tests:', error);
+    throw error;
+  }
+}
+
+async function deleteSandboxTest(test_id) {
+  try {
+    await pool.query('DELETE FROM sandbox_tests WHERE test_id = $1', [test_id]);
+  } catch (error) {
+    console.error('Error deleting sandbox test:', error);
+    throw error;
+  }
+}
+
+async function clearSandboxTests() {
+  try {
+    await pool.query('DELETE FROM sandbox_tests');
+  } catch (error) {
+    console.error('Error clearing sandbox tests:', error);
+    throw error;
+  }
+}
+
 // Generic query function for direct database access
 async function query(text, params) {
   return pool.query(text, params);
@@ -222,4 +280,8 @@ module.exports = {
   getAllProjects,
   getAnalytics,
   getAgentPerformance,
+  saveSandboxTest,
+  getSandboxTests,
+  deleteSandboxTest,
+  clearSandboxTests,
 };

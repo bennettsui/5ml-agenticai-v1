@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Beaker, Loader2, Clock, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, History } from 'lucide-react';
 
 interface ModelResult {
@@ -62,6 +62,63 @@ export default function ModelSandbox() {
     { id: 'social', name: 'Social Media Agent', icon: '📱' },
     { id: 'research', name: 'Research Agent', icon: '📊' },
   ];
+
+  // Load history from database on mount
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  const loadHistory = async () => {
+    try {
+      const response = await fetch('/api/sandbox/tests');
+      const data = await response.json();
+
+      if (data.success && data.tests) {
+        const loadedHistory: TestHistory[] = data.tests.map((test: any) => ({
+          id: test.test_id,
+          timestamp: new Date(test.created_at),
+          agent: test.agent_type,
+          agentName: agents.find(a => a.id === test.agent_type)?.name || test.agent_type,
+          clientName: test.client_name,
+          brief: test.brief,
+          results: test.results
+        }));
+        setHistory(loadedHistory);
+      }
+    } catch (error) {
+      console.error('Failed to load history:', error);
+      // Silently fail - history just won't be loaded
+    }
+  };
+
+  const saveToDatabase = async (test: Omit<TestHistory, 'id' | 'timestamp'>) => {
+    try {
+      const response = await fetch('/api/sandbox/tests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agent_type: test.agent,
+          client_name: test.clientName,
+          brief: test.brief,
+          results: test.results
+        })
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Failed to save to database:', error);
+      return null;
+    }
+  };
+
+  const clearHistoryFromDatabase = async () => {
+    try {
+      await fetch('/api/sandbox/tests', { method: 'DELETE' });
+    } catch (error) {
+      console.error('Failed to clear history from database:', error);
+    }
+  };
 
   const testModel = async (modelId: string) => {
     const startTime = Date.now();
@@ -147,11 +204,9 @@ export default function ModelSandbox() {
     const agentInfo = agents.find(a => a.id === currentAgent);
 
     // Save to history after a delay to ensure results state is updated
-    setTimeout(() => {
+    setTimeout(async () => {
       setResults(latestResults => {
-        const historyEntry: TestHistory = {
-          id: `test-${Date.now()}`,
-          timestamp: new Date(),
+        const historyEntry: Omit<TestHistory, 'id' | 'timestamp'> = {
           agent: currentAgent,
           agentName: agentInfo?.name || currentAgent,
           clientName: currentClientName,
@@ -159,7 +214,19 @@ export default function ModelSandbox() {
           results: { ...latestResults }
         };
 
-        setHistory(prev => [historyEntry, ...prev]);
+        // Save to database and update local state
+        saveToDatabase(historyEntry).then(response => {
+          if (response && response.success) {
+            // Use the test_id from database as the id
+            const fullHistoryEntry: TestHistory = {
+              id: response.test_id,
+              timestamp: new Date(response.created_at),
+              ...historyEntry
+            };
+            setHistory(prev => [fullHistoryEntry, ...prev]);
+          }
+        });
+
         return latestResults;
       });
     }, 100);
@@ -614,8 +681,9 @@ export default function ModelSandbox() {
           {history.length > 0 && (
             <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (confirm('Clear all test history?')) {
+                    await clearHistoryFromDatabase();
                     setHistory([]);
                     setExpandedHistory(null);
                   }
