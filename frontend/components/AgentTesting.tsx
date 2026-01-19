@@ -282,10 +282,14 @@ export default function AgentTesting() {
 
   // Create a new project
   const handleCreateProject = async () => {
-    if (!newProjectBrief.trim()) return;
+    if (!newProjectTitle.trim() && !newProjectPurpose.trim()) return;
 
     const newProject = {
-      brief: newProjectBrief,
+      title: newProjectTitle,
+      purpose: newProjectPurpose,
+      deliverable: newProjectDeliverable,
+      background: newProjectBackground,
+      brief: `Title: ${newProjectTitle}\nPurpose: ${newProjectPurpose}\nDeliverable: ${newProjectDeliverable}${newProjectBackground ? `\nBackground: ${newProjectBackground}` : ''}`,
       conversations: [],
       conversation_count: 0,
       created_at: new Date().toISOString(),
@@ -296,147 +300,47 @@ export default function AgentTesting() {
     setSelectedProject(newProject);
     setShowNewProjectForm(false);
     setActiveTab('agents');
-    setAgentChats({
-      research: [],
-      customer: [],
-      competitor: [],
-      strategy: [],
-    });
+    setConversation([]);
 
-    // Auto-expand all agents for new project
-    setExpandedAgents({
-      research: true,
-      customer: true,
-      competitor: true,
-      strategy: true,
-    });
+    // Clear form
+    setNewProjectTitle('');
+    setNewProjectPurpose('');
+    setNewProjectDeliverable('');
+    setNewProjectBackground('');
 
-    // Auto-start Brand Research Agent with default prompt
-    setTimeout(() => {
-      setAgentInputs({ research: 'Please start the brand research analysis based on the project brief.' });
-      // Auto-send the message to research agent
-      autoSendToResearchAgent(newProject);
-    }, 100);
-  };
-
-  // Auto-send message to research agent for new projects
-  const autoSendToResearchAgent = async (project: any) => {
-    if (!selectedBrand) return;
-
-    const message = 'Please start the brand research analysis based on the project brief.';
-
-    // Add user message to chat
-    const userMessage: Message = {
-      role: 'user',
-      content: message,
+    // Add system message to conversation
+    const systemMessage: Message = {
+      role: 'system',
+      content: `New project created: ${newProjectTitle}. Select an agent from the left sidebar to begin analysis.`,
       timestamp: new Date().toISOString(),
     };
-
-    setAgentChats(prev => ({
-      ...prev,
-      research: [userMessage],
-    }));
-
-    setLoadingAgents(prev => ({ ...prev, research: true }));
-
-    try {
-      const fullContext = `Project Brief: ${project.brief}\n\nCurrent question: ${message}`;
-
-      const response = await fetch(`/agents/research`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_name: selectedBrand.brand_name,
-          brief: fullContext,
-          industry: selectedBrand.industry,
-          model: agentModels.research,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`);
-      }
-
-      // Parse and format the response
-      let parsedContent = null;
-      let displayContent = '';
-
-      if (data.error) {
-        displayContent = `Error: ${data.error}`;
-      } else if (data.analysis) {
-        parsedContent = data.analysis;
-        displayContent = typeof data.analysis === 'string' ? data.analysis : '';
-      } else {
-        displayContent = 'No analysis data received';
-      }
-
-      // Add assistant response to chat
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: displayContent,
-        parsed: parsedContent,
-        model: agentModels.research,
-        timestamp: new Date().toISOString(),
-      };
-
-      setAgentChats(prev => ({
-        ...prev,
-        research: [...prev.research, assistantMessage],
-      }));
-
-      // Reload brand list to update usage count
-      await loadBrands();
-
-      // Auto-save conversation after response
-      await autoSaveConversation('research', [...agentChats.research, userMessage, assistantMessage]);
-    } catch (error: any) {
-      const errorMessage: Message = {
-        role: 'assistant',
-        content: `Error: ${error.message || 'Failed to get response from agent'}`,
-        timestamp: new Date().toISOString(),
-      };
-
-      setAgentChats(prev => ({
-        ...prev,
-        research: [...prev.research, errorMessage],
-      }));
-    } finally {
-      setLoadingAgents(prev => ({ ...prev, research: false }));
-      setAgentInputs({ research: '' });
-    }
+    setConversation([systemMessage]);
   };
+
+  // DEPRECATED: Old auto-send function - now using unified conversation model
+  // Kept for reference, to be removed after migration is complete
 
   // Select an existing project
   const handleSelectProject = async (project: any) => {
     setSelectedProject(project);
     setActiveTab('agents');
 
-    // Reset chats
-    const newChats: Record<string, Message[]> = {
-      research: [],
-      customer: [],
-      competitor: [],
-      strategy: [],
-    };
+    // Reset conversation
+    const allMessages: Message[] = [];
 
-    const agentsToExpand: Record<string, boolean> = {
-      research: false,
-      customer: false,
-      competitor: false,
-      strategy: false,
-    };
-
-    // Load all conversations for this project
+    // Load all conversations for this project and merge into unified conversation
     if (project.conversations && project.conversations.length > 0) {
       for (const conv of project.conversations) {
         try {
           const response = await fetch(`/api/conversation/${conv.conversation_id}`);
           const data = await response.json();
           if (data.success && data.conversation.messages) {
-            newChats[conv.agent_type] = data.conversation.messages;
-            agentsToExpand[conv.agent_type] = true; // Auto-expand agents with existing conversations
+            // Tag each message with its agent
+            const taggedMessages = data.conversation.messages.map((msg: Message) => ({
+              ...msg,
+              agent: conv.agent_type,
+            }));
+            allMessages.push(...taggedMessages);
           }
         } catch (error) {
           console.error('Error loading conversation:', error);
@@ -444,21 +348,19 @@ export default function AgentTesting() {
       }
     }
 
-    setAgentChats(newChats);
+    // Sort by timestamp
+    allMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-    // Auto-expand agents that have conversations, or expand all if none exist
-    const hasAnyConversations = Object.values(agentsToExpand).some(v => v);
-    if (!hasAnyConversations) {
-      // New project - expand all agents
-      setExpandedAgents({
-        research: true,
-        customer: true,
-        competitor: true,
-        strategy: true,
-      });
-    } else {
-      // Existing project - only expand agents with conversations
-      setExpandedAgents(agentsToExpand);
+    setConversation(allMessages);
+
+    // Add welcome message if no conversations exist
+    if (allMessages.length === 0) {
+      const welcomeMessage: Message = {
+        role: 'system',
+        content: `Project loaded: ${project.title || project.brief}. Select an agent from the left sidebar to begin analysis.`,
+        timestamp: new Date().toISOString(),
+      };
+      setConversation([welcomeMessage]);
     }
   };
 
@@ -489,6 +391,11 @@ export default function AgentTesting() {
   const autoSaveConversation = async (agentType: string, messages: Message[]) => {
     if (!selectedBrand || !selectedProject || messages.length === 0) return;
 
+    // Support both old and new project brief formats
+    const projectBrief = selectedProject.title
+      ? `Title: ${selectedProject.title}\nPurpose: ${selectedProject.purpose}\nDeliverable: ${selectedProject.deliverable}${selectedProject.background ? `\nBackground: ${selectedProject.background}` : ''}`
+      : selectedProject.brief;
+
     try {
       await fetch('/api/conversations', {
         method: 'POST',
@@ -496,7 +403,7 @@ export default function AgentTesting() {
         body: JSON.stringify({
           brand_name: selectedBrand.brand_name,
           agent_type: agentType,
-          initial_brief: selectedProject.brief,
+          initial_brief: projectBrief,
           messages: messages,
         }),
       });
@@ -506,6 +413,146 @@ export default function AgentTesting() {
     } catch (error) {
       console.error('Error auto-saving conversation:', error);
     }
+  };
+
+  // Unified Conversation Handlers for New UI
+
+  // Handle agent selection - shows confirmation prompt in chatbot
+  const handleSelectAgent = (agentId: string) => {
+    if (!selectedProject) {
+      alert('Please select or create a project first');
+      return;
+    }
+
+    const agent = agents.find(a => a.id === agentId);
+    if (!agent) return;
+
+    setSelectedAgent(agentId);
+
+    // Add system message asking for confirmation
+    const confirmationMessage: Message = {
+      role: 'system',
+      content: `You selected: ${agent.name}. Would you like to initiate this agent with the project context? Type your message below or press Enter to start with default prompt.`,
+      timestamp: new Date().toISOString(),
+      agent: agentId,
+    };
+
+    setConversation(prev => [...prev, confirmationMessage]);
+
+    // Auto-populate default prompt based on agent type
+    if (agentId === 'orchestrator') {
+      setChatInput('Please orchestrate a comprehensive brand strategy analysis using all available agents.');
+    } else if (agentId === 'research') {
+      setChatInput('Please analyze the current brand status based on the project brief.');
+    } else if (agentId === 'customer') {
+      setChatInput('Please provide customer insights and audience segmentation for this brand.');
+    } else if (agentId === 'competitor') {
+      setChatInput('Please analyze the competitive landscape for this brand.');
+    } else if (agentId === 'strategy') {
+      setChatInput('Please provide strategic recommendations based on available research.');
+    }
+  };
+
+  // Send message in unified chatbot
+  const handleSendUnifiedMessage = async () => {
+    if (!chatInput.trim() || !selectedAgent || !selectedProject || !selectedBrand) return;
+
+    const userMessage: Message = {
+      role: 'user',
+      content: chatInput,
+      timestamp: new Date().toISOString(),
+      agent: selectedAgent,
+    };
+
+    setConversation(prev => [...prev, userMessage]);
+    setChatInput('');
+    setIsLoading(true);
+
+    try {
+      const agent = agents.find(a => a.id === selectedAgent);
+      if (!agent) throw new Error('Agent not found');
+
+      // Build context from project brief
+      const projectBrief = selectedProject.title
+        ? `Title: ${selectedProject.title}\nPurpose: ${selectedProject.purpose}\nDeliverable: ${selectedProject.deliverable}${selectedProject.background ? `\nBackground: ${selectedProject.background}` : ''}`
+        : selectedProject.brief;
+
+      const fullContext = `Project Brief:\n${projectBrief}\n\nCurrent question: ${chatInput}`;
+
+      // Determine endpoint based on agent
+      let endpoint = `/agents/${selectedAgent}`;
+      if (selectedAgent === 'orchestrator') {
+        endpoint = '/agents/orchestrate';
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_name: selectedBrand.brand_name,
+          brief: fullContext,
+          industry: selectedBrand.industry,
+          model: selectedModel,
+          conversation_history: conversation.filter(m => m.agent === selectedAgent),
+          existing_data: {}, // TODO: Gather data from previous agent responses
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+
+      // Parse and format the response
+      let parsedContent = null;
+      let displayContent = '';
+
+      if (data.error) {
+        displayContent = `Error: ${data.error}`;
+      } else if (data.analysis) {
+        parsedContent = data.analysis;
+        displayContent = typeof data.analysis === 'string' ? data.analysis : '';
+      } else {
+        displayContent = 'No analysis data received';
+      }
+
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: displayContent,
+        parsed: parsedContent,
+        model: selectedModel,
+        timestamp: new Date().toISOString(),
+        agent: selectedAgent,
+      };
+
+      setConversation(prev => [...prev, assistantMessage]);
+
+      // Auto-save conversation
+      await autoSaveConversation(selectedAgent, [...conversation, userMessage, assistantMessage]);
+
+      // Reload brand list to update usage count
+      await loadBrands();
+    } catch (error: any) {
+      const errorMessage: Message = {
+        role: 'assistant',
+        content: `Error: ${error.message || 'Failed to get response from agent'}`,
+        timestamp: new Date().toISOString(),
+        agent: selectedAgent,
+      };
+
+      setConversation(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Toggle category expansion
+  const toggleCategory = (categoryId: string) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [categoryId]: !prev[categoryId],
+    }));
   };
 
   // Load brand details and reset state
@@ -520,12 +567,9 @@ export default function AgentTesting() {
         // Reset state for new brand selection
         setActiveTab('projects');
         setSelectedProject(null);
-        setAgentChats({
-          research: [],
-          customer: [],
-          competitor: [],
-          strategy: [],
-        });
+        setConversation([]);
+        setSelectedAgent(null);
+        setChatInput('');
 
         setShowNewBrandForm(false);
 
