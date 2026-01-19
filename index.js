@@ -887,7 +887,7 @@ const server = http.createServer(app);
 // Initialize WebSocket server
 wsServer.initialize(server);
 
-server.listen(port, () => {
+server.listen(port, '0.0.0.0', () => {
   console.log(`
 ╔════════════════════════════════════════╗
 ║  🚀 5ML Agentic AI Platform v1         ║
