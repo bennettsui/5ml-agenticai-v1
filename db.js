@@ -511,6 +511,54 @@ async function deleteConversation(conversation_id) {
   }
 }
 
+async function getProjectsByBrand(brand_name) {
+  try {
+    // Get all unique briefs for the brand with aggregated data
+    const result = await pool.query(
+      `SELECT
+        initial_brief as brief,
+        COUNT(*) as conversation_count,
+        MAX(updated_at) as last_updated,
+        MIN(created_at) as created_at,
+        json_agg(
+          json_build_object(
+            'conversation_id', conversation_id,
+            'agent_type', agent_type,
+            'created_at', created_at,
+            'updated_at', updated_at,
+            'message_count', jsonb_array_length(messages)
+          ) ORDER BY updated_at DESC
+        ) as conversations
+       FROM conversations
+       WHERE brand_name = $1
+       GROUP BY initial_brief
+       ORDER BY last_updated DESC`,
+      [brand_name]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+    throw error;
+  }
+}
+
+async function getConversationsByBrandAndBrief(brand_name, initial_brief, limit = 20) {
+  try {
+    const result = await pool.query(
+      `SELECT conversation_id, agent_type, initial_brief, messages, created_at, updated_at
+       FROM conversations
+       WHERE brand_name = $1 AND initial_brief = $2
+       ORDER BY updated_at DESC
+       LIMIT $3`,
+      [brand_name, initial_brief, limit]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching conversations by brand and brief:', error);
+    throw error;
+  }
+}
+
 // Generic query function for direct database access
 async function query(text, params) {
   return pool.query(text, params);
@@ -541,4 +589,6 @@ module.exports = {
   getConversationsByBrand,
   getConversation,
   deleteConversation,
+  getProjectsByBrand,
+  getConversationsByBrandAndBrief,
 };

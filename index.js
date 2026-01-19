@@ -26,7 +26,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation } = require('./db');
+const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, getProjectsByBrand, getConversationsByBrandAndBrief } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -878,6 +878,42 @@ app.delete('/api/conversation/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting conversation:', error);
     res.status(500).json({ error: 'Failed to delete conversation' });
+  }
+});
+
+// Get projects for a brand (grouped by brief)
+app.get('/api/brands/:brand_name/projects', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const projects = await getProjectsByBrand(req.params.brand_name);
+    res.json({ success: true, projects });
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+    res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+// Get conversations for a specific project (brand + brief)
+app.get('/api/brands/:brand_name/projects/:brief_index/conversations', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const brief = req.query.brief;
+    if (!brief) {
+      return res.status(400).json({ error: 'Brief parameter required' });
+    }
+
+    const limit = parseInt(req.query.limit) || 20;
+    const conversations = await getConversationsByBrandAndBrief(req.params.brand_name, brief, limit);
+    res.json({ success: true, conversations });
+  } catch (error) {
+    console.error('Error fetching project conversations:', error);
+    res.status(500).json({ error: 'Failed to fetch project conversations' });
   }
 });
 
