@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Beaker, Loader2, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Beaker, Loader2, Clock, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, History } from 'lucide-react';
 
 interface ModelResult {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -17,6 +17,16 @@ interface ModelResults {
   perplexity: ModelResult;
 }
 
+interface TestHistory {
+  id: string;
+  timestamp: Date;
+  agent: string;
+  agentName: string;
+  clientName: string;
+  brief: string;
+  results: ModelResults;
+}
+
 export default function ModelSandbox() {
   const [agent, setAgent] = useState('social');
   const [clientName, setClientName] = useState('');
@@ -28,6 +38,8 @@ export default function ModelSandbox() {
     sonnet: { status: 'idle' },
     perplexity: { status: 'idle' },
   });
+  const [history, setHistory] = useState<TestHistory[]>([]);
+  const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
 
   const models = [
     { id: 'deepseek', name: 'DeepSeek Reasoner', color: 'orange' },
@@ -104,17 +116,42 @@ export default function ModelSandbox() {
     setIsTesting(true);
 
     // Reset all results
-    setResults({
+    const freshResults: ModelResults = {
       deepseek: { status: 'idle' },
       haiku: { status: 'idle' },
       sonnet: { status: 'idle' },
       perplexity: { status: 'idle' },
-    });
+    };
+    setResults(freshResults);
 
     // Test all models in parallel
     await Promise.all(models.map(model => testModel(model.id)));
 
     setIsTesting(false);
+
+    // Capture current test parameters for history
+    const currentAgent = agent;
+    const currentClientName = clientName;
+    const currentBrief = brief;
+    const agentInfo = agents.find(a => a.id === currentAgent);
+
+    // Save to history after a delay to ensure results state is updated
+    setTimeout(() => {
+      setResults(latestResults => {
+        const historyEntry: TestHistory = {
+          id: `test-${Date.now()}`,
+          timestamp: new Date(),
+          agent: currentAgent,
+          agentName: agentInfo?.name || currentAgent,
+          clientName: currentClientName,
+          brief: currentBrief,
+          results: { ...latestResults }
+        };
+
+        setHistory(prev => [historyEntry, ...prev]);
+        return latestResults;
+      });
+    }, 100);
   };
 
   const getStatusColor = (status: string) => {
@@ -348,6 +385,140 @@ export default function ModelSandbox() {
           );
         })}
       </div>
+
+      {/* Test History */}
+      {history.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <History className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Test History</h3>
+            <span className="text-sm text-slate-500 dark:text-slate-400">({history.length} test{history.length !== 1 ? 's' : ''})</span>
+          </div>
+
+          <div className="space-y-3">
+            {history.map((entry, index) => (
+              <div
+                key={entry.id}
+                className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
+              >
+                {/* History Item Header */}
+                <button
+                  onClick={() => setExpandedHistory(expandedHistory === entry.id ? null : entry.id)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3 flex-1 text-left">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                        #{history.length - index}
+                      </span>
+                      <span className="text-xs text-slate-600 dark:text-slate-400">
+                        {entry.timestamp.toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <div className="h-4 w-px bg-slate-300 dark:bg-slate-600"></div>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {entry.agentName}
+                    </span>
+                    <div className="h-4 w-px bg-slate-300 dark:bg-slate-600"></div>
+                    <span className="text-sm text-slate-600 dark:text-slate-400 truncate max-w-xs">
+                      {entry.clientName}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {/* Success/Error counts */}
+                    <div className="flex items-center gap-1 text-xs">
+                      <span className="text-green-600 dark:text-green-400">
+                        {Object.values(entry.results).filter(r => r.status === 'success').length} ✓
+                      </span>
+                      <span className="text-red-600 dark:text-red-400">
+                        {Object.values(entry.results).filter(r => r.status === 'error').length} ✗
+                      </span>
+                    </div>
+                    {expandedHistory === entry.id ? (
+                      <ChevronUp className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                    )}
+                  </div>
+                </button>
+
+                {/* Expanded History Details */}
+                {expandedHistory === entry.id && (
+                  <div className="p-4 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+                    {/* Brief */}
+                    <div className="mb-4">
+                      <h4 className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-2">
+                        Brief
+                      </h4>
+                      <p className="text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 p-3 rounded-lg">
+                        {entry.brief}
+                      </p>
+                    </div>
+
+                    {/* Model Results */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {models.map(model => {
+                        const result = entry.results[model.id as keyof ModelResults];
+                        return (
+                          <div
+                            key={model.id}
+                            className="border border-slate-200 dark:border-slate-700 rounded-lg p-3"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <h5 className={`text-sm font-bold ${getModelColor(model.color)}`}>
+                                {model.name}
+                              </h5>
+                              <div className="flex items-center gap-2">
+                                {result.duration && (
+                                  <span className="text-xs text-slate-600 dark:text-slate-400">
+                                    {result.duration.toFixed(2)}s
+                                  </span>
+                                )}
+                                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${getStatusColor(result.status)}`}>
+                                  {getStatusIcon(result.status)}
+                                </div>
+                              </div>
+                            </div>
+
+                            {result.status === 'success' && result.data && (
+                              <div className="text-xs max-h-48 overflow-y-auto">
+                                {formatOutput(result.data)}
+                              </div>
+                            )}
+
+                            {result.status === 'error' && (
+                              <div className="text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                                {result.error}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Clear History Button */}
+          {history.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => {
+                  if (confirm('Clear all test history?')) {
+                    setHistory([]);
+                    setExpandedHistory(null);
+                  }
+                }}
+                className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+              >
+                Clear History
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
