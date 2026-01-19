@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sparkles, Search, Share2, TrendingUp, Loader2, BarChart3, PenTool, Image, Film } from 'lucide-react';
 
 interface Agent {
@@ -74,6 +74,60 @@ export default function AgentTesting() {
     industry: '',
     useWebResearch: true,
   });
+  const [brandSuggestions, setBrandSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Search brands for autocomplete
+  const searchBrands = async (query: string) => {
+    if (!query || query.trim().length < 2) {
+      setBrandSuggestions([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/brands/search?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      if (data.success) {
+        setBrandSuggestions(data.brands || []);
+      }
+    } catch (error) {
+      console.error('Error searching brands:', error);
+    }
+  };
+
+  // Debounced brand search
+  useEffect(() => {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+
+    if (formData.client_name && formData.client_name.length >= 2) {
+      const timeout = setTimeout(() => {
+        searchBrands(formData.client_name);
+      }, 300);
+      setSearchTimeout(timeout);
+    } else {
+      setBrandSuggestions([]);
+    }
+
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [formData.client_name]);
+
+  const selectBrand = (brand: any) => {
+    setFormData({
+      ...formData,
+      client_name: brand.brand_name,
+      industry: brand.industry || formData.industry,
+    });
+    setShowSuggestions(false);
+    setBrandSuggestions([]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +135,7 @@ export default function AgentTesting() {
 
     setLoading(true);
     setResult(null);
+    setShowSuggestions(false);
 
     try {
       const response = await fetch(`/agents/${selectedAgent}`, {
@@ -169,18 +224,51 @@ export default function AgentTesting() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   Client Name
                 </label>
                 <input
+                  ref={inputRef}
                   type="text"
                   value={formData.client_name}
-                  onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, client_name: e.target.value });
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
                   placeholder="e.g., Tesla"
                   required
+                  autoComplete="off"
                 />
+                {showSuggestions && brandSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {brandSuggestions.map((brand) => (
+                      <button
+                        key={brand.brand_id}
+                        type="button"
+                        onClick={() => selectBrand(brand)}
+                        className="w-full px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-600 flex items-center justify-between"
+                      >
+                        <div>
+                          <div className="text-sm font-medium text-slate-900 dark:text-white">
+                            {brand.brand_name}
+                          </div>
+                          {brand.industry && (
+                            <div className="text-xs text-slate-600 dark:text-slate-400">
+                              {brand.industry}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          {brand.usage_count} uses
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

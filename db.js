@@ -59,6 +59,24 @@ async function initDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_sandbox_agent ON sandbox_tests(agent_type);
       CREATE INDEX IF NOT EXISTS idx_sandbox_created ON sandbox_tests(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS brands (
+        id SERIAL PRIMARY KEY,
+        brand_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_name VARCHAR(255) UNIQUE NOT NULL,
+        normalized_name VARCHAR(255) NOT NULL,
+        industry VARCHAR(255),
+        brand_info JSONB DEFAULT '{}',
+        last_analysis JSONB,
+        agent_results JSONB DEFAULT '{}',
+        usage_count INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_brands_normalized ON brands(normalized_name);
+      CREATE INDEX IF NOT EXISTS idx_brands_name ON brands(brand_name);
+      CREATE INDEX IF NOT EXISTS idx_brands_updated ON brands(updated_at DESC);
     `);
     console.log('✅ Database schema initialized');
   } catch (error) {
@@ -265,6 +283,148 @@ async function clearSandboxTests() {
   }
 }
 
+// Brand database functions
+function normalizeBrandName(brandName) {
+  return brandName.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+async function saveBrand(brand_name, industry = null, brand_info = {}) {
+  try {
+    const normalized_name = normalizeBrandName(brand_name);
+
+    // Check if brand already exists (by normalized name)
+    const existing = await pool.query(
+      'SELECT * FROM brands WHERE normalized_name = $1',
+      [normalized_name]
+    );
+
+    if (existing.rows.length > 0) {
+      // Update existing brand
+      const result = await pool.query(
+        `UPDATE brands
+         SET brand_name = $1,
+             industry = COALESCE($2, industry),
+             brand_info = COALESCE($3, brand_info),
+             usage_count = usage_count + 1,
+             updated_at = NOW()
+         WHERE normalized_name = $4
+         RETURNING *`,
+        [brand_name, industry, JSON.stringify(brand_info), normalized_name]
+      );
+      return result.rows[0];
+    } else {
+      // Create new brand
+      const result = await pool.query(
+        `INSERT INTO brands (brand_name, normalized_name, industry, brand_info)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        [brand_name, normalized_name, industry, JSON.stringify(brand_info)]
+      );
+      return result.rows[0];
+    }
+  } catch (error) {
+    console.error('Error saving brand:', error);
+    throw error;
+  }
+}
+
+async function getBrandByName(brand_name) {
+  try {
+    const normalized_name = normalizeBrandName(brand_name);
+    const result = await pool.query(
+      'SELECT * FROM brands WHERE normalized_name = $1',
+      [normalized_name]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching brand:', error);
+    throw error;
+  }
+}
+
+async function searchBrands(query, limit = 10) {
+  try {
+    const searchTerm = `%${normalizeBrandName(query)}%`;
+    const result = await pool.query(
+      `SELECT brand_id, brand_name, industry, usage_count, updated_at
+       FROM brands
+       WHERE normalized_name LIKE $1
+       ORDER BY usage_count DESC, updated_at DESC
+       LIMIT $2`,
+      [searchTerm, limit]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error searching brands:', error);
+    throw error;
+  }
+}
+
+async function updateBrandResults(brand_name, agent_type, results) {
+  try {
+    const normalized_name = normalizeBrandName(brand_name);
+
+    // Get current agent_results
+    const brand = await pool.query(
+      'SELECT agent_results FROM brands WHERE normalized_name = $1',
+      [normalized_name]
+    );
+
+    if (brand.rows.length === 0) {
+      throw new Error(`Brand not found: ${brand_name}`);
+    }
+
+    const agentResults = brand.rows[0].agent_results || {};
+    agentResults[agent_type] = results;
+
+    // Update brand with new results
+    const result = await pool.query(
+      `UPDATE brands
+       SET agent_results = $1,
+           last_analysis = $2,
+           updated_at = NOW()
+       WHERE normalized_name = $3
+       RETURNING *`,
+      [JSON.stringify(agentResults), JSON.stringify(results), normalized_name]
+    );
+
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error updating brand results:', error);
+    throw error;
+  }
+}
+
+async function getAllBrands(limit = 50) {
+  try {
+    const result = await pool.query(
+      `SELECT brand_id, brand_name, industry, usage_count, updated_at, created_at
+       FROM brands
+       ORDER BY updated_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching brands:', error);
+    throw error;
+  }
+}
+
+async function getBrandWithResults(brand_name) {
+  try {
+    const normalized_name = normalizeBrandName(brand_name);
+    const result = await pool.query(
+      'SELECT * FROM brands WHERE normalized_name = $1',
+      [normalized_name]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching brand with results:', error);
+    throw error;
+  }
+}
+
 // Generic query function for direct database access
 async function query(text, params) {
   return pool.query(text, params);
@@ -284,4 +444,10 @@ module.exports = {
   getSandboxTests,
   deleteSandboxTest,
   clearSandboxTests,
+  saveBrand,
+  getBrandByName,
+  searchBrands,
+  updateBrandResults,
+  getAllBrands,
+  getBrandWithResults,
 };

@@ -26,7 +26,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests } = require('./db');
+const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -419,13 +419,23 @@ ${brief}
  */
 app.post('/agents/creative', async (req, res) => {
   try {
-    const { client_name, brief, model, no_fallback } = req.body;
+    const { client_name, brief, industry, model, no_fallback } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeCreative } = require('./agents/creativeAgent');
     const analysis = await analyzeCreative(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'creative', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
 
     res.json({
       success: true,
@@ -467,13 +477,23 @@ app.post('/agents/creative', async (req, res) => {
  */
 app.post('/agents/seo', async (req, res) => {
   try {
-    const { client_name, brief, model, no_fallback } = req.body;
+    const { client_name, brief, industry, model, no_fallback } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeSEO } = require('./agents/seoAgent');
     const analysis = await analyzeSEO(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'seo', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
 
     res.json({
       success: true,
@@ -515,13 +535,23 @@ app.post('/agents/seo', async (req, res) => {
  */
 app.post('/agents/social', async (req, res) => {
   try {
-    const { client_name, brief, model, no_fallback } = req.body;
+    const { client_name, brief, industry, model, no_fallback } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeSocial } = require('./agents/socialAgent');
     const analysis = await analyzeSocial(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'social', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
 
     res.json({
       success: true,
@@ -563,13 +593,26 @@ app.post('/agents/social', async (req, res) => {
  */
 app.post('/agents/research', async (req, res) => {
   try {
-    const { client_name, brief, model, no_fallback } = req.body;
+    const { client_name, brief, industry, model, no_fallback } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeResearch } = require('./agents/researchAgent');
     const analysis = await analyzeResearch(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        // Save/update brand
+        await saveBrand(client_name, industry, { brief });
+        // Update brand with analysis results
+        await updateBrandResults(client_name, 'research', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+        // Don't fail the request if DB save fails
+      }
+    }
 
     res.json({
       success: true,
@@ -680,6 +723,87 @@ app.delete('/api/sandbox/tests', async (req, res) => {
   } catch (error) {
     console.error('Error clearing sandbox tests:', error);
     res.status(500).json({ error: 'Failed to clear sandbox tests' });
+  }
+});
+
+// ==========================================
+// Brand Database Endpoints
+// ==========================================
+
+// Search brands for autocomplete
+app.get('/api/brands/search', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const query = req.query.q || '';
+    const limit = parseInt(req.query.limit) || 10;
+
+    if (!query || query.trim().length < 2) {
+      return res.json({ success: true, brands: [] });
+    }
+
+    const brands = await searchBrands(query, limit);
+    res.json({ success: true, brands });
+  } catch (error) {
+    console.error('Error searching brands:', error);
+    res.status(500).json({ error: 'Failed to search brands' });
+  }
+});
+
+// Get all brands
+app.get('/api/brands', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const brands = await getAllBrands(limit);
+    res.json({ success: true, brands });
+  } catch (error) {
+    console.error('Error fetching brands:', error);
+    res.status(500).json({ error: 'Failed to fetch brands' });
+  }
+});
+
+// Get specific brand by name
+app.get('/api/brands/:name', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const brand = await getBrandWithResults(req.params.name);
+    if (!brand) {
+      return res.status(404).json({ error: 'Brand not found' });
+    }
+    res.json({ success: true, brand });
+  } catch (error) {
+    console.error('Error fetching brand:', error);
+    res.status(500).json({ error: 'Failed to fetch brand' });
+  }
+});
+
+// Save or update brand
+app.post('/api/brands', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const { brand_name, industry, brand_info } = req.body;
+
+    if (!brand_name) {
+      return res.status(400).json({ error: 'brand_name is required' });
+    }
+
+    const brand = await saveBrand(brand_name, industry, brand_info);
+    res.json({ success: true, brand });
+  } catch (error) {
+    console.error('Error saving brand:', error);
+    res.status(500).json({ error: 'Failed to save brand' });
   }
 });
 
