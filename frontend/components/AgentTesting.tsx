@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Sparkles, Search, Share2, TrendingUp, Loader2, Building2, Plus, Clock, ChevronDown, ChevronUp, Send, User, Bot, History } from 'lucide-react';
+import { Sparkles, Search, Share2, TrendingUp, Loader2, Building2, Plus, Clock, ChevronDown, ChevronUp, Send, User, Bot, History, Trash2 } from 'lucide-react';
 
 interface Agent {
   id: string;
@@ -177,9 +177,17 @@ export default function AgentTesting() {
   const [allBrands, setAllBrands] = useState<any[]>([]);
   const [brandSearchQuery, setBrandSearchQuery] = useState('');
   const [showNewBrandForm, setShowNewBrandForm] = useState(false);
-  const [initialBrief, setInitialBrief] = useState('');
   const [industry, setIndustry] = useState('');
   const [newBrandName, setNewBrandName] = useState('');
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'projects' | 'agents'>('projects');
+
+  // Project state
+  const [projects, setProjects] = useState<any[]>([]);
+  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [showNewProjectForm, setShowNewProjectForm] = useState(false);
+  const [newProjectBrief, setNewProjectBrief] = useState('');
 
   // Chat state per agent
   const [agentChats, setAgentChats] = useState<Record<string, Message[]>>({
@@ -198,11 +206,6 @@ export default function AgentTesting() {
   });
   const [loadingAgents, setLoadingAgents] = useState<Record<string, boolean>>({});
 
-  // History state
-  const [conversationHistory, setConversationHistory] = useState<any[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-
   // Load all brands on mount
   useEffect(() => {
     loadBrands();
@@ -220,53 +223,77 @@ export default function AgentTesting() {
     }
   };
 
-  // Load conversation history for brand
-  const loadConversationHistory = async (brandName: string) => {
+  // Load projects for brand
+  const loadProjects = async (brandName: string) => {
     try {
-      const response = await fetch(`/api/conversations/${encodeURIComponent(brandName)}`);
+      const response = await fetch(`/api/brands/${encodeURIComponent(brandName)}/projects`);
       const data = await response.json();
       if (data.success) {
-        setConversationHistory(data.conversations || []);
+        setProjects(data.projects || []);
       }
     } catch (error) {
-      console.error('Error loading conversation history:', error);
-      setConversationHistory([]);
+      console.error('Error loading projects:', error);
+      setProjects([]);
     }
   };
 
-  // Load a specific conversation
-  const loadConversation = async (conversationId: string) => {
-    try {
-      const response = await fetch(`/api/conversation/${conversationId}`);
-      const data = await response.json();
-      if (data.success) {
-        const conv = data.conversation;
-        setInitialBrief(conv.initial_brief || '');
+  // Create a new project
+  const handleCreateProject = () => {
+    if (!newProjectBrief.trim()) return;
 
-        // Set the agent chat with the loaded messages
-        const messages = conv.messages || [];
-        setAgentChats(prev => ({
-          ...prev,
-          [conv.agent_type]: messages,
-        }));
+    setSelectedProject({
+      brief: newProjectBrief,
+      conversations: [],
+      conversation_count: 0,
+      created_at: new Date().toISOString(),
+      last_updated: new Date().toISOString(),
+      isNew: true,
+    });
 
-        // Expand the agent automatically
-        setExpandedAgents(prev => ({
-          ...prev,
-          [conv.agent_type]: true,
-        }));
+    setShowNewProjectForm(false);
+    setActiveTab('agents');
+    setAgentChats({
+      social: [],
+      research: [],
+      seo: [],
+      creative: [],
+    });
+  };
 
-        setCurrentConversationId(conversationId);
-        setShowHistory(false);
+  // Select an existing project
+  const handleSelectProject = async (project: any) => {
+    setSelectedProject(project);
+    setActiveTab('agents');
+
+    // Reset chats
+    const newChats: Record<string, Message[]> = {
+      social: [],
+      research: [],
+      seo: [],
+      creative: [],
+    };
+
+    // Load all conversations for this project
+    if (project.conversations && project.conversations.length > 0) {
+      for (const conv of project.conversations) {
+        try {
+          const response = await fetch(`/api/conversation/${conv.conversation_id}`);
+          const data = await response.json();
+          if (data.success && data.conversation.messages) {
+            newChats[conv.agent_type] = data.conversation.messages;
+          }
+        } catch (error) {
+          console.error('Error loading conversation:', error);
+        }
       }
-    } catch (error) {
-      console.error('Error loading conversation:', error);
     }
+
+    setAgentChats(newChats);
   };
 
   // Save current conversation
   const saveCurrentConversation = async (agentType: string) => {
-    if (!selectedBrand || !agentChats[agentType] || agentChats[agentType].length === 0) return;
+    if (!selectedBrand || !selectedProject || !agentChats[agentType] || agentChats[agentType].length === 0) return;
 
     try {
       await fetch('/api/conversations', {
@@ -275,29 +302,30 @@ export default function AgentTesting() {
         body: JSON.stringify({
           brand_name: selectedBrand.brand_name,
           agent_type: agentType,
-          initial_brief: initialBrief,
+          initial_brief: selectedProject.brief,
           messages: agentChats[agentType],
         }),
       });
 
-      // Reload history
-      await loadConversationHistory(selectedBrand.brand_name);
+      // Reload projects
+      await loadProjects(selectedBrand.brand_name);
     } catch (error) {
       console.error('Error saving conversation:', error);
     }
   };
 
-  // Load brand details and reset chat
+  // Load brand details and reset state
   const handleBrandSelect = async (brand: any) => {
     try {
       const response = await fetch(`/api/brands/${encodeURIComponent(brand.brand_name)}`);
       const data = await response.json();
       if (data.success) {
         setSelectedBrand(data.brand);
-        setInitialBrief(data.brand.brand_info?.brief || '');
         setIndustry(data.brand.industry || '');
 
-        // Reset chats for new brand selection
+        // Reset state for new brand selection
+        setActiveTab('projects');
+        setSelectedProject(null);
         setAgentChats({
           social: [],
           research: [],
@@ -305,11 +333,10 @@ export default function AgentTesting() {
           creative: [],
         });
 
-        setCurrentConversationId(null);
         setShowNewBrandForm(false);
 
-        // Load conversation history
-        await loadConversationHistory(brand.brand_name);
+        // Load projects for this brand
+        await loadProjects(brand.brand_name);
       }
     } catch (error) {
       console.error('Error loading brand details:', error);
@@ -318,7 +345,7 @@ export default function AgentTesting() {
   };
 
   const handleCreateBrand = async () => {
-    if (!newBrandName || !initialBrief || !industry) return;
+    if (!newBrandName || !industry) return;
 
     try {
       const response = await fetch('/api/brands', {
@@ -327,7 +354,7 @@ export default function AgentTesting() {
         body: JSON.stringify({
           brand_name: newBrandName,
           industry,
-          brand_info: { brief: initialBrief },
+          brand_info: {},
         }),
       });
 
@@ -342,9 +369,66 @@ export default function AgentTesting() {
     }
   };
 
+  const handleDeleteBrand = async (brandName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!confirm(`Are you sure you want to delete "${brandName}" and all its projects? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/brands/${encodeURIComponent(brandName)}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await loadBrands();
+        if (selectedBrand?.brand_name === brandName) {
+          setSelectedBrand(null);
+          setSelectedProject(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting brand:', error);
+      alert('Failed to delete brand');
+    }
+  };
+
+  const handleDeleteProject = async (brief: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!confirm('Are you sure you want to delete this project and all its conversations? This cannot be undone.')) {
+      return;
+    }
+
+    if (!selectedBrand) return;
+
+    try {
+      const response = await fetch(
+        `/api/brands/${encodeURIComponent(selectedBrand.brand_name)}/projects?brief=${encodeURIComponent(brief)}`,
+        {
+          method: 'DELETE',
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        await loadProjects(selectedBrand.brand_name);
+        if (selectedProject?.brief === brief) {
+          setSelectedProject(null);
+          setActiveTab('projects');
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      alert('Failed to delete project');
+    }
+  };
+
   const sendMessageToAgent = async (agentId: string) => {
     const message = agentInputs[agentId]?.trim();
-    if (!message || !selectedBrand) return;
+    if (!message || !selectedBrand || !selectedProject) return;
 
     // Add user message to chat
     const userMessage: Message = {
@@ -362,14 +446,14 @@ export default function AgentTesting() {
     setLoadingAgents(prev => ({ ...prev, [agentId]: true }));
 
     try {
-      // Build conversation context: initial brief + all previous messages + current message
+      // Build conversation context: project brief + all previous messages + current message
       const conversationHistory = agentChats[agentId] || [];
       const contextMessages = conversationHistory
         .filter(msg => msg.role === 'user')
         .map(msg => msg.content);
 
-      const fullContext = initialBrief
-        ? `Initial Brief: ${initialBrief}\n\nPrevious questions:\n${contextMessages.join('\n')}\n\nCurrent question: ${message}`
+      const fullContext = selectedProject.brief
+        ? `Project Brief: ${selectedProject.brief}\n\nPrevious questions:\n${contextMessages.join('\n')}\n\nCurrent question: ${message}`
         : `Previous questions:\n${contextMessages.join('\n')}\n\nCurrent question: ${message}`;
 
       const response = await fetch(`/agents/${agentId}`, {
@@ -459,7 +543,6 @@ export default function AgentTesting() {
               setShowNewBrandForm(!showNewBrandForm);
               setSelectedBrand(null);
               setNewBrandName('');
-              setInitialBrief('');
               setIndustry('');
             }}
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
@@ -486,15 +569,9 @@ export default function AgentTesting() {
               placeholder="Industry"
               className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
             />
-            <textarea
-              value={initialBrief}
-              onChange={(e) => setInitialBrief(e.target.value)}
-              placeholder="Initial brief for this brand..."
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 h-24"
-            />
             <button
               onClick={handleCreateBrand}
-              disabled={!newBrandName || !initialBrief || !industry}
+              disabled={!newBrandName || !industry}
               className="w-full py-2 px-4 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-400 text-white rounded-lg transition-colors"
             >
               Create Brand
@@ -524,16 +601,16 @@ export default function AgentTesting() {
               </div>
             ) : (
               filteredBrands.map((brand) => (
-                <button
+                <div
                   key={brand.brand_id}
-                  onClick={() => handleBrandSelect(brand)}
                   className={`
-                    p-4 rounded-lg border-2 transition-all text-left
+                    relative group p-4 rounded-lg border-2 transition-all cursor-pointer
                     ${selectedBrand?.brand_id === brand.brand_id
                       ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-500 shadow-md'
                       : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:border-primary-300'
                     }
                   `}
+                  onClick={() => handleBrandSelect(brand)}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div>
@@ -542,6 +619,13 @@ export default function AgentTesting() {
                         <p className="text-xs text-slate-600 dark:text-slate-400">{brand.industry}</p>
                       )}
                     </div>
+                    <button
+                      onClick={(e) => handleDeleteBrand(brand.brand_name, e)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded"
+                      title="Delete brand"
+                    >
+                      <Trash2 size={14} className="text-red-600 dark:text-red-400" />
+                    </button>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
                     <span>{brand.usage_count || 0} runs</span>
@@ -550,121 +634,184 @@ export default function AgentTesting() {
                       {new Date(brand.updated_at).toLocaleDateString()}
                     </span>
                   </div>
-                </button>
+                </div>
               ))
             )}
           </div>
         )}
       </div>
 
-      {/* Selected Brand and Initial Brief */}
+      {/* Brand Workspace with Tabs */}
       {selectedBrand && (
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">{selectedBrand.brand_name}</h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400">{selectedBrand.industry}</p>
-            </div>
-            <div className="flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden">
+          {/* Brand Header */}
+          <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">{selectedBrand.brand_name}</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400">{selectedBrand.industry}</p>
+              </div>
               <button
-                onClick={() => setShowHistory(!showHistory)}
-                className="flex items-center gap-2 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-              >
-                <History size={16} />
-                History ({conversationHistory.length})
-              </button>
-              <button
-                onClick={() => setSelectedBrand(null)}
+                onClick={() => {
+                  setSelectedBrand(null);
+                  setSelectedProject(null);
+                  setActiveTab('projects');
+                }}
                 className="text-sm text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               >
                 Change Brand
               </button>
             </div>
-          </div>
-          {initialBrief && (
-            <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Initial Brief:</h3>
-              <p className="text-sm text-slate-700 dark:text-slate-300">{initialBrief}</p>
+
+            {/* Tabs */}
+            <div className="flex gap-4 border-b border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => setActiveTab('projects')}
+                className={`pb-2 px-1 border-b-2 transition-colors ${
+                  activeTab === 'projects'
+                    ? 'border-primary-600 text-primary-600 dark:text-primary-400 font-semibold'
+                    : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Projects {projects.length > 0 && `(${projects.length})`}
+              </button>
+              <button
+                onClick={() => selectedProject && setActiveTab('agents')}
+                disabled={!selectedProject}
+                className={`pb-2 px-1 border-b-2 transition-colors ${
+                  activeTab === 'agents' && selectedProject
+                    ? 'border-primary-600 text-primary-600 dark:text-primary-400 font-semibold'
+                    : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white disabled:opacity-40 disabled:cursor-not-allowed'
+                }`}
+              >
+                Agents {selectedProject && '→'}
+              </button>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Conversation History Panel */}
-      {selectedBrand && showHistory && (
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <History size={20} />
-              Conversation History
-            </h3>
-            <button
-              onClick={() => setShowHistory(false)}
-              className="text-sm text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-            >
-              Close
-            </button>
           </div>
 
-          {conversationHistory.length === 0 ? (
-            <div className="text-center py-8 text-slate-500 dark:text-slate-400">
-              No conversation history yet. Start chatting with an agent to create history.
-            </div>
-          ) : (
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {conversationHistory.map((conv) => {
-                const agent = agents.find(a => a.id === conv.agent_type);
-                const Icon = agent?.icon || TrendingUp;
-                const colors = agent ? colorClasses[agent.color] : colorClasses.orange;
-                const messageCount = Array.isArray(conv.messages) ? conv.messages.length : 0;
-                const exchanges = Math.floor(messageCount / 2);
+          {/* Projects Tab Content */}
+          {activeTab === 'projects' && (
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  {showNewProjectForm ? 'New Project' : 'Your Projects'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowNewProjectForm(!showNewProjectForm);
+                    setNewProjectBrief('');
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors text-sm"
+                >
+                  <Plus size={16} />
+                  {showNewProjectForm ? 'Cancel' : 'New Project'}
+                </button>
+              </div>
 
-                return (
-                  <div
-                    key={conv.conversation_id}
-                    className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-primary-500 dark:hover:border-primary-500 transition-colors cursor-pointer"
-                    onClick={() => loadConversation(conv.conversation_id)}
+              {/* New Project Form */}
+              {showNewProjectForm && (
+                <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Project Brief
+                  </label>
+                  <textarea
+                    value={newProjectBrief}
+                    onChange={(e) => setNewProjectBrief(e.target.value)}
+                    placeholder="Describe your project goals, target audience, and any specific requirements..."
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 h-32"
+                  />
+                  <button
+                    onClick={handleCreateProject}
+                    disabled={!newProjectBrief.trim()}
+                    className="mt-3 w-full py-2 px-4 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-400 text-white rounded-lg transition-colors"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg ${colors.bg} flex-shrink-0`}>
-                        <Icon className={colors.icon} size={18} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-semibold text-slate-900 dark:text-white">
-                            {agent?.name || conv.agent_type}
-                          </h4>
-                          <span className="text-xs text-slate-500 dark:text-slate-400">
-                            {exchanges} exchanges
-                          </span>
-                        </div>
-                        {conv.initial_brief && (
-                          <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mb-2">
-                            {conv.initial_brief}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-                          <span>
-                            Created: {new Date(conv.created_at).toLocaleDateString()} {new Date(conv.created_at).toLocaleTimeString()}
-                          </span>
-                          {conv.updated_at !== conv.created_at && (
-                            <span>
-                              Updated: {new Date(conv.updated_at).toLocaleDateString()}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                    Create Project & Start Working
+                  </button>
+                </div>
+              )}
+
+              {/* Projects List */}
+              {!showNewProjectForm && (
+                <>
+                  {projects.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+                      <p className="mb-2">No projects yet for this brand.</p>
+                      <p className="text-sm">Click "New Project" to get started.</p>
                     </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {projects.map((project, idx) => {
+                        const totalAgents = project.conversations ? new Set(project.conversations.map((c: any) => c.agent_type)).size : 0;
+
+                        return (
+                          <div
+                            key={idx}
+                            className="group p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-primary-500 dark:hover:border-primary-500 transition-colors cursor-pointer"
+                            onClick={() => handleSelectProject(project)}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-2 mb-3">
+                                  {project.brief || 'No brief provided'}
+                                </p>
+                                <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                                  <span>{totalAgents} agent{totalAgents !== 1 ? 's' : ''} used</span>
+                                  <span>{project.conversation_count} conversation{project.conversation_count !== 1 ? 's' : ''}</span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock size={12} />
+                                    {new Date(project.last_updated).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={(e) => handleDeleteProject(project.brief, e)}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded"
+                                  title="Delete project"
+                                >
+                                  <Trash2 size={14} className="text-red-600 dark:text-red-400" />
+                                </button>
+                                <ChevronDown size={18} className="text-slate-400 transform -rotate-90" />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Agents Tab Content */}
+          {activeTab === 'agents' && selectedProject && (
+            <div className="p-6">
+              {/* Project Brief Display */}
+              <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Current Project Brief:</h3>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">{selectedProject.brief}</p>
                   </div>
-                );
-              })}
+                  <button
+                    onClick={() => {
+                      setActiveTab('projects');
+                      setSelectedProject(null);
+                    }}
+                    className="text-sm text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 ml-4"
+                  >
+                    Change Project
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Agent Chat Sections */}
-      {selectedBrand && (
+      {/* Agent Chat Sections - Only show in Agents tab */}
+      {selectedBrand && activeTab === 'agents' && selectedProject && (
         <div className="space-y-4">
           {agents.map((agent) => {
             const Icon = agent.icon;
