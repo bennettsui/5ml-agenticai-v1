@@ -189,8 +189,14 @@ async function getAgentPerformance() {
   }
 }
 
+// Generic query function for direct database access
+async function query(text, params) {
+  return pool.query(text, params);
+}
+
 module.exports = {
   pool,
+  query,
   initDatabase,
   saveProject,
   saveAnalysis,
