@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Beaker, Loader2, Clock, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, History } from 'lucide-react';
 
 interface ModelResult {
@@ -13,7 +13,6 @@ interface ModelResult {
 interface ModelResults {
   deepseek: ModelResult;
   haiku: ModelResult;
-  sonnet: ModelResult;
   perplexity: ModelResult;
 }
 
@@ -35,7 +34,6 @@ export default function ModelSandbox() {
   const [results, setResults] = useState<ModelResults>({
     deepseek: { status: 'idle' },
     haiku: { status: 'idle' },
-    sonnet: { status: 'idle' },
     perplexity: { status: 'idle' },
   });
   const [history, setHistory] = useState<TestHistory[]>([]);
@@ -45,14 +43,12 @@ export default function ModelSandbox() {
   const modelPricing: Record<string, { input: number; output: number }> = {
     'deepseek': { input: 0.03, output: 0.11 }, // DeepSeek V3.2
     'haiku': { input: 0.25, output: 1.25 }, // Claude 3 Haiku
-    'sonnet': { input: 3.00, output: 15.00 }, // Claude 3.5 Sonnet
     'perplexity': { input: 3.00, output: 15.00 }, // Perplexity Sonar Pro
   };
 
   const models = [
     { id: 'deepseek', name: 'DeepSeek Reasoner', color: 'orange' },
     { id: 'haiku', name: 'Claude 3 Haiku', color: 'blue' },
-    { id: 'sonnet', name: 'Claude 3.5 Sonnet', color: 'purple' },
     { id: 'perplexity', name: 'Perplexity Sonar Pro', color: 'green' },
   ];
 
@@ -187,7 +183,6 @@ export default function ModelSandbox() {
     const freshResults: ModelResults = {
       deepseek: { status: 'idle' },
       haiku: { status: 'idle' },
-      sonnet: { status: 'idle' },
       perplexity: { status: 'idle' },
     };
     setResults(freshResults);
@@ -290,6 +285,78 @@ export default function ModelSandbox() {
     };
   };
 
+  // Recursive function to render nested values
+  const renderValue = (value: any, depth: number = 0): React.ReactElement => {
+    if (value === null || value === undefined) {
+      return <span className="text-slate-400 dark:text-slate-600 italic">N/A</span>;
+    }
+
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        return <span className="text-slate-400 dark:text-slate-600 italic">Empty list</span>;
+      }
+      // Check if array contains objects
+      const hasObjects = value.some(item => typeof item === 'object' && item !== null && !Array.isArray(item));
+
+      if (hasObjects) {
+        // Render array of objects as cards
+        return (
+          <div className="space-y-3">
+            {value.map((item, idx) => (
+              <div key={idx} className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                {typeof item === 'object' && item !== null ? (
+                  <div className="space-y-2">
+                    {Object.entries(item).map(([k, v]) => (
+                      <div key={k}>
+                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">{k.replace(/_/g, ' ')}: </span>
+                        <span className="text-sm text-slate-800 dark:text-slate-200">{String(v)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-sm text-slate-800 dark:text-slate-200">{String(item)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      } else {
+        // Render simple array as bullet list
+        return (
+          <ul className="space-y-2">
+            {value.map((item, idx) => (
+              <li key={idx} className="flex items-start gap-2">
+                <span className="text-slate-400 dark:text-slate-600 mt-0.5">•</span>
+                <span className="flex-1 text-slate-800 dark:text-slate-200">{String(item)}</span>
+              </li>
+            ))}
+          </ul>
+        );
+      }
+    }
+
+    if (typeof value === 'object' && value !== null) {
+      // Render nested object
+      return (
+        <div className={`space-y-2 ${depth > 0 ? 'pl-4 border-l-2 border-slate-200 dark:border-slate-700' : ''}`}>
+          {Object.entries(value).map(([k, v]) => (
+            <div key={k}>
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                {k.replace(/_/g, ' ')}:
+              </div>
+              <div className="ml-2">
+                {renderValue(v, depth + 1)}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Render string/number/boolean
+    return <p className="text-slate-800 dark:text-slate-200 leading-relaxed">{String(value)}</p>;
+  };
+
   const formatOutput = (data: any, modelId?: string) => {
     if (!data) return null;
 
@@ -351,25 +418,8 @@ export default function ModelSandbox() {
                 {key.replace(/_/g, ' ')}
               </div>
             </div>
-            <div className="ml-3.5 text-sm text-slate-900 dark:text-white leading-relaxed">
-              {Array.isArray(value) ? (
-                <ul className="space-y-2">
-                  {value.map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-2">
-                      <span className="text-slate-400 dark:text-slate-600 mt-0.5">•</span>
-                      <span className="flex-1">{String(item)}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : typeof value === 'object' && value !== null ? (
-                <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
-                  <pre className="text-xs overflow-auto leading-relaxed text-slate-800 dark:text-slate-200">
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                </div>
-              ) : (
-                <p className="text-slate-800 dark:text-slate-200">{String(value)}</p>
-              )}
+            <div className="ml-3.5 text-sm leading-relaxed">
+              {renderValue(value)}
             </div>
           </div>
         ))}
