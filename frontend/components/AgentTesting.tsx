@@ -13,10 +13,9 @@ interface Agent {
 }
 
 const agents: Agent[] = [
-  // Row 1: Strategy & Analysis
   {
-    id: 'social-strategy',
-    name: 'Social Strategy',
+    id: 'social',
+    name: 'Social Media Agent',
     icon: Share2,
     color: 'green',
     description: 'Creates comprehensive social media strategies with trending format analysis',
@@ -24,53 +23,27 @@ const agents: Agent[] = [
   },
   {
     id: 'research',
-    name: 'Research',
+    name: 'Research Agent',
     icon: TrendingUp,
     color: 'orange',
-    description: 'Comprehensive market research with web-based insights',
-    capabilities: ['Market insights', 'Competitor analysis', 'Trend monitoring', 'Opportunities', 'Risk assessment'],
+    description: 'Deep brand research with 5-stage methodology (3Cs, SWOT, real-time insights)',
+    capabilities: ['Brand analysis', 'Competitor intelligence', '3Cs framework', 'SWOT analysis', 'Market positioning'],
   },
   {
-    id: 'analyze',
-    name: 'Analyze',
-    icon: BarChart3,
-    color: 'indigo',
-    description: 'Data analysis and business intelligence with actionable insights',
-    capabilities: ['Data analysis', 'Business metrics', 'Performance tracking', 'Predictive insights', 'ROI analysis'],
-  },
-  // Row 2: Content Creation
-  {
-    id: 'copywriter',
-    name: 'Copywriter',
-    icon: PenTool,
-    color: 'purple',
-    description: 'Professional copywriting for ads, posts, and marketing materials',
-    capabilities: ['Ad copy', 'Headlines', 'CTAs', 'Product descriptions', 'Email campaigns'],
-  },
-  {
-    id: 'visual',
-    name: 'Visual',
-    icon: Image,
-    color: 'pink',
-    description: 'Visual concepts, art direction, and brand design guidance',
-    capabilities: ['Visual concepts', 'Art direction', 'Brand identity', 'Color palettes', 'Design systems'],
-  },
-  {
-    id: 'storyboard',
-    name: 'Storyboard',
-    icon: Film,
-    color: 'cyan',
-    description: 'Video storyboarding and visual storytelling for campaigns',
-    capabilities: ['Video concepts', 'Scene planning', 'Visual flow', 'Shot composition', 'Narrative structure'],
-  },
-  // Row 3: Optimization
-  {
-    id: 'seo-evaluation',
-    name: 'SEO Evaluation',
+    id: 'seo',
+    name: 'SEO Agent',
     icon: Search,
     color: 'blue',
     description: 'Comprehensive SEO analysis and optimization recommendations',
     capabilities: ['Keyword research', 'Content strategy', 'Technical SEO', 'Backlink opportunities', 'Trend analysis'],
+  },
+  {
+    id: 'creative',
+    name: 'Creative Agent',
+    icon: Sparkles,
+    color: 'purple',
+    description: 'Creative content generation and campaign ideation',
+    capabilities: ['Campaign concepts', 'Creative copy', 'Content ideas', 'Brand storytelling', 'Visual direction'],
   },
 ];
 
@@ -255,7 +228,7 @@ export default function AgentTesting() {
               </select>
             </div>
 
-            {(selectedAgent === 'seo-evaluation' || selectedAgent === 'social-strategy' || selectedAgent === 'research' || selectedAgent === 'analyze') && (
+            {(selectedAgent === 'seo' || selectedAgent === 'social' || selectedAgent === 'research') && (
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -265,7 +238,7 @@ export default function AgentTesting() {
                   className="w-4 h-4 text-primary-600 rounded"
                 />
                 <label htmlFor="useWebResearch" className="text-sm text-slate-700 dark:text-slate-300">
-                  Enable web research for real-time insights
+                  Enable web research for real-time insights (uses Perplexity)
                 </label>
               </div>
             )}
