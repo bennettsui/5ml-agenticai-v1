@@ -177,7 +177,7 @@ async function strategyWithClaude(client_name, brief, modelSelection = 'haiku', 
 
   const response = await client.messages.create({
     model: claudeModel,
-    max_tokens: 5000,
+    max_tokens: 4096,
     messages: [
       {
         role: 'user',
