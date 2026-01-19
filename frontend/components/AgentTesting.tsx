@@ -527,6 +527,20 @@ export default function AgentTesting() {
         displayContent = 'No analysis data received';
       }
 
+      // Check for orchestration logs (CSO agent)
+      const orchestrationLogs: Message[] = [];
+      if (data.analysis?._orchestration?.orchestration_log) {
+        const logs = data.analysis._orchestration.orchestration_log;
+        logs.forEach((log: any) => {
+          orchestrationLogs.push({
+            role: 'system',
+            content: log.message || JSON.stringify(log),
+            timestamp: log.timestamp || new Date().toISOString(),
+            agent: selectedAgent,
+          });
+        });
+      }
+
       const assistantMessage: Message = {
         role: 'assistant',
         content: displayContent,
@@ -536,7 +550,8 @@ export default function AgentTesting() {
         agent: selectedAgent,
       };
 
-      setConversation(prev => [...prev, assistantMessage]);
+      // Add orchestration logs first, then the final result
+      setConversation(prev => [...prev, ...orchestrationLogs, assistantMessage]);
 
       // Auto-save conversation
       await autoSaveConversation(selectedAgent, [...conversation, userMessage, assistantMessage]);

@@ -165,26 +165,26 @@ async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
       }
     }
 
-    // 5. 市場哨兵 (Market Sentinel)
-    if (dataEvaluation.gaps.includes('market_monitoring')) {
+    // 5. 市場掃描哨兵 (Competitive Review)
+    if (dataEvaluation.gaps.includes('competitive_review')) {
       orchestrationLog.push({
-        step: 'calling_market_sentinel',
-        message: '📡 Calling 市場哨兵 (Market Sentinel Agent)...',
+        step: 'calling_competitive_review',
+        message: '📡 Calling 市場掃描哨兵 (Competitive Review Agent)...',
         agent: 'sentinel'
       });
 
       try {
         const { monitorMarketTrends } = require('./marketSentinelAgent');
-        gatheredData.market_monitoring = await monitorMarketTrends(client_name, brief, { model: modelSelection });
+        gatheredData.competitive_review = await monitorMarketTrends(client_name, brief, { model: modelSelection });
         orchestrationLog.push({
-          step: 'market_sentinel_complete',
-          message: '✅ Market Sentinel completed',
+          step: 'competitive_review_complete',
+          message: '✅ Competitive Review completed',
           success: true
         });
       } catch (error) {
         orchestrationLog.push({
-          step: 'market_sentinel_error',
-          message: `❌ Market Sentinel failed: ${error.message}`,
+          step: 'competitive_review_error',
+          message: `❌ Competitive Review failed: ${error.message}`,
           error: error.message
         });
       }
@@ -300,8 +300,8 @@ async function evaluateDataSufficiency(client_name, brief, existingData, convers
     gaps.push('brand_strategy');
   }
 
-  if (!existingData.market_monitoring && !conversationHistory.some(m => m.agent === 'sentinel')) {
-    gaps.push('market_monitoring');
+  if (!existingData.competitive_review && !conversationHistory.some(m => m.agent === 'sentinel')) {
+    gaps.push('competitive_review');
   }
 
   return {
@@ -338,8 +338,8 @@ async function synthesizeDiagnosis(client_name, brief, existingData, orchestrati
     contextData += `### 4. 品牌策略指揮官報告\n${JSON.stringify(existingData.brand_strategy, null, 2)}\n\n`;
   }
 
-  if (existingData.market_monitoring) {
-    contextData += `### 5. 市場哨兵報告\n${JSON.stringify(existingData.market_monitoring, null, 2)}\n\n`;
+  if (existingData.competitive_review) {
+    contextData += `### 5. 市場掃描哨兵報告\n${JSON.stringify(existingData.competitive_review, null, 2)}\n\n`;
   }
 
   if (additionalGuidance) {

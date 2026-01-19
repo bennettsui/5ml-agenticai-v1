@@ -8,15 +8,17 @@ const client = new Anthropic({
 });
 
 /**
- * Market Sentinel Agent (市場哨兵)
- * Real-time market monitoring and trend analysis
+ * Competitive Review Agent (市場掃描哨兵)
+ * Tactical market monitoring and creative trend analysis
  *
  * Capabilities:
- * - Latest news monitoring (past 3 months)
- * - Social media VOC (小紅書/Dcard/Google Reviews)
- * - Competitor advertising campaigns
- * - Market trend detection
- * - Early warning signals
+ * - Daily/weekly product & promotion monitoring
+ * - Ad creative breakdown (hooks, visual logic, CTA)
+ * - Influencer tracking (KOL endorsement quality)
+ * - Media clipping & sentiment analysis
+ * - Trend detection (keywords, emerging content formats)
+ *
+ * Time Focus: Latest 24 hours or this week only
  */
 
 async function monitorMarketTrends(client_name, brief, options = {}) {
@@ -52,78 +54,78 @@ async function monitorMarketTrends(client_name, brief, options = {}) {
 }
 
 async function monitorWithPerplexity(client_name, brief, modelsUsed = []) {
-  const systemPrompt = `你是一位專業的「市場哨兵」（Market Sentinel），專注於實時市場監測與趨勢分析。你必須使用最新資訊（2026年）。`;
+  const systemPrompt = `你是一位專業的「市場掃描哨兵」（Competitive Review Agent），專注於戰術級的市場監控與創意趨勢分析。你是數位行銷監控員與創意審查員。你必須使用最新資訊（2026年），且僅關注「最新 24 小時」或「本週」的動態。`;
 
-  const query = `請針對品牌「${client_name}」進行市場監測，必須使用最新網路資訊（過去3個月）：
+  const query = `請針對品牌「${client_name}」進行戰術級市場監測，必須使用最新網路資訊（最新24小時或本週）：
 
 **項目簡報**: ${brief}
 
 <任務要求>：
 
-# 新聞動態監測 (Recent 3 Months)
+# 1. 日常/週常監測
 
-## 品牌相關新聞
-- 最新產品發布
-- 重大商業動作（融資、併購、擴張）
-- 危機事件或爭議
-- 獎項與認可
+## 產品與促銷
+- 新產品上架（本週）
+- 限時活動與優惠
+- 快閃店動態
+- 產品組合變化
 
-## 行業趨勢新聞
-- 市場規模變化
-- 技術創新
-- 法規政策變動
-- 消費者行為轉變
+## 廣告素材拆解
+- Google Ads / Facebook Ads 最新素材
+- 素材鉤子 (Hooks) 分析：開頭如何抓住注意力
+- 視覺邏輯：色彩、排版、文案層次
+- CTA (Call-to-Action) 設計與轉化邏輯
+- **推理追蹤**：為何這個廣告有效/無效？
 
-# 社群輿情分析 (VOC - Voice of Customer)
+## 影響力追蹤
+- KOL 代言質量評估
+- 網紅參與度分析（Branding vs. ROI）
+- 內容合作形式（業配/聯名/代言）
+- 粉絲互動數據（讚/留言/分享）
 
-## 小紅書 (Xiaohongshu)
-- 熱門討論話題
-- 用戶評價趨勢（正面/負面）
-- KOL 提及情況
-- 爆款內容分析
+# 2. 媒體與輿情
 
-## Dcard / PTT
-- 討論聲量趨勢
-- 主要爭議點
-- 品牌形象評價
+## 媒體剪報 (Media Clippings)
+- 收集本週相關新聞報導
+- 正面/負面情緒分析
+- 媒體聲量趨勢
+- 關鍵媒體來源
 
-## Google Reviews
-- 平均評分趨勢
-- 高頻關鍵詞（好評/差評）
-- 服務問題識別
+## 輿情監測
+- 社群平台情緒分析（小紅書/Dcard/PTT）
+- 危機預警（負面評論擴散）
+- 品牌提及量變化
 
-# 競品廣告監測
+# 3. 趨勢預警
 
-## 最新 Campaign
-- 2-3個主要競品的最新廣告活動
-- 創意主題與視覺風格
-- 投放渠道與預算估算
-- 效果表現（如有數據）
+## 關鍵字搜尋趨勢
+- 行業熱搜關鍵字（本週）
+- 品牌相關搜尋量變化
+- 新興需求信號
 
-## 廣告策略分析
-- 主打賣點變化
-- 目標受眾調整
-- 季節性/節慶性活動
+## 新興內容格式
+- AI 生成素材應用（AIGC）
+- 短影音趨勢（TikTok/YouTube Shorts/Reels）
+- 互動式內容（AR/VR/Live）
+- 新興平台或功能
 
-# 市場早期預警
+<時效要求>：
+- **僅關注「最新 24 小時」或「本週」的動態**
+- 所有資訊必須標註時間戳記
+- 過期資訊（超過一週）不納入分析
 
-## 機會信號
-- 新興需求點
-- 競品弱勢領域
-- 政策利好
-
-## 威脅信號
-- 負面輿情擴散
-- 競品強勢動作
-- 市場飽和跡象
+<推理要求>：
+- 分析競品廣告素材為何有效/無效
+- 拆解創意邏輯與轉化路徑
+- 提供可學習的洞察
 
 <輸出格式>：
-- 必須標註所有資訊的來源與時間
+- 必須標註所有資訊的來源與精確時間
 - 使用結構化格式（JSON或清晰的段落）
-- 對趨勢做出明確判斷（上升/下降/穩定）
-- 提供可操作的早期預警建議
+- 對每個素材提供「為何有效/無效」的推理
+- 提供可操作的戰術建議
 
-<目標>：產出《市場監測與趨勢預警報告》`;
+<目標>：產出《市場情報速遞與創意趨勢報告》`;
 
   const result = await perplexityService.research(query, {
     systemPrompt,
@@ -139,55 +141,71 @@ async function monitorWithPerplexity(client_name, brief, modelsUsed = []) {
   });
 
   return {
-    market_monitoring: result.content,
+    competitive_review: result.content,
     sources: result.citations || [],
     _meta: {
       models_used: modelsUsed,
-      note: 'Real-time market monitoring with latest news and VOC analysis',
-      agent: '市場哨兵 (Market Sentinel)'
+      note: 'Tactical market monitoring with ad creative breakdown and trend analysis (Latest 24h/week)',
+      agent: '市場掃描哨兵 (Competitive Review Agent)'
     }
   };
 }
 
 async function monitorWithDeepSeek(client_name, brief, modelSelection, no_fallback, modelsUsed = []) {
-  const systemPrompt = `你是一位專業的「市場哨兵」（Market Sentinel），專注於實時市場監測與趨勢分析。
+  const systemPrompt = `你是一位專業的「市場掃描哨兵」（Competitive Review Agent），是數位行銷監控員與創意審查員。
 
-你的任務是監測品牌「${client_name}」的市場動態，包括：
-1. 最新新聞（過去3個月）
-2. 社群輿情（小紅書/Dcard/Google Reviews）
-3. 競品廣告活動
-4. 市場早期預警信號
+你的任務是對品牌「${client_name}」進行戰術級市場監測，包括：
+1. 日常/週常監測（產品、促銷、廣告素材拆解、KOL追蹤）
+2. 媒體剪報與輿情分析
+3. 趨勢預警（關鍵字、新興內容格式如AI生成素材、短影音）
+
+**時效要求**：僅關注「最新 24 小時」或「本週」的動態
+**推理要求**：分析競品廣告素材為何有效/無效
 
 請基於數據分析產出結構化報告。`;
 
   const userPrompt = `**項目簡報**: ${brief}
 
-請產出《市場監測與趨勢預警報告》，包含：
-1. 新聞動態監測（品牌相關新聞 + 行業趨勢）
-2. 社群輿情分析（小紅書 + Dcard/PTT + Google Reviews）
-3. 競品廣告監測（最新Campaign + 廣告策略）
-4. 市場早期預警（機會信號 + 威脅信號）
+請產出《市場情報速遞與創意趨勢報告》，包含：
+1. 日常/週常監測
+   - 產品與促銷（新品上架、限時活動、快閃店）
+   - 廣告素材拆解（hooks、視覺邏輯、CTA + 推理為何有效/無效）
+   - 影響力追蹤（KOL質量、參與度）
+
+2. 媒體與輿情
+   - 媒體剪報（本週新聞、情緒分析）
+   - 輿情監測（社群平台、危機預警）
+
+3. 趨勢預警
+   - 關鍵字搜尋趨勢（本週）
+   - 新興內容格式（AI生成素材、短影音、AR/VR）
 
 以JSON格式輸出，包含以下結構：
 {
-  "news_monitoring": {
-    "brand_news": [...],
-    "industry_trends": [...]
+  "daily_weekly_monitoring": {
+    "products_promotions": [...],
+    "ad_creative_breakdown": [
+      {
+        "platform": "...",
+        "creative_hooks": "...",
+        "visual_logic": "...",
+        "cta_design": "...",
+        "effectiveness_reasoning": "為何有效/無效的分析"
+      }
+    ],
+    "influencer_tracking": [...]
   },
-  "voc_analysis": {
-    "xiaohongshu": {...},
-    "dcard_ptt": {...},
-    "google_reviews": {...}
+  "media_sentiment": {
+    "media_clippings": [...],
+    "voc_monitoring": {...}
   },
-  "competitor_ads": {
-    "latest_campaigns": [...],
-    "strategy_analysis": {...}
-  },
-  "early_warning": {
-    "opportunities": [...],
-    "threats": [...]
+  "trend_warnings": {
+    "keyword_trends": [...],
+    "emerging_formats": [...]
   }
-}`;
+}
+
+**重要**: 所有資訊必須標註時間戳記，僅採用最新24小時或本週的數據`;
 
   try {
     const result = await deepseekService.research(userPrompt, {
@@ -211,13 +229,13 @@ async function monitorWithDeepSeek(client_name, brief, modelSelection, no_fallba
     }
 
     return {
-      market_monitoring: parsedContent,
+      competitive_review: parsedContent,
       reasoning_process: result.reasoning_process,
       _meta: {
         models_used: modelsUsed,
         reasoning_process: result.reasoning_process,
-        note: 'Market monitoring with reasoning analysis',
-        agent: '市場哨兵 (Market Sentinel)'
+        note: 'Tactical market monitoring with ad creative breakdown (Latest 24h/week)',
+        agent: '市場掃描哨兵 (Competitive Review Agent)'
       }
     };
   } catch (error) {
@@ -238,41 +256,57 @@ async function monitorWithClaude(client_name, brief, modelSelection = 'haiku', m
     messages: [
       {
         role: 'user',
-        content: `# Role: 市場哨兵 (Market Sentinel)
+        content: `# Role: 市場掃描哨兵 (Competitive Review Agent)
 
-<背景>：你是一位市場監測專家，負責追蹤品牌的實時市場動態、社群輿情、競品活動，並提供早期預警。
+<背景>：提供長期的、戰術級的市場監控，捕捉細微的市場變化與創意趨勢。
+<角色>：你是一位數位行銷監控員與創意審查員。
 
 **品牌名稱**: ${client_name}
 **項目簡報**: ${brief}
 
-<任務要求>，請執行以下監測分析：
+<任務要求>，請執行以下戰術級監測分析：
 
-**新聞動態監測**
-- 品牌相關新聞（最新產品、商業動作、危機事件）
-- 行業趨勢新聞（市場變化、技術創新、政策法規）
+**1. 日常/週常監測**
+- 產品與促銷：新產品上架、限時活動、快閃店動態
+- 廣告素材拆解：分析 Google/FB Ads 的素材鉤子 (Hooks)、視覺邏輯與 CTA
+- 影響力追蹤：監測 KOL 代言質量、網紅參與度（Branding vs. ROI）
 
-**社群輿情分析**
-- 小紅書：熱門話題、用戶評價、KOL提及
-- Dcard/PTT：討論聲量、主要爭議、品牌形象
-- Google Reviews：評分趨勢、高頻關鍵詞、服務問題
+**2. 媒體與輿情**
+- 收集媒體剪報 (Media Clippings) 並進行正負面情緒分析
+- 社群平台輿情（小紅書/Dcard/PTT）
+- 危機預警（負面評論擴散）
 
-**競品廣告監測**
-- 最新Campaign（2-3個主要競品）
-- 廣告策略分析（賣點、受眾、渠道）
+**3. 趨勢預警**
+- 識別行業內的關鍵字搜尋趨勢
+- 新興內容格式（如：AI 生成素材、短影音趨勢）
 
-**市場早期預警**
-- 機會信號（新興需求、競品弱勢、政策利好）
-- 威脅信號（負面輿情、競品強勢、市場飽和）
+<時效要求>：
+- **僅關注「最新 24 小時」或「本週」的動態**
+- 所有資訊必須標註時間戳記
+
+<推理追蹤>：
+- 分析競品廣告素材為何有效/無效
 
 <輸出格式>：以JSON格式輸出，結構如下：
 {
-  "news_monitoring": { "brand_news": [], "industry_trends": [] },
-  "voc_analysis": { "xiaohongshu": {}, "dcard_ptt": {}, "google_reviews": {} },
-  "competitor_ads": { "latest_campaigns": [], "strategy_analysis": {} },
-  "early_warning": { "opportunities": [], "threats": [] }
+  "daily_weekly_monitoring": {
+    "products_promotions": [],
+    "ad_creative_breakdown": [
+      { "platform": "", "hooks": "", "visual_logic": "", "cta": "", "effectiveness_reasoning": "" }
+    ],
+    "influencer_tracking": []
+  },
+  "media_sentiment": {
+    "media_clippings": [],
+    "voc_monitoring": {}
+  },
+  "trend_warnings": {
+    "keyword_trends": [],
+    "emerging_formats": []
+  }
 }
 
-<目標>：產出《市場監測與趨勢預警報告》`
+<目標>：產出《市場情報速遞與創意趨勢報告》`
       }
     ]
   });
@@ -298,11 +332,11 @@ async function monitorWithClaude(client_name, brief, modelSelection = 'haiku', m
   }
 
   return {
-    market_monitoring: parsedContent,
+    competitive_review: parsedContent,
     _meta: {
       models_used: modelsUsed,
-      note: 'Market monitoring analysis',
-      agent: '市場哨兵 (Market Sentinel)'
+      note: 'Tactical market monitoring with ad creative breakdown (Latest 24h/week)',
+      agent: '市場掃描哨兵 (Competitive Review Agent)'
     }
   };
 }
