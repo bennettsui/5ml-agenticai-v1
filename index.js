@@ -76,13 +76,53 @@ app.get('/sandbox.html', (req, res) => {
  *                   type: string
  *                   example: iad
  */
-app.get('/health', (req, res) => {
-  res.json({
+app.get('/health', async (req, res) => {
+  const health = {
     status: 'ok',
     service: '5ML Agentic AI Platform v1',
     timestamp: new Date().toISOString(),
-    region: 'iad'
-  });
+    region: 'iad',
+    checks: {
+      database: 'unknown',
+      schema: 'unknown'
+    }
+  };
+
+  // Check database connection and schema
+  if (process.env.DATABASE_URL) {
+    try {
+      const db = require('./db');
+
+      // Test basic connection
+      await db.query('SELECT 1');
+      health.checks.database = 'ok';
+
+      // Check if receipt_batches table exists (schema validation)
+      await db.query('SELECT 1 FROM receipt_batches LIMIT 1');
+      health.checks.schema = 'ok';
+
+    } catch (error) {
+      health.checks.database = 'connected';
+
+      // If table doesn't exist, set status to degraded
+      if (error.code === '42P01') {
+        health.status = 'degraded';
+        health.checks.schema = 'missing_tables';
+        health.message = 'Database connected but schema not initialized. Visit /api/receipts/init-database';
+      } else {
+        health.status = 'degraded';
+        health.checks.schema = 'error';
+        health.error = error.message;
+      }
+    }
+  } else {
+    health.checks.database = 'not_configured';
+    health.checks.schema = 'not_configured';
+  }
+
+  // Return 503 if degraded, 200 if ok
+  const statusCode = health.status === 'ok' ? 200 : 503;
+  res.status(statusCode).json(health);
 });
 
 // ==========================================
