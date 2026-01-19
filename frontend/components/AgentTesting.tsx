@@ -10,18 +10,36 @@ interface Agent {
   color: string;
   description: string;
   capabilities: string[];
+  category: 'agentic_ai' | 'workflow' | 'ai_agents';
+}
+
+interface AgentCategory {
+  id: string;
+  name: string;
+  description: string;
+  agents: Agent[];
 }
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   parsed?: any;
   brief?: string;
   model?: string;
   timestamp: string;
+  agent?: string;
 }
 
 const agents: Agent[] = [
+  {
+    id: 'orchestrator',
+    name: '品牌策略指揮官',
+    icon: Sparkles,
+    color: 'purple',
+    description: 'Agentic AI - Orchestrates all agents with autonomous planning and goal-oriented execution',
+    capabilities: ['Autonomous planning', 'Multi-agent orchestration', 'Data quality reflection', 'Goal-oriented execution', 'Self-correction'],
+    category: 'agentic_ai',
+  },
   {
     id: 'research',
     name: '品牌現狀研究專家',
@@ -29,6 +47,7 @@ const agents: Agent[] = [
     color: 'orange',
     description: 'Brand Research Agent - Real-time brand audit with market intelligence and asset analysis',
     capabilities: ['Real-time intelligence', '3Cs & SWOT analysis', 'Product & pricing', 'VOC analysis', 'Brand asset audit'],
+    category: 'ai_agents',
   },
   {
     id: 'customer',
@@ -37,6 +56,7 @@ const agents: Agent[] = [
     color: 'blue',
     description: 'Customer Insight Agent - Deep audience segmentation and psychological motivation analysis',
     capabilities: ['Market segmentation', 'TA positioning', 'Persona building', 'Empathy mapping', 'Purchase triggers'],
+    category: 'ai_agents',
   },
   {
     id: 'competitor',
@@ -45,14 +65,37 @@ const agents: Agent[] = [
     color: 'green',
     description: 'Competitor Analysis Agent - Intelligence gathering and differentiation opportunity mapping',
     capabilities: ['Competitive radar', 'Benchmarking', 'Market dynamics', 'Differentiation analysis', 'SOV estimation'],
+    category: 'ai_agents',
   },
   {
     id: 'strategy',
-    name: '品牌策略指揮官',
+    name: '品牌策略分析專家',
     icon: Sparkles,
     color: 'purple',
     description: 'Brand Strategy Agent - Strategic diagnosis and actionable blueprint development',
     capabilities: ['Strategic diagnosis', 'SWOT strategy', 'Brand archetype', 'Positioning statement', 'Action blueprint'],
+    category: 'ai_agents',
+  },
+];
+
+const agentCategories: AgentCategory[] = [
+  {
+    id: 'agentic_ai',
+    name: 'Agentic AI',
+    description: 'Autonomous orchestration with multi-agent coordination',
+    agents: agents.filter(a => a.category === 'agentic_ai'),
+  },
+  {
+    id: 'workflow',
+    name: 'Workflow',
+    description: 'Pre-defined workflows for common tasks',
+    agents: agents.filter(a => a.category === 'workflow'),
+  },
+  {
+    id: 'ai_agents',
+    name: 'AI Agents',
+    description: 'Specialized research and analysis agents',
+    agents: agents.filter(a => a.category === 'ai_agents'),
   },
 ];
 
@@ -187,24 +230,24 @@ export default function AgentTesting() {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [showNewProjectForm, setShowNewProjectForm] = useState(false);
-  const [newProjectBrief, setNewProjectBrief] = useState('');
+  const [newProjectTitle, setNewProjectTitle] = useState('');
+  const [newProjectPurpose, setNewProjectPurpose] = useState('');
+  const [newProjectDeliverable, setNewProjectDeliverable] = useState('');
+  const [newProjectBackground, setNewProjectBackground] = useState('');
 
-  // Chat state per agent
-  const [agentChats, setAgentChats] = useState<Record<string, Message[]>>({
-    research: [],
-    customer: [],
-    competitor: [],
-    strategy: [],
+  // Unified chat state
+  const [conversation, setConversation] = useState<Message[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [chatInput, setChatInput] = useState('');
+  const [selectedModel, setSelectedModel] = useState('deepseek');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Agent sidebar state
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
+    agentic_ai: true,
+    workflow: false,
+    ai_agents: true,
   });
-  const [expandedAgents, setExpandedAgents] = useState<Record<string, boolean>>({});
-  const [agentInputs, setAgentInputs] = useState<Record<string, string>>({});
-  const [agentModels, setAgentModels] = useState<Record<string, string>>({
-    research: 'deepseek',
-    customer: 'deepseek',
-    competitor: 'deepseek',
-    strategy: 'deepseek',
-  });
-  const [loadingAgents, setLoadingAgents] = useState<Record<string, boolean>>({});
 
   // Load all brands on mount
   useEffect(() => {

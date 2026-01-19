@@ -729,6 +729,45 @@ app.post('/agents/strategy', async (req, res) => {
   }
 });
 
+// Brand Strategy Orchestration (Agentic AI Mode)
+app.post('/agents/orchestrate', async (req, res) => {
+  try {
+    const { client_name, brief, industry, model, conversation_history, existing_data } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { orchestrateBrandStrategy } = require('./agents/brandStrategyAgent');
+    const analysis = await orchestrateBrandStrategy(client_name, brief, {
+      model,
+      conversationHistory: conversation_history || [],
+      existingData: existing_data || {}
+    });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'orchestration', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
+
+    res.json({
+      success: true,
+      agent: 'orchestration',
+      mode: 'agentic_ai',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Orchestration agent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /**
  * @swagger
  * /agents:
