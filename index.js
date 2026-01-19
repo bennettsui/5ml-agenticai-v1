@@ -1033,18 +1033,29 @@ app.get('*', (req, res, next) => {
   }
 
   // For Next.js routes, try to serve the corresponding HTML file
+  const fs = require('fs');
   const nextJsPath = path.join(__dirname, 'frontend/out');
-  const htmlPath = path.join(nextJsPath, req.path, 'index.html');
-  const directHtmlPath = path.join(nextJsPath, req.path + '.html');
+
+  // Remove trailing slash for path lookups
+  const cleanPath = req.path.endsWith('/') && req.path !== '/'
+    ? req.path.slice(0, -1)
+    : req.path;
+
+  const htmlPath = path.join(nextJsPath, cleanPath, 'index.html');
+  const directHtmlPath = path.join(nextJsPath, cleanPath + '.html');
 
   // Check if path/index.html exists
-  const fs = require('fs');
   if (fs.existsSync(htmlPath)) {
     return res.sendFile(htmlPath);
   }
   // Check if path.html exists
   if (fs.existsSync(directHtmlPath)) {
     return res.sendFile(directHtmlPath);
+  }
+
+  // If original path had trailing slash and we didn't find anything, redirect to without trailing slash
+  if (req.path.endsWith('/') && req.path !== '/') {
+    return res.redirect(301, cleanPath);
   }
 
   // Otherwise continue to next middleware
