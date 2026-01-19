@@ -39,11 +39,6 @@ if (process.env.DATABASE_URL) {
 // ==========================================
 // Static Files & Dashboard
 // ==========================================
-// Serve navigation landing page
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/public/navigation.html');
-});
-
 // Serve sandbox (legacy dashboard)
 app.get('/sandbox.html', (req, res) => {
   res.sendFile(__dirname + '/public/index.html');
