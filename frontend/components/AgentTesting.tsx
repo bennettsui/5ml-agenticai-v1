@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Sparkles, Search, Share2, TrendingUp, Loader2, BarChart3, PenTool, Image, Film } from 'lucide-react';
+import { Sparkles, Search, Share2, TrendingUp, Loader2, BarChart3, PenTool, Image, Film, Building2, Plus, Clock } from 'lucide-react';
 
 interface Agent {
   id: string;
@@ -64,6 +64,10 @@ const colorClasses: Record<string, { bg: string; border: string; icon: string; b
 };
 
 export default function AgentTesting() {
+  const [selectedBrand, setSelectedBrand] = useState<any>(null);
+  const [allBrands, setAllBrands] = useState<any[]>([]);
+  const [brandSearchQuery, setBrandSearchQuery] = useState('');
+  const [showNewBrandForm, setShowNewBrandForm] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [model, setModel] = useState('deepseek');
   const [loading, setLoading] = useState(false);
@@ -78,6 +82,49 @@ export default function AgentTesting() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Load all brands on mount
+  useEffect(() => {
+    loadBrands();
+  }, []);
+
+  const loadBrands = async () => {
+    try {
+      const response = await fetch('/api/brands?limit=20');
+      const data = await response.json();
+      if (data.success) {
+        setAllBrands(data.brands || []);
+      }
+    } catch (error) {
+      console.error('Error loading brands:', error);
+    }
+  };
+
+  // Auto-populate form when brand is selected
+  useEffect(() => {
+    if (selectedBrand) {
+      setFormData({
+        ...formData,
+        client_name: selectedBrand.brand_name,
+        industry: selectedBrand.industry || '',
+      });
+      setShowNewBrandForm(false);
+    }
+  }, [selectedBrand]);
+
+  const handleBrandSelect = async (brand: any) => {
+    try {
+      // Load full brand details including agent results
+      const response = await fetch(`/api/brands/${encodeURIComponent(brand.brand_name)}`);
+      const data = await response.json();
+      if (data.success) {
+        setSelectedBrand(data.brand);
+      }
+    } catch (error) {
+      console.error('Error loading brand details:', error);
+      setSelectedBrand(brand);
+    }
+  };
 
   // Search brands for autocomplete
   const searchBrands = async (query: string) => {
@@ -149,6 +196,12 @@ export default function AgentTesting() {
 
       const data = await response.json();
       setResult(data);
+
+      // Reload brand to get updated agent results and usage count
+      if (formData.client_name) {
+        await handleBrandSelect({ brand_name: formData.client_name });
+        await loadBrands(); // Refresh brand list
+      }
     } catch (error) {
       setResult({ error: 'Failed to execute agent' });
     } finally {
@@ -158,11 +211,113 @@ export default function AgentTesting() {
 
   const selectedAgentData = agents.find(a => a.id === selectedAgent);
 
+  const filteredBrands = brandSearchQuery
+    ? allBrands.filter(b =>
+        b.brand_name.toLowerCase().includes(brandSearchQuery.toLowerCase()) ||
+        (b.industry && b.industry.toLowerCase().includes(brandSearchQuery.toLowerCase()))
+      )
+    : allBrands;
+
   return (
     <div className="space-y-6">
+      {/* Brand Selection */}
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Building2 size={24} />
+            Select Brand
+          </h2>
+          <button
+            onClick={() => {
+              setShowNewBrandForm(!showNewBrandForm);
+              setSelectedBrand(null);
+              setFormData({
+                client_name: '',
+                brief: '',
+                industry: '',
+                useWebResearch: true,
+              });
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+          >
+            <Plus size={18} />
+            New Brand
+          </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-4">
+          <input
+            type="text"
+            value={brandSearchQuery}
+            onChange={(e) => setBrandSearchQuery(e.target.value)}
+            placeholder="Search brands..."
+            className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
+
+        {/* Brand List */}
+        {!showNewBrandForm && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto">
+            {filteredBrands.length === 0 ? (
+              <div className="col-span-full text-center py-8 text-slate-500 dark:text-slate-400">
+                No brands found. Click "New Brand" to create one.
+              </div>
+            ) : (
+              filteredBrands.map((brand) => (
+                <button
+                  key={brand.brand_id}
+                  onClick={() => handleBrandSelect(brand)}
+                  className={`
+                    p-4 rounded-lg border-2 transition-all text-left
+                    ${selectedBrand?.brand_id === brand.brand_id
+                      ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-500 shadow-md'
+                      : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:border-primary-300'
+                    }
+                  `}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h3 className="font-semibold text-slate-900 dark:text-white">{brand.brand_name}</h3>
+                      {brand.industry && (
+                        <p className="text-xs text-slate-600 dark:text-slate-400">{brand.industry}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                    <span>{brand.usage_count || 0} runs</span>
+                    <span className="flex items-center gap-1">
+                      <Clock size={12} />
+                      {new Date(brand.updated_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Selected Brand Details */}
+        {selectedBrand && selectedBrand.agent_results && Object.keys(selectedBrand.agent_results).length > 0 && (
+          <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Previous Analysis:</h3>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(selectedBrand.agent_results).map(([agentType, _]) => (
+                <span
+                  key={agentType}
+                  className="px-3 py-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-full text-xs text-slate-700 dark:text-slate-300"
+                >
+                  {agents.find(a => a.id === agentType)?.name || agentType}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Agent Selection */}
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Select an Agent</h2>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Select Agent</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {agents.map((agent) => {
             const Icon = agent.icon;
@@ -223,68 +378,92 @@ export default function AgentTesting() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="relative">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Client Name
-                </label>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={formData.client_name}
-                  onChange={(e) => {
-                    setFormData({ ...formData, client_name: e.target.value });
-                    setShowSuggestions(true);
-                  }}
-                  onFocus={() => setShowSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
-                  placeholder="e.g., Tesla"
-                  required
-                  autoComplete="off"
-                />
-                {showSuggestions && brandSuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {brandSuggestions.map((brand) => (
-                      <button
-                        key={brand.brand_id}
-                        type="button"
-                        onClick={() => selectBrand(brand)}
-                        className="w-full px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-600 flex items-center justify-between"
-                      >
-                        <div>
-                          <div className="text-sm font-medium text-slate-900 dark:text-white">
-                            {brand.brand_name}
-                          </div>
-                          {brand.industry && (
-                            <div className="text-xs text-slate-600 dark:text-slate-400">
-                              {brand.industry}
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">
-                          {brand.usage_count} uses
-                        </div>
-                      </button>
-                    ))}
+            {/* Show brand info when brand is selected */}
+            {selectedBrand ? (
+              <div className="p-4 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-700 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-slate-900 dark:text-white">{selectedBrand.brand_name}</h3>
+                    {selectedBrand.industry && (
+                      <p className="text-sm text-slate-600 dark:text-slate-400">{selectedBrand.industry}</p>
+                    )}
                   </div>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedBrand(null);
+                      setShowNewBrandForm(true);
+                    }}
+                    className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                  >
+                    Change Brand
+                  </button>
+                </div>
               </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="relative">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Brand Name
+                  </label>
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={formData.client_name}
+                    onChange={(e) => {
+                      setFormData({ ...formData, client_name: e.target.value });
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    placeholder="e.g., Tesla"
+                    required
+                    autoComplete="off"
+                  />
+                  {showSuggestions && brandSuggestions.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {brandSuggestions.map((brand) => (
+                        <button
+                          key={brand.brand_id}
+                          type="button"
+                          onClick={() => selectBrand(brand)}
+                          className="w-full px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-600 flex items-center justify-between"
+                        >
+                          <div>
+                            <div className="text-sm font-medium text-slate-900 dark:text-white">
+                              {brand.brand_name}
+                            </div>
+                            {brand.industry && (
+                              <div className="text-xs text-slate-600 dark:text-slate-400">
+                                {brand.industry}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            {brand.usage_count} uses
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Industry
-                </label>
-                <input
-                  type="text"
-                  value={formData.industry}
-                  onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
-                  placeholder="e.g., Electric Vehicles"
-                  required
-                />
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Industry
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.industry}
+                    onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    placeholder="e.g., Electric Vehicles"
+                    required
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
