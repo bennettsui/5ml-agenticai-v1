@@ -9,7 +9,10 @@ const client = new Anthropic({
 
 /**
  * Brand Strategy Agent (品牌策略指揮官)
- * High-level strategic diagnosis and actionable recommendations
+ * Layer 3: AI Agent - Strategic diagnosis and actionable recommendations
+ *
+ * Note: This agent performs its own strategic analysis.
+ * For orchestration of multiple agents, use CSO Orchestrator (高階品牌策略戰略長)
  */
 
 async function analyzeBrandStrategy(client_name, brief, options = {}) {
@@ -404,6 +407,20 @@ async function strategyWithDeepSeek(client_name, brief, modelSelection, no_fallb
     console.warn('DeepSeek API unavailable, falling back to Claude');
     return await strategyWithClaude(client_name, brief, modelSelection, modelsUsed);
   }
+}
+
+/**
+ * Orchestrate Brand Strategy (Agentic AI Mode)
+ * Layer 6: Orchestration & Workflow
+ *
+ * This function acts as an autonomous agent that:
+ * - Evaluates data sufficiency
+ * - Calls other agents when needed (research, customer, competitor)
+ * - Has reflection and self-correction capabilities
+ * - Goal-oriented: aims to produce 5 positioning keywords
+ * - Can retry and request more data
+ */
+  };
 }
 
 module.exports = {

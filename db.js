@@ -30,7 +30,11 @@ async function initDatabase() {
         id SERIAL PRIMARY KEY,
         project_id UUID UNIQUE DEFAULT gen_random_uuid(),
         client_name VARCHAR(255) NOT NULL,
-        brief TEXT NOT NULL,
+        brief TEXT,
+        title VARCHAR(255),
+        purpose TEXT,
+        deliverable TEXT,
+        background TEXT,
         industry VARCHAR(100),
         created_at TIMESTAMP DEFAULT NOW()
       );
@@ -46,6 +50,18 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_project_client ON projects(client_name);
       CREATE INDEX IF NOT EXISTS idx_analysis_project ON analyses(project_id);
       CREATE INDEX IF NOT EXISTS idx_analysis_agent ON analyses(agent_type);
+    `);
+
+    // Migrate existing projects table to add new fields if they don't exist
+    await pool.query(`
+      ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS title VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS purpose TEXT,
+      ADD COLUMN IF NOT EXISTS deliverable TEXT,
+      ADD COLUMN IF NOT EXISTS background TEXT;
+
+      ALTER TABLE projects
+      ALTER COLUMN brief DROP NOT NULL;
 
       CREATE TABLE IF NOT EXISTS sandbox_tests (
         id SERIAL PRIMARY KEY,
@@ -103,13 +119,25 @@ async function initDatabase() {
 }
 
 // 保存 project
-async function saveProject(client_name, brief, industry = null) {
+async function saveProject(client_name, briefOrProjectData, industry = null) {
   try {
-    const result = await pool.query(
-      'INSERT INTO projects (client_name, brief, industry) VALUES ($1, $2, $3) RETURNING project_id',
-      [client_name, brief, industry]
-    );
-    return result.rows[0].project_id;
+    // Support both old format (string) and new format (object)
+    if (typeof briefOrProjectData === 'string') {
+      // Old format: just a brief string
+      const result = await pool.query(
+        'INSERT INTO projects (client_name, brief, industry) VALUES ($1, $2, $3) RETURNING project_id',
+        [client_name, briefOrProjectData, industry]
+      );
+      return result.rows[0].project_id;
+    } else {
+      // New format: object with title, purpose, deliverable, background
+      const { title, purpose, deliverable, background, brief } = briefOrProjectData;
+      const result = await pool.query(
+        'INSERT INTO projects (client_name, title, purpose, deliverable, background, brief, industry) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING project_id',
+        [client_name, title, purpose, deliverable, background, brief, industry]
+      );
+      return result.rows[0].project_id;
+    }
   } catch (error) {
     console.error('Error saving project:', error);
     throw error;

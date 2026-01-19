@@ -10,49 +10,101 @@ interface Agent {
   color: string;
   description: string;
   capabilities: string[];
+  category: 'agentic_ai' | 'workflow' | 'ai_agents';
+}
+
+interface AgentCategory {
+  id: string;
+  name: string;
+  description: string;
+  agents: Agent[];
 }
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   parsed?: any;
   brief?: string;
   model?: string;
   timestamp: string;
+  agent?: string;
 }
 
 const agents: Agent[] = [
   {
+    id: 'cso',
+    name: '高階品牌策略戰略長 (CSO)',
+    icon: Sparkles,
+    color: 'purple',
+    description: 'Layer 6: CSO Orchestrator - Coordinates 5 specialist agents with autonomous planning',
+    capabilities: ['Orchestrate 5 agents', 'Data sufficiency check', 'Quality reflection', 'Goal-oriented (5 keywords)', 'Self-correction'],
+    category: 'agentic_ai',
+  },
+  {
     id: 'research',
-    name: '品牌現狀研究專家',
+    name: '品牌研究專家',
     icon: TrendingUp,
     color: 'orange',
-    description: 'Brand Research Agent - Real-time brand audit with market intelligence and asset analysis',
-    capabilities: ['Real-time intelligence', '3Cs & SWOT analysis', 'Product & pricing', 'VOC analysis', 'Brand asset audit'],
+    description: 'Layer 3: Brand Research - Real-time brand audit with 3Cs, SWOT, and asset analysis',
+    capabilities: ['Real-time intelligence', '3Cs & SWOT', 'Product portfolio', 'Pricing strategy', 'VOC analysis'],
+    category: 'ai_agents',
   },
   {
     id: 'customer',
     name: '用戶洞察專家',
     icon: User,
     color: 'blue',
-    description: 'Customer Insight Agent - Deep audience segmentation and psychological motivation analysis',
-    capabilities: ['Market segmentation', 'TA positioning', 'Persona building', 'Empathy mapping', 'Purchase triggers'],
+    description: 'Layer 3: Customer Insight - Deep audience segmentation and persona building',
+    capabilities: ['Market segmentation', 'TA positioning', 'Persona building', 'Empathy mapping', 'Decision barriers'],
+    category: 'ai_agents',
   },
   {
     id: 'competitor',
     name: '競爭情報專家',
     icon: Search,
     color: 'green',
-    description: 'Competitor Analysis Agent - Intelligence gathering and differentiation opportunity mapping',
-    capabilities: ['Competitive radar', 'Benchmarking', 'Market dynamics', 'Differentiation analysis', 'SOV estimation'],
+    description: 'Layer 3: Competitor Intelligence - Competitive radar and differentiation mapping',
+    capabilities: ['Competitive radar', 'Benchmarking', 'Latest campaigns', 'Differentiation', 'SOV estimation'],
+    category: 'ai_agents',
   },
   {
     id: 'strategy',
     name: '品牌策略指揮官',
     icon: Sparkles,
     color: 'purple',
-    description: 'Brand Strategy Agent - Strategic diagnosis and actionable blueprint development',
+    description: 'Layer 3: Brand Strategy - SWOT strategy matrix and positioning recommendations',
     capabilities: ['Strategic diagnosis', 'SWOT strategy', 'Brand archetype', 'Positioning statement', 'Action blueprint'],
+    category: 'ai_agents',
+  },
+  {
+    id: 'sentinel',
+    name: '市場哨兵',
+    icon: TrendingUp,
+    color: 'red',
+    description: 'Layer 3: Market Sentinel - Real-time market monitoring and trend analysis',
+    capabilities: ['News monitoring', 'VOC analysis', 'Competitor ads', 'Trend detection', 'Early warning'],
+    category: 'ai_agents',
+  },
+];
+
+const agentCategories: AgentCategory[] = [
+  {
+    id: 'agentic_ai',
+    name: 'Agentic AI',
+    description: 'Autonomous orchestration with multi-agent coordination',
+    agents: agents.filter(a => a.category === 'agentic_ai'),
+  },
+  {
+    id: 'workflow',
+    name: 'Workflow',
+    description: 'Pre-defined workflows for common tasks',
+    agents: agents.filter(a => a.category === 'workflow'),
+  },
+  {
+    id: 'ai_agents',
+    name: 'AI Agents',
+    description: 'Specialized research and analysis agents',
+    agents: agents.filter(a => a.category === 'ai_agents'),
   },
 ];
 
@@ -67,6 +119,7 @@ const colorClasses: Record<string, { bg: string; border: string; icon: string; b
   blue: { bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-700', icon: 'text-blue-600 dark:text-blue-400', button: 'bg-blue-600 hover:bg-blue-700', text: 'text-blue-600 dark:text-blue-400' },
   green: { bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-700', icon: 'text-green-600 dark:text-green-400', button: 'bg-green-600 hover:bg-green-700', text: 'text-green-600 dark:text-green-400' },
   orange: { bg: 'bg-orange-50 dark:bg-orange-900/20', border: 'border-orange-200 dark:border-orange-700', icon: 'text-orange-600 dark:text-orange-400', button: 'bg-orange-600 hover:bg-orange-700', text: 'text-orange-600 dark:text-orange-400' },
+  red: { bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-700', icon: 'text-red-600 dark:text-red-400', button: 'bg-red-600 hover:bg-red-700', text: 'text-red-600 dark:text-red-400' },
 };
 
 // JSON rendering component
@@ -187,24 +240,24 @@ export default function AgentTesting() {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [showNewProjectForm, setShowNewProjectForm] = useState(false);
-  const [newProjectBrief, setNewProjectBrief] = useState('');
+  const [newProjectTitle, setNewProjectTitle] = useState('');
+  const [newProjectPurpose, setNewProjectPurpose] = useState('');
+  const [newProjectDeliverable, setNewProjectDeliverable] = useState('');
+  const [newProjectBackground, setNewProjectBackground] = useState('');
 
-  // Chat state per agent
-  const [agentChats, setAgentChats] = useState<Record<string, Message[]>>({
-    research: [],
-    customer: [],
-    competitor: [],
-    strategy: [],
+  // Unified chat state
+  const [conversation, setConversation] = useState<Message[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [chatInput, setChatInput] = useState('');
+  const [selectedModel, setSelectedModel] = useState('deepseek');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Agent sidebar state
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
+    agentic_ai: true,
+    workflow: false,
+    ai_agents: true,
   });
-  const [expandedAgents, setExpandedAgents] = useState<Record<string, boolean>>({});
-  const [agentInputs, setAgentInputs] = useState<Record<string, string>>({});
-  const [agentModels, setAgentModels] = useState<Record<string, string>>({
-    research: 'deepseek',
-    customer: 'deepseek',
-    competitor: 'deepseek',
-    strategy: 'deepseek',
-  });
-  const [loadingAgents, setLoadingAgents] = useState<Record<string, boolean>>({});
 
   // Load all brands on mount
   useEffect(() => {
@@ -239,10 +292,14 @@ export default function AgentTesting() {
 
   // Create a new project
   const handleCreateProject = async () => {
-    if (!newProjectBrief.trim()) return;
+    if (!newProjectTitle.trim() && !newProjectPurpose.trim()) return;
 
     const newProject = {
-      brief: newProjectBrief,
+      title: newProjectTitle,
+      purpose: newProjectPurpose,
+      deliverable: newProjectDeliverable,
+      background: newProjectBackground,
+      brief: `Title: ${newProjectTitle}\nPurpose: ${newProjectPurpose}\nDeliverable: ${newProjectDeliverable}${newProjectBackground ? `\nBackground: ${newProjectBackground}` : ''}`,
       conversations: [],
       conversation_count: 0,
       created_at: new Date().toISOString(),
@@ -253,60 +310,201 @@ export default function AgentTesting() {
     setSelectedProject(newProject);
     setShowNewProjectForm(false);
     setActiveTab('agents');
-    setAgentChats({
-      research: [],
-      customer: [],
-      competitor: [],
-      strategy: [],
-    });
+    setConversation([]);
 
-    // Auto-expand all agents for new project
-    setExpandedAgents({
-      research: true,
-      customer: true,
-      competitor: true,
-      strategy: true,
-    });
+    // Clear form
+    setNewProjectTitle('');
+    setNewProjectPurpose('');
+    setNewProjectDeliverable('');
+    setNewProjectBackground('');
 
-    // Auto-start Brand Research Agent with default prompt
-    setTimeout(() => {
-      setAgentInputs({ research: 'Please start the brand research analysis based on the project brief.' });
-      // Auto-send the message to research agent
-      autoSendToResearchAgent(newProject);
-    }, 100);
-  };
-
-  // Auto-send message to research agent for new projects
-  const autoSendToResearchAgent = async (project: any) => {
-    if (!selectedBrand) return;
-
-    const message = 'Please start the brand research analysis based on the project brief.';
-
-    // Add user message to chat
-    const userMessage: Message = {
-      role: 'user',
-      content: message,
+    // Add system message to conversation
+    const systemMessage: Message = {
+      role: 'system',
+      content: `New project created: ${newProjectTitle}. Select an agent from the left sidebar to begin analysis.`,
       timestamp: new Date().toISOString(),
     };
+    setConversation([systemMessage]);
+  };
 
-    setAgentChats(prev => ({
-      ...prev,
-      research: [userMessage],
-    }));
+  // DEPRECATED: Old auto-send function - now using unified conversation model
+  // Kept for reference, to be removed after migration is complete
 
-    setLoadingAgents(prev => ({ ...prev, research: true }));
+  // Select an existing project
+  const handleSelectProject = async (project: any) => {
+    setSelectedProject(project);
+    setActiveTab('agents');
+
+    // Reset conversation
+    const allMessages: Message[] = [];
+
+    // Load all conversations for this project and merge into unified conversation
+    if (project.conversations && project.conversations.length > 0) {
+      for (const conv of project.conversations) {
+        try {
+          const response = await fetch(`/api/conversation/${conv.conversation_id}`);
+          const data = await response.json();
+          if (data.success && data.conversation.messages) {
+            // Tag each message with its agent
+            const taggedMessages = data.conversation.messages.map((msg: Message) => ({
+              ...msg,
+              agent: conv.agent_type,
+            }));
+            allMessages.push(...taggedMessages);
+          }
+        } catch (error) {
+          console.error('Error loading conversation:', error);
+        }
+      }
+    }
+
+    // Sort by timestamp
+    allMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    setConversation(allMessages);
+
+    // Add welcome message if no conversations exist
+    if (allMessages.length === 0) {
+      const welcomeMessage: Message = {
+        role: 'system',
+        content: `Project loaded: ${project.title || project.brief}. Select an agent from the left sidebar to begin analysis.`,
+        timestamp: new Date().toISOString(),
+      };
+      setConversation([welcomeMessage]);
+    }
+  };
+
+  // DEPRECATED: Old save function - replaced by autoSaveConversation
+  // Kept for reference during migration
+  /* const saveCurrentConversation = async (agentType: string) => {
+    if (!selectedBrand || !selectedProject) return;
 
     try {
-      const fullContext = `Project Brief: ${project.brief}\n\nCurrent question: ${message}`;
+      await fetch('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brand_name: selectedBrand.brand_name,
+          agent_type: agentType,
+          initial_brief: selectedProject.brief,
+          messages: [],
+        }),
+      });
 
-      const response = await fetch(`/agents/research`, {
+      await loadProjects(selectedBrand.brand_name);
+    } catch (error) {
+      console.error('Error saving conversation:', error);
+    }
+  }; */
+
+  // Auto-save conversation after each message
+  const autoSaveConversation = async (agentType: string, messages: Message[]) => {
+    if (!selectedBrand || !selectedProject || messages.length === 0) return;
+
+    // Support both old and new project brief formats
+    const projectBrief = selectedProject.title
+      ? `Title: ${selectedProject.title}\nPurpose: ${selectedProject.purpose}\nDeliverable: ${selectedProject.deliverable}${selectedProject.background ? `\nBackground: ${selectedProject.background}` : ''}`
+      : selectedProject.brief;
+
+    try {
+      await fetch('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brand_name: selectedBrand.brand_name,
+          agent_type: agentType,
+          initial_brief: projectBrief,
+          messages: messages,
+        }),
+      });
+
+      // Reload projects silently
+      await loadProjects(selectedBrand.brand_name);
+    } catch (error) {
+      console.error('Error auto-saving conversation:', error);
+    }
+  };
+
+  // Unified Conversation Handlers for New UI
+
+  // Handle agent selection - shows confirmation prompt in chatbot
+  const handleSelectAgent = (agentId: string) => {
+    if (!selectedProject) {
+      alert('Please select or create a project first');
+      return;
+    }
+
+    const agent = agents.find(a => a.id === agentId);
+    if (!agent) return;
+
+    setSelectedAgent(agentId);
+
+    // Add system message asking for confirmation
+    const confirmationMessage: Message = {
+      role: 'system',
+      content: `You selected: ${agent.name}. Would you like to initiate this agent with the project context? Type your message below or press Enter to start with default prompt.`,
+      timestamp: new Date().toISOString(),
+      agent: agentId,
+    };
+
+    setConversation(prev => [...prev, confirmationMessage]);
+
+    // Auto-populate default prompt based on agent type
+    if (agentId === 'cso') {
+      setChatInput('請協調五位專家進行品牌全息診斷，產出綜合性策略報告。');
+    } else if (agentId === 'research') {
+      setChatInput('請分析品牌現狀，包含3Cs、SWOT與品牌資產審計。');
+    } else if (agentId === 'customer') {
+      setChatInput('請進行用戶洞察分析，建立受眾畫像與同理心地圖。');
+    } else if (agentId === 'competitor') {
+      setChatInput('請分析競爭情報，建立競爭雷達與差異化分析。');
+    } else if (agentId === 'strategy') {
+      setChatInput('請產出品牌策略建議，包含SWOT策略矩陣與定位陳述。');
+    } else if (agentId === 'sentinel') {
+      setChatInput('請監測市場動態，分析最新新聞、社群輿情與競品廣告。');
+    }
+  };
+
+  // Send message in unified chatbot
+  const handleSendUnifiedMessage = async () => {
+    if (!chatInput.trim() || !selectedAgent || !selectedProject || !selectedBrand) return;
+
+    const userMessage: Message = {
+      role: 'user',
+      content: chatInput,
+      timestamp: new Date().toISOString(),
+      agent: selectedAgent,
+    };
+
+    setConversation(prev => [...prev, userMessage]);
+    setChatInput('');
+    setIsLoading(true);
+
+    try {
+      const agent = agents.find(a => a.id === selectedAgent);
+      if (!agent) throw new Error('Agent not found');
+
+      // Build context from project brief
+      const projectBrief = selectedProject.title
+        ? `Title: ${selectedProject.title}\nPurpose: ${selectedProject.purpose}\nDeliverable: ${selectedProject.deliverable}${selectedProject.background ? `\nBackground: ${selectedProject.background}` : ''}`
+        : selectedProject.brief;
+
+      const fullContext = `Project Brief:\n${projectBrief}\n\nCurrent question: ${chatInput}`;
+
+      // Determine endpoint based on agent
+      // CSO uses its own endpoint, all others use /agents/{agentId}
+      const endpoint = `/agents/${selectedAgent}`;
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           client_name: selectedBrand.brand_name,
           brief: fullContext,
           industry: selectedBrand.industry,
-          model: agentModels.research,
+          model: selectedModel,
+          conversation_history: conversation.filter(m => m.agent === selectedAgent),
+          existing_data: {}, // TODO: Gather data from previous agent responses
         }),
       });
 
@@ -329,140 +527,57 @@ export default function AgentTesting() {
         displayContent = 'No analysis data received';
       }
 
-      // Add assistant response to chat
+      // Check for orchestration logs (CSO agent)
+      const orchestrationLogs: Message[] = [];
+      if (data.analysis?._orchestration?.orchestration_log) {
+        const logs = data.analysis._orchestration.orchestration_log;
+        logs.forEach((log: any) => {
+          orchestrationLogs.push({
+            role: 'system',
+            content: log.message || JSON.stringify(log),
+            timestamp: log.timestamp || new Date().toISOString(),
+            agent: selectedAgent,
+          });
+        });
+      }
+
       const assistantMessage: Message = {
         role: 'assistant',
         content: displayContent,
         parsed: parsedContent,
-        model: agentModels.research,
+        model: selectedModel,
         timestamp: new Date().toISOString(),
+        agent: selectedAgent,
       };
 
-      setAgentChats(prev => ({
-        ...prev,
-        research: [...prev.research, assistantMessage],
-      }));
+      // Add orchestration logs first, then the final result
+      setConversation(prev => [...prev, ...orchestrationLogs, assistantMessage]);
+
+      // Auto-save conversation
+      await autoSaveConversation(selectedAgent, [...conversation, userMessage, assistantMessage]);
 
       // Reload brand list to update usage count
       await loadBrands();
-
-      // Auto-save conversation after response
-      await autoSaveConversation('research', [...agentChats.research, userMessage, assistantMessage]);
     } catch (error: any) {
       const errorMessage: Message = {
         role: 'assistant',
         content: `Error: ${error.message || 'Failed to get response from agent'}`,
         timestamp: new Date().toISOString(),
+        agent: selectedAgent,
       };
 
-      setAgentChats(prev => ({
-        ...prev,
-        research: [...prev.research, errorMessage],
-      }));
+      setConversation(prev => [...prev, errorMessage]);
     } finally {
-      setLoadingAgents(prev => ({ ...prev, research: false }));
-      setAgentInputs({ research: '' });
+      setIsLoading(false);
     }
   };
 
-  // Select an existing project
-  const handleSelectProject = async (project: any) => {
-    setSelectedProject(project);
-    setActiveTab('agents');
-
-    // Reset chats
-    const newChats: Record<string, Message[]> = {
-      research: [],
-      customer: [],
-      competitor: [],
-      strategy: [],
-    };
-
-    const agentsToExpand: Record<string, boolean> = {
-      research: false,
-      customer: false,
-      competitor: false,
-      strategy: false,
-    };
-
-    // Load all conversations for this project
-    if (project.conversations && project.conversations.length > 0) {
-      for (const conv of project.conversations) {
-        try {
-          const response = await fetch(`/api/conversation/${conv.conversation_id}`);
-          const data = await response.json();
-          if (data.success && data.conversation.messages) {
-            newChats[conv.agent_type] = data.conversation.messages;
-            agentsToExpand[conv.agent_type] = true; // Auto-expand agents with existing conversations
-          }
-        } catch (error) {
-          console.error('Error loading conversation:', error);
-        }
-      }
-    }
-
-    setAgentChats(newChats);
-
-    // Auto-expand agents that have conversations, or expand all if none exist
-    const hasAnyConversations = Object.values(agentsToExpand).some(v => v);
-    if (!hasAnyConversations) {
-      // New project - expand all agents
-      setExpandedAgents({
-        research: true,
-        customer: true,
-        competitor: true,
-        strategy: true,
-      });
-    } else {
-      // Existing project - only expand agents with conversations
-      setExpandedAgents(agentsToExpand);
-    }
-  };
-
-  // Save current conversation
-  const saveCurrentConversation = async (agentType: string) => {
-    if (!selectedBrand || !selectedProject || !agentChats[agentType] || agentChats[agentType].length === 0) return;
-
-    try {
-      await fetch('/api/conversations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brand_name: selectedBrand.brand_name,
-          agent_type: agentType,
-          initial_brief: selectedProject.brief,
-          messages: agentChats[agentType],
-        }),
-      });
-
-      // Reload projects
-      await loadProjects(selectedBrand.brand_name);
-    } catch (error) {
-      console.error('Error saving conversation:', error);
-    }
-  };
-
-  // Auto-save conversation after each message
-  const autoSaveConversation = async (agentType: string, messages: Message[]) => {
-    if (!selectedBrand || !selectedProject || messages.length === 0) return;
-
-    try {
-      await fetch('/api/conversations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brand_name: selectedBrand.brand_name,
-          agent_type: agentType,
-          initial_brief: selectedProject.brief,
-          messages: messages,
-        }),
-      });
-
-      // Reload projects silently
-      await loadProjects(selectedBrand.brand_name);
-    } catch (error) {
-      console.error('Error auto-saving conversation:', error);
-    }
+  // Toggle category expansion
+  const toggleCategory = (categoryId: string) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [categoryId]: !prev[categoryId],
+    }));
   };
 
   // Load brand details and reset state
@@ -477,12 +592,9 @@ export default function AgentTesting() {
         // Reset state for new brand selection
         setActiveTab('projects');
         setSelectedProject(null);
-        setAgentChats({
-          research: [],
-          customer: [],
-          competitor: [],
-          strategy: [],
-        });
+        setConversation([]);
+        setSelectedAgent(null);
+        setChatInput('');
 
         setShowNewBrandForm(false);
 
@@ -577,104 +689,12 @@ export default function AgentTesting() {
     }
   };
 
-  const sendMessageToAgent = async (agentId: string) => {
-    const message = agentInputs[agentId]?.trim();
-    if (!message || !selectedBrand || !selectedProject) return;
-
-    // Add user message to chat
-    const userMessage: Message = {
-      role: 'user',
-      content: message,
-      timestamp: new Date().toISOString(),
-    };
-
-    setAgentChats(prev => ({
-      ...prev,
-      [agentId]: [...prev[agentId], userMessage],
-    }));
-
-    setAgentInputs(prev => ({ ...prev, [agentId]: '' }));
-    setLoadingAgents(prev => ({ ...prev, [agentId]: true }));
-
-    try {
-      // Build conversation context: project brief + all previous messages + current message
-      const conversationHistory = agentChats[agentId] || [];
-      const contextMessages = conversationHistory
-        .filter(msg => msg.role === 'user')
-        .map(msg => msg.content);
-
-      const fullContext = selectedProject.brief
-        ? `Project Brief: ${selectedProject.brief}\n\nPrevious questions:\n${contextMessages.join('\n')}\n\nCurrent question: ${message}`
-        : `Previous questions:\n${contextMessages.join('\n')}\n\nCurrent question: ${message}`;
-
-      const response = await fetch(`/agents/${agentId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_name: selectedBrand.brand_name,
-          brief: fullContext,
-          industry: selectedBrand.industry,
-          model: agentModels[agentId],
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`);
-      }
-
-      // Parse and format the response
-      let parsedContent = null;
-      let displayContent = '';
-
-      if (data.error) {
-        displayContent = `Error: ${data.error}`;
-      } else if (data.analysis) {
-        parsedContent = data.analysis;
-        displayContent = typeof data.analysis === 'string' ? data.analysis : '';
-      } else {
-        displayContent = 'No analysis data received';
-      }
-
-      // Add assistant response to chat
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: displayContent,
-        parsed: parsedContent,
-        model: agentModels[agentId],
-        timestamp: new Date().toISOString(),
-      };
-
-      setAgentChats(prev => ({
-        ...prev,
-        [agentId]: [...prev[agentId], assistantMessage],
-      }));
-
-      // Reload brand list to update usage count
-      await loadBrands();
-
-      // Auto-save conversation after response
-      await autoSaveConversation(agentId, [...agentChats[agentId], userMessage, assistantMessage]);
-    } catch (error: any) {
-      const errorMessage: Message = {
-        role: 'assistant',
-        content: `Error: ${error.message || 'Failed to get response from agent'}`,
-        timestamp: new Date().toISOString(),
-      };
-
-      setAgentChats(prev => ({
-        ...prev,
-        [agentId]: [...prev[agentId], errorMessage],
-      }));
-    } finally {
-      setLoadingAgents(prev => ({ ...prev, [agentId]: false }));
-    }
-  };
-
-  const toggleAgent = (agentId: string) => {
-    setExpandedAgents(prev => ({ ...prev, [agentId]: !prev[agentId] }));
-  };
+  // DEPRECATED: Old per-agent messaging and toggle functions - replaced by unified handlers
+  // Commented out during migration to new UI
+  /*
+  const sendMessageToAgent = async (agentId: string) => { ... }
+  const toggleAgent = (agentId: string) => { ... }
+  */
 
   const filteredBrands = brandSearchQuery
     ? allBrands.filter(b =>
@@ -853,7 +873,10 @@ export default function AgentTesting() {
                 <button
                   onClick={() => {
                     setShowNewProjectForm(!showNewProjectForm);
-                    setNewProjectBrief('');
+                    setNewProjectTitle('');
+                    setNewProjectPurpose('');
+                    setNewProjectDeliverable('');
+                    setNewProjectBackground('');
                   }}
                   className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors text-sm"
                 >
@@ -864,19 +887,59 @@ export default function AgentTesting() {
 
               {/* New Project Form */}
               {showNewProjectForm && (
-                <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Project Brief
-                  </label>
-                  <textarea
-                    value={newProjectBrief}
-                    onChange={(e) => setNewProjectBrief(e.target.value)}
-                    placeholder="Describe your project goals, target audience, and any specific requirements..."
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 h-32"
-                  />
+                <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Project Title <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newProjectTitle}
+                      onChange={(e) => setNewProjectTitle(e.target.value)}
+                      placeholder="e.g., Q1 2026 Brand Refresh Campaign"
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Purpose <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={newProjectPurpose}
+                      onChange={(e) => setNewProjectPurpose(e.target.value)}
+                      placeholder="What is the goal of this project? What problems are you trying to solve?"
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 h-24"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Deliverable <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={newProjectDeliverable}
+                      onChange={(e) => setNewProjectDeliverable(e.target.value)}
+                      placeholder="What are the expected outcomes? (e.g., Brand positioning statement, 6-month content strategy, competitive analysis report)"
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 h-24"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Background (Optional)
+                    </label>
+                    <textarea
+                      value={newProjectBackground}
+                      onChange={(e) => setNewProjectBackground(e.target.value)}
+                      placeholder="Any additional context, constraints, or relevant information..."
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 h-24"
+                    />
+                  </div>
+
                   <button
                     onClick={handleCreateProject}
-                    disabled={!newProjectBrief.trim()}
+                    disabled={!newProjectTitle.trim() || !newProjectPurpose.trim() || !newProjectDeliverable.trim()}
                     className="mt-3 w-full py-2 px-4 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-400 text-white rounded-lg transition-colors"
                   >
                     Create Project & Start Working
@@ -905,8 +968,11 @@ export default function AgentTesting() {
                           >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1">
+                                <h4 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
+                                  {project.title || 'Untitled Project'}
+                                </h4>
                                 <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-2 mb-3">
-                                  {project.brief || 'No brief provided'}
+                                  {project.purpose || project.brief || 'No purpose provided'}
                                 </p>
                                 <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
                                   <span>{totalAgents} agent{totalAgents !== 1 ? 's' : ''} used</span>
@@ -938,20 +1004,44 @@ export default function AgentTesting() {
             </div>
           )}
 
-          {/* Agents Tab Content */}
+          {/* Agents Tab Content - New Split View Layout */}
           {activeTab === 'agents' && selectedProject && (
             <div className="p-6">
               {/* Project Brief Display */}
               <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Current Project Brief:</h3>
-                    <p className="text-sm text-slate-700 dark:text-slate-300">{selectedProject.brief}</p>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Current Project:</h3>
+                    <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-1">{selectedProject.title || 'Untitled Project'}</h4>
+                    {selectedProject.purpose && (
+                      <div className="mb-2">
+                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Purpose: </span>
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{selectedProject.purpose}</span>
+                      </div>
+                    )}
+                    {selectedProject.deliverable && (
+                      <div className="mb-2">
+                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Deliverable: </span>
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{selectedProject.deliverable}</span>
+                      </div>
+                    )}
+                    {selectedProject.background && (
+                      <div>
+                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Background: </span>
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{selectedProject.background}</span>
+                      </div>
+                    )}
+                    {/* Fallback to old brief format */}
+                    {!selectedProject.title && selectedProject.brief && (
+                      <p className="text-sm text-slate-700 dark:text-slate-300">{selectedProject.brief}</p>
+                    )}
                   </div>
                   <button
                     onClick={() => {
                       setActiveTab('projects');
                       setSelectedProject(null);
+                      setConversation([]);
+                      setSelectedAgent(null);
                     }}
                     className="text-sm text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 ml-4"
                   >
@@ -960,169 +1050,185 @@ export default function AgentTesting() {
                 </div>
               </div>
 
-              {/* Helper message for new projects */}
-              {selectedProject.isNew && (
-                <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <Sparkles size={20} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              {/* Split View: Left Sidebar (Agents) + Right Chatbot */}
+              <div className="flex gap-6 h-[calc(100vh-24rem)]">
+                {/* Left Sidebar - Agent Categories */}
+                <div className="w-80 flex-shrink-0 space-y-4 overflow-y-auto">
+                  {agentCategories.map((category) => (
+                    <div key={category.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+                      {/* Category Header */}
+                      <button
+                        onClick={() => toggleCategory(category.id)}
+                        className="w-full p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                      >
+                        <div className="text-left">
+                          <h3 className="font-semibold text-slate-900 dark:text-white text-sm">{category.name}</h3>
+                          <p className="text-xs text-slate-600 dark:text-slate-400">{category.description}</p>
+                        </div>
+                        {expandedCategories[category.id] ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </button>
+
+                      {/* Agent List */}
+                      {expandedCategories[category.id] && category.agents.length > 0 && (
+                        <div className="border-t border-slate-200 dark:border-slate-700">
+                          {category.agents.map((agent) => {
+                            const Icon = agent.icon;
+                            const colors = colorClasses[agent.color];
+                            const isSelected = selectedAgent === agent.id;
+
+                            return (
+                              <button
+                                key={agent.id}
+                                onClick={() => handleSelectAgent(agent.id)}
+                                className={`w-full p-3 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-b border-slate-100 dark:border-slate-700 last:border-b-0 ${
+                                  isSelected ? 'bg-slate-100 dark:bg-slate-700' : ''
+                                }`}
+                              >
+                                <div className={`p-2 rounded-lg ${colors.bg} flex-shrink-0`}>
+                                  <Icon className={colors.icon} size={16} />
+                                </div>
+                                <div className="flex-1 text-left">
+                                  <h4 className="text-sm font-medium text-slate-900 dark:text-white">{agent.name}</h4>
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {agent.capabilities.slice(0, 2).map((cap, idx) => (
+                                      <span key={idx} className="text-xs px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-slate-600 dark:text-slate-400">
+                                        {cap}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Right Side - Unified Chatbot */}
+                <div className="flex-1 flex flex-col bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+                  {/* Chat Header */}
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                     <div>
-                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                        Brand Research Agent is starting!
-                      </h4>
-                      <p className="text-xs text-blue-700 dark:text-blue-300">
-                        The <strong>Brand Research Agent</strong> has been automatically initiated to analyze the brand.
-                        Once complete, you can use other agents for customer insights, competitive intelligence, or strategic planning.
-                        All agents use your project brief as context.
+                      <h3 className="font-semibold text-slate-900 dark:text-white">Project Conversation</h3>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        {selectedAgent
+                          ? `Active: ${agents.find(a => a.id === selectedAgent)?.name}`
+                          : 'Select an agent from the left to start'}
                       </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedModel}
+                        onChange={(e) => setSelectedModel(e.target.value)}
+                        className="px-3 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                      >
+                        {models.map((model) => (
+                          <option key={model.id} value={model.id}>
+                            {model.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Chat Messages */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {conversation.length === 0 ? (
+                      <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+                        <Sparkles size={48} className="mx-auto mb-4 opacity-20" />
+                        <p className="mb-2">Welcome to your project workspace!</p>
+                        <p className="text-sm">Select an agent from the left sidebar to begin analysis.</p>
+                      </div>
+                    ) : (
+                      conversation.map((msg, idx) => (
+                        <div
+                          key={idx}
+                          className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                        >
+                          {msg.role === 'assistant' && (
+                            <div className={`p-2 rounded-full ${
+                              msg.agent ? colorClasses[agents.find(a => a.id === msg.agent)?.color || 'purple'].bg : 'bg-slate-100 dark:bg-slate-700'
+                            } flex-shrink-0 self-start`}>
+                              <Bot className={
+                                msg.agent ? colorClasses[agents.find(a => a.id === msg.agent)?.color || 'purple'].icon : 'text-slate-600'
+                              } size={16} />
+                            </div>
+                          )}
+                          {msg.role === 'system' && (
+                            <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/20 flex-shrink-0 self-start">
+                              <Sparkles className="text-blue-600 dark:text-blue-400" size={16} />
+                            </div>
+                          )}
+                          <div
+                            className={`max-w-[80%] rounded-lg p-3 ${
+                              msg.role === 'user'
+                                ? 'bg-primary-600 text-white'
+                                : msg.role === 'system'
+                                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white'
+                            }`}
+                          >
+                            {msg.parsed ? (
+                              <RenderJSON data={msg.parsed} />
+                            ) : (
+                              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                            )}
+                            {msg.model && msg.role === 'assistant' && (
+                              <p className="text-xs mt-2 opacity-70">
+                                {models.find(m => m.id === msg.model)?.name || msg.model}
+                              </p>
+                            )}
+                          </div>
+                          {msg.role === 'user' && (
+                            <div className="p-2 rounded-full bg-primary-100 dark:bg-primary-900/20 flex-shrink-0 self-start">
+                              <User className="text-primary-600 dark:text-primary-400" size={16} />
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                    {isLoading && (
+                      <div className="flex gap-3">
+                        <div className="p-2 rounded-full bg-slate-100 dark:bg-slate-700 flex-shrink-0">
+                          <Loader2 className="text-slate-600 dark:text-slate-400 animate-spin" size={16} />
+                        </div>
+                        <div className="bg-slate-100 dark:bg-slate-700 rounded-lg p-3">
+                          <p className="text-sm text-slate-600 dark:text-slate-400">Thinking...</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Chat Input */}
+                  <div className="p-4 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSendUnifiedMessage()}
+                        placeholder={selectedAgent ? "Type your message..." : "Select an agent first..."}
+                        disabled={!selectedAgent || isLoading}
+                        className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed"
+                      />
+                      <button
+                        onClick={handleSendUnifiedMessage}
+                        disabled={!chatInput.trim() || !selectedAgent || isLoading}
+                        className="px-4 py-2 rounded-lg text-white font-medium transition-colors bg-primary-600 hover:bg-primary-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
+                      >
+                        <Send size={18} />
+                      </button>
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Agent Chat Sections - Only show in Agents tab */}
-      {selectedBrand && activeTab === 'agents' && selectedProject && (
-        <div className="space-y-4">
-          {agents.map((agent) => {
-            const Icon = agent.icon;
-            const colors = colorClasses[agent.color];
-            const isExpanded = expandedAgents[agent.id];
-            const chatHistory = agentChats[agent.id] || [];
-            const hasMessages = chatHistory.length > 0;
-
-            return (
-              <div key={agent.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden">
-                {/* Agent Header */}
-                <button
-                  onClick={() => toggleAgent(agent.id)}
-                  className="w-full p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${colors.bg}`}>
-                      <Icon className={colors.icon} size={20} />
-                    </div>
-                    <div className="text-left">
-                      <h3 className="font-semibold text-slate-900 dark:text-white">{agent.name}</h3>
-                      <p className="text-xs text-slate-600 dark:text-slate-400">{agent.description}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {hasMessages && (
-                      <span className="text-xs text-slate-500 dark:text-slate-400">
-                        {Math.floor(chatHistory.length / 2)} exchanges
-                      </span>
-                    )}
-                    {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                  </div>
-                </button>
-
-                {/* Chat Interface */}
-                {isExpanded && (
-                  <div className="border-t border-slate-200 dark:border-slate-700">
-                    {/* Chat History */}
-                    {chatHistory.length > 0 && (
-                      <div className="p-4 space-y-3 max-h-96 overflow-y-auto bg-slate-50 dark:bg-slate-900">
-                        {chatHistory.map((msg, idx) => (
-                          <div
-                            key={idx}
-                            className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                          >
-                            {msg.role === 'assistant' && (
-                              <div className={`p-2 rounded-full ${colors.bg} flex-shrink-0 self-start`}>
-                                <Bot className={colors.icon} size={16} />
-                              </div>
-                            )}
-                            <div
-                              className={`max-w-[80%] rounded-lg p-3 ${
-                                msg.role === 'user'
-                                  ? 'bg-primary-600 text-white'
-                                  : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700'
-                              }`}
-                            >
-                              {msg.role === 'assistant' && msg.parsed ? (
-                                <RenderJSON data={msg.parsed} />
-                              ) : (
-                                <div className="text-sm whitespace-pre-wrap break-words">{msg.content}</div>
-                              )}
-                              <div className={`text-xs mt-2 ${msg.role === 'user' ? 'opacity-80' : 'opacity-60'}`}>
-                                {msg.model && `${msg.model} • `}
-                                {new Date(msg.timestamp).toLocaleTimeString()}
-                              </div>
-                            </div>
-                            {msg.role === 'user' && (
-                              <div className="p-2 rounded-full bg-primary-100 dark:bg-primary-900/20 flex-shrink-0 self-start">
-                                <User className="text-primary-600 dark:text-primary-400" size={16} />
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                        {loadingAgents[agent.id] && (
-                          <div className="flex gap-3 justify-start">
-                            <div className={`p-2 rounded-full ${colors.bg} flex-shrink-0`}>
-                              <Bot className={colors.icon} size={16} />
-                            </div>
-                            <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
-                              <Loader2 className="animate-spin text-slate-600" size={16} />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Input Area */}
-                    <div className="p-4 bg-white dark:bg-slate-800">
-                      <div className="flex gap-2 mb-3">
-                        <select
-                          value={agentModels[agent.id]}
-                          onChange={(e) => setAgentModels(prev => ({ ...prev, [agent.id]: e.target.value }))}
-                          className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
-                        >
-                          {models.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name}
-                            </option>
-                          ))}
-                        </select>
-                        {hasMessages && (
-                          <button
-                            onClick={() => saveCurrentConversation(agent.id)}
-                            className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
-                            title="Save this conversation"
-                          >
-                            <History size={16} />
-                            Save
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={agentInputs[agent.id] || ''}
-                          onChange={(e) => setAgentInputs(prev => ({ ...prev, [agent.id]: e.target.value }))}
-                          onKeyPress={(e) => e.key === 'Enter' && !loadingAgents[agent.id] && sendMessageToAgent(agent.id)}
-                          placeholder={chatHistory.length === 0 ? "Start conversation..." : "Ask a follow-up question..."}
-                          className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500"
-                          disabled={loadingAgents[agent.id]}
-                        />
-                        <button
-                          onClick={() => sendMessageToAgent(agent.id)}
-                          disabled={!agentInputs[agent.id]?.trim() || loadingAgents[agent.id]}
-                          className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${colors.button} disabled:bg-slate-400 disabled:cursor-not-allowed`}
-                        >
-                          <Send size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
