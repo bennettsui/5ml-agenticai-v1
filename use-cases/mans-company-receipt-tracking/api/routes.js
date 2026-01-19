@@ -44,6 +44,16 @@ router.post('/process', async (req, res) => {
       });
     }
 
+    // Check if database is configured
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured',
+        details: 'DATABASE_URL environment variable is not set. Please configure PostgreSQL database.',
+        help: 'Run: fly postgres create && fly postgres attach <postgres-app-name>',
+      });
+    }
+
     // Create new batch in database
     const batchResult = await db.query(
       `INSERT INTO receipt_batches (
