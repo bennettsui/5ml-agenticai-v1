@@ -12,7 +12,12 @@ async function analyzeSEO(client_name, brief, options = {}) {
   const modelsUsed = [];
   let webResearch = null;
 
-  // Optionally use Perplexity for current SEO trends and competitor analysis
+  // If Perplexity is selected, use it for the full analysis
+  if (modelSelection === 'perplexity' && perplexityService.isAvailable()) {
+    return await analyzeWithPerplexity(client_name, brief, modelsUsed);
+  }
+
+  // Optionally use Perplexity for current SEO trends and competitor analysis (when using other models)
   if (shouldUsePerplexity(modelSelection)) {
     try {
       console.log('🔍 Gathering current SEO trends via Perplexity...');
@@ -160,6 +165,73 @@ async function analyzeWithDeepSeek(client_name, brief, webResearch, modelSelecti
     }
     console.error('DeepSeek error, falling back to Claude Haiku:', error.message);
     return await analyzeSEO(client_name, brief, { model: 'haiku', no_fallback: false });
+  }
+}
+
+async function analyzeWithPerplexity(client_name, brief, modelsUsed = []) {
+  const jsonSchema = `{
+  "target_keywords": ["關鍵詞1", "關鍵詞2"],
+  "content_strategy": "內容策略描述",
+  "technical_seo": ["技術建議1", "技術建議2"],
+  "backlink_opportunities": ["機會1", "機會2"],
+  "timeline_months": 數字
+}`;
+
+  const systemPrompt = `你是一個 SEO 專家。請為以下項目提供 SEO 策略，結合2026年最新的搜索引擎算法更新和趨勢。
+請返回 JSON 格式（只返回 JSON，不需要其他文本）。`;
+
+  const userPrompt = `**客户**: ${client_name}
+**簡報**: ${brief}
+
+請提供完整的 SEO 策略，包括目標關鍵詞、內容策略、技術 SEO 建議、外鏈機會和實施時間表。
+
+請返回以下 JSON 格式:
+${jsonSchema}`;
+
+  try {
+    const result = await perplexityService.research(
+      userPrompt,
+      {
+        systemPrompt,
+        maxTokens: 2000,
+        searchRecency: 'week',
+        temperature: 0.3
+      }
+    );
+
+    // Track Perplexity usage
+    modelsUsed.push({
+      model: getModelDisplayName('perplexity'),
+      model_id: 'sonar-pro',
+      usage: result.usage || {}
+    });
+
+    const text = result.content;
+
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
+
+      return {
+        ...analysis,
+        _meta: {
+          models_used: modelsUsed,
+          enhanced_with_web_research: true,
+          sources: result.citations || []
+        }
+      };
+    } catch {
+      return {
+        raw: text,
+        _meta: {
+          models_used: modelsUsed,
+          enhanced_with_web_research: true,
+          sources: result.citations || []
+        }
+      };
+    }
+  } catch (error) {
+    throw new Error(`Perplexity API error: ${error.message}`);
   }
 }
 
