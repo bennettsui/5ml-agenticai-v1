@@ -198,6 +198,11 @@ export default function AgentTesting() {
   });
   const [loadingAgents, setLoadingAgents] = useState<Record<string, boolean>>({});
 
+  // History state
+  const [conversationHistory, setConversationHistory] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+
   // Load all brands on mount
   useEffect(() => {
     loadBrands();
@@ -212,6 +217,73 @@ export default function AgentTesting() {
       }
     } catch (error) {
       console.error('Error loading brands:', error);
+    }
+  };
+
+  // Load conversation history for brand
+  const loadConversationHistory = async (brandName: string) => {
+    try {
+      const response = await fetch(`/api/conversations/${encodeURIComponent(brandName)}`);
+      const data = await response.json();
+      if (data.success) {
+        setConversationHistory(data.conversations || []);
+      }
+    } catch (error) {
+      console.error('Error loading conversation history:', error);
+      setConversationHistory([]);
+    }
+  };
+
+  // Load a specific conversation
+  const loadConversation = async (conversationId: string) => {
+    try {
+      const response = await fetch(`/api/conversation/${conversationId}`);
+      const data = await response.json();
+      if (data.success) {
+        const conv = data.conversation;
+        setInitialBrief(conv.initial_brief || '');
+
+        // Set the agent chat with the loaded messages
+        const messages = conv.messages || [];
+        setAgentChats(prev => ({
+          ...prev,
+          [conv.agent_type]: messages,
+        }));
+
+        // Expand the agent automatically
+        setExpandedAgents(prev => ({
+          ...prev,
+          [conv.agent_type]: true,
+        }));
+
+        setCurrentConversationId(conversationId);
+        setShowHistory(false);
+      }
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+    }
+  };
+
+  // Save current conversation
+  const saveCurrentConversation = async (agentType: string) => {
+    if (!selectedBrand || !agentChats[agentType] || agentChats[agentType].length === 0) return;
+
+    try {
+      await fetch('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brand_name: selectedBrand.brand_name,
+          agent_type: agentType,
+          initial_brief: initialBrief,
+          messages: agentChats[agentType],
+        }),
+      });
+
+      // Reload history
+      await loadConversationHistory(selectedBrand.brand_name);
+    } catch (error) {
+      console.error('Error saving conversation:', error);
     }
   };
 
@@ -233,7 +305,11 @@ export default function AgentTesting() {
           creative: [],
         });
 
+        setCurrentConversationId(null);
         setShowNewBrandForm(false);
+
+        // Load conversation history
+        await loadConversationHistory(brand.brand_name);
       }
     } catch (error) {
       console.error('Error loading brand details:', error);
@@ -489,17 +565,99 @@ export default function AgentTesting() {
               <h2 className="text-xl font-bold text-slate-900 dark:text-white">{selectedBrand.brand_name}</h2>
               <p className="text-sm text-slate-600 dark:text-slate-400">{selectedBrand.industry}</p>
             </div>
-            <button
-              onClick={() => setSelectedBrand(null)}
-              className="text-sm text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-            >
-              Change Brand
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className="flex items-center gap-2 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                <History size={16} />
+                History ({conversationHistory.length})
+              </button>
+              <button
+                onClick={() => setSelectedBrand(null)}
+                className="text-sm text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              >
+                Change Brand
+              </button>
+            </div>
           </div>
           {initialBrief && (
             <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Initial Brief:</h3>
               <p className="text-sm text-slate-700 dark:text-slate-300">{initialBrief}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Conversation History Panel */}
+      {selectedBrand && showHistory && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <History size={20} />
+              Conversation History
+            </h3>
+            <button
+              onClick={() => setShowHistory(false)}
+              className="text-sm text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+            >
+              Close
+            </button>
+          </div>
+
+          {conversationHistory.length === 0 ? (
+            <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+              No conversation history yet. Start chatting with an agent to create history.
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {conversationHistory.map((conv) => {
+                const agent = agents.find(a => a.id === conv.agent_type);
+                const Icon = agent?.icon || TrendingUp;
+                const colors = agent ? colorClasses[agent.color] : colorClasses.orange;
+                const messageCount = Array.isArray(conv.messages) ? conv.messages.length : 0;
+                const exchanges = Math.floor(messageCount / 2);
+
+                return (
+                  <div
+                    key={conv.conversation_id}
+                    className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-primary-500 dark:hover:border-primary-500 transition-colors cursor-pointer"
+                    onClick={() => loadConversation(conv.conversation_id)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2 rounded-lg ${colors.bg} flex-shrink-0`}>
+                        <Icon className={colors.icon} size={18} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className="font-semibold text-slate-900 dark:text-white">
+                            {agent?.name || conv.agent_type}
+                          </h4>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            {exchanges} exchanges
+                          </span>
+                        </div>
+                        {conv.initial_brief && (
+                          <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mb-2">
+                            {conv.initial_brief}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                          <span>
+                            Created: {new Date(conv.created_at).toLocaleDateString()} {new Date(conv.created_at).toLocaleTimeString()}
+                          </span>
+                          {conv.updated_at !== conv.created_at && (
+                            <span>
+                              Updated: {new Date(conv.updated_at).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -600,7 +758,7 @@ export default function AgentTesting() {
                         <select
                           value={agentModels[agent.id]}
                           onChange={(e) => setAgentModels(prev => ({ ...prev, [agent.id]: e.target.value }))}
-                          className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
+                          className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
                         >
                           {models.map((m) => (
                             <option key={m.id} value={m.id}>
@@ -608,6 +766,16 @@ export default function AgentTesting() {
                             </option>
                           ))}
                         </select>
+                        {hasMessages && (
+                          <button
+                            onClick={() => saveCurrentConversation(agent.id)}
+                            className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
+                            title="Save this conversation"
+                          >
+                            <History size={16} />
+                            Save
+                          </button>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <input
