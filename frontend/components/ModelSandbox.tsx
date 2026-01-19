@@ -41,6 +41,14 @@ export default function ModelSandbox() {
   const [history, setHistory] = useState<TestHistory[]>([]);
   const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
 
+  // Model pricing (per million tokens)
+  const modelPricing: Record<string, { input: number; output: number }> = {
+    'deepseek': { input: 0.03, output: 0.11 }, // DeepSeek V3.2
+    'haiku': { input: 0.25, output: 1.25 }, // Claude 3 Haiku
+    'sonnet': { input: 3.00, output: 15.00 }, // Claude 3.5 Sonnet
+    'perplexity': { input: 3.00, output: 15.00 }, // Perplexity Sonar Pro
+  };
+
   const models = [
     { id: 'deepseek', name: 'DeepSeek Reasoner', color: 'orange' },
     { id: 'haiku', name: 'Claude 3 Haiku', color: 'blue' },
@@ -84,10 +92,13 @@ export default function ModelSandbox() {
 
       const data = await response.json();
 
+      // Check if response indicates N/A (like Perplexity with Creative Agent)
+      const isNotApplicable = data.analysis?.status === 'not_applicable';
+
       setResults(prev => ({
         ...prev,
         [modelId]: {
-          status: 'success',
+          status: isNotApplicable ? 'idle' : 'success',
           data: data.analysis,
           duration
         }
@@ -182,21 +193,83 @@ export default function ModelSandbox() {
     return colors[color] || 'text-slate-600 dark:text-slate-400';
   };
 
-  const formatOutput = (data: any) => {
+  const calculateCost = (modelId: string, usage: any) => {
+    if (!usage || !modelPricing[modelId]) return null;
+
+    const pricing = modelPricing[modelId];
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    // Handle different token field formats
+    if (usage.input_tokens !== undefined) {
+      inputTokens = usage.input_tokens;
+      outputTokens = usage.output_tokens || 0;
+    } else if (usage.prompt_tokens !== undefined) {
+      inputTokens = usage.prompt_tokens;
+      outputTokens = usage.completion_tokens || 0;
+    }
+
+    const inputCost = (inputTokens / 1000000) * pricing.input;
+    const outputCost = (outputTokens / 1000000) * pricing.output;
+    const totalCost = inputCost + outputCost;
+
+    return {
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      inputCost,
+      outputCost,
+      totalCost
+    };
+  };
+
+  const formatOutput = (data: any, modelId?: string) => {
     if (!data) return null;
+
+    // Handle N/A case (Perplexity with Creative Agent)
+    if (data.status === 'not_applicable') {
+      return (
+        <div className="space-y-3">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">
+              ⓘ Not Applicable
+            </h4>
+            <p className="text-sm text-blue-800 dark:text-blue-400 leading-relaxed mb-3">
+              {data.reason}
+            </p>
+            {data.recommendation && (
+              <p className="text-sm text-blue-700 dark:text-blue-500 font-medium">
+                💡 {data.recommendation}
+              </p>
+            )}
+          </div>
+        </div>
+      );
+    }
 
     // Handle raw text output
     if (data.raw) {
       return (
         <div className="prose prose-sm dark:prose-invert max-w-none">
-          <pre className="whitespace-pre-wrap bg-slate-50 dark:bg-slate-900 p-4 rounded-lg text-xs leading-relaxed">
+          <pre className="whitespace-pre-wrap bg-white dark:bg-slate-800 p-4 rounded-lg text-xs leading-relaxed border border-slate-200 dark:border-slate-700">
             {data.raw}
           </pre>
         </div>
       );
     }
 
-    const entries = Object.entries(data).filter(([key]) => key !== '_meta');
+    const entries = Object.entries(data).filter(([key]) => key !== '_meta' && key !== 'status' && key !== 'reason' && key !== 'recommendation');
+
+    // Get usage and cost info from _meta
+    const meta = data._meta;
+    const modelsUsed = meta?.models_used || [];
+    let usage = null;
+    let costInfo = null;
+
+    if (modelsUsed.length > 0 && modelId) {
+      usage = modelsUsed[0].usage;
+      costInfo = calculateCost(modelId, usage);
+    }
 
     return (
       <div className="space-y-4">
@@ -222,8 +295,8 @@ export default function ModelSandbox() {
                   ))}
                 </ul>
               ) : typeof value === 'object' && value !== null ? (
-                <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
-                  <pre className="text-xs overflow-auto leading-relaxed">
+                <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                  <pre className="text-xs overflow-auto leading-relaxed text-slate-800 dark:text-slate-200">
                     {JSON.stringify(value, null, 2)}
                   </pre>
                 </div>
@@ -233,6 +306,42 @@ export default function ModelSandbox() {
             </div>
           </div>
         ))}
+
+        {/* Usage and Cost Information */}
+        {costInfo && (
+          <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 space-y-2">
+              <div className="text-xs font-semibold text-slate-700 dark:text-slate-400 uppercase tracking-wide mb-2">
+                Usage & Cost
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-600 dark:text-slate-400">Input Tokens:</span>
+                  <span className="ml-2 font-mono text-slate-900 dark:text-white">{costInfo.inputTokens.toLocaleString()}</span>
+                </div>
+                <div>
+                  <span className="text-slate-600 dark:text-slate-400">Output Tokens:</span>
+                  <span className="ml-2 font-mono text-slate-900 dark:text-white">{costInfo.outputTokens.toLocaleString()}</span>
+                </div>
+                <div>
+                  <span className="text-slate-600 dark:text-slate-400">Total Tokens:</span>
+                  <span className="ml-2 font-mono text-slate-900 dark:text-white">{costInfo.totalTokens.toLocaleString()}</span>
+                </div>
+                <div>
+                  <span className="text-slate-600 dark:text-slate-400">Est. Cost:</span>
+                  <span className="ml-2 font-mono font-semibold text-green-600 dark:text-green-400">
+                    ${costInfo.totalCost.toFixed(6)}
+                  </span>
+                </div>
+              </div>
+              {modelsUsed.length > 0 && modelsUsed[0].model && (
+                <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
+                  Model: {modelsUsed[0].model} ({modelsUsed[0].model_id})
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -365,7 +474,7 @@ export default function ModelSandbox() {
 
                 {result.status === 'success' && result.data && (
                   <div className="text-sm">
-                    {formatOutput(result.data)}
+                    {formatOutput(result.data, model.id)}
                   </div>
                 )}
 
@@ -482,7 +591,7 @@ export default function ModelSandbox() {
 
                             {result.status === 'success' && result.data && (
                               <div className="text-xs max-h-48 overflow-y-auto">
-                                {formatOutput(result.data)}
+                                {formatOutput(result.data, model.id)}
                               </div>
                             )}
 

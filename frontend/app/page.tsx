@@ -20,7 +20,7 @@ export default function Home() {
       title: 'Social Media & SEO Agents',
       description: 'AI agents for creative content, SEO optimization, and social media strategy',
       icon: TrendingUp,
-      href: '/use-cases/social',
+      href: '/social',
       color: 'from-purple-500 to-pink-600',
       features: ['Creative Agent', 'SEO Agent', 'Social Agent', 'Research Agent'],
       status: 'Active'
