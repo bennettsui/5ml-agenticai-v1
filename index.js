@@ -26,7 +26,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults } = require('./db');
+const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -807,6 +807,80 @@ app.post('/api/brands', async (req, res) => {
   } catch (error) {
     console.error('Error saving brand:', error);
     res.status(500).json({ error: 'Failed to save brand' });
+  }
+});
+
+// ==========================================
+// Conversation History Endpoints
+// ==========================================
+
+// Get conversation history for a brand
+app.get('/api/conversations/:brand_name', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const conversations = await getConversationsByBrand(req.params.brand_name, limit);
+    res.json({ success: true, conversations });
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    res.status(500).json({ error: 'Failed to fetch conversations' });
+  }
+});
+
+// Save a new conversation
+app.post('/api/conversations', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const { brand_name, agent_type, initial_brief, messages } = req.body;
+
+    if (!brand_name || !agent_type || !messages) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const conversation = await saveConversation(brand_name, agent_type, initial_brief, messages);
+    res.json({ success: true, conversation });
+  } catch (error) {
+    console.error('Error saving conversation:', error);
+    res.status(500).json({ error: 'Failed to save conversation' });
+  }
+});
+
+// Get specific conversation
+app.get('/api/conversation/:id', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const conversation = await getConversation(req.params.id);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    res.json({ success: true, conversation });
+  } catch (error) {
+    console.error('Error fetching conversation:', error);
+    res.status(500).json({ error: 'Failed to fetch conversation' });
+  }
+});
+
+// Delete a conversation
+app.delete('/api/conversation/:id', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    await deleteConversation(req.params.id);
+    res.json({ success: true, message: 'Conversation deleted' });
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    res.status(500).json({ error: 'Failed to delete conversation' });
   }
 });
 

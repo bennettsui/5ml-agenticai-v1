@@ -77,6 +77,21 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_brands_normalized ON brands(normalized_name);
       CREATE INDEX IF NOT EXISTS idx_brands_name ON brands(brand_name);
       CREATE INDEX IF NOT EXISTS idx_brands_updated ON brands(updated_at DESC);
+
+      CREATE TABLE IF NOT EXISTS conversations (
+        id SERIAL PRIMARY KEY,
+        conversation_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_name VARCHAR(255) NOT NULL,
+        agent_type VARCHAR(50) NOT NULL,
+        initial_brief TEXT,
+        messages JSONB NOT NULL DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_conversations_brand ON conversations(brand_name);
+      CREATE INDEX IF NOT EXISTS idx_conversations_agent ON conversations(agent_type);
+      CREATE INDEX IF NOT EXISTS idx_conversations_created ON conversations(created_at DESC);
     `);
     console.log('✅ Database schema initialized');
   } catch (error) {
@@ -425,6 +440,77 @@ async function getBrandWithResults(brand_name) {
   }
 }
 
+// Conversation history functions
+async function saveConversation(brand_name, agent_type, initial_brief, messages) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO conversations (brand_name, agent_type, initial_brief, messages, updated_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       RETURNING conversation_id, created_at`,
+      [brand_name, agent_type, initial_brief, JSON.stringify(messages)]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving conversation:', error);
+    throw error;
+  }
+}
+
+async function updateConversation(conversation_id, messages) {
+  try {
+    const result = await pool.query(
+      `UPDATE conversations
+       SET messages = $1, updated_at = NOW()
+       WHERE conversation_id = $2
+       RETURNING *`,
+      [JSON.stringify(messages), conversation_id]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error updating conversation:', error);
+    throw error;
+  }
+}
+
+async function getConversationsByBrand(brand_name, limit = 20) {
+  try {
+    const result = await pool.query(
+      `SELECT conversation_id, agent_type, initial_brief, messages, created_at, updated_at
+       FROM conversations
+       WHERE brand_name = $1
+       ORDER BY updated_at DESC
+       LIMIT $2`,
+      [brand_name, limit]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    throw error;
+  }
+}
+
+async function getConversation(conversation_id) {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM conversations WHERE conversation_id = $1',
+      [conversation_id]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching conversation:', error);
+    throw error;
+  }
+}
+
+async function deleteConversation(conversation_id) {
+  try {
+    await pool.query('DELETE FROM conversations WHERE conversation_id = $1', [conversation_id]);
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    throw error;
+  }
+}
+
 // Generic query function for direct database access
 async function query(text, params) {
   return pool.query(text, params);
@@ -450,4 +536,9 @@ module.exports = {
   updateBrandResults,
   getAllBrands,
   getBrandWithResults,
+  saveConversation,
+  updateConversation,
+  getConversationsByBrand,
+  getConversation,
+  deleteConversation,
 };
