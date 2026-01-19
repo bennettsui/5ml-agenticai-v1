@@ -77,7 +77,6 @@ const agents: Agent[] = [
 const models = [
   { id: 'deepseek', name: 'DeepSeek Reasoner', description: 'Fast & affordable (default)' },
   { id: 'haiku', name: 'Claude Haiku', description: 'General purpose fallback' },
-  { id: 'sonnet', name: 'Claude Sonnet', description: 'Complex analysis' },
   { id: 'perplexity', name: 'Perplexity Sonar Pro', description: 'Real-time web research' },
 ];
 
