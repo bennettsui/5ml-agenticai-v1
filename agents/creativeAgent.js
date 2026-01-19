@@ -10,14 +10,25 @@ async function analyzeCreative(client_name, brief, options = {}) {
   const { model: modelSelection = 'deepseek', no_fallback = false } = options;
   const modelsUsed = [];
 
+  // Perplexity is not suitable for creative work - return N/A explanation
+  if (modelSelection === 'perplexity') {
+    return {
+      status: 'not_applicable',
+      reason: 'Perplexity Sonar Pro is optimized for web search and real-time information retrieval, not creative content generation. Creative work requires imaginative thinking, brand strategy, and artistic direction - capabilities better suited to models like DeepSeek and Claude.',
+      recommendation: 'Please use DeepSeek Reasoner, Claude Haiku, or Claude Sonnet for creative analysis.',
+      _meta: {
+        models_used: [],
+        note: 'Creative agent does not support Perplexity - use DeepSeek or Claude instead'
+      }
+    };
+  }
+
   // Use DeepSeek if selected and available
   if (shouldUseDeepSeek(modelSelection)) {
     return await analyzeWithDeepSeek(client_name, brief, modelSelection, no_fallback, modelsUsed);
   }
 
-  // Creative agent doesn't use Perplexity - fall back to DeepSeek
-  const effectiveModel = modelSelection === 'perplexity' ? 'deepseek' : modelSelection;
-  const claudeModel = getClaudeModel(effectiveModel);
+  const claudeModel = getClaudeModel(modelSelection);
 
   const response = await client.messages.create({
     model: claudeModel,

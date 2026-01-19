@@ -84,10 +84,13 @@ export default function ModelSandbox() {
 
       const data = await response.json();
 
+      // Check if response indicates N/A (like Perplexity with Creative Agent)
+      const isNotApplicable = data.analysis?.status === 'not_applicable';
+
       setResults(prev => ({
         ...prev,
         [modelId]: {
-          status: 'success',
+          status: isNotApplicable ? 'idle' : 'success',
           data: data.analysis,
           duration
         }
@@ -185,18 +188,39 @@ export default function ModelSandbox() {
   const formatOutput = (data: any) => {
     if (!data) return null;
 
+    // Handle N/A case (Perplexity with Creative Agent)
+    if (data.status === 'not_applicable') {
+      return (
+        <div className="space-y-3">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">
+              ⓘ Not Applicable
+            </h4>
+            <p className="text-sm text-blue-800 dark:text-blue-400 leading-relaxed mb-3">
+              {data.reason}
+            </p>
+            {data.recommendation && (
+              <p className="text-sm text-blue-700 dark:text-blue-500 font-medium">
+                💡 {data.recommendation}
+              </p>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     // Handle raw text output
     if (data.raw) {
       return (
         <div className="prose prose-sm dark:prose-invert max-w-none">
-          <pre className="whitespace-pre-wrap bg-slate-50 dark:bg-slate-900 p-4 rounded-lg text-xs leading-relaxed">
+          <pre className="whitespace-pre-wrap bg-white dark:bg-slate-800 p-4 rounded-lg text-xs leading-relaxed border border-slate-200 dark:border-slate-700">
             {data.raw}
           </pre>
         </div>
       );
     }
 
-    const entries = Object.entries(data).filter(([key]) => key !== '_meta');
+    const entries = Object.entries(data).filter(([key]) => key !== '_meta' && key !== 'status' && key !== 'reason' && key !== 'recommendation');
 
     return (
       <div className="space-y-4">
@@ -222,8 +246,8 @@ export default function ModelSandbox() {
                   ))}
                 </ul>
               ) : typeof value === 'object' && value !== null ? (
-                <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
-                  <pre className="text-xs overflow-auto leading-relaxed">
+                <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                  <pre className="text-xs overflow-auto leading-relaxed text-slate-800 dark:text-slate-200">
                     {JSON.stringify(value, null, 2)}
                   </pre>
                 </div>
