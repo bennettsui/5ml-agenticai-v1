@@ -4,7 +4,8 @@
   "description": "5ML Agentic AI Platform v1",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",

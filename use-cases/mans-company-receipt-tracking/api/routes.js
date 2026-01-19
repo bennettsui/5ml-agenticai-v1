@@ -15,6 +15,7 @@ const router = express.Router();
 const db = require('../../../db');
 const path = require('path');
 const fs = require('fs').promises;
+const { processReceiptBatch } = require('../lib/batch-processor');
 
 // Import tools (will be compiled from TypeScript)
 // For now, using placeholder functions - will be replaced with actual imports
@@ -457,85 +458,6 @@ router.get('/analytics/compliance', async (req, res) => {
 // HELPER FUNCTIONS
 // =============================================================================
 
-/**
- * Process receipt batch asynchronously
- *
- * This function orchestrates the entire workflow:
- * 1. Download receipts from Dropbox
- * 2. Run OCR on each receipt
- * 3. Categorize receipts
- * 4. Generate Excel export
- * 5. Update database with results
- */
-async function processReceiptBatch(batchId, dropboxUrl, clientName) {
-  try {
-    // Update status to processing
-    await db.query(
-      "UPDATE receipt_batches SET status = 'processing', updated_at = NOW() WHERE batch_id = $1",
-      [batchId]
-    );
-
-    await logProcessing(batchId, 'info', 'download_start', 'Starting download from Dropbox');
-
-    // TODO: Implement actual processing using the tools we created
-    // For now, this is a placeholder structure
-
-    // Step 1: Download from Dropbox
-    // const dropboxConnector = require('../../../tools/dropbox-connector');
-    // const downloadResults = await dropboxConnector.downloadReceipts(dropboxUrl);
-
-    // Step 2: OCR processing
-    // const { claudeVisionOCR } = require('../../../infrastructure/agents/receipt-ocr-agent/tools');
-    // const ocrResults = await claudeVisionOCR.processBatch(downloadResults);
-
-    // Step 3: Categorization
-    // const { categorizerAgent } = require('../agents/categorizer-agent');
-    // const categorizedResults = await categorizerAgent.categorizeBatch(ocrResults);
-
-    // Step 4: Save to database
-    // ... save results to receipts table ...
-
-    // Step 5: Generate Excel export
-    // const { excelExporter } = require('../tools/excel-export');
-    // const excelPath = await excelExporter.generateWorkbook(categorizedResults);
-
-    // Step 6: Update batch as completed
-    await db.query(
-      `UPDATE receipt_batches
-       SET status = 'completed',
-           completed_at = NOW(),
-           updated_at = NOW()
-       WHERE batch_id = $1`,
-      [batchId]
-    );
-
-    await logProcessing(batchId, 'info', 'batch_completed', 'Batch processing completed successfully');
-  } catch (error) {
-    console.error(`Error in processReceiptBatch for ${batchId}:`, error);
-
-    // Update batch status to failed
-    await db.query(
-      "UPDATE receipt_batches SET status = 'failed', updated_at = NOW() WHERE batch_id = $1",
-      [batchId]
-    );
-
-    await logProcessing(batchId, 'error', 'batch_failed', `Batch processing failed: ${error.message}`);
-  }
-}
-
-/**
- * Log processing step
- */
-async function logProcessing(batchId, level, step, message, details = null) {
-  try {
-    await db.query(
-      `INSERT INTO processing_logs (batch_id, log_level, step, message, details)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [batchId, level, step, message, details ? JSON.stringify(details) : null]
-    );
-  } catch (error) {
-    console.error('Error logging processing step:', error);
-  }
-}
+// processReceiptBatch function moved to ../lib/batch-processor.js
 
 module.exports = router;
