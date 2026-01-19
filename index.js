@@ -570,9 +570,9 @@ app.post('/agents/social', async (req, res) => {
  * @swagger
  * /agents/research:
  *   post:
- *     summary: Web research with Perplexity AI
+ *     summary: Brand Research Agent - Real-time brand status scan and asset audit
  *     tags: [Agents]
- *     description: Performs comprehensive web-based research using Perplexity Sonar Pro - provides market insights, competitor analysis, current trends, opportunities and risks with real-time web data
+ *     description: Combines real-time intelligence with brand asset auditing. Provides data sufficiency check, dynamic scanning (3-month news, campaigns), product/pricing analysis, positioning verification, VOC analysis, 3Cs framework, SWOT analysis, and strategic diagnosis with reasoning tracking.
  *     requestBody:
  *       required: true
  *       content:
@@ -581,13 +581,13 @@ app.post('/agents/social', async (req, res) => {
  *             $ref: '#/components/schemas/AgentRequest'
  *     responses:
  *       200:
- *         description: Research analysis completed
+ *         description: Brand research analysis completed
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/AgentResponse'
  *       400:
- *         description: Missing required fields or PERPLEXITY_API_KEY not configured
+ *         description: Missing required fields
  *       500:
  *         description: Server error
  */
@@ -663,7 +663,7 @@ app.get('/agents', (req, res) => {
       {
         name: 'research',
         endpoint: '/agents/research',
-        description: '🔍 Web research with Perplexity AI'
+        description: 'Brand Research Agent - Real-time brand status scan and asset audit'
       }
     ],
     timestamp: new Date().toISOString(),

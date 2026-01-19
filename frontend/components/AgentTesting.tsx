@@ -31,11 +31,11 @@ const agents: Agent[] = [
   },
   {
     id: 'research',
-    name: 'Research Agent',
+    name: 'Brand Research Agent',
     icon: TrendingUp,
     color: 'orange',
-    description: 'Deep brand research with 5-stage methodology (3Cs, SWOT, real-time insights)',
-    capabilities: ['Brand analysis', 'Competitor intelligence', '3Cs framework', 'SWOT analysis', 'Market positioning'],
+    description: 'Brand status research expert combining real-time intelligence with brand asset auditing',
+    capabilities: ['Brand audit', 'Real-time intelligence', 'Product analysis', 'VOC analysis', 'Positioning verification'],
   },
   {
     id: 'seo',
