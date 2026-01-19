@@ -11,7 +11,7 @@ export default function SocialAgentsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('agents');
 
   const tabs = [
-    { id: 'agents' as Tab, label: 'Agent Testing', icon: Sparkles },
+    { id: 'agents' as Tab, label: 'Agents', icon: Sparkles },
     { id: 'sandbox' as Tab, label: 'Sandbox', icon: Beaker },
   ];
 
