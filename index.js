@@ -30,7 +30,10 @@ const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProje
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
-  initDatabase();
+  initDatabase().catch(err => {
+    console.error('⚠️ Database initialization failed:', err.message);
+    console.log('⚠️ App will continue running without database');
+  });
   console.log('📊 Database initialization started');
 } else {
   console.log('⚠️ DATABASE_URL not set - running without database');
@@ -892,13 +895,14 @@ server.listen(port, '0.0.0.0', () => {
 ╔════════════════════════════════════════╗
 ║  🚀 5ML Agentic AI Platform v1         ║
 ║  📍 Port: ${port}                           ║
+║  📍 Host: 0.0.0.0 (Fly.io compatible)  ║
 ║  🏥 Health: GET /health               ║
 ║  📊 Analyze: POST /analyze             ║
 ║  🪝 Webhook: POST /webhook/github     ║
 ║  🤖 Agents: GET /agents               ║
 ║  💾 Projects: GET /projects           ║
 ║  📝 Receipts: POST /api/receipts      ║
-║  🔌 WebSocket: ws://localhost:${port}/ws   ║
+║  🔌 WebSocket: /ws                     ║
 ║  🌍 Region: IAD (Ashburn, Virginia)   ║
 ╚════════════════════════════════════════╝
   `);
