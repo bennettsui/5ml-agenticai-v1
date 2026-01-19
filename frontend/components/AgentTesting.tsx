@@ -258,6 +258,14 @@ export default function AgentTesting() {
       seo: [],
       creative: [],
     });
+
+    // Auto-expand all agents for new project
+    setExpandedAgents({
+      social: true,
+      research: true,
+      seo: true,
+      creative: true,
+    });
   };
 
   // Select an existing project
@@ -273,6 +281,13 @@ export default function AgentTesting() {
       creative: [],
     };
 
+    const agentsToExpand: Record<string, boolean> = {
+      social: false,
+      research: false,
+      seo: false,
+      creative: false,
+    };
+
     // Load all conversations for this project
     if (project.conversations && project.conversations.length > 0) {
       for (const conv of project.conversations) {
@@ -281,6 +296,7 @@ export default function AgentTesting() {
           const data = await response.json();
           if (data.success && data.conversation.messages) {
             newChats[conv.agent_type] = data.conversation.messages;
+            agentsToExpand[conv.agent_type] = true; // Auto-expand agents with existing conversations
           }
         } catch (error) {
           console.error('Error loading conversation:', error);
@@ -289,6 +305,21 @@ export default function AgentTesting() {
     }
 
     setAgentChats(newChats);
+
+    // Auto-expand agents that have conversations, or expand all if none exist
+    const hasAnyConversations = Object.values(agentsToExpand).some(v => v);
+    if (!hasAnyConversations) {
+      // New project - expand all agents
+      setExpandedAgents({
+        social: true,
+        research: true,
+        seo: true,
+        creative: true,
+      });
+    } else {
+      // Existing project - only expand agents with conversations
+      setExpandedAgents(agentsToExpand);
+    }
   };
 
   // Save current conversation
@@ -805,6 +836,24 @@ export default function AgentTesting() {
                   </button>
                 </div>
               </div>
+
+              {/* Helper message for new projects */}
+              {selectedProject.isNew && (
+                <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <Sparkles size={20} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                        Ready to start your research!
+                      </h4>
+                      <p className="text-xs text-blue-700 dark:text-blue-300">
+                        All agents are ready below. Start with the <strong>Brand Research Agent</strong> to analyze the brand,
+                        then use other agents for specific tasks. Each agent will use your project brief as context.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
