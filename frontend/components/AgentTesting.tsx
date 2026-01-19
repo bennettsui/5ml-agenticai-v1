@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Search, Share2, TrendingUp, Loader2, BarChart3 } from 'lucide-react';
+import { Sparkles, Search, Share2, TrendingUp, Loader2, BarChart3, PenTool, Image, Film } from 'lucide-react';
 
 interface Agent {
   id: string;
@@ -13,33 +13,18 @@ interface Agent {
 }
 
 const agents: Agent[] = [
+  // Row 1: Strategy & Analysis
   {
-    id: 'creative',
-    name: 'Creative Agent',
-    icon: Sparkles,
-    color: 'purple',
-    description: 'Generates creative concepts, visual direction, and brand messaging',
-    capabilities: ['Creative concepts', 'Visual direction', 'Tone of voice', 'Key messages', 'Risk assessment'],
-  },
-  {
-    id: 'seo',
-    name: 'SEO Agent',
-    icon: Search,
-    color: 'blue',
-    description: 'Analyzes SEO strategy with real-time web research',
-    capabilities: ['Keyword research', 'Content strategy', 'Technical SEO', 'Backlink opportunities', 'Trend analysis'],
-  },
-  {
-    id: 'social',
-    name: 'Social Media Agent',
+    id: 'social-strategy',
+    name: 'Social Strategy',
     icon: Share2,
     color: 'green',
-    description: 'Creates social media strategies with trending format analysis',
+    description: 'Creates comprehensive social media strategies with trending format analysis',
     capabilities: ['Platform selection', 'Content pillars', 'Posting frequency', 'Engagement strategy', 'Hashtag strategy'],
   },
   {
     id: 'research',
-    name: 'Research Agent',
+    name: 'Research',
     icon: TrendingUp,
     color: 'orange',
     description: 'Comprehensive market research with web-based insights',
@@ -47,11 +32,45 @@ const agents: Agent[] = [
   },
   {
     id: 'analyze',
-    name: 'Analyze Agent',
+    name: 'Analyze',
     icon: BarChart3,
     color: 'indigo',
     description: 'Data analysis and business intelligence with actionable insights',
     capabilities: ['Data analysis', 'Business metrics', 'Performance tracking', 'Predictive insights', 'ROI analysis'],
+  },
+  // Row 2: Content Creation
+  {
+    id: 'copywriter',
+    name: 'Copywriter',
+    icon: PenTool,
+    color: 'purple',
+    description: 'Professional copywriting for ads, posts, and marketing materials',
+    capabilities: ['Ad copy', 'Headlines', 'CTAs', 'Product descriptions', 'Email campaigns'],
+  },
+  {
+    id: 'visual',
+    name: 'Visual',
+    icon: Image,
+    color: 'pink',
+    description: 'Visual concepts, art direction, and brand design guidance',
+    capabilities: ['Visual concepts', 'Art direction', 'Brand identity', 'Color palettes', 'Design systems'],
+  },
+  {
+    id: 'storyboard',
+    name: 'Storyboard',
+    icon: Film,
+    color: 'cyan',
+    description: 'Video storyboarding and visual storytelling for campaigns',
+    capabilities: ['Video concepts', 'Scene planning', 'Visual flow', 'Shot composition', 'Narrative structure'],
+  },
+  // Row 3: Optimization
+  {
+    id: 'seo-evaluation',
+    name: 'SEO Evaluation',
+    icon: Search,
+    color: 'blue',
+    description: 'Comprehensive SEO analysis and optimization recommendations',
+    capabilities: ['Keyword research', 'Content strategy', 'Technical SEO', 'Backlink opportunities', 'Trend analysis'],
   },
 ];
 
@@ -68,6 +87,8 @@ const colorClasses: Record<string, { bg: string; border: string; icon: string; b
   green: { bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-700', icon: 'text-green-600 dark:text-green-400', button: 'bg-green-600 hover:bg-green-700' },
   orange: { bg: 'bg-orange-50 dark:bg-orange-900/20', border: 'border-orange-200 dark:border-orange-700', icon: 'text-orange-600 dark:text-orange-400', button: 'bg-orange-600 hover:bg-orange-700' },
   indigo: { bg: 'bg-indigo-50 dark:bg-indigo-900/20', border: 'border-indigo-200 dark:border-indigo-700', icon: 'text-indigo-600 dark:text-indigo-400', button: 'bg-indigo-600 hover:bg-indigo-700' },
+  pink: { bg: 'bg-pink-50 dark:bg-pink-900/20', border: 'border-pink-200 dark:border-pink-700', icon: 'text-pink-600 dark:text-pink-400', button: 'bg-pink-600 hover:bg-pink-700' },
+  cyan: { bg: 'bg-cyan-50 dark:bg-cyan-900/20', border: 'border-cyan-200 dark:border-cyan-700', icon: 'text-cyan-600 dark:text-cyan-400', button: 'bg-cyan-600 hover:bg-cyan-700' },
 };
 
 export default function AgentTesting() {
@@ -115,7 +136,7 @@ export default function AgentTesting() {
       {/* Agent Selection */}
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
         <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Select an Agent</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {agents.map((agent) => {
             const Icon = agent.icon;
             const colors = colorClasses[agent.color];
@@ -235,7 +256,7 @@ export default function AgentTesting() {
               </select>
             </div>
 
-            {(selectedAgent === 'seo' || selectedAgent === 'social' || selectedAgent === 'research' || selectedAgent === 'analyze') && (
+            {(selectedAgent === 'seo-evaluation' || selectedAgent === 'social-strategy' || selectedAgent === 'research' || selectedAgent === 'analyze') && (
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
