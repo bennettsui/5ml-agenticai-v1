@@ -32,7 +32,7 @@ async function analyzeCreative(client_name, brief, options = {}) {
 
   const response = await client.messages.create({
     model: claudeModel,
-    max_tokens: effectiveModel === 'sonnet' ? 2000 : 1000,
+    max_tokens: modelSelection === 'sonnet' ? 2000 : 1000,
     messages: [
       {
         role: 'user',
@@ -56,7 +56,7 @@ async function analyzeCreative(client_name, brief, options = {}) {
   const text = response.content[0].text;
 
   modelsUsed.push({
-    model: getModelDisplayName(effectiveModel),
+    model: getModelDisplayName(modelSelection),
     model_id: claudeModel,
     usage: {
       input_tokens: response.usage?.input_tokens || 0,
