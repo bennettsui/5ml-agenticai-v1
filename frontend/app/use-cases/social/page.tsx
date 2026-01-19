@@ -74,16 +74,12 @@ export default function SocialAgentsPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'agents' && <AgentTesting />}
         {activeTab === 'sandbox' && (
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-8">
-            <div className="text-center py-12">
-              <Beaker className="w-16 h-16 text-slate-400 dark:text-slate-600 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-                Sandbox Environment
-              </h3>
-              <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-                Experimental features and testing environment. Coming soon.
-              </p>
-            </div>
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden" style={{ height: 'calc(100vh - 200px)' }}>
+            <iframe
+              src="/sandbox.html"
+              className="w-full h-full border-0"
+              title="Model Sandbox - Compare AI Models Side by Side"
+            />
           </div>
         )}
       </main>
