@@ -26,7 +26,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance } = require('./db');
+const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -628,6 +628,62 @@ app.get('/agents', (req, res) => {
     ],
     timestamp: new Date().toISOString(),
   });
+});
+
+// ==========================================
+// Sandbox Test History Endpoints
+// ==========================================
+
+// Save sandbox test
+app.post('/api/sandbox/tests', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const { agent_type, client_name, brief, results } = req.body;
+
+    if (!agent_type || !client_name || !brief || !results) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const test = await saveSandboxTest(agent_type, client_name, brief, results);
+    res.json({ success: true, test_id: test.test_id, created_at: test.created_at });
+  } catch (error) {
+    console.error('Error saving sandbox test:', error);
+    res.status(500).json({ error: 'Failed to save sandbox test' });
+  }
+});
+
+// Get sandbox test history
+app.get('/api/sandbox/tests', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const tests = await getSandboxTests(limit);
+    res.json({ success: true, tests });
+  } catch (error) {
+    console.error('Error fetching sandbox tests:', error);
+    res.status(500).json({ error: 'Failed to fetch sandbox tests' });
+  }
+});
+
+// Clear all sandbox tests
+app.delete('/api/sandbox/tests', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    await clearSandboxTests();
+    res.json({ success: true, message: 'All sandbox tests cleared' });
+  } catch (error) {
+    console.error('Error clearing sandbox tests:', error);
+    res.status(500).json({ error: 'Failed to clear sandbox tests' });
+  }
 });
 
 // ==========================================

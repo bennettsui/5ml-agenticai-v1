@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { Home, Beaker, Sparkles, DollarSign } from 'lucide-react';
-import AgentTesting from '@/components/AgentTesting';
+import PricingTable from '@/components/PricingTable';
 
-export default function SocialAgentsPage() {
+export default function ModelPricingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       {/* Header */}
@@ -39,7 +39,7 @@ export default function SocialAgentsPage() {
           <div className="flex space-x-8">
             <Link
               href="/social"
-              className="flex items-center gap-2 px-3 py-4 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm"
+              className="flex items-center gap-2 px-3 py-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 font-medium text-sm transition-colors"
             >
               <Sparkles size={18} />
               Agents
@@ -53,7 +53,7 @@ export default function SocialAgentsPage() {
             </Link>
             <Link
               href="/social/modelpricing"
-              className="flex items-center gap-2 px-3 py-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 font-medium text-sm transition-colors"
+              className="flex items-center gap-2 px-3 py-4 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm"
             >
               <DollarSign size={18} />
               Model Pricing Ref
@@ -64,7 +64,7 @@ export default function SocialAgentsPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <AgentTesting />
+        <PricingTable />
       </main>
     </div>
   );
