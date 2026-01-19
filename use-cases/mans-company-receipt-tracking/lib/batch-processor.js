@@ -1,0 +1,217 @@
+/**
+ * Batch Processor - Complete receipt processing workflow
+ * with detailed debug checkpoints
+ */
+
+const path = require('path');
+const db = require('../../../db');
+
+/**
+ * Log processing step to database and console
+ */
+async function logProcessing(batchId, level, step, message, details = null) {
+  try {
+    console.log(`[${level.toUpperCase()}] [${step}] ${message}`);
+    await db.query(
+      `INSERT INTO processing_logs (batch_id, log_level, step, message, details)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [batchId, level, step, message, details ? JSON.stringify(details) : null]
+    );
+  } catch (error) {
+    console.error('Error logging processing step:', error);
+  }
+}
+
+/**
+ * Process receipt batch with detailed checkpoints
+ */
+async function processReceiptBatch(batchId, dropboxUrl, clientName) {
+  const wsServer = require('../../../services/websocket-server');
+  let downloadedFiles = [];
+
+  try {
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🚀 [BATCH ${batchId}] Starting receipt processing`);
+    console.log(`📁 Dropbox: ${dropboxUrl.substring(0, 50)}...`);
+    console.log(`👤 Client: ${clientName}`);
+    console.log(`${'='.repeat(60)}\n`);
+
+    // CHECKPOINT 1: Update status
+    console.log('✓ CHECKPOINT 1: Setting status to processing...');
+    await db.query(
+      "UPDATE receipt_batches SET status = 'processing', updated_at = NOW() WHERE batch_id = $1",
+      [batchId]
+    );
+    await logProcessing(batchId, 'info', 'batch_start', 'Batch processing started');
+    wsServer.sendStatus(batchId, { status: 'processing', progress: 5 });
+
+    // CHECKPOINT 2: Validate environment
+    console.log('✓ CHECKPOINT 2: Checking environment...');
+    if (!process.env.DROPBOX_ACCESS_TOKEN) {
+      throw new Error('DROPBOX_ACCESS_TOKEN not configured');
+    }
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error('ANTHROPIC_API_KEY not configured');
+    }
+    console.log('✅ Environment OK\n');
+
+    // CHECKPOINT 3: Download from Dropbox
+    console.log('✓ CHECKPOINT 3: Downloading from Dropbox...');
+    await logProcessing(batchId, 'info', 'download_start', 'Downloading receipts');
+    wsServer.sendProgress(batchId, { progress: 10, message: 'Downloading...' });
+
+    const DropboxConnector = require('../../../tools/dropbox-connector');
+    const dropbox = new DropboxConnector(process.env.DROPBOX_ACCESS_TOKEN);
+
+    const downloadResults = await dropbox.downloadReceipts(
+      dropboxUrl,
+      `/tmp/receipts/${batchId}`,
+      (p) => {
+        wsServer.sendProgress(batchId, {
+          progress: 10 + (p.progress * 0.2),
+          message: `Downloading ${p.current}/${p.total}`
+        });
+      }
+    );
+
+    downloadedFiles = downloadResults.results.filter(r => r.success);
+    if (downloadedFiles.length === 0) {
+      throw new Error('No receipts downloaded');
+    }
+
+    await db.query(
+      'UPDATE receipt_batches SET total_receipts = $1 WHERE batch_id = $2',
+      [downloadedFiles.length, batchId]
+    );
+    console.log(`✅ Downloaded ${downloadedFiles.length} receipts\n`);
+
+    // CHECKPOINT 4: OCR Processing
+    console.log('✓ CHECKPOINT 4: Running OCR...');
+    await logProcessing(batchId, 'info', 'ocr_start', 'Starting OCR');
+    wsServer.sendProgress(batchId, { progress: 30, message: 'Processing with Claude Vision...' });
+
+    const OCRProcessor = require('../../../tools/ocr-processor');
+    const ocr = new OCRProcessor(process.env.ANTHROPIC_API_KEY);
+
+    const imagePaths = downloadedFiles.map(f => f.path);
+    const ocrResults = await ocr.processBatch(imagePaths, (p) => {
+      const progress = 30 + (p.progress * 0.4);
+      wsServer.sendProgress(batchId, {
+        progress: Math.round(progress),
+        message: `OCR ${p.current}/${p.total}`
+      });
+
+      db.query(
+        'UPDATE receipt_batches SET processed_receipts = $1, failed_receipts = $2 WHERE batch_id = $3',
+        [p.successful, p.failed, batchId]
+      ).catch(console.error);
+    });
+
+    console.log(`✅ OCR: ${ocrResults.successful} successful\n`);
+
+    // CHECKPOINT 5: Save to database
+    console.log('✓ CHECKPOINT 5: Saving to database...');
+    wsServer.sendProgress(batchId, { progress: 70, message: 'Saving receipts...' });
+
+    let totalAmount = 0;
+    let savedCount = 0;
+
+    for (const result of ocrResults.results) {
+      if (!result.success || !result.data) continue;
+
+      try {
+        const data = result.data;
+        const filename = path.basename(result.image_path);
+        const fileData = downloadedFiles.find(f => f.path === result.image_path);
+
+        await db.query(
+          `INSERT INTO receipts (
+            batch_id, image_path, image_hash,
+            receipt_date, vendor, description, amount, currency,
+            tax_amount, receipt_number, payment_method,
+            ocr_confidence, ocr_raw_text,
+            category_id, category_name, categorization_confidence,
+            deductible, deductible_amount, non_deductible_amount
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+          [
+            batchId, filename, fileData?.hash || '',
+            data.date || new Date().toISOString().split('T')[0],
+            data.vendor || 'Unknown', data.description || '',
+            data.amount || 0, data.currency || 'HKD',
+            data.tax_amount || 0, data.receipt_number || '',
+            data.payment_method || '', data.confidence || 0.8,
+            result.raw_text || '', '5100', 'Office Expenses',
+            0.8, true, data.amount || 0, 0
+          ]
+        );
+
+        totalAmount += (data.amount || 0);
+        savedCount++;
+      } catch (err) {
+        console.error(`Error saving receipt:`, err.message);
+      }
+    }
+
+    await db.query(
+      `UPDATE receipt_batches
+       SET total_amount = $1, deductible_amount = $1,
+           processed_receipts = $2
+       WHERE batch_id = $3`,
+      [totalAmount, savedCount, batchId]
+    );
+
+    console.log(`✅ Saved ${savedCount} receipts (HKD ${totalAmount.toFixed(2)})\n`);
+
+    // CHECKPOINT 6: Complete
+    console.log('✓ CHECKPOINT 6: Finalizing...');
+    await db.query(
+      `UPDATE receipt_batches
+       SET status = 'completed', completed_at = NOW()
+       WHERE batch_id = $1`,
+      [batchId]
+    );
+
+    wsServer.sendStatus(batchId, {
+      status: 'completed',
+      progress: 100,
+      message: 'Complete!'
+    });
+
+    console.log(`✅ BATCH ${batchId} COMPLETE: ${savedCount} receipts, HKD ${totalAmount.toFixed(2)}\n`);
+    await logProcessing(batchId, 'info', 'batch_completed', 'Processing completed successfully');
+
+  } catch (error) {
+    console.error(`\n❌ ERROR in batch ${batchId}:`, error);
+    console.error(error.stack);
+
+    await db.query(
+      "UPDATE receipt_batches SET status = 'failed' WHERE batch_id = $1",
+      [batchId]
+    );
+
+    wsServer.sendStatus(batchId, {
+      status: 'failed',
+      message: error.message
+    });
+
+    await logProcessing(batchId, 'error', 'batch_failed', `Failed: ${error.message}`, {
+      error: error.message,
+      stack: error.stack
+    });
+  } finally {
+    // Cleanup downloaded files
+    if (downloadedFiles.length > 0) {
+      try {
+        const fs = require('fs').promises;
+        for (const file of downloadedFiles) {
+          await fs.unlink(file.path).catch(() => {});
+        }
+        console.log('🗑️  Cleaned up temporary files');
+      } catch (err) {
+        console.error('Cleanup warning:', err.message);
+      }
+    }
+  }
+}
+
+module.exports = { processReceiptBatch };
