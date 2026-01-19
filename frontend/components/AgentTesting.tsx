@@ -32,21 +32,21 @@ interface Message {
 
 const agents: Agent[] = [
   {
-    id: 'orchestrator',
-    name: '品牌策略指揮官',
+    id: 'cso',
+    name: '高階品牌策略戰略長 (CSO)',
     icon: Sparkles,
     color: 'purple',
-    description: 'Agentic AI - Orchestrates all agents with autonomous planning and goal-oriented execution',
-    capabilities: ['Autonomous planning', 'Multi-agent orchestration', 'Data quality reflection', 'Goal-oriented execution', 'Self-correction'],
+    description: 'Layer 6: CSO Orchestrator - Coordinates 5 specialist agents with autonomous planning',
+    capabilities: ['Orchestrate 5 agents', 'Data sufficiency check', 'Quality reflection', 'Goal-oriented (5 keywords)', 'Self-correction'],
     category: 'agentic_ai',
   },
   {
     id: 'research',
-    name: '品牌現狀研究專家',
+    name: '品牌研究專家',
     icon: TrendingUp,
     color: 'orange',
-    description: 'Brand Research Agent - Real-time brand audit with market intelligence and asset analysis',
-    capabilities: ['Real-time intelligence', '3Cs & SWOT analysis', 'Product & pricing', 'VOC analysis', 'Brand asset audit'],
+    description: 'Layer 3: Brand Research - Real-time brand audit with 3Cs, SWOT, and asset analysis',
+    capabilities: ['Real-time intelligence', '3Cs & SWOT', 'Product portfolio', 'Pricing strategy', 'VOC analysis'],
     category: 'ai_agents',
   },
   {
@@ -54,8 +54,8 @@ const agents: Agent[] = [
     name: '用戶洞察專家',
     icon: User,
     color: 'blue',
-    description: 'Customer Insight Agent - Deep audience segmentation and psychological motivation analysis',
-    capabilities: ['Market segmentation', 'TA positioning', 'Persona building', 'Empathy mapping', 'Purchase triggers'],
+    description: 'Layer 3: Customer Insight - Deep audience segmentation and persona building',
+    capabilities: ['Market segmentation', 'TA positioning', 'Persona building', 'Empathy mapping', 'Decision barriers'],
     category: 'ai_agents',
   },
   {
@@ -63,17 +63,26 @@ const agents: Agent[] = [
     name: '競爭情報專家',
     icon: Search,
     color: 'green',
-    description: 'Competitor Analysis Agent - Intelligence gathering and differentiation opportunity mapping',
-    capabilities: ['Competitive radar', 'Benchmarking', 'Market dynamics', 'Differentiation analysis', 'SOV estimation'],
+    description: 'Layer 3: Competitor Intelligence - Competitive radar and differentiation mapping',
+    capabilities: ['Competitive radar', 'Benchmarking', 'Latest campaigns', 'Differentiation', 'SOV estimation'],
     category: 'ai_agents',
   },
   {
     id: 'strategy',
-    name: '品牌策略分析專家',
+    name: '品牌策略指揮官',
     icon: Sparkles,
     color: 'purple',
-    description: 'Brand Strategy Agent - Strategic diagnosis and actionable blueprint development',
+    description: 'Layer 3: Brand Strategy - SWOT strategy matrix and positioning recommendations',
     capabilities: ['Strategic diagnosis', 'SWOT strategy', 'Brand archetype', 'Positioning statement', 'Action blueprint'],
+    category: 'ai_agents',
+  },
+  {
+    id: 'sentinel',
+    name: '市場哨兵',
+    icon: TrendingUp,
+    color: 'red',
+    description: 'Layer 3: Market Sentinel - Real-time market monitoring and trend analysis',
+    capabilities: ['News monitoring', 'VOC analysis', 'Competitor ads', 'Trend detection', 'Early warning'],
     category: 'ai_agents',
   },
 ];
@@ -110,6 +119,7 @@ const colorClasses: Record<string, { bg: string; border: string; icon: string; b
   blue: { bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-700', icon: 'text-blue-600 dark:text-blue-400', button: 'bg-blue-600 hover:bg-blue-700', text: 'text-blue-600 dark:text-blue-400' },
   green: { bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-700', icon: 'text-green-600 dark:text-green-400', button: 'bg-green-600 hover:bg-green-700', text: 'text-green-600 dark:text-green-400' },
   orange: { bg: 'bg-orange-50 dark:bg-orange-900/20', border: 'border-orange-200 dark:border-orange-700', icon: 'text-orange-600 dark:text-orange-400', button: 'bg-orange-600 hover:bg-orange-700', text: 'text-orange-600 dark:text-orange-400' },
+  red: { bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-700', icon: 'text-red-600 dark:text-red-400', button: 'bg-red-600 hover:bg-red-700', text: 'text-red-600 dark:text-red-400' },
 };
 
 // JSON rendering component
@@ -440,16 +450,18 @@ export default function AgentTesting() {
     setConversation(prev => [...prev, confirmationMessage]);
 
     // Auto-populate default prompt based on agent type
-    if (agentId === 'orchestrator') {
-      setChatInput('Please orchestrate a comprehensive brand strategy analysis using all available agents.');
+    if (agentId === 'cso') {
+      setChatInput('請協調五位專家進行品牌全息診斷，產出綜合性策略報告。');
     } else if (agentId === 'research') {
-      setChatInput('Please analyze the current brand status based on the project brief.');
+      setChatInput('請分析品牌現狀，包含3Cs、SWOT與品牌資產審計。');
     } else if (agentId === 'customer') {
-      setChatInput('Please provide customer insights and audience segmentation for this brand.');
+      setChatInput('請進行用戶洞察分析，建立受眾畫像與同理心地圖。');
     } else if (agentId === 'competitor') {
-      setChatInput('Please analyze the competitive landscape for this brand.');
+      setChatInput('請分析競爭情報，建立競爭雷達與差異化分析。');
     } else if (agentId === 'strategy') {
-      setChatInput('Please provide strategic recommendations based on available research.');
+      setChatInput('請產出品牌策略建議，包含SWOT策略矩陣與定位陳述。');
+    } else if (agentId === 'sentinel') {
+      setChatInput('請監測市場動態，分析最新新聞、社群輿情與競品廣告。');
     }
   };
 
@@ -480,10 +492,8 @@ export default function AgentTesting() {
       const fullContext = `Project Brief:\n${projectBrief}\n\nCurrent question: ${chatInput}`;
 
       // Determine endpoint based on agent
-      let endpoint = `/agents/${selectedAgent}`;
-      if (selectedAgent === 'orchestrator') {
-        endpoint = '/agents/orchestrate';
-      }
+      // CSO uses its own endpoint, all others use /agents/{agentId}
+      const endpoint = `/agents/${selectedAgent}`;
 
       const response = await fetch(endpoint, {
         method: 'POST',

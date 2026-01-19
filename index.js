@@ -729,17 +729,17 @@ app.post('/agents/strategy', async (req, res) => {
   }
 });
 
-// Brand Strategy Orchestration (Agentic AI Mode)
-app.post('/agents/orchestrate', async (req, res) => {
+// CSO Orchestrator (高階品牌策略戰略長) - Layer 6
+app.post('/agents/cso', async (req, res) => {
   try {
     const { client_name, brief, industry, model, conversation_history, existing_data } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
-    const { orchestrateBrandStrategy } = require('./agents/brandStrategyAgent');
-    const analysis = await orchestrateBrandStrategy(client_name, brief, {
-      model,
+    const { orchestrateBrandDiagnosis } = require('./agents/csoOrchestrator');
+    const analysis = await orchestrateBrandDiagnosis(client_name, brief, {
+      model: model || 'deepseek', // CSO requires DeepSeek R1
       conversationHistory: conversation_history || [],
       existingData: existing_data || {}
     });
@@ -748,7 +748,7 @@ app.post('/agents/orchestrate', async (req, res) => {
     if (process.env.DATABASE_URL) {
       try {
         await saveBrand(client_name, industry, { brief });
-        await updateBrandResults(client_name, 'orchestration', analysis);
+        await updateBrandResults(client_name, 'cso_orchestration', analysis);
       } catch (dbError) {
         console.error('Error saving to brand database:', dbError);
       }
@@ -756,14 +756,50 @@ app.post('/agents/orchestrate', async (req, res) => {
 
     res.json({
       success: true,
-      agent: 'orchestration',
-      mode: 'agentic_ai',
+      agent: 'cso',
+      mode: 'orchestration',
+      role: '高階品牌策略戰略長 (CSO)',
       client_name,
       analysis,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Orchestration agent error:', error);
+    console.error('CSO Orchestrator error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Market Sentinel Agent (市場哨兵) - Layer 3
+app.post('/agents/sentinel', async (req, res) => {
+  try {
+    const { client_name, brief, industry, model, no_fallback } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { monitorMarketTrends } = require('./agents/marketSentinelAgent');
+    const analysis = await monitorMarketTrends(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'market_sentinel', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
+
+    res.json({
+      success: true,
+      agent: 'sentinel',
+      role: '市場哨兵 (Market Sentinel)',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Market Sentinel agent error:', error);
     res.status(500).json({ error: error.message });
   }
 });
