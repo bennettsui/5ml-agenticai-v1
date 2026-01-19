@@ -238,18 +238,19 @@ export default function AgentTesting() {
   };
 
   // Create a new project
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     if (!newProjectBrief.trim()) return;
 
-    setSelectedProject({
+    const newProject = {
       brief: newProjectBrief,
       conversations: [],
       conversation_count: 0,
       created_at: new Date().toISOString(),
       last_updated: new Date().toISOString(),
       isNew: true,
-    });
+    };
 
+    setSelectedProject(newProject);
     setShowNewProjectForm(false);
     setActiveTab('agents');
     setAgentChats({
@@ -266,6 +267,99 @@ export default function AgentTesting() {
       seo: true,
       creative: true,
     });
+
+    // Auto-start Brand Research Agent with default prompt
+    setTimeout(() => {
+      setAgentInputs({ research: 'Please start the brand research analysis based on the project brief.' });
+      // Auto-send the message to research agent
+      autoSendToResearchAgent(newProject);
+    }, 100);
+  };
+
+  // Auto-send message to research agent for new projects
+  const autoSendToResearchAgent = async (project: any) => {
+    if (!selectedBrand) return;
+
+    const message = 'Please start the brand research analysis based on the project brief.';
+
+    // Add user message to chat
+    const userMessage: Message = {
+      role: 'user',
+      content: message,
+      timestamp: new Date().toISOString(),
+    };
+
+    setAgentChats(prev => ({
+      ...prev,
+      research: [userMessage],
+    }));
+
+    setLoadingAgents(prev => ({ ...prev, research: true }));
+
+    try {
+      const fullContext = `Project Brief: ${project.brief}\n\nCurrent question: ${message}`;
+
+      const response = await fetch(`/agents/research`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_name: selectedBrand.brand_name,
+          brief: fullContext,
+          industry: selectedBrand.industry,
+          model: agentModels.research,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+
+      // Parse and format the response
+      let parsedContent = null;
+      let displayContent = '';
+
+      if (data.error) {
+        displayContent = `Error: ${data.error}`;
+      } else if (data.analysis) {
+        parsedContent = data.analysis;
+        displayContent = typeof data.analysis === 'string' ? data.analysis : '';
+      } else {
+        displayContent = 'No analysis data received';
+      }
+
+      // Add assistant response to chat
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: displayContent,
+        parsed: parsedContent,
+        model: agentModels.research,
+        timestamp: new Date().toISOString(),
+      };
+
+      setAgentChats(prev => ({
+        ...prev,
+        research: [...prev.research, assistantMessage],
+      }));
+
+      // Reload brand list to update usage count
+      await loadBrands();
+    } catch (error: any) {
+      const errorMessage: Message = {
+        role: 'assistant',
+        content: `Error: ${error.message || 'Failed to get response from agent'}`,
+        timestamp: new Date().toISOString(),
+      };
+
+      setAgentChats(prev => ({
+        ...prev,
+        research: [...prev.research, errorMessage],
+      }));
+    } finally {
+      setLoadingAgents(prev => ({ ...prev, research: false }));
+      setAgentInputs({ research: '' });
+    }
   };
 
   // Select an existing project
@@ -844,11 +938,12 @@ export default function AgentTesting() {
                     <Sparkles size={20} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                     <div>
                       <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                        Ready to start your research!
+                        Brand Research Agent is starting!
                       </h4>
                       <p className="text-xs text-blue-700 dark:text-blue-300">
-                        All agents are ready below. Start with the <strong>Brand Research Agent</strong> to analyze the brand,
-                        then use other agents for specific tasks. Each agent will use your project brief as context.
+                        The <strong>Brand Research Agent</strong> has been automatically initiated to analyze the brand.
+                        Once complete, you can use other agents for specific tasks like social media strategy, SEO, or creative content.
+                        All agents use your project brief as context.
                       </p>
                     </div>
                   </div>
