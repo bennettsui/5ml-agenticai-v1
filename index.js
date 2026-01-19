@@ -630,6 +630,108 @@ app.post('/agents/research', async (req, res) => {
   }
 });
 
+// Customer Insight Agent
+app.post('/agents/customer', async (req, res) => {
+  try {
+    const { client_name, brief, industry, model, no_fallback } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { analyzeCustomerInsight } = require('./agents/customerInsightAgent');
+    const analysis = await analyzeCustomerInsight(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'customer', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
+
+    res.json({
+      success: true,
+      agent: 'customer',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Customer insight agent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Competitor Analysis Agent
+app.post('/agents/competitor', async (req, res) => {
+  try {
+    const { client_name, brief, industry, model, no_fallback } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { analyzeCompetitor } = require('./agents/competitorAgent');
+    const analysis = await analyzeCompetitor(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'competitor', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
+
+    res.json({
+      success: true,
+      agent: 'competitor',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Competitor analysis agent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Brand Strategy Agent
+app.post('/agents/strategy', async (req, res) => {
+  try {
+    const { client_name, brief, industry, model, no_fallback } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { analyzeBrandStrategy } = require('./agents/brandStrategyAgent');
+    const analysis = await analyzeBrandStrategy(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'strategy', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
+
+    res.json({
+      success: true,
+      agent: 'strategy',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Brand strategy agent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /**
  * @swagger
  * /agents:

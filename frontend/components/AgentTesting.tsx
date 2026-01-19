@@ -23,36 +23,36 @@ interface Message {
 
 const agents: Agent[] = [
   {
-    id: 'social',
-    name: 'Social Media Agent',
-    icon: Share2,
-    color: 'green',
-    description: 'Creates comprehensive social media strategies with trending format analysis',
-    capabilities: ['Platform selection', 'Content pillars', 'Posting frequency', 'Engagement strategy', 'Hashtag strategy'],
-  },
-  {
     id: 'research',
-    name: 'Brand Research Agent',
+    name: '品牌現狀研究專家',
     icon: TrendingUp,
     color: 'orange',
-    description: 'Brand status research expert combining real-time intelligence with brand asset auditing',
-    capabilities: ['Brand audit', 'Real-time intelligence', 'Product analysis', 'VOC analysis', 'Positioning verification'],
+    description: 'Brand Research Agent - Real-time brand audit with market intelligence and asset analysis',
+    capabilities: ['Real-time intelligence', '3Cs & SWOT analysis', 'Product & pricing', 'VOC analysis', 'Brand asset audit'],
   },
   {
-    id: 'seo',
-    name: 'SEO Agent',
-    icon: Search,
+    id: 'customer',
+    name: '用戶洞察專家',
+    icon: User,
     color: 'blue',
-    description: 'Comprehensive SEO analysis and optimization recommendations',
-    capabilities: ['Keyword research', 'Content strategy', 'Technical SEO', 'Backlink opportunities', 'Trend analysis'],
+    description: 'Customer Insight Agent - Deep audience segmentation and psychological motivation analysis',
+    capabilities: ['Market segmentation', 'TA positioning', 'Persona building', 'Empathy mapping', 'Purchase triggers'],
   },
   {
-    id: 'creative',
-    name: 'Creative Agent',
+    id: 'competitor',
+    name: '競爭情報專家',
+    icon: Search,
+    color: 'green',
+    description: 'Competitor Analysis Agent - Intelligence gathering and differentiation opportunity mapping',
+    capabilities: ['Competitive radar', 'Benchmarking', 'Market dynamics', 'Differentiation analysis', 'SOV estimation'],
+  },
+  {
+    id: 'strategy',
+    name: '品牌策略指揮官',
     icon: Sparkles,
     color: 'purple',
-    description: 'Creative content generation and campaign ideation',
-    capabilities: ['Campaign concepts', 'Creative copy', 'Content ideas', 'Brand storytelling', 'Visual direction'],
+    description: 'Brand Strategy Agent - Strategic diagnosis and actionable blueprint development',
+    capabilities: ['Strategic diagnosis', 'SWOT strategy', 'Brand archetype', 'Positioning statement', 'Action blueprint'],
   },
 ];
 
@@ -191,18 +191,18 @@ export default function AgentTesting() {
 
   // Chat state per agent
   const [agentChats, setAgentChats] = useState<Record<string, Message[]>>({
-    social: [],
     research: [],
-    seo: [],
-    creative: [],
+    customer: [],
+    competitor: [],
+    strategy: [],
   });
   const [expandedAgents, setExpandedAgents] = useState<Record<string, boolean>>({});
   const [agentInputs, setAgentInputs] = useState<Record<string, string>>({});
   const [agentModels, setAgentModels] = useState<Record<string, string>>({
-    social: 'deepseek',
     research: 'deepseek',
-    seo: 'deepseek',
-    creative: 'deepseek',
+    customer: 'deepseek',
+    competitor: 'deepseek',
+    strategy: 'deepseek',
   });
   const [loadingAgents, setLoadingAgents] = useState<Record<string, boolean>>({});
 
@@ -254,18 +254,18 @@ export default function AgentTesting() {
     setShowNewProjectForm(false);
     setActiveTab('agents');
     setAgentChats({
-      social: [],
       research: [],
-      seo: [],
-      creative: [],
+      customer: [],
+      competitor: [],
+      strategy: [],
     });
 
     // Auto-expand all agents for new project
     setExpandedAgents({
-      social: true,
       research: true,
-      seo: true,
-      creative: true,
+      customer: true,
+      competitor: true,
+      strategy: true,
     });
 
     // Auto-start Brand Research Agent with default prompt
@@ -345,6 +345,9 @@ export default function AgentTesting() {
 
       // Reload brand list to update usage count
       await loadBrands();
+
+      // Auto-save conversation after response
+      await autoSaveConversation('research', [...agentChats.research, userMessage, assistantMessage]);
     } catch (error: any) {
       const errorMessage: Message = {
         role: 'assistant',
@@ -369,17 +372,17 @@ export default function AgentTesting() {
 
     // Reset chats
     const newChats: Record<string, Message[]> = {
-      social: [],
       research: [],
-      seo: [],
-      creative: [],
+      customer: [],
+      competitor: [],
+      strategy: [],
     };
 
     const agentsToExpand: Record<string, boolean> = {
-      social: false,
       research: false,
-      seo: false,
-      creative: false,
+      customer: false,
+      competitor: false,
+      strategy: false,
     };
 
     // Load all conversations for this project
@@ -405,10 +408,10 @@ export default function AgentTesting() {
     if (!hasAnyConversations) {
       // New project - expand all agents
       setExpandedAgents({
-        social: true,
         research: true,
-        seo: true,
-        creative: true,
+        customer: true,
+        competitor: true,
+        strategy: true,
       });
     } else {
       // Existing project - only expand agents with conversations
@@ -439,6 +442,29 @@ export default function AgentTesting() {
     }
   };
 
+  // Auto-save conversation after each message
+  const autoSaveConversation = async (agentType: string, messages: Message[]) => {
+    if (!selectedBrand || !selectedProject || messages.length === 0) return;
+
+    try {
+      await fetch('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brand_name: selectedBrand.brand_name,
+          agent_type: agentType,
+          initial_brief: selectedProject.brief,
+          messages: messages,
+        }),
+      });
+
+      // Reload projects silently
+      await loadProjects(selectedBrand.brand_name);
+    } catch (error) {
+      console.error('Error auto-saving conversation:', error);
+    }
+  };
+
   // Load brand details and reset state
   const handleBrandSelect = async (brand: any) => {
     try {
@@ -452,10 +478,10 @@ export default function AgentTesting() {
         setActiveTab('projects');
         setSelectedProject(null);
         setAgentChats({
-          social: [],
           research: [],
-          seo: [],
-          creative: [],
+          customer: [],
+          competitor: [],
+          strategy: [],
         });
 
         setShowNewBrandForm(false);
@@ -627,6 +653,9 @@ export default function AgentTesting() {
 
       // Reload brand list to update usage count
       await loadBrands();
+
+      // Auto-save conversation after response
+      await autoSaveConversation(agentId, [...agentChats[agentId], userMessage, assistantMessage]);
     } catch (error: any) {
       const errorMessage: Message = {
         role: 'assistant',
@@ -942,7 +971,7 @@ export default function AgentTesting() {
                       </h4>
                       <p className="text-xs text-blue-700 dark:text-blue-300">
                         The <strong>Brand Research Agent</strong> has been automatically initiated to analyze the brand.
-                        Once complete, you can use other agents for specific tasks like social media strategy, SEO, or creative content.
+                        Once complete, you can use other agents for customer insights, competitive intelligence, or strategic planning.
                         All agents use your project brief as context.
                       </p>
                     </div>
