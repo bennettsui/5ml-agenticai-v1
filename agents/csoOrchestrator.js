@@ -389,8 +389,7 @@ async function synthesizeDiagnosis(client_name, brief, existingData, orchestrati
 5. 風險評估`;
 
   try {
-    const result = await deepseekService.research(userPrompt, {
-      systemPrompt,
+    const result = await deepseekService.analyze(systemPrompt, userPrompt, {
       maxTokens: 8000,
       temperature: 0.3,
     });

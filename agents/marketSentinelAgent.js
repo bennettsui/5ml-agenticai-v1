@@ -208,8 +208,7 @@ async function monitorWithDeepSeek(client_name, brief, modelSelection, no_fallba
 **重要**: 所有資訊必須標註時間戳記，僅採用最新24小時或本週的數據`;
 
   try {
-    const result = await deepseekService.research(userPrompt, {
-      systemPrompt,
+    const result = await deepseekService.analyze(systemPrompt, userPrompt, {
       maxTokens: 4000,
       temperature: 0.3,
     });
