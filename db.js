@@ -589,7 +589,35 @@ async function getProjectsByBrand(brand_name) {
        ORDER BY last_updated DESC`,
       [brand_name]
     );
-    return result.rows;
+
+    // Parse brief to extract title, purpose, deliverable, background
+    const projects = result.rows.map(row => {
+      const brief = row.brief || '';
+      const parsed = {
+        title: null,
+        purpose: null,
+        deliverable: null,
+        background: null,
+      };
+
+      // Extract fields from formatted brief
+      const titleMatch = brief.match(/Title:\s*([^\n]+)/);
+      const purposeMatch = brief.match(/Purpose:\s*([^\n]+)/);
+      const deliverableMatch = brief.match(/Deliverable:\s*([^\n]+)/);
+      const backgroundMatch = brief.match(/Background:\s*([^\n]+)/);
+
+      if (titleMatch) parsed.title = titleMatch[1].trim();
+      if (purposeMatch) parsed.purpose = purposeMatch[1].trim();
+      if (deliverableMatch) parsed.deliverable = deliverableMatch[1].trim();
+      if (backgroundMatch) parsed.background = backgroundMatch[1].trim();
+
+      return {
+        ...row,
+        ...parsed,
+      };
+    });
+
+    return projects;
   } catch (error) {
     console.error('Error fetching projects:', error);
     throw error;

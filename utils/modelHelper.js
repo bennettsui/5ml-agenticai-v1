@@ -14,8 +14,12 @@ const MODEL_MAP = {
   'perplexity': 'sonar-pro'
 };
 
-function getClaudeModel(modelSelection = 'deepseek') {
-  return MODEL_MAP[modelSelection] || MODEL_MAP['deepseek'];
+function getClaudeModel(modelSelection = 'haiku') {
+  // If deepseek is selected but we're using Claude as fallback, use Haiku
+  if (modelSelection === 'deepseek') {
+    return MODEL_MAP['haiku'];
+  }
+  return MODEL_MAP[modelSelection] || MODEL_MAP['haiku'];
 }
 
 function shouldUsePerplexity(modelSelection) {

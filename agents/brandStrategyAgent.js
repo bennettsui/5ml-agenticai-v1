@@ -409,20 +409,6 @@ async function strategyWithDeepSeek(client_name, brief, modelSelection, no_fallb
   }
 }
 
-/**
- * Orchestrate Brand Strategy (Agentic AI Mode)
- * Layer 6: Orchestration & Workflow
- *
- * This function acts as an autonomous agent that:
- * - Evaluates data sufficiency
- * - Calls other agents when needed (research, customer, competitor)
- * - Has reflection and self-correction capabilities
- * - Goal-oriented: aims to produce 5 positioning keywords
- * - Can retry and request more data
- */
-  };
-}
-
 module.exports = {
   analyzeBrandStrategy,
 };
