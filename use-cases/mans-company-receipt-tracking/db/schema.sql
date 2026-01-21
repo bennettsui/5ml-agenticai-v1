@@ -1,21 +1,6 @@
 -- Man's Accounting Firm - Receipt Tracking Database Schema
--- Version: 1.1.0
+-- Version: 1.0.0
 -- Created: 2026-01-18
--- Updated: 2026-01-21
-
--- =============================================================================
--- CLIENTS TABLE
--- Master table for client management
--- =============================================================================
-
-CREATE TABLE IF NOT EXISTS t_clients (
-  id SERIAL PRIMARY KEY,
-  client_name VARCHAR(255) NOT NULL UNIQUE,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_t_clients_name ON t_clients(client_name);
 
 -- =============================================================================
 -- RECEIPT BATCHES TABLE
@@ -440,7 +425,6 @@ $$ LANGUAGE plpgsql;
 -- Function: Archive completed batches older than 2 years
 -- (Implement as needed for archival strategy)
 
-COMMENT ON TABLE t_clients IS 'Master table for client management';
 COMMENT ON TABLE receipt_batches IS 'Tracks batch processing of receipts from Dropbox folders';
 COMMENT ON TABLE receipts IS 'Individual receipt records with OCR and categorization';
 COMMENT ON TABLE category_statistics IS 'Aggregate category performance metrics';
