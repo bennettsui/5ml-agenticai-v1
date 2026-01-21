@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Sparkles, Search, Share2, TrendingUp, Loader2, Building2, Plus, Clock, ChevronDown, ChevronUp, Send, User, Bot, History, Trash2 } from 'lucide-react';
+import DatabaseStatusBanner from './DatabaseStatusBanner';
 
 interface Agent {
   id: string;
@@ -233,6 +234,10 @@ export default function AgentTesting() {
   const [industry, setIndustry] = useState('');
   const [newBrandName, setNewBrandName] = useState('');
 
+  // Database status
+  const [isDatabaseConnected, setIsDatabaseConnected] = useState(true);
+  const [isRetryingConnection, setIsRetryingConnection] = useState(false);
+
   // Tab state
   const [activeTab, setActiveTab] = useState<'projects' | 'agents'>('projects');
 
@@ -268,12 +273,28 @@ export default function AgentTesting() {
     try {
       const response = await fetch('/api/brands?limit=20');
       const data = await response.json();
+
+      // Check for database disconnection (503 or error response)
+      if (response.status === 503 || data.error === 'Database not configured') {
+        setIsDatabaseConnected(false);
+        setAllBrands([]);
+        return;
+      }
+
       if (data.success) {
+        setIsDatabaseConnected(true);
         setAllBrands(data.brands || []);
       }
     } catch (error) {
       console.error('Error loading brands:', error);
+      setIsDatabaseConnected(false);
     }
+  };
+
+  const handleRetryConnection = async () => {
+    setIsRetryingConnection(true);
+    await loadBrands();
+    setIsRetryingConnection(false);
   };
 
   // Load projects for brand
@@ -705,6 +726,13 @@ export default function AgentTesting() {
 
   return (
     <div className="space-y-6">
+      {/* Database Status Banner */}
+      <DatabaseStatusBanner
+        isConnected={isDatabaseConnected}
+        onRetry={handleRetryConnection}
+        isRetrying={isRetryingConnection}
+      />
+
       {/* Brand Selection */}
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
         <div className="flex items-center justify-between mb-4">
