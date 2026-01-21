@@ -1,13 +1,9 @@
 const { Pool } = require('pg');
 
-// Configure SSL and connection timeouts based on environment and DATABASE_URL
+// Configure SSL based on environment and DATABASE_URL
 const getDatabaseConfig = () => {
   const config = {
     connectionString: process.env.DATABASE_URL,
-    // Connection timeout settings for TLS stability on Fly.io
-    connectionTimeoutMillis: 10000, // 10 seconds to establish connection
-    idleTimeoutMillis: 30000, // 30 seconds before idle clients are closed
-    max: 10, // Maximum number of clients in the pool
   };
 
   // Only enable SSL for production databases (not localhost)

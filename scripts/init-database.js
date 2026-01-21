@@ -26,13 +26,10 @@ async function initDatabase() {
   console.log(`  Host: ${new URL(process.env.DATABASE_URL).host}`);
   console.log(`  Database: ${new URL(process.env.DATABASE_URL).pathname.substring(1)}\n`);
 
-  // Create pool with timeout settings for TLS stability
-  const isRemote = !process.env.DATABASE_URL.includes('localhost');
+  // Create pool
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: isRemote ? { rejectUnauthorized: false } : false,
-    connectionTimeoutMillis: 10000, // 10 seconds to establish connection
-    idleTimeoutMillis: 30000, // 30 seconds before idle clients are closed
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
   });
 
   try {
