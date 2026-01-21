@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Beaker, Loader2, Clock, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, History, Trash2 } from 'lucide-react';
+import DatabaseStatusBanner from './DatabaseStatusBanner';
 
 interface ModelResult {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -39,6 +40,10 @@ export default function ModelSandbox() {
   const [history, setHistory] = useState<TestHistory[]>([]);
   const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
 
+  // Database status
+  const [isDatabaseConnected, setIsDatabaseConnected] = useState(true);
+  const [isRetryingConnection, setIsRetryingConnection] = useState(false);
+
   // Model pricing (per million tokens)
   const modelPricing: Record<string, { input: number; output: number }> = {
     'deepseek': { input: 0.03, output: 0.11 }, // DeepSeek V3.2
@@ -69,7 +74,15 @@ export default function ModelSandbox() {
       const response = await fetch('/api/sandbox/tests');
       const data = await response.json();
 
+      // Check for database disconnection (503 or error response)
+      if (response.status === 503 || data.error === 'Database not configured') {
+        setIsDatabaseConnected(false);
+        setHistory([]);
+        return;
+      }
+
       if (data.success && data.tests) {
+        setIsDatabaseConnected(true);
         const loadedHistory: TestHistory[] = data.tests.map((test: any) => ({
           id: test.test_id,
           timestamp: new Date(test.created_at),
@@ -83,8 +96,14 @@ export default function ModelSandbox() {
       }
     } catch (error) {
       console.error('Failed to load history:', error);
-      // Silently fail - history just won't be loaded
+      setIsDatabaseConnected(false);
     }
+  };
+
+  const handleRetryConnection = async () => {
+    setIsRetryingConnection(true);
+    await loadHistory();
+    setIsRetryingConnection(false);
   };
 
   const saveToDatabase = async (test: Omit<TestHistory, 'id' | 'timestamp'>) => {
@@ -488,6 +507,13 @@ export default function ModelSandbox() {
 
   return (
     <div className="space-y-6">
+      {/* Database Status Banner */}
+      <DatabaseStatusBanner
+        isConnected={isDatabaseConnected}
+        onRetry={handleRetryConnection}
+        isRetrying={isRetryingConnection}
+      />
+
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md border border-slate-200 dark:border-slate-700 p-6">
         <div className="flex items-center gap-3 mb-4">
