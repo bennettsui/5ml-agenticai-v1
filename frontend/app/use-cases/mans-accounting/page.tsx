@@ -31,6 +31,17 @@ export default function ReceiptProcessor() {
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const formatErrorMessage = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object') {
+      const message = (value as { message?: string }).message;
+      const status = (value as { status?: string | number }).status;
+      if (message && status !== undefined) return `${message} (status ${status})`;
+      if (message) return message;
+    }
+    return 'Unexpected error occurred';
+  };
+
   // Real-time updates with WebSocket (fallback to polling)
   useEffect(() => {
     if (!batchId) return;
@@ -144,7 +155,7 @@ export default function ReceiptProcessor() {
       if (data.success) {
         setBatchId(data.batch_id);
       } else {
-        setError(data.error || 'Failed to start processing');
+        setError(data.error ? formatErrorMessage(data.error) : 'Failed to start processing');
         setIsProcessing(false);
       }
     } catch (err) {
