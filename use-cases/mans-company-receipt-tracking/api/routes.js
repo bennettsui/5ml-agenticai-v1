@@ -15,6 +15,7 @@ const router = express.Router();
 const db = require('../../../db');
 const path = require('path');
 const fs = require('fs').promises;
+const { Dropbox } = require('dropbox');
 const { processReceiptBatch } = require('../lib/batch-processor');
 
 // Import tools (will be compiled from TypeScript)
@@ -56,13 +57,29 @@ router.post('/process', async (req, res) => {
       });
     }
 
+    // Ensure client exists (create if missing)
+    let clientId = null;
+    const existingClient = await db.query(
+      'SELECT id FROM t_clients WHERE LOWER(client_name) = LOWER($1)',
+      [client_name.trim()]
+    );
+    if (existingClient.rows.length > 0) {
+      clientId = existingClient.rows[0].id;
+    } else {
+      const newClient = await db.query(
+        'INSERT INTO t_clients (client_name) VALUES ($1) RETURNING id',
+        [client_name.trim()]
+      );
+      clientId = newClient.rows[0].id;
+    }
+
     // Create new batch in database
     const batchResult = await db.query(
       `INSERT INTO receipt_batches (
-        client_name, dropbox_url, status, period_start, period_end
+        client_id, dropbox_url, status, period_start, period_end
       ) VALUES ($1, $2, 'pending', $3, $4)
       RETURNING batch_id, created_at`,
-      [client_name, dropbox_url, period_start || null, period_end || null]
+      [clientId, dropbox_url, period_start || null, period_end || null]
     );
 
     const batchId = batchResult.rows[0].batch_id;
@@ -179,7 +196,7 @@ router.get('/batches/:batchId', async (req, res) => {
         receipt_id, receipt_date, vendor, description, amount, currency,
         category_id, category_name, deductible_amount, non_deductible_amount,
         categorization_confidence, requires_review, reviewed
-       FROM receipts
+       FROM t_receipts
        WHERE batch_id = $1
        ORDER BY receipt_date DESC`,
       [batchId]
@@ -342,36 +359,112 @@ router.get('/batches/:batchId/download', async (req, res) => {
   }
 });
 
-/**
- * GET /receipts/:receiptId
- *
- * Get individual receipt details
- */
-router.get('/:receiptId', async (req, res) => {
+// =============================================================================
+// DATABASE INITIALIZATION ENDPOINT
+// =============================================================================
+
+const initDbRouter = require('./init-db-endpoint');
+router.use('/', initDbRouter);
+
+const normalizeDropboxUrl = (value) => {
   try {
-    const { receiptId } = req.params;
+    const parsed = new URL(value);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch (error) {
+    return value;
+  }
+};
 
-    const result = await db.query(
-      'SELECT * FROM receipts WHERE receipt_id = $1',
-      [receiptId]
-    );
+const summarizeDropboxError = (error) => {
+  const summary = error?.error?.error_summary || error?.error?.error;
+  const status = error?.status || error?.response?.status;
+  return {
+    message: error?.message || 'Dropbox error',
+    summary: summary || null,
+    status: status || null,
+  };
+};
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
+/**
+ * GET /debug-dropbox
+ *
+ * Debug shared link access with Dropbox API
+ *
+ * Query:
+ *   url=https://www.dropbox.com/...
+ */
+router.get('/debug-dropbox', async (req, res) => {
+  try {
+    const sharedUrl = req.query.url;
+    if (!sharedUrl) {
+      return res.status(400).json({
         success: false,
-        error: 'Receipt not found',
+        error: 'Missing url query parameter',
       });
     }
 
-    res.json({
+    if (!process.env.DROPBOX_ACCESS_TOKEN) {
+      return res.status(503).json({
+        success: false,
+        error: 'DROPBOX_ACCESS_TOKEN is not configured',
+      });
+    }
+
+    const dbx = new Dropbox({ accessToken: process.env.DROPBOX_ACCESS_TOKEN });
+    const normalizedUrl = normalizeDropboxUrl(sharedUrl);
+    const results = {
+      normalized_url: normalizedUrl,
+      metadata: null,
+      list_folder_normalized: null,
+      list_folder_original: null,
+    };
+
+    try {
+      const metadata = await dbx.sharingGetSharedLinkMetadata({ url: normalizedUrl });
+      results.metadata = {
+        ok: true,
+        tag: metadata.result['.tag'],
+        name: metadata.result.name || null,
+      };
+    } catch (error) {
+      results.metadata = { ok: false, error: summarizeDropboxError(error) };
+    }
+
+    try {
+      const listResult = await dbx.filesListFolder({
+        path: '',
+        shared_link: { url: normalizedUrl },
+      });
+      results.list_folder_normalized = {
+        ok: true,
+        entries: listResult.result.entries.length,
+      };
+    } catch (error) {
+      results.list_folder_normalized = { ok: false, error: summarizeDropboxError(error) };
+    }
+
+    try {
+      const listResult = await dbx.filesListFolder({
+        path: '',
+        shared_link: { url: sharedUrl },
+      });
+      results.list_folder_original = {
+        ok: true,
+        entries: listResult.result.entries.length,
+      };
+    } catch (error) {
+      results.list_folder_original = { ok: false, error: summarizeDropboxError(error) };
+    }
+
+    return res.json({
       success: true,
-      receipt: result.rows[0],
+      results,
     });
   } catch (error) {
-    console.error('Error fetching receipt:', error);
-    res.status(500).json({
+    console.error('Error debugging Dropbox link:', error);
+    return res.status(500).json({
       success: false,
-      error: 'Failed to fetch receipt',
+      error: error.message,
     });
   }
 });
@@ -397,7 +490,7 @@ router.get('/analytics/categories', async (req, res) => {
           SUM(deductible_amount) as deductible_amount,
           SUM(non_deductible_amount) as non_deductible_amount,
           AVG(categorization_confidence) as avg_confidence
-        FROM receipts
+        FROM t_receipts
         WHERE batch_id = $1
         GROUP BY category_id, category_name
         ORDER BY total_amount DESC
@@ -416,6 +509,132 @@ router.get('/analytics/categories', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch category analytics',
+    });
+  }
+});
+
+// =============================================================================
+// CLIENT MANAGEMENT ENDPOINTS
+// =============================================================================
+
+/**
+ * GET /clients
+ *
+ * Get all clients from t_clients table
+ */
+router.get('/clients', async (req, res) => {
+  try {
+    const result = await db.query(
+      'SELECT id, client_name, created_at FROM t_clients ORDER BY client_name ASC'
+    );
+
+    res.json({
+      success: true,
+      clients: result.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching clients:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch clients',
+    });
+  }
+});
+
+/**
+ * POST /clients
+ *
+ * Add a new client to t_clients table
+ *
+ * Body:
+ * {
+ *   "client_name": "New Client Name"
+ * }
+ */
+router.post('/clients', async (req, res) => {
+  try {
+    const { client_name } = req.body;
+
+    // Validate required field
+    if (!client_name || client_name.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'client_name is required',
+      });
+    }
+
+    // Validate client name format (alphanumeric and special characters: ,.-_&@)
+    const validPattern = /^[a-zA-Z0-9\s,.\-_&@]+$/;
+    if (!validPattern.test(client_name)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Client name can only contain alphanumeric characters and special characters: , . - _ & @',
+      });
+    }
+
+    // Check for duplicate
+    const existingClient = await db.query(
+      'SELECT id FROM t_clients WHERE LOWER(client_name) = LOWER($1)',
+      [client_name.trim()]
+    );
+
+    if (existingClient.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'A client with this name already exists',
+      });
+    }
+
+    // Insert new client
+    const result = await db.query(
+      `INSERT INTO t_clients (client_name) VALUES ($1) RETURNING id, client_name, created_at`,
+      [client_name.trim()]
+    );
+
+    res.status(201).json({
+      success: true,
+      client: result.rows[0],
+      message: 'Client added successfully',
+    });
+  } catch (error) {
+    console.error('Error adding client:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add client',
+    });
+  }
+});
+
+/**
+ * GET /receipts/:receiptId
+ *
+ * Get individual receipt details
+ */
+router.get('/:receiptId', async (req, res) => {
+  try {
+    const { receiptId } = req.params;
+
+    const result = await db.query(
+      'SELECT * FROM t_receipts WHERE receipt_id = $1',
+      [receiptId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Receipt not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      receipt: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error fetching receipt:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch receipt',
     });
   }
 });
@@ -546,13 +765,6 @@ router.post('/clients', async (req, res) => {
     });
   }
 });
-
-// =============================================================================
-// DATABASE INITIALIZATION ENDPOINT
-// =============================================================================
-
-const initDbRouter = require('./init-db-endpoint');
-router.use('/', initDbRouter);
 
 // =============================================================================
 // HELPER FUNCTIONS

@@ -125,7 +125,7 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName) {
         const fileData = downloadedFiles.find(f => f.path === result.image_path);
 
         await db.query(
-          `INSERT INTO receipts (
+          `INSERT INTO t_receipts (
             batch_id, image_path, image_hash,
             receipt_date, vendor, description, amount, currency,
             tax_amount, receipt_number, payment_method,

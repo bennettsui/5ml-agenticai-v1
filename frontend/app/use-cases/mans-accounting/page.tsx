@@ -44,7 +44,17 @@ export default function ReceiptProcessor() {
   const [isLoadingClients, setIsLoadingClients] = useState(false);
   const [isAddingClient, setIsAddingClient] = useState(false);
   const [clientError, setClientError] = useState<string | null>(null);
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
+  const sanitizeDropboxUrl = (value: string): string => {
+    if (!value) return value;
+    try {
+      const url = new URL(value);
+      return `${url.origin}${url.pathname}`;
+    } catch (error) {
+      return value;
+    }
+  };
 
 
   // Fetch clients on mount
@@ -55,6 +65,9 @@ export default function ReceiptProcessor() {
   const fetchClients = async () => {
     setIsLoadingClients(true);
     try {
+      if (!API_BASE) {
+        throw new Error('API base URL is not configured');
+      }
       const response = await fetch(`${API_BASE}/api/clients`);
       const data = await response.json();
       if (data.success) {
@@ -473,75 +486,79 @@ export default function ReceiptProcessor() {
               
             </div>
 
-            <div>
-              <label htmlFor="dropboxUrl" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Dropbox Shared Folder URL
-              </label>
-              <div className="mt-1 relative">
-                <input
-                  type="url"
-                  id="dropboxUrl"
-                  value={dropboxUrl}
-                  onChange={(e) => setDropboxUrl(e.target.value)}
-                  className="block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                  placeholder="https://www.dropbox.com/sh/abc123..."
-                  required
-                  disabled={isProcessing}
-                />
-                <Upload className="absolute right-3 top-2.5 h-5 w-5 text-slate-400 dark:text-slate-500" />
-              </div>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Share your Dropbox folder and paste the link here
-              </p>
-            </div>
+            {selectedClientId && (
+              <>
+                <div>
+                  <label htmlFor="dropboxUrl" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Dropbox Shared Folder URL
+                  </label>
+                  <div className="mt-1 relative">
+                    <input
+                      type="url"
+                      id="dropboxUrl"
+                      value={dropboxUrl}
+                      onChange={(e) => setDropboxUrl(sanitizeDropboxUrl(e.target.value))}
+                      className="block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                      placeholder="https://www.dropbox.com/sh/abc123..."
+                      required
+                      disabled={isProcessing}
+                    />
+                    <Upload className="absolute right-3 top-2.5 h-5 w-5 text-slate-400 dark:text-slate-500" />
+                  </div>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Share your Dropbox folder and paste the link here
+                  </p>
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="periodStart" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Period Start (Optional)
-                </label>
-                <input
-                  type="date"
-                  id="periodStart"
-                  value={periodStart}
-                  onChange={(e) => setPeriodStart(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                  disabled={isProcessing}
-                />
-              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="periodStart" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Period Start (Optional)
+                    </label>
+                    <input
+                      type="date"
+                      id="periodStart"
+                      value={periodStart}
+                      onChange={(e) => setPeriodStart(e.target.value)}
+                      className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                      disabled={isProcessing}
+                    />
+                  </div>
 
-              <div>
-                <label htmlFor="periodEnd" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Period End (Optional)
-                </label>
-                <input
-                  type="date"
-                  id="periodEnd"
-                  value={periodEnd}
-                  onChange={(e) => setPeriodEnd(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                  disabled={isProcessing}
-                />
-              </div>
-            </div>
+                  <div>
+                    <label htmlFor="periodEnd" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Period End (Optional)
+                    </label>
+                    <input
+                      type="date"
+                      id="periodEnd"
+                      value={periodEnd}
+                      onChange={(e) => setPeriodEnd(e.target.value)}
+                      className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                      disabled={isProcessing}
+                    />
+                  </div>
+                </div>
 
-            <button
-              type="submit"
-              disabled={isProcessing || !clientName}
-              className="w-full flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-slate-400 disabled:cursor-not-allowed dark:bg-blue-600 dark:hover:bg-blue-700"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <FileSpreadsheet className="w-5 h-5 mr-2" />
-                  Process Receipts
-                </>
-              )}
-            </button>
+                <button
+                  type="submit"
+                  disabled={isProcessing || !clientName}
+                  className="w-full flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-slate-400 disabled:cursor-not-allowed dark:bg-blue-600 dark:hover:bg-blue-700"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <FileSpreadsheet className="w-5 h-5 mr-2" />
+                      Process Receipts
+                    </>
+                  )}
+                </button>
+              </>
+            )}
           </form>
 
           {error && (

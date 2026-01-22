@@ -16,6 +16,15 @@ class DropboxConnector {
     this.dbx = new Dropbox({ accessToken });
   }
 
+  normalizeSharedUrl(url) {
+    try {
+      const parsed = new URL(url);
+      return `${parsed.origin}${parsed.pathname}`;
+    } catch (error) {
+      return url;
+    }
+  }
+
   /**
    * Extract shared link metadata
    */
@@ -44,13 +53,46 @@ class DropboxConnector {
     try {
       console.log(`📋 [Dropbox] Listing files from: ${sharedUrl}`);
 
-      const { id } = this.parseSharedLink(sharedUrl);
+      const normalizedUrl = this.normalizeSharedUrl(sharedUrl);
+      let metadata = null;
+      try {
+        metadata = await this.dbx.sharingGetSharedLinkMetadata({
+          url: normalizedUrl
+        });
+      } catch (error) {
+        console.warn('⚠️  [Dropbox] shared link metadata failed, continuing:', error.message);
+      }
 
-      // List folder contents
-      const response = await this.dbx.filesListFolder({
-        path: '',
-        shared_link: { url: sharedUrl }
-      });
+      if (metadata && metadata.result['.tag'] === 'file') {
+        const name = metadata.result.name;
+        const ext = path.extname(name).toLowerCase();
+        if (!extensions.includes(ext)) {
+          return { files: [], total: 0 };
+        }
+        return {
+          files: [{
+            name,
+            path_display: null,
+            is_shared_file: true
+          }],
+          total: 1
+        };
+      }
+
+      let response;
+      try {
+        // List folder contents via shared link
+        response = await this.dbx.filesListFolder({
+          path: '',
+          shared_link: { url: normalizedUrl }
+        });
+      } catch (error) {
+        console.warn('⚠️  [Dropbox] filesListFolder failed, retrying with original URL:', error.message);
+        response = await this.dbx.filesListFolder({
+          path: '',
+          shared_link: { url: sharedUrl }
+        });
+      }
 
       // Filter for image files
       const imageFiles = response.result.entries.filter(entry => {
@@ -66,28 +108,76 @@ class DropboxConnector {
         total: imageFiles.length
       };
     } catch (error) {
-      console.error('❌ [Dropbox] Error listing files:', error.message);
-      throw new Error(`Failed to list Dropbox files: ${error.message}`);
+      const errorSummary = error?.error?.error_summary || error?.error?.error;
+      const status = error?.status || error?.response?.status;
+      const details = [
+        errorSummary ? `summary=${errorSummary}` : null,
+        status ? `status=${status}` : null
+      ].filter(Boolean).join(' ');
+      const message = details ? `${error.message} (${details})` : error.message;
+      console.error('❌ [Dropbox] Error listing files:', message);
+      throw new Error(`Failed to list Dropbox files: ${message}`);
     }
   }
 
   /**
    * Download a single file
    */
-  async downloadFile(sharedUrl, filePath, outputDir) {
+  async downloadFile(sharedUrl, filePath, outputDir, filenameOverride = null) {
     try {
-      console.log(`⬇️  [Dropbox] Downloading: ${filePath}`);
+      console.log(`⬇️  [Dropbox] Downloading: ${filePath || filenameOverride || sharedUrl}`);
 
-      const response = await this.dbx.sharingGetSharedLinkFile({
-        url: sharedUrl,
-        path: filePath
-      });
+      const normalizedUrl = this.normalizeSharedUrl(sharedUrl);
+      const requestFile = async (urlValue, pathValue) => {
+        if (pathValue) {
+          return await this.dbx.sharingGetSharedLinkFile({ url: urlValue, path: pathValue });
+        }
+        return await this.dbx.sharingGetSharedLinkFile({ url: urlValue });
+      };
+
+      const candidates = [];
+      if (filePath) {
+        candidates.push(filePath);
+        if (!filePath.startsWith('/')) {
+          candidates.push(`/${filePath}`);
+        }
+        const base = path.basename(filePath);
+        candidates.push(base);
+        candidates.push(`/${base}`);
+      }
+
+      let response;
+      let lastError = null;
+      for (const candidate of candidates) {
+        try {
+          response = await requestFile(normalizedUrl, candidate);
+          break;
+        } catch (error) {
+          lastError = error;
+          const status = error?.status || error?.response?.status;
+          if (status !== 400 && status !== 409) {
+            throw error;
+          }
+        }
+      }
+
+      if (!response) {
+        try {
+          response = await requestFile(normalizedUrl, null);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      if (!response && lastError) {
+        throw lastError;
+      }
 
       // Ensure output directory exists
       await fs.mkdir(outputDir, { recursive: true });
 
       // Generate output filename
-      const filename = path.basename(filePath);
+      const filename = filenameOverride || path.basename(filePath || 'receipt');
       const outputPath = path.join(outputDir, filename);
 
       // Write file
@@ -106,8 +196,15 @@ class DropboxConnector {
         size: fileBuffer.length
       };
     } catch (error) {
-      console.error(`❌ [Dropbox] Error downloading ${filePath}:`, error.message);
-      throw new Error(`Failed to download file: ${error.message}`);
+      const errorSummary = error?.error?.error_summary || error?.error?.error;
+      const status = error?.status || error?.response?.status;
+      const details = [
+        errorSummary ? `summary=${errorSummary}` : null,
+        status ? `status=${status}` : null
+      ].filter(Boolean).join(' ');
+      const message = details ? `${error.message} (${details})` : error.message;
+      console.error(`❌ [Dropbox] Error downloading ${filePath}:`, message);
+      throw new Error(`Failed to download file: ${message}`);
     }
   }
 
@@ -131,7 +228,12 @@ class DropboxConnector {
       // Download each file
       for (const file of files) {
         try {
-          const result = await this.downloadFile(sharedUrl, file.path_display, outputDir);
+          const result = await this.downloadFile(
+            sharedUrl,
+            file.name || file.path_lower || file.path_display,
+            outputDir,
+            file.name || null
+          );
           results.push({
             success: true,
             ...result

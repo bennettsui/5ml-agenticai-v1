@@ -219,7 +219,20 @@ SELECT
 FROM receipt_batches rb
 LEFT JOIN t_receipts r ON rb.batch_id = r.batch_id
 JOIN t_clients c ON rb.client_id = c.id
-GROUP BY rb.batch_id, c.client_name
+GROUP BY
+  rb.batch_id,
+  c.client_name,
+  rb.status,
+  rb.total_receipts,
+  rb.processed_receipts,
+  rb.failed_receipts,
+  rb.total_amount,
+  rb.deductible_amount,
+  rb.non_deductible_amount,
+  rb.period_start,
+  rb.period_end,
+  rb.created_at,
+  rb.completed_at
 ORDER BY rb.created_at DESC;
 
 CREATE OR REPLACE VIEW v_category_breakdown AS
