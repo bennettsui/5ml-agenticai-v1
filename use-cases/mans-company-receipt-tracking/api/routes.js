@@ -18,7 +18,8 @@ const fs = require('fs').promises;
 const { processReceiptBatch } = require('../lib/batch-processor');
 
 // Import tools (will be compiled from TypeScript)
-// For now, using placeholder functions - will be replaced with actual imports
+// For now, using placeholder functions - will be replaced with actual imports]
+
 
 /**
  * POST /receipts/process
@@ -450,6 +451,98 @@ router.get('/analytics/compliance', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch compliance analytics',
+    });
+  }
+});
+
+// =============================================================================
+// CLIENT MANAGEMENT ENDPOINTS
+// =============================================================================
+
+/**
+ * GET /clients
+ *
+ * Get all clients from t_clients table
+ */
+router.get('/clients', async (req, res) => {
+  try {
+    const result = await db.query(
+      'SELECT id, client_name, created_at FROM t_clients ORDER BY client_name ASC'
+    );
+
+    res.json({
+      success: true,
+      clients: result.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching clients:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch clients',
+    });
+  }
+});
+
+/**
+ * POST /clients
+ *
+ * Add a new client to t_clients table
+ *
+ * Body:
+ * {
+ *   "client_name": "New Client Name"
+ * }
+ */
+router.post('/clients', async (req, res) => {
+  try {
+    const { client_name } = req.body;
+
+    // Validate required field
+    if (!client_name || client_name.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'client_name is required',
+      });
+    }
+
+    // Validate client name format (alphanumeric and special characters: ,.-_&@)
+    const validPattern = /^[a-zA-Z0-9\s,.\-_&@]+$/;
+    if (!validPattern.test(client_name)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Client name can only contain alphanumeric characters and special characters: , . - _ & @',
+      });
+    }
+
+    // Check for duplicate
+    const existingClient = await db.query(
+      'SELECT id FROM t_clients WHERE LOWER(client_name) = LOWER($1)',
+      [client_name.trim()]
+    );
+
+    if (existingClient.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'A client with this name already exists',
+      });
+    }
+
+    // Insert new client
+    const result = await db.query(
+      `INSERT INTO t_clients (client_name) VALUES ($1) RETURNING id, client_name, created_at`,
+      [client_name.trim()]
+    );
+
+    res.status(201).json({
+      success: true,
+      client: result.rows[0],
+      message: 'Client added successfully',
+    });
+  } catch (error) {
+    console.error('Error adding client:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add client',
     });
   }
 });

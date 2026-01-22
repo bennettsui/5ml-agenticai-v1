@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle2, Clock, Download, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
-
+import { AlertCircle, CheckCircle2, Clock, Download, FileSpreadsheet, Loader2, Upload, Users, UserPlus, ChevronDown } from 'lucide-react';
 interface BatchStatus {
   batch_id: string;
   status: string;
@@ -21,15 +20,133 @@ interface BatchStatus {
   updated_at: string;
 }
 
+interface Client {
+  id: number;
+  client_name: string;
+  created_at: string;
+}
+
 export default function ReceiptProcessor() {
   const [dropboxUrl, setDropboxUrl] = useState('');
-  const [clientName, setClientName] = useState("Man's Accounting Firm");
+  const [clientName, setClientName] = useState('');
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Client selection state
+  const [clientMode, setClientMode] = useState<'select' | 'add' | null>(null);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+  const [newClientName, setNewClientName] = useState('');
+  const [isLoadingClients, setIsLoadingClients] = useState(false);
+  const [isAddingClient, setIsAddingClient] = useState(false);
+  const [clientError, setClientError] = useState<string | null>(null);
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+
+  // Fetch clients on mount
+  useEffect(() => {
+    fetchClients();
+  }, []);
+
+  const fetchClients = async () => {
+    setIsLoadingClients(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/clients`);
+      const data = await response.json();
+      if (data.success) {
+        setClients(data.clients);
+      }
+    } catch (err) {
+      console.error('Error fetching clients:', err);
+    } finally {
+      setIsLoadingClients(false);
+    }
+  };
+
+  const handleSelectExistingClient = () => {
+    setClientMode('select');
+    setClientError(null);
+    setNewClientName('');
+  };
+
+  const handleAddNewClient = () => {
+    setClientMode('add');
+    setClientError(null);
+    setSelectedClientId(null);
+    setClientName('');
+  };
+
+  const handleClientSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const clientId = parseInt(e.target.value);
+    setSelectedClientId(clientId);
+    const selectedClient = clients.find(c => c.id === clientId);
+    if (selectedClient) {
+      setClientName(selectedClient.client_name);
+    }
+    setClientError(null);
+  };
+
+  const validateClientName = (name: string): boolean => {
+    const validPattern = /^[a-zA-Z0-9\s,.\-_&@]+$/;
+    return validPattern.test(name);
+  };
+
+  const handleNewClientNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setNewClientName(value);
+
+    if (value && !validateClientName(value)) {
+      setClientError('Only alphanumeric characters and special characters: , . - _ & @ are allowed');
+    } else {
+      setClientError(null);
+    }
+  };
+
+  const handleAddClientSubmit = async () => {
+    if (!newClientName.trim()) {
+      setClientError('Client name is required');
+      return;
+    }
+
+    if (!validateClientName(newClientName)) {
+      setClientError('Only alphanumeric characters and special characters: , . - _ & @ are allowed');
+      return;
+    }
+
+    setIsAddingClient(true);
+    setClientError(null);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/clients`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ client_name: newClientName.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Refresh client list and select the new client
+        await fetchClients();
+        setSelectedClientId(data.client.id);
+        setClientName(data.client.client_name);
+        setClientMode('select');
+        setNewClientName('');
+      } else {
+        setClientError(data.error || 'Failed to add client');
+      }
+    } catch (err) {
+      setClientError('Network error. Please try again.');
+    } finally {
+      setIsAddingClient(false);
+    }
+  };
 
   // Real-time updates with WebSocket (fallback to polling)
   useEffect(() => {
@@ -93,7 +210,7 @@ export default function ReceiptProcessor() {
 
       pollInterval = setInterval(async () => {
         try {
-          const response = await fetch(`/api/receipts/batches/${batchId}/status`);
+          const response = await fetch(`${API_BASE}/api/receipts/batches/${batchId}/status`);
           const data = await response.json();
 
           if (data.success) {
@@ -122,11 +239,18 @@ export default function ReceiptProcessor() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Validate client selection
+    if (!clientName) {
+      setError('Please select an existing client or add a new client first.');
+      return;
+    }
+
     setIsProcessing(true);
     setBatchStatus(null);
 
     try {
-      const response = await fetch('/api/receipts/process', {
+      const response = await fetch(`${API_BASE}/api/receipts/process`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -155,7 +279,7 @@ export default function ReceiptProcessor() {
 
   const handleDownload = () => {
     if (batchId) {
-      window.location.href = `/api/receipts/batches/${batchId}/download`;
+      window.location.href = `${API_BASE}/api/receipts/batches/${batchId}/download`;
     }
   };
 
@@ -199,19 +323,154 @@ export default function ReceiptProcessor() {
         {/* Input Form */}
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Step 1: Client Selection */}
             <div>
-              <label htmlFor="clientName" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Client Name
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                Select Client
               </label>
-              <input
-                type="text"
-                id="clientName"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                placeholder="Man's Accounting Firm"
-                required
-              />
+
+              {/* Client Mode Buttons */}
+              {clientMode === null && (
+                <div className="flex gap-4">
+                  <button
+                    type="button"
+                    onClick={handleSelectExistingClient}
+                    disabled={isProcessing}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-blue-500 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Users className="w-5 h-5" />
+                    Select an existing client
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddNewClient}
+                    disabled={isProcessing}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-green-500 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <UserPlus className="w-5 h-5" />
+                    Add a new client
+                  </button>
+                </div>
+              )}
+
+              {/* Existing Client Dropdown */}
+              {clientMode === 'select' && (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <select
+                      id="clientSelect"
+                      value={selectedClientId || ''}
+                      onChange={handleClientSelect}
+                      disabled={isProcessing || isLoadingClients}
+                      className="block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2.5 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">-- Select a client --</option>
+                      {clients.map((client) => (
+                        <option key={client.id} value={client.id}>
+                          {client.client_name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 h-5 w-5 text-slate-400 pointer-events-none" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClientMode(null);
+                        setSelectedClientId(null);
+                        setClientName('');
+                      }}
+                      disabled={isProcessing}
+                      className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                    >
+                      Back
+                    </button>
+                    <span className="text-slate-300 dark:text-slate-600">|</span>
+                    <button
+                      type="button"
+                      onClick={handleAddNewClient}
+                      disabled={isProcessing}
+                      className="text-sm text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+                    >
+                      Add a new client instead
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Add New Client Form */}
+              {clientMode === 'add' && (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      id="newClientName"
+                      value={newClientName}
+                      onChange={handleNewClientNameChange}
+                      disabled={isProcessing || isAddingClient}
+                      className="flex-1 rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-green-500 focus:ring-green-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50"
+                      placeholder="Enter new client name"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddClientSubmit}
+                      disabled={isProcessing || isAddingClient || !newClientName.trim() || !!clientError}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {isAddingClient ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <UserPlus className="w-4 h-4" />
+                      )}
+                      Add
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Allowed: letters, numbers, spaces, and special characters: , . - _ & @
+                  </p>
+                  {clientError && (
+                    <p className="text-sm text-red-600 dark:text-red-400">{clientError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClientMode(null);
+                        setNewClientName('');
+                        setClientError(null);
+                      }}
+                      disabled={isProcessing || isAddingClient}
+                      className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                    >
+                      Back
+                    </button>
+                    {clients.length > 0 && (
+                      <>
+                        <span className="text-slate-300 dark:text-slate-600">|</span>
+                        <button
+                          type="button"
+                          onClick={handleSelectExistingClient}
+                          disabled={isProcessing || isAddingClient}
+                          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          Select existing client instead
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Selected Client Display */}
+              {clientName && clientMode === 'select' && selectedClientId && (
+                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    Selected client: <span className="font-medium">{clientName}</span>
+                  </p>
+                </div>
+              )}
+              
             </div>
 
             <div>
@@ -268,7 +527,7 @@ export default function ReceiptProcessor() {
 
             <button
               type="submit"
-              disabled={isProcessing}
+              disabled={isProcessing || !clientName}
               className="w-full flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-slate-400 disabled:cursor-not-allowed dark:bg-blue-600 dark:hover:bg-blue-700"
             >
               {isProcessing ? (

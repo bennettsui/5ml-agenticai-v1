@@ -9,6 +9,32 @@ const app = express();
 const path = require('path');
 app.use(express.json());
 
+const cors = require('cors');
+const apiRoutes = require('./use-cases/mans-company-receipt-tracking/api/routes.js');
+
+// ✅ Global middleware
+app.use(cors());
+app.use(express.json());
+
+// ✅ API routes
+app.use('/api', apiRoutes);
+
+// ✅ Health check (important for Fly.io)
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+app.use(cors({
+  origin: ['http://localhost:5173', 'https://your-domain.com'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+}));
+
+
 // Swagger API Documentation (before static files)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
   customCss: '.swagger-ui .topbar { display: none }',

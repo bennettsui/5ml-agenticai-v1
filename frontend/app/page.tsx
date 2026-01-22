@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen } from 'lucide-react';
 
 export default function Home() {
+  
   const useCases = [
     {
       id: 'mans-accounting',
