@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Home,
@@ -22,6 +22,12 @@ import {
   Brain,
   TrendingUp,
   ChevronDown,
+  ChevronRight,
+  FolderOpen,
+  RefreshCw,
+  Eye,
+  Pause,
+  Play,
 } from 'lucide-react';
 
 interface Source {
@@ -37,6 +43,16 @@ interface Source {
   why_selected: string;
   isEditing?: boolean;
   isNew?: boolean;
+}
+
+interface Topic {
+  id?: number;
+  topic_id: string;
+  name: string;
+  keywords: string[];
+  status: string;
+  created_at?: string;
+  sources?: Source[];
 }
 
 type ResearchMode = 'comprehensive' | 'quick' | 'trends';
@@ -74,6 +90,15 @@ const LLM_PROVIDERS = [
 ];
 
 export default function TopicSetupPage() {
+  // Existing topics state
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [loadingTopics, setLoadingTopics] = useState(true);
+  const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
+  const [topicSources, setTopicSources] = useState<Record<string, Source[]>>({});
+  const [loadingSources, setLoadingSources] = useState<string | null>(null);
+
+  // New topic creation state
+  const [showNewTopicForm, setShowNewTopicForm] = useState(false);
   const [topicName, setTopicName] = useState('');
   const [keywords, setKeywords] = useState('');
   const [researchMode, setResearchMode] = useState<ResearchMode>('comprehensive');
@@ -83,6 +108,70 @@ export default function TopicSetupPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Fetch existing topics on mount
+  useEffect(() => {
+    fetchTopics();
+  }, []);
+
+  const fetchTopics = async () => {
+    setLoadingTopics(true);
+    try {
+      const response = await fetch('/api/intelligence/topics');
+      const data = await response.json();
+      if (data.success) {
+        setTopics(data.topics || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch topics:', err);
+    } finally {
+      setLoadingTopics(false);
+    }
+  };
+
+  const fetchTopicSources = async (topicId: string) => {
+    setLoadingSources(topicId);
+    try {
+      const response = await fetch(`/api/intelligence/topics/${topicId}/sources`);
+      const data = await response.json();
+      if (data.success) {
+        setTopicSources(prev => ({ ...prev, [topicId]: data.sources || [] }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch sources:', err);
+    } finally {
+      setLoadingSources(null);
+    }
+  };
+
+  const toggleTopicExpand = (topicId: string) => {
+    if (expandedTopicId === topicId) {
+      setExpandedTopicId(null);
+    } else {
+      setExpandedTopicId(topicId);
+      if (!topicSources[topicId]) {
+        fetchTopicSources(topicId);
+      }
+    }
+  };
+
+  const handlePauseTopic = async (topicId: string) => {
+    try {
+      await fetch(`/api/intelligence/topics/${topicId}/pause`, { method: 'PUT' });
+      fetchTopics();
+    } catch (err) {
+      setError('Failed to pause topic');
+    }
+  };
+
+  const handleResumeTopic = async (topicId: string) => {
+    try {
+      await fetch(`/api/intelligence/topics/${topicId}/resume`, { method: 'PUT' });
+      fetchTopics();
+    } catch (err) {
+      setError('Failed to resume topic');
+    }
+  };
 
   const handleDiscoverSources = async () => {
     if (!topicName.trim()) {
@@ -186,10 +275,11 @@ export default function TopicSetupPage() {
 
       if (data.success) {
         setSuccess(`Topic "${topicName}" created successfully!`);
-        // Redirect to dashboard after 2 seconds
-        setTimeout(() => {
-          window.location.href = `/intelligence/dashboard?topic=${data.topicId}`;
-        }, 2000);
+        setTopicName('');
+        setKeywords('');
+        setDiscoveredSources([]);
+        setShowNewTopicForm(false);
+        fetchTopics();
       } else {
         setError(data.error || 'Failed to create topic');
       }
@@ -197,6 +287,26 @@ export default function TopicSetupPage() {
       setError('Failed to connect to server');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleAddSourcesToExistingTopic = async (topicId: string, sources: Source[]) => {
+    try {
+      const response = await fetch(`/api/intelligence/topics/${topicId}/sources`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sources }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setSuccess(`Added ${sources.length} sources to topic`);
+        fetchTopicSources(topicId);
+      } else {
+        setError(data.error || 'Failed to add sources');
+      }
+    } catch (err) {
+      setError('Failed to connect to server');
     }
   };
 
@@ -273,175 +383,385 @@ export default function TopicSetupPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Error/Success Messages */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300">
-            {error}
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 flex justify-between items-center">
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
         {success && (
-          <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300">
-            {success}
+          <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 flex justify-between items-center">
+            <span>{success}</span>
+            <button onClick={() => setSuccess(null)} className="text-green-500 hover:text-green-700">
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 
-        {/* Topic Configuration */}
+        {/* Existing Topics Section */}
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-8">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-            Step 1: Define Your Topic
-          </h2>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Topic Name *
-              </label>
-              <input
-                type="text"
-                value={topicName}
-                onChange={e => setTopicName(e.target.value)}
-                placeholder="e.g., IG Growth Hacking, AI Latest News"
-                className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Keywords (optional, comma-separated)
-              </label>
-              <input
-                type="text"
-                value={keywords}
-                onChange={e => setKeywords(e.target.value)}
-                placeholder="e.g., instagram algorithm, reels, engagement"
-                className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Research Mode Selection */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-                Research Mode
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {RESEARCH_MODES.map((mode) => {
-                  const Icon = mode.icon;
-                  const isSelected = researchMode === mode.id;
-                  return (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      onClick={() => setResearchMode(mode.id)}
-                      className={`p-4 rounded-lg border-2 text-left transition-all ${
-                        isSelected
-                          ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
-                          : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <Icon className={`w-5 h-5 ${isSelected ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`} />
-                        <span className={`font-medium ${isSelected ? 'text-teal-700 dark:text-teal-300' : 'text-slate-700 dark:text-slate-300'}`}>
-                          {mode.name}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">{mode.description}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* LLM Selection */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                AI Model
-              </label>
-              <div className="relative">
-                <select
-                  value={selectedLLM}
-                  onChange={(e) => setSelectedLLM(e.target.value as LLMProvider)}
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none cursor-pointer"
-                >
-                  {LLM_PROVIDERS.map((llm) => (
-                    <option key={llm.id} value={llm.id}>
-                      {llm.name} {llm.recommended ? '(Recommended)' : ''} - {llm.description}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Perplexity is recommended for web research tasks with real-time internet access
-              </p>
-            </div>
-
-            <button
-              onClick={handleDiscoverSources}
-              disabled={isDiscovering || !topicName.trim()}
-              className="flex items-center gap-2 px-6 py-3 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
-            >
-              {isDiscovering ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Discovering Sources ({RESEARCH_MODES.find(m => m.id === researchMode)?.name})...
-                </>
-              ) : (
-                <>
-                  <Search className="w-5 h-5" />
-                  Discover Information Sources
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Discovered Sources */}
-        {discoveredSources.length > 0 && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                Step 2: Review & Approve Sources ({discoveredSources.length})
-              </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <FolderOpen className="w-5 h-5 text-teal-500" />
+              Your Topics ({topics.length})
+            </h2>
+            <div className="flex gap-2">
               <button
-                onClick={handleAddCustomSource}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors"
+                onClick={fetchTopics}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Refresh
+              </button>
+              <button
+                onClick={() => setShowNewTopicForm(!showNewTopicForm)}
+                className="flex items-center gap-2 px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white font-medium rounded-lg transition-colors text-sm"
               >
                 <Plus className="w-4 h-4" />
-                Add Custom Source
-              </button>
-            </div>
-
-            <div className="grid gap-4">
-              {discoveredSources.map(source => (
-                <SourceCard
-                  key={source.source_id}
-                  source={source}
-                  onRemove={handleRemoveSource}
-                  onEdit={handleEditSource}
-                  onSave={handleSaveEdit}
-                  onCancel={handleCancelEdit}
-                />
-              ))}
-            </div>
-
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={handleCreateTopic}
-                disabled={isCreating}
-                className="flex items-center gap-2 px-8 py-3 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
-              >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Creating Topic...
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-5 h-5" />
-                    Create Topic & Start Monitoring
-                  </>
-                )}
+                New Topic
               </button>
             </div>
           </div>
+
+          {loadingTopics ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-teal-500" />
+              <span className="ml-2 text-slate-600 dark:text-slate-400">Loading topics...</span>
+            </div>
+          ) : topics.length === 0 ? (
+            <div className="text-center py-8">
+              <FolderOpen className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+              <p className="text-slate-600 dark:text-slate-400 mb-4">No topics created yet</p>
+              <button
+                onClick={() => setShowNewTopicForm(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white font-medium rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Create Your First Topic
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {topics.map(topic => (
+                <div
+                  key={topic.topic_id}
+                  className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
+                >
+                  {/* Topic Header */}
+                  <div
+                    className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700"
+                    onClick={() => toggleTopicExpand(topic.topic_id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      {expandedTopicId === topic.topic_id ? (
+                        <ChevronDown className="w-5 h-5 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-slate-400" />
+                      )}
+                      <div>
+                        <h3 className="font-medium text-slate-900 dark:text-white">{topic.name}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                            topic.status === 'active'
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                              : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                          }`}>
+                            {topic.status}
+                          </span>
+                          {topic.keywords && topic.keywords.length > 0 && (
+                            <span className="text-xs text-slate-500 dark:text-slate-400">
+                              {topic.keywords.slice(0, 3).join(', ')}
+                              {topic.keywords.length > 3 && ` +${topic.keywords.length - 3} more`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      {topic.status === 'active' ? (
+                        <button
+                          onClick={() => handlePauseTopic(topic.topic_id)}
+                          className="p-2 text-slate-400 hover:text-yellow-500 transition-colors"
+                          title="Pause monitoring"
+                        >
+                          <Pause className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleResumeTopic(topic.topic_id)}
+                          className="p-2 text-slate-400 hover:text-green-500 transition-colors"
+                          title="Resume monitoring"
+                        >
+                          <Play className="w-4 h-4" />
+                        </button>
+                      )}
+                      <Link
+                        href={`/intelligence/dashboard?topic=${topic.topic_id}`}
+                        className="p-2 text-slate-400 hover:text-teal-500 transition-colors"
+                        title="View dashboard"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* Topic Sources (Expanded) */}
+                  {expandedTopicId === topic.topic_id && (
+                    <div className="p-4 border-t border-slate-200 dark:border-slate-700">
+                      {loadingSources === topic.topic_id ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="w-5 h-5 animate-spin text-teal-500" />
+                          <span className="ml-2 text-sm text-slate-600 dark:text-slate-400">Loading sources...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                              Sources ({topicSources[topic.topic_id]?.length || 0})
+                            </h4>
+                            <button
+                              onClick={() => {
+                                setTopicName(topic.name);
+                                setKeywords(topic.keywords?.join(', ') || '');
+                                setShowNewTopicForm(true);
+                              }}
+                              className="text-xs text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1"
+                            >
+                              <Search className="w-3 h-3" />
+                              Discover More Sources
+                            </button>
+                          </div>
+                          {topicSources[topic.topic_id]?.length > 0 ? (
+                            <div className="grid gap-2">
+                              {topicSources[topic.topic_id].map(source => (
+                                <div
+                                  key={source.source_id}
+                                  className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg"
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <Globe className="w-4 h-4 text-slate-400" />
+                                        <span className="font-medium text-sm text-slate-900 dark:text-white">
+                                          {source.name}
+                                        </span>
+                                        <span className="px-1.5 py-0.5 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded text-xs">
+                                          {source.authority_score}/100
+                                        </span>
+                                      </div>
+                                      <a
+                                        href={source.primary_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 mt-1"
+                                      >
+                                        {source.primary_url}
+                                        <ExternalLink className="w-3 h-3" />
+                                      </a>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">
+                              No sources found for this topic
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* New Topic Form */}
+        {showNewTopicForm && (
+          <>
+            {/* Topic Configuration */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  {discoveredSources.length > 0 ? 'Step 2: Review & Approve Sources' : 'Step 1: Define Your Topic'}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowNewTopicForm(false);
+                    setTopicName('');
+                    setKeywords('');
+                    setDiscoveredSources([]);
+                  }}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {discoveredSources.length === 0 ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Topic Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={topicName}
+                      onChange={e => setTopicName(e.target.value)}
+                      placeholder="e.g., IG Growth Hacking, AI Latest News"
+                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Keywords (optional, comma-separated)
+                    </label>
+                    <input
+                      type="text"
+                      value={keywords}
+                      onChange={e => setKeywords(e.target.value)}
+                      placeholder="e.g., instagram algorithm, reels, engagement"
+                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* Research Mode Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                      Research Mode
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {RESEARCH_MODES.map((mode) => {
+                        const Icon = mode.icon;
+                        const isSelected = researchMode === mode.id;
+                        return (
+                          <button
+                            key={mode.id}
+                            type="button"
+                            onClick={() => setResearchMode(mode.id)}
+                            className={`p-4 rounded-lg border-2 text-left transition-all ${
+                              isSelected
+                                ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
+                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <Icon className={`w-5 h-5 ${isSelected ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`} />
+                              <span className={`font-medium ${isSelected ? 'text-teal-700 dark:text-teal-300' : 'text-slate-700 dark:text-slate-300'}`}>
+                                {mode.name}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{mode.description}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* LLM Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      AI Model
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={selectedLLM}
+                        onChange={(e) => setSelectedLLM(e.target.value as LLMProvider)}
+                        className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none cursor-pointer"
+                      >
+                        {LLM_PROVIDERS.map((llm) => (
+                          <option key={llm.id} value={llm.id}>
+                            {llm.name} {llm.recommended ? '(Recommended)' : ''} - {llm.description}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Perplexity is recommended for web research tasks with real-time internet access
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleDiscoverSources}
+                    disabled={isDiscovering || !topicName.trim()}
+                    className="flex items-center gap-2 px-6 py-3 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
+                  >
+                    {isDiscovering ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Discovering Sources ({RESEARCH_MODES.find(m => m.id === researchMode)?.name})...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-5 h-5" />
+                        Discover Information Sources
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Found {discoveredSources.length} sources for &quot;{topicName}&quot;
+                    </p>
+                    <button
+                      onClick={handleAddCustomSource}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Custom Source
+                    </button>
+                  </div>
+
+                  <div className="grid gap-4 mb-6">
+                    {discoveredSources.map(source => (
+                      <SourceCard
+                        key={source.source_id}
+                        source={source}
+                        onRemove={handleRemoveSource}
+                        onEdit={handleEditSource}
+                        onSave={handleSaveEdit}
+                        onCancel={handleCancelEdit}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex justify-between">
+                    <button
+                      onClick={() => setDiscoveredSources([])}
+                      className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+                    >
+                      <ChevronRight className="w-4 h-4 rotate-180" />
+                      Back to Edit Topic
+                    </button>
+                    <button
+                      onClick={handleCreateTopic}
+                      disabled={isCreating}
+                      className="flex items-center gap-2 px-8 py-3 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
+                    >
+                      {isCreating ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Creating Topic...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-5 h-5" />
+                          Create Topic & Start Monitoring
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
         )}
       </main>
     </div>
@@ -527,7 +847,7 @@ function SourceCard({
             <ExternalLink className="w-3 h-3" />
           </a>
           <div className="flex flex-wrap gap-1 mt-2">
-            {source.content_types.map(type => (
+            {source.content_types?.map(type => (
               <span
                 key={type}
                 className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded text-xs"
@@ -535,9 +855,11 @@ function SourceCard({
                 {type}
               </span>
             ))}
-            <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded text-xs">
-              {source.posting_frequency}
-            </span>
+            {source.posting_frequency && (
+              <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded text-xs">
+                {source.posting_frequency}
+              </span>
+            )}
           </div>
           {source.why_selected && (
             <p className="text-xs text-slate-500 dark:text-slate-500 mt-2 italic">
