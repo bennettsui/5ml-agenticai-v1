@@ -7,7 +7,9 @@ import {
   Search,
   Settings,
   LayoutDashboard,
-  Activity,
+  Radio,
+  PlusCircle,
+  Users,
   Plus,
   Trash2,
   Edit2,
@@ -187,25 +189,39 @@ export default function TopicSetupPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-8">
             <Link
+              href="/intelligence"
+              className="flex items-center gap-2 px-3 py-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 font-medium text-sm transition-colors"
+            >
+              <Users size={18} />
+              Overview
+            </Link>
+            <Link
               href="/intelligence/setup"
               className="flex items-center gap-2 px-3 py-4 border-b-2 border-teal-500 text-teal-600 dark:text-teal-400 font-medium text-sm"
             >
-              <Settings size={18} />
+              <PlusCircle size={18} />
               Setup
             </Link>
             <Link
               href="/intelligence/live-scan"
-              className="flex items-center gap-2 px-3 py-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 font-medium text-sm"
+              className="flex items-center gap-2 px-3 py-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 font-medium text-sm transition-colors"
             >
-              <Activity size={18} />
+              <Radio size={18} />
               Live Scan
             </Link>
             <Link
               href="/intelligence/dashboard"
-              className="flex items-center gap-2 px-3 py-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 font-medium text-sm"
+              className="flex items-center gap-2 px-3 py-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 font-medium text-sm transition-colors"
             >
               <LayoutDashboard size={18} />
               Dashboard
+            </Link>
+            <Link
+              href="/intelligence/settings"
+              className="flex items-center gap-2 px-3 py-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 font-medium text-sm transition-colors"
+            >
+              <Settings size={18} />
+              Settings
             </Link>
           </div>
         </div>
