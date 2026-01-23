@@ -207,6 +207,98 @@ router.post('/process-upload', async (req, res) => {
 });
 
 /**
+ * GET /receipts/debug/table
+ *
+ * Render receipt_batches and receipts in simple HTML tables.
+ *
+ * Query:
+ *   limit=50
+ */
+router.get('/debug/table', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 500);
+    const escapeHtml = (value) => {
+      if (value === null || value === undefined) return '';
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
+
+    const batchesResult = await db.query(
+      `SELECT
+        batch_id, client_name, status, total_receipts, processed_receipts, failed_receipts,
+        total_amount, deductible_amount, non_deductible_amount, period_start, period_end,
+        created_at, updated_at, completed_at
+       FROM receipt_batches
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    const receiptsResult = await db.query(
+      `SELECT
+        receipt_id, batch_id, receipt_date, vendor, amount, currency, category_name,
+        deductible, created_at
+       FROM receipts
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    const renderTable = (title, rows) => {
+      if (rows.length === 0) {
+        return `<h2>${escapeHtml(title)}</h2><p>No rows.</p>`;
+      }
+      const headers = Object.keys(rows[0]);
+      const headerRow = headers.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+      const bodyRows = rows.map(row => {
+        const cells = headers.map(h => `<td>${escapeHtml(row[h])}</td>`).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
+      return `
+        <h2>${escapeHtml(title)}</h2>
+        <table>
+          <thead><tr>${headerRow}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      `;
+    };
+
+    res.type('html').send(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Receipt Tables</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 16px; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 24px; }
+            th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 12px; }
+            th { background: #f3f4f6; text-align: left; }
+            h1 { margin: 0 0 12px; }
+            h2 { margin: 20px 0 8px; }
+          </style>
+        </head>
+        <body>
+          <h1>Receipt Debug Tables</h1>
+          ${renderTable('receipt_batches', batchesResult.rows)}
+          ${renderTable('receipts', receiptsResult.rows)}
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Error rendering debug table:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to render tables',
+    });
+  }
+});
+
+/**
  * GET /receipts/batches
  *
  * List all processing batches (paginated)

@@ -4,6 +4,7 @@
  */
 
 const path = require('path');
+const ExcelJS = require('exceljs');
 const db = require('../../../db');
 
 /**
@@ -176,8 +177,79 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
 
     console.log(`✅ Saved ${savedCount} receipts (HKD ${totalAmount.toFixed(2)})\n`);
 
-    // CHECKPOINT 6: Complete
-    console.log('✓ CHECKPOINT 6: Finalizing...');
+    // CHECKPOINT 6: Export Excel
+    console.log('✓ CHECKPOINT 6: Exporting Excel...');
+    await logProcessing(batchId, 'info', 'export_start', 'Exporting Excel report');
+    wsServer.sendProgress(batchId, { progress: 85, message: 'Exporting Excel...' });
+
+    const exportDir = process.env.EXCEL_OUTPUT_DIR || '/tmp/excel-exports';
+    const outputPath = path.join(exportDir, `receipts_${batchId}.xlsx`);
+    const fs = require('fs').promises;
+    await fs.mkdir(exportDir, { recursive: true });
+
+    const receiptsResult = await db.query(
+      `SELECT
+        receipt_date, vendor, description, amount, currency, tax_amount,
+        receipt_number, payment_method, category_id, category_name,
+        deductible, deductible_amount, non_deductible_amount
+       FROM receipts
+       WHERE batch_id = $1
+       ORDER BY receipt_date ASC, vendor ASC`,
+      [batchId]
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = '5ML Agentic AI';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet('Receipts');
+    sheet.columns = [
+      { header: 'Date', key: 'receipt_date', width: 12 },
+      { header: 'Vendor', key: 'vendor', width: 24 },
+      { header: 'Description', key: 'description', width: 36 },
+      { header: 'Amount', key: 'amount', width: 12 },
+      { header: 'Currency', key: 'currency', width: 8 },
+      { header: 'Tax', key: 'tax_amount', width: 10 },
+      { header: 'Receipt #', key: 'receipt_number', width: 16 },
+      { header: 'Payment', key: 'payment_method', width: 12 },
+      { header: 'Category ID', key: 'category_id', width: 12 },
+      { header: 'Category', key: 'category_name', width: 20 },
+      { header: 'Deductible', key: 'deductible', width: 12 },
+      { header: 'Deductible Amount', key: 'deductible_amount', width: 18 },
+      { header: 'Non-Deductible', key: 'non_deductible_amount', width: 18 }
+    ];
+
+    receiptsResult.rows.forEach(row => {
+      sheet.addRow({
+        receipt_date: row.receipt_date,
+        vendor: row.vendor,
+        description: row.description,
+        amount: row.amount,
+        currency: row.currency,
+        tax_amount: row.tax_amount,
+        receipt_number: row.receipt_number,
+        payment_method: row.payment_method,
+        category_id: row.category_id,
+        category_name: row.category_name,
+        deductible: row.deductible,
+        deductible_amount: row.deductible_amount,
+        non_deductible_amount: row.non_deductible_amount
+      });
+    });
+
+    await workbook.xlsx.writeFile(outputPath);
+
+    await db.query(
+      `UPDATE receipt_batches
+       SET excel_file_path = $1
+       WHERE batch_id = $2`,
+      [outputPath, batchId]
+    );
+
+    await logProcessing(batchId, 'info', 'export_complete', 'Excel export complete');
+
+    // CHECKPOINT 7: Complete
+    console.log('✓ CHECKPOINT 7: Finalizing...');
     await db.query(
       `UPDATE receipt_batches
        SET status = 'completed', completed_at = NOW()
