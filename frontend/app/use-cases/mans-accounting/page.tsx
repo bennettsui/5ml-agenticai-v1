@@ -30,6 +30,11 @@ export default function ReceiptProcessor() {
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
   const [error, setError] = useState<string>('');
+  const isLocalhost = () => {
+    if (typeof window === 'undefined') return false;
+    return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  };
+  const API_BASE = isLocalhost() ? (process.env.NEXT_PUBLIC_API_URL || '') : '';
 
   const formatErrorMessage = (value: unknown): string => {
     if (typeof value === 'string') return value;
@@ -77,6 +82,8 @@ export default function ReceiptProcessor() {
     return Number.isFinite(parsed) ? parsed : 0;
   };
 
+  const apiUrl = (path: string) => (API_BASE ? `${API_BASE}${path}` : path);
+
   // Real-time updates with WebSocket (fallback to polling)
   useEffect(() => {
     if (!batchId) return;
@@ -84,7 +91,39 @@ export default function ReceiptProcessor() {
     let pollInterval: NodeJS.Timeout | null = null;
     let ws: WebSocket | null = null;
 
-    // Try WebSocket first
+    function startPolling() {
+      if (pollInterval) return; // Already polling
+
+      pollInterval = setInterval(async () => {
+        try {
+          const response = await fetch(apiUrl(`/api/receipts/batches/${batchId}/status`));
+          const data = await response.json();
+
+          if (data.success) {
+            const normalized = {
+              ...data,
+              status: normalizeStatus(data.status),
+              progress: normalizeProgress(data.progress),
+            } as BatchStatus;
+            setBatchStatus(normalized);
+
+            if (normalized.status === 'completed' || normalized.status === 'failed') {
+              setIsProcessing(false);
+              if (pollInterval) clearInterval(pollInterval);
+            }
+          } else {
+            setError(data.error ? formatErrorMessage(data.error) : 'Failed to fetch status');
+          }
+        } catch (err) {
+          console.error('Error polling status:', err);
+        }
+      }, 2000);
+    }
+
+    // Start polling immediately to keep UI in sync even if WebSocket is quiet.
+    startPolling();
+
+    // Try WebSocket for real-time updates.
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
@@ -153,39 +192,11 @@ export default function ReceiptProcessor() {
 
       ws.onclose = () => {
         console.log('WebSocket disconnected');
+        startPolling();
       };
     } catch (err) {
       console.warn('WebSocket not available, using polling', err);
       startPolling();
-    }
-
-    function startPolling() {
-      if (pollInterval) return; // Already polling
-
-      pollInterval = setInterval(async () => {
-        try {
-          const response = await fetch(`/api/receipts/batches/${batchId}/status`);
-          const data = await response.json();
-
-          if (data.success) {
-            const normalized = {
-              ...data,
-              status: normalizeStatus(data.status),
-              progress: normalizeProgress(data.progress),
-            } as BatchStatus;
-            setBatchStatus(normalized);
-
-            if (normalized.status === 'completed' || normalized.status === 'failed') {
-              setIsProcessing(false);
-              if (pollInterval) clearInterval(pollInterval);
-            }
-          } else {
-            setError(data.error ? formatErrorMessage(data.error) : 'Failed to fetch status');
-          }
-        } catch (err) {
-          console.error('Error polling status:', err);
-        }
-      }, 2000);
     }
 
     return () => {
@@ -217,7 +228,7 @@ export default function ReceiptProcessor() {
         }))
       );
 
-      const response = await fetch('/api/receipts/process-upload', {
+      const response = await fetch(apiUrl('/api/receipts/process-upload'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -258,7 +269,7 @@ export default function ReceiptProcessor() {
 
   const handleDownload = () => {
     if (batchId) {
-      window.location.href = `/api/receipts/batches/${batchId}/download`;
+      window.location.href = apiUrl(`/api/receipts/batches/${batchId}/download`);
     }
   };
 

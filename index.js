@@ -8,6 +8,13 @@ require('dotenv').config();
 const app = express();
 const path = require('path');
 app.use(express.json({ limit: '25mb' }));
+const cors = require('cors');
+
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:5173', 'https://5ml-agenticai-v1.fly.dev'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
 // Swagger API Documentation (before static files)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
