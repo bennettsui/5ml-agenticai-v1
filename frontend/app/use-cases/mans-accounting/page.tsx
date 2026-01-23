@@ -42,6 +42,13 @@ export default function ReceiptProcessor() {
     return 'Unexpected error occurred';
   };
 
+  const toDisplayText = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return String(value);
+    if (value && typeof value === 'object') return JSON.stringify(value);
+    return '';
+  };
+
   const readFileAsBase64 = (file: File): Promise<string> => (
     new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -353,7 +360,7 @@ export default function ReceiptProcessor() {
                 <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
                 <div className="ml-3">
                   <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Error</h3>
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{toDisplayText(error)}</p>
                 </div>
               </div>
             </div>
