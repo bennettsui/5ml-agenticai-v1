@@ -25,14 +25,19 @@ async function logProcessing(batchId, level, step, message, details = null) {
 /**
  * Process receipt batch with detailed checkpoints
  */
-async function processReceiptBatch(batchId, dropboxUrl, clientName) {
+async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFiles = null) {
   const wsServer = require('../../../services/websocket-server');
   let downloadedFiles = [];
+  const useUploads = Array.isArray(uploadedFiles) && uploadedFiles.length > 0;
 
   try {
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🚀 [BATCH ${batchId}] Starting receipt processing`);
-    console.log(`📁 Dropbox: ${dropboxUrl.substring(0, 50)}...`);
+    if (useUploads) {
+      console.log(`📁 Uploads: ${uploadedFiles.length} files`);
+    } else {
+      console.log(`📁 Dropbox: ${dropboxUrl.substring(0, 50)}...`);
+    }
     console.log(`👤 Client: ${clientName}`);
     console.log(`${'='.repeat(60)}\n`);
 
@@ -47,7 +52,7 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName) {
 
     // CHECKPOINT 2: Validate environment
     console.log('✓ CHECKPOINT 2: Checking environment...');
-    if (!process.env.DROPBOX_ACCESS_TOKEN) {
+    if (!useUploads && !process.env.DROPBOX_ACCESS_TOKEN) {
       throw new Error('DROPBOX_ACCESS_TOKEN not configured');
     }
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -55,35 +60,44 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName) {
     }
     console.log('✅ Environment OK\n');
 
-    // CHECKPOINT 3: Download from Dropbox
-    console.log('✓ CHECKPOINT 3: Downloading from Dropbox...');
-    await logProcessing(batchId, 'info', 'download_start', 'Downloading receipts');
-    wsServer.sendProgress(batchId, { progress: 10, message: 'Downloading...' });
-
-    const DropboxConnector = require('../../../tools/dropbox-connector');
-    const dropbox = new DropboxConnector(process.env.DROPBOX_ACCESS_TOKEN);
-
-    const downloadResults = await dropbox.downloadReceipts(
-      dropboxUrl,
-      `/tmp/receipts/${batchId}`,
-      (p) => {
-        wsServer.sendProgress(batchId, {
-          progress: 10 + (p.progress * 0.2),
-          message: `Downloading ${p.current}/${p.total}`
-        });
+    // CHECKPOINT 3: Collect receipts
+    console.log('✓ CHECKPOINT 3: Collecting receipts...');
+    if (useUploads) {
+      await logProcessing(batchId, 'info', 'upload_start', 'Using uploaded receipts');
+      wsServer.sendProgress(batchId, { progress: 10, message: 'Preparing uploads...' });
+      downloadedFiles = uploadedFiles;
+      if (downloadedFiles.length === 0) {
+        throw new Error('No receipts uploaded');
       }
-    );
+    } else {
+      await logProcessing(batchId, 'info', 'download_start', 'Downloading receipts');
+      wsServer.sendProgress(batchId, { progress: 10, message: 'Downloading...' });
 
-    downloadedFiles = downloadResults.results.filter(r => r.success);
-    if (downloadedFiles.length === 0) {
-      throw new Error('No receipts downloaded');
+      const DropboxConnector = require('../../../tools/dropbox-connector');
+      const dropbox = new DropboxConnector(process.env.DROPBOX_ACCESS_TOKEN);
+
+      const downloadResults = await dropbox.downloadReceipts(
+        dropboxUrl,
+        `/tmp/receipts/${batchId}`,
+        (p) => {
+          wsServer.sendProgress(batchId, {
+            progress: 10 + (p.progress * 0.2),
+            message: `Downloading ${p.current}/${p.total}`
+          });
+        }
+      );
+
+      downloadedFiles = downloadResults.results.filter(r => r.success);
+      if (downloadedFiles.length === 0) {
+        throw new Error('No receipts downloaded');
+      }
     }
 
     await db.query(
       'UPDATE receipt_batches SET total_receipts = $1 WHERE batch_id = $2',
       [downloadedFiles.length, batchId]
     );
-    console.log(`✅ Downloaded ${downloadedFiles.length} receipts\n`);
+    console.log(`✅ Collected ${downloadedFiles.length} receipts\n`);
 
     // CHECKPOINT 4: OCR Processing
     console.log('✓ CHECKPOINT 4: Running OCR...');
