@@ -30,7 +30,7 @@ export default function Home() {
       title: 'Topic Intelligence',
       description: 'Multi-topic news monitoring with daily scraping, real-time analysis, and weekly digests',
       icon: Newspaper,
-      href: '/intelligence/setup',
+      href: '/intelligence',
       color: 'from-teal-500 to-cyan-600',
       features: ['Source Curator', 'News Analyst', 'Newsletter Writer', 'Real-time Scan'],
       status: 'New'
