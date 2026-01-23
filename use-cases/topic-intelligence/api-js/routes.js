@@ -1,6 +1,11 @@
 /**
  * Topic Intelligence API Routes (JavaScript version)
  * Provides endpoints for topic-based news intelligence features
+ *
+ * Supports multiple prompt modes for Source Curator:
+ * - 'comprehensive': Full research sources + trends mapping (default)
+ * - 'quick': Fast scan for quick overview
+ * - 'trends': Focus on trend tracking and emerging signals
  */
 
 const express = require('express');
@@ -10,29 +15,266 @@ const router = express.Router();
 const topics = new Map();
 const sources = new Map();
 
+// ==========================================
+// Prompt Templates
+// ==========================================
+
+const QUALITY_FILTER_SUFFIX = `When choosing sources:
+- Prioritise credibility (official, peer-reviewed, established firms, recognised experts).
+- Avoid low-quality SEO farm content and generic listicles unless they add unique value.
+- Prefer sources with:
+  • clear authorship,
+  • methodological transparency,
+  • and regular updates.
+- If there are major disagreements between sources, briefly note them.`;
+
+const PROMPTS = {
+  comprehensive: `You are a senior research analyst.
+
+Your task: Map out the BEST sources to research the topic: "{topic}".
+
+Please:
+1) Focus on:
+   - Language(s): {languages}
+   - Region(s): {regions}
+   - Timeframe: especially sources updated since {timeframe}
+
+2) Identify and list sources in these buckets:
+   A. Official / Primary Sources
+      - Official websites, documentation, standards bodies
+      - Company / product blogs, transparency centers, APIs
+   B. Academic & Data Sources
+      - Key papers, journals, datasets, university labs
+      - Where to search (e.g. Google Scholar keywords)
+   C. Industry Reports & Market Research
+      - Consulting firms, research houses, annual / benchmark reports
+   D. High-Quality Blogs, Newsletters & Media
+      - Practitioners' blogs, expert newsletters, niche publications
+   E. Tools, Dashboards & Databases
+      - Analytics tools, trackers, public dashboards, APIs
+   F. Communities & Social Sources
+      - Reddit, forums, Discord/Slack groups, Twitter/X, YouTube channels, key influencers
+   G. Events & Organisations
+      - Conferences, associations, meetups relevant to this topic
+
+3) For EACH source, provide:
+   - Name
+   - URL
+   - Type (official / academic / report / blog / tool / community / event etc.)
+   - Why it's useful for this topic (1–2 lines)
+   - Freshness (e.g. "updated 2025", "ongoing newsletter")
+   - Priority: High / Medium / Nice-to-have
+
+4) Trend-tracking focus:
+   - Show where to monitor ongoing CHANGES and TRENDS for {topic}:
+     • specific newsletters
+     • recurring reports (annual / quarterly)
+     • dashboards / trackers
+     • social accounts (X/Twitter, LinkedIn, YouTube, Substack, etc.)
+   - Suggest 5–10 concrete search queries I can reuse on Google or other search engines to keep tracking new developments about {topic}.
+
+User-provided keywords (if any): {keywords}
+
+{quality_filter}
+
+Output format - MUST return valid JSON:
+{
+  "executive_summary": ["bullet point 1", "bullet point 2", ...5-7 key points],
+  "sources": [
+    {
+      "source_id": "unique_id",
+      "name": "Source Name",
+      "title": "Description/Title",
+      "type": "official|academic|report|blog|tool|community|event|newsletter|social",
+      "primary_url": "https://...",
+      "secondary_urls": [],
+      "content_types": ["articles", "reports", "videos"],
+      "posting_frequency": "daily|weekly|monthly|quarterly|annually",
+      "focus_areas": ["keyword1", "keyword2"],
+      "authority_score": 85,
+      "why_selected": "Why this source is valuable",
+      "freshness": "updated 2025",
+      "priority": "high|medium|nice-to-have"
+    }
+  ],
+  "search_queries": ["query 1", "query 2", ...5-10 queries]
+}
+
+Return ONLY the JSON object, no other text.`,
+
+  quick: `Map out key research sources for the topic: "{topic}".
+
+Constraints:
+- Language: {languages}
+- Region focus: {regions}
+- Prioritise recent sources (since {timeframe}).
+
+User-provided keywords (if any): {keywords}
+
+Deliver:
+1) Top 15-20 must-follow sources with:
+   - Name, URL, type
+   - One line: why this is valuable for understanding {topic}.
+
+2) Group them into:
+   - Official / primary
+   - Academic / data
+   - Industry reports
+   - Blogs / newsletters / media
+   - Tools / dashboards
+   - Communities / key people
+
+3) Add:
+   - 5 search queries I should regularly use to track new updates on {topic}.
+
+{quality_filter}
+
+Output format - MUST return valid JSON:
+{
+  "sources": [
+    {
+      "source_id": "unique_id",
+      "name": "Source Name",
+      "title": "Brief description",
+      "type": "official|academic|report|blog|tool|community|newsletter|social",
+      "primary_url": "https://...",
+      "secondary_urls": [],
+      "content_types": ["articles"],
+      "posting_frequency": "weekly",
+      "focus_areas": ["keyword1"],
+      "authority_score": 85,
+      "why_selected": "One line reason",
+      "priority": "high|medium|nice-to-have"
+    }
+  ],
+  "search_queries": ["query 1", "query 2", ...5 queries]
+}
+
+Return ONLY the JSON object, no other text.`,
+
+  trends: `You are analysing current and emerging trends for the topic: "{topic}".
+
+Tasks:
+1) Identify where trends are visible:
+   - Recurring reports (annual/quarterly) and who publishes them
+   - Dashboards / trackers / datasets
+   - Expert newsletters / Substacks / blogs
+   - Active X/Twitter, LinkedIn, YouTube accounts shaping the discourse
+
+2) For each source, give:
+   - Name, URL, type
+   - What kind of trend signal it gives (quantitative data, expert commentary, early-stage signals, etc.)
+   - Update frequency (daily / weekly / monthly / annually)
+
+3) Summarise:
+   - 3–5 "best single places" to watch if I only have limited time
+   - 5–10 search queries or RSS keywords I can use to continuously monitor trends in {topic}.
+
+Focus:
+- Language: {languages}
+- Region/Market: {regions}
+- Most recent 2–3 years of information.
+
+User-provided keywords (if any): {keywords}
+
+{quality_filter}
+
+Output format - MUST return valid JSON:
+{
+  "executive_summary": ["best place 1", "best place 2", ...3-5 must-watch sources],
+  "sources": [
+    {
+      "source_id": "unique_id",
+      "name": "Source Name",
+      "title": "Description",
+      "type": "report|newsletter|blog|tool|social",
+      "primary_url": "https://...",
+      "secondary_urls": [],
+      "content_types": ["reports", "data"],
+      "posting_frequency": "quarterly",
+      "focus_areas": ["trend1"],
+      "authority_score": 90,
+      "why_selected": "What trend signal it gives",
+      "trend_signal_type": "quantitative|expert_commentary|early_signals|mixed",
+      "priority": "high|medium|nice-to-have"
+    }
+  ],
+  "search_queries": ["trend query 1", "trend query 2", ...5-10 queries]
+}
+
+Return ONLY the JSON object, no other text.`
+};
+
+/**
+ * Build prompt with parameters
+ */
+function buildPrompt(topicName, keywords, mode, languages, regions, timeframe) {
+  const template = PROMPTS[mode] || PROMPTS.comprehensive;
+
+  return template
+    .replace(/{topic}/g, topicName)
+    .replace(/{languages}/g, languages || 'English, Traditional Chinese')
+    .replace(/{regions}/g, regions || 'Global, Hong Kong, Asia')
+    .replace(/{timeframe}/g, timeframe || '2024')
+    .replace(/{keywords}/g, keywords?.length ? keywords.join(', ') : '(No specific keywords provided)')
+    .replace(/{quality_filter}/g, QUALITY_FILTER_SUFFIX);
+}
+
 /**
  * POST /sources/discover
  * Discovers authoritative sources for a given topic using the Source Curator agent
+ *
+ * Supports modes: 'comprehensive' (default), 'quick', 'trends'
  */
 router.post('/sources/discover', async (req, res) => {
   try {
-    const { topicName, keywords = [] } = req.body;
+    const {
+      topicName,
+      keywords = [],
+      mode = 'comprehensive',
+      languages,
+      regions,
+      timeframe
+    } = req.body;
 
     if (!topicName) {
       return res.status(400).json({ success: false, error: 'Topic name is required' });
     }
 
-    console.log(`🔍 Discovering sources for topic: ${topicName}`);
+    console.log(`🔍 Discovering sources for topic: ${topicName} (mode: ${mode})`);
     console.log(`   Keywords: ${keywords.join(', ')}`);
 
-    // For demo: Generate realistic mock sources
-    // In production, this would call the Source Curator agent with LLM
-    const discoveredSources = generateMockSources(topicName, keywords);
+    // Check if we have LLM API configured
+    const hasLLM = process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY;
+
+    let discoveredSources;
+    let executiveSummary;
+    let searchQueries;
+
+    if (hasLLM) {
+      // Use real LLM to discover sources
+      try {
+        const result = await callLLMForSources(topicName, keywords, mode, languages, regions, timeframe);
+        discoveredSources = result.sources;
+        executiveSummary = result.executiveSummary;
+        searchQueries = result.searchQueries;
+      } catch (llmError) {
+        console.error('LLM call failed, using mock data:', llmError.message);
+        discoveredSources = generateMockSources(topicName, keywords, mode);
+      }
+    } else {
+      // Use mock data for demo
+      discoveredSources = generateMockSources(topicName, keywords, mode);
+      searchQueries = generateMockSearchQueries(topicName, keywords);
+    }
 
     res.json({
       success: true,
       topicName,
+      mode,
+      executiveSummary,
       sources: discoveredSources,
+      searchQueries,
       totalFound: discoveredSources.length,
     });
   } catch (error) {
@@ -40,6 +282,58 @@ router.post('/sources/discover', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+/**
+ * Call LLM API to discover sources
+ */
+async function callLLMForSources(topicName, keywords, mode, languages, regions, timeframe) {
+  const prompt = buildPrompt(topicName, keywords, mode, languages, regions, timeframe);
+
+  // Try DeepSeek first, then OpenAI
+  const apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY;
+  const baseUrl = process.env.DEEPSEEK_API_KEY
+    ? 'https://api.deepseek.com/v1'
+    : 'https://api.openai.com/v1';
+  const model = process.env.DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: 'You are a senior research analyst. Return only valid JSON.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: mode === 'comprehensive' ? 4000 : 2500,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`LLM API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices[0].message.content;
+
+  // Parse JSON from response
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('No JSON found in response');
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]);
+
+  return {
+    sources: parsed.sources || [],
+    executiveSummary: parsed.executive_summary,
+    searchQueries: parsed.search_queries,
+  };
+}
 
 /**
  * POST /topics
@@ -258,199 +552,304 @@ router.post('/email/test', async (req, res) => {
 /**
  * Generates mock sources for demo purposes
  */
-function generateMockSources(topicName, keywords) {
-  const keywordStr = keywords.length > 0 ? keywords[0].toLowerCase() : topicName.toLowerCase();
-
+function generateMockSources(topicName, keywords, mode = 'comprehensive') {
   const sourceTemplates = [
-    {
-      name: 'Social Media Examiner',
-      title: 'Leading Social Media Marketing Resource',
-      primary_url: 'https://www.socialmediaexaminer.com/',
-      content_types: ['articles', 'podcasts', 'guides'],
-      posting_frequency: 'daily',
-      authority_score: 92,
-      why_selected: 'Industry-leading publication covering all major social platforms with actionable marketing strategies',
-    },
-    {
-      name: 'Later Blog',
-      title: 'Instagram & Social Media Marketing Tips',
-      primary_url: 'https://later.com/blog/',
-      content_types: ['articles', 'case-studies', 'tutorials'],
-      posting_frequency: 'daily',
-      authority_score: 88,
-      why_selected: 'Specializes in Instagram marketing with data-driven insights and platform updates',
-    },
-    {
-      name: 'Hootsuite Blog',
-      title: 'Social Media Marketing & Management',
-      primary_url: 'https://blog.hootsuite.com/',
-      content_types: ['articles', 'research', 'guides'],
-      posting_frequency: 'daily',
-      authority_score: 90,
-      why_selected: 'Comprehensive social media resource with original research and platform-specific strategies',
-    },
-    {
-      name: 'Buffer Resources',
-      title: 'Social Media Marketing Library',
-      primary_url: 'https://buffer.com/resources/',
-      content_types: ['articles', 'data-studies', 'tools'],
-      posting_frequency: 'weekly',
-      authority_score: 87,
-      why_selected: 'Data-backed content with focus on organic growth and engagement strategies',
-    },
-    {
-      name: 'Sprout Social Insights',
-      title: 'Social Media Strategy & Data',
-      primary_url: 'https://sproutsocial.com/insights/',
-      content_types: ['articles', 'reports', 'webinars'],
-      posting_frequency: 'daily',
-      authority_score: 89,
-      why_selected: 'Enterprise-grade insights with comprehensive platform analytics and trends',
-    },
-    {
-      name: 'Neil Patel Blog',
-      title: 'Digital Marketing & SEO Expert',
-      primary_url: 'https://neilpatel.com/blog/',
-      content_types: ['articles', 'videos', 'tools'],
-      posting_frequency: 'daily',
-      authority_score: 91,
-      why_selected: 'One of the most influential digital marketers with proven growth strategies',
-    },
-    {
-      name: 'HubSpot Marketing Blog',
-      title: 'Inbound Marketing & Sales',
-      primary_url: 'https://blog.hubspot.com/marketing',
-      content_types: ['articles', 'templates', 'research'],
-      posting_frequency: 'daily',
-      authority_score: 93,
-      why_selected: 'Industry standard for inbound marketing with comprehensive guides and templates',
-    },
+    // Official / Primary Sources
     {
       name: 'Instagram Business Blog',
       title: 'Official Instagram for Business',
+      type: 'official',
       primary_url: 'https://business.instagram.com/blog/',
       content_types: ['announcements', 'case-studies', 'tips'],
       posting_frequency: 'weekly',
       authority_score: 95,
       why_selected: 'Official source for Instagram feature updates and best practices',
+      freshness: 'updated 2025',
+      priority: 'high',
+    },
+    {
+      name: 'Meta for Developers',
+      title: 'Official Meta Platform Documentation',
+      type: 'official',
+      primary_url: 'https://developers.facebook.com/docs/',
+      content_types: ['documentation', 'APIs'],
+      posting_frequency: 'weekly',
+      authority_score: 96,
+      why_selected: 'Official API documentation and platform changelog',
+      freshness: 'updated 2025',
+      priority: 'high',
+    },
+    // Industry Reports
+    {
+      name: 'Social Media Examiner',
+      title: 'Leading Social Media Marketing Resource',
+      type: 'blog',
+      primary_url: 'https://www.socialmediaexaminer.com/',
+      content_types: ['articles', 'podcasts', 'reports'],
+      posting_frequency: 'daily',
+      authority_score: 92,
+      why_selected: 'Industry-leading publication covering all major social platforms with actionable marketing strategies',
+      freshness: 'updated daily',
+      priority: 'high',
+    },
+    {
+      name: 'HubSpot State of Marketing Report',
+      title: 'Annual Marketing Industry Report',
+      type: 'report',
+      primary_url: 'https://www.hubspot.com/state-of-marketing',
+      content_types: ['reports', 'datasets'],
+      posting_frequency: 'annually',
+      authority_score: 91,
+      why_selected: 'Comprehensive annual benchmarks on social media marketing performance',
+      freshness: '2024 edition',
+      priority: 'high',
+      trend_signal_type: 'quantitative',
+    },
+    // High-Quality Blogs
+    {
+      name: 'Later Blog',
+      title: 'Instagram & Social Media Marketing Tips',
+      type: 'blog',
+      primary_url: 'https://later.com/blog/',
+      content_types: ['articles', 'case-studies', 'tutorials'],
+      posting_frequency: 'daily',
+      authority_score: 88,
+      why_selected: 'Specializes in Instagram marketing with data-driven insights and platform updates',
+      freshness: 'updated daily',
+      priority: 'high',
+    },
+    {
+      name: 'Hootsuite Blog',
+      title: 'Social Media Marketing & Management',
+      type: 'blog',
+      primary_url: 'https://blog.hootsuite.com/',
+      content_types: ['articles', 'reports', 'guides'],
+      posting_frequency: 'daily',
+      authority_score: 90,
+      why_selected: 'Comprehensive social media resource with original research and platform-specific strategies',
+      freshness: 'updated daily',
+      priority: 'high',
+    },
+    {
+      name: 'Buffer Resources',
+      title: 'Social Media Marketing Library',
+      type: 'blog',
+      primary_url: 'https://buffer.com/resources/',
+      content_types: ['articles', 'data-studies', 'tools'],
+      posting_frequency: 'weekly',
+      authority_score: 87,
+      why_selected: 'Data-backed content with focus on organic growth and engagement strategies',
+      freshness: 'updated weekly',
+      priority: 'high',
+    },
+    {
+      name: 'Neil Patel Blog',
+      title: 'Digital Marketing & SEO Expert',
+      type: 'blog',
+      primary_url: 'https://neilpatel.com/blog/',
+      content_types: ['articles', 'videos', 'tools'],
+      posting_frequency: 'daily',
+      authority_score: 91,
+      why_selected: 'One of the most influential digital marketers with proven growth strategies',
+      freshness: 'updated daily',
+      priority: 'medium',
+    },
+    // Tools & Dashboards
+    {
+      name: 'Sprout Social Index',
+      title: 'Social Media Benchmarks Dashboard',
+      type: 'tool',
+      primary_url: 'https://sproutsocial.com/insights/data/',
+      content_types: ['datasets', 'reports'],
+      posting_frequency: 'quarterly',
+      authority_score: 89,
+      why_selected: 'Real-time benchmark data and industry trends for social media performance',
+      freshness: 'Q4 2024',
+      priority: 'high',
+      trend_signal_type: 'quantitative',
+    },
+    {
+      name: 'Socialinsider Analytics',
+      title: 'Competitive Analysis Tool',
+      type: 'tool',
+      primary_url: 'https://www.socialinsider.io/',
+      content_types: ['tools', 'reports'],
+      posting_frequency: 'weekly',
+      authority_score: 84,
+      why_selected: 'Competitive benchmarking and industry analytics for Instagram',
+      freshness: 'live data',
+      priority: 'medium',
+    },
+    // Communities & Social
+    {
+      name: 'Adam Mosseri (Instagram Head)',
+      title: 'Official Instagram Updates',
+      type: 'social',
+      primary_url: 'https://www.threads.net/@mosseri',
+      secondary_urls: ['https://www.instagram.com/mosseri/'],
+      content_types: ['posts', 'videos'],
+      posting_frequency: 'weekly',
+      authority_score: 98,
+      why_selected: 'Primary source for Instagram algorithm changes and feature announcements',
+      freshness: 'updated weekly',
+      priority: 'high',
+      trend_signal_type: 'expert_commentary',
+    },
+    {
+      name: 'r/Instagram',
+      title: 'Reddit Instagram Community',
+      type: 'community',
+      primary_url: 'https://www.reddit.com/r/Instagram/',
+      content_types: ['discussions', 'tips'],
+      posting_frequency: 'daily',
+      authority_score: 72,
+      why_selected: 'Community discussions on algorithm changes, bugs, and growth tactics',
+      freshness: 'live',
+      priority: 'medium',
+      trend_signal_type: 'early_signals',
+    },
+    {
+      name: 'r/InstagramMarketing',
+      title: 'Instagram Marketing Subreddit',
+      type: 'community',
+      primary_url: 'https://www.reddit.com/r/InstagramMarketing/',
+      content_types: ['discussions', 'case-studies'],
+      posting_frequency: 'daily',
+      authority_score: 70,
+      why_selected: 'Marketing-focused community with strategy discussions',
+      freshness: 'live',
+      priority: 'medium',
+    },
+    // Newsletters
+    {
+      name: 'Marketing Brew',
+      title: 'Daily Marketing Newsletter',
+      type: 'newsletter',
+      primary_url: 'https://www.marketingbrew.com/',
+      content_types: ['newsletters', 'analysis'],
+      posting_frequency: 'daily',
+      authority_score: 85,
+      why_selected: 'Concise daily updates on marketing industry news and social media trends',
+      freshness: 'daily',
+      priority: 'high',
+      trend_signal_type: 'mixed',
     },
     {
       name: 'Creator Economy Newsletter',
       title: 'Newsletter for Content Creators',
+      type: 'newsletter',
       primary_url: 'https://creatoreconomy.so/',
-      content_types: ['newsletter', 'analysis'],
+      content_types: ['newsletters', 'analysis'],
       posting_frequency: 'weekly',
       authority_score: 82,
       why_selected: 'Focused analysis of creator economy trends and monetization strategies',
+      freshness: 'weekly',
+      priority: 'medium',
     },
+    // News & Media
     {
-      name: 'The Verge - Social',
+      name: 'The Verge - Social Media',
       title: 'Tech News on Social Platforms',
+      type: 'blog',
       primary_url: 'https://www.theverge.com/social-media',
       content_types: ['news', 'analysis'],
       posting_frequency: 'daily',
       authority_score: 88,
       why_selected: 'Breaking news and analysis on social platform changes and tech industry impact',
+      freshness: 'daily',
+      priority: 'high',
     },
     {
       name: 'TechCrunch Social',
       title: 'Startup & Tech Social News',
+      type: 'blog',
       primary_url: 'https://techcrunch.com/tag/social/',
       content_types: ['news', 'analysis', 'interviews'],
       posting_frequency: 'daily',
       authority_score: 90,
       why_selected: 'Breaking news on social media startups, acquisitions, and platform changes',
-    },
-    {
-      name: 'Marketing Brew',
-      title: 'Daily Marketing Newsletter',
-      primary_url: 'https://www.marketingbrew.com/',
-      content_types: ['newsletter', 'analysis'],
-      posting_frequency: 'daily',
-      authority_score: 85,
-      why_selected: 'Concise daily updates on marketing industry news and trends',
+      freshness: 'daily',
+      priority: 'high',
     },
     {
       name: 'Digiday',
       title: 'Digital Media & Marketing',
+      type: 'blog',
       primary_url: 'https://digiday.com/',
-      content_types: ['articles', 'podcasts', 'research'],
+      content_types: ['articles', 'podcasts', 'reports'],
       posting_frequency: 'daily',
       authority_score: 86,
       why_selected: 'Deep coverage of digital advertising, media, and marketing technology',
+      freshness: 'daily',
+      priority: 'medium',
+    },
+    // Academic / Research
+    {
+      name: 'Pew Research - Social Media',
+      title: 'Social Media Research & Statistics',
+      type: 'academic',
+      primary_url: 'https://www.pewresearch.org/topic/internet-technology/social-media/',
+      content_types: ['reports', 'datasets'],
+      posting_frequency: 'quarterly',
+      authority_score: 94,
+      why_selected: 'Authoritative research on social media demographics and usage patterns',
+      freshness: '2024 reports',
+      priority: 'high',
+      trend_signal_type: 'quantitative',
     },
     {
-      name: 'Search Engine Journal',
-      title: 'SEO & Digital Marketing',
-      primary_url: 'https://www.searchenginejournal.com/',
-      content_types: ['articles', 'guides', 'news'],
-      posting_frequency: 'daily',
-      authority_score: 88,
-      why_selected: 'Comprehensive SEO and digital marketing coverage including social signals',
-    },
-    {
-      name: 'Social Media Today',
-      title: 'Social Media News & Trends',
-      primary_url: 'https://www.socialmediatoday.com/',
-      content_types: ['articles', 'infographics', 'tips'],
-      posting_frequency: 'daily',
-      authority_score: 84,
-      why_selected: 'Aggregated insights and tips from social media industry experts',
-    },
-    {
-      name: 'Influencer Marketing Hub',
-      title: 'Influencer Marketing Resources',
-      primary_url: 'https://influencermarketinghub.com/',
-      content_types: ['articles', 'tools', 'benchmarks'],
-      posting_frequency: 'daily',
-      authority_score: 83,
-      why_selected: 'Specialized in influencer marketing with calculators and benchmarks',
-    },
-    {
-      name: 'Content Marketing Institute',
-      title: 'Content Marketing Education',
-      primary_url: 'https://contentmarketinginstitute.com/',
-      content_types: ['articles', 'research', 'events'],
-      posting_frequency: 'daily',
-      authority_score: 89,
-      why_selected: 'Leading authority on content marketing strategy and best practices',
-    },
-    {
-      name: 'Moz Blog',
-      title: 'SEO Software & Resources',
-      primary_url: 'https://moz.com/blog',
-      content_types: ['articles', 'videos', 'tools'],
-      posting_frequency: 'weekly',
-      authority_score: 91,
-      why_selected: 'Industry-standard SEO resource with connections to social marketing',
-    },
-    {
-      name: 'Agorapulse Blog',
-      title: 'Social Media Management Tips',
-      primary_url: 'https://www.agorapulse.com/blog/',
-      content_types: ['articles', 'webinars', 'podcasts'],
-      posting_frequency: 'weekly',
-      authority_score: 81,
-      why_selected: 'Practical social media management advice with ROI focus',
-    },
-    {
-      name: 'Reels Trends Newsletter',
-      title: 'Instagram Reels Strategy',
-      primary_url: 'https://reelstrends.substack.com/',
-      content_types: ['newsletter', 'trends'],
-      posting_frequency: 'weekly',
-      authority_score: 78,
-      why_selected: 'Specialized focus on short-form video trends and Reels strategies',
+      name: 'DataReportal',
+      title: 'Global Digital Statistics',
+      type: 'report',
+      primary_url: 'https://datareportal.com/',
+      content_types: ['reports', 'datasets'],
+      posting_frequency: 'quarterly',
+      authority_score: 90,
+      why_selected: 'Comprehensive global statistics on social media usage and trends',
+      freshness: 'Q1 2025',
+      priority: 'high',
+      trend_signal_type: 'quantitative',
     },
   ];
 
+  // Filter based on mode
+  let filteredSources = sourceTemplates;
+  if (mode === 'quick') {
+    filteredSources = sourceTemplates.filter(s => s.priority === 'high').slice(0, 15);
+  } else if (mode === 'trends') {
+    filteredSources = sourceTemplates.filter(s =>
+      s.trend_signal_type || s.posting_frequency === 'daily' || s.type === 'newsletter'
+    );
+  }
+
   // Add unique IDs and focus areas based on keywords
-  return sourceTemplates.map((template, index) => ({
+  return filteredSources.map((template, index) => ({
     ...template,
     source_id: `src-${Date.now()}-${index}`,
-    secondary_urls: [],
+    secondary_urls: template.secondary_urls || [],
     focus_areas: keywords.length > 0 ? keywords.slice(0, 3) : [topicName],
   }));
+}
+
+/**
+ * Generates mock search queries
+ */
+function generateMockSearchQueries(topicName, keywords) {
+  const baseQueries = [
+    `"${topicName}" latest updates ${new Date().getFullYear()}`,
+    `"${topicName}" algorithm changes`,
+    `"${topicName}" best practices guide`,
+    `"${topicName}" benchmark report`,
+    `"${topicName}" case study results`,
+  ];
+
+  if (keywords.length > 0) {
+    keywords.slice(0, 3).forEach(keyword => {
+      baseQueries.push(`"${keyword}" trends ${new Date().getFullYear()}`);
+    });
+  }
+
+  return baseQueries;
 }
 
 /**
