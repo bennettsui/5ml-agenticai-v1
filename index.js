@@ -1352,6 +1352,12 @@ app.use('/api/receipts', receiptTrackingRoutes);
 
 console.log('✅ Receipt tracking routes loaded: /api/receipts');
 
+// Topic Intelligence Routes
+const topicIntelligenceRoutes = require('./use-cases/topic-intelligence/api-js/routes');
+app.use('/api/intelligence', topicIntelligenceRoutes);
+
+console.log('✅ Topic Intelligence routes loaded: /api/intelligence');
+
 // ==========================================
 // Next.js Client-Side Routing Fallback
 // ==========================================
@@ -1422,6 +1428,7 @@ server.listen(port, '0.0.0.0', () => {
 ║  🤖 Agents: GET /agents               ║
 ║  💾 Projects: GET /projects           ║
 ║  📝 Receipts: POST /api/receipts      ║
+║  📰 Intelligence: /api/intelligence    ║
 ║  🔌 WebSocket: /ws                     ║
 ║  🌍 Region: IAD (Ashburn, Virginia)   ║
 ╚════════════════════════════════════════╝
