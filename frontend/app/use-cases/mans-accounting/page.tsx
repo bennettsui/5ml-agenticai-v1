@@ -105,6 +105,7 @@ export default function ReceiptProcessor() {
 
             if ((updateEvent === 'progress' || updateEvent === 'status') && data) {
               const nextData = (data && typeof data === 'object') ? { ...(data as Record<string, unknown>) } : {};
+              console.log('📨 WebSocket update received:', nextData);
               if ('status' in nextData) {
                 nextData.status = normalizeStatus(nextData.status);
               }
@@ -112,6 +113,8 @@ export default function ReceiptProcessor() {
                 nextData.progress = normalizeProgress(nextData.progress);
               }
               setBatchStatus(prev => {
+                console.log('batchStatus prevData', prev);
+                console.log('🔄 Merging batch status update:', { prev, nextData });
                 if (prev) {
                   return { ...prev, ...nextData };
                 }
@@ -176,6 +179,8 @@ export default function ReceiptProcessor() {
               setIsProcessing(false);
               if (pollInterval) clearInterval(pollInterval);
             }
+          } else {
+            setError(data.error ? formatErrorMessage(data.error) : 'Failed to fetch status');
           }
         } catch (err) {
           console.error('Error polling status:', err);
@@ -229,6 +234,18 @@ export default function ReceiptProcessor() {
 
       if (data.success) {
         setBatchId(data.batch_id);
+        setBatchStatus({
+          batch_id: data.batch_id,
+          status: normalizeStatus(data.status),
+          progress: 0,
+          total_receipts: 0,
+          processed_receipts: 0,
+          failed_receipts: 0,
+          total_amount: 0,
+          deductible_amount: 0,
+          recent_logs: [],
+          updated_at: new Date().toISOString(),
+        });
       } else {
         setError(data.error ? formatErrorMessage(data.error) : 'Failed to start processing');
         setIsProcessing(false);
