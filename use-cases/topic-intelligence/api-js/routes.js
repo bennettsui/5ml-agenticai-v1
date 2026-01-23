@@ -11,9 +11,17 @@
 const express = require('express');
 const router = express.Router();
 
-// In-memory storage for demo purposes (replace with Notion integration later)
-const topics = new Map();
-const sources = new Map();
+// Database functions (with fallback to in-memory for development)
+let db;
+try {
+  db = require('../../../db');
+} catch (e) {
+  console.warn('Database module not available, using in-memory storage');
+}
+
+// In-memory fallback storage
+const inMemoryTopics = new Map();
+const inMemorySources = new Map();
 
 // ==========================================
 // Prompt Templates
@@ -347,36 +355,68 @@ router.post('/topics', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Topic name is required' });
     }
 
-    const topicId = `topic-${Date.now()}`;
-    const topic = {
-      id: topicId,
-      name: topicName,
-      keywords,
-      sources: topicSources,
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      dailyScanConfig: {
-        enabled: true,
-        time: '06:00',
-        timezone: 'Asia/Hong_Kong',
-      },
-      weeklyDigestConfig: {
-        enabled: true,
-        day: 'monday',
-        time: '08:00',
-        timezone: 'Asia/Hong_Kong',
-        recipientList: [],
-      },
-    };
+    let topicId;
+    let savedSources = [];
 
-    topics.set(topicId, topic);
+    // Try database first, fallback to in-memory
+    if (db && process.env.DATABASE_URL) {
+      try {
+        // Save topic to database
+        const savedTopic = await db.saveIntelligenceTopic(topicName, keywords);
+        topicId = savedTopic.topic_id;
 
-    // Save sources
-    topicSources.forEach(source => {
-      sources.set(source.source_id, { ...source, topicId });
-    });
+        // Save sources to database
+        if (topicSources.length > 0) {
+          savedSources = await db.saveIntelligenceSources(topicId, topicSources);
+        }
 
-    console.log(`✅ Created topic: ${topicName} (${topicId}) with ${topicSources.length} sources`);
+        console.log(`✅ Created topic in DB: ${topicName} (${topicId}) with ${savedSources.length} sources`);
+      } catch (dbError) {
+        console.error('Database save failed, using in-memory:', dbError.message);
+        // Fallback to in-memory
+        topicId = `topic-${Date.now()}`;
+        inMemoryTopics.set(topicId, {
+          id: topicId,
+          name: topicName,
+          keywords,
+          sources: topicSources,
+          status: 'active',
+          createdAt: new Date().toISOString(),
+        });
+      }
+    } else {
+      // In-memory storage
+      topicId = `topic-${Date.now()}`;
+      const topic = {
+        id: topicId,
+        name: topicName,
+        keywords,
+        sources: topicSources,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        dailyScanConfig: {
+          enabled: true,
+          time: '06:00',
+          timezone: 'Asia/Hong_Kong',
+        },
+        weeklyDigestConfig: {
+          enabled: true,
+          day: 'monday',
+          time: '08:00',
+          timezone: 'Asia/Hong_Kong',
+          recipientList: [],
+        },
+      };
+
+      inMemoryTopics.set(topicId, topic);
+
+      // Save sources in-memory
+      topicSources.forEach(source => {
+        inMemorySources.set(source.source_id, { ...source, topicId });
+      });
+
+      console.log(`✅ Created topic in-memory: ${topicName} (${topicId}) with ${topicSources.length} sources`);
+    }
 
     res.json({
       success: true,
@@ -395,7 +435,19 @@ router.post('/topics', async (req, res) => {
  */
 router.get('/topics', async (req, res) => {
   try {
-    const topicList = Array.from(topics.values());
+    let topicList;
+
+    if (db && process.env.DATABASE_URL) {
+      try {
+        topicList = await db.getIntelligenceTopics();
+      } catch (dbError) {
+        console.error('Database fetch failed:', dbError.message);
+        topicList = Array.from(inMemoryTopics.values());
+      }
+    } else {
+      topicList = Array.from(inMemoryTopics.values());
+    }
+
     res.json({ success: true, topics: topicList });
   } catch (error) {
     console.error('Error listing topics:', error);
@@ -409,7 +461,18 @@ router.get('/topics', async (req, res) => {
  */
 router.get('/topics/:id', async (req, res) => {
   try {
-    const topic = topics.get(req.params.id);
+    let topic;
+
+    if (db && process.env.DATABASE_URL) {
+      try {
+        topic = await db.getIntelligenceTopic(req.params.id);
+      } catch (dbError) {
+        console.error('Database fetch failed:', dbError.message);
+        topic = inMemoryTopics.get(req.params.id);
+      }
+    } else {
+      topic = inMemoryTopics.get(req.params.id);
+    }
 
     if (!topic) {
       return res.status(404).json({ success: false, error: 'Topic not found' });
@@ -428,14 +491,22 @@ router.get('/topics/:id', async (req, res) => {
  */
 router.put('/topics/:id/pause', async (req, res) => {
   try {
-    const topic = topics.get(req.params.id);
+    if (db && process.env.DATABASE_URL) {
+      try {
+        await db.updateIntelligenceTopicStatus(req.params.id, 'paused');
+        return res.json({ success: true, message: 'Topic paused' });
+      } catch (dbError) {
+        console.error('Database update failed:', dbError.message);
+      }
+    }
 
+    // Fallback to in-memory
+    const topic = inMemoryTopics.get(req.params.id);
     if (!topic) {
       return res.status(404).json({ success: false, error: 'Topic not found' });
     }
-
     topic.status = 'paused';
-    topics.set(req.params.id, topic);
+    inMemoryTopics.set(req.params.id, topic);
 
     res.json({ success: true, message: 'Topic paused' });
   } catch (error) {
@@ -450,14 +521,22 @@ router.put('/topics/:id/pause', async (req, res) => {
  */
 router.put('/topics/:id/resume', async (req, res) => {
   try {
-    const topic = topics.get(req.params.id);
+    if (db && process.env.DATABASE_URL) {
+      try {
+        await db.updateIntelligenceTopicStatus(req.params.id, 'active');
+        return res.json({ success: true, message: 'Topic resumed' });
+      } catch (dbError) {
+        console.error('Database update failed:', dbError.message);
+      }
+    }
 
+    // Fallback to in-memory
+    const topic = inMemoryTopics.get(req.params.id);
     if (!topic) {
       return res.status(404).json({ success: false, error: 'Topic not found' });
     }
-
     topic.status = 'active';
-    topics.set(req.params.id, topic);
+    inMemoryTopics.set(req.params.id, topic);
 
     res.json({ success: true, message: 'Topic resumed' });
   } catch (error) {
@@ -478,7 +557,17 @@ router.post('/scan/start', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Topic ID is required' });
     }
 
-    const topic = topics.get(topicId);
+    let topic;
+    if (db && process.env.DATABASE_URL) {
+      try {
+        topic = await db.getIntelligenceTopic(topicId);
+      } catch (dbError) {
+        topic = inMemoryTopics.get(topicId);
+      }
+    } else {
+      topic = inMemoryTopics.get(topicId);
+    }
+
     if (!topic) {
       return res.status(404).json({ success: false, error: 'Topic not found' });
     }
@@ -503,15 +592,26 @@ router.post('/scan/start', async (req, res) => {
  */
 router.get('/news', async (req, res) => {
   try {
-    const { topicId, limit = 20, offset = 0 } = req.query;
+    const { topicId, limit = 20 } = req.query;
 
-    // In production, this would fetch from Notion
-    const mockNews = generateMockNews(parseInt(limit));
+    let news = [];
+
+    if (topicId && db && process.env.DATABASE_URL) {
+      try {
+        news = await db.getIntelligenceNews(topicId, parseInt(limit));
+      } catch (dbError) {
+        console.error('Database fetch failed:', dbError.message);
+        news = generateMockNews(parseInt(limit));
+      }
+    } else {
+      // Return mock data when no topicId or no database
+      news = generateMockNews(parseInt(limit));
+    }
 
     res.json({
       success: true,
-      news: mockNews,
-      total: mockNews.length,
+      news,
+      total: news.length,
       hasMore: false,
     });
   } catch (error) {
