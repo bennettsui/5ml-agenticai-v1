@@ -111,7 +111,24 @@ export default function ReceiptProcessor() {
               if ('progress' in nextData) {
                 nextData.progress = normalizeProgress(nextData.progress);
               }
-              setBatchStatus(prev => prev ? { ...prev, ...nextData } as BatchStatus : nextData as BatchStatus);
+              setBatchStatus(prev => {
+                if (prev) {
+                  return { ...prev, ...nextData };
+                }
+                const fallback: BatchStatus = {
+                  batch_id: batchId || '',
+                  status: normalizeStatus(nextData.status),
+                  progress: normalizeProgress(nextData.progress),
+                  total_receipts: 0,
+                  processed_receipts: 0,
+                  failed_receipts: 0,
+                  total_amount: 0,
+                  deductible_amount: 0,
+                  recent_logs: [],
+                  updated_at: new Date().toISOString(),
+                };
+                return { ...fallback, ...nextData } as BatchStatus;
+              });
 
               if (normalizeStatus(nextData.status) === 'completed' || normalizeStatus(nextData.status) === 'failed') {
                 setIsProcessing(false);
