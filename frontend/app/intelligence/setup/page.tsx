@@ -18,6 +18,10 @@ import {
   Loader2,
   Globe,
   ExternalLink,
+  Zap,
+  Brain,
+  TrendingUp,
+  ChevronDown,
 } from 'lucide-react';
 
 interface Source {
@@ -35,9 +39,45 @@ interface Source {
   isNew?: boolean;
 }
 
+type ResearchMode = 'comprehensive' | 'quick' | 'trends';
+type LLMProvider = 'perplexity' | 'claude-sonnet' | 'claude-haiku' | 'deepseek';
+
+const RESEARCH_MODES = [
+  {
+    id: 'comprehensive' as ResearchMode,
+    name: 'Comprehensive Research',
+    description: 'Full source discovery with trend mapping and authority scoring',
+    icon: Brain,
+    color: 'purple',
+  },
+  {
+    id: 'quick' as ResearchMode,
+    name: 'Quick Scan',
+    description: 'Fast overview of top sources for rapid setup',
+    icon: Zap,
+    color: 'yellow',
+  },
+  {
+    id: 'trends' as ResearchMode,
+    name: 'Trend Focus',
+    description: 'Focus on emerging signals and trend tracking sources',
+    icon: TrendingUp,
+    color: 'green',
+  },
+];
+
+const LLM_PROVIDERS = [
+  { id: 'perplexity' as LLMProvider, name: 'Perplexity Sonar Pro', description: 'Best for web research', recommended: true },
+  { id: 'claude-sonnet' as LLMProvider, name: 'Claude Sonnet', description: 'Balanced quality & speed' },
+  { id: 'claude-haiku' as LLMProvider, name: 'Claude Haiku', description: 'Fast & cost-effective' },
+  { id: 'deepseek' as LLMProvider, name: 'DeepSeek Reasoner', description: 'Deep reasoning capability' },
+];
+
 export default function TopicSetupPage() {
   const [topicName, setTopicName] = useState('');
   const [keywords, setKeywords] = useState('');
+  const [researchMode, setResearchMode] = useState<ResearchMode>('comprehensive');
+  const [selectedLLM, setSelectedLLM] = useState<LLMProvider>('perplexity');
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [discoveredSources, setDiscoveredSources] = useState<Source[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -61,6 +101,8 @@ export default function TopicSetupPage() {
         body: JSON.stringify({
           topicName: topicName.trim(),
           keywords: keywords.split(',').map(k => k.trim()).filter(Boolean),
+          mode: researchMode,
+          llm: selectedLLM,
         }),
       });
 
@@ -274,6 +316,63 @@ export default function TopicSetupPage() {
               />
             </div>
 
+            {/* Research Mode Selection */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                Research Mode
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {RESEARCH_MODES.map((mode) => {
+                  const Icon = mode.icon;
+                  const isSelected = researchMode === mode.id;
+                  return (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => setResearchMode(mode.id)}
+                      className={`p-4 rounded-lg border-2 text-left transition-all ${
+                        isSelected
+                          ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Icon className={`w-5 h-5 ${isSelected ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`} />
+                        <span className={`font-medium ${isSelected ? 'text-teal-700 dark:text-teal-300' : 'text-slate-700 dark:text-slate-300'}`}>
+                          {mode.name}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{mode.description}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* LLM Selection */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                AI Model
+              </label>
+              <div className="relative">
+                <select
+                  value={selectedLLM}
+                  onChange={(e) => setSelectedLLM(e.target.value as LLMProvider)}
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none cursor-pointer"
+                >
+                  {LLM_PROVIDERS.map((llm) => (
+                    <option key={llm.id} value={llm.id}>
+                      {llm.name} {llm.recommended ? '(Recommended)' : ''} - {llm.description}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Perplexity is recommended for web research tasks with real-time internet access
+              </p>
+            </div>
+
             <button
               onClick={handleDiscoverSources}
               disabled={isDiscovering || !topicName.trim()}
@@ -282,7 +381,7 @@ export default function TopicSetupPage() {
               {isDiscovering ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Discovering Sources...
+                  Discovering Sources ({RESEARCH_MODES.find(m => m.id === researchMode)?.name})...
                 </>
               ) : (
                 <>
