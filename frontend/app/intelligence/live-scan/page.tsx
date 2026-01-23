@@ -1,0 +1,466 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import {
+  Home,
+  Settings,
+  LayoutDashboard,
+  Activity,
+  Pause,
+  Square,
+  Eye,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Radio,
+} from 'lucide-react';
+
+interface ScanProgress {
+  sourcesScanned: number;
+  totalSources: number;
+  articlesFound: number;
+  articlesAnalyzed: number;
+  highImportanceCount: number;
+  status: 'scanning' | 'analyzing' | 'syncing' | 'complete' | 'failed' | 'idle';
+  currentSource?: string;
+}
+
+interface SourceStatus {
+  sourceId: string;
+  sourceName: string;
+  status: 'active' | 'complete' | 'failed';
+  articlesFound?: number;
+  error?: string;
+}
+
+interface AnalyzedArticle {
+  article_id: string;
+  title: string;
+  source_name: string;
+  source_url: string;
+  importance_score: number;
+  content_summary: string;
+  key_insights: string[];
+  action_items: string[];
+  tags: string[];
+}
+
+interface ErrorLog {
+  time: string;
+  sourceId?: string;
+  message: string;
+}
+
+export default function LiveScanPage() {
+  const [topicId, setTopicId] = useState<string>('');
+  const [topicName, setTopicName] = useState<string>('');
+  const [isConnected, setIsConnected] = useState(false);
+  const [progress, setProgress] = useState<ScanProgress>({
+    sourcesScanned: 0,
+    totalSources: 0,
+    articlesFound: 0,
+    articlesAnalyzed: 0,
+    highImportanceCount: 0,
+    status: 'idle',
+  });
+  const [sourceStatuses, setSourceStatuses] = useState<Map<string, SourceStatus>>(new Map());
+  const [analyzedArticles, setAnalyzedArticles] = useState<AnalyzedArticle[]>([]);
+  const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
+  const [showErrors, setShowErrors] = useState(false);
+
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    // Get topic from URL params
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('topic') || '';
+    setTopicId(id);
+
+    // Fetch topic name
+    if (id) {
+      fetch(`/api/intelligence/topics/${id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setTopicName(data.topic.name);
+          }
+        })
+        .catch(console.error);
+    }
+
+    // Connect to WebSocket
+    connectWebSocket(id);
+
+    return () => {
+      wsRef.current?.close();
+    };
+  }, []);
+
+  const connectWebSocket = (topicId: string) => {
+    const wsUrl = `ws://localhost:3001?topicId=${topicId}`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      setIsConnected(true);
+      console.log('[WebSocket] Connected');
+    };
+
+    ws.onclose = () => {
+      setIsConnected(false);
+      console.log('[WebSocket] Disconnected');
+      // Attempt reconnect after 3 seconds
+      setTimeout(() => connectWebSocket(topicId), 3000);
+    };
+
+    ws.onerror = error => {
+      console.error('[WebSocket] Error:', error);
+    };
+
+    ws.onmessage = event => {
+      try {
+        const message = JSON.parse(event.data);
+        handleWebSocketMessage(message);
+      } catch (err) {
+        console.error('[WebSocket] Parse error:', err);
+      }
+    };
+
+    wsRef.current = ws;
+  };
+
+  const handleWebSocketMessage = (message: { event: string; data: unknown }) => {
+    switch (message.event) {
+      case 'progress_update':
+        setProgress(message.data as ScanProgress);
+        break;
+
+      case 'source_status_update':
+        const sourceStatus = message.data as SourceStatus;
+        setSourceStatuses(prev => {
+          const newMap = new Map(prev);
+          newMap.set(sourceStatus.sourceId, sourceStatus);
+          return newMap;
+        });
+        break;
+
+      case 'article_analyzed':
+        const article = message.data as AnalyzedArticle;
+        setAnalyzedArticles(prev => [article, ...prev].slice(0, 50));
+        break;
+
+      case 'error_occurred':
+        const error = message.data as { sourceId?: string; message: string };
+        setErrorLogs(prev => [
+          { time: new Date().toISOString(), ...error },
+          ...prev,
+        ].slice(0, 100));
+        break;
+
+      case 'scan_complete':
+        setProgress(prev => ({ ...prev, status: 'complete' }));
+        break;
+    }
+  };
+
+  const handleStartScan = async () => {
+    if (!topicId) return;
+
+    setProgress(prev => ({ ...prev, status: 'scanning' }));
+    setSourceStatuses(new Map());
+    setAnalyzedArticles([]);
+    setErrorLogs([]);
+
+    try {
+      await fetch('/api/orchestration/trigger-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topicId }),
+      });
+    } catch (error) {
+      console.error('Failed to start scan:', error);
+      setProgress(prev => ({ ...prev, status: 'failed' }));
+    }
+  };
+
+  const handlePauseScan = () => {
+    // Would send pause command via WebSocket
+    console.log('Pause scan');
+  };
+
+  const handleStopScan = () => {
+    // Would send stop command via WebSocket
+    setProgress(prev => ({ ...prev, status: 'idle' }));
+  };
+
+  const progressPercent = progress.totalSources > 0
+    ? Math.round((progress.sourcesScanned / progress.totalSources) * 100)
+    : 0;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      {/* Header */}
+      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link href="/" className="text-slate-600 hover:text-slate-900 dark:text-slate-400">
+                <Home className="w-5 h-5" />
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                  Live Scan: {topicName || 'Loading...'}
+                </h1>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  Real-time news discovery and analysis
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {isConnected ? (
+                <span className="flex items-center gap-1 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-xs">
+                  <Radio className="w-3 h-3 animate-pulse" />
+                  Connected
+                </span>
+              ) : (
+                <span className="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full text-xs">
+                  Disconnected
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Navigation */}
+      <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex space-x-8">
+            <Link href="/intelligence/setup" className="flex items-center gap-2 px-3 py-4 border-b-2 border-transparent text-slate-500 font-medium text-sm">
+              <Settings size={18} />
+              Setup
+            </Link>
+            <Link href="/intelligence/live-scan" className="flex items-center gap-2 px-3 py-4 border-b-2 border-teal-500 text-teal-600 dark:text-teal-400 font-medium text-sm">
+              <Activity size={18} />
+              Live Scan
+            </Link>
+            <Link href="/intelligence/dashboard" className="flex items-center gap-2 px-3 py-4 border-b-2 border-transparent text-slate-500 font-medium text-sm">
+              <LayoutDashboard size={18} />
+              Dashboard
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Progress Section */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Scan Progress</h2>
+            <div className="flex gap-2">
+              {progress.status === 'idle' && (
+                <button
+                  onClick={handleStartScan}
+                  className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-sm font-medium"
+                >
+                  Start Scan
+                </button>
+              )}
+              {(progress.status === 'scanning' || progress.status === 'analyzing') && (
+                <>
+                  <button
+                    onClick={handlePauseScan}
+                    className="flex items-center gap-1 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm"
+                  >
+                    <Pause className="w-4 h-4" />
+                    Pause
+                  </button>
+                  <button
+                    onClick={handleStopScan}
+                    className="flex items-center gap-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm"
+                  >
+                    <Square className="w-4 h-4" />
+                    Stop
+                  </button>
+                </>
+              )}
+              <Link
+                href={`/intelligence/dashboard?topic=${topicId}`}
+                className="flex items-center gap-1 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm"
+              >
+                <Eye className="w-4 h-4" />
+                View Dashboard
+              </Link>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mb-4">
+            <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400 mb-1">
+              <span>Progress</span>
+              <span>{progressPercent}%</span>
+            </div>
+            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-teal-500 transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">
+                {progress.sourcesScanned}/{progress.totalSources}
+              </div>
+              <div className="text-xs text-slate-600 dark:text-slate-400">Sources Scanned</div>
+            </div>
+            <div className="text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">
+                {progress.articlesFound}
+              </div>
+              <div className="text-xs text-slate-600 dark:text-slate-400">Articles Found</div>
+            </div>
+            <div className="text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">
+                {progress.articlesAnalyzed}
+              </div>
+              <div className="text-xs text-slate-600 dark:text-slate-400">Articles Analyzed</div>
+            </div>
+            <div className="text-center p-3 bg-teal-50 dark:bg-teal-900/30 rounded-lg">
+              <div className="text-2xl font-bold text-teal-600 dark:text-teal-400">
+                {progress.highImportanceCount}
+              </div>
+              <div className="text-xs text-slate-600 dark:text-slate-400">High Importance</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-6">
+          {/* Source Status Cards */}
+          <div className="col-span-1">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4">Source Status</h3>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {Array.from(sourceStatuses.values()).map(source => (
+                  <div
+                    key={source.sourceId}
+                    className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-700/50 rounded"
+                  >
+                    {source.status === 'active' && (
+                      <Loader2 className="w-4 h-4 text-teal-500 animate-spin" />
+                    )}
+                    {source.status === 'complete' && (
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    )}
+                    {source.status === 'failed' && (
+                      <AlertCircle className="w-4 h-4 text-red-500" />
+                    )}
+                    <span className="text-sm text-slate-700 dark:text-slate-300 truncate flex-1">
+                      {source.sourceName}
+                    </span>
+                    {source.articlesFound !== undefined && (
+                      <span className="text-xs text-slate-500">{source.articlesFound}</span>
+                    )}
+                  </div>
+                ))}
+                {sourceStatuses.size === 0 && (
+                  <p className="text-sm text-slate-500 text-center py-4">
+                    No sources scanned yet
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Real-time Analysis Feed */}
+          <div className="col-span-2">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4">
+                Real-time Analysis Feed
+              </h3>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                {analyzedArticles.map(article => (
+                  <div
+                    key={article.article_id}
+                    className="p-3 border border-slate-200 dark:border-slate-700 rounded-lg"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-slate-900 dark:text-white text-sm">
+                          {article.title}
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {article.source_name}
+                        </p>
+                      </div>
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          article.importance_score >= 80
+                            ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300'
+                            : article.importance_score >= 60
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                            : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        {article.importance_score}/100
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 line-clamp-2">
+                      {article.content_summary}
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {article.tags.slice(0, 3).map(tag => (
+                        <span
+                          key={tag}
+                          className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded text-xs"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {analyzedArticles.length === 0 && (
+                  <p className="text-sm text-slate-500 text-center py-8">
+                    Waiting for articles to be analyzed...
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Error Log (Collapsible) */}
+        {errorLogs.length > 0 && (
+          <div className="mt-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-red-200 dark:border-red-900">
+            <button
+              onClick={() => setShowErrors(!showErrors)}
+              className="w-full px-4 py-3 flex items-center justify-between text-left"
+            >
+              <span className="flex items-center gap-2 text-red-600 dark:text-red-400 font-medium">
+                <AlertCircle className="w-4 h-4" />
+                Error Log ({errorLogs.length})
+              </span>
+              <span className="text-sm text-slate-500">
+                {showErrors ? 'Hide' : 'Show'}
+              </span>
+            </button>
+            {showErrors && (
+              <div className="px-4 pb-4 max-h-48 overflow-y-auto">
+                {errorLogs.map((log, i) => (
+                  <div key={i} className="text-xs text-red-600 dark:text-red-400 py-1 border-b border-red-100 dark:border-red-900/50">
+                    <span className="text-slate-500">{new Date(log.time).toLocaleTimeString()}</span>
+                    {' - '}
+                    {log.message}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
