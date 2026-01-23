@@ -55,6 +55,21 @@ export default function ReceiptProcessor() {
     })
   );
 
+  const normalizeStatus = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object') {
+      const nested = (value as { status?: unknown }).status;
+      if (typeof nested === 'string') return nested;
+    }
+    return 'processing';
+  };
+
+  const normalizeProgress = (value: unknown): number => {
+    if (typeof value === 'number') return value;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
   // Real-time updates with WebSocket (fallback to polling)
   useEffect(() => {
     if (!batchId) return;
@@ -81,12 +96,17 @@ export default function ReceiptProcessor() {
           if (message.type === 'update') {
             const { event: updateEvent, data } = message;
 
-            if (updateEvent === 'progress' && data) {
-              setBatchStatus(prev => prev ? { ...prev, ...data } : data as BatchStatus);
-            } else if (updateEvent === 'status' && data) {
-              setBatchStatus(prev => prev ? { ...prev, status: data.status } : data as BatchStatus);
+            if ((updateEvent === 'progress' || updateEvent === 'status') && data) {
+              const nextData = (data && typeof data === 'object') ? { ...(data as Record<string, unknown>) } : {};
+              if ('status' in nextData) {
+                nextData.status = normalizeStatus(nextData.status);
+              }
+              if ('progress' in nextData) {
+                nextData.progress = normalizeProgress(nextData.progress);
+              }
+              setBatchStatus(prev => prev ? { ...prev, ...nextData } as BatchStatus : nextData as BatchStatus);
 
-              if (data.status === 'completed' || data.status === 'failed') {
+              if (normalizeStatus(nextData.status) === 'completed' || normalizeStatus(nextData.status) === 'failed') {
                 setIsProcessing(false);
               }
             } else if (updateEvent === 'completed') {
@@ -121,9 +141,14 @@ export default function ReceiptProcessor() {
           const data = await response.json();
 
           if (data.success) {
-            setBatchStatus(data);
+            const normalized = {
+              ...data,
+              status: normalizeStatus(data.status),
+              progress: normalizeProgress(data.progress),
+            } as BatchStatus;
+            setBatchStatus(normalized);
 
-            if (data.status === 'completed' || data.status === 'failed') {
+            if (normalized.status === 'completed' || normalized.status === 'failed') {
               setIsProcessing(false);
               if (pollInterval) clearInterval(pollInterval);
             }
@@ -340,9 +365,9 @@ export default function ReceiptProcessor() {
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Processing Status</h2>
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${getStatusColor(batchStatus.status)}`}>
-                {getStatusIcon(batchStatus.status)}
-                <span className="text-sm font-medium capitalize">{batchStatus.status}</span>
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${getStatusColor(normalizeStatus(batchStatus.status))}`}>
+                {getStatusIcon(normalizeStatus(batchStatus.status))}
+                <span className="text-sm font-medium capitalize">{normalizeStatus(batchStatus.status)}</span>
               </div>
             </div>
 
@@ -350,12 +375,12 @@ export default function ReceiptProcessor() {
             <div className="mb-6">
               <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400 mb-2">
                 <span>Progress</span>
-                <span>{batchStatus.progress}%</span>
+                <span>{normalizeProgress(batchStatus.progress)}%</span>
               </div>
               <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
                 <div
                   className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${batchStatus.progress}%` }}
+                  style={{ width: `${normalizeProgress(batchStatus.progress)}%` }}
                 />
               </div>
               <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
@@ -412,7 +437,7 @@ export default function ReceiptProcessor() {
             )}
 
             {/* Download Button */}
-            {batchStatus.status === 'completed' && (
+            {normalizeStatus(batchStatus.status) === 'completed' && (
               <button
                 onClick={handleDownload}
                 className="w-full flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
@@ -423,7 +448,7 @@ export default function ReceiptProcessor() {
             )}
 
             {/* Failed State */}
-            {batchStatus.status === 'failed' && (
+            {normalizeStatus(batchStatus.status) === 'failed' && (
               <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
                 <div className="flex">
                   <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
