@@ -57,29 +57,13 @@ router.post('/process', async (req, res) => {
       });
     }
 
-    // Ensure client exists (create if missing)
-    let clientId = null;
-    const existingClient = await db.query(
-      'SELECT id FROM t_clients WHERE LOWER(client_name) = LOWER($1)',
-      [client_name.trim()]
-    );
-    if (existingClient.rows.length > 0) {
-      clientId = existingClient.rows[0].id;
-    } else {
-      const newClient = await db.query(
-        'INSERT INTO t_clients (client_name) VALUES ($1) RETURNING id',
-        [client_name.trim()]
-      );
-      clientId = newClient.rows[0].id;
-    }
-
     // Create new batch in database
     const batchResult = await db.query(
       `INSERT INTO receipt_batches (
-        client_id, dropbox_url, status, period_start, period_end
+        client_name, dropbox_url, status, period_start, period_end
       ) VALUES ($1, $2, 'pending', $3, $4)
       RETURNING batch_id, created_at`,
-      [clientId, dropbox_url, period_start || null, period_end || null]
+      [client_name, dropbox_url, period_start || null, period_end || null]
     );
 
     const batchId = batchResult.rows[0].batch_id;
@@ -154,27 +138,12 @@ router.post('/process-upload', async (req, res) => {
       });
     }
 
-    let clientId = null;
-    const existingClient = await db.query(
-      'SELECT id FROM t_clients WHERE LOWER(client_name) = LOWER($1)',
-      [client_name.trim()]
-    );
-    if (existingClient.rows.length > 0) {
-      clientId = existingClient.rows[0].id;
-    } else {
-      const newClient = await db.query(
-        'INSERT INTO t_clients (client_name) VALUES ($1) RETURNING id',
-        [client_name.trim()]
-      );
-      clientId = newClient.rows[0].id;
-    }
-
     const batchResult = await db.query(
       `INSERT INTO receipt_batches (
-        client_id, status, period_start, period_end
+        client_name, status, period_start, period_end
       ) VALUES ($1, 'pending', $2, $3)
       RETURNING batch_id, created_at`,
-      [clientId, period_start || null, period_end || null]
+      [client_name, period_start || null, period_end || null]
     );
 
     const batchId = batchResult.rows[0].batch_id;
