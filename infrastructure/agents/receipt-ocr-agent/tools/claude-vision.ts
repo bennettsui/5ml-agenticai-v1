@@ -116,7 +116,7 @@ Focus on Hong Kong receipts. Handle Chinese and English text.`;
 
       // Call Claude Vision API
       const response = await this.client.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-3-haiku-20240307',
         max_tokens: options.maxTokens || 2048,
         messages: [
           {
