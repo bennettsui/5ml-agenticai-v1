@@ -233,6 +233,7 @@ function buildPrompt(topicName, keywords, mode, languages, regions, timeframe) {
  * Discovers authoritative sources for a given topic using the Source Curator agent
  *
  * Supports modes: 'comprehensive' (default), 'quick', 'trends'
+ * Supports LLM providers: 'perplexity', 'claude-sonnet', 'claude-haiku', 'deepseek'
  */
 router.post('/sources/discover', async (req, res) => {
   try {
@@ -240,6 +241,7 @@ router.post('/sources/discover', async (req, res) => {
       topicName,
       keywords = [],
       mode = 'comprehensive',
+      llm = 'perplexity',
       languages,
       regions,
       timeframe
@@ -249,37 +251,48 @@ router.post('/sources/discover', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Topic name is required' });
     }
 
-    console.log(`🔍 Discovering sources for topic: ${topicName} (mode: ${mode})`);
+    console.log(`🔍 Discovering sources for topic: ${topicName}`);
+    console.log(`   Mode: ${mode}, LLM: ${llm}`);
     console.log(`   Keywords: ${keywords.join(', ')}`);
 
-    // Check if we have LLM API configured
-    const hasLLM = process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY;
+    // Check which LLM APIs are available
+    const hasPerplexity = !!process.env.PERPLEXITY_API_KEY;
+    const hasClaude = !!process.env.ANTHROPIC_API_KEY;
+    const hasDeepSeek = !!process.env.DEEPSEEK_API_KEY;
+    const hasOpenAI = !!process.env.OPENAI_API_KEY;
 
     let discoveredSources;
     let executiveSummary;
     let searchQueries;
+    let actualLLMUsed = llm;
 
-    if (hasLLM) {
-      // Use real LLM to discover sources
+    // Try to use the selected LLM, with fallbacks
+    const llmAvailable = hasPerplexity || hasClaude || hasDeepSeek || hasOpenAI;
+
+    if (llmAvailable) {
       try {
-        const result = await callLLMForSources(topicName, keywords, mode, languages, regions, timeframe);
+        const result = await callLLMForSources(topicName, keywords, mode, llm, languages, regions, timeframe);
         discoveredSources = result.sources;
         executiveSummary = result.executiveSummary;
         searchQueries = result.searchQueries;
+        actualLLMUsed = result.llmUsed;
       } catch (llmError) {
         console.error('LLM call failed, using mock data:', llmError.message);
         discoveredSources = generateMockSources(topicName, keywords, mode);
+        actualLLMUsed = 'mock';
       }
     } else {
       // Use mock data for demo
       discoveredSources = generateMockSources(topicName, keywords, mode);
       searchQueries = generateMockSearchQueries(topicName, keywords);
+      actualLLMUsed = 'mock';
     }
 
     res.json({
       success: true,
       topicName,
       mode,
+      llmUsed: actualLLMUsed,
       executiveSummary,
       sources: discoveredSources,
       searchQueries,
@@ -292,42 +305,155 @@ router.post('/sources/discover', async (req, res) => {
 });
 
 /**
- * Call LLM API to discover sources
+ * LLM Provider configurations
  */
-async function callLLMForSources(topicName, keywords, mode, languages, regions, timeframe) {
+const LLM_CONFIGS = {
+  'perplexity': {
+    baseUrl: 'https://api.perplexity.ai',
+    model: 'sonar-pro',
+    envKey: 'PERPLEXITY_API_KEY',
+  },
+  'claude-sonnet': {
+    baseUrl: 'https://api.anthropic.com/v1',
+    model: 'claude-sonnet-4-20250514',
+    envKey: 'ANTHROPIC_API_KEY',
+    isAnthropic: true,
+  },
+  'claude-haiku': {
+    baseUrl: 'https://api.anthropic.com/v1',
+    model: 'claude-3-5-haiku-20241022',
+    envKey: 'ANTHROPIC_API_KEY',
+    isAnthropic: true,
+  },
+  'deepseek': {
+    baseUrl: 'https://api.deepseek.com/v1',
+    model: 'deepseek-chat',
+    envKey: 'DEEPSEEK_API_KEY',
+  },
+};
+
+/**
+ * Call LLM API to discover sources
+ * Supports multiple providers with automatic fallback
+ */
+async function callLLMForSources(topicName, keywords, mode, selectedLLM, languages, regions, timeframe) {
   const prompt = buildPrompt(topicName, keywords, mode, languages, regions, timeframe);
 
-  // Try DeepSeek first, then OpenAI
-  const apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY;
-  const baseUrl = process.env.DEEPSEEK_API_KEY
-    ? 'https://api.deepseek.com/v1'
-    : 'https://api.openai.com/v1';
-  const model = process.env.DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
+  // Determine which LLM to use with fallback chain
+  const llmPriority = [selectedLLM, 'perplexity', 'claude-sonnet', 'deepseek'];
+  let llmUsed = null;
+  let config = null;
+  let apiKey = null;
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: 'You are a senior research analyst. Return only valid JSON.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.3,
-      max_tokens: mode === 'comprehensive' ? 4000 : 2500,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`LLM API error: ${response.status}`);
+  for (const llm of llmPriority) {
+    const cfg = LLM_CONFIGS[llm];
+    if (cfg && process.env[cfg.envKey]) {
+      llmUsed = llm;
+      config = cfg;
+      apiKey = process.env[cfg.envKey];
+      break;
+    }
   }
 
-  const data = await response.json();
-  const content = data.choices[0].message.content;
+  if (!config || !apiKey) {
+    throw new Error('No LLM API key configured');
+  }
 
+  console.log(`   Using LLM: ${llmUsed} (${config.model})`);
+
+  let response;
+
+  if (config.isAnthropic) {
+    // Anthropic API has different format
+    response = await fetch(`${config.baseUrl}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: config.model,
+        max_tokens: mode === 'comprehensive' ? 4096 : 2048,
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        system: 'You are a senior research analyst. Return only valid JSON.',
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const content = data.content[0].text;
+
+    return parseSourcesResponse(content, llmUsed);
+  } else if (llmUsed === 'perplexity') {
+    // Perplexity API
+    response = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          { role: 'system', content: 'You are a senior research analyst. Return only valid JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.2,
+        max_tokens: mode === 'comprehensive' ? 4000 : 2500,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Perplexity API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices[0].message.content;
+
+    return parseSourcesResponse(content, llmUsed);
+  } else {
+    // OpenAI-compatible API (DeepSeek, etc.)
+    response = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          { role: 'system', content: 'You are a senior research analyst. Return only valid JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: mode === 'comprehensive' ? 4000 : 2500,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`LLM API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices[0].message.content;
+
+    return parseSourcesResponse(content, llmUsed);
+  }
+}
+
+/**
+ * Parse LLM response to extract sources
+ */
+function parseSourcesResponse(content, llmUsed) {
   // Parse JSON from response
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
@@ -340,6 +466,7 @@ async function callLLMForSources(topicName, keywords, mode, languages, regions, 
     sources: parsed.sources || [],
     executiveSummary: parsed.executive_summary,
     searchQueries: parsed.search_queries,
+    llmUsed,
   };
 }
 
