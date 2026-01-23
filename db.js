@@ -112,6 +112,59 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_conversations_brand ON conversations(brand_name);
       CREATE INDEX IF NOT EXISTS idx_conversations_agent ON conversations(agent_type);
       CREATE INDEX IF NOT EXISTS idx_conversations_created ON conversations(created_at DESC);
+
+      -- Topic Intelligence Tables
+      CREATE TABLE IF NOT EXISTS intelligence_topics (
+        id SERIAL PRIMARY KEY,
+        topic_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        name VARCHAR(500) NOT NULL,
+        keywords JSONB DEFAULT '[]',
+        status VARCHAR(50) DEFAULT 'active',
+        daily_scan_config JSONB DEFAULT '{"enabled": true, "time": "06:00", "timezone": "Asia/Hong_Kong"}',
+        weekly_digest_config JSONB DEFAULT '{"enabled": true, "day": "monday", "time": "08:00", "timezone": "Asia/Hong_Kong", "recipientList": []}',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS intelligence_sources (
+        id SERIAL PRIMARY KEY,
+        source_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        topic_id UUID REFERENCES intelligence_topics(topic_id) ON DELETE CASCADE,
+        name VARCHAR(500) NOT NULL,
+        title TEXT,
+        source_type VARCHAR(100),
+        primary_url TEXT NOT NULL,
+        secondary_urls JSONB DEFAULT '[]',
+        content_types JSONB DEFAULT '[]',
+        posting_frequency VARCHAR(50),
+        focus_areas JSONB DEFAULT '[]',
+        authority_score INTEGER DEFAULT 50,
+        why_selected TEXT,
+        freshness VARCHAR(100),
+        priority VARCHAR(50) DEFAULT 'medium',
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS intelligence_news (
+        id SERIAL PRIMARY KEY,
+        news_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        topic_id UUID REFERENCES intelligence_topics(topic_id) ON DELETE CASCADE,
+        source_id UUID REFERENCES intelligence_sources(source_id) ON DELETE SET NULL,
+        title TEXT NOT NULL,
+        url TEXT,
+        summary TEXT,
+        importance_score INTEGER,
+        dimensions JSONB,
+        published_at TIMESTAMP,
+        scraped_at TIMESTAMP DEFAULT NOW(),
+        status VARCHAR(50) DEFAULT 'new'
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_topics_status ON intelligence_topics(status);
+      CREATE INDEX IF NOT EXISTS idx_sources_topic ON intelligence_sources(topic_id);
+      CREATE INDEX IF NOT EXISTS idx_news_topic ON intelligence_news(topic_id);
+      CREATE INDEX IF NOT EXISTS idx_news_scraped ON intelligence_news(scraped_at DESC);
     `);
     console.log('✅ Database schema initialized');
   } catch (error) {
@@ -650,6 +703,173 @@ async function query(text, params) {
   return pool.query(text, params);
 }
 
+// ==========================================
+// Topic Intelligence Functions
+// ==========================================
+
+async function saveIntelligenceTopic(name, keywords = [], config = {}) {
+  try {
+    const dailyScanConfig = config.dailyScanConfig || {
+      enabled: true,
+      time: '06:00',
+      timezone: 'Asia/Hong_Kong'
+    };
+    const weeklyDigestConfig = config.weeklyDigestConfig || {
+      enabled: true,
+      day: 'monday',
+      time: '08:00',
+      timezone: 'Asia/Hong_Kong',
+      recipientList: []
+    };
+
+    const result = await pool.query(
+      `INSERT INTO intelligence_topics (name, keywords, daily_scan_config, weekly_digest_config)
+       VALUES ($1, $2, $3, $4)
+       RETURNING topic_id, name, keywords, status, daily_scan_config, weekly_digest_config, created_at`,
+      [name, JSON.stringify(keywords), JSON.stringify(dailyScanConfig), JSON.stringify(weeklyDigestConfig)]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving intelligence topic:', error);
+    throw error;
+  }
+}
+
+async function getIntelligenceTopics() {
+  try {
+    const result = await pool.query(
+      `SELECT topic_id, name, keywords, status, daily_scan_config, weekly_digest_config, created_at, updated_at
+       FROM intelligence_topics
+       ORDER BY created_at DESC`
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching intelligence topics:', error);
+    throw error;
+  }
+}
+
+async function getIntelligenceTopic(topicId) {
+  try {
+    const result = await pool.query(
+      `SELECT t.topic_id, t.name, t.keywords, t.status, t.daily_scan_config, t.weekly_digest_config, t.created_at, t.updated_at,
+              COALESCE(json_agg(s.*) FILTER (WHERE s.source_id IS NOT NULL), '[]') as sources
+       FROM intelligence_topics t
+       LEFT JOIN intelligence_sources s ON t.topic_id = s.topic_id
+       WHERE t.topic_id = $1
+       GROUP BY t.id`,
+      [topicId]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching intelligence topic:', error);
+    throw error;
+  }
+}
+
+async function updateIntelligenceTopicStatus(topicId, status) {
+  try {
+    const result = await pool.query(
+      `UPDATE intelligence_topics SET status = $2, updated_at = NOW() WHERE topic_id = $1 RETURNING *`,
+      [topicId, status]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error updating topic status:', error);
+    throw error;
+  }
+}
+
+async function saveIntelligenceSources(topicId, sources) {
+  try {
+    const savedSources = [];
+    for (const source of sources) {
+      const result = await pool.query(
+        `INSERT INTO intelligence_sources
+         (topic_id, name, title, source_type, primary_url, secondary_urls, content_types, posting_frequency, focus_areas, authority_score, why_selected, freshness, priority)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         RETURNING *`,
+        [
+          topicId,
+          source.name,
+          source.title || '',
+          source.type || 'blog',
+          source.primary_url,
+          JSON.stringify(source.secondary_urls || []),
+          JSON.stringify(source.content_types || []),
+          source.posting_frequency || 'irregular',
+          JSON.stringify(source.focus_areas || []),
+          source.authority_score || 50,
+          source.why_selected || '',
+          source.freshness || '',
+          source.priority || 'medium'
+        ]
+      );
+      savedSources.push(result.rows[0]);
+    }
+    return savedSources;
+  } catch (error) {
+    console.error('Error saving intelligence sources:', error);
+    throw error;
+  }
+}
+
+async function getIntelligenceSources(topicId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM intelligence_sources WHERE topic_id = $1 ORDER BY authority_score DESC`,
+      [topicId]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching intelligence sources:', error);
+    throw error;
+  }
+}
+
+async function saveIntelligenceNews(topicId, sourceId, newsItem) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO intelligence_news
+       (topic_id, source_id, title, url, summary, importance_score, dimensions, published_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [
+        topicId,
+        sourceId,
+        newsItem.title,
+        newsItem.url,
+        newsItem.summary,
+        newsItem.importance_score || newsItem.importanceScore,
+        JSON.stringify(newsItem.dimensions || {}),
+        newsItem.published_at || newsItem.publishedAt
+      ]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving intelligence news:', error);
+    throw error;
+  }
+}
+
+async function getIntelligenceNews(topicId, limit = 50) {
+  try {
+    const result = await pool.query(
+      `SELECT n.*, s.name as source_name
+       FROM intelligence_news n
+       LEFT JOIN intelligence_sources s ON n.source_id = s.source_id
+       WHERE n.topic_id = $1
+       ORDER BY n.scraped_at DESC
+       LIMIT $2`,
+      [topicId, limit]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching intelligence news:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -679,4 +899,13 @@ module.exports = {
   deleteProject,
   getProjectsByBrand,
   getConversationsByBrandAndBrief,
+  // Topic Intelligence
+  saveIntelligenceTopic,
+  getIntelligenceTopics,
+  getIntelligenceTopic,
+  updateIntelligenceTopicStatus,
+  saveIntelligenceSources,
+  getIntelligenceSources,
+  saveIntelligenceNews,
+  getIntelligenceNews,
 };
