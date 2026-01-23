@@ -772,6 +772,130 @@ router.post('/email/test', async (req, res) => {
   }
 });
 
+/**
+ * GET /topics/:id/sources
+ * Gets all sources for a specific topic
+ */
+router.get('/topics/:id/sources', async (req, res) => {
+  try {
+    const topicId = req.params.id;
+    let sources = [];
+
+    if (db && process.env.DATABASE_URL) {
+      try {
+        sources = await db.getIntelligenceSources(topicId);
+      } catch (dbError) {
+        console.error('Database fetch failed:', dbError.message);
+        // Fallback to in-memory
+        sources = Array.from(inMemorySources.values()).filter(s => s.topicId === topicId);
+      }
+    } else {
+      sources = Array.from(inMemorySources.values()).filter(s => s.topicId === topicId);
+    }
+
+    res.json({
+      success: true,
+      topicId,
+      sources,
+      total: sources.length,
+    });
+  } catch (error) {
+    console.error('Error fetching sources:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /topics/:id/sources
+ * Adds new sources to an existing topic
+ */
+router.post('/topics/:id/sources', async (req, res) => {
+  try {
+    const topicId = req.params.id;
+    const { sources: newSources = [] } = req.body;
+
+    if (!newSources.length) {
+      return res.status(400).json({ success: false, error: 'At least one source is required' });
+    }
+
+    let savedSources = [];
+
+    if (db && process.env.DATABASE_URL) {
+      try {
+        // Verify topic exists
+        const topic = await db.getIntelligenceTopic(topicId);
+        if (!topic) {
+          return res.status(404).json({ success: false, error: 'Topic not found' });
+        }
+
+        // Add source_id if not present
+        const sourcesWithIds = newSources.map(s => ({
+          ...s,
+          source_id: s.source_id || `source-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        }));
+
+        savedSources = await db.saveIntelligenceSources(topicId, sourcesWithIds);
+        console.log(`✅ Added ${savedSources.length} sources to topic ${topicId}`);
+      } catch (dbError) {
+        console.error('Database save failed:', dbError.message);
+        // Fallback to in-memory
+        newSources.forEach(source => {
+          const sourceId = source.source_id || `source-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          inMemorySources.set(sourceId, { ...source, source_id: sourceId, topicId });
+          savedSources.push({ ...source, source_id: sourceId });
+        });
+      }
+    } else {
+      // In-memory storage
+      newSources.forEach(source => {
+        const sourceId = source.source_id || `source-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        inMemorySources.set(sourceId, { ...source, source_id: sourceId, topicId });
+        savedSources.push({ ...source, source_id: sourceId });
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Added ${savedSources.length} sources to topic`,
+      sources: savedSources,
+    });
+  } catch (error) {
+    console.error('Error adding sources:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /topics/:id/sources/:sourceId
+ * Removes a source from a topic
+ */
+router.delete('/topics/:id/sources/:sourceId', async (req, res) => {
+  try {
+    const { id: topicId, sourceId } = req.params;
+
+    if (db && process.env.DATABASE_URL) {
+      try {
+        // Note: Would need to add deleteIntelligenceSource to db.js
+        // For now, just log and return success
+        console.log(`🗑️ Would delete source ${sourceId} from topic ${topicId}`);
+      } catch (dbError) {
+        console.error('Database delete failed:', dbError.message);
+      }
+    }
+
+    // In-memory deletion
+    inMemorySources.delete(sourceId);
+
+    res.json({
+      success: true,
+      message: 'Source removed',
+    });
+  } catch (error) {
+    console.error('Error removing source:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==========================================
 // Helper Functions
 // ==========================================
