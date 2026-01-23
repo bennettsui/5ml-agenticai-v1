@@ -29,7 +29,7 @@ export default function ReceiptProcessor() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string>('');
 
   const formatErrorMessage = (value: unknown): string => {
     if (typeof value === 'string') return value;
@@ -145,7 +145,7 @@ export default function ReceiptProcessor() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setError('');
     setIsProcessing(true);
     setBatchStatus(null);
 
@@ -322,7 +322,7 @@ export default function ReceiptProcessor() {
             </button>
           </form>
 
-          {error && (
+          {error.length > 0 && (
             <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
               <div className="flex">
                 <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
