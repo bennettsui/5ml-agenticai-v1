@@ -1297,10 +1297,17 @@ app.get('/stats', async (req, res) => {
   try {
     const stats = {
       agents: [
-        { id: 'creative', name: 'Creative Agent', description: 'Brand concepts & visual direction', status: 'active' },
-        { id: 'seo', name: 'SEO Agent', description: 'Search optimization with web research', status: 'active' },
-        { id: 'social', name: 'Social Media Agent', description: 'Social strategy & trending formats', status: 'active' },
-        { id: 'research', name: 'Research Agent', description: 'Market intelligence & insights', status: 'active' },
+        // Social Media & SEO Agents
+        { id: 'creative', name: 'Creative Agent', description: 'Brand concepts & visual direction', status: 'active', category: 'social' },
+        { id: 'seo', name: 'SEO Agent', description: 'Search optimization with web research', status: 'active', category: 'social' },
+        { id: 'social', name: 'Social Media Agent', description: 'Social strategy & trending formats', status: 'active', category: 'social' },
+        { id: 'research', name: 'Research Agent', description: 'Market intelligence & insights', status: 'active', category: 'social' },
+        // Topic Intelligence Agents
+        { id: 'source-curator', name: 'Source Curator', description: 'Discovers & qualifies news sources using Perplexity', status: 'active', category: 'intelligence' },
+        { id: 'news-analyst', name: 'News Analyst', description: 'Analyzes articles with Claude for relevance & insights', status: 'active', category: 'intelligence' },
+        { id: 'news-writer', name: 'News Writer', description: 'Generates digests & newsletters with DeepSeek', status: 'active', category: 'intelligence' },
+        // OCR Agent
+        { id: 'ocr', name: 'OCR Agent', description: 'Receipt processing with Claude Vision', status: 'active', category: 'accounting' },
       ],
       models: [
         { id: 'deepseek', name: 'DeepSeek Reasoner', type: 'primary', status: 'available' },
@@ -1310,19 +1317,56 @@ app.get('/stats', async (req, res) => {
       ],
       layers: {
         total: 7,
-        active: 5,
-        planned: 2,
-        completion: 71,
+        active: 6,
+        planned: 1,
+        completion: 86,
+        details: [
+          { id: 'L1', name: 'Core Infrastructure', status: 'active' },
+          { id: 'L2', name: 'Tools & Utilities', status: 'active' },
+          { id: 'L3', name: 'Specialized Agents', status: 'active' },
+          { id: 'L4', name: 'Knowledge Management', status: 'partial' },
+          { id: 'L5', name: 'Workflows', status: 'active' },
+          { id: 'L6', name: 'Orchestration', status: 'active' },
+          { id: 'L7', name: 'Governance', status: 'planned' },
+        ],
       },
+      databaseTables: [
+        { name: 'projects', description: 'Social media projects', category: 'social' },
+        { name: 'analyses', description: 'Agent analysis results', category: 'social' },
+        { name: 'receipts', description: 'Receipt records from OCR', category: 'accounting' },
+        { name: 'intelligence_topics', description: 'Monitored news topics', category: 'intelligence' },
+        { name: 'intelligence_sources', description: 'Curated news sources', category: 'intelligence' },
+        { name: 'intelligence_news', description: 'Collected news articles', category: 'intelligence' },
+      ],
     };
 
     // Add database stats if available
     if (process.env.DATABASE_URL) {
       try {
         const analytics = await getAnalytics();
+
+        // Get Topic Intelligence counts
+        let topicsCount = 0;
+        let sourcesCount = 0;
+        let newsCount = 0;
+        try {
+          const { getIntelligenceTopics, getIntelligenceSources, getIntelligenceNews } = require('./db');
+          const topics = await getIntelligenceTopics();
+          topicsCount = topics.length;
+          // Sum sources across all topics
+          for (const topic of topics) {
+            const sources = await getIntelligenceSources(topic.topic_id);
+            sourcesCount += sources.length;
+          }
+        } catch (e) {
+          // Ignore if Topic Intelligence tables not yet created
+        }
+
         stats.database = {
           projects: analytics.totalProjects,
           analyses: analytics.totalAnalyses,
+          topics: topicsCount,
+          sources: sourcesCount,
           status: 'connected',
         };
       } catch (error) {

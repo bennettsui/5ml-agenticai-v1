@@ -155,8 +155,8 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Active Agents</div>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white">11</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Creative, SEO, Social, Research, OCR, Source Curator, News Analyst, +4</div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">8</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Creative, SEO, Social, Research, OCR, Source Curator, News Analyst, News Writer</div>
             </div>
             <div>
               <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Use Cases</div>
