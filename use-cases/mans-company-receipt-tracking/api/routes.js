@@ -15,6 +15,8 @@ const router = express.Router();
 const db = require('../../../db');
 const path = require('path');
 const fs = require('fs').promises;
+const crypto = require('crypto');
+const { Dropbox } = require('dropbox');
 const { processReceiptBatch } = require('../lib/batch-processor');
 
 // Import tools (will be compiled from TypeScript)
@@ -55,13 +57,29 @@ router.post('/process', async (req, res) => {
       });
     }
 
+    // Ensure client exists (create if missing)
+    let clientId = null;
+    const existingClient = await db.query(
+      'SELECT id FROM t_clients WHERE LOWER(client_name) = LOWER($1)',
+      [client_name.trim()]
+    );
+    if (existingClient.rows.length > 0) {
+      clientId = existingClient.rows[0].id;
+    } else {
+      const newClient = await db.query(
+        'INSERT INTO t_clients (client_name) VALUES ($1) RETURNING id',
+        [client_name.trim()]
+      );
+      clientId = newClient.rows[0].id;
+    }
+
     // Create new batch in database
     const batchResult = await db.query(
       `INSERT INTO receipt_batches (
-        client_name, dropbox_url, status, period_start, period_end
+        client_id, dropbox_url, status, period_start, period_end
       ) VALUES ($1, $2, 'pending', $3, $4)
       RETURNING batch_id, created_at`,
-      [client_name, dropbox_url, period_start || null, period_end || null]
+      [clientId, dropbox_url, period_start || null, period_end || null]
     );
 
     const batchId = batchResult.rows[0].batch_id;
@@ -87,6 +105,130 @@ router.post('/process', async (req, res) => {
     });
   } catch (error) {
     console.error('Error starting receipt processing:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to start receipt processing',
+      details: error.message,
+    });
+  }
+});
+
+/**
+ * POST /receipts/process-upload
+ *
+ * Start processing receipts from uploaded images (base64).
+ *
+ * Body:
+ * {
+ *   "client_name": "Man's Accounting Firm",
+ *   "period_start": "2026-01-01",
+ *   "period_end": "2026-01-31",
+ *   "images": [{ "filename": "receipt.png", "data": "base64..." }]
+ * }
+ */
+router.post('/process-upload', async (req, res) => {
+  try {
+    const { client_name, period_start, period_end, images } = req.body;
+
+    if (!client_name || !Array.isArray(images) || images.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'client_name and images are required',
+      });
+    }
+
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured',
+        details: 'DATABASE_URL environment variable is not set. Please configure PostgreSQL database.',
+        help: 'Run: fly postgres create && fly postgres attach <postgres-app-name>',
+      });
+    }
+
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(503).json({
+        success: false,
+        error: 'OCR not configured',
+        details: 'ANTHROPIC_API_KEY environment variable is not set.',
+      });
+    }
+
+    let clientId = null;
+    const existingClient = await db.query(
+      'SELECT id FROM t_clients WHERE LOWER(client_name) = LOWER($1)',
+      [client_name.trim()]
+    );
+    if (existingClient.rows.length > 0) {
+      clientId = existingClient.rows[0].id;
+    } else {
+      const newClient = await db.query(
+        'INSERT INTO t_clients (client_name) VALUES ($1) RETURNING id',
+        [client_name.trim()]
+      );
+      clientId = newClient.rows[0].id;
+    }
+
+    const batchResult = await db.query(
+      `INSERT INTO receipt_batches (
+        client_id, status, period_start, period_end
+      ) VALUES ($1, 'pending', $2, $3)
+      RETURNING batch_id, created_at`,
+      [clientId, period_start || null, period_end || null]
+    );
+
+    const batchId = batchResult.rows[0].batch_id;
+    const uploadDir = path.join('/tmp/receipts', batchId, 'uploads');
+    await fs.mkdir(uploadDir, { recursive: true });
+
+    const uploadedFiles = [];
+    for (let i = 0; i < images.length; i += 1) {
+      const image = images[i] || {};
+      const filename = typeof image.filename === 'string' ? image.filename : `receipt_${i + 1}.png`;
+      const data = typeof image.data === 'string' ? image.data : '';
+      if (!data) continue;
+
+      const safeName = path.basename(filename);
+      const outputPath = path.join(uploadDir, safeName);
+      const buffer = Buffer.from(data, 'base64');
+      await fs.writeFile(outputPath, buffer);
+
+      const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+      uploadedFiles.push({
+        success: true,
+        filename: safeName,
+        path: outputPath,
+        hash,
+        size: buffer.length,
+      });
+    }
+
+    if (uploadedFiles.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No valid images provided',
+      });
+    }
+
+    await db.query(
+      `INSERT INTO processing_logs (batch_id, log_level, step, message)
+       VALUES ($1, 'info', 'batch_created', 'New batch created for upload processing')`,
+      [batchId]
+    );
+
+    processReceiptBatch(batchId, null, client_name, uploadedFiles).catch(error => {
+      console.error(`Error processing batch ${batchId}:`, error);
+    });
+
+    res.json({
+      success: true,
+      batch_id: batchId,
+      status: 'pending',
+      message: 'Receipt processing started. Use /batches/:batchId/status to check progress.',
+      created_at: batchResult.rows[0].created_at,
+    });
+  } catch (error) {
+    console.error('Error starting upload receipt processing:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to start receipt processing',

@@ -22,7 +22,7 @@ interface BatchStatus {
 }
 
 export default function ReceiptProcessor() {
-  const [dropboxUrl, setDropboxUrl] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [clientName, setClientName] = useState("Man's Accounting Firm");
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
@@ -41,6 +41,19 @@ export default function ReceiptProcessor() {
     }
     return 'Unexpected error occurred';
   };
+
+  const readFileAsBase64 = (file: File): Promise<string> => (
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result?.toString() || '';
+        const commaIndex = result.indexOf(',');
+        resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    })
+  );
 
   // Real-time updates with WebSocket (fallback to polling)
   useEffect(() => {
@@ -136,17 +149,30 @@ export default function ReceiptProcessor() {
     setIsProcessing(true);
     setBatchStatus(null);
 
+    if (uploadedFiles.length === 0) {
+      setError('Please select at least one receipt image.');
+      setIsProcessing(false);
+      return;
+    }
+
     try {
-      const response = await fetch('/api/receipts/process', {
+      const images = await Promise.all(
+        uploadedFiles.map(async (file) => ({
+          filename: file.name,
+          data: await readFileAsBase64(file),
+        }))
+      );
+
+      const response = await fetch('/api/receipts/process-upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           client_name: clientName,
-          dropbox_url: dropboxUrl,
           period_start: periodStart || null,
           period_end: periodEnd || null,
+          images,
         }),
       });
 
@@ -203,7 +229,7 @@ export default function ReceiptProcessor() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Receipt to P&L Automation</h1>
           <p className="mt-2 text-slate-600 dark:text-slate-400">
-            Upload receipts from Dropbox and get a complete P&L statement in under 3 minutes
+            Upload receipts and get a complete P&L statement in under 3 minutes
           </p>
         </div>
 
@@ -225,27 +251,27 @@ export default function ReceiptProcessor() {
               />
             </div>
 
-            <div>
-              <label htmlFor="dropboxUrl" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Dropbox Shared Folder URL
-              </label>
-              <div className="mt-1 relative">
-                <input
-                  type="url"
-                  id="dropboxUrl"
-                  value={dropboxUrl}
-                  onChange={(e) => setDropboxUrl(e.target.value)}
-                  className="block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                  placeholder="https://www.dropbox.com/sh/abc123..."
-                  required
-                  disabled={isProcessing}
-                />
-                <Upload className="absolute right-3 top-2.5 h-5 w-5 text-slate-400 dark:text-slate-500" />
-              </div>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Share your Dropbox folder and paste the link here
-              </p>
-            </div>
+                <div>
+                  <label htmlFor="receiptFiles" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Receipt Images
+                  </label>
+                  <div className="mt-1 relative">
+                    <input
+                      type="file"
+                      id="receiptFiles"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => setUploadedFiles(Array.from(e.target.files || []))}
+                      className="block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      required
+                      disabled={isProcessing}
+                    />
+                    <Upload className="absolute right-3 top-2.5 h-5 w-5 text-slate-400 dark:text-slate-500" />
+                  </div>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Upload one or more receipt images (JPG, PNG, WEBP)
+                  </p>
+                </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -417,8 +443,8 @@ export default function ReceiptProcessor() {
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
           <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">How it works</h3>
           <ol className="list-decimal list-inside space-y-2 text-sm text-blue-700 dark:text-blue-400">
-            <li>Share your Dropbox folder containing receipt images (JPG, PNG, WEBP)</li>
-            <li>Paste the shared link above and click "Process Receipts"</li>
+            <li>Upload your receipt images (JPG, PNG, WEBP)</li>
+            <li>Click "Process Receipts" to start OCR and categorization</li>
             <li>Our AI extracts data from receipts using Claude Vision (supports Chinese + English)</li>
             <li>Receipts are automatically categorized with HK IRD compliance checks</li>
             <li>Download your complete P&L Excel report in under 3 minutes</li>
