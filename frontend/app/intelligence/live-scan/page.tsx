@@ -99,21 +99,33 @@ export default function LiveScanPage() {
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
   const [showErrors, setShowErrors] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityLog[]>([]);
+  const [shouldAutostart, setShouldAutostart] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const activityLogRef = useRef<HTMLDivElement>(null);
+  const autostartTriggered = useRef(false);
 
   // Fetch all topics on mount
   useEffect(() => {
     fetchTopics();
   }, []);
 
-  // Get topic from URL params
+  // Get topic from URL params and check for autostart
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('topic') || '';
+    const autostart = params.get('autostart') === 'true';
+
     if (id) {
       setTopicId(id);
+    }
+
+    if (autostart) {
+      setShouldAutostart(true);
+      // Remove autostart from URL to prevent re-triggering on refresh
+      const url = new URL(window.location.href);
+      url.searchParams.delete('autostart');
+      window.history.replaceState({}, '', url.toString());
     }
   }, []);
 
@@ -142,6 +154,18 @@ export default function LiveScanPage() {
       wsRef.current?.close();
     };
   }, [topicId]);
+
+  // Handle autostart when topic is loaded and WebSocket is connected
+  useEffect(() => {
+    if (shouldAutostart && topicId && topicName && isConnected && !autostartTriggered.current) {
+      autostartTriggered.current = true;
+      setShouldAutostart(false);
+      // Small delay to ensure everything is ready
+      setTimeout(() => {
+        handleStartScanInternal();
+      }, 500);
+    }
+  }, [shouldAutostart, topicId, topicName, isConnected]);
 
   const fetchTopics = async () => {
     setLoadingTopics(true);
@@ -299,7 +323,8 @@ export default function LiveScanPage() {
     }
   };
 
-  const handleStartScan = async () => {
+  // Internal function for starting scan - can be called from useEffect
+  const handleStartScanInternal = async () => {
     if (!topicId) return;
 
     setProgress(prev => ({ ...prev, status: 'scanning' }));
@@ -336,6 +361,8 @@ export default function LiveScanPage() {
       setProgress(prev => ({ ...prev, status: 'failed' }));
     }
   };
+
+  const handleStartScan = () => handleStartScanInternal();
 
   const handlePauseScan = () => {
     // Would send pause command via WebSocket

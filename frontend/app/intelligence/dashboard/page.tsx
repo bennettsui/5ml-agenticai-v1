@@ -163,27 +163,10 @@ export default function IntelligenceDashboardPage() {
     setTopic(null);
   };
 
-  const handleManualScan = async () => {
+  const handleManualScan = () => {
     if (!topic) return;
-    setIsScanning(true);
-
-    try {
-      const response = await fetch('/api/orchestration/trigger-scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topicId: topic.topic_id }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        // Redirect to live scan
-        window.location.href = `/intelligence/live-scan?topic=${topic.id}`;
-      }
-    } catch (error) {
-      console.error('Failed to start scan:', error);
-    } finally {
-      setIsScanning(false);
-    }
+    // Redirect to live scan with autostart parameter
+    window.location.href = `/intelligence/live-scan?topic=${topic.topic_id}&autostart=true`;
   };
 
   const handleSendDigest = async () => {
