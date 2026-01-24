@@ -2025,7 +2025,7 @@ function generateMockAISummary(articles, topicName) {
 
 /**
  * POST /email/test
- * Sends a test email
+ * Sends a test email using Resend API
  */
 router.post('/email/test', async (req, res) => {
   try {
@@ -2035,12 +2035,92 @@ router.post('/email/test', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Email is required' });
     }
 
-    // In production, this would use ResendEmailTool
-    console.log(`📧 Test email would be sent to: ${email}`);
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      console.error('RESEND_API_KEY not configured');
+      return res.status(500).json({
+        success: false,
+        error: 'Email service not configured. Please set RESEND_API_KEY environment variable.'
+      });
+    }
+
+    // Get topic name if topicId provided
+    let topicName = 'Test Topic';
+    if (topicId && db && process.env.DATABASE_URL) {
+      try {
+        const topic = await db.getIntelligenceTopic(topicId);
+        if (topic) {
+          topicName = topic.name;
+        }
+      } catch (dbError) {
+        console.warn('Could not fetch topic name:', dbError.message);
+      }
+    }
+
+    // Generate a simple test email HTML
+    const testHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+          h1 { color: #0d9488; margin-bottom: 16px; }
+          p { color: #475569; line-height: 1.6; }
+          .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>🎉 Test Email Successful!</h1>
+          <p>This is a test email from your <strong>${topicName}</strong> intelligence digest.</p>
+          <p>If you received this email, your email configuration is working correctly. You'll receive weekly intelligence digests at this address.</p>
+          <div class="footer">
+            <p>Sent via 5ML Topic Intelligence</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    console.log(`📧 Sending test email to: ${email}`);
+
+    // Send email via Resend API
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'news@5ml.io',
+        to: email,
+        subject: `[TEST] ${topicName} Weekly Brief`,
+        html: testHtml,
+        reply_to: 'support@5ml.io',
+        tags: [
+          { name: 'type', value: 'test' },
+          ...(topicId ? [{ name: 'topic_id', value: topicId }] : []),
+        ],
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Resend API error:', data);
+      return res.status(response.status).json({
+        success: false,
+        error: data.message || 'Failed to send email'
+      });
+    }
+
+    console.log(`✅ Test email sent successfully: ${data.id}`);
 
     res.json({
       success: true,
       message: `Test email sent to ${email}`,
+      emailId: data.id,
     });
   } catch (error) {
     console.error('Error sending test email:', error);
