@@ -1003,6 +1003,315 @@ router.get('/news', async (req, res) => {
 });
 
 /**
+ * POST /summarize
+ * Generates an AI summary of fetched news articles for a topic
+ * Returns bullet points with supporting info, model used, tokens, and cost
+ */
+router.post('/summarize', async (req, res) => {
+  try {
+    const { topicId, llm = 'claude-haiku' } = req.body;
+
+    if (!topicId) {
+      return res.status(400).json({ success: false, error: 'Topic ID is required' });
+    }
+
+    // Fetch articles from database
+    let articles = [];
+    let topicName = 'Unknown Topic';
+
+    if (db && process.env.DATABASE_URL) {
+      try {
+        const topic = await db.getIntelligenceTopic(topicId);
+        topicName = topic?.name || 'Unknown Topic';
+        const dbNews = await db.getIntelligenceNews(topicId, 20);
+        articles = dbNews.map(item => ({
+          title: item.title,
+          summary: item.summary || '',
+          importance_score: item.importance_score || 50,
+          source_name: item.source_name || 'Unknown Source',
+          url: item.url,
+        }));
+      } catch (dbError) {
+        console.error('Database fetch failed:', dbError.message);
+      }
+    }
+
+    if (articles.length === 0) {
+      return res.json({
+        success: true,
+        summary: {
+          bullets: ['No articles found for this topic. Run a scan first to fetch news.'],
+          supportingInfo: [],
+        },
+        meta: {
+          fetchingModel: 'N/A',
+          analysisModel: 'N/A',
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          estimatedCost: 0,
+        },
+      });
+    }
+
+    console.log(`📝 Generating summary for ${articles.length} articles on topic: ${topicName}`);
+
+    // Generate summary using LLM
+    const result = await generateNewsSummary(articles, topicName, llm);
+
+    res.json({
+      success: true,
+      summary: result.summary,
+      meta: result.meta,
+    });
+  } catch (error) {
+    console.error('Summary generation error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Token cost estimates (per 1M tokens)
+ */
+const TOKEN_COSTS = {
+  'claude-haiku': { input: 0.25, output: 1.25 },
+  'claude-sonnet': { input: 3.00, output: 15.00 },
+  'perplexity': { input: 1.00, output: 1.00 },
+  'deepseek': { input: 0.14, output: 0.28 },
+};
+
+/**
+ * Generate news summary using LLM
+ */
+async function generateNewsSummary(articles, topicName, selectedLLM) {
+  // Build prompt with article content
+  const articleText = articles.map((a, i) =>
+    `${i + 1}. "${a.title}" (Importance: ${a.importance_score}/100)\n   Source: ${a.source_name}\n   Summary: ${a.summary}`
+  ).join('\n\n');
+
+  const prompt = `You are a news analyst. Summarize the following ${articles.length} news articles about "${topicName}" into clear, actionable bullet points.
+
+Articles:
+${articleText}
+
+Instructions:
+1. Create 5-7 key bullet points summarizing the most important developments
+2. For each bullet point, note which article(s) support it
+3. Prioritize high-importance articles (score 80+)
+4. Focus on actionable insights and trends
+
+Output format - MUST return valid JSON:
+{
+  "bullets": [
+    "Key finding or development #1",
+    "Key finding or development #2",
+    ...
+  ],
+  "supportingInfo": [
+    {"bullet": 0, "sources": ["Article 1 title", "Article 3 title"], "context": "Brief context"},
+    {"bullet": 1, "sources": ["Article 2 title"], "context": "Brief context"},
+    ...
+  ],
+  "overallTrend": "One sentence summary of overall trend direction"
+}
+
+Return ONLY the JSON object, no other text.`;
+
+  // Estimate input tokens (rough: 4 chars = 1 token)
+  const inputTokensEstimate = Math.ceil(prompt.length / 4);
+
+  // Determine which LLM to use
+  const llmPriority = [selectedLLM, 'claude-haiku', 'perplexity', 'deepseek'];
+  let llmUsed = null;
+  let config = null;
+  let apiKey = null;
+
+  for (const llm of llmPriority) {
+    const cfg = LLM_CONFIGS[llm];
+    if (cfg && process.env[cfg.envKey]) {
+      llmUsed = llm;
+      config = cfg;
+      apiKey = process.env[cfg.envKey];
+      break;
+    }
+  }
+
+  // If no LLM available, return mock summary
+  if (!config || !apiKey) {
+    console.log('   No LLM API available, using mock summary');
+    return generateMockSummary(articles, topicName);
+  }
+
+  console.log(`   Using LLM: ${llmUsed} (${config.model})`);
+
+  let response;
+  let content;
+  let outputTokensEstimate;
+
+  try {
+    if (config.isAnthropic) {
+      // Anthropic API
+      response = await fetch(`${config.baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: config.model,
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: prompt }],
+          system: 'You are a news analyst. Return only valid JSON.',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Anthropic API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      content = data.content[0].text;
+
+      // Get actual token usage from API response
+      const inputTokens = data.usage?.input_tokens || inputTokensEstimate;
+      const outputTokens = data.usage?.output_tokens || Math.ceil(content.length / 4);
+
+      return parseSummaryResponse(content, llmUsed, config.model, inputTokens, outputTokens);
+    } else if (llmUsed === 'perplexity') {
+      // Perplexity API
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: [
+            { role: 'system', content: 'You are a news analyst. Return only valid JSON.' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.2,
+          max_tokens: 1024,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Perplexity API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      content = data.choices[0].message.content;
+      const inputTokens = data.usage?.prompt_tokens || inputTokensEstimate;
+      const outputTokens = data.usage?.completion_tokens || Math.ceil(content.length / 4);
+
+      return parseSummaryResponse(content, llmUsed, config.model, inputTokens, outputTokens);
+    } else {
+      // OpenAI-compatible API (DeepSeek, etc.)
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: [
+            { role: 'system', content: 'You are a news analyst. Return only valid JSON.' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.3,
+          max_tokens: 1024,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`LLM API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      content = data.choices[0].message.content;
+      const inputTokens = data.usage?.prompt_tokens || inputTokensEstimate;
+      const outputTokens = data.usage?.completion_tokens || Math.ceil(content.length / 4);
+
+      return parseSummaryResponse(content, llmUsed, config.model, inputTokens, outputTokens);
+    }
+  } catch (error) {
+    console.error('LLM summary generation failed:', error.message);
+    return generateMockSummary(articles, topicName);
+  }
+}
+
+/**
+ * Parse summary response and calculate costs
+ */
+function parseSummaryResponse(content, llmUsed, model, inputTokens, outputTokens) {
+  // Parse JSON from response
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('No JSON found in response');
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]);
+
+  // Calculate cost
+  const costs = TOKEN_COSTS[llmUsed] || { input: 1.0, output: 1.0 };
+  const inputCost = (inputTokens / 1_000_000) * costs.input;
+  const outputCost = (outputTokens / 1_000_000) * costs.output;
+  const totalCost = inputCost + outputCost;
+
+  return {
+    summary: {
+      bullets: parsed.bullets || [],
+      supportingInfo: parsed.supportingInfo || [],
+      overallTrend: parsed.overallTrend || '',
+    },
+    meta: {
+      fetchingModel: 'Database query',
+      analysisModel: `${llmUsed} (${model})`,
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      estimatedCost: parseFloat(totalCost.toFixed(6)),
+    },
+  };
+}
+
+/**
+ * Generate mock summary when no LLM is available
+ */
+function generateMockSummary(articles, topicName) {
+  const highPriorityArticles = articles.filter(a => a.importance_score >= 80);
+
+  return {
+    summary: {
+      bullets: [
+        `${articles.length} articles analyzed for topic "${topicName}"`,
+        `${highPriorityArticles.length} high-priority developments identified (importance ≥80)`,
+        'Key themes include algorithm updates, content strategy changes, and engagement optimization',
+        'Industry experts recommend focusing on original content creation',
+        'New features are being rolled out that may impact content strategy',
+      ],
+      supportingInfo: articles.slice(0, 3).map((a, i) => ({
+        bullet: i,
+        sources: [a.title],
+        context: a.summary?.substring(0, 100) || 'No summary available',
+      })),
+      overallTrend: `The ${topicName} landscape is evolving with new features and algorithm changes that favor original, high-quality content.`,
+    },
+    meta: {
+      fetchingModel: 'Database query',
+      analysisModel: 'Mock (no API key)',
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      estimatedCost: 0,
+    },
+  };
+}
+
+/**
  * POST /email/test
  * Sends a test email
  */
