@@ -1703,16 +1703,26 @@ Return ONLY the JSON object, no other text.`;
             { role: 'user', content: prompt }
           ],
           temperature: 0.3,
-          max_tokens: 1024,
+          max_tokens: 4096,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`LLM API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('   DeepSeek API error response:', errorText);
+        throw new Error(`LLM API error: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('   DeepSeek response received, finish_reason:', data.choices?.[0]?.finish_reason);
+
       content = data.choices[0].message.content;
+
+      // Log if response seems truncated
+      if (data.choices?.[0]?.finish_reason === 'length') {
+        console.warn('   ⚠️ Response was truncated due to max_tokens limit');
+      }
+
       const inputTokens = data.usage?.prompt_tokens || inputTokensEstimate;
       const outputTokens = data.usage?.completion_tokens || Math.ceil(content.length / 4);
 
@@ -1729,13 +1739,24 @@ Return ONLY the JSON object, no other text.`;
  * Parse summary response and calculate costs
  */
 function parseSummaryResponse(content, llmUsed, model, inputTokens, outputTokens) {
+  console.log('   Parsing LLM response, length:', content?.length || 0);
+
   // Parse JSON from response
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
+    console.error('   Raw content (first 500 chars):', content?.substring(0, 500));
     throw new Error('No JSON found in response');
   }
 
-  const parsed = JSON.parse(jsonMatch[0]);
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch (parseError) {
+    console.error('   JSON parse error:', parseError.message);
+    console.error('   Raw JSON (first 500 chars):', jsonMatch[0].substring(0, 500));
+    console.error('   Raw JSON (last 200 chars):', jsonMatch[0].slice(-200));
+    throw parseError;
+  }
 
   // Calculate cost
   const costs = TOKEN_COSTS[llmUsed] || { input: 1.0, output: 1.0 };
