@@ -2106,10 +2106,14 @@ router.post('/summarize', async (req, res) => {
       });
     }
 
-    console.log(`📝 Generating categorized summary for ${articles.length} articles on topic: ${topicName}`);
+    // Limit articles to prevent token overflow (top 10 by importance)
+    const sortedArticles = [...articles].sort((a, b) => (b.importance_score || 0) - (a.importance_score || 0));
+    const articlesToSummarize = sortedArticles.slice(0, 10);
+
+    console.log(`📝 Generating categorized summary for ${articlesToSummarize.length} articles (of ${articles.length} total) on topic: ${topicName}`);
 
     // Generate summary using LLM
-    const result = await generateNewsSummary(articles, topicName, llm);
+    const result = await generateNewsSummary(articlesToSummarize, topicName, llm);
 
     // Save summary to database
     if (db && process.env.DATABASE_URL) {
@@ -2155,7 +2159,19 @@ router.post('/summarize', async (req, res) => {
     });
   } catch (error) {
     console.error('Summary generation error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error stack:', error.stack);
+
+    // Provide more specific error messages
+    let errorMessage = error.message || 'Unknown error';
+    if (errorMessage.includes('429') || errorMessage.includes('rate')) {
+      errorMessage = 'API rate limit exceeded. Please wait a moment and try again.';
+    } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
+      errorMessage = 'API authentication failed. Please check your API key.';
+    } else if (errorMessage.includes('context') || errorMessage.includes('token')) {
+      errorMessage = 'Content too long for AI processing. Try scanning fewer articles.';
+    }
+
+    res.status(500).json({ success: false, error: errorMessage });
   }
 });
 
@@ -2415,6 +2431,20 @@ Return ONLY the JSON object, no other text.`;
   } catch (error) {
     console.error('   ❌ LLM summary generation failed:', error.message);
     console.error('   Full error:', error);
+
+    // Re-throw with more context for specific error types
+    if (error.message?.includes('429')) {
+      throw new Error('API rate limit exceeded (429). Please wait before retrying.');
+    }
+    if (error.message?.includes('413') || error.message?.includes('too large')) {
+      throw new Error('Request too large. Try reducing the number of articles.');
+    }
+    if (error.message?.includes('context_length') || error.message?.includes('maximum context')) {
+      throw new Error('Content exceeds AI context limit. Try scanning fewer articles.');
+    }
+
+    // For other errors, return mock summary
+    console.log('   Falling back to mock summary due to error');
     return generateMockAISummary(articles, topicName);
   }
 }
