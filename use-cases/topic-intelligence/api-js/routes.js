@@ -730,43 +730,48 @@ router.post('/scan/start', async (req, res) => {
 async function runScanWithUpdates(topicId, topic, sources, scanId) {
   const wsServer = require('../../../services/websocket-server');
 
-  // Track if we're using real sources from database or mock sources
-  const usingRealSources = sources.length > 0;
-  const scanSources = usingRealSources ? sources : generateMockSources(topic.name, topic.keywords || [], 'quick').slice(0, 5);
+  try {
+    // Track if we're using real sources from database or mock sources
+    const usingRealSources = sources.length > 0;
+    const scanSources = usingRealSources ? sources : generateMockSources(topic.name, topic.keywords || [], 'quick').slice(0, 5);
 
-  let articlesFound = 0;
-  let articlesAnalyzed = 0;
-  let highImportanceCount = 0;
+    console.log(`📡 Broadcasting to ${topicId}: Starting scan with ${scanSources.length} sources`);
 
-  // Send initial progress
-  wsServer.broadcast(topicId, {
-    event: 'progress_update',
-    data: {
-      sourcesScanned: 0,
-      totalSources: scanSources.length,
-      articlesFound: 0,
-      articlesAnalyzed: 0,
-      highImportanceCount: 0,
-      status: 'scanning',
-      currentSource: null,
-    },
-  });
+    let articlesFound = 0;
+    let articlesAnalyzed = 0;
+    let highImportanceCount = 0;
 
-  for (let i = 0; i < scanSources.length; i++) {
-    const source = scanSources[i];
-    const sourceName = source.name || `Source ${i + 1}`;
-
-    // Send source status - starting
+    // Send initial progress
     wsServer.broadcast(topicId, {
-      event: 'source_status_update',
+      event: 'progress_update',
       data: {
-        sourceId: source.source_id || `src-${i}`,
-        sourceName,
-        status: 'active',
-        url: source.primary_url,
-        step: 'connecting',
+        sourcesScanned: 0,
+        totalSources: scanSources.length,
+        articlesFound: 0,
+        articlesAnalyzed: 0,
+        highImportanceCount: 0,
+        status: 'scanning',
+        currentSource: null,
       },
     });
+
+    for (let i = 0; i < scanSources.length; i++) {
+      const source = scanSources[i];
+      const sourceName = source.name || `Source ${i + 1}`;
+
+      console.log(`   Scanning source ${i + 1}/${scanSources.length}: ${sourceName}`);
+
+      // Send source status - starting
+      wsServer.broadcast(topicId, {
+        event: 'source_status_update',
+        data: {
+          sourceId: source.source_id || `src-${i}`,
+          sourceName,
+          status: 'active',
+          url: source.primary_url,
+          step: 'connecting',
+        },
+      });
 
     // Simulate connection delay
     await sleep(800);
@@ -902,20 +907,32 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
     await sleep(500);
   }
 
-  // Send completion
-  wsServer.broadcast(topicId, {
-    event: 'scan_complete',
-    data: {
-      scanId,
-      totalSources: scanSources.length,
-      articlesFound,
-      articlesAnalyzed,
-      highImportanceCount,
-      completedAt: new Date().toISOString(),
-    },
-  });
+    // Send completion
+    wsServer.broadcast(topicId, {
+      event: 'scan_complete',
+      data: {
+        scanId,
+        totalSources: scanSources.length,
+        articlesFound,
+        articlesAnalyzed,
+        highImportanceCount,
+        completedAt: new Date().toISOString(),
+      },
+    });
 
-  console.log(`✅ Scan complete for topic: ${topic.name} - ${articlesAnalyzed} articles analyzed`);
+    console.log(`✅ Scan complete for topic: ${topic.name} - ${articlesAnalyzed} articles analyzed`);
+
+  } catch (error) {
+    console.error(`❌ Scan error for topic ${topicId}:`, error);
+    const wsServer = require('../../../services/websocket-server');
+    wsServer.broadcast(topicId, {
+      event: 'error_occurred',
+      data: {
+        message: `Scan failed: ${error.message}`,
+        scanId,
+      },
+    });
+  }
 }
 
 /**
