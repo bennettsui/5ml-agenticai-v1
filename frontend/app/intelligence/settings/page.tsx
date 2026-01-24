@@ -104,6 +104,8 @@ export default function TopicSettingsPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [selectedEdmId, setSelectedEdmId] = useState<string | null>(null);
   const [selectedEdmHtml, setSelectedEdmHtml] = useState<string | null>(null);
+  const [isSavingEdm, setIsSavingEdm] = useState(false);
+  const [isSendingEdm, setIsSendingEdm] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -370,6 +372,74 @@ export default function TopicSettingsPage() {
       }
     } catch (error) {
       console.error('Failed to load EDM:', error);
+    }
+  };
+
+  // Save EDM to database (draft)
+  const handleSaveEdm = async () => {
+    if (!selectedTopicId) return;
+    setIsSavingEdm(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/intelligence/edm/save/${selectedTopicId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage({ type: 'success', text: `EDM saved to database (ID: ${data.edmId})` });
+        // Reload history to show the new entry
+        loadEdmHistory();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to save EDM' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to save EDM' });
+    } finally {
+      setIsSavingEdm(false);
+    }
+  };
+
+  // Send EDM to recipients
+  const handleSendEdm = async () => {
+    if (!selectedTopicId) return;
+
+    // Get recipient count
+    const recipientCount = recipients
+      .split(/[,\n]/)
+      .map(e => e.trim())
+      .filter(e => e && e.includes('@')).length;
+
+    if (recipientCount === 0) {
+      setMessage({ type: 'error', text: 'No recipients configured. Please add recipients first.' });
+      return;
+    }
+
+    if (!confirm(`Send EDM to ${recipientCount} recipient(s)?`)) return;
+
+    setIsSendingEdm(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/intelligence/edm/send/${selectedTopicId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage({ type: 'success', text: `EDM sent to ${data.recipientCount} recipient(s)!` });
+        // Reload history to show the new entry
+        loadEdmHistory();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to send EDM' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to send EDM' });
+    } finally {
+      setIsSendingEdm(false);
     }
   };
 
@@ -907,12 +977,38 @@ export default function TopicSettingsPage() {
                             {edmPreview.articlesIncluded} articles included • Generated {new Date(edmPreview.generatedAt).toLocaleString()}
                           </p>
                         </div>
-                        <button
-                          onClick={() => setShowPreview(false)}
-                          className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
-                        >
-                          <X className="w-4 h-4 text-slate-500" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleSaveEdm}
+                            disabled={isSavingEdm}
+                            className="flex items-center gap-1 px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm"
+                          >
+                            {isSavingEdm ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Save className="w-3 h-3" />
+                            )}
+                            Save Draft
+                          </button>
+                          <button
+                            onClick={handleSendEdm}
+                            disabled={isSendingEdm}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-400 text-white rounded-lg text-sm"
+                          >
+                            {isSendingEdm ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Send className="w-3 h-3" />
+                            )}
+                            Send EDM
+                          </button>
+                          <button
+                            onClick={() => setShowPreview(false)}
+                            className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
+                          >
+                            <X className="w-4 h-4 text-slate-500" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <div className="bg-white">
