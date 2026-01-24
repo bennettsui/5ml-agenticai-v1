@@ -109,6 +109,79 @@ interface SavedSummary {
   created_at: string;
 }
 
+// Helper component to format summary text with bullet points
+function FormattedSummaryText({ text, colorClass = "text-slate-700 dark:text-slate-300" }: { text: string; colorClass?: string }) {
+  // Check if text contains numbered items (1., 2., 3., etc.) or bullet points
+  const hasNumberedItems = /\d+\.\s/.test(text);
+  const hasBulletPoints = /^[-•]\s/m.test(text);
+
+  if (hasNumberedItems || hasBulletPoints) {
+    // Split by numbered items or bullet points
+    const parts = text.split(/(?=\d+\.\s)|(?=^[-•]\s)/m).filter(p => p.trim());
+
+    if (parts.length > 1) {
+      // Extract header (text before first numbered item)
+      const firstNumberIndex = text.search(/\d+\.\s/);
+      const header = firstNumberIndex > 0 ? text.substring(0, firstNumberIndex).trim() : null;
+      const items = header ? parts.slice(1) : parts;
+
+      return (
+        <div className="space-y-1.5">
+          {header && <p className={`text-sm font-medium ${colorClass}`}>{header}</p>}
+          <ul className="space-y-1 ml-1">
+            {items.map((item, idx) => {
+              // Clean up the item text
+              const cleanItem = item.replace(/^\d+\.\s*|^[-•]\s*/, '').trim();
+              if (!cleanItem) return null;
+              return (
+                <li key={idx} className={`text-sm ${colorClass} flex items-start gap-1.5`}>
+                  <span className="text-slate-400 mt-1">•</span>
+                  <span>{cleanItem}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      );
+    }
+  }
+
+  // Check for colon-separated structure (Title: Description)
+  const colonMatch = text.match(/^([^:]+):\s*(.+)$/s);
+  if (colonMatch && colonMatch[1].length < 60) {
+    const [, title, content] = colonMatch;
+    // Check if content has sub-items
+    if (/\d+\.\s/.test(content) || /[-•]\s/.test(content)) {
+      return (
+        <div className="space-y-1.5">
+          <p className={`text-sm font-medium ${colorClass}`}>{title.trim()}</p>
+          <FormattedSummaryText text={content.trim()} colorClass={colorClass} />
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-1">
+        <p className={`text-sm font-medium ${colorClass}`}>{title.trim()}</p>
+        <p className={`text-sm ${colorClass} opacity-90`}>{content.trim()}</p>
+      </div>
+    );
+  }
+
+  // Default: just return the text, split by paragraphs
+  const paragraphs = text.split(/\n\n|\n/).filter(p => p.trim());
+  if (paragraphs.length > 1) {
+    return (
+      <div className="space-y-1.5">
+        {paragraphs.map((p, idx) => (
+          <p key={idx} className={`text-sm ${colorClass}`}>{p.trim()}</p>
+        ))}
+      </div>
+    );
+  }
+
+  return <p className={`text-sm ${colorClass}`}>{text}</p>;
+}
+
 export default function IntelligenceDashboardPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loadingTopics, setLoadingTopics] = useState(true);
@@ -645,15 +718,17 @@ export default function IntelligenceDashboardPage() {
                         {/* Overall Trend */}
                         {summary.overallTrend && (
                           <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex items-center gap-2 mb-2">
                               <TrendingUp className="w-4 h-4 text-purple-500" />
                               <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
                                 Overall Trend
                               </span>
                             </div>
-                            <p className="text-sm text-purple-800 dark:text-purple-200">
-                              {summary.overallTrend}
-                            </p>
+                            <div className="text-sm text-purple-800 dark:text-purple-200 space-y-2">
+                              {summary.overallTrend.split(/\n\n|\n/).filter(p => p.trim()).map((paragraph, idx) => (
+                                <p key={idx}>{paragraph.trim()}</p>
+                              ))}
+                            </div>
                           </div>
                         )}
 
@@ -664,26 +739,28 @@ export default function IntelligenceDashboardPage() {
                               <Zap className="w-4 h-4" />
                               Breaking News / Important Updates
                             </h4>
-                            <ul className="space-y-2">
+                            <ul className="space-y-3">
                               {summary.breakingNews.map((item, i) => (
-                                <li key={i} className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 text-xs flex items-center justify-center font-medium">!</span>
-                                  <div className="flex-1">
-                                    <p className="text-sm text-slate-700 dark:text-slate-300">{item.text}</p>
-                                    {item.sources?.length > 0 && (
-                                      <div className="mt-1 flex flex-wrap gap-1">
-                                        {item.sources.map(srcId => {
-                                          const article = summary.articles?.find(a => a.id === srcId);
-                                          return article ? (
-                                            <a key={srcId} href={article.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded text-xs hover:bg-red-200 dark:hover:bg-red-800">
-                                              [{srcId}] <ExternalLink className="w-2.5 h-2.5" />
-                                            </a>
-                                          ) : (
-                                            <span key={srcId} className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded text-xs">[{srcId}]</span>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
+                                <li key={i} className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                                  <div className="flex items-start gap-2">
+                                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 text-xs flex items-center justify-center font-medium mt-0.5">!</span>
+                                    <div className="flex-1">
+                                      <FormattedSummaryText text={item.text} colorClass="text-slate-700 dark:text-slate-300" />
+                                      {item.sources?.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-1">
+                                          {item.sources.map(srcId => {
+                                            const article = summary.articles?.find(a => a.id === srcId);
+                                            return article ? (
+                                              <a key={srcId} href={article.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded text-xs hover:bg-red-200 dark:hover:bg-red-800">
+                                                [{srcId}] <ExternalLink className="w-2.5 h-2.5" />
+                                              </a>
+                                            ) : (
+                                              <span key={srcId} className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded text-xs">[{srcId}]</span>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 </li>
                               ))}
@@ -698,26 +775,28 @@ export default function IntelligenceDashboardPage() {
                               <Lightbulb className="w-4 h-4" />
                               Practical Tips
                             </h4>
-                            <ul className="space-y-2">
+                            <ul className="space-y-3">
                               {summary.practicalTips.map((item, i) => (
-                                <li key={i} className="flex items-start gap-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 text-xs flex items-center justify-center font-medium">{i + 1}</span>
-                                  <div className="flex-1">
-                                    <p className="text-sm text-slate-700 dark:text-slate-300">{item.text}</p>
-                                    {item.sources?.length > 0 && (
-                                      <div className="mt-1 flex flex-wrap gap-1">
-                                        {item.sources.map(srcId => {
-                                          const article = summary.articles?.find(a => a.id === srcId);
-                                          return article ? (
-                                            <a key={srcId} href={article.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded text-xs hover:bg-amber-200 dark:hover:bg-amber-800">
-                                              [{srcId}] <ExternalLink className="w-2.5 h-2.5" />
-                                            </a>
-                                          ) : (
-                                            <span key={srcId} className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded text-xs">[{srcId}]</span>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
+                                <li key={i} className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                                  <div className="flex items-start gap-2">
+                                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 text-xs flex items-center justify-center font-medium mt-0.5">{i + 1}</span>
+                                    <div className="flex-1">
+                                      <FormattedSummaryText text={item.text} colorClass="text-slate-700 dark:text-slate-300" />
+                                      {item.sources?.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-1">
+                                          {item.sources.map(srcId => {
+                                            const article = summary.articles?.find(a => a.id === srcId);
+                                            return article ? (
+                                              <a key={srcId} href={article.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded text-xs hover:bg-amber-200 dark:hover:bg-amber-800">
+                                                [{srcId}] <ExternalLink className="w-2.5 h-2.5" />
+                                              </a>
+                                            ) : (
+                                              <span key={srcId} className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded text-xs">[{srcId}]</span>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 </li>
                               ))}
@@ -732,26 +811,28 @@ export default function IntelligenceDashboardPage() {
                               <List className="w-4 h-4" />
                               Key Points
                             </h4>
-                            <ul className="space-y-2">
+                            <ul className="space-y-3">
                               {summary.keyPoints.map((item, i) => (
-                                <li key={i} className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-xs flex items-center justify-center font-medium">{i + 1}</span>
-                                  <div className="flex-1">
-                                    <p className="text-sm text-slate-700 dark:text-slate-300">{item.text}</p>
-                                    {item.sources?.length > 0 && (
-                                      <div className="mt-1 flex flex-wrap gap-1">
-                                        {item.sources.map(srcId => {
-                                          const article = summary.articles?.find(a => a.id === srcId);
-                                          return article ? (
-                                            <a key={srcId} href={article.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800">
-                                              [{srcId}] <ExternalLink className="w-2.5 h-2.5" />
-                                            </a>
-                                          ) : (
-                                            <span key={srcId} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">[{srcId}]</span>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
+                                <li key={i} className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                  <div className="flex items-start gap-2">
+                                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-xs flex items-center justify-center font-medium mt-0.5">{i + 1}</span>
+                                    <div className="flex-1">
+                                      <FormattedSummaryText text={item.text} colorClass="text-slate-700 dark:text-slate-300" />
+                                      {item.sources?.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-1">
+                                          {item.sources.map(srcId => {
+                                            const article = summary.articles?.find(a => a.id === srcId);
+                                            return article ? (
+                                              <a key={srcId} href={article.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800">
+                                                [{srcId}] <ExternalLink className="w-2.5 h-2.5" />
+                                              </a>
+                                            ) : (
+                                              <span key={srcId} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">[{srcId}]</span>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 </li>
                               ))}
