@@ -20,6 +20,12 @@ import {
   Clock,
   Mail,
   Globe,
+  Eye,
+  History,
+  FileText,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface TopicSettings {
@@ -60,6 +66,24 @@ interface Source {
   authorityScore: number;
 }
 
+interface EdmPreview {
+  subject: string;
+  previewText: string;
+  htmlContent: string;
+  articlesIncluded: number;
+  generatedAt: string;
+}
+
+interface EdmHistoryItem {
+  id: string;
+  subject: string;
+  previewText: string;
+  recipients: string[];
+  articlesIncluded: number;
+  status: string;
+  sentAt: string;
+}
+
 export default function TopicSettingsPage() {
   const [topic, setTopic] = useState<TopicSettings | null>(null);
   const [topics, setTopics] = useState<TopicListItem[]>([]);
@@ -70,6 +94,16 @@ export default function TopicSettingsPage() {
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testEmail, setTestEmail] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // EDM Preview & History state
+  const [edmPreview, setEdmPreview] = useState<EdmPreview | null>(null);
+  const [edmHistory, setEdmHistory] = useState<EdmHistoryItem[]>([]);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [selectedEdmId, setSelectedEdmId] = useState<string | null>(null);
+  const [selectedEdmHtml, setSelectedEdmHtml] = useState<string | null>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -274,6 +308,68 @@ export default function TopicSettingsPage() {
       setMessage({ type: 'error', text: 'Failed to send test email' });
     } finally {
       setIsSendingTest(false);
+    }
+  };
+
+  // Load EDM Preview
+  const loadEdmPreview = async () => {
+    if (!selectedTopicId) return;
+    setIsLoadingPreview(true);
+    setEdmPreview(null);
+
+    try {
+      const response = await fetch(`/api/intelligence/edm/preview/${selectedTopicId}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setEdmPreview(data.preview);
+        setShowPreview(true);
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to load preview' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to load EDM preview' });
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
+
+  // Load EDM History
+  const loadEdmHistory = async () => {
+    if (!selectedTopicId) return;
+    setIsLoadingHistory(true);
+
+    try {
+      const response = await fetch(`/api/intelligence/edm/history/${selectedTopicId}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setEdmHistory(data.history);
+        setShowHistory(true);
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to load history' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to load EDM history' });
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  // Load specific EDM for preview
+  const loadEdmById = async (edmId: string) => {
+    setSelectedEdmId(edmId);
+    setSelectedEdmHtml(null);
+
+    try {
+      const response = await fetch(`/api/intelligence/edm/${edmId}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setSelectedEdmHtml(data.edm.htmlContent);
+      }
+    } catch (error) {
+      console.error('Failed to load EDM:', error);
     }
   };
 
@@ -759,6 +855,165 @@ export default function TopicSettingsPage() {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* EDM Preview & History */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-purple-500" />
+                Email Newsletter Preview
+              </h2>
+
+              <div className="space-y-4">
+                {/* Action Buttons */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={loadEdmPreview}
+                    disabled={isLoadingPreview}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:bg-slate-400 text-white rounded-lg text-sm"
+                  >
+                    {isLoadingPreview ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                    Generate Preview
+                  </button>
+                  <button
+                    onClick={loadEdmHistory}
+                    disabled={isLoadingHistory}
+                    className="flex items-center gap-2 px-4 py-2 border border-purple-300 dark:border-purple-700 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg text-sm"
+                  >
+                    {isLoadingHistory ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <History className="w-4 h-4" />
+                    )}
+                    View History
+                  </button>
+                </div>
+
+                {/* Preview Section */}
+                {showPreview && edmPreview && (
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                    <div className="bg-slate-50 dark:bg-slate-900 p-3 border-b border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900 dark:text-white">
+                            {edmPreview.subject}
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {edmPreview.articlesIncluded} articles included • Generated {new Date(edmPreview.generatedAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setShowPreview(false)}
+                          className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
+                        >
+                          <X className="w-4 h-4 text-slate-500" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="bg-white">
+                      <iframe
+                        srcDoc={edmPreview.htmlContent}
+                        title="EDM Preview"
+                        className="w-full h-[600px] border-0"
+                        sandbox="allow-same-origin"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* History Section */}
+                {showHistory && (
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                    <div className="bg-slate-50 dark:bg-slate-900 p-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                      <h3 className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                        <History className="w-4 h-4 text-purple-500" />
+                        Sent Email History
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setShowHistory(false);
+                          setSelectedEdmId(null);
+                          setSelectedEdmHtml(null);
+                        }}
+                        className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
+                      >
+                        <X className="w-4 h-4 text-slate-500" />
+                      </button>
+                    </div>
+
+                    {edmHistory.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 dark:text-slate-400">
+                        <Mail className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                        <p>No emails sent yet.</p>
+                        <p className="text-sm mt-1">Send your first weekly digest to see history here.</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                        {edmHistory.map(edm => (
+                          <div
+                            key={edm.id}
+                            className="p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
+                            onClick={() => loadEdmById(edm.id)}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                                  {edm.subject}
+                                </p>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                                    {new Date(edm.sentAt).toLocaleDateString()} {new Date(edm.sentAt).toLocaleTimeString()}
+                                  </span>
+                                  <span className="text-xs text-slate-400">•</span>
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                                    {edm.articlesIncluded} articles
+                                  </span>
+                                  <span className="text-xs text-slate-400">•</span>
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                                    {edm.recipients.length} recipient{edm.recipients.length !== 1 ? 's' : ''}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-xs ${
+                                  edm.status === 'sent'
+                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                                }`}>
+                                  {edm.status}
+                                </span>
+                                <Eye className="w-4 h-4 text-slate-400" />
+                              </div>
+                            </div>
+
+                            {/* Expanded preview for selected EDM */}
+                            {selectedEdmId === edm.id && selectedEdmHtml && (
+                              <div className="mt-4 border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
+                                <iframe
+                                  srcDoc={selectedEdmHtml}
+                                  title="EDM Preview"
+                                  className="w-full h-[500px] border-0 bg-white"
+                                  sandbox="allow-same-origin"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!showPreview && !showHistory && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Generate a preview to see how your weekly digest will look, or view previously sent emails.
+                  </p>
+                )}
               </div>
             </div>
 

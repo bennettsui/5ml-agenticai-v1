@@ -813,9 +813,16 @@ export default function TopicSetupPage() {
             {/* Topic Configuration */}
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-8">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  {discoveredSources.length > 0 ? 'Step 2: Review & Approve Sources' : 'Step 1: Define Your Topic'}
-                </h2>
+                <div>
+                  {discoveredSources.length > 0 && topicName && (
+                    <p className="text-sm font-medium text-teal-600 dark:text-teal-400 mb-1">
+                      New Topic: {topicName}
+                    </p>
+                  )}
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                    {discoveredSources.length > 0 ? 'Step 2: Review & Approve Sources' : 'Step 1: Define Your Topic'}
+                  </h2>
+                </div>
                 <button
                   onClick={() => {
                     setShowNewTopicForm(false);

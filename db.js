@@ -185,6 +185,24 @@ async function initDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_summaries_topic ON intelligence_summaries(topic_id);
       CREATE INDEX IF NOT EXISTS idx_summaries_created ON intelligence_summaries(created_at DESC);
+
+      -- Intelligence EDM (Email) History Table
+      CREATE TABLE IF NOT EXISTS intelligence_edm_history (
+        id SERIAL PRIMARY KEY,
+        edm_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        topic_id UUID REFERENCES intelligence_topics(topic_id) ON DELETE CASCADE,
+        subject VARCHAR(500),
+        preview_text TEXT,
+        html_content TEXT,
+        recipients JSONB DEFAULT '[]',
+        articles_included INTEGER,
+        status VARCHAR(50) DEFAULT 'sent',
+        resend_id VARCHAR(100),
+        sent_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_edm_topic ON intelligence_edm_history(topic_id);
+      CREATE INDEX IF NOT EXISTS idx_edm_sent ON intelligence_edm_history(sent_at DESC);
     `);
     console.log('✅ Database schema initialized');
   } catch (error) {
@@ -1003,6 +1021,63 @@ async function getLatestIntelligenceSummary(topicId) {
   }
 }
 
+// ==================== EDM History Functions ====================
+
+async function saveEdmHistory(topicId, edmData) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO intelligence_edm_history
+       (topic_id, subject, preview_text, html_content, recipients, articles_included, status, resend_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [
+        topicId,
+        edmData.subject,
+        edmData.previewText,
+        edmData.htmlContent,
+        JSON.stringify(edmData.recipients || []),
+        edmData.articlesIncluded || 0,
+        edmData.status || 'sent',
+        edmData.resendId || null
+      ]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving EDM history:', error);
+    throw error;
+  }
+}
+
+async function getEdmHistory(topicId, limit = 10) {
+  try {
+    const result = await pool.query(
+      `SELECT edm_id, topic_id, subject, preview_text, recipients, articles_included, status, resend_id, sent_at
+       FROM intelligence_edm_history
+       WHERE topic_id = $1
+       ORDER BY sent_at DESC
+       LIMIT $2`,
+      [topicId, limit]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching EDM history:', error);
+    throw error;
+  }
+}
+
+async function getEdmById(edmId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM intelligence_edm_history WHERE edm_id = $1`,
+      [edmId]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching EDM by ID:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -1047,4 +1122,8 @@ module.exports = {
   saveIntelligenceSummary,
   getIntelligenceSummaries,
   getLatestIntelligenceSummary,
+  // EDM History
+  saveEdmHistory,
+  getEdmHistory,
+  getEdmById,
 };
