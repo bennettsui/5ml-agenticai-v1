@@ -1163,42 +1163,76 @@ async function generateNewsSummary(articles, topicName, selectedLLM) {
     `[${a.id}] "${a.title}" (Importance: ${a.importance_score}/100)\n    Source: ${a.source_name}\n    Summary: ${a.summary}`
   ).join('\n\n');
 
-  const prompt = `You are a senior news analyst for "${topicName}". Analyze the following ${articles.length} articles and categorize insights into three sections.
+  const prompt = `You are a senior research and strategy analyst.
+Your job is to read a batch of scraped materials on "${topicName}" and produce a concise summary with concrete, actionable insights.
 
-Articles (use [number] for citations):
+SCRAPED ARTICLES (use [number] for citations):
 ${articleText}
 
-INSTRUCTIONS:
-1. BREAKING NEWS / IMPORTANT UPDATES: Identify urgent or significant industry developments (if any)
-2. PRACTICAL TIPS: Extract actionable advice for industry practitioners
-3. KEY POINTS: Summarize the main takeaways from all articles
+=== GLOBAL RULES ===
+1. Do NOT talk about how many items there are or how they were scraped
+2. Do NOT describe your own analysis steps or methodology
+3. Avoid meta phrases like "multiple sources emphasize", "various reports highlight", "there are X articles", "significant evolution"
+4. Never mention scraping, crawling, data pipelines, or analysis method
+5. Every statement must include:
+   - A specific object within the topic (e.g., a feature, behavior, metric, tactic, policy)
+   - A clear pattern or change (e.g., increasing, declining, newly introduced, de-prioritized)
+   - At least one recommended action someone could apply in the next 2-4 weeks
+6. When evidence is weak or mixed, label it as a **hypothesis** and suggest a small, low-risk test
 
-For each point, include source citations like [1], [2], [3] referencing article numbers.
-Prioritize high-importance articles (score 80+).
+=== SECTION REQUIREMENTS ===
 
-Output format - MUST return valid JSON:
+**OVERALL TREND** (2-3 short paragraphs):
+- Name which part of "${topicName}" each paragraph refers to
+- Explain how behavior, performance, or constraints are changing
+- State what adjustment is needed (e.g., "move budget from A to B", "test new approach X")
+- Avoid generalities like "things are changing rapidly" unless you specify WHAT is changing
+
+**BREAKING NEWS / IMPORTANT UPDATES** (3-5 numbered items):
+Each item MUST include:
+1. What changed - one concrete development (new rule, feature, behavior, risk, opportunity)
+2. Who is most affected - specific type of person/team/use case impacted
+3. Immediate actions (next 0-30 days) - 2-3 actionable steps with clear behavior and timeframes
+   Example phrasing: "Run a 2-week test comparing...", "Reduce dependence on... by at least 20%..."
+
+**PRACTICAL TIPS** (3-5 items):
+Each tip MUST include:
+1. Action-oriented title (e.g., "Test a simpler approach with existing audience for 14 days")
+2. Exactly what to do, including recommended ranges (frequency, duration, sample size)
+3. Metric to watch - 1-2 primary metrics (e.g., response rate, conversion, engagement)
+4. Why it helps - one sentence linking back to observed patterns
+Avoid vague advice like "be data-driven" or "follow best practices"
+
+**KEY POINTS** (4-6 single-sentence decision rules):
+- Each should stand alone as a practical rule of thumb
+- Frame as if/then, when/then, or clear directive
+- Examples:
+  - "If you are targeting risk-averse stakeholders, prioritize options that reduce complexity"
+  - "When a new feature is unclear, start with a minimal version and test with a small subset first"
+  - "If a tactic depends heavily on one channel, create at least one viable backup within the next month"
+
+=== OUTPUT FORMAT - MUST RETURN VALID JSON ===
 {
+  "overallTrend": "2-3 paragraphs as described above, concatenated with paragraph breaks",
   "breakingNews": [
-    {"text": "Major development or urgent update [1][3]", "sources": [1, 3]},
-    {"text": "Another breaking news item [2]", "sources": [2]}
+    {"text": "Full item with what changed, who affected, and actions [1][3]", "sources": [1, 3]}
   ],
   "practicalTips": [
-    {"text": "Actionable tip for practitioners [1][4]", "sources": [1, 4]},
-    {"text": "Another practical recommendation [2][5]", "sources": [2, 5]}
+    {"text": "Title: Action description. Metric: X. Because Y. [2][4]", "sources": [2, 4]}
   ],
   "keyPoints": [
-    {"text": "Key takeaway from the articles [1][2][3]", "sources": [1, 2, 3]},
-    {"text": "Another important insight [4]", "sources": [4]}
-  ],
-  "overallTrend": "One sentence summary of the overall trend direction for ${topicName}"
+    {"text": "If/when decision rule statement [1][2]", "sources": [1, 2]}
+  ]
 }
 
 Rules:
-- breakingNews: Only include if there are genuinely urgent/breaking items (can be empty array)
-- practicalTips: 2-4 actionable items
-- keyPoints: 3-5 main takeaways
-- Always include source citations in [n] format within the text
-- sources array should match the citation numbers in the text
+- breakingNews: Only include if genuinely urgent/breaking (can be empty array)
+- practicalTips: 3-5 actionable items with specific behaviors
+- keyPoints: 4-6 decision rules as if/then statements
+- Always include source citations [n] within the text
+- sources array must match citation numbers in text
+- Sound like a strategic consultant: clear, concrete, focused on decisions
+- Prefer action verbs: "increase", "reduce", "test", "validate", "prioritize"
 
 Return ONLY the JSON object, no other text.`;
 
