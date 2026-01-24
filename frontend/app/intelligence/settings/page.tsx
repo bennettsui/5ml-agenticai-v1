@@ -43,10 +43,14 @@ interface TopicSettings {
 }
 
 interface TopicListItem {
-  id: string;
+  id?: string;
+  topic_id?: string;
   name: string;
   status: string;
 }
+
+// Helper to get topic ID from either format
+const getTopicId = (topic: TopicListItem): string => topic.topic_id || topic.id || '';
 
 interface Source {
   sourceId: string;
@@ -105,11 +109,11 @@ export default function TopicSettingsPage() {
         const params = new URLSearchParams(window.location.search);
         const topicIdFromUrl = params.get('topic');
 
-        if (topicIdFromUrl && data.topics.some((t: TopicListItem) => t.id === topicIdFromUrl)) {
+        if (topicIdFromUrl && data.topics.some((t: TopicListItem) => getTopicId(t) === topicIdFromUrl)) {
           setSelectedTopicId(topicIdFromUrl);
         } else if (data.topics.length > 0) {
           // Select first topic by default
-          setSelectedTopicId(data.topics[0].id);
+          setSelectedTopicId(getTopicId(data.topics[0]));
         }
       }
     } catch (error) {
@@ -129,16 +133,26 @@ export default function TopicSettingsPage() {
 
       if (data.success && data.topic) {
         const t = data.topic;
-        setTopic(t);
+        // Normalize topic ID (API may return id or topic_id)
+        const normalizedTopic = {
+          ...t,
+          id: t.id || t.topic_id,
+        };
+        setTopic(normalizedTopic);
         setName(t.name || '');
-        setKeywords(t.keywords?.join(', ') || '');
+        // Handle keywords as array or JSONB
+        const keywordsArray = Array.isArray(t.keywords) ? t.keywords : (t.keywords ? Object.values(t.keywords) : []);
+        setKeywords(keywordsArray.join(', ') || '');
         setStatus(t.status === 'archived' ? 'paused' : t.status);
-        setDailyScanTime(t.dailyScanConfig?.time || '06:00');
-        setDailyScanEnabled(t.dailyScanConfig?.enabled ?? true);
-        setWeeklyDigestDay(t.weeklyDigestConfig?.day || 'monday');
-        setWeeklyDigestTime(t.weeklyDigestConfig?.time || '08:00');
-        setWeeklyDigestEnabled(t.weeklyDigestConfig?.enabled ?? true);
-        setRecipients(t.weeklyDigestConfig?.recipientList?.join('\n') || '');
+        // Handle config from either camelCase or snake_case
+        const dailyConfig = t.dailyScanConfig || t.daily_scan_config || {};
+        const weeklyConfig = t.weeklyDigestConfig || t.weekly_digest_config || {};
+        setDailyScanTime(dailyConfig.time || '06:00');
+        setDailyScanEnabled(dailyConfig.enabled ?? true);
+        setWeeklyDigestDay(weeklyConfig.day || 'monday');
+        setWeeklyDigestTime(weeklyConfig.time || '08:00');
+        setWeeklyDigestEnabled(weeklyConfig.enabled ?? true);
+        setRecipients(weeklyConfig.recipientList?.join('\n') || weeklyConfig.recipient_list?.join('\n') || '');
       } else {
         console.error('API returned error:', data);
         setMessage({ type: 'error', text: data.error || 'Topic not found or failed to load' });
@@ -357,7 +371,7 @@ export default function TopicSettingsPage() {
                 className="flex-1 max-w-md px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
               >
                 {topics.map(t => (
-                  <option key={t.id} value={t.id}>
+                  <option key={getTopicId(t)} value={getTopicId(t)}>
                     {t.name} ({t.status})
                   </option>
                 ))}

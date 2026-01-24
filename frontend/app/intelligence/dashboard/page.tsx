@@ -32,6 +32,7 @@ import {
   History,
   Calendar,
   ChevronRight,
+  Trash2,
 } from 'lucide-react';
 
 interface Topic {
@@ -372,6 +373,36 @@ export default function IntelligenceDashboardPage() {
     }
   };
 
+  const handleDeleteTopic = async () => {
+    if (!topic || !selectedTopicId) return;
+
+    if (!confirm(`Are you sure you want to delete "${topic.name}"? This will also delete all sources, news articles, and summaries associated with this topic. This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/intelligence/topics/${selectedTopicId}`, { method: 'DELETE' });
+      const data = await response.json();
+
+      if (data.success) {
+        // Clear current topic and refresh list
+        setTopic(null);
+        setSelectedTopicId(null);
+        setArticles([]);
+        setSummary(null);
+        setSummaryHistory([]);
+        fetchTopics();
+        // Navigate back to setup or show empty state
+        alert('Topic deleted successfully');
+      } else {
+        alert(`Failed to delete topic: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to delete topic:', error);
+      alert('Failed to delete topic');
+    }
+  };
+
   const handleGenerateSummary = async () => {
     if (!topic) return;
     setIsGeneratingSummary(true);
@@ -599,6 +630,16 @@ export default function IntelligenceDashboardPage() {
               <PlusCircle className="w-4 h-4" />
               New Topic
             </Link>
+            {selectedTopicId && (
+              <button
+                onClick={handleDeleteTopic}
+                className="flex items-center gap-2 px-4 py-2 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm"
+                title="Delete selected topic"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Topic
+              </button>
+            )}
           </div>
         </div>
 

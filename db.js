@@ -800,6 +800,60 @@ async function updateIntelligenceTopicStatus(topicId, status) {
   }
 }
 
+async function updateIntelligenceTopic(topicId, updates) {
+  try {
+    const { name, keywords, daily_scan_config, weekly_digest_config } = updates;
+    const result = await pool.query(
+      `UPDATE intelligence_topics
+       SET name = COALESCE($2, name),
+           keywords = COALESCE($3, keywords),
+           daily_scan_config = COALESCE($4, daily_scan_config),
+           weekly_digest_config = COALESCE($5, weekly_digest_config),
+           updated_at = NOW()
+       WHERE topic_id = $1
+       RETURNING *`,
+      [topicId, name, keywords ? JSON.stringify(keywords) : null,
+       daily_scan_config ? JSON.stringify(daily_scan_config) : null,
+       weekly_digest_config ? JSON.stringify(weekly_digest_config) : null]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error updating topic:', error);
+    throw error;
+  }
+}
+
+async function deleteIntelligenceTopic(topicId) {
+  try {
+    // Delete related data first (sources, news, summaries)
+    await pool.query('DELETE FROM intelligence_summaries WHERE topic_id = $1', [topicId]);
+    await pool.query('DELETE FROM intelligence_news WHERE topic_id = $1', [topicId]);
+    await pool.query('DELETE FROM intelligence_sources WHERE topic_id = $1', [topicId]);
+    // Then delete the topic
+    const result = await pool.query(
+      'DELETE FROM intelligence_topics WHERE topic_id = $1 RETURNING *',
+      [topicId]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error deleting topic:', error);
+    throw error;
+  }
+}
+
+async function deleteIntelligenceSource(sourceId) {
+  try {
+    const result = await pool.query(
+      'DELETE FROM intelligence_sources WHERE source_id = $1 RETURNING *',
+      [sourceId]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error deleting source:', error);
+    throw error;
+  }
+}
+
 async function saveIntelligenceSources(topicId, sources) {
   try {
     const savedSources = [];
@@ -983,8 +1037,11 @@ module.exports = {
   getIntelligenceTopics,
   getIntelligenceTopic,
   updateIntelligenceTopicStatus,
+  updateIntelligenceTopic,
+  deleteIntelligenceTopic,
   saveIntelligenceSources,
   getIntelligenceSources,
+  deleteIntelligenceSource,
   saveIntelligenceNews,
   getIntelligenceNews,
   saveIntelligenceSummary,

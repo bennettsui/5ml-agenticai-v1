@@ -336,6 +336,48 @@ export default function TopicSetupPage() {
     }
   };
 
+  const handleDeleteTopic = async (topicId: string, topicName: string) => {
+    if (!confirm(`Are you sure you want to delete "${topicName}"? This will also delete all sources, news articles, and summaries associated with this topic. This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/intelligence/topics/${topicId}`, { method: 'DELETE' });
+      const data = await response.json();
+
+      if (data.success) {
+        fetchTopics();
+        if (expandedTopicId === topicId) {
+          setExpandedTopicId(null);
+        }
+      } else {
+        setError(data.error || 'Failed to delete topic');
+      }
+    } catch (err) {
+      setError('Failed to delete topic');
+    }
+  };
+
+  const handleDeleteSource = async (sourceId: string, sourceName: string, topicId: string) => {
+    if (!confirm(`Are you sure you want to delete source "${sourceName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/intelligence/sources/${sourceId}`, { method: 'DELETE' });
+      const data = await response.json();
+
+      if (data.success) {
+        // Refresh sources for this topic
+        fetchTopicSources(topicId);
+      } else {
+        setError(data.error || 'Failed to delete source');
+      }
+    } catch (err) {
+      setError('Failed to delete source');
+    }
+  };
+
   const handleDiscoverSources = async () => {
     if (!topicName.trim()) {
       setError('Please enter a topic name');
@@ -667,6 +709,13 @@ export default function TopicSetupPage() {
                       >
                         <Eye className="w-4 h-4" />
                       </Link>
+                      <button
+                        onClick={() => handleDeleteTopic(topic.topic_id, topic.name)}
+                        className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                        title="Delete topic"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
 
@@ -732,6 +781,13 @@ export default function TopicSetupPage() {
                                         <ExternalLink className="w-3 h-3" />
                                       </a>
                                     </div>
+                                    <button
+                                      onClick={() => handleDeleteSource(source.source_id, source.name, topic.topic_id)}
+                                      className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                                      title="Delete source"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
                                   </div>
                                 </div>
                               ))}
