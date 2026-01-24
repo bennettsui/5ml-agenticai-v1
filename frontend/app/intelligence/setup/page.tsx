@@ -28,7 +28,170 @@ import {
   Eye,
   Pause,
   Play,
+  Database,
+  Sparkles,
+  FileSearch,
 } from 'lucide-react';
+
+// Preloader Component
+function Preloader({
+  message = 'Loading...',
+  subMessage,
+  variant = 'default'
+}: {
+  message?: string;
+  subMessage?: string;
+  variant?: 'default' | 'discovering' | 'database';
+}) {
+  const getIcon = () => {
+    switch (variant) {
+      case 'discovering':
+        return <Sparkles className="w-8 h-8 text-teal-500" />;
+      case 'database':
+        return <Database className="w-8 h-8 text-teal-500" />;
+      default:
+        return <FileSearch className="w-8 h-8 text-teal-500" />;
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center py-12">
+      {/* Animated Icon Container */}
+      <div className="relative">
+        {/* Outer Ring */}
+        <div className="absolute inset-0 rounded-full border-4 border-teal-100 dark:border-teal-900/30" />
+        {/* Spinning Ring */}
+        <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-teal-500 animate-spin" />
+        {/* Icon */}
+        <div className="w-20 h-20 flex items-center justify-center">
+          <div className="animate-pulse">
+            {getIcon()}
+          </div>
+        </div>
+      </div>
+
+      {/* Loading Text */}
+      <div className="mt-6 text-center">
+        <p className="text-lg font-medium text-slate-900 dark:text-white">{message}</p>
+        {subMessage && (
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{subMessage}</p>
+        )}
+      </div>
+
+      {/* Progress Dots */}
+      <div className="flex gap-1.5 mt-4">
+        <div className="w-2 h-2 rounded-full bg-teal-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+        <div className="w-2 h-2 rounded-full bg-teal-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+        <div className="w-2 h-2 rounded-full bg-teal-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+      </div>
+    </div>
+  );
+}
+
+// Source Discovery Preloader with Progress
+function DiscoveryPreloader({
+  mode,
+  llm,
+  topicName
+}: {
+  mode: string;
+  llm: string;
+  topicName: string;
+}) {
+  const [step, setStep] = useState(0);
+  const steps = [
+    { label: 'Initializing AI model', icon: Brain },
+    { label: 'Searching for sources', icon: Search },
+    { label: 'Analyzing relevance', icon: FileSearch },
+    { label: 'Scoring authority', icon: Sparkles },
+    { label: 'Compiling results', icon: Database },
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStep(s => (s + 1) % steps.length);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="bg-gradient-to-br from-teal-50 to-slate-50 dark:from-teal-900/20 dark:to-slate-800 rounded-xl p-8 border border-teal-200 dark:border-teal-800">
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center gap-2 px-4 py-2 bg-teal-100 dark:bg-teal-900/50 rounded-full text-teal-700 dark:text-teal-300 text-sm font-medium mb-4">
+          <Sparkles className="w-4 h-4 animate-pulse" />
+          AI-Powered Source Discovery
+        </div>
+        <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+          Discovering sources for &quot;{topicName}&quot;
+        </h3>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+          Using {llm} in {mode} mode
+        </p>
+      </div>
+
+      {/* Progress Steps */}
+      <div className="space-y-3 max-w-md mx-auto">
+        {steps.map((s, i) => {
+          const Icon = s.icon;
+          const isActive = i === step;
+          const isComplete = i < step;
+
+          return (
+            <div
+              key={i}
+              className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ${
+                isActive
+                  ? 'bg-teal-100 dark:bg-teal-900/50 scale-105'
+                  : isComplete
+                  ? 'bg-green-50 dark:bg-green-900/20'
+                  : 'bg-white/50 dark:bg-slate-700/50'
+              }`}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                isActive
+                  ? 'bg-teal-500 text-white'
+                  : isComplete
+                  ? 'bg-green-500 text-white'
+                  : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400'
+              }`}>
+                {isComplete ? (
+                  <Check className="w-4 h-4" />
+                ) : isActive ? (
+                  <Icon className="w-4 h-4 animate-pulse" />
+                ) : (
+                  <Icon className="w-4 h-4" />
+                )}
+              </div>
+              <span className={`text-sm font-medium ${
+                isActive
+                  ? 'text-teal-700 dark:text-teal-300'
+                  : isComplete
+                  ? 'text-green-700 dark:text-green-300'
+                  : 'text-slate-500 dark:text-slate-400'
+              }`}>
+                {s.label}
+              </span>
+              {isActive && (
+                <Loader2 className="w-4 h-4 ml-auto text-teal-500 animate-spin" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Animated Background Elements */}
+      <div className="mt-8 flex justify-center gap-2">
+        {[...Array(5)].map((_, i) => (
+          <div
+            key={i}
+            className="w-3 h-3 rounded-full bg-teal-400/50 animate-ping"
+            style={{ animationDelay: `${i * 200}ms`, animationDuration: '1.5s' }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface Source {
   source_id: string;
@@ -425,10 +588,11 @@ export default function TopicSetupPage() {
           </div>
 
           {loadingTopics ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-teal-500" />
-              <span className="ml-2 text-slate-600 dark:text-slate-400">Loading topics...</span>
-            </div>
+            <Preloader
+              message="Loading your topics"
+              subMessage="Fetching data from database..."
+              variant="database"
+            />
           ) : topics.length === 0 ? (
             <div className="text-center py-8">
               <FolderOpen className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
@@ -510,9 +674,17 @@ export default function TopicSetupPage() {
                   {expandedTopicId === topic.topic_id && (
                     <div className="p-4 border-t border-slate-200 dark:border-slate-700">
                       {loadingSources === topic.topic_id ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="w-5 h-5 animate-spin text-teal-500" />
-                          <span className="ml-2 text-sm text-slate-600 dark:text-slate-400">Loading sources...</span>
+                        <div className="py-6">
+                          <div className="flex flex-col items-center">
+                            <div className="relative w-12 h-12">
+                              <div className="absolute inset-0 rounded-full border-2 border-teal-100 dark:border-teal-900/30" />
+                              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-teal-500 animate-spin" />
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <Globe className="w-5 h-5 text-teal-500 animate-pulse" />
+                              </div>
+                            </div>
+                            <p className="text-sm text-slate-600 dark:text-slate-400 mt-3">Loading sources...</p>
+                          </div>
                         </div>
                       ) : (
                         <>
@@ -602,108 +774,108 @@ export default function TopicSetupPage() {
               </div>
 
               {discoveredSources.length === 0 ? (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Topic Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={topicName}
-                      onChange={e => setTopicName(e.target.value)}
-                      placeholder="e.g., IG Growth Hacking, AI Latest News"
-                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Keywords (optional, comma-separated)
-                    </label>
-                    <input
-                      type="text"
-                      value={keywords}
-                      onChange={e => setKeywords(e.target.value)}
-                      placeholder="e.g., instagram algorithm, reels, engagement"
-                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  {/* Research Mode Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-                      Research Mode
-                    </label>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {RESEARCH_MODES.map((mode) => {
-                        const Icon = mode.icon;
-                        const isSelected = researchMode === mode.id;
-                        return (
-                          <button
-                            key={mode.id}
-                            type="button"
-                            onClick={() => setResearchMode(mode.id)}
-                            className={`p-4 rounded-lg border-2 text-left transition-all ${
-                              isSelected
-                                ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
-                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 mb-1">
-                              <Icon className={`w-5 h-5 ${isSelected ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`} />
-                              <span className={`font-medium ${isSelected ? 'text-teal-700 dark:text-teal-300' : 'text-slate-700 dark:text-slate-300'}`}>
-                                {mode.name}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">{mode.description}</p>
-                          </button>
-                        );
-                      })}
+                isDiscovering ? (
+                  /* Show Discovery Preloader when discovering sources */
+                  <DiscoveryPreloader
+                    mode={RESEARCH_MODES.find(m => m.id === researchMode)?.name || 'Comprehensive Research'}
+                    llm={LLM_PROVIDERS.find(l => l.id === selectedLLM)?.name || 'Perplexity Sonar Pro'}
+                    topicName={topicName}
+                  />
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Topic Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={topicName}
+                        onChange={e => setTopicName(e.target.value)}
+                        placeholder="e.g., IG Growth Hacking, AI Latest News"
+                        className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      />
                     </div>
-                  </div>
 
-                  {/* LLM Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      AI Model
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={selectedLLM}
-                        onChange={(e) => setSelectedLLM(e.target.value as LLMProvider)}
-                        className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none cursor-pointer"
-                      >
-                        {LLM_PROVIDERS.map((llm) => (
-                          <option key={llm.id} value={llm.id}>
-                            {llm.name} {llm.recommended ? '(Recommended)' : ''} - {llm.description}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Keywords (optional, comma-separated)
+                      </label>
+                      <input
+                        type="text"
+                        value={keywords}
+                        onChange={e => setKeywords(e.target.value)}
+                        placeholder="e.g., instagram algorithm, reels, engagement"
+                        className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      />
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Perplexity is recommended for web research tasks with real-time internet access
-                    </p>
-                  </div>
 
-                  <button
-                    onClick={handleDiscoverSources}
-                    disabled={isDiscovering || !topicName.trim()}
-                    className="flex items-center gap-2 px-6 py-3 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
-                  >
-                    {isDiscovering ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Discovering Sources ({RESEARCH_MODES.find(m => m.id === researchMode)?.name})...
-                      </>
-                    ) : (
-                      <>
-                        <Search className="w-5 h-5" />
-                        Discover Information Sources
-                      </>
-                    )}
-                  </button>
-                </div>
+                    {/* Research Mode Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                        Research Mode
+                      </label>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {RESEARCH_MODES.map((mode) => {
+                          const Icon = mode.icon;
+                          const isSelected = researchMode === mode.id;
+                          return (
+                            <button
+                              key={mode.id}
+                              type="button"
+                              onClick={() => setResearchMode(mode.id)}
+                              className={`p-4 rounded-lg border-2 text-left transition-all ${
+                                isSelected
+                                  ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
+                                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                <Icon className={`w-5 h-5 ${isSelected ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`} />
+                                <span className={`font-medium ${isSelected ? 'text-teal-700 dark:text-teal-300' : 'text-slate-700 dark:text-slate-300'}`}>
+                                  {mode.name}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">{mode.description}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* LLM Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        AI Model
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={selectedLLM}
+                          onChange={(e) => setSelectedLLM(e.target.value as LLMProvider)}
+                          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none cursor-pointer"
+                        >
+                          {LLM_PROVIDERS.map((llm) => (
+                            <option key={llm.id} value={llm.id}>
+                              {llm.name} {llm.recommended ? '(Recommended)' : ''} - {llm.description}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        Perplexity is recommended for web research tasks with real-time internet access
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={handleDiscoverSources}
+                      disabled={!topicName.trim()}
+                      className="flex items-center gap-2 px-6 py-3 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
+                    >
+                      <Search className="w-5 h-5" />
+                      Discover Information Sources
+                    </button>
+                  </div>
+                )
               ) : (
                 <>
                   <div className="flex items-center justify-between mb-4">
