@@ -15,7 +15,17 @@ import {
   Radio,
   PlusCircle,
   Users,
+  FolderOpen,
+  ChevronDown,
 } from 'lucide-react';
+
+interface Topic {
+  id?: number;
+  topic_id: string;
+  name: string;
+  status: string;
+  keywords?: string[];
+}
 
 interface ScanProgress {
   sourcesScanned: number;
@@ -54,6 +64,8 @@ interface ErrorLog {
 }
 
 export default function LiveScanPage() {
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [loadingTopics, setLoadingTopics] = useState(true);
   const [topicId, setTopicId] = useState<string>('');
   const [topicName, setTopicName] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
@@ -72,15 +84,24 @@ export default function LiveScanPage() {
 
   const wsRef = useRef<WebSocket | null>(null);
 
+  // Fetch all topics on mount
   useEffect(() => {
-    // Get topic from URL params
+    fetchTopics();
+  }, []);
+
+  // Get topic from URL params
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('topic') || '';
-    setTopicId(id);
-
-    // Fetch topic name
     if (id) {
-      fetch(`/api/intelligence/topics/${id}`)
+      setTopicId(id);
+    }
+  }, []);
+
+  // Load topic name when topicId changes
+  useEffect(() => {
+    if (topicId) {
+      fetch(`/api/intelligence/topics/${topicId}`)
         .then(res => res.json())
         .then(data => {
           if (data.success) {
@@ -88,15 +109,60 @@ export default function LiveScanPage() {
           }
         })
         .catch(console.error);
-    }
 
-    // Connect to WebSocket
-    connectWebSocket(id);
+      // Update URL
+      const url = new URL(window.location.href);
+      url.searchParams.set('topic', topicId);
+      window.history.replaceState({}, '', url.toString());
+
+      // Connect to WebSocket
+      connectWebSocket(topicId);
+    }
 
     return () => {
       wsRef.current?.close();
     };
-  }, []);
+  }, [topicId]);
+
+  const fetchTopics = async () => {
+    setLoadingTopics(true);
+    try {
+      const response = await fetch('/api/intelligence/topics');
+      const data = await response.json();
+      if (data.success) {
+        setTopics(data.topics || []);
+        // Auto-select first topic if none selected
+        if (!topicId && data.topics?.length > 0) {
+          const params = new URLSearchParams(window.location.search);
+          const urlTopicId = params.get('topic');
+          if (urlTopicId) {
+            setTopicId(urlTopicId);
+          } else {
+            setTopicId(data.topics[0].topic_id);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch topics:', error);
+    } finally {
+      setLoadingTopics(false);
+    }
+  };
+
+  const handleTopicChange = (newTopicId: string) => {
+    setTopicId(newTopicId);
+    setProgress({
+      sourcesScanned: 0,
+      totalSources: 0,
+      articlesFound: 0,
+      articlesAnalyzed: 0,
+      highImportanceCount: 0,
+      status: 'idle',
+    });
+    setSourceStatuses(new Map());
+    setAnalyzedArticles([]);
+    setErrorLogs([]);
+  };
 
   const connectWebSocket = (topicId: string) => {
     const wsUrl = `ws://localhost:3001?topicId=${topicId}`;
@@ -262,6 +328,63 @@ export default function LiveScanPage() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Topic Selector */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <FolderOpen className="w-5 h-5 text-teal-500" />
+              <span className="font-medium text-slate-700 dark:text-slate-300">Select Topic:</span>
+              {loadingTopics ? (
+                <Loader2 className="w-5 h-5 animate-spin text-teal-500" />
+              ) : topics.length > 0 ? (
+                <div className="relative">
+                  <select
+                    value={topicId}
+                    onChange={(e) => handleTopicChange(e.target.value)}
+                    className="px-4 py-2 pr-8 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none cursor-pointer min-w-[250px]"
+                  >
+                    <option value="" disabled>Choose a topic...</option>
+                    {topics.map((t) => (
+                      <option key={t.topic_id} value={t.topic_id}>
+                        {t.name} ({t.status})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+              ) : (
+                <span className="text-slate-500 dark:text-slate-400">No topics available</span>
+              )}
+            </div>
+            <Link
+              href="/intelligence/setup"
+              className="flex items-center gap-2 px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-sm"
+            >
+              <PlusCircle className="w-4 h-4" />
+              New Topic
+            </Link>
+          </div>
+        </div>
+
+        {!topicId && !loadingTopics && topics.length === 0 ? (
+          <div className="text-center py-16">
+            <FolderOpen className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">
+              No Topics Created Yet
+            </h2>
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
+              Create your first topic to start live scanning.
+            </p>
+            <Link
+              href="/intelligence/setup"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white rounded-lg"
+            >
+              <PlusCircle className="w-5 h-5" />
+              Create Your First Topic
+            </Link>
+          </div>
+        ) : (
+        <>
         {/* Progress Section */}
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -468,6 +591,8 @@ export default function LiveScanPage() {
               </div>
             )}
           </div>
+        )}
+        </>
         )}
       </main>
     </div>

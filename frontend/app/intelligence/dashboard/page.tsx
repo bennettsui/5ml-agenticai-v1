@@ -19,14 +19,17 @@ import {
   Clock,
   Star,
   Loader2,
+  FolderOpen,
 } from 'lucide-react';
 
 interface Topic {
-  id: string;
+  id?: number;
+  topic_id: string;
   name: string;
   status: 'active' | 'paused' | 'archived';
+  keywords?: string[];
   lastUpdated?: string;
-  sourcesCount: number;
+  sourcesCount?: number;
 }
 
 interface Article {
@@ -50,26 +53,68 @@ interface DailyStats {
 }
 
 export default function IntelligenceDashboardPage() {
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [loadingTopics, setLoadingTopics] = useState(true);
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [topic, setTopic] = useState<Topic | null>(null);
   const [articles, setArticles] = useState<Article[]>([]);
   const [stats, setStats] = useState<DailyStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isSendingDigest, setIsSendingDigest] = useState(false);
   const [filter, setFilter] = useState<'all' | 'high' | 'medium'>('all');
   const [page, setPage] = useState(1);
 
+  // Fetch all topics on mount
+  useEffect(() => {
+    fetchTopics();
+  }, []);
+
+  // Load topic from URL params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const topicId = params.get('topic');
-
     if (topicId) {
-      loadTopic(topicId);
-      loadArticles(topicId);
-    } else {
-      setIsLoading(false);
+      setSelectedTopicId(topicId);
     }
   }, []);
+
+  // Load selected topic details
+  useEffect(() => {
+    if (selectedTopicId) {
+      loadTopic(selectedTopicId);
+      loadArticles(selectedTopicId);
+      // Update URL
+      const url = new URL(window.location.href);
+      url.searchParams.set('topic', selectedTopicId);
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [selectedTopicId]);
+
+  const fetchTopics = async () => {
+    setLoadingTopics(true);
+    try {
+      const response = await fetch('/api/intelligence/topics');
+      const data = await response.json();
+      if (data.success) {
+        setTopics(data.topics || []);
+        // Auto-select first topic if none selected and topics exist
+        if (!selectedTopicId && data.topics?.length > 0) {
+          const params = new URLSearchParams(window.location.search);
+          const topicId = params.get('topic');
+          if (topicId) {
+            setSelectedTopicId(topicId);
+          } else {
+            setSelectedTopicId(data.topics[0].topic_id);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch topics:', error);
+    } finally {
+      setLoadingTopics(false);
+    }
+  };
 
   const loadTopic = async (topicId: string) => {
     try {
@@ -86,9 +131,20 @@ export default function IntelligenceDashboardPage() {
   const loadArticles = async (topicId: string) => {
     setIsLoading(true);
     try {
-      // In production, this would fetch from Notion
-      // For now, use mock data
-      setArticles([]);
+      const response = await fetch(`/api/intelligence/news?topicId=${topicId}`);
+      const data = await response.json();
+      if (data.success) {
+        setArticles(data.news || []);
+      }
+      setStats({
+        newArticles: data.news?.length || 0,
+        highImportance: data.news?.filter((a: Article) => a.importance_score >= 80).length || 0,
+        mediumImportance: data.news?.filter((a: Article) => a.importance_score >= 60 && a.importance_score < 80).length || 0,
+        lowImportance: data.news?.filter((a: Article) => a.importance_score < 60).length || 0,
+        topSources: [],
+      });
+    } catch (error) {
+      console.error('Failed to load articles:', error);
       setStats({
         newArticles: 0,
         highImportance: 0,
@@ -96,11 +152,15 @@ export default function IntelligenceDashboardPage() {
         lowImportance: 0,
         topSources: [],
       });
-    } catch (error) {
-      console.error('Failed to load articles:', error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleTopicChange = (topicId: string) => {
+    setSelectedTopicId(topicId);
+    setArticles([]);
+    setTopic(null);
   };
 
   const handleManualScan = async () => {
@@ -111,7 +171,7 @@ export default function IntelligenceDashboardPage() {
       const response = await fetch('/api/orchestration/trigger-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topicId: topic.id }),
+        body: JSON.stringify({ topicId: topic.topic_id }),
       });
 
       const data = await response.json();
@@ -134,7 +194,7 @@ export default function IntelligenceDashboardPage() {
       const response = await fetch('/api/orchestration/trigger-digest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topicId: topic.id }),
+        body: JSON.stringify({ topicId: topic.topic_id }),
       });
 
       const data = await response.json();
@@ -193,7 +253,7 @@ export default function IntelligenceDashboardPage() {
             </div>
             <div className="flex items-center gap-2">
               <Link
-                href={`/intelligence/settings?topic=${topic?.id}`}
+                href={`/intelligence/settings?topic=${topic?.topic_id}`}
                 className="flex items-center gap-1 px-3 py-2 text-slate-600 hover:text-slate-900 dark:text-slate-400"
               >
                 <Settings className="w-4 h-4" />
@@ -224,7 +284,7 @@ export default function IntelligenceDashboardPage() {
                 Send Digest
               </button>
               <Link
-                href={`/intelligence/live-scan?topic=${topic?.id}`}
+                href={`/intelligence/live-scan?topic=${topic?.topic_id}`}
                 className="flex items-center gap-1 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm"
               >
                 <Eye className="w-4 h-4" />
@@ -264,22 +324,66 @@ export default function IntelligenceDashboardPage() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {!topic ? (
+        {/* Topic Selector */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <FolderOpen className="w-5 h-5 text-teal-500" />
+              <span className="font-medium text-slate-700 dark:text-slate-300">Select Topic:</span>
+              {loadingTopics ? (
+                <Loader2 className="w-5 h-5 animate-spin text-teal-500" />
+              ) : topics.length > 0 ? (
+                <div className="relative">
+                  <select
+                    value={selectedTopicId || ''}
+                    onChange={(e) => handleTopicChange(e.target.value)}
+                    className="px-4 py-2 pr-8 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none cursor-pointer min-w-[250px]"
+                  >
+                    <option value="" disabled>Choose a topic...</option>
+                    {topics.map((t) => (
+                      <option key={t.topic_id} value={t.topic_id}>
+                        {t.name} ({t.status})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+              ) : (
+                <span className="text-slate-500 dark:text-slate-400">No topics available</span>
+              )}
+            </div>
+            <Link
+              href="/intelligence/setup"
+              className="flex items-center gap-2 px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-sm"
+            >
+              <PlusCircle className="w-4 h-4" />
+              New Topic
+            </Link>
+          </div>
+        </div>
+
+        {!topic && !loadingTopics && topics.length === 0 ? (
           <div className="text-center py-16">
+            <FolderOpen className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">
-              No Topic Selected
+              No Topics Created Yet
             </h2>
             <p className="text-slate-600 dark:text-slate-400 mb-6">
-              Please select a topic or create a new one to view the dashboard.
+              Create your first topic to start monitoring news and updates.
             </p>
             <Link
               href="/intelligence/setup"
               className="inline-flex items-center gap-2 px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white rounded-lg"
             >
-              Create New Topic
+              <PlusCircle className="w-5 h-5" />
+              Create Your First Topic
             </Link>
           </div>
-        ) : (
+        ) : !topic && selectedTopicId ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
+          </div>
+        ) : topic ? (
           <div className="grid grid-cols-4 gap-6">
             {/* Main Content - News Feed */}
             <div className="col-span-3">
@@ -407,7 +511,7 @@ export default function IntelligenceDashboardPage() {
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </main>
     </div>
   );
