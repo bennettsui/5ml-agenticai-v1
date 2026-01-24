@@ -24,6 +24,94 @@ const inMemoryTopics = new Map();
 const inMemorySources = new Map();
 
 // ==========================================
+// EDM Cache (Key-Value Store)
+// ==========================================
+// Simple in-memory KV cache with TTL for EDM content
+// Keys are formatted as: edm:{topicId}:{dateKey}
+// This provides fast retrieval without regenerating HTML each time
+
+const edmCache = new Map();
+const EDM_CACHE_TTL = 60 * 60 * 1000; // 1 hour TTL
+
+/**
+ * Get EDM from cache
+ * @param {string} key - Cache key (e.g., 'edm:topic123:2026-01-24')
+ * @returns {object|null} Cached EDM data or null if not found/expired
+ */
+function getEdmFromCache(key) {
+  const cached = edmCache.get(key);
+  if (!cached) return null;
+
+  // Check if expired
+  if (Date.now() > cached.expiresAt) {
+    edmCache.delete(key);
+    return null;
+  }
+
+  console.log(`[EDM Cache] HIT: ${key}`);
+  return cached.data;
+}
+
+/**
+ * Set EDM in cache
+ * @param {string} key - Cache key
+ * @param {object} data - EDM data to cache
+ * @param {number} ttl - Time to live in milliseconds (default: 1 hour)
+ */
+function setEdmInCache(key, data, ttl = EDM_CACHE_TTL) {
+  edmCache.set(key, {
+    data,
+    expiresAt: Date.now() + ttl,
+    createdAt: Date.now(),
+  });
+  console.log(`[EDM Cache] SET: ${key} (TTL: ${ttl / 1000}s)`);
+
+  // Clean up old entries (keep cache size manageable)
+  if (edmCache.size > 100) {
+    const now = Date.now();
+    for (const [k, v] of edmCache.entries()) {
+      if (now > v.expiresAt) {
+        edmCache.delete(k);
+      }
+    }
+  }
+}
+
+/**
+ * Generate cache key for EDM
+ * @param {string} topicId - Topic ID
+ * @param {Date} date - Date for the EDM (defaults to today)
+ * @returns {string} Cache key
+ */
+function getEdmCacheKey(topicId, date = new Date()) {
+  const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+  return `edm:${topicId}:${dateKey}`;
+}
+
+/**
+ * Get cache statistics
+ */
+function getEdmCacheStats() {
+  const now = Date.now();
+  let validCount = 0;
+  let expiredCount = 0;
+
+  for (const [, v] of edmCache.entries()) {
+    if (now > v.expiresAt) {
+      expiredCount++;
+    } else {
+      validCount++;
+    }
+  }
+
+  return {
+    totalEntries: edmCache.size,
+    validEntries: validCount,
+    expiredEntries: expiredCount,
+  };
+}
+
+// ==========================================
 // Content Fetching & Analysis Helpers
 // ==========================================
 
@@ -2133,13 +2221,29 @@ router.post('/email/test', async (req, res) => {
 /**
  * GET /edm/preview/:topicId
  * Generate an EDM preview with real data from the topic
+ * Uses in-memory KV cache for performance
  */
 router.get('/edm/preview/:topicId', async (req, res) => {
   try {
     const { topicId } = req.params;
+    const forceRefresh = req.query.refresh === 'true';
 
     if (!db || !process.env.DATABASE_URL) {
       return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    // Check cache first (unless force refresh requested)
+    const cacheKey = getEdmCacheKey(topicId);
+    if (!forceRefresh) {
+      const cachedEdm = getEdmFromCache(cacheKey);
+      if (cachedEdm) {
+        return res.json({
+          success: true,
+          preview: cachedEdm,
+          cached: true,
+          cacheKey,
+        });
+      }
     }
 
     // Get topic info
@@ -2150,6 +2254,14 @@ router.get('/edm/preview/:topicId', async (req, res) => {
 
     // Get recent news articles (last 7 days)
     const articles = await db.getIntelligenceNews(topicId);
+
+    // Get the latest analysis summary
+    const latestSummary = await db.getLatestIntelligenceSummary(topicId);
+
+    // Calculate date range (last 7 days)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
 
     // Format articles for the preview
     const formattedArticles = articles.slice(0, 15).map(a => ({
@@ -2166,27 +2278,45 @@ router.get('/edm/preview/:topicId', async (req, res) => {
 
     // Calculate stats
     const highImportanceCount = formattedArticles.filter(a => a.importance_score >= 80).length;
-    const weekDate = new Date().toISOString();
 
     // Generate the EDM HTML using a template
     const edmHtml = generateEdmHtml({
       topicId,
       topicName: topic.name,
       articles: formattedArticles,
-      weekDate,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
       totalArticlesThisWeek: formattedArticles.length,
       highImportanceCount,
+      summary: latestSummary ? {
+        breakingNews: latestSummary.breaking_news || [],
+        practicalTips: latestSummary.practical_tips || [],
+        keyPoints: latestSummary.key_points || [],
+        overallTrend: latestSummary.overall_trend || null,
+      } : null,
     });
+
+    // Prepare preview data
+    const previewData = {
+      subject: `${topic.name} Weekly Brief - ${formattedArticles.length} must-read insights`,
+      previewText: `本週 ${topic.name} 共發現 ${formattedArticles.length} 條新聞，其中 ${highImportanceCount} 條高重要性`,
+      htmlContent: edmHtml,
+      articlesIncluded: formattedArticles.length,
+      generatedAt: new Date().toISOString(),
+      dateRange: {
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+      },
+    };
+
+    // Cache the result
+    setEdmInCache(cacheKey, previewData);
 
     res.json({
       success: true,
-      preview: {
-        subject: `${topic.name} Weekly Brief - ${formattedArticles.length} must-read insights`,
-        previewText: `本週 ${topic.name} 共發現 ${formattedArticles.length} 條新聞，其中 ${highImportanceCount} 條高重要性`,
-        htmlContent: edmHtml,
-        articlesIncluded: formattedArticles.length,
-        generatedAt: new Date().toISOString(),
-      },
+      preview: previewData,
+      cached: false,
+      cacheKey,
     });
   } catch (error) {
     console.error('Error generating EDM preview:', error);
@@ -2266,12 +2396,163 @@ router.get('/edm/:edmId', async (req, res) => {
 });
 
 /**
- * Helper function to generate EDM HTML
+ * Helper function to generate EDM HTML with Key Visual
  */
 function generateEdmHtml(input) {
-  const { topicId, topicName, articles, weekDate, totalArticlesThisWeek, highImportanceCount } = input;
-  const formattedDate = new Date(weekDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const { topicId, topicName, articles, startDate, endDate, totalArticlesThisWeek, highImportanceCount, summary, keyVisualUrl } = input;
+
+  // Format date range
+  const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const formatYear = (dateStr) => new Date(dateStr).getFullYear();
+  const dateRangeStr = `${formatDate(startDate)} - ${formatDate(endDate)}, ${formatYear(endDate)}`;
+
   const dashboardUrl = `https://dashboard.5ml.io/intelligence/dashboard?topic=${topicId}`;
+
+  // Generate Key Visual HTML
+  // Creates a visually striking banner with topic info
+  const generateKeyVisual = () => {
+    // If custom key visual image is provided
+    if (keyVisualUrl) {
+      return `
+          <!-- Key Visual Banner with Image -->
+          <tr>
+            <td style="padding:0;">
+              <img src="${keyVisualUrl}" alt="${topicName} Weekly Brief" style="width:100%;height:auto;display:block;" />
+            </td>
+          </tr>`;
+    }
+
+    // Default: CSS-based Key Visual
+    return `
+          <!-- Key Visual Banner -->
+          <tr>
+            <td style="padding:0;">
+              <table role="presentation" style="width:100%;border:none;border-spacing:0;background:linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0d9488 100%);">
+                <tr>
+                  <td style="padding:40px 30px;text-align:center;">
+                    <!-- Decorative circles -->
+                    <div style="position:relative;">
+                      <!-- Brand logo area -->
+                      <table role="presentation" style="width:100%;border:none;border-spacing:0;">
+                        <tr>
+                          <td style="text-align:center;padding-bottom:15px;">
+                            <span style="display:inline-block;padding:8px 16px;background:rgba(255,255,255,0.15);border-radius:20px;color:rgba(255,255,255,0.9);font-size:12px;letter-spacing:1px;">5ML INTELLIGENCE</span>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <!-- Main Title -->
+                      <h1 style="margin:0 0 10px;color:#ffffff;font-size:32px;font-weight:bold;text-shadow:0 2px 10px rgba(0,0,0,0.3);">${topicName}</h1>
+                      <p style="margin:0 0 5px;color:#5eead4;font-size:18px;font-weight:600;">Weekly Intelligence Brief</p>
+
+                      <!-- Date Range Badge -->
+                      <table role="presentation" style="width:100%;border:none;border-spacing:0;margin-top:15px;">
+                        <tr>
+                          <td style="text-align:center;">
+                            <span style="display:inline-block;padding:10px 20px;background:rgba(94,234,212,0.2);border:1px solid rgba(94,234,212,0.4);border-radius:25px;color:#5eead4;font-size:14px;font-weight:500;">
+                              📅 ${dateRangeStr}
+                            </span>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <!-- Stats Row -->
+                      <table role="presentation" style="width:100%;border:none;border-spacing:0;margin-top:25px;">
+                        <tr>
+                          <td style="text-align:center;">
+                            <table role="presentation" style="margin:0 auto;border:none;border-spacing:0;">
+                              <tr>
+                                <td style="padding:0 15px;text-align:center;">
+                                  <div style="color:#ffffff;font-size:28px;font-weight:bold;">${totalArticlesThisWeek}</div>
+                                  <div style="color:rgba(255,255,255,0.7);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Articles</div>
+                                </td>
+                                <td style="padding:0 15px;border-left:1px solid rgba(255,255,255,0.2);text-align:center;">
+                                  <div style="color:#f97316;font-size:28px;font-weight:bold;">${highImportanceCount}</div>
+                                  <div style="color:rgba(255,255,255,0.7);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">High Priority</div>
+                                </td>
+                                <td style="padding:0 15px;border-left:1px solid rgba(255,255,255,0.2);text-align:center;">
+                                  <div style="color:#a78bfa;font-size:28px;font-weight:bold;">${articles.slice(0, 3).length}</div>
+                                  <div style="color:rgba(255,255,255,0.7);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Top Stories</div>
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>`;
+  };
+
+  // Generate summary sections HTML
+  const generateSummaryHtml = () => {
+    if (!summary) return '';
+
+    let html = '';
+
+    // Overall Trend
+    if (summary.overallTrend) {
+      html += `
+          <tr>
+            <td style="padding:0 30px 20px;">
+              <div style="background:linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);border-radius:8px;padding:20px;">
+                <h3 style="margin:0 0 10px;color:#ffffff;font-size:16px;font-weight:bold;">📈 Overall Trend</h3>
+                <p style="margin:0;color:rgba(255,255,255,0.95);font-size:14px;line-height:1.6;">${summary.overallTrend}</p>
+              </div>
+            </td>
+          </tr>`;
+    }
+
+    // Breaking News
+    if (summary.breakingNews && summary.breakingNews.length > 0) {
+      html += `
+          <tr>
+            <td style="padding:0 30px 20px;">
+              <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:20px;">
+                <h3 style="margin:0 0 15px;color:#dc2626;font-size:16px;font-weight:bold;">⚡ Breaking News</h3>
+                <ul style="margin:0;padding:0 0 0 20px;color:#7f1d1d;font-size:14px;line-height:1.8;">
+                  ${summary.breakingNews.slice(0, 3).map(item => `<li style="margin-bottom:8px;">${typeof item === 'string' ? item : item.text || ''}</li>`).join('')}
+                </ul>
+              </div>
+            </td>
+          </tr>`;
+    }
+
+    // Practical Tips
+    if (summary.practicalTips && summary.practicalTips.length > 0) {
+      html += `
+          <tr>
+            <td style="padding:0 30px 20px;">
+              <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:20px;">
+                <h3 style="margin:0 0 15px;color:#d97706;font-size:16px;font-weight:bold;">💡 Practical Tips</h3>
+                <ul style="margin:0;padding:0 0 0 20px;color:#78350f;font-size:14px;line-height:1.8;">
+                  ${summary.practicalTips.slice(0, 3).map(item => `<li style="margin-bottom:8px;">${typeof item === 'string' ? item : item.text || ''}</li>`).join('')}
+                </ul>
+              </div>
+            </td>
+          </tr>`;
+    }
+
+    // Key Points
+    if (summary.keyPoints && summary.keyPoints.length > 0) {
+      html += `
+          <tr>
+            <td style="padding:0 30px 20px;">
+              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:20px;">
+                <h3 style="margin:0 0 15px;color:#1d4ed8;font-size:16px;font-weight:bold;">📋 Key Points</h3>
+                <ul style="margin:0;padding:0 0 0 20px;color:#1e3a8a;font-size:14px;line-height:1.8;">
+                  ${summary.keyPoints.slice(0, 4).map(item => `<li style="margin-bottom:8px;">${typeof item === 'string' ? item : item.text || ''}</li>`).join('')}
+                </ul>
+              </div>
+            </td>
+          </tr>`;
+    }
+
+    return html;
+  };
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -2285,24 +2566,31 @@ function generateEdmHtml(input) {
     <tr>
       <td align="center" style="padding:20px 0;">
         <table role="presentation" style="width:600px;border:none;border-spacing:0;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
-          <!-- Header -->
-          <tr>
-            <td style="padding:30px;background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);text-align:center;">
-              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:bold;">5ML Intelligence</h1>
-              <p style="margin:10px 0 0;color:rgba(255,255,255,0.9);font-size:14px;">Week of ${formattedDate}</p>
-            </td>
-          </tr>
 
-          <!-- Intro -->
+          ${generateKeyVisual()}
+
+          <!-- Intro Message -->
           <tr>
-            <td style="padding:30px;">
-              <h2 style="margin:0 0 15px;color:#1e293b;font-size:22px;font-weight:bold;">${topicName} Weekly Brief</h2>
+            <td style="padding:25px 30px 15px;">
               <p style="margin:0;color:#64748b;font-size:15px;line-height:1.6;">
-                📊 共發現 <strong>${totalArticlesThisWeek}</strong> 條新聞，其中 <strong style="color:#0d9488;">${highImportanceCount}</strong> 條高重要性。
-                以下係本週最重要既洞察：
+                👋 Hi there! Here's your weekly intelligence digest covering the latest developments in <strong style="color:#0d9488;">${topicName}</strong>.
+                We've analyzed the news and summarized the key insights for you.
               </p>
             </td>
           </tr>
+
+          <!-- AI Summary Section -->
+          ${generateSummaryHtml()}
+
+          <!-- Section Divider -->
+          ${summary ? `
+          <tr>
+            <td style="padding:10px 30px 20px;">
+              <div style="border-bottom:2px solid #e2e8f0;"></div>
+              <p style="margin:15px 0 0;color:#94a3b8;font-size:13px;text-align:center;">📰 Top Stories This Week</p>
+            </td>
+          </tr>
+          ` : ''}
 
           <!-- Top Stories -->
           ${articles.slice(0, 3).map((article, i) => `
