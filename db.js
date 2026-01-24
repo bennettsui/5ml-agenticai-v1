@@ -789,6 +789,13 @@ async function getIntelligenceTopics() {
 
 async function getIntelligenceTopic(topicId) {
   try {
+    // First, let's get JUST the weekly_digest_config to debug
+    const configCheck = await pool.query(
+      `SELECT weekly_digest_config FROM intelligence_topics WHERE topic_id = $1`,
+      [topicId]
+    );
+    console.log('[DB getIntelligenceTopic] Raw weekly_digest_config from DB:', JSON.stringify(configCheck.rows[0]?.weekly_digest_config, null, 2));
+
     const result = await pool.query(
       `SELECT t.topic_id, t.name, t.keywords, t.status, t.daily_scan_config, t.weekly_digest_config, t.created_at, t.updated_at,
               COALESCE(json_agg(s.*) FILTER (WHERE s.source_id IS NOT NULL), '[]') as sources
@@ -798,6 +805,7 @@ async function getIntelligenceTopic(topicId) {
        GROUP BY t.id`,
       [topicId]
     );
+    console.log('[DB getIntelligenceTopic] Returning weekly_digest_config:', JSON.stringify(result.rows[0]?.weekly_digest_config, null, 2));
     return result.rows[0] || null;
   } catch (error) {
     console.error('Error fetching intelligence topic:', error);
