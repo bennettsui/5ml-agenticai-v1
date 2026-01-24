@@ -247,7 +247,7 @@ export default function IntelligenceDashboardPage() {
       const response = await fetch('/api/intelligence/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topicId: topic.topic_id, llm: 'claude-haiku' }),
+        body: JSON.stringify({ topicId: topic.topic_id, llm: 'deepseek' }),
       });
 
       const data = await response.json();

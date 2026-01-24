@@ -230,7 +230,7 @@ export default function LiveScanPage() {
       const response = await fetch('/api/intelligence/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topicId, llm: 'claude-haiku' }),
+        body: JSON.stringify({ topicId, llm: 'deepseek' }),
       });
 
       const data = await response.json();

@@ -1027,7 +1027,7 @@ router.get('/news', async (req, res) => {
  */
 router.post('/summarize', async (req, res) => {
   try {
-    const { topicId, llm = 'claude-haiku' } = req.body;
+    const { topicId, llm = 'deepseek' } = req.body;
 
     if (!topicId) {
       return res.status(400).json({ success: false, error: 'Topic ID is required' });
