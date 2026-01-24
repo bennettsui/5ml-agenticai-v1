@@ -1400,13 +1400,11 @@ function parseSummaryResponse(content, llmUsed, model, inputTokens, outputTokens
 
 /**
  * Generate mock AI summary when no LLM is available
+ * Extracts actual information from articles to provide meaningful insights
  */
 function generateMockAISummary(articles, topicName) {
   // Ensure articles is an array
   const articleList = Array.isArray(articles) ? articles : [];
-
-  const highPriorityArticles = articleList.filter(a => a.importance_score >= 80);
-  const topArticleIds = articleList.slice(0, 3).map(a => a.id);
 
   // Handle empty articles case
   if (articleList.length === 0) {
@@ -1414,12 +1412,12 @@ function generateMockAISummary(articles, topicName) {
       summary: {
         breakingNews: [],
         practicalTips: [],
-        keyPoints: [{ text: 'No articles available for analysis.', sources: [] }],
-        overallTrend: `No recent data available for ${topicName}.`,
+        keyPoints: [{ text: 'No articles available for analysis. Run a scan to fetch news first.', sources: [] }],
+        overallTrend: `No recent data available for ${topicName}. Start a scan to gather intelligence.`,
       },
       meta: {
         fetchingModel: 'Database query',
-        analysisModel: 'Mock (no API key)',
+        analysisModel: 'Mock (no API key) - Add DEEPSEEK_API_KEY for real analysis',
         inputTokens: 0,
         outputTokens: 0,
         totalTokens: 0,
@@ -1428,47 +1426,85 @@ function generateMockAISummary(articles, topicName) {
     };
   }
 
+  // Extract actual data from articles
+  const highPriorityArticles = articleList.filter(a => a.importance_score >= 80);
+  const mediumPriorityArticles = articleList.filter(a => a.importance_score >= 60 && a.importance_score < 80);
+
+  // Extract keywords from titles for more specific insights
+  const allTitles = articleList.map(a => a.title).join(' ').toLowerCase();
+  const commonTopics = [];
+  const topicKeywords = ['update', 'new', 'change', 'feature', 'algorithm', 'growth', 'strategy', 'tip', 'trend', 'announcement', 'launch'];
+  topicKeywords.forEach(keyword => {
+    if (allTitles.includes(keyword)) commonTopics.push(keyword);
+  });
+
+  // Build breaking news from high priority articles
+  const breakingNews = highPriorityArticles.slice(0, 3).map((article, idx) => ({
+    text: `${article.title.substring(0, 100)}${article.title.length > 100 ? '...' : ''} - Review within 48 hours and assess impact on your current approach. [${article.id}]`,
+    sources: [article.id],
+  }));
+
+  // Build practical tips from article summaries
+  const practicalTips = [];
+  const tipArticles = articleList.slice(0, 5);
+
+  if (tipArticles[0]) {
+    practicalTips.push({
+      text: `Based on "${tipArticles[0].title.substring(0, 50)}...": Test implementing key insights from this source over 2 weeks. Track engagement metrics before and after. [${tipArticles[0].id}]`,
+      sources: [tipArticles[0].id],
+    });
+  }
+  if (tipArticles[1]) {
+    practicalTips.push({
+      text: `From "${tipArticles[1].title.substring(0, 50)}...": Document 3 actionable takeaways and schedule implementation within 7 days. [${tipArticles[1].id}]`,
+      sources: [tipArticles[1].id],
+    });
+  }
+  if (tipArticles[2]) {
+    practicalTips.push({
+      text: `Consider "${tipArticles[2].title.substring(0, 50)}...": Run a small-scale pilot test before full rollout. Monitor results for 1 week. [${tipArticles[2].id}]`,
+      sources: [tipArticles[2].id],
+    });
+  }
+
+  // Build key points as decision rules
+  const keyPoints = [];
+
+  if (highPriorityArticles.length > 0) {
+    keyPoints.push({
+      text: `If you see ${highPriorityArticles.length} high-priority items like these, prioritize reviewing them within 24-48 hours before competitors adapt. [${highPriorityArticles.slice(0, 2).map(a => a.id).join('][')}]`,
+      sources: highPriorityArticles.slice(0, 2).map(a => a.id),
+    });
+  }
+
+  keyPoints.push({
+    text: `When monitoring ${topicName}, focus on sources that consistently provide actionable insights (${articleList.slice(0, 3).map(a => a.source_name).filter((v, i, a) => a.indexOf(v) === i).join(', ')}). [${articleList.slice(0, 2).map(a => a.id).join('][')}]`,
+    sources: articleList.slice(0, 2).map(a => a.id),
+  });
+
+  if (commonTopics.length > 0) {
+    keyPoints.push({
+      text: `Current themes include: ${commonTopics.slice(0, 4).join(', ')}. If these align with your strategy, allocate time this week to deep-dive into the top 3 articles. [${articleList.slice(0, 3).map(a => a.id).join('][')}]`,
+      sources: articleList.slice(0, 3).map(a => a.id),
+    });
+  }
+
+  // Build overall trend from article data
+  const sourceNames = [...new Set(articleList.map(a => a.source_name))];
+  const avgScore = Math.round(articleList.reduce((sum, a) => sum + (a.importance_score || 50), 0) / articleList.length);
+
+  const overallTrend = `Based on ${articleList.length} articles from ${sourceNames.length} sources (avg importance: ${avgScore}/100), ${topicName} shows ${highPriorityArticles.length > 2 ? 'significant activity requiring immediate attention' : mediumPriorityArticles.length > 3 ? 'moderate developments worth monitoring weekly' : 'steady state with routine updates'}. ${highPriorityArticles.length > 0 ? `Top priority: "${highPriorityArticles[0].title.substring(0, 60)}..."` : 'No urgent items detected.'} Recommended action: Set up a 15-minute weekly review to stay current.`;
+
   return {
     summary: {
-      breakingNews: highPriorityArticles.length > 0 ? [
-        {
-          text: `${highPriorityArticles.length} high-priority developments identified requiring attention [${topArticleIds[0]}]`,
-          sources: [topArticleIds[0]],
-        },
-      ] : [],
-      practicalTips: [
-        {
-          text: `Focus on original content creation for better engagement [${topArticleIds[0]}][${topArticleIds[1] || topArticleIds[0]}]`,
-          sources: topArticleIds.slice(0, 2),
-        },
-        {
-          text: `Monitor algorithm changes and adapt content strategy accordingly [${topArticleIds[1] || topArticleIds[0]}]`,
-          sources: [topArticleIds[1] || topArticleIds[0]],
-        },
-        {
-          text: `Stay updated with platform feature releases for competitive advantage [${topArticleIds[2] || topArticleIds[0]}]`,
-          sources: [topArticleIds[2] || topArticleIds[0]],
-        },
-      ],
-      keyPoints: [
-        {
-          text: `${articleList.length} articles analyzed for topic "${topicName}" [${topArticleIds.join('][')}]`,
-          sources: topArticleIds,
-        },
-        {
-          text: `Key themes include algorithm updates, content strategy changes, and engagement optimization [${topArticleIds[0]}][${topArticleIds[1] || topArticleIds[0]}]`,
-          sources: topArticleIds.slice(0, 2),
-        },
-        {
-          text: `New features are being rolled out that may impact content strategy [${topArticleIds[2] || topArticleIds[0]}]`,
-          sources: [topArticleIds[2] || topArticleIds[0]],
-        },
-      ],
-      overallTrend: `The ${topicName} landscape is evolving with new features and algorithm changes that favor original, high-quality content.`,
+      breakingNews,
+      practicalTips,
+      keyPoints,
+      overallTrend,
     },
     meta: {
       fetchingModel: 'Database query',
-      analysisModel: 'Mock (no API key)',
+      analysisModel: 'Mock (no API key) - Add DEEPSEEK_API_KEY for AI-powered analysis',
       inputTokens: 0,
       outputTokens: 0,
       totalTokens: 0,
