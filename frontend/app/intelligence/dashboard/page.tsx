@@ -29,6 +29,9 @@ import {
   Zap,
   Lightbulb,
   List,
+  History,
+  Calendar,
+  ChevronRight,
 } from 'lucide-react';
 
 interface Topic {
@@ -88,6 +91,22 @@ interface SummaryMeta {
   outputTokens: number;
   totalTokens: number;
   estimatedCost: number;
+  articlesAnalyzed?: number;
+}
+
+interface SavedSummary {
+  summary_id: string;
+  topic_id: string;
+  breaking_news: SummaryItem[];
+  practical_tips: SummaryItem[];
+  key_points: SummaryItem[];
+  overall_trend: string;
+  model_used: string;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost: number;
+  articles_analyzed: number;
+  created_at: string;
 }
 
 export default function IntelligenceDashboardPage() {
@@ -109,6 +128,12 @@ export default function IntelligenceDashboardPage() {
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [showSummary, setShowSummary] = useState(true);
 
+  // Scan history state
+  const [summaryHistory, setSummaryHistory] = useState<SavedSummary[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+
   // Fetch all topics on mount
   useEffect(() => {
     fetchTopics();
@@ -128,6 +153,7 @@ export default function IntelligenceDashboardPage() {
     if (selectedTopicId) {
       loadTopic(selectedTopicId);
       loadArticles(selectedTopicId);
+      loadSummaryHistory(selectedTopicId);
       // Update URL
       const url = new URL(window.location.href);
       url.searchParams.set('topic', selectedTopicId);
@@ -201,6 +227,42 @@ export default function IntelligenceDashboardPage() {
     }
   };
 
+  const loadSummaryHistory = async (topicId: string) => {
+    setLoadingHistory(true);
+    try {
+      const response = await fetch(`/api/intelligence/summaries/${topicId}`);
+      const data = await response.json();
+      if (data.success) {
+        setSummaryHistory(data.summaries || []);
+        // Auto-expand and display the latest summary if available
+        if (data.summaries && data.summaries.length > 0) {
+          const latest = data.summaries[0];
+          setExpandedHistoryId(latest.summary_id);
+          // Convert saved summary to display format
+          setSummary({
+            breakingNews: latest.breaking_news || [],
+            practicalTips: latest.practical_tips || [],
+            keyPoints: latest.key_points || [],
+            overallTrend: latest.overall_trend || '',
+          });
+          setSummaryMeta({
+            fetchingModel: 'Database query',
+            analysisModel: latest.model_used || 'Unknown',
+            inputTokens: latest.input_tokens || 0,
+            outputTokens: latest.output_tokens || 0,
+            totalTokens: (latest.input_tokens || 0) + (latest.output_tokens || 0),
+            estimatedCost: parseFloat(latest.estimated_cost) || 0,
+            articlesAnalyzed: latest.articles_analyzed || 0,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load summary history:', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   const handleTopicChange = (topicId: string) => {
     setSelectedTopicId(topicId);
     setArticles([]);
@@ -255,6 +317,8 @@ export default function IntelligenceDashboardPage() {
         setSummary(data.summary);
         setSummaryMeta(data.meta);
         setShowSummary(true);
+        // Reload history to include new summary
+        loadSummaryHistory(topic.topic_id);
       } else {
         alert(`Failed to generate summary: ${data.error}`);
       }
@@ -263,6 +327,54 @@ export default function IntelligenceDashboardPage() {
     } finally {
       setIsGeneratingSummary(false);
     }
+  };
+
+  const handleRegenerateSummary = async (summaryId: string) => {
+    if (!topic) return;
+    setRegeneratingId(summaryId);
+
+    try {
+      const response = await fetch('/api/intelligence/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topicId: topic.topic_id, llm: 'deepseek' }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setSummary(data.summary);
+        setSummaryMeta(data.meta);
+        setShowSummary(true);
+        // Reload history to include new summary
+        loadSummaryHistory(topic.topic_id);
+      } else {
+        alert(`Failed to regenerate summary: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to regenerate summary:', error);
+    } finally {
+      setRegeneratingId(null);
+    }
+  };
+
+  const displayHistorySummary = (savedSummary: SavedSummary) => {
+    setSummary({
+      breakingNews: savedSummary.breaking_news || [],
+      practicalTips: savedSummary.practical_tips || [],
+      keyPoints: savedSummary.key_points || [],
+      overallTrend: savedSummary.overall_trend || '',
+    });
+    setSummaryMeta({
+      fetchingModel: 'Database query',
+      analysisModel: savedSummary.model_used || 'Unknown',
+      inputTokens: savedSummary.input_tokens || 0,
+      outputTokens: savedSummary.output_tokens || 0,
+      totalTokens: (savedSummary.input_tokens || 0) + (savedSummary.output_tokens || 0),
+      estimatedCost: parseFloat(String(savedSummary.estimated_cost)) || 0,
+      articlesAnalyzed: savedSummary.articles_analyzed || 0,
+    });
+    setExpandedHistoryId(savedSummary.summary_id);
+    setShowSummary(true);
   };
 
   const filteredArticles = articles.filter(article => {
@@ -667,6 +779,118 @@ export default function IntelligenceDashboardPage() {
                   </div>
                 )}
               </div>
+
+              {/* Scan History */}
+              {summaryHistory.length > 0 && (
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <History className="w-5 h-5 text-slate-500" />
+                        <h3 className="font-semibold text-slate-900 dark:text-white">Analysis History</h3>
+                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs rounded-full">
+                          {summaryHistory.length} {summaryHistory.length === 1 ? 'report' : 'reports'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="divide-y divide-slate-200 dark:divide-slate-700 max-h-[400px] overflow-y-auto">
+                    {summaryHistory.map((savedSummary, index) => (
+                      <div
+                        key={savedSummary.summary_id}
+                        className={`p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${
+                          expandedHistoryId === savedSummary.summary_id ? 'bg-purple-50 dark:bg-purple-900/10' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div
+                            className="flex items-center gap-3 flex-1 cursor-pointer"
+                            onClick={() => displayHistorySummary(savedSummary)}
+                          >
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                              index === 0
+                                ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                            }`}>
+                              {index === 0 ? <Sparkles className="w-4 h-4" /> : index + 1}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-slate-900 dark:text-white">
+                                  {index === 0 ? 'Latest Analysis' : `Analysis #${summaryHistory.length - index}`}
+                                </span>
+                                {index === 0 && (
+                                  <span className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs rounded">
+                                    Current
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  {new Date(savedSummary.created_at).toLocaleDateString()}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {new Date(savedSummary.created_at).toLocaleTimeString()}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Cpu className="w-3 h-3" />
+                                  {savedSummary.model_used || 'Unknown'}
+                                </span>
+                                <span>{savedSummary.articles_analyzed || 0} articles</span>
+                              </div>
+                            </div>
+                            <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${
+                              expandedHistoryId === savedSummary.summary_id ? 'rotate-90' : ''
+                            }`} />
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRegenerateSummary(savedSummary.summary_id);
+                            }}
+                            disabled={regeneratingId === savedSummary.summary_id}
+                            className="ml-3 flex items-center gap-1 px-3 py-1.5 bg-purple-500 hover:bg-purple-600 disabled:bg-slate-400 text-white rounded-lg text-xs"
+                          >
+                            {regeneratingId === savedSummary.summary_id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-3 h-3" />
+                            )}
+                            Regenerate
+                          </button>
+                        </div>
+                        {/* Quick preview of key stats */}
+                        {expandedHistoryId === savedSummary.summary_id && (
+                          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                            <div className="grid grid-cols-3 gap-3 text-xs">
+                              <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                                <div className="text-red-600 dark:text-red-400 font-medium">Breaking News</div>
+                                <div className="text-slate-600 dark:text-slate-400">
+                                  {savedSummary.breaking_news?.length || 0} items
+                                </div>
+                              </div>
+                              <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                                <div className="text-amber-600 dark:text-amber-400 font-medium">Practical Tips</div>
+                                <div className="text-slate-600 dark:text-slate-400">
+                                  {savedSummary.practical_tips?.length || 0} items
+                                </div>
+                              </div>
+                              <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                <div className="text-blue-600 dark:text-blue-400 font-medium">Key Points</div>
+                                <div className="text-slate-600 dark:text-slate-400">
+                                  {savedSummary.key_points?.length || 0} items
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Filters */}
               <div className="flex items-center justify-between mb-4">
