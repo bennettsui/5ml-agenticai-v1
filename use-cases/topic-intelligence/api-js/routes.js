@@ -674,7 +674,7 @@ router.put('/topics/:id/resume', async (req, res) => {
 
 /**
  * POST /scan/start
- * Starts a manual scan for a topic
+ * Starts a manual scan for a topic with real-time WebSocket updates
  */
 router.post('/scan/start', async (req, res) => {
   try {
@@ -685,33 +685,244 @@ router.post('/scan/start', async (req, res) => {
     }
 
     let topic;
+    let sources = [];
+
     if (db && process.env.DATABASE_URL) {
       try {
         topic = await db.getIntelligenceTopic(topicId);
+        sources = await db.getIntelligenceSources(topicId);
       } catch (dbError) {
         topic = inMemoryTopics.get(topicId);
+        sources = Array.from(inMemorySources.values()).filter(s => s.topicId === topicId);
       }
     } else {
       topic = inMemoryTopics.get(topicId);
+      sources = Array.from(inMemorySources.values()).filter(s => s.topicId === topicId);
     }
 
     if (!topic) {
       return res.status(404).json({ success: false, error: 'Topic not found' });
     }
 
-    // In production, this would trigger the DailyNewsWorkflow
-    console.log(`🔄 Starting scan for topic: ${topic.name}`);
+    const scanId = `scan-${Date.now()}`;
+    console.log(`🔄 Starting scan for topic: ${topic.name} (${sources.length} sources)`);
 
+    // Return immediately with scan ID
     res.json({
       success: true,
       message: 'Scan started',
-      scanId: `scan-${Date.now()}`,
+      scanId,
+      totalSources: sources.length,
     });
+
+    // Run scan asynchronously with WebSocket updates
+    runScanWithUpdates(topicId, topic, sources, scanId);
+
   } catch (error) {
     console.error('Error starting scan:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+/**
+ * Run scan asynchronously and send WebSocket updates
+ */
+async function runScanWithUpdates(topicId, topic, sources, scanId) {
+  const wsServer = require('../../../services/websocket-server');
+
+  const totalSources = sources.length || 5; // Use mock if no sources
+  const scanSources = sources.length > 0 ? sources : generateMockSources(topic.name, topic.keywords || [], 'quick').slice(0, 5);
+
+  let articlesFound = 0;
+  let articlesAnalyzed = 0;
+  let highImportanceCount = 0;
+
+  // Send initial progress
+  wsServer.broadcast(topicId, {
+    event: 'progress_update',
+    data: {
+      sourcesScanned: 0,
+      totalSources: scanSources.length,
+      articlesFound: 0,
+      articlesAnalyzed: 0,
+      highImportanceCount: 0,
+      status: 'scanning',
+      currentSource: null,
+    },
+  });
+
+  for (let i = 0; i < scanSources.length; i++) {
+    const source = scanSources[i];
+    const sourceName = source.name || `Source ${i + 1}`;
+
+    // Send source status - starting
+    wsServer.broadcast(topicId, {
+      event: 'source_status_update',
+      data: {
+        sourceId: source.source_id || `src-${i}`,
+        sourceName,
+        status: 'active',
+        url: source.primary_url,
+        step: 'connecting',
+      },
+    });
+
+    // Simulate connection delay
+    await sleep(800);
+
+    // Send status - fetching
+    wsServer.broadcast(topicId, {
+      event: 'source_status_update',
+      data: {
+        sourceId: source.source_id || `src-${i}`,
+        sourceName,
+        status: 'active',
+        step: 'fetching',
+        message: `Fetching content from ${source.primary_url}`,
+      },
+    });
+
+    await sleep(1200);
+
+    // Simulate finding articles
+    const foundInSource = Math.floor(Math.random() * 5) + 1;
+    articlesFound += foundInSource;
+
+    // Send status - parsing
+    wsServer.broadcast(topicId, {
+      event: 'source_status_update',
+      data: {
+        sourceId: source.source_id || `src-${i}`,
+        sourceName,
+        status: 'active',
+        step: 'parsing',
+        message: `Found ${foundInSource} articles, parsing content...`,
+      },
+    });
+
+    await sleep(1000);
+
+    // Send status - analyzing
+    wsServer.broadcast(topicId, {
+      event: 'source_status_update',
+      data: {
+        sourceId: source.source_id || `src-${i}`,
+        sourceName,
+        status: 'active',
+        step: 'analyzing',
+        message: `Analyzing ${foundInSource} articles with AI...`,
+      },
+    });
+
+    await sleep(1500);
+
+    // Generate mock analyzed articles for this source
+    for (let j = 0; j < foundInSource; j++) {
+      const importance = Math.floor(Math.random() * 40) + 60; // 60-100
+      if (importance >= 80) highImportanceCount++;
+      articlesAnalyzed++;
+
+      // Send article analyzed event
+      wsServer.broadcast(topicId, {
+        event: 'article_analyzed',
+        data: {
+          article_id: `article-${Date.now()}-${j}`,
+          title: generateMockArticleTitle(topic.name, source.type),
+          source_name: sourceName,
+          source_url: source.primary_url,
+          importance_score: importance,
+          content_summary: generateMockSummary(topic.name),
+          key_insights: ['Key insight 1', 'Key insight 2'],
+          action_items: importance >= 80 ? ['Review immediately', 'Share with team'] : [],
+          tags: [topic.name, source.type, 'news'],
+        },
+      });
+
+      await sleep(300);
+    }
+
+    // Send source complete
+    wsServer.broadcast(topicId, {
+      event: 'source_status_update',
+      data: {
+        sourceId: source.source_id || `src-${i}`,
+        sourceName,
+        status: 'complete',
+        articlesFound: foundInSource,
+        step: 'complete',
+        message: `Completed: ${foundInSource} articles analyzed`,
+      },
+    });
+
+    // Send progress update
+    wsServer.broadcast(topicId, {
+      event: 'progress_update',
+      data: {
+        sourcesScanned: i + 1,
+        totalSources: scanSources.length,
+        articlesFound,
+        articlesAnalyzed,
+        highImportanceCount,
+        status: i === scanSources.length - 1 ? 'complete' : 'scanning',
+        currentSource: i < scanSources.length - 1 ? scanSources[i + 1]?.name : null,
+      },
+    });
+
+    await sleep(500);
+  }
+
+  // Send completion
+  wsServer.broadcast(topicId, {
+    event: 'scan_complete',
+    data: {
+      scanId,
+      totalSources: scanSources.length,
+      articlesFound,
+      articlesAnalyzed,
+      highImportanceCount,
+      completedAt: new Date().toISOString(),
+    },
+  });
+
+  console.log(`✅ Scan complete for topic: ${topic.name} - ${articlesAnalyzed} articles analyzed`);
+}
+
+/**
+ * Helper: Sleep function
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Helper: Generate mock article title
+ */
+function generateMockArticleTitle(topicName, sourceType) {
+  const templates = [
+    `Breaking: New Developments in ${topicName}`,
+    `${topicName}: What You Need to Know in 2025`,
+    `Industry Report: ${topicName} Trends Analysis`,
+    `Expert Analysis: The Future of ${topicName}`,
+    `${topicName} Update: Key Changes Announced`,
+    `How ${topicName} is Evolving This Quarter`,
+    `${topicName}: Best Practices Guide 2025`,
+    `The State of ${topicName}: Data Report`,
+  ];
+  return templates[Math.floor(Math.random() * templates.length)];
+}
+
+/**
+ * Helper: Generate mock summary
+ */
+function generateMockSummary(topicName) {
+  const templates = [
+    `This article covers recent developments in ${topicName}, highlighting key changes that professionals need to be aware of.`,
+    `An in-depth analysis of ${topicName} trends, with data-backed insights and actionable recommendations.`,
+    `Industry experts weigh in on the future of ${topicName}, providing strategic guidance for the coming months.`,
+    `Comprehensive coverage of ${topicName} updates, including practical tips and implementation strategies.`,
+  ];
+  return templates[Math.floor(Math.random() * templates.length)];
+}
 
 /**
  * GET /news

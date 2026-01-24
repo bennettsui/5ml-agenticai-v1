@@ -17,6 +17,12 @@ import {
   Users,
   FolderOpen,
   ChevronDown,
+  Globe,
+  FileText,
+  Brain,
+  Wifi,
+  WifiOff,
+  Activity,
 } from 'lucide-react';
 
 interface Topic {
@@ -43,6 +49,17 @@ interface SourceStatus {
   status: 'active' | 'complete' | 'failed';
   articlesFound?: number;
   error?: string;
+  step?: 'connecting' | 'fetching' | 'parsing' | 'analyzing' | 'complete';
+  message?: string;
+  url?: string;
+}
+
+interface ActivityLog {
+  id: string;
+  time: string;
+  type: 'info' | 'source' | 'article' | 'success' | 'error';
+  message: string;
+  details?: string;
 }
 
 interface AnalyzedArticle {
@@ -81,8 +98,10 @@ export default function LiveScanPage() {
   const [analyzedArticles, setAnalyzedArticles] = useState<AnalyzedArticle[]>([]);
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
   const [showErrors, setShowErrors] = useState(false);
+  const [activityLog, setActivityLog] = useState<ActivityLog[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const activityLogRef = useRef<HTMLDivElement>(null);
 
   // Fetch all topics on mount
   useEffect(() => {
@@ -162,20 +181,39 @@ export default function LiveScanPage() {
     setSourceStatuses(new Map());
     setAnalyzedArticles([]);
     setErrorLogs([]);
+    setActivityLog([]);
+  };
+
+  const addActivityLog = (type: ActivityLog['type'], message: string, details?: string) => {
+    const newLog: ActivityLog = {
+      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      time: new Date().toISOString(),
+      type,
+      message,
+      details,
+    };
+    setActivityLog(prev => [newLog, ...prev].slice(0, 100));
   };
 
   const connectWebSocket = (topicId: string) => {
-    const wsUrl = `ws://localhost:3001?topicId=${topicId}`;
+    // Connect to WebSocket on same host
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
     const ws = new WebSocket(wsUrl);
 
+    // Subscribe to topic updates after connection
     ws.onopen = () => {
       setIsConnected(true);
       console.log('[WebSocket] Connected');
+      addActivityLog('info', 'Connected to real-time updates server');
+      // Subscribe to this topic's updates
+      ws.send(JSON.stringify({ type: 'subscribe', batchId: topicId }));
     };
 
     ws.onclose = () => {
       setIsConnected(false);
       console.log('[WebSocket] Disconnected');
+      addActivityLog('info', 'Disconnected from server, reconnecting...');
       // Attempt reconnect after 3 seconds
       setTimeout(() => connectWebSocket(topicId), 3000);
     };
@@ -196,36 +234,67 @@ export default function LiveScanPage() {
     wsRef.current = ws;
   };
 
-  const handleWebSocketMessage = (message: { event: string; data: unknown }) => {
-    switch (message.event) {
+  const handleWebSocketMessage = (message: { event?: string; type?: string; data?: unknown; batchId?: string }) => {
+    // Handle different message formats
+    const event = message.event || message.type;
+    const data = message.data;
+
+    switch (event) {
+      case 'connected':
+      case 'subscribed':
+        addActivityLog('info', message.type === 'subscribed' ? 'Subscribed to topic updates' : 'WebSocket connected');
+        break;
+
       case 'progress_update':
-        setProgress(message.data as ScanProgress);
+        setProgress(data as ScanProgress);
         break;
 
       case 'source_status_update':
-        const sourceStatus = message.data as SourceStatus;
+        const sourceStatus = data as SourceStatus;
         setSourceStatuses(prev => {
           const newMap = new Map(prev);
           newMap.set(sourceStatus.sourceId, sourceStatus);
           return newMap;
         });
+        // Add activity log based on step
+        if (sourceStatus.step === 'connecting') {
+          addActivityLog('source', `Connecting to ${sourceStatus.sourceName}`, sourceStatus.url);
+        } else if (sourceStatus.step === 'fetching') {
+          addActivityLog('source', `Fetching content from ${sourceStatus.sourceName}`, sourceStatus.message);
+        } else if (sourceStatus.step === 'parsing') {
+          addActivityLog('source', `Parsing articles from ${sourceStatus.sourceName}`, sourceStatus.message);
+        } else if (sourceStatus.step === 'analyzing') {
+          addActivityLog('source', `Analyzing with AI: ${sourceStatus.sourceName}`, sourceStatus.message);
+        } else if (sourceStatus.step === 'complete') {
+          addActivityLog('success', `Completed: ${sourceStatus.sourceName}`, `Found ${sourceStatus.articlesFound} articles`);
+        }
         break;
 
       case 'article_analyzed':
-        const article = message.data as AnalyzedArticle;
+        const article = data as AnalyzedArticle;
         setAnalyzedArticles(prev => [article, ...prev].slice(0, 50));
+        addActivityLog('article', `Analyzed: ${article.title.substring(0, 50)}...`, `Score: ${article.importance_score}/100`);
         break;
 
       case 'error_occurred':
-        const error = message.data as { sourceId?: string; message: string };
+        const error = data as { sourceId?: string; message: string };
         setErrorLogs(prev => [
           { time: new Date().toISOString(), ...error },
           ...prev,
         ].slice(0, 100));
+        addActivityLog('error', error.message);
         break;
 
       case 'scan_complete':
         setProgress(prev => ({ ...prev, status: 'complete' }));
+        addActivityLog('success', 'Scan completed successfully!', `Analyzed ${(data as { articlesAnalyzed?: number })?.articlesAnalyzed || 0} articles`);
+        break;
+
+      case 'update':
+        // Handle wrapped update messages
+        if (message.data) {
+          handleWebSocketMessage({ event: (message.data as { event: string }).event, data: (message.data as { data: unknown }).data });
+        }
         break;
     }
   };
@@ -237,15 +306,33 @@ export default function LiveScanPage() {
     setSourceStatuses(new Map());
     setAnalyzedArticles([]);
     setErrorLogs([]);
+    setActivityLog([]);
+
+    addActivityLog('info', `Starting scan for topic: ${topicName}`);
 
     try {
-      await fetch('/api/orchestration/trigger-scan', {
+      const response = await fetch('/api/intelligence/scan/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topicId }),
       });
+
+      const data = await response.json();
+
+      if (data.success) {
+        addActivityLog('info', `Scan initiated with ${data.totalSources || 0} sources`, `Scan ID: ${data.scanId}`);
+        setProgress(prev => ({
+          ...prev,
+          totalSources: data.totalSources || 0,
+          status: 'scanning',
+        }));
+      } else {
+        addActivityLog('error', `Failed to start scan: ${data.error}`);
+        setProgress(prev => ({ ...prev, status: 'failed' }));
+      }
     } catch (error) {
       console.error('Failed to start scan:', error);
+      addActivityLog('error', 'Failed to connect to server');
       setProgress(prev => ({ ...prev, status: 'failed' }));
     }
   };
@@ -469,6 +556,56 @@ export default function LiveScanPage() {
           </div>
         </div>
 
+        {/* Activity Log - Shows during scanning */}
+        {(progress.status === 'scanning' || progress.status === 'analyzing' || activityLog.length > 0) && (
+          <div className="bg-slate-900 dark:bg-slate-950 rounded-xl shadow-sm border border-slate-700 p-4 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-green-400 flex items-center gap-2">
+                <Activity className="w-4 h-4" />
+                Live Activity Log
+              </h3>
+              <div className="flex items-center gap-2">
+                {isConnected ? (
+                  <span className="flex items-center gap-1 text-xs text-green-400">
+                    <Wifi className="w-3 h-3" />
+                    Live
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs text-red-400">
+                    <WifiOff className="w-3 h-3" />
+                    Disconnected
+                  </span>
+                )}
+              </div>
+            </div>
+            <div
+              ref={activityLogRef}
+              className="font-mono text-xs space-y-1 max-h-[200px] overflow-y-auto bg-black/50 rounded p-3"
+            >
+              {activityLog.length === 0 ? (
+                <p className="text-slate-500">Waiting for scan to start...</p>
+              ) : (
+                activityLog.slice(0, 30).map(log => (
+                  <div key={log.id} className="flex items-start gap-2">
+                    <span className="text-slate-500 shrink-0">
+                      {new Date(log.time).toLocaleTimeString()}
+                    </span>
+                    {log.type === 'info' && <span className="text-blue-400">[INFO]</span>}
+                    {log.type === 'source' && <span className="text-yellow-400">[SOURCE]</span>}
+                    {log.type === 'article' && <span className="text-cyan-400">[ARTICLE]</span>}
+                    {log.type === 'success' && <span className="text-green-400">[SUCCESS]</span>}
+                    {log.type === 'error' && <span className="text-red-400">[ERROR]</span>}
+                    <span className="text-slate-300">{log.message}</span>
+                    {log.details && (
+                      <span className="text-slate-500">- {log.details}</span>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-6">
           {/* Source Status Cards */}
           <div className="col-span-1">
@@ -478,28 +615,54 @@ export default function LiveScanPage() {
                 {Array.from(sourceStatuses.values()).map(source => (
                   <div
                     key={source.sourceId}
-                    className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-700/50 rounded"
+                    className={`p-3 rounded-lg border transition-all ${
+                      source.status === 'active'
+                        ? 'border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-900/20'
+                        : source.status === 'complete'
+                        ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20'
+                        : source.status === 'failed'
+                        ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
+                        : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50'
+                    }`}
                   >
-                    {source.status === 'active' && (
-                      <Loader2 className="w-4 h-4 text-teal-500 animate-spin" />
+                    <div className="flex items-center gap-2 mb-1">
+                      {source.status === 'active' && (
+                        <Loader2 className="w-4 h-4 text-teal-500 animate-spin" />
+                      )}
+                      {source.status === 'complete' && (
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      )}
+                      {source.status === 'failed' && (
+                        <AlertCircle className="w-4 h-4 text-red-500" />
+                      )}
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate flex-1">
+                        {source.sourceName}
+                      </span>
+                      {source.articlesFound !== undefined && (
+                        <span className="text-xs bg-slate-200 dark:bg-slate-600 px-2 py-0.5 rounded">
+                          {source.articlesFound} articles
+                        </span>
+                      )}
+                    </div>
+                    {source.status === 'active' && source.step && (
+                      <div className="mt-2 flex items-center gap-2 text-xs text-teal-600 dark:text-teal-400">
+                        {source.step === 'connecting' && <Globe className="w-3 h-3" />}
+                        {source.step === 'fetching' && <FileText className="w-3 h-3" />}
+                        {source.step === 'parsing' && <FileText className="w-3 h-3" />}
+                        {source.step === 'analyzing' && <Brain className="w-3 h-3 animate-pulse" />}
+                        <span className="capitalize">{source.step}...</span>
+                      </div>
                     )}
-                    {source.status === 'complete' && (
-                      <CheckCircle2 className="w-4 h-4 text-green-500" />
-                    )}
-                    {source.status === 'failed' && (
-                      <AlertCircle className="w-4 h-4 text-red-500" />
-                    )}
-                    <span className="text-sm text-slate-700 dark:text-slate-300 truncate flex-1">
-                      {source.sourceName}
-                    </span>
-                    {source.articlesFound !== undefined && (
-                      <span className="text-xs text-slate-500">{source.articlesFound}</span>
+                    {source.url && source.status === 'active' && (
+                      <div className="mt-1 text-xs text-slate-500 truncate">
+                        {source.url}
+                      </div>
                     )}
                   </div>
                 ))}
                 {sourceStatuses.size === 0 && (
-                  <p className="text-sm text-slate-500 text-center py-4">
-                    No sources scanned yet
+                  <p className="text-sm text-slate-500 text-center py-8">
+                    No sources scanned yet. Click &quot;Start Scan&quot; to begin.
                   </p>
                 )}
               </div>
