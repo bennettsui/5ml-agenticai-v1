@@ -431,6 +431,7 @@ export default function LiveScanPage() {
 
       if (data.success) {
         addActivityLog('info', `Scan initiated with ${data.totalSources || 0} sources`, `Scan ID: ${data.scanId}`);
+        addActivityLog('info', `WebSocket status: ${isConnected ? 'Connected' : 'Disconnected'}`, 'Waiting for updates...');
         setProgress(prev => ({
           ...prev,
           totalSources: data.totalSources || 0,
