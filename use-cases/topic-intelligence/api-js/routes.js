@@ -117,8 +117,11 @@ function getEdmCacheStats() {
 // Saves analysis results and sources to Notion databases
 
 const NOTION_API_KEY = process.env.NOTION_API_KEY;
-const NOTION_ANALYSIS_DB_ID = process.env.NOTION_ANALYSIS_DATABASE_ID;
-const NOTION_SOURCES_DB_ID = process.env.NOTION_SOURCES_DATABASE_ID;
+const NOTION_PARENT_PAGE_ID = process.env.NOTION_PARENT_PAGE_ID || '2cb1f0bba67180b090b6ffb0619fc571';
+
+// Database IDs - will be created automatically if not set
+let notionAnalysisDbId = process.env.NOTION_ANALYSIS_DATABASE_ID || null;
+let notionSourcesDbId = process.env.NOTION_SOURCES_DATABASE_ID || null;
 
 /**
  * Notion API helper for saving analysis results
@@ -127,10 +130,11 @@ class NotionHelper {
   constructor() {
     this.baseUrl = 'https://api.notion.com/v1';
     this.notionVersion = '2022-06-28';
+    this.initialized = false;
   }
 
   isAvailable() {
-    return !!(NOTION_API_KEY && (NOTION_ANALYSIS_DB_ID || NOTION_SOURCES_DB_ID));
+    return !!NOTION_API_KEY;
   }
 
   async request(method, endpoint, data) {
@@ -157,11 +161,82 @@ class NotionHelper {
   }
 
   /**
+   * Initialize Notion databases (create if not exist)
+   */
+  async initialize() {
+    if (this.initialized) return;
+    if (!NOTION_API_KEY) {
+      console.log('[Notion] NOTION_API_KEY not configured, skipping initialization');
+      return;
+    }
+
+    console.log('[Notion] Initializing Notion integration...');
+
+    // Create Analysis Database if not exists
+    if (!notionAnalysisDbId) {
+      try {
+        const analysisDb = await this.request('POST', '/databases', {
+          parent: { type: 'page_id', page_id: NOTION_PARENT_PAGE_ID },
+          title: [{ type: 'text', text: { content: '📊 情報分析' } }],
+          properties: {
+            '主題': { title: {} },
+            '日期': { date: {} },
+            '本週趨勢': { rich_text: {} },
+            '分析模型': {
+              select: {
+                options: [
+                  { name: 'deepseek', color: 'blue' },
+                  { name: 'claude-haiku', color: 'purple' },
+                  { name: 'perplexity', color: 'green' },
+                  { name: 'Unknown', color: 'gray' },
+                ]
+              }
+            },
+            '文章數量': { number: { format: 'number' } },
+          },
+        });
+        notionAnalysisDbId = analysisDb.id;
+        console.log(`[Notion] ✅ Created Analysis database: ${analysisDb.url}`);
+      } catch (error) {
+        console.error('[Notion] Failed to create Analysis database:', error.message);
+      }
+    }
+
+    // Create Sources Database if not exists
+    if (!notionSourcesDbId) {
+      try {
+        const sourcesDb = await this.request('POST', '/databases', {
+          parent: { type: 'page_id', page_id: NOTION_PARENT_PAGE_ID },
+          title: [{ type: 'text', text: { content: '📰 資料來源' } }],
+          properties: {
+            '標題': { title: {} },
+            '主題': { select: { options: [] } },
+            '來源': { rich_text: {} },
+            '連結': { url: {} },
+            '重要性': { number: { format: 'number' } },
+            '日期': { date: {} },
+            '標籤': { multi_select: { options: [] } },
+          },
+        });
+        notionSourcesDbId = sourcesDb.id;
+        console.log(`[Notion] ✅ Created Sources database: ${sourcesDb.url}`);
+      } catch (error) {
+        console.error('[Notion] Failed to create Sources database:', error.message);
+      }
+    }
+
+    this.initialized = true;
+    console.log('[Notion] Initialization complete');
+  }
+
+  /**
    * Save analysis summary to Notion
    */
   async saveAnalysisToNotion(topicName, summary, meta = {}) {
-    if (!NOTION_ANALYSIS_DB_ID) {
-      console.log('[Notion] NOTION_ANALYSIS_DATABASE_ID not configured, skipping');
+    await this.initialize();
+
+    if (!notionAnalysisDbId) {
+      console.log('[Notion] Analysis database not available, skipping');
       return null;
     }
 
@@ -185,7 +260,7 @@ class NotionHelper {
 
     // Create the page
     const page = await this.request('POST', '/pages', {
-      parent: { database_id: NOTION_ANALYSIS_DB_ID },
+      parent: { database_id: notionAnalysisDbId },
       properties,
     });
 
@@ -270,8 +345,10 @@ class NotionHelper {
    * Save source/article to Notion
    */
   async saveSourceToNotion(article, topicName) {
-    if (!NOTION_SOURCES_DB_ID) {
-      console.log('[Notion] NOTION_SOURCES_DATABASE_ID not configured, skipping');
+    await this.initialize();
+
+    if (!notionSourcesDbId) {
+      console.log('[Notion] Sources database not available, skipping');
       return null;
     }
 
@@ -300,7 +377,7 @@ class NotionHelper {
     };
 
     const page = await this.request('POST', '/pages', {
-      parent: { database_id: NOTION_SOURCES_DB_ID },
+      parent: { database_id: notionSourcesDbId },
       properties,
     });
 
@@ -358,7 +435,9 @@ class NotionHelper {
    * Batch save multiple sources to Notion
    */
   async batchSaveSourcesToNotion(articles, topicName) {
-    if (!NOTION_SOURCES_DB_ID || !articles || articles.length === 0) {
+    await this.initialize();
+
+    if (!notionSourcesDbId || !articles || articles.length === 0) {
       return { success: [], failed: [] };
     }
 
