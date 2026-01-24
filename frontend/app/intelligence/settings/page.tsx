@@ -122,14 +122,15 @@ export default function TopicSettingsPage() {
 
   const loadTopic = async (topicId: string) => {
     setIsLoading(true);
+    setTopic(null); // Reset topic while loading
     try {
       const response = await fetch(`/api/intelligence/topics/${topicId}`);
       const data = await response.json();
 
-      if (data.success) {
+      if (data.success && data.topic) {
         const t = data.topic;
         setTopic(t);
-        setName(t.name);
+        setName(t.name || '');
         setKeywords(t.keywords?.join(', ') || '');
         setStatus(t.status === 'archived' ? 'paused' : t.status);
         setDailyScanTime(t.dailyScanConfig?.time || '06:00');
@@ -137,7 +138,10 @@ export default function TopicSettingsPage() {
         setWeeklyDigestDay(t.weeklyDigestConfig?.day || 'monday');
         setWeeklyDigestTime(t.weeklyDigestConfig?.time || '08:00');
         setWeeklyDigestEnabled(t.weeklyDigestConfig?.enabled ?? true);
-        setRecipients(t.weeklyDigestConfig?.recipientList?.join(', ') || '');
+        setRecipients(t.weeklyDigestConfig?.recipientList?.join('\n') || '');
+      } else {
+        console.error('API returned error:', data);
+        setMessage({ type: 'error', text: data.error || 'Topic not found or failed to load' });
       }
     } catch (error) {
       console.error('Failed to load topic:', error);
@@ -365,6 +369,7 @@ export default function TopicSettingsPage() {
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
+            <span className="ml-3 text-slate-500">Loading topic settings...</span>
           </div>
         ) : !topic && !isLoadingTopics && topics.length === 0 ? (
           <div className="text-center py-16">
@@ -378,9 +383,26 @@ export default function TopicSettingsPage() {
               Create Topic
             </Link>
           </div>
+        ) : !topic && selectedTopicId ? (
+          <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+            <p className="text-slate-600 dark:text-slate-400 mb-4">
+              Could not load topic settings. The topic may not exist in the orchestrator yet.
+            </p>
+            <p className="text-sm text-slate-500 mb-4">
+              Topic ID: {selectedTopicId}
+            </p>
+            <button
+              onClick={() => loadTopic(selectedTopicId)}
+              className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg"
+            >
+              Retry Loading
+            </button>
+          </div>
         ) : !topic ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
+          <div className="text-center py-16">
+            <p className="text-slate-600 dark:text-slate-400">
+              Select a topic to view settings.
+            </p>
           </div>
         ) : (
           <div className="space-y-6">
