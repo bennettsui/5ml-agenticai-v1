@@ -822,20 +822,44 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
       if (importance >= 80) highImportanceCount++;
       articlesAnalyzed++;
 
+      const articleData = {
+        article_id: `article-${Date.now()}-${j}`,
+        title: generateMockArticleTitle(topic.name, source.type),
+        source_name: sourceName,
+        source_url: source.primary_url,
+        importance_score: importance,
+        content_summary: generateMockSummary(topic.name),
+        key_insights: ['Key insight 1', 'Key insight 2'],
+        action_items: importance >= 80 ? ['Review immediately', 'Share with team'] : [],
+        tags: [topic.name, source.type, 'news'],
+      };
+
+      // Save article to database
+      if (db && process.env.DATABASE_URL) {
+        try {
+          await db.saveIntelligenceNews(topicId, source.source_id || `src-${i}`, {
+            title: articleData.title,
+            url: articleData.source_url,
+            summary: articleData.content_summary,
+            importance_score: articleData.importance_score,
+            dimensions: {
+              relevance: Math.floor(Math.random() * 20) + 80,
+              actionability: Math.floor(Math.random() * 30) + 70,
+              authority: Math.floor(Math.random() * 20) + 75,
+              timeliness: Math.floor(Math.random() * 15) + 85,
+              originality: Math.floor(Math.random() * 25) + 70,
+            },
+            published_at: new Date().toISOString(),
+          });
+        } catch (dbError) {
+          console.error('Failed to save article to database:', dbError.message);
+        }
+      }
+
       // Send article analyzed event
       wsServer.broadcast(topicId, {
         event: 'article_analyzed',
-        data: {
-          article_id: `article-${Date.now()}-${j}`,
-          title: generateMockArticleTitle(topic.name, source.type),
-          source_name: sourceName,
-          source_url: source.primary_url,
-          importance_score: importance,
-          content_summary: generateMockSummary(topic.name),
-          key_insights: ['Key insight 1', 'Key insight 2'],
-          action_items: importance >= 80 ? ['Review immediately', 'Share with team'] : [],
-          tags: [topic.name, source.type, 'news'],
-        },
+        data: articleData,
       });
 
       await sleep(300);
@@ -936,7 +960,20 @@ router.get('/news', async (req, res) => {
 
     if (topicId && db && process.env.DATABASE_URL) {
       try {
-        news = await db.getIntelligenceNews(topicId, parseInt(limit));
+        const dbNews = await db.getIntelligenceNews(topicId, parseInt(limit));
+        // Transform database fields to match frontend expectations
+        news = dbNews.map(item => ({
+          id: item.id || item.news_id,
+          title: item.title,
+          source_name: item.source_name || 'Unknown Source',
+          source_url: item.url,
+          importance_score: item.importance_score || 50,
+          content_summary: item.summary || '',
+          published_at: item.published_at || item.scraped_at,
+          key_insights: item.dimensions?.key_insights || [],
+          tags: item.dimensions?.tags || [],
+          dimensions: item.dimensions || {},
+        }));
       } catch (dbError) {
         console.error('Database fetch failed:', dbError.message);
         news = generateMockNews(parseInt(limit));
@@ -1421,11 +1458,13 @@ function generateMockNews(limit = 20) {
   const articles = [
     {
       title: 'Instagram Algorithm Update: What Creators Need to Know in 2024',
-      url: 'https://example.com/ig-algorithm-2024',
-      source: 'Social Media Examiner',
-      publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-      summary: 'Instagram has rolled out significant changes to its recommendation algorithm, prioritizing original content and reducing the visibility of reposted material.',
-      importanceScore: 92,
+      source_url: 'https://example.com/ig-algorithm-2024',
+      source_name: 'Social Media Examiner',
+      published_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+      content_summary: 'Instagram has rolled out significant changes to its recommendation algorithm, prioritizing original content and reducing the visibility of reposted material.',
+      importance_score: 92,
+      key_insights: ['Algorithm now prioritizes original content', 'Reposted content visibility reduced'],
+      tags: ['instagram', 'algorithm', 'creators'],
       dimensions: {
         relevance: 95,
         actionability: 88,
@@ -1436,11 +1475,13 @@ function generateMockNews(limit = 20) {
     },
     {
       title: 'New Reels Features: Longer Duration and Enhanced Editing',
-      url: 'https://example.com/reels-features',
-      source: 'Later Blog',
-      publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-      summary: 'Instagram expands Reels to 3-minute videos with new editing tools including AI-powered captions and background removal.',
-      importanceScore: 88,
+      source_url: 'https://example.com/reels-features',
+      source_name: 'Later Blog',
+      published_at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+      content_summary: 'Instagram expands Reels to 3-minute videos with new editing tools including AI-powered captions and background removal.',
+      importance_score: 88,
+      key_insights: ['Reels now support 3-minute videos', 'AI-powered editing tools added'],
+      tags: ['reels', 'video', 'editing'],
       dimensions: {
         relevance: 90,
         actionability: 92,
@@ -1451,11 +1492,13 @@ function generateMockNews(limit = 20) {
     },
     {
       title: 'Engagement Rate Benchmarks: Q4 2024 Report',
-      url: 'https://example.com/engagement-benchmarks',
-      source: 'Hootsuite Blog',
-      publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
-      summary: 'New research reveals average engagement rates across industries, with significant variations between Reels, Stories, and Feed posts.',
-      importanceScore: 85,
+      source_url: 'https://example.com/engagement-benchmarks',
+      source_name: 'Hootsuite Blog',
+      published_at: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
+      content_summary: 'New research reveals average engagement rates across industries, with significant variations between Reels, Stories, and Feed posts.',
+      importance_score: 85,
+      key_insights: ['Engagement rates vary by content type', 'Reels outperform Feed posts'],
+      tags: ['engagement', 'benchmarks', 'research'],
       dimensions: {
         relevance: 88,
         actionability: 85,
