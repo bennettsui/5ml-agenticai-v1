@@ -181,7 +181,6 @@ class NotionHelper {
           properties: {
             '主題': { title: {} },
             '日期': { date: {} },
-            '本週趨勢': { rich_text: {} },
             '分析模型': {
               select: {
                 options: [
@@ -193,6 +192,18 @@ class NotionHelper {
               }
             },
             '文章數量': { number: { format: 'number' } },
+            '重要快訊數': { number: { format: 'number' } },
+            '實用建議數': { number: { format: 'number' } },
+            '重點摘要數': { number: { format: 'number' } },
+            '狀態': {
+              select: {
+                options: [
+                  { name: '已完成', color: 'green' },
+                  { name: '進行中', color: 'yellow' },
+                  { name: '待處理', color: 'gray' },
+                ]
+              }
+            },
           },
         });
         notionAnalysisDbId = analysisDb.id;
@@ -214,8 +225,29 @@ class NotionHelper {
             '來源': { rich_text: {} },
             '連結': { url: {} },
             '重要性': { number: { format: 'number' } },
+            '相關性': { number: { format: 'number' } },
+            '影響力': { number: { format: 'number' } },
             '日期': { date: {} },
             '標籤': { multi_select: { options: [] } },
+            '分析模型': {
+              select: {
+                options: [
+                  { name: 'deepseek', color: 'blue' },
+                  { name: 'claude-haiku', color: 'purple' },
+                  { name: 'perplexity', color: 'green' },
+                  { name: '關鍵字分析', color: 'gray' },
+                ]
+              }
+            },
+            '優先級': {
+              select: {
+                options: [
+                  { name: '🔴 高', color: 'red' },
+                  { name: '🟡 中', color: 'yellow' },
+                  { name: '🟢 低', color: 'green' },
+                ]
+              }
+            },
           },
         });
         notionSourcesDbId = sourcesDb.id;
@@ -240,6 +272,10 @@ class NotionHelper {
       return null;
     }
 
+    const breakingNewsCount = summary.breakingNews?.length || 0;
+    const practicalTipsCount = summary.practicalTips?.length || 0;
+    const keyPointsCount = summary.keyPoints?.length || 0;
+
     const properties = {
       '主題': {
         title: [{ type: 'text', text: { content: topicName } }],
@@ -247,14 +283,23 @@ class NotionHelper {
       '日期': {
         date: { start: new Date().toISOString().split('T')[0] },
       },
-      '本週趨勢': {
-        rich_text: [{ type: 'text', text: { content: (summary.overallTrend || '').substring(0, 2000) } }],
-      },
       '分析模型': {
         select: { name: meta.analysisModel || 'Unknown' },
       },
       '文章數量': {
         number: meta.articlesAnalyzed || 0,
+      },
+      '重要快訊數': {
+        number: breakingNewsCount,
+      },
+      '實用建議數': {
+        number: practicalTipsCount,
+      },
+      '重點摘要數': {
+        number: keyPointsCount,
+      },
+      '狀態': {
+        select: { name: '已完成' },
       },
     };
 
@@ -264,8 +309,31 @@ class NotionHelper {
       properties,
     });
 
-    // Add content blocks for breakingNews, practicalTips, keyPoints
+    // Add content blocks
     const blocks = [];
+
+    // Overall Trend section
+    if (summary.overallTrend) {
+      blocks.push({
+        object: 'block',
+        type: 'heading_2',
+        heading_2: {
+          rich_text: [{ type: 'text', text: { content: '📈 本週趨勢' } }],
+        },
+      });
+      // Split by newlines and add as paragraphs
+      const trendParagraphs = summary.overallTrend.split('\n').filter(p => p.trim());
+      trendParagraphs.forEach(para => {
+        blocks.push({
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [{ type: 'text', text: { content: para.substring(0, 2000) } }],
+          },
+        });
+      });
+      blocks.push({ object: 'block', type: 'divider', divider: {} });
+    }
 
     // Breaking News section
     if (summary.breakingNews && summary.breakingNews.length > 0) {
@@ -286,6 +354,7 @@ class NotionHelper {
           },
         });
       });
+      blocks.push({ object: 'block', type: 'divider', divider: {} });
     }
 
     // Practical Tips section
@@ -307,6 +376,7 @@ class NotionHelper {
           },
         });
       });
+      blocks.push({ object: 'block', type: 'divider', divider: {} });
     }
 
     // Key Points section
@@ -352,6 +422,18 @@ class NotionHelper {
       return null;
     }
 
+    // Determine priority based on importance score
+    const importanceScore = article.importance_score || 0;
+    let priority = '🟢 低';
+    if (importanceScore >= 80) priority = '🔴 高';
+    else if (importanceScore >= 60) priority = '🟡 中';
+
+    // Map analysis model name
+    let analysisModel = article.analysis_model || 'Unknown';
+    if (analysisModel.includes('關鍵字') || analysisModel.includes('Keyword')) {
+      analysisModel = '關鍵字分析';
+    }
+
     const properties = {
       '標題': {
         title: [{ type: 'text', text: { content: (article.title || '').substring(0, 200) } }],
@@ -366,13 +448,25 @@ class NotionHelper {
         url: article.source_url || article.url || null,
       },
       '重要性': {
-        number: article.importance_score || 0,
+        number: importanceScore,
+      },
+      '相關性': {
+        number: article.relevancy_score || 0,
+      },
+      '影響力': {
+        number: article.impact_score || 0,
       },
       '日期': {
         date: { start: new Date().toISOString().split('T')[0] },
       },
       '標籤': {
         multi_select: (article.tags || []).slice(0, 5).map(tag => ({ name: String(tag).substring(0, 100) })),
+      },
+      '分析模型': {
+        select: { name: analysisModel },
+      },
+      '優先級': {
+        select: { name: priority },
       },
     };
 
@@ -381,49 +475,75 @@ class NotionHelper {
       properties,
     });
 
+    // Build content blocks
+    const contentBlocks = [];
+
     // Add summary as content block
     if (article.content_summary || article.summary) {
       const summaryText = article.content_summary || article.summary;
-      await this.request('PATCH', `/blocks/${page.id}/children`, {
-        children: [
-          {
-            object: 'block',
-            type: 'heading_3',
-            heading_3: {
-              rich_text: [{ type: 'text', text: { content: '摘要' } }],
-            },
-          },
-          {
-            object: 'block',
-            type: 'paragraph',
-            paragraph: {
-              rich_text: [{ type: 'text', text: { content: summaryText.substring(0, 2000) } }],
-            },
-          },
-        ],
+      contentBlocks.push({
+        object: 'block',
+        type: 'heading_3',
+        heading_3: {
+          rich_text: [{ type: 'text', text: { content: '📝 摘要' } }],
+        },
       });
+      contentBlocks.push({
+        object: 'block',
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [{ type: 'text', text: { content: summaryText.substring(0, 2000) } }],
+        },
+      });
+      contentBlocks.push({ object: 'block', type: 'divider', divider: {} });
     }
 
     // Add key insights as content blocks
     if (article.key_insights && article.key_insights.length > 0) {
-      const insightBlocks = [
-        {
-          object: 'block',
-          type: 'heading_3',
-          heading_3: {
-            rich_text: [{ type: 'text', text: { content: '重點洞察' } }],
-          },
+      contentBlocks.push({
+        object: 'block',
+        type: 'heading_3',
+        heading_3: {
+          rich_text: [{ type: 'text', text: { content: '💡 重點洞察' } }],
         },
-        ...article.key_insights.map(insight => ({
+      });
+      article.key_insights.forEach(insight => {
+        contentBlocks.push({
           object: 'block',
           type: 'bulleted_list_item',
           bulleted_list_item: {
             rich_text: [{ type: 'text', text: { content: String(insight).substring(0, 2000) } }],
           },
-        })),
-      ];
+        });
+      });
+      contentBlocks.push({ object: 'block', type: 'divider', divider: {} });
+    }
+
+    // Add action items as content blocks
+    if (article.action_items && article.action_items.length > 0) {
+      contentBlocks.push({
+        object: 'block',
+        type: 'heading_3',
+        heading_3: {
+          rich_text: [{ type: 'text', text: { content: '✅ 行動建議' } }],
+        },
+      });
+      article.action_items.forEach(action => {
+        contentBlocks.push({
+          object: 'block',
+          type: 'to_do',
+          to_do: {
+            rich_text: [{ type: 'text', text: { content: String(action).substring(0, 2000) } }],
+            checked: false,
+          },
+        });
+      });
+    }
+
+    // Append all content blocks to the page
+    if (contentBlocks.length > 0) {
       await this.request('PATCH', `/blocks/${page.id}/children`, {
-        children: insightBlocks,
+        children: contentBlocks,
       });
     }
 
