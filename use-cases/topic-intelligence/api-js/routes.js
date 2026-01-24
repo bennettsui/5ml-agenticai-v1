@@ -192,31 +192,32 @@ async function analyzeArticleContent(title, content, topicName, keywords, select
   // Build analysis prompt
   const keywordsStr = keywords && keywords.length > 0 ? keywords.join(', ') : topicName;
 
-  const prompt = `You are an expert analyst evaluating news content for professionals monitoring "${topicName}".
+  const prompt = `你是一位資深分析師，負責為關注「${topicName}」的專業人士評估新聞內容。
+請用繁體中文回覆，語氣要輕鬆幽默但專業有料，像是跟朋友分享有趣發現一樣。
 
-ARTICLE TITLE: ${title}
+文章標題：${title}
 
-ARTICLE CONTENT:
+文章內容：
 ${content.substring(0, 8000)}
 
-TOPIC KEYWORDS: ${keywordsStr}
+主題關鍵字：${keywordsStr}
 
-Analyze this article and provide:
-1. RELEVANCY_SCORE (0-100): How relevant is this to "${topicName}"? Consider keyword matches, topic alignment, and industry applicability.
-2. IMPACT_SCORE (0-100): How impactful is this for professionals in this field? Consider urgency, business implications, competitive advantage.
-3. SUMMARY: 2-3 sentence summary of the key information.
-4. KEY_INSIGHTS: 2-4 bullet points of actionable insights.
-5. ACTION_ITEMS: If impact is high (70+), list 1-3 specific actions a professional should take.
-6. TAGS: 3-5 relevant tags/categories.
+請分析這篇文章：
+1. RELEVANCY_SCORE (0-100)：跟「${topicName}」有多相關？
+2. IMPACT_SCORE (0-100)：對從業者有多重要？會不會影響飯碗？
+3. SUMMARY：用 2-3 句話講重點，要有梗但不失專業
+4. KEY_INSIGHTS：2-4 個重點洞察（bullet points），每個要有具體行動建議
+5. ACTION_ITEMS：如果很重要 (70分以上)，列 1-3 個該馬上做的事
+6. TAGS：3-5 個標籤
 
-Return ONLY valid JSON:
+請回傳 JSON 格式：
 {
   "relevancy_score": 85,
   "impact_score": 72,
-  "summary": "Concise summary here...",
-  "key_insights": ["Insight 1", "Insight 2"],
-  "action_items": ["Action 1 if high impact"],
-  "tags": ["tag1", "tag2", "tag3"]
+  "summary": "這裡是摘要...",
+  "key_insights": ["• 洞察一", "• 洞察二"],
+  "action_items": ["• 行動一"],
+  "tags": ["標籤1", "標籤2"]
 }`;
 
   // Try to use LLM for analysis
@@ -256,7 +257,7 @@ Return ONLY valid JSON:
           model: config.model,
           max_tokens: 512,
           messages: [{ role: 'user', content: prompt }],
-          system: 'You are a news analyst. Return only valid JSON.',
+          system: '你是一位資深新聞分析師。用繁體中文回覆，語氣輕鬆幽默但專業。只回傳 JSON 格式。',
         }),
       });
 
@@ -274,7 +275,7 @@ Return ONLY valid JSON:
         body: JSON.stringify({
           model: config.model,
           messages: [
-            { role: 'system', content: 'You are a news analyst. Return only valid JSON.' },
+            { role: 'system', content: '你是一位資深新聞分析師。用繁體中文回覆，語氣輕鬆幽默但專業。只回傳 JSON 格式。' },
             { role: 'user', content: prompt }
           ],
           temperature: 0.3,
@@ -351,13 +352,13 @@ function generateKeywordBasedAnalysis(title, content, topicName, keywords) {
     relevancy_score: relevancyScore,
     impact_score: impactScore,
     importance_score: importanceScore,
-    summary: summary || `Article about ${topicName}`,
+    summary: summary || `關於 ${topicName} 的文章`,
     key_insights: matchedKeywords.length > 0
-      ? [`Covers topics: ${matchedKeywords.slice(0, 3).join(', ')}`, `${matchCount} keyword mentions found`]
-      : ['General industry coverage'],
-    action_items: importanceScore >= 70 ? ['Review for relevant updates'] : [],
+      ? [`• 涵蓋主題：${matchedKeywords.slice(0, 3).join('、')}`, `• 找到 ${matchCount} 次關鍵字提及`]
+      : ['• 一般產業報導'],
+    action_items: importanceScore >= 70 ? ['• 建議檢閱相關更新'] : [],
     tags: [...matchedKeywords.slice(0, 3), topicName].filter((v, i, a) => a.indexOf(v) === i),
-    analysis_model: 'Keyword Analysis (no API key)',
+    analysis_model: '關鍵字分析（無 API 金鑰）',
   };
 }
 
@@ -931,8 +932,6 @@ router.get('/topics/:id', async (req, res) => {
     if (db && process.env.DATABASE_URL) {
       try {
         topic = await db.getIntelligenceTopic(req.params.id);
-        console.log(`[GET /topics/:id] Loaded topic:`, topic?.name);
-        console.log(`[GET /topics/:id] weekly_digest_config:`, JSON.stringify(topic?.weekly_digest_config, null, 2));
       } catch (dbError) {
         console.error('Database fetch failed:', dbError.message);
         topic = inMemoryTopics.get(req.params.id);
@@ -990,13 +989,9 @@ router.put('/topics/:id', async (req, res) => {
       } : null,
     };
 
-    console.log(`[PUT /topics/:id] Saving updates for topic ${id}:`);
-    console.log(`[PUT /topics/:id] weekly_digest_config:`, JSON.stringify(updates.weekly_digest_config, null, 2));
-
     if (db && process.env.DATABASE_URL) {
       try {
         const topic = await db.updateIntelligenceTopic(id, updates);
-        console.log(`[PUT /topics/:id] Saved topic. Returned weekly_digest_config:`, JSON.stringify(topic?.weekly_digest_config, null, 2));
         if (topic) {
           return res.json({ success: true, topic, message: 'Topic updated successfully' });
         }
@@ -1542,10 +1537,10 @@ function generateMockArticleTitle(topicName, sourceType) {
  */
 function generateMockSummary(topicName) {
   const templates = [
-    `This article covers recent developments in ${topicName}, highlighting key changes that professionals need to be aware of.`,
-    `An in-depth analysis of ${topicName} trends, with data-backed insights and actionable recommendations.`,
-    `Industry experts weigh in on the future of ${topicName}, providing strategic guidance for the coming months.`,
-    `Comprehensive coverage of ${topicName} updates, including practical tips and implementation strategies.`,
+    `這篇文章介紹了 ${topicName} 的最新動態，重點整理了專業人士需要知道的關鍵變化。`,
+    `${topicName} 趨勢深度分析，用數據說話，附上可執行的建議。`,
+    `業界專家怎麼看 ${topicName} 的未來？這裡有未來幾個月的策略指南。`,
+    `${topicName} 更新總整理，包含實用技巧和實施策略，乾貨滿滿。`,
   ];
   return templates[Math.floor(Math.random() * templates.length)];
 }
@@ -1738,78 +1733,75 @@ const TOKEN_COSTS = {
 async function generateNewsSummary(articles, topicName, selectedLLM) {
   // Build prompt with article content - include reference IDs for citations
   const articleText = articles.map(a =>
-    `[${a.id}] "${a.title}" (Importance: ${a.importance_score}/100)\n    Source: ${a.source_name}\n    Summary: ${a.summary}`
+    `[${a.id}] "${a.title}" (重要性：${a.importance_score}/100)\n    來源：${a.source_name}\n    摘要：${a.summary}`
   ).join('\n\n');
 
-  const prompt = `You are a senior research and strategy analyst.
-Your job is to read a batch of scraped materials on "${topicName}" and produce a concise summary with concrete, actionable insights.
+  const prompt = `你是一位資深策略分析師，同時也是個會講幹話的專家（但幹話要有料）。
+請用繁體中文撰寫，語氣要像跟老朋友分享業界八卦一樣 — 輕鬆、有梗，但每句話都要有乾貨。
 
-SCRAPED ARTICLES (use [number] for citations):
+以下是關於「${topicName}」的新聞資料（引用請用 [編號]）：
 ${articleText}
 
-=== GLOBAL RULES ===
-1. Do NOT talk about how many items there are or how they were scraped
-2. Do NOT describe your own analysis steps or methodology
-3. Avoid meta phrases like "multiple sources emphasize", "various reports highlight", "there are X articles", "significant evolution"
-4. Never mention scraping, crawling, data pipelines, or analysis method
-5. Every statement must include:
-   - A specific object within the topic (e.g., a feature, behavior, metric, tactic, policy)
-   - A clear pattern or change (e.g., increasing, declining, newly introduced, de-prioritized)
-   - At least one recommended action someone could apply in the next 2-4 weeks
-6. When evidence is weak or mixed, label it as a **hypothesis** and suggest a small, low-risk test
+=== 重要規則 ===
+1. 不要講有幾篇文章或資料怎麼來的（沒人在乎）
+2. 不要描述你的分析方法（直接講結論）
+3. 避免廢話如「多方來源指出」、「值得關注的是」
+4. 每個觀點都要包含：
+   - 具體的東西（功能、指標、政策、行為）
+   - 明確的變化（上升、下降、新推出、被砍掉）
+   - 至少一個 2-4 週內可執行的建議
+5. 如果證據不夠強，標註為「假說」並建議小規模測試
 
-=== SECTION REQUIREMENTS ===
+=== 各區段要求 ===
 
-**OVERALL TREND** (2-3 short paragraphs):
-- Name which part of "${topicName}" each paragraph refers to
-- Explain how behavior, performance, or constraints are changing
-- State what adjustment is needed (e.g., "move budget from A to B", "test new approach X")
-- Avoid generalities like "things are changing rapidly" unless you specify WHAT is changing
+**本週趨勢** (2-3 段)：
+• 每段要點名「${topicName}」的哪個部分
+• 說明正在發生什麼變化（要具體，不要「變化很快」這種廢話）
+• 給出調整建議（如：「把預算從 A 移到 B」、「測試新方法 X」）
 
-**BREAKING NEWS / IMPORTANT UPDATES** (3-5 numbered items):
-Each item MUST include:
-1. What changed - one concrete development (new rule, feature, behavior, risk, opportunity)
-2. Who is most affected - specific type of person/team/use case impacted
-3. Immediate actions (next 0-30 days) - 2-3 actionable steps with clear behavior and timeframes
-   Example phrasing: "Run a 2-week test comparing...", "Reduce dependence on... by at least 20%..."
+**重要快訊** (3-5 條)：
+每條必須包含：
+• 發生什麼事 — 一個具體的變化（新規則、新功能、新風險、新機會）
+• 誰會受影響 — 哪種人/團隊/使用場景
+• 馬上要做的事 (30天內) — 2-3 個具體行動
+  範例：「花兩週測試 A 跟 B 的差異」、「把對 X 的依賴降低 20%」
 
-**PRACTICAL TIPS** (3-5 items):
-Each tip MUST include:
-1. Action-oriented title (e.g., "Test a simpler approach with existing audience for 14 days")
-2. Exactly what to do, including recommended ranges (frequency, duration, sample size)
-3. Metric to watch - 1-2 primary metrics (e.g., response rate, conversion, engagement)
-4. Why it helps - one sentence linking back to observed patterns
-Avoid vague advice like "be data-driven" or "follow best practices"
+**實用建議** (3-5 條)：
+每條必須包含：
+• 行動導向的標題（如：「用現有受眾測試簡化版本，為期 14 天」）
+• 具體怎麼做（頻率、時長、樣本大小）
+• 要看什麼指標（轉換率、互動率等）
+• 為什麼有效 — 一句話連結觀察到的模式
+避免「要數據驅動」這種正確的廢話
 
-**KEY POINTS** (4-6 single-sentence decision rules):
-- Each should stand alone as a practical rule of thumb
-- Frame as if/then, when/then, or clear directive
-- Examples:
-  - "If you are targeting risk-averse stakeholders, prioritize options that reduce complexity"
-  - "When a new feature is unclear, start with a minimal version and test with a small subset first"
-  - "If a tactic depends heavily on one channel, create at least one viable backup within the next month"
+**重點摘要** (4-6 條決策法則)：
+• 每條要能獨立成一個實用的經驗法則
+• 用「如果...就...」、「當...時...」的句式
+• 範例：
+  - 「如果目標對象很保守，優先選擇能降低複雜度的方案」
+  - 「新功能不確定時，先做最小版本給小群人測試」
+  - 「如果某策略太依賴單一管道，一個月內至少準備一個備案」
 
-=== OUTPUT FORMAT - MUST RETURN VALID JSON ===
+=== 輸出格式 - 必須回傳 JSON ===
 {
-  "overallTrend": "2-3 paragraphs as described above, concatenated with paragraph breaks",
+  "overallTrend": "2-3 段趨勢分析，用換行分隔",
   "breakingNews": [
-    {"text": "Full item with what changed, who affected, and actions [1][3]", "sources": [1, 3]}
+    {"text": "• 完整的重要快訊，包含變化、影響者、行動 [1][3]", "sources": [1, 3]}
   ],
   "practicalTips": [
-    {"text": "Title: Action description. Metric: X. Because Y. [2][4]", "sources": [2, 4]}
+    {"text": "• 標題：具體行動。指標：X。因為 Y。[2][4]", "sources": [2, 4]}
   ],
   "keyPoints": [
-    {"text": "If/when decision rule statement [1][2]", "sources": [1, 2]}
+    {"text": "• 如果/當...決策法則 [1][2]", "sources": [1, 2]}
   ]
 }
 
-Rules:
-- breakingNews: Only include if genuinely urgent/breaking (can be empty array)
-- practicalTips: 3-5 actionable items with specific behaviors
-- keyPoints: 4-6 decision rules as if/then statements
-- Always include source citations [n] within the text
-- sources array must match citation numbers in text
-- Sound like a strategic consultant: clear, concrete, focused on decisions
+規則：
+- breakingNews：只放真的很重要的（可以是空陣列）
+- practicalTips：3-5 條有具體行動的建議
+- keyPoints：4-6 條決策法則
+- 文字中要有引用 [n]，sources 陣列要對應
+- 語氣像資深顧問跟客戶喝咖啡聊天：直接、具體、focused on 決策
 - Prefer action verbs: "increase", "reduce", "test", "validate", "prioritize"
 
 Return ONLY the JSON object, no other text.`;
@@ -1863,7 +1855,7 @@ Return ONLY the JSON object, no other text.`;
           model: config.model,
           max_tokens: 1024,
           messages: [{ role: 'user', content: prompt }],
-          system: 'You are a news analyst. Return only valid JSON.',
+          system: '你是一位資深新聞分析師。用繁體中文回覆，語氣輕鬆幽默但專業。只回傳 JSON 格式。',
         }),
       });
 
@@ -1890,7 +1882,7 @@ Return ONLY the JSON object, no other text.`;
         body: JSON.stringify({
           model: config.model,
           messages: [
-            { role: 'system', content: 'You are a news analyst. Return only valid JSON.' },
+            { role: 'system', content: '你是一位資深新聞分析師。用繁體中文回覆，語氣輕鬆幽默但專業。只回傳 JSON 格式。' },
             { role: 'user', content: prompt }
           ],
           temperature: 0.2,
@@ -1919,7 +1911,7 @@ Return ONLY the JSON object, no other text.`;
         body: JSON.stringify({
           model: config.model,
           messages: [
-            { role: 'system', content: 'You are a news analyst. Return only valid JSON.' },
+            { role: 'system', content: '你是一位資深新聞分析師。用繁體中文回覆，語氣輕鬆幽默但專業。只回傳 JSON 格式。' },
             { role: 'user', content: prompt }
           ],
           temperature: 0.3,
@@ -2044,7 +2036,7 @@ function generateMockAISummary(articles, topicName) {
 
   // Build breaking news from high priority articles
   const breakingNews = highPriorityArticles.slice(0, 3).map((article, idx) => ({
-    text: `${article.title.substring(0, 100)}${article.title.length > 100 ? '...' : ''} - Review within 48 hours and assess impact on your current approach. [${article.id}]`,
+    text: `• ${article.title.substring(0, 100)}${article.title.length > 100 ? '...' : ''} — 建議 48 小時內評估對現有策略的影響 [${article.id}]`,
     sources: [article.id],
   }));
 
@@ -2054,19 +2046,19 @@ function generateMockAISummary(articles, topicName) {
 
   if (tipArticles[0]) {
     practicalTips.push({
-      text: `Based on "${tipArticles[0].title.substring(0, 50)}...": Test implementing key insights from this source over 2 weeks. Track engagement metrics before and after. [${tipArticles[0].id}]`,
+      text: `• 根據「${tipArticles[0].title.substring(0, 50)}...」：花兩週測試文中的關鍵洞察，追蹤前後互動指標變化。[${tipArticles[0].id}]`,
       sources: [tipArticles[0].id],
     });
   }
   if (tipArticles[1]) {
     practicalTips.push({
-      text: `From "${tipArticles[1].title.substring(0, 50)}...": Document 3 actionable takeaways and schedule implementation within 7 days. [${tipArticles[1].id}]`,
+      text: `• 根據「${tipArticles[1].title.substring(0, 50)}...」：整理 3 個可執行的重點，7 天內安排實施。[${tipArticles[1].id}]`,
       sources: [tipArticles[1].id],
     });
   }
   if (tipArticles[2]) {
     practicalTips.push({
-      text: `Consider "${tipArticles[2].title.substring(0, 50)}...": Run a small-scale pilot test before full rollout. Monitor results for 1 week. [${tipArticles[2].id}]`,
+      text: `• 關於「${tipArticles[2].title.substring(0, 50)}...」：先做小規模測試再全面推行，觀察一週結果。[${tipArticles[2].id}]`,
       sources: [tipArticles[2].id],
     });
   }
@@ -2076,19 +2068,19 @@ function generateMockAISummary(articles, topicName) {
 
   if (highPriorityArticles.length > 0) {
     keyPoints.push({
-      text: `If you see ${highPriorityArticles.length} high-priority items like these, prioritize reviewing them within 24-48 hours before competitors adapt. [${highPriorityArticles.slice(0, 2).map(a => a.id).join('][')}]`,
+      text: `• 如果看到這種高優先項目（這週有 ${highPriorityArticles.length} 則），建議 24-48 小時內優先處理，搶在競爭對手之前。[${highPriorityArticles.slice(0, 2).map(a => a.id).join('][')}]`,
       sources: highPriorityArticles.slice(0, 2).map(a => a.id),
     });
   }
 
   keyPoints.push({
-    text: `When monitoring ${topicName}, focus on sources that consistently provide actionable insights (${articleList.slice(0, 3).map(a => a.source_name).filter((v, i, a) => a.indexOf(v) === i).join(', ')}). [${articleList.slice(0, 2).map(a => a.id).join('][')}]`,
+    text: `• 追蹤 ${topicName} 時，優先關注持續提供實用洞察的來源（${articleList.slice(0, 3).map(a => a.source_name).filter((v, i, a) => a.indexOf(v) === i).join('、')}）。[${articleList.slice(0, 2).map(a => a.id).join('][')}]`,
     sources: articleList.slice(0, 2).map(a => a.id),
   });
 
   if (commonTopics.length > 0) {
     keyPoints.push({
-      text: `Current themes include: ${commonTopics.slice(0, 4).join(', ')}. If these align with your strategy, allocate time this week to deep-dive into the top 3 articles. [${articleList.slice(0, 3).map(a => a.id).join('][')}]`,
+      text: `• 本週熱門主題：${commonTopics.slice(0, 4).join('、')}。如果跟你的策略相關，這週找時間深入研究前 3 篇。[${articleList.slice(0, 3).map(a => a.id).join('][')}]`,
       sources: articleList.slice(0, 3).map(a => a.id),
     });
   }
@@ -2097,7 +2089,7 @@ function generateMockAISummary(articles, topicName) {
   const sourceNames = [...new Set(articleList.map(a => a.source_name))];
   const avgScore = Math.round(articleList.reduce((sum, a) => sum + (a.importance_score || 50), 0) / articleList.length);
 
-  const overallTrend = `Based on ${articleList.length} articles from ${sourceNames.length} sources (avg importance: ${avgScore}/100), ${topicName} shows ${highPriorityArticles.length > 2 ? 'significant activity requiring immediate attention' : mediumPriorityArticles.length > 3 ? 'moderate developments worth monitoring weekly' : 'steady state with routine updates'}. ${highPriorityArticles.length > 0 ? `Top priority: "${highPriorityArticles[0].title.substring(0, 60)}..."` : 'No urgent items detected.'} Recommended action: Set up a 15-minute weekly review to stay current.`;
+  const overallTrend = `本週從 ${sourceNames.length} 個來源收集了 ${articleList.length} 篇文章（平均重要性：${avgScore}/100）。${topicName} 目前${highPriorityArticles.length > 2 ? '動態頻繁，需要立即關注' : mediumPriorityArticles.length > 3 ? '有中等程度的發展，值得每週追蹤' : '處於穩定狀態，例行更新即可'}。${highPriorityArticles.length > 0 ? `本週最重要：「${highPriorityArticles[0].title.substring(0, 60)}...」` : '目前沒有緊急項目。'}建議每週安排 15 分鐘快速瀏覽，保持消息靈通。`;
 
   return {
     summary: {
@@ -2189,7 +2181,7 @@ router.post('/email/test', async (req, res) => {
       body: JSON.stringify({
         from: 'news@5ml.io',
         to: email,
-        subject: `[TEST] ${topicName} Weekly Brief`,
+        subject: `[測試] ${topicName} 每週情報`,
         html: testHtml,
         reply_to: 'support@5ml.io',
         tags: [
@@ -2304,7 +2296,7 @@ router.get('/edm/preview/:topicId', async (req, res) => {
 
     // Prepare preview data
     const previewData = {
-      subject: `${topic.name} Weekly Brief - ${formattedArticles.length} must-read insights`,
+      subject: `${topic.name} 每週情報 - ${formattedArticles.length} 篇必讀分析`,
       previewText: `本週 ${topic.name} 共發現 ${formattedArticles.length} 條新聞，其中 ${highImportanceCount} 條高重要性`,
       htmlContent: edmHtml,
       articlesIncluded: formattedArticles.length,
@@ -2646,10 +2638,13 @@ router.get('/edm/:edmId', async (req, res) => {
 function generateEdmHtml(input) {
   const { topicId, topicName, articles, startDate, endDate, totalArticlesThisWeek, highImportanceCount, summary, keyVisualUrl } = input;
 
-  // Format date range
-  const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Format date range in Chinese
+  const formatDate = (dateStr) => {
+    const d = new Date(dateStr);
+    return `${d.getMonth() + 1}月${d.getDate()}日`;
+  };
   const formatYear = (dateStr) => new Date(dateStr).getFullYear();
-  const dateRangeStr = `${formatDate(startDate)} - ${formatDate(endDate)}, ${formatYear(endDate)}`;
+  const dateRangeStr = `${formatYear(endDate)}年 ${formatDate(startDate)} - ${formatDate(endDate)}`;
 
   const dashboardUrl = `https://dashboard.5ml.io/intelligence/dashboard?topic=${topicId}`;
 
@@ -2688,7 +2683,7 @@ function generateEdmHtml(input) {
 
                       <!-- Main Title -->
                       <h1 style="margin:0 0 10px;color:#ffffff;font-size:32px;font-weight:bold;text-shadow:0 2px 10px rgba(0,0,0,0.3);">${topicName}</h1>
-                      <p style="margin:0 0 5px;color:#5eead4;font-size:18px;font-weight:600;">Weekly Intelligence Brief</p>
+                      <p style="margin:0 0 5px;color:#5eead4;font-size:18px;font-weight:600;">每週情報快報</p>
 
                       <!-- Date Range Badge -->
                       <table role="presentation" style="width:100%;border:none;border-spacing:0;margin-top:15px;">
@@ -2709,15 +2704,15 @@ function generateEdmHtml(input) {
                               <tr>
                                 <td style="padding:0 15px;text-align:center;">
                                   <div style="color:#ffffff;font-size:28px;font-weight:bold;">${totalArticlesThisWeek}</div>
-                                  <div style="color:rgba(255,255,255,0.7);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Articles</div>
+                                  <div style="color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.5px;">篇文章</div>
                                 </td>
                                 <td style="padding:0 15px;border-left:1px solid rgba(255,255,255,0.2);text-align:center;">
                                   <div style="color:#f97316;font-size:28px;font-weight:bold;">${highImportanceCount}</div>
-                                  <div style="color:rgba(255,255,255,0.7);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">High Priority</div>
+                                  <div style="color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.5px;">高優先</div>
                                 </td>
                                 <td style="padding:0 15px;border-left:1px solid rgba(255,255,255,0.2);text-align:center;">
                                   <div style="color:#a78bfa;font-size:28px;font-weight:bold;">${articles.slice(0, 3).length}</div>
-                                  <div style="color:rgba(255,255,255,0.7);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Top Stories</div>
+                                  <div style="color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.5px;">精選頭條</div>
                                 </td>
                               </tr>
                             </table>
@@ -2744,7 +2739,7 @@ function generateEdmHtml(input) {
           <tr>
             <td style="padding:0 30px 20px;">
               <div style="background:linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);border-radius:8px;padding:20px;">
-                <h3 style="margin:0 0 10px;color:#ffffff;font-size:16px;font-weight:bold;">📈 Overall Trend</h3>
+                <h3 style="margin:0 0 10px;color:#ffffff;font-size:16px;font-weight:bold;">📈 本週趨勢</h3>
                 <p style="margin:0;color:rgba(255,255,255,0.95);font-size:14px;line-height:1.6;">${summary.overallTrend}</p>
               </div>
             </td>
@@ -2757,7 +2752,7 @@ function generateEdmHtml(input) {
           <tr>
             <td style="padding:0 30px 20px;">
               <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:20px;">
-                <h3 style="margin:0 0 15px;color:#dc2626;font-size:16px;font-weight:bold;">⚡ Breaking News</h3>
+                <h3 style="margin:0 0 15px;color:#dc2626;font-size:16px;font-weight:bold;">⚡ 重要快訊</h3>
                 <ul style="margin:0;padding:0 0 0 20px;color:#7f1d1d;font-size:14px;line-height:1.8;">
                   ${summary.breakingNews.slice(0, 3).map(item => `<li style="margin-bottom:8px;">${typeof item === 'string' ? item : item.text || ''}</li>`).join('')}
                 </ul>
@@ -2772,7 +2767,7 @@ function generateEdmHtml(input) {
           <tr>
             <td style="padding:0 30px 20px;">
               <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:20px;">
-                <h3 style="margin:0 0 15px;color:#d97706;font-size:16px;font-weight:bold;">💡 Practical Tips</h3>
+                <h3 style="margin:0 0 15px;color:#d97706;font-size:16px;font-weight:bold;">💡 實用建議</h3>
                 <ul style="margin:0;padding:0 0 0 20px;color:#78350f;font-size:14px;line-height:1.8;">
                   ${summary.practicalTips.slice(0, 3).map(item => `<li style="margin-bottom:8px;">${typeof item === 'string' ? item : item.text || ''}</li>`).join('')}
                 </ul>
@@ -2787,7 +2782,7 @@ function generateEdmHtml(input) {
           <tr>
             <td style="padding:0 30px 20px;">
               <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:20px;">
-                <h3 style="margin:0 0 15px;color:#1d4ed8;font-size:16px;font-weight:bold;">📋 Key Points</h3>
+                <h3 style="margin:0 0 15px;color:#1d4ed8;font-size:16px;font-weight:bold;">📋 重點摘要</h3>
                 <ul style="margin:0;padding:0 0 0 20px;color:#1e3a8a;font-size:14px;line-height:1.8;">
                   ${summary.keyPoints.slice(0, 4).map(item => `<li style="margin-bottom:8px;">${typeof item === 'string' ? item : item.text || ''}</li>`).join('')}
                 </ul>
@@ -2804,7 +2799,7 @@ function generateEdmHtml(input) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${topicName} Weekly Brief</title>
+  <title>${topicName} 每週情報</title>
 </head>
 <body style="margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background-color:#f4f4f4;">
   <table role="presentation" style="width:100%;border:none;border-spacing:0;">
@@ -2818,8 +2813,8 @@ function generateEdmHtml(input) {
           <tr>
             <td style="padding:25px 30px 15px;">
               <p style="margin:0;color:#64748b;font-size:15px;line-height:1.6;">
-                👋 Hi there! Here's your weekly intelligence digest covering the latest developments in <strong style="color:#0d9488;">${topicName}</strong>.
-                We've analyzed the news and summarized the key insights for you.
+                👋 嗨！這是你的每週情報摘要，涵蓋 <strong style="color:#0d9488;">${topicName}</strong> 的最新動態。
+                我們已經幫你分析好了，重點都在這裡，喝杯咖啡慢慢看吧！
               </p>
             </td>
           </tr>
@@ -2832,7 +2827,7 @@ function generateEdmHtml(input) {
           <tr>
             <td style="padding:10px 30px 20px;">
               <div style="border-bottom:2px solid #e2e8f0;"></div>
-              <p style="margin:15px 0 0;color:#94a3b8;font-size:13px;text-align:center;">📰 Top Stories This Week</p>
+              <p style="margin:15px 0 0;color:#94a3b8;font-size:13px;text-align:center;">📰 本週精選文章</p>
             </td>
           </tr>
           ` : ''}
@@ -2845,21 +2840,21 @@ function generateEdmHtml(input) {
                 <tr>
                   <td style="padding:20px;">
                     <div style="display:flex;align-items:center;margin-bottom:10px;">
-                      <span style="display:inline-block;padding:4px 10px;background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);color:#fff;font-size:11px;font-weight:bold;border-radius:4px;">#${i + 1} TOP STORY</span>
+                      <span style="display:inline-block;padding:4px 10px;background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);color:#fff;font-size:11px;font-weight:bold;border-radius:4px;">精選 #${i + 1}</span>
                     </div>
                     <h3 style="margin:10px 0;color:#1e293b;font-size:16px;line-height:1.4;">${article.title}</h3>
                     <p style="margin:0 0 15px;color:#64748b;font-size:14px;line-height:1.5;">${article.content_summary}</p>
                     <table style="width:100%;margin-bottom:15px;">
                       <tr>
                         <td style="color:#94a3b8;font-size:12px;">
-                          📊 Score: <span style="color:#0d9488;font-weight:bold;">${article.importance_score}/100</span>
+                          📊 重要性：<span style="color:#0d9488;font-weight:bold;">${article.importance_score}/100</span>
                         </td>
                         <td style="color:#94a3b8;font-size:12px;text-align:right;">
                           👤 ${article.source_name}
                         </td>
                       </tr>
                     </table>
-                    <a href="${article.source_url}" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:500;">Read Article →</a>
+                    <a href="${article.source_url}" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:500;">閱讀全文 →</a>
                   </td>
                 </tr>
               </table>
@@ -2871,12 +2866,12 @@ function generateEdmHtml(input) {
           ${articles.length > 3 ? `
           <tr>
             <td style="padding:0 30px 30px;">
-              <h3 style="margin:0 0 15px;color:#1e293b;font-size:18px;">📚 More This Week</h3>
+              <h3 style="margin:0 0 15px;color:#1e293b;font-size:18px;">📚 本週更多文章</h3>
               ${articles.slice(3).map(article => `
               <div style="padding:15px 0;border-bottom:1px solid #e2e8f0;">
                 <a href="${article.source_url}" style="color:#1e293b;text-decoration:none;font-size:14px;font-weight:600;line-height:1.4;display:block;">${article.title}</a>
                 <p style="margin:5px 0 0;color:#94a3b8;font-size:12px;">
-                  ${article.source_name} • Score: ${article.importance_score}/100
+                  ${article.source_name} • 重要性：${article.importance_score}/100
                   ${article.tags.length > 0 ? ` • ${article.tags.slice(0, 2).join(', ')}` : ''}
                 </p>
               </div>
@@ -2889,7 +2884,7 @@ function generateEdmHtml(input) {
           <tr>
             <td style="padding:30px;background-color:#f8fafc;text-align:center;">
               <p style="margin:0 0 15px;color:#64748b;font-size:14px;">想了解更多？</p>
-              <a href="${dashboardUrl}" style="display:inline-block;padding:15px 40px;background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);color:#ffffff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:bold;box-shadow:0 4px 12px rgba(13,148,136,0.3);">Explore All News →</a>
+              <a href="${dashboardUrl}" style="display:inline-block;padding:15px 40px;background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);color:#ffffff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:bold;box-shadow:0 4px 12px rgba(13,148,136,0.3);">探索更多新聞 →</a>
             </td>
           </tr>
 
@@ -2897,12 +2892,12 @@ function generateEdmHtml(input) {
           <tr>
             <td style="padding:30px;text-align:center;border-top:1px solid #e2e8f0;">
               <p style="margin:0 0 10px;color:#94a3b8;font-size:12px;">
-                You received this email because you subscribed to ${topicName} updates.
+                您收到此郵件是因為您訂閱了 ${topicName} 的情報更新。
               </p>
               <p style="margin:0;color:#94a3b8;font-size:12px;">
-                <a href="#" style="color:#64748b;">Unsubscribe</a> | <a href="#" style="color:#64748b;">Manage Preferences</a>
+                <a href="#" style="color:#64748b;">取消訂閱</a> | <a href="#" style="color:#64748b;">管理偏好設定</a>
               </p>
-              <p style="margin:15px 0 0;color:#cbd5e1;font-size:11px;">© 2026 5ML. All rights reserved.</p>
+              <p style="margin:15px 0 0;color:#cbd5e1;font-size:11px;">© 2026 5ML. 保留所有權利。</p>
             </td>
           </tr>
         </table>
