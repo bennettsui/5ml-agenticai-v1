@@ -66,7 +66,7 @@ interface SourceStatus {
 interface ActivityLog {
   id: string;
   time: string;
-  type: 'info' | 'source' | 'article' | 'success' | 'error';
+  type: 'info' | 'source' | 'article' | 'success' | 'error' | 'ai' | 'notion';
   message: string;
   details?: string;
 }
@@ -225,7 +225,7 @@ export default function LiveScanPage() {
     setIsGeneratingSummary(true);
     setSummary(null);
     setSummaryMeta(null);
-    addActivityLog('info', 'Generating AI summary of analyzed articles...');
+    addActivityLog('info', '🤖 Starting AI summary generation...');
 
     try {
       const response = await fetch('/api/intelligence/summarize', {
@@ -235,10 +235,32 @@ export default function LiveScanPage() {
       });
 
       const data = await response.json();
+
+      // Display all process logs from backend
+      if (data.logs && Array.isArray(data.logs)) {
+        data.logs.forEach((log: { type: string; message: string; details?: string }) => {
+          // Determine log type based on message content and type
+          let logType: ActivityLog['type'] = 'info';
+          const msgLower = log.message.toLowerCase();
+
+          if (msgLower.includes('notion')) {
+            logType = log.type === 'error' ? 'error' : log.type === 'success' ? 'success' : 'notion';
+          } else if (msgLower.includes('ai') || msgLower.includes('summary') || msgLower.includes('token')) {
+            logType = log.type === 'error' ? 'error' : log.type === 'success' ? 'success' : 'ai';
+          } else if (log.type === 'success') {
+            logType = 'success';
+          } else if (log.type === 'error') {
+            logType = 'error';
+          }
+
+          addActivityLog(logType, log.message, log.details || undefined);
+        });
+      }
+
       if (data.success) {
         setSummary(data.summary);
         setSummaryMeta(data.meta);
-        addActivityLog('success', 'AI summary generated successfully', `${data.meta.totalTokens} tokens used`);
+        addActivityLog('success', '✅ AI summary process complete', `${data.meta.totalTokens} tokens used`);
       } else {
         addActivityLog('error', `Failed to generate summary: ${data.error}`);
       }
@@ -909,7 +931,7 @@ export default function LiveScanPage() {
               {activityLog.length === 0 ? (
                 <p className="text-slate-500">Waiting for scan to start...</p>
               ) : (
-                activityLog.slice(0, 30).map(log => (
+                activityLog.slice(0, 50).map(log => (
                   <div key={log.id} className="flex items-start gap-2">
                     <span className="text-slate-500 shrink-0">
                       {new Date(log.time).toLocaleTimeString()}
@@ -919,6 +941,8 @@ export default function LiveScanPage() {
                     {log.type === 'article' && <span className="text-cyan-400">[ARTICLE]</span>}
                     {log.type === 'success' && <span className="text-green-400">[SUCCESS]</span>}
                     {log.type === 'error' && <span className="text-red-400">[ERROR]</span>}
+                    {log.type === 'ai' && <span className="text-purple-400">[AI]</span>}
+                    {log.type === 'notion' && <span className="text-pink-400">[NOTION]</span>}
                     <span className="text-slate-300">{log.message}</span>
                     {log.details && (
                       <span className="text-slate-500">- {log.details}</span>

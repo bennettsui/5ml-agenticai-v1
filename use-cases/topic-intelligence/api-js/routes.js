@@ -2096,6 +2096,13 @@ router.get('/news', async (req, res) => {
  * Saves to database and includes source citations
  */
 router.post('/summarize', async (req, res) => {
+  // Collect logs to return to frontend
+  const processLogs = [];
+  const addLog = (type, message, details = null) => {
+    processLogs.push({ type, message, details, time: new Date().toISOString() });
+    console.log(`[Summary] ${type.toUpperCase()}: ${message}${details ? ` - ${details}` : ''}`);
+  };
+
   try {
     const { topicId, llm = 'deepseek' } = req.body;
 
@@ -2106,6 +2113,8 @@ router.post('/summarize', async (req, res) => {
     // Fetch articles from database
     let articles = [];
     let topicName = 'Unknown Topic';
+
+    addLog('info', 'Fetching articles from database...');
 
     if (db && process.env.DATABASE_URL) {
       try {
@@ -2120,12 +2129,15 @@ router.post('/summarize', async (req, res) => {
           source_name: item.source_name || 'Unknown Source',
           url: item.url,
         }));
+        addLog('success', `Found ${articles.length} articles for "${topicName}"`);
       } catch (dbError) {
         console.error('Database fetch failed:', dbError.message);
+        addLog('error', 'Database fetch failed', dbError.message);
       }
     }
 
     if (articles.length === 0) {
+      addLog('info', 'No articles found - run a scan first');
       return res.json({
         success: true,
         summary: {
@@ -2144,6 +2156,7 @@ router.post('/summarize', async (req, res) => {
           estimatedCost: 0,
           articlesAnalyzed: 0,
         },
+        logs: processLogs,
       });
     }
 
@@ -2151,47 +2164,50 @@ router.post('/summarize', async (req, res) => {
     const sortedArticles = [...articles].sort((a, b) => (b.importance_score || 0) - (a.importance_score || 0));
     const articlesToSummarize = sortedArticles.slice(0, 10);
 
-    console.log(`📝 Generating categorized summary for ${articlesToSummarize.length} articles (of ${articles.length} total) on topic: ${topicName}`);
+    addLog('info', `Generating AI summary using ${llm}`, `${articlesToSummarize.length} of ${articles.length} articles`);
 
     // Generate summary using LLM
     const result = await generateNewsSummary(articlesToSummarize, topicName, llm);
 
+    addLog('success', 'AI summary generated', `${result.meta?.totalTokens || 0} tokens used`);
+
     // Save summary to database
     if (db && process.env.DATABASE_URL) {
       try {
+        addLog('info', 'Saving summary to database...');
         await db.saveIntelligenceSummary(topicId, result.summary, {
           ...result.meta,
           articlesAnalyzed: articles.length,
         });
-        console.log(`💾 Summary saved to database for topic: ${topicName}`);
+        addLog('success', 'Summary saved to database');
       } catch (dbError) {
         console.error('Failed to save summary to database:', dbError.message);
+        addLog('error', 'Failed to save to database', dbError.message);
       }
     }
 
     // Save to Notion
-    console.log(`[Notion] Checking Notion availability: API Key ${NOTION_API_KEY ? 'configured ✅' : 'NOT configured ❌'}`);
     if (notionHelper.isAvailable()) {
-      console.log(`[Notion] 📝 Starting Notion save for topic: ${topicName}`);
+      addLog('info', 'Starting Notion sync...');
       try {
         // Save analysis summary to Notion
-        console.log('[Notion] Saving analysis summary...');
+        addLog('info', 'Saving analysis to Notion...');
         const analysisPage = await notionHelper.saveAnalysisToNotion(topicName, result.summary, {
           ...result.meta,
           articlesAnalyzed: articles.length,
         });
-        console.log(`[Notion] ✅ Analysis saved: ${analysisPage?.url || 'done'}`);
+        addLog('success', 'Analysis saved to Notion', analysisPage?.url || 'done');
 
         // Save sources/articles to Notion
-        console.log(`[Notion] Saving ${articles.length} sources...`);
+        addLog('info', `Saving ${articles.length} sources to Notion...`);
         const sourcesResult = await notionHelper.batchSaveSourcesToNotion(articles, topicName);
-        console.log(`[Notion] ✅ Sources saved: ${sourcesResult.success.length} success, ${sourcesResult.failed.length} failed`);
+        addLog('success', 'Sources saved to Notion', `${sourcesResult.success.length} success, ${sourcesResult.failed.length} failed`);
       } catch (notionError) {
         console.error('[Notion] ❌ Failed to save to Notion:', notionError.message);
-        console.error('[Notion] Full error:', notionError);
+        addLog('error', 'Failed to save to Notion', notionError.message);
       }
     } else {
-      console.log('[Notion] ⚠️ Notion not available - set NOTION_API_KEY environment variable');
+      addLog('info', 'Notion not configured - skipping sync');
     }
 
     // Include article references for frontend
@@ -2206,6 +2222,7 @@ router.post('/summarize', async (req, res) => {
       success: true,
       summary: result.summary,
       meta: { ...result.meta, articlesAnalyzed: articles.length },
+      logs: processLogs,
     });
   } catch (error) {
     console.error('Summary generation error:', error);
