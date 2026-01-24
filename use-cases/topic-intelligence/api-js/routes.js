@@ -2128,6 +2128,258 @@ router.post('/email/test', async (req, res) => {
   }
 });
 
+// ==================== EDM Preview & History ====================
+
+/**
+ * GET /edm/preview/:topicId
+ * Generate an EDM preview with real data from the topic
+ */
+router.get('/edm/preview/:topicId', async (req, res) => {
+  try {
+    const { topicId } = req.params;
+
+    if (!db || !process.env.DATABASE_URL) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    // Get topic info
+    const topic = await db.getIntelligenceTopic(topicId);
+    if (!topic) {
+      return res.status(404).json({ success: false, error: 'Topic not found' });
+    }
+
+    // Get recent news articles (last 7 days)
+    const articles = await db.getIntelligenceNews(topicId);
+
+    // Format articles for the preview
+    const formattedArticles = articles.slice(0, 15).map(a => ({
+      title: a.title,
+      source_name: a.source_name,
+      source_url: a.url,
+      published_at: a.scraped_at,
+      importance_score: a.importance_score || 75,
+      content_summary: a.summary || a.content?.substring(0, 200) + '...' || 'No summary available',
+      key_insights: a.key_insights || [],
+      action_items: [],
+      tags: a.tags || [],
+    }));
+
+    // Calculate stats
+    const highImportanceCount = formattedArticles.filter(a => a.importance_score >= 80).length;
+    const weekDate = new Date().toISOString();
+
+    // Generate the EDM HTML using a template
+    const edmHtml = generateEdmHtml({
+      topicId,
+      topicName: topic.name,
+      articles: formattedArticles,
+      weekDate,
+      totalArticlesThisWeek: formattedArticles.length,
+      highImportanceCount,
+    });
+
+    res.json({
+      success: true,
+      preview: {
+        subject: `${topic.name} Weekly Brief - ${formattedArticles.length} must-read insights`,
+        previewText: `本週 ${topic.name} 共發現 ${formattedArticles.length} 條新聞，其中 ${highImportanceCount} 條高重要性`,
+        htmlContent: edmHtml,
+        articlesIncluded: formattedArticles.length,
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Error generating EDM preview:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /edm/history/:topicId
+ * Get EDM sending history for a topic
+ */
+router.get('/edm/history/:topicId', async (req, res) => {
+  try {
+    const { topicId } = req.params;
+    const limit = parseInt(req.query.limit) || 10;
+
+    if (!db || !process.env.DATABASE_URL) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const history = await db.getEdmHistory(topicId, limit);
+
+    res.json({
+      success: true,
+      history: history.map(edm => ({
+        id: edm.edm_id,
+        subject: edm.subject,
+        previewText: edm.preview_text,
+        recipients: edm.recipients || [],
+        articlesIncluded: edm.articles_included,
+        status: edm.status,
+        sentAt: edm.sent_at,
+      })),
+    });
+  } catch (error) {
+    console.error('Error fetching EDM history:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /edm/:edmId
+ * Get a specific EDM by ID (including full HTML content)
+ */
+router.get('/edm/:edmId', async (req, res) => {
+  try {
+    const { edmId } = req.params;
+
+    if (!db || !process.env.DATABASE_URL) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const edm = await db.getEdmById(edmId);
+    if (!edm) {
+      return res.status(404).json({ success: false, error: 'EDM not found' });
+    }
+
+    res.json({
+      success: true,
+      edm: {
+        id: edm.edm_id,
+        topicId: edm.topic_id,
+        subject: edm.subject,
+        previewText: edm.preview_text,
+        htmlContent: edm.html_content,
+        recipients: edm.recipients || [],
+        articlesIncluded: edm.articles_included,
+        status: edm.status,
+        resendId: edm.resend_id,
+        sentAt: edm.sent_at,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching EDM:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Helper function to generate EDM HTML
+ */
+function generateEdmHtml(input) {
+  const { topicId, topicName, articles, weekDate, totalArticlesThisWeek, highImportanceCount } = input;
+  const formattedDate = new Date(weekDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dashboardUrl = `https://dashboard.5ml.io/intelligence/dashboard?topic=${topicId}`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${topicName} Weekly Brief</title>
+</head>
+<body style="margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background-color:#f4f4f4;">
+  <table role="presentation" style="width:100%;border:none;border-spacing:0;">
+    <tr>
+      <td align="center" style="padding:20px 0;">
+        <table role="presentation" style="width:600px;border:none;border-spacing:0;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="padding:30px;background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);text-align:center;">
+              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:bold;">5ML Intelligence</h1>
+              <p style="margin:10px 0 0;color:rgba(255,255,255,0.9);font-size:14px;">Week of ${formattedDate}</p>
+            </td>
+          </tr>
+
+          <!-- Intro -->
+          <tr>
+            <td style="padding:30px;">
+              <h2 style="margin:0 0 15px;color:#1e293b;font-size:22px;font-weight:bold;">${topicName} Weekly Brief</h2>
+              <p style="margin:0;color:#64748b;font-size:15px;line-height:1.6;">
+                📊 共發現 <strong>${totalArticlesThisWeek}</strong> 條新聞，其中 <strong style="color:#0d9488;">${highImportanceCount}</strong> 條高重要性。
+                以下係本週最重要既洞察：
+              </p>
+            </td>
+          </tr>
+
+          <!-- Top Stories -->
+          ${articles.slice(0, 3).map((article, i) => `
+          <tr>
+            <td style="padding:0 30px 20px;">
+              <table style="width:100%;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+                <tr>
+                  <td style="padding:20px;">
+                    <div style="display:flex;align-items:center;margin-bottom:10px;">
+                      <span style="display:inline-block;padding:4px 10px;background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);color:#fff;font-size:11px;font-weight:bold;border-radius:4px;">#${i + 1} TOP STORY</span>
+                    </div>
+                    <h3 style="margin:10px 0;color:#1e293b;font-size:16px;line-height:1.4;">${article.title}</h3>
+                    <p style="margin:0 0 15px;color:#64748b;font-size:14px;line-height:1.5;">${article.content_summary}</p>
+                    <table style="width:100%;margin-bottom:15px;">
+                      <tr>
+                        <td style="color:#94a3b8;font-size:12px;">
+                          📊 Score: <span style="color:#0d9488;font-weight:bold;">${article.importance_score}/100</span>
+                        </td>
+                        <td style="color:#94a3b8;font-size:12px;text-align:right;">
+                          👤 ${article.source_name}
+                        </td>
+                      </tr>
+                    </table>
+                    <a href="${article.source_url}" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:500;">Read Article →</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          `).join('')}
+
+          <!-- More Stories -->
+          ${articles.length > 3 ? `
+          <tr>
+            <td style="padding:0 30px 30px;">
+              <h3 style="margin:0 0 15px;color:#1e293b;font-size:18px;">📚 More This Week</h3>
+              ${articles.slice(3).map(article => `
+              <div style="padding:15px 0;border-bottom:1px solid #e2e8f0;">
+                <a href="${article.source_url}" style="color:#1e293b;text-decoration:none;font-size:14px;font-weight:600;line-height:1.4;display:block;">${article.title}</a>
+                <p style="margin:5px 0 0;color:#94a3b8;font-size:12px;">
+                  ${article.source_name} • Score: ${article.importance_score}/100
+                  ${article.tags.length > 0 ? ` • ${article.tags.slice(0, 2).join(', ')}` : ''}
+                </p>
+              </div>
+              `).join('')}
+            </td>
+          </tr>
+          ` : ''}
+
+          <!-- CTA -->
+          <tr>
+            <td style="padding:30px;background-color:#f8fafc;text-align:center;">
+              <p style="margin:0 0 15px;color:#64748b;font-size:14px;">想了解更多？</p>
+              <a href="${dashboardUrl}" style="display:inline-block;padding:15px 40px;background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);color:#ffffff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:bold;box-shadow:0 4px 12px rgba(13,148,136,0.3);">Explore All News →</a>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:30px;text-align:center;border-top:1px solid #e2e8f0;">
+              <p style="margin:0 0 10px;color:#94a3b8;font-size:12px;">
+                You received this email because you subscribed to ${topicName} updates.
+              </p>
+              <p style="margin:0;color:#94a3b8;font-size:12px;">
+                <a href="#" style="color:#64748b;">Unsubscribe</a> | <a href="#" style="color:#64748b;">Manage Preferences</a>
+              </p>
+              <p style="margin:15px 0 0;color:#cbd5e1;font-size:11px;">© 2026 5ML. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 /**
  * GET /topics/:id/sources
  * Gets all sources for a specific topic

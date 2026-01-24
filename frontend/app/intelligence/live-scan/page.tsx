@@ -124,6 +124,7 @@ export default function LiveScanPage() {
   const [topicId, setTopicId] = useState<string>('');
   const [topicName, setTopicName] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
   const [progress, setProgress] = useState<ScanProgress>({
     sourcesScanned: 0,
     totalSources: 0,
@@ -199,17 +200,17 @@ export default function LiveScanPage() {
     };
   }, [topicId]);
 
-  // Handle autostart when topic is loaded and WebSocket is connected
+  // Handle autostart when topic is loaded and WebSocket is subscribed
   useEffect(() => {
-    if (shouldAutostart && topicId && topicName && isConnected && !autostartTriggered.current) {
+    if (shouldAutostart && topicId && topicName && isSubscribed && !autostartTriggered.current) {
       autostartTriggered.current = true;
       setShouldAutostart(false);
       // Small delay to ensure everything is ready
       setTimeout(() => {
         handleStartScanInternal();
-      }, 500);
+      }, 300);
     }
-  }, [shouldAutostart, topicId, topicName, isConnected]);
+  }, [shouldAutostart, topicId, topicName, isSubscribed]);
 
   // Auto-generate summary when scan completes
   useEffect(() => {
@@ -276,6 +277,7 @@ export default function LiveScanPage() {
 
   const handleTopicChange = (newTopicId: string) => {
     setTopicId(newTopicId);
+    setIsSubscribed(false); // Reset subscription status when changing topics
     setProgress({
       sourcesScanned: 0,
       totalSources: 0,
@@ -318,6 +320,7 @@ export default function LiveScanPage() {
 
     ws.onclose = () => {
       setIsConnected(false);
+      setIsSubscribed(false);
       console.log('[WebSocket] Disconnected');
       addActivityLog('info', 'Disconnected from server, reconnecting...');
       // Attempt reconnect after 3 seconds
@@ -347,8 +350,12 @@ export default function LiveScanPage() {
 
     switch (event) {
       case 'connected':
+        addActivityLog('info', 'WebSocket connected');
+        break;
+
       case 'subscribed':
-        addActivityLog('info', message.type === 'subscribed' ? 'Subscribed to topic updates' : 'WebSocket connected');
+        setIsSubscribed(true);
+        addActivityLog('info', 'Subscribed to topic updates - Ready to scan');
         break;
 
       case 'progress_update':
@@ -593,9 +600,14 @@ export default function LiveScanPage() {
               {progress.status === 'idle' && (
                 <button
                   onClick={handleStartScan}
-                  className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-sm font-medium"
+                  disabled={!isSubscribed}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                    isSubscribed
+                      ? 'bg-teal-500 hover:bg-teal-600 text-white'
+                      : 'bg-slate-300 dark:bg-slate-600 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+                  }`}
                 >
-                  Start Scan
+                  {!isConnected ? 'Connecting...' : !isSubscribed ? 'Subscribing...' : 'Start Scan'}
                 </button>
               )}
               {(progress.status === 'scanning' || progress.status === 'analyzing') && (
