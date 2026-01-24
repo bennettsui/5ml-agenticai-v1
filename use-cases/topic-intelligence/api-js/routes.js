@@ -1027,7 +1027,7 @@ router.get('/news', async (req, res) => {
  */
 router.post('/summarize', async (req, res) => {
   try {
-    const { topicId, llm = 'claude-haiku' } = req.body;
+    const { topicId, llm = 'deepseek' } = req.body;
 
     if (!topicId) {
       return res.status(400).json({ success: false, error: 'Topic ID is required' });
@@ -1368,8 +1368,31 @@ function parseSummaryResponse(content, llmUsed, model, inputTokens, outputTokens
  * Generate mock summary when no LLM is available
  */
 function generateMockSummary(articles, topicName) {
-  const highPriorityArticles = articles.filter(a => a.importance_score >= 80);
-  const topArticleIds = articles.slice(0, 3).map(a => a.id);
+  // Ensure articles is an array
+  const articleList = Array.isArray(articles) ? articles : [];
+
+  const highPriorityArticles = articleList.filter(a => a.importance_score >= 80);
+  const topArticleIds = articleList.slice(0, 3).map(a => a.id);
+
+  // Handle empty articles case
+  if (articleList.length === 0) {
+    return {
+      summary: {
+        breakingNews: [],
+        practicalTips: [],
+        keyPoints: [{ text: 'No articles available for analysis.', sources: [] }],
+        overallTrend: `No recent data available for ${topicName}.`,
+      },
+      meta: {
+        fetchingModel: 'Database query',
+        analysisModel: 'Mock (no API key)',
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        estimatedCost: 0,
+      },
+    };
+  }
 
   return {
     summary: {
@@ -1395,7 +1418,7 @@ function generateMockSummary(articles, topicName) {
       ],
       keyPoints: [
         {
-          text: `${articles.length} articles analyzed for topic "${topicName}" [${topArticleIds.join('][')}]`,
+          text: `${articleList.length} articles analyzed for topic "${topicName}" [${topArticleIds.join('][')}]`,
           sources: topArticleIds,
         },
         {
