@@ -42,6 +42,12 @@ interface TopicSettings {
   };
 }
 
+interface TopicListItem {
+  id: string;
+  name: string;
+  status: string;
+}
+
 interface Source {
   sourceId: string;
   name: string;
@@ -52,7 +58,10 @@ interface Source {
 
 export default function TopicSettingsPage() {
   const [topic, setTopic] = useState<TopicSettings | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [topics, setTopics] = useState<TopicListItem[]>([]);
+  const [selectedTopicId, setSelectedTopicId] = useState<string>('');
+  const [isLoadingTopics, setIsLoadingTopics] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testEmail, setTestEmail] = useState('');
@@ -70,15 +79,46 @@ export default function TopicSettingsPage() {
   const [recipients, setRecipients] = useState('');
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const topicId = params.get('topic');
-
-    if (topicId) {
-      loadTopic(topicId);
-    } else {
-      setIsLoading(false);
-    }
+    loadTopicsList();
   }, []);
+
+  useEffect(() => {
+    if (selectedTopicId) {
+      loadTopic(selectedTopicId);
+      // Update URL without reload
+      const url = new URL(window.location.href);
+      url.searchParams.set('topic', selectedTopicId);
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [selectedTopicId]);
+
+  const loadTopicsList = async () => {
+    setIsLoadingTopics(true);
+    try {
+      const response = await fetch('/api/intelligence/topics');
+      const data = await response.json();
+
+      if (data.success && data.topics) {
+        setTopics(data.topics);
+
+        // Check URL for topic param
+        const params = new URLSearchParams(window.location.search);
+        const topicIdFromUrl = params.get('topic');
+
+        if (topicIdFromUrl && data.topics.some((t: TopicListItem) => t.id === topicIdFromUrl)) {
+          setSelectedTopicId(topicIdFromUrl);
+        } else if (data.topics.length > 0) {
+          // Select first topic by default
+          setSelectedTopicId(data.topics[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load topics:', error);
+      setMessage({ type: 'error', text: 'Failed to load topics list' });
+    } finally {
+      setIsLoadingTopics(false);
+    }
+  };
 
   const loadTopic = async (topicId: string) => {
     setIsLoading(true);
@@ -284,21 +324,63 @@ export default function TopicSettingsPage() {
           </div>
         )}
 
+        {/* Topic Selector */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 mb-6">
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Select Topic:
+            </label>
+            {isLoadingTopics ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 text-teal-500 animate-spin" />
+                <span className="text-sm text-slate-500">Loading topics...</span>
+              </div>
+            ) : topics.length === 0 ? (
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-slate-500">No topics found.</span>
+                <Link
+                  href="/intelligence/setup"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-sm"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Create Topic
+                </Link>
+              </div>
+            ) : (
+              <select
+                value={selectedTopicId}
+                onChange={e => setSelectedTopicId(e.target.value)}
+                className="flex-1 max-w-md px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+              >
+                {topics.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.status})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
           </div>
-        ) : !topic ? (
+        ) : !topic && !isLoadingTopics && topics.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-slate-600 dark:text-slate-400 mb-4">
-              No topic selected. Please select a topic from the dashboard.
+              No topics available. Create a topic to configure settings.
             </p>
             <Link
-              href="/intelligence/dashboard"
+              href="/intelligence/setup"
               className="px-4 py-2 bg-teal-500 text-white rounded-lg"
             >
-              Go to Dashboard
+              Create Topic
             </Link>
+          </div>
+        ) : !topic ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
           </div>
         ) : (
           <div className="space-y-6">
