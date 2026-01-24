@@ -23,6 +23,11 @@ import {
   Wifi,
   WifiOff,
   Activity,
+  Sparkles,
+  TrendingUp,
+  Cpu,
+  DollarSign,
+  Info,
 } from 'lucide-react';
 
 interface Topic {
@@ -80,6 +85,25 @@ interface ErrorLog {
   message: string;
 }
 
+interface SummaryData {
+  bullets: string[];
+  supportingInfo: Array<{
+    bullet: number;
+    sources: string[];
+    context: string;
+  }>;
+  overallTrend?: string;
+}
+
+interface SummaryMeta {
+  fetchingModel: string;
+  analysisModel: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+}
+
 export default function LiveScanPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loadingTopics, setLoadingTopics] = useState(true);
@@ -100,6 +124,12 @@ export default function LiveScanPage() {
   const [showErrors, setShowErrors] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityLog[]>([]);
   const [shouldAutostart, setShouldAutostart] = useState(false);
+
+  // Summary state
+  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [summaryMeta, setSummaryMeta] = useState<SummaryMeta | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const summaryTriggered = useRef(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const activityLogRef = useRef<HTMLDivElement>(null);
@@ -166,6 +196,44 @@ export default function LiveScanPage() {
       }, 500);
     }
   }, [shouldAutostart, topicId, topicName, isConnected]);
+
+  // Auto-generate summary when scan completes
+  useEffect(() => {
+    if (progress.status === 'complete' && topicId && !summaryTriggered.current && progress.articlesAnalyzed > 0) {
+      summaryTriggered.current = true;
+      generateSummary();
+    }
+  }, [progress.status, topicId, progress.articlesAnalyzed]);
+
+  const generateSummary = async () => {
+    if (!topicId) return;
+    setIsGeneratingSummary(true);
+    setSummary(null);
+    setSummaryMeta(null);
+    addActivityLog('info', 'Generating AI summary of analyzed articles...');
+
+    try {
+      const response = await fetch('/api/intelligence/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topicId, llm: 'claude-haiku' }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setSummary(data.summary);
+        setSummaryMeta(data.meta);
+        addActivityLog('success', 'AI summary generated successfully', `${data.meta.totalTokens} tokens used`);
+      } else {
+        addActivityLog('error', `Failed to generate summary: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to generate summary:', error);
+      addActivityLog('error', 'Failed to generate summary');
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
 
   const fetchTopics = async () => {
     setLoadingTopics(true);
@@ -332,6 +400,9 @@ export default function LiveScanPage() {
     setAnalyzedArticles([]);
     setErrorLogs([]);
     setActivityLog([]);
+    setSummary(null);
+    setSummaryMeta(null);
+    summaryTriggered.current = false;
 
     addActivityLog('info', `Starting scan for topic: ${topicName}`);
 
@@ -582,6 +653,120 @@ export default function LiveScanPage() {
             </div>
           </div>
         </div>
+
+        {/* AI Summary Panel - Shows when scan completes */}
+        {(progress.status === 'complete' || isGeneratingSummary || summary) && (
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-500" />
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">AI Summary</h2>
+                {summaryMeta && (
+                  <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded-full">
+                    {summaryMeta.totalTokens.toLocaleString()} tokens
+                  </span>
+                )}
+              </div>
+              {!isGeneratingSummary && summary && (
+                <button
+                  onClick={generateSummary}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Regenerate
+                </button>
+              )}
+            </div>
+
+            {isGeneratingSummary && (
+              <div className="py-8 text-center">
+                <Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto mb-2" />
+                <p className="text-slate-500 dark:text-slate-400 text-sm">
+                  Analyzing {progress.articlesAnalyzed} articles and generating summary...
+                </p>
+              </div>
+            )}
+
+            {summary && !isGeneratingSummary && (
+              <div className="space-y-4">
+                {/* Summary Meta Info */}
+                {summaryMeta && (
+                  <div className="flex flex-wrap gap-4 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg text-sm">
+                    <div className="flex items-center gap-1.5">
+                      <Cpu className="w-4 h-4 text-slate-400" />
+                      <span className="text-slate-500">Model:</span>
+                      <span className="font-medium text-slate-700 dark:text-slate-300">
+                        {summaryMeta.analysisModel}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <FileText className="w-4 h-4 text-slate-400" />
+                      <span className="text-slate-500">Tokens:</span>
+                      <span className="font-medium text-slate-700 dark:text-slate-300">
+                        {summaryMeta.inputTokens.toLocaleString()} in / {summaryMeta.outputTokens.toLocaleString()} out
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <DollarSign className="w-4 h-4 text-slate-400" />
+                      <span className="text-slate-500">Cost:</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        ${summaryMeta.estimatedCost.toFixed(6)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Overall Trend */}
+                {summary.overallTrend && (
+                  <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                    <div className="flex items-center gap-2 mb-1">
+                      <TrendingUp className="w-4 h-4 text-purple-500" />
+                      <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                        Overall Trend
+                      </span>
+                    </div>
+                    <p className="text-sm text-purple-800 dark:text-purple-200">
+                      {summary.overallTrend}
+                    </p>
+                  </div>
+                )}
+
+                {/* Bullet Points */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Key Findings
+                  </h4>
+                  <ul className="space-y-2">
+                    {summary.bullets.map((bullet, i) => {
+                      const support = summary.supportingInfo?.find(s => s.bullet === i);
+                      return (
+                        <li
+                          key={i}
+                          className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                        >
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 text-xs flex items-center justify-center font-medium">
+                            {i + 1}
+                          </span>
+                          <div className="flex-1">
+                            <p className="text-sm text-slate-700 dark:text-slate-300">
+                              {bullet}
+                            </p>
+                            {support && support.sources?.length > 0 && (
+                              <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                                <Info className="w-3 h-3" />
+                                <span>Sources: {support.sources.slice(0, 2).join(', ')}</span>
+                              </div>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Activity Log - Shows during scanning */}
         {(progress.status === 'scanning' || progress.status === 'analyzing' || activityLog.length > 0) && (
