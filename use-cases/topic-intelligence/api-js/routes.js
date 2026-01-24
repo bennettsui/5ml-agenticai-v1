@@ -24,6 +24,256 @@ const inMemoryTopics = new Map();
 const inMemorySources = new Map();
 
 // ==========================================
+// Content Fetching & Analysis Helpers
+// ==========================================
+
+/**
+ * Fetch and extract text content from a URL
+ * @param {string} url - The URL to fetch
+ * @returns {Promise<{title: string, content: string, success: boolean, error?: string}>}
+ */
+async function fetchPageContent(url) {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; NewsBot/1.0; +https://5ml.ai)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return { title: '', content: '', success: false, error: `HTTP ${response.status}` };
+    }
+
+    const html = await response.text();
+
+    // Extract title
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim().replace(/\s+/g, ' ') : '';
+
+    // Extract main content - remove scripts, styles, nav, footer, etc.
+    let content = html
+      // Remove script tags and content
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      // Remove style tags and content
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      // Remove nav, header, footer, aside
+      .replace(/<(nav|header|footer|aside)[^>]*>[\s\S]*?<\/\1>/gi, '')
+      // Remove all HTML tags
+      .replace(/<[^>]+>/g, ' ')
+      // Decode HTML entities
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      // Clean up whitespace
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Limit content length for LLM processing (roughly 4000 tokens ≈ 16000 chars)
+    if (content.length > 16000) {
+      content = content.substring(0, 16000) + '...';
+    }
+
+    return { title, content, success: true };
+  } catch (error) {
+    const errorMessage = error.name === 'AbortError' ? 'Timeout' : error.message;
+    return { title: '', content: '', success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Analyze article content for relevancy, impact, and insights using LLM
+ * @param {string} title - Article title
+ * @param {string} content - Article content
+ * @param {string} topicName - The topic being monitored
+ * @param {string[]} keywords - Topic keywords
+ * @param {string} selectedLLM - LLM to use
+ * @returns {Promise<{relevancy_score: number, impact_score: number, importance_score: number, summary: string, key_insights: string[], action_items: string[], tags: string[]}>}
+ */
+async function analyzeArticleContent(title, content, topicName, keywords, selectedLLM = 'deepseek') {
+  // Build analysis prompt
+  const keywordsStr = keywords && keywords.length > 0 ? keywords.join(', ') : topicName;
+
+  const prompt = `You are an expert analyst evaluating news content for professionals monitoring "${topicName}".
+
+ARTICLE TITLE: ${title}
+
+ARTICLE CONTENT:
+${content.substring(0, 8000)}
+
+TOPIC KEYWORDS: ${keywordsStr}
+
+Analyze this article and provide:
+1. RELEVANCY_SCORE (0-100): How relevant is this to "${topicName}"? Consider keyword matches, topic alignment, and industry applicability.
+2. IMPACT_SCORE (0-100): How impactful is this for professionals in this field? Consider urgency, business implications, competitive advantage.
+3. SUMMARY: 2-3 sentence summary of the key information.
+4. KEY_INSIGHTS: 2-4 bullet points of actionable insights.
+5. ACTION_ITEMS: If impact is high (70+), list 1-3 specific actions a professional should take.
+6. TAGS: 3-5 relevant tags/categories.
+
+Return ONLY valid JSON:
+{
+  "relevancy_score": 85,
+  "impact_score": 72,
+  "summary": "Concise summary here...",
+  "key_insights": ["Insight 1", "Insight 2"],
+  "action_items": ["Action 1 if high impact"],
+  "tags": ["tag1", "tag2", "tag3"]
+}`;
+
+  // Try to use LLM for analysis
+  const llmPriority = [selectedLLM, 'deepseek', 'claude-haiku', 'perplexity'];
+  let config = null;
+  let apiKey = null;
+  let llmUsed = null;
+
+  for (const llm of llmPriority) {
+    const cfg = LLM_CONFIGS[llm];
+    if (cfg && process.env[cfg.envKey]) {
+      llmUsed = llm;
+      config = cfg;
+      apiKey = process.env[cfg.envKey];
+      break;
+    }
+  }
+
+  // If no LLM available, use keyword-based scoring
+  if (!config || !apiKey) {
+    return generateKeywordBasedAnalysis(title, content, topicName, keywords);
+  }
+
+  try {
+    let response;
+    let responseContent;
+
+    if (config.isAnthropic) {
+      response = await fetch(`${config.baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: config.model,
+          max_tokens: 512,
+          messages: [{ role: 'user', content: prompt }],
+          system: 'You are a news analyst. Return only valid JSON.',
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      const data = await response.json();
+      responseContent = data.content[0].text;
+    } else {
+      // OpenAI-compatible API
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: [
+            { role: 'system', content: 'You are a news analyst. Return only valid JSON.' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.3,
+          max_tokens: 512,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      const data = await response.json();
+      responseContent = data.choices[0].message.content;
+    }
+
+    // Parse JSON from response
+    const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in response');
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    // Calculate overall importance score
+    const importanceScore = Math.round((parsed.relevancy_score * 0.4) + (parsed.impact_score * 0.6));
+
+    return {
+      relevancy_score: parsed.relevancy_score || 50,
+      impact_score: parsed.impact_score || 50,
+      importance_score: importanceScore,
+      summary: parsed.summary || '',
+      key_insights: parsed.key_insights || [],
+      action_items: parsed.action_items || [],
+      tags: parsed.tags || [topicName],
+      analysis_model: `${llmUsed} (${config.model})`,
+    };
+  } catch (error) {
+    console.error('LLM analysis failed:', error.message);
+    return generateKeywordBasedAnalysis(title, content, topicName, keywords);
+  }
+}
+
+/**
+ * Fallback: Generate analysis based on keyword matching when no LLM is available
+ */
+function generateKeywordBasedAnalysis(title, content, topicName, keywords) {
+  const textToAnalyze = `${title} ${content}`.toLowerCase();
+  const allKeywords = [...(keywords || []), topicName.toLowerCase()];
+
+  // Count keyword matches
+  let matchCount = 0;
+  let matchedKeywords = [];
+  for (const keyword of allKeywords) {
+    const regex = new RegExp(keyword.toLowerCase(), 'gi');
+    const matches = textToAnalyze.match(regex);
+    if (matches) {
+      matchCount += matches.length;
+      matchedKeywords.push(keyword);
+    }
+  }
+
+  // Calculate relevancy based on keyword density
+  const wordCount = textToAnalyze.split(/\s+/).length;
+  const keywordDensity = (matchCount / Math.max(wordCount, 1)) * 100;
+  const relevancyScore = Math.min(95, Math.max(20, Math.round(keywordDensity * 50 + (matchedKeywords.length * 15))));
+
+  // Impact based on urgency words
+  const urgencyWords = ['breaking', 'urgent', 'important', 'critical', 'major', 'significant', 'new', 'update', 'change', 'announce'];
+  const urgencyMatches = urgencyWords.filter(word => textToAnalyze.includes(word)).length;
+  const impactScore = Math.min(90, Math.max(30, 40 + (urgencyMatches * 8) + (matchCount * 3)));
+
+  const importanceScore = Math.round((relevancyScore * 0.4) + (impactScore * 0.6));
+
+  // Generate summary from first sentences
+  const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 20);
+  const summary = sentences.slice(0, 2).join('. ').substring(0, 300) + (sentences.length > 2 ? '...' : '.');
+
+  return {
+    relevancy_score: relevancyScore,
+    impact_score: impactScore,
+    importance_score: importanceScore,
+    summary: summary || `Article about ${topicName}`,
+    key_insights: matchedKeywords.length > 0
+      ? [`Covers topics: ${matchedKeywords.slice(0, 3).join(', ')}`, `${matchCount} keyword mentions found`]
+      : ['General industry coverage'],
+    action_items: importanceScore >= 70 ? ['Review for relevant updates'] : [],
+    tags: [...matchedKeywords.slice(0, 3), topicName].filter((v, i, a) => a.indexOf(v) === i),
+    analysis_model: 'Keyword Analysis (no API key)',
+  };
+}
+
+// ==========================================
 // Prompt Templates
 // ==========================================
 
@@ -726,6 +976,7 @@ router.post('/scan/start', async (req, res) => {
 
 /**
  * Run scan asynchronously and send WebSocket updates
+ * Now with real content fetching and LLM-based analysis
  */
 async function runScanWithUpdates(topicId, topic, sources, scanId) {
   const wsServer = require('../../../services/websocket-server');
@@ -758,8 +1009,9 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
     for (let i = 0; i < scanSources.length; i++) {
       const source = scanSources[i];
       const sourceName = source.name || `Source ${i + 1}`;
+      const sourceUrl = source.primary_url || source.url;
 
-      console.log(`   Scanning source ${i + 1}/${scanSources.length}: ${sourceName}`);
+      console.log(`   Scanning source ${i + 1}/${scanSources.length}: ${sourceName} (${sourceUrl})`);
 
       // Send source status - starting
       wsServer.broadcast(topicId, {
@@ -768,144 +1020,198 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
           sourceId: source.source_id || `src-${i}`,
           sourceName,
           status: 'active',
-          url: source.primary_url,
+          url: sourceUrl,
           step: 'connecting',
         },
       });
 
-    // Simulate connection delay
-    await sleep(800);
-
-    // Send status - fetching
-    wsServer.broadcast(topicId, {
-      event: 'source_status_update',
-      data: {
-        sourceId: source.source_id || `src-${i}`,
-        sourceName,
-        status: 'active',
-        step: 'fetching',
-        message: `Fetching content from ${source.primary_url}`,
-      },
-    });
-
-    await sleep(1200);
-
-    // Simulate finding articles
-    const foundInSource = Math.floor(Math.random() * 5) + 1;
-    articlesFound += foundInSource;
-
-    // Send status - parsing
-    wsServer.broadcast(topicId, {
-      event: 'source_status_update',
-      data: {
-        sourceId: source.source_id || `src-${i}`,
-        sourceName,
-        status: 'active',
-        step: 'parsing',
-        message: `Found ${foundInSource} articles, parsing content...`,
-      },
-    });
-
-    await sleep(1000);
-
-    // Send status - analyzing
-    wsServer.broadcast(topicId, {
-      event: 'source_status_update',
-      data: {
-        sourceId: source.source_id || `src-${i}`,
-        sourceName,
-        status: 'active',
-        step: 'analyzing',
-        message: `Analyzing ${foundInSource} articles with AI...`,
-      },
-    });
-
-    await sleep(1500);
-
-    // Generate mock analyzed articles for this source
-    for (let j = 0; j < foundInSource; j++) {
-      const importance = Math.floor(Math.random() * 40) + 60; // 60-100
-      if (importance >= 80) highImportanceCount++;
-      articlesAnalyzed++;
-
-      const articleData = {
-        article_id: `article-${Date.now()}-${j}`,
-        title: generateMockArticleTitle(topic.name, source.type),
-        source_name: sourceName,
-        source_url: source.primary_url,
-        importance_score: importance,
-        content_summary: generateMockSummary(topic.name),
-        key_insights: ['Key insight 1', 'Key insight 2'],
-        action_items: importance >= 80 ? ['Review immediately', 'Share with team'] : [],
-        tags: [topic.name, source.type, 'news'],
-      };
-
-      // Save article to database
-      // Only use source_id if we have real sources from database, otherwise pass null
-      // (mock sources don't exist in intelligence_sources table, would violate FK constraint)
-      if (db && process.env.DATABASE_URL) {
-        try {
-          const sourceIdForDb = usingRealSources ? source.source_id : null;
-          await db.saveIntelligenceNews(topicId, sourceIdForDb, {
-            title: articleData.title,
-            url: articleData.source_url,
-            summary: articleData.content_summary,
-            importance_score: articleData.importance_score,
-            dimensions: {
-              relevance: Math.floor(Math.random() * 20) + 80,
-              actionability: Math.floor(Math.random() * 30) + 70,
-              authority: Math.floor(Math.random() * 20) + 75,
-              timeliness: Math.floor(Math.random() * 15) + 85,
-              originality: Math.floor(Math.random() * 25) + 70,
-              key_insights: articleData.key_insights,
-              tags: articleData.tags,
-            },
-            published_at: new Date().toISOString(),
-          });
-          console.log(`📰 Saved article to database: ${articleData.title.substring(0, 40)}...`);
-        } catch (dbError) {
-          console.error('Failed to save article to database:', dbError.message);
-        }
-      }
-
-      // Send article analyzed event
+      // Send status - fetching
       wsServer.broadcast(topicId, {
-        event: 'article_analyzed',
-        data: articleData,
+        event: 'source_status_update',
+        data: {
+          sourceId: source.source_id || `src-${i}`,
+          sourceName,
+          status: 'active',
+          step: 'fetching',
+          message: `Fetching content from ${sourceUrl}`,
+        },
       });
 
+      // Fetch the source page to find articles
+      let sourceArticles = [];
+      try {
+        const sourceContent = await fetchPageContent(sourceUrl);
+
+        if (sourceContent.success) {
+          // Try to extract article links from the source page
+          // Look for common article patterns in the content
+          sourceArticles = extractArticleLinks(sourceUrl, sourceContent.content);
+
+          // If no articles found, treat the source URL itself as an article
+          if (sourceArticles.length === 0) {
+            sourceArticles = [{
+              url: sourceUrl,
+              title: sourceContent.title || sourceName,
+              content: sourceContent.content,
+            }];
+          }
+        } else {
+          console.log(`   ⚠️ Failed to fetch ${sourceName}: ${sourceContent.error}`);
+          // Create a placeholder article for the failed source
+          sourceArticles = [{
+            url: sourceUrl,
+            title: `${sourceName} - Unable to fetch`,
+            content: '',
+            fetchError: sourceContent.error,
+          }];
+        }
+      } catch (fetchError) {
+        console.error(`   ❌ Error fetching ${sourceName}:`, fetchError.message);
+        sourceArticles = [{
+          url: sourceUrl,
+          title: `${sourceName} - Fetch error`,
+          content: '',
+          fetchError: fetchError.message,
+        }];
+      }
+
+      const foundInSource = sourceArticles.length;
+      articlesFound += foundInSource;
+
+      // Send status - parsing
+      wsServer.broadcast(topicId, {
+        event: 'source_status_update',
+        data: {
+          sourceId: source.source_id || `src-${i}`,
+          sourceName,
+          status: 'active',
+          step: 'parsing',
+          message: `Found ${foundInSource} articles, parsing content...`,
+        },
+      });
+
+      // Send status - analyzing
+      wsServer.broadcast(topicId, {
+        event: 'source_status_update',
+        data: {
+          sourceId: source.source_id || `src-${i}`,
+          sourceName,
+          status: 'active',
+          step: 'analyzing',
+          message: `Analyzing ${foundInSource} articles with AI...`,
+        },
+      });
+
+      // Process each article found in this source
+      for (let j = 0; j < Math.min(foundInSource, 5); j++) { // Limit to 5 articles per source
+        const articleInfo = sourceArticles[j];
+
+        // Fetch full content if we don't have it yet
+        let articleContent = articleInfo.content || '';
+        let articleTitle = articleInfo.title || '';
+
+        if (!articleContent && articleInfo.url && !articleInfo.fetchError) {
+          console.log(`      Fetching article: ${articleInfo.url.substring(0, 60)}...`);
+          const fullContent = await fetchPageContent(articleInfo.url);
+          if (fullContent.success) {
+            articleContent = fullContent.content;
+            articleTitle = fullContent.title || articleTitle;
+          }
+        }
+
+        // Analyze the content with LLM
+        console.log(`      Analyzing: ${articleTitle.substring(0, 50)}...`);
+        const analysis = await analyzeArticleContent(
+          articleTitle,
+          articleContent,
+          topic.name,
+          topic.keywords || [],
+          'deepseek'
+        );
+
+        if (analysis.importance_score >= 80) highImportanceCount++;
+        articlesAnalyzed++;
+
+        const articleData = {
+          article_id: `article-${Date.now()}-${i}-${j}`,
+          title: articleTitle || `Article from ${sourceName}`,
+          source_name: sourceName,
+          source_url: articleInfo.url || sourceUrl,
+          importance_score: analysis.importance_score,
+          relevancy_score: analysis.relevancy_score,
+          impact_score: analysis.impact_score,
+          content_summary: analysis.summary,
+          key_insights: analysis.key_insights,
+          action_items: analysis.action_items,
+          tags: analysis.tags,
+          analysis_model: analysis.analysis_model,
+        };
+
+        // Save article to database
+        if (db && process.env.DATABASE_URL) {
+          try {
+            const sourceIdForDb = usingRealSources ? source.source_id : null;
+            await db.saveIntelligenceNews(topicId, sourceIdForDb, {
+              title: articleData.title,
+              url: articleData.source_url,
+              summary: articleData.content_summary,
+              importance_score: articleData.importance_score,
+              dimensions: {
+                relevance: analysis.relevancy_score,
+                impact: analysis.impact_score,
+                key_insights: articleData.key_insights,
+                action_items: articleData.action_items,
+                tags: articleData.tags,
+                analysis_model: analysis.analysis_model,
+              },
+              published_at: new Date().toISOString(),
+            });
+            console.log(`📰 Saved article to database: ${articleData.title.substring(0, 40)}...`);
+          } catch (dbError) {
+            console.error('Failed to save article to database:', dbError.message);
+          }
+        }
+
+        // Send article analyzed event
+        wsServer.broadcast(topicId, {
+          event: 'article_analyzed',
+          data: articleData,
+        });
+
+        // Small delay between articles
+        await sleep(200);
+      }
+
+      // Send source complete
+      wsServer.broadcast(topicId, {
+        event: 'source_status_update',
+        data: {
+          sourceId: source.source_id || `src-${i}`,
+          sourceName,
+          status: 'complete',
+          articlesFound: Math.min(foundInSource, 5),
+          step: 'complete',
+          message: `Completed: ${Math.min(foundInSource, 5)} articles analyzed`,
+        },
+      });
+
+      // Send progress update
+      wsServer.broadcast(topicId, {
+        event: 'progress_update',
+        data: {
+          sourcesScanned: i + 1,
+          totalSources: scanSources.length,
+          articlesFound,
+          articlesAnalyzed,
+          highImportanceCount,
+          status: i === scanSources.length - 1 ? 'complete' : 'scanning',
+          currentSource: i < scanSources.length - 1 ? scanSources[i + 1]?.name : null,
+        },
+      });
+
+      // Small delay between sources
       await sleep(300);
     }
-
-    // Send source complete
-    wsServer.broadcast(topicId, {
-      event: 'source_status_update',
-      data: {
-        sourceId: source.source_id || `src-${i}`,
-        sourceName,
-        status: 'complete',
-        articlesFound: foundInSource,
-        step: 'complete',
-        message: `Completed: ${foundInSource} articles analyzed`,
-      },
-    });
-
-    // Send progress update
-    wsServer.broadcast(topicId, {
-      event: 'progress_update',
-      data: {
-        sourcesScanned: i + 1,
-        totalSources: scanSources.length,
-        articlesFound,
-        articlesAnalyzed,
-        highImportanceCount,
-        status: i === scanSources.length - 1 ? 'complete' : 'scanning',
-        currentSource: i < scanSources.length - 1 ? scanSources[i + 1]?.name : null,
-      },
-    });
-
-    await sleep(500);
-  }
 
     // Send completion
     wsServer.broadcast(topicId, {
@@ -933,6 +1239,58 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
       },
     });
   }
+}
+
+/**
+ * Extract article links from a page's content
+ * Looks for common patterns in news sites and blogs
+ */
+function extractArticleLinks(baseUrl, content) {
+  const articles = [];
+
+  // Try to parse base URL for domain
+  let baseDomain = '';
+  try {
+    const urlObj = new URL(baseUrl);
+    baseDomain = urlObj.origin;
+  } catch (e) {
+    return articles;
+  }
+
+  // Simple regex to find links that look like article URLs
+  // This is a basic implementation - could be enhanced with site-specific parsers
+  const linkPattern = /href=["']([^"']+)["'][^>]*>([^<]+)</gi;
+  let match;
+
+  const seenUrls = new Set();
+  while ((match = linkPattern.exec(content)) !== null && articles.length < 10) {
+    let url = match[1];
+    const title = match[2].trim();
+
+    // Skip empty titles or navigation links
+    if (!title || title.length < 10 || title.length > 200) continue;
+    if (/^(home|about|contact|menu|nav|login|sign|search)/i.test(title)) continue;
+
+    // Make URL absolute
+    if (url.startsWith('/')) {
+      url = baseDomain + url;
+    } else if (!url.startsWith('http')) {
+      continue; // Skip relative URLs that aren't path-based
+    }
+
+    // Skip if not same domain or already seen
+    if (!url.startsWith(baseDomain) && !url.includes(new URL(baseUrl).hostname)) continue;
+    if (seenUrls.has(url)) continue;
+    seenUrls.add(url);
+
+    // Check if URL looks like an article (has date pattern or article-like path)
+    const isArticleLike = /\/\d{4}\/|\/article|\/post|\/blog|\/news|\/\d+\/|\.html?$/i.test(url);
+    if (!isArticleLike && articles.length > 3) continue; // Be stricter after finding some
+
+    articles.push({ url, title, content: '' });
+  }
+
+  return articles;
 }
 
 /**
