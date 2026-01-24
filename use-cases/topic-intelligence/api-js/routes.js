@@ -168,29 +168,38 @@ class NotionHelper {
   async initialize() {
     if (this.initialized) return;
     if (!NOTION_API_KEY) {
-      console.log('[Notion] NOTION_API_KEY not configured, skipping initialization');
+      console.log('[Notion] ❌ NOTION_API_KEY not configured, skipping initialization');
       return;
     }
 
-    console.log('[Notion] Initializing Notion integration...');
-    console.log(`[Notion] Using Analysis database: ${NOTION_ANALYSIS_DB_ID}`);
+    console.log('[Notion] 🔄 Initializing Notion integration...');
+    console.log(`[Notion] Analysis database ID: ${NOTION_ANALYSIS_DB_ID}`);
 
     // Get the parent page ID from the analysis database
     if (!this.parentPageId) {
       try {
         const dbInfo = await this.request('GET', `/databases/${NOTION_ANALYSIS_DB_ID}`);
+        console.log(`[Notion] Database parent type: ${dbInfo.parent?.type}`);
+
         if (dbInfo.parent?.type === 'page_id') {
           this.parentPageId = dbInfo.parent.page_id;
-          console.log(`[Notion] Found parent page: ${this.parentPageId}`);
+          console.log(`[Notion] ✅ Found parent page: ${this.parentPageId}`);
+        } else if (dbInfo.parent?.type === 'workspace') {
+          console.log('[Notion] ⚠️ Database is in workspace root - cannot create child databases');
+          console.log('[Notion] Sources will be saved to the Analysis database as linked items');
+        } else {
+          console.log(`[Notion] ⚠️ Unknown parent type: ${dbInfo.parent?.type}`);
         }
       } catch (error) {
-        console.error('[Notion] Failed to get analysis database info:', error.message);
+        console.error('[Notion] ❌ Failed to get analysis database info:', error.message);
+        console.error('[Notion] Full error:', error);
       }
     }
 
     // Create Sources Database if not exists (under the same parent)
     if (!notionSourcesDbId && this.parentPageId) {
       try {
+        console.log('[Notion] Creating Sources database under parent page...');
         const sourcesDb = await this.request('POST', '/databases', {
           parent: { type: 'page_id', page_id: this.parentPageId },
           title: [{ type: 'text', text: { content: '📰 資料來源' } }],
@@ -228,18 +237,25 @@ class NotionHelper {
         notionSourcesDbId = sourcesDb.id;
         console.log(`[Notion] ✅ Created Sources database: ${sourcesDb.url}`);
       } catch (error) {
-        console.error('[Notion] Failed to create Sources database:', error.message);
+        console.error('[Notion] ❌ Failed to create Sources database:', error.message);
+        // Check if it's a duplicate - database might already exist
+        if (error.message.includes('duplicate') || error.message.includes('already exists')) {
+          console.log('[Notion] Sources database may already exist, searching...');
+        }
       }
+    } else if (!notionSourcesDbId) {
+      console.log('[Notion] ⚠️ Cannot create Sources database - no parent page available');
     }
 
     this.initialized = true;
-    console.log('[Notion] Initialization complete');
+    console.log(`[Notion] ✅ Initialization complete. Sources DB: ${notionSourcesDbId || 'not available'}`);
   }
 
   /**
    * Save analysis summary to Notion
    */
   async saveAnalysisToNotion(topicName, summary, meta = {}) {
+    console.log('[Notion] saveAnalysisToNotion called');
     await this.initialize();
 
     if (!NOTION_ANALYSIS_DB_ID) {
@@ -247,42 +263,63 @@ class NotionHelper {
       return null;
     }
 
+    console.log(`[Notion] Database ID: ${NOTION_ANALYSIS_DB_ID}`);
+
+    // Get database schema to know what properties exist
+    let dbSchema = {};
+    try {
+      const dbInfo = await this.request('GET', `/databases/${NOTION_ANALYSIS_DB_ID}`);
+      dbSchema = dbInfo.properties || {};
+      console.log(`[Notion] Database properties: ${Object.keys(dbSchema).join(', ')}`);
+    } catch (err) {
+      console.error('[Notion] Failed to get database schema:', err.message);
+    }
+
     const breakingNewsCount = summary.breakingNews?.length || 0;
     const practicalTipsCount = summary.practicalTips?.length || 0;
     const keyPointsCount = summary.keyPoints?.length || 0;
 
-    const properties = {
-      '主題': {
-        title: [{ type: 'text', text: { content: topicName } }],
-      },
-      '日期': {
-        date: { start: new Date().toISOString().split('T')[0] },
-      },
-      '分析模型': {
-        select: { name: meta.analysisModel || 'Unknown' },
-      },
-      '文章數量': {
-        number: meta.articlesAnalyzed || 0,
-      },
-      '重要快訊數': {
-        number: breakingNewsCount,
-      },
-      '實用建議數': {
-        number: practicalTipsCount,
-      },
-      '重點摘要數': {
-        number: keyPointsCount,
-      },
-      '狀態': {
-        select: { name: '已完成' },
-      },
+    // Build properties based on what exists in the database
+    const properties = {};
+
+    // Title is required (might be '主題' or 'Name' or '名稱')
+    const titleProp = Object.keys(dbSchema).find(k => dbSchema[k].type === 'title') || '主題';
+    properties[titleProp] = {
+      title: [{ type: 'text', text: { content: `${topicName} - ${new Date().toLocaleDateString('zh-TW')}` } }],
     };
+
+    // Add optional properties only if they exist in the schema
+    if (dbSchema['日期']) {
+      properties['日期'] = { date: { start: new Date().toISOString().split('T')[0] } };
+    }
+    if (dbSchema['分析模型']) {
+      properties['分析模型'] = { select: { name: meta.analysisModel || 'Unknown' } };
+    }
+    if (dbSchema['文章數量']) {
+      properties['文章數量'] = { number: meta.articlesAnalyzed || 0 };
+    }
+    if (dbSchema['重要快訊數']) {
+      properties['重要快訊數'] = { number: breakingNewsCount };
+    }
+    if (dbSchema['實用建議數']) {
+      properties['實用建議數'] = { number: practicalTipsCount };
+    }
+    if (dbSchema['重點摘要數']) {
+      properties['重點摘要數'] = { number: keyPointsCount };
+    }
+    if (dbSchema['狀態']) {
+      properties['狀態'] = { select: { name: '已完成' } };
+    }
+
+    console.log(`[Notion] Creating page with properties: ${Object.keys(properties).join(', ')}`);
 
     // Create the page
     const page = await this.request('POST', '/pages', {
       parent: { database_id: NOTION_ANALYSIS_DB_ID },
       properties,
     });
+
+    console.log(`[Notion] Page created: ${page.id}`);
 
     // Add content blocks
     const blocks = [];
@@ -390,12 +427,16 @@ class NotionHelper {
    * Save source/article to Notion
    */
   async saveSourceToNotion(article, topicName) {
+    console.log(`[Notion] saveSourceToNotion called for: ${article.title?.substring(0, 50)}...`);
     await this.initialize();
 
     if (!notionSourcesDbId) {
-      console.log('[Notion] Sources database not available, skipping');
+      console.log('[Notion] Sources database ID not available, skipping source save');
+      console.log('[Notion] Parent page ID:', this.parentPageId);
       return null;
     }
+
+    console.log(`[Notion] Using Sources DB: ${notionSourcesDbId}`);
 
     // Determine priority based on importance score
     const importanceScore = article.importance_score || 0;
@@ -2129,19 +2170,28 @@ router.post('/summarize', async (req, res) => {
     }
 
     // Save to Notion
+    console.log(`[Notion] Checking Notion availability: API Key ${NOTION_API_KEY ? 'configured ✅' : 'NOT configured ❌'}`);
     if (notionHelper.isAvailable()) {
+      console.log(`[Notion] 📝 Starting Notion save for topic: ${topicName}`);
       try {
         // Save analysis summary to Notion
-        await notionHelper.saveAnalysisToNotion(topicName, result.summary, {
+        console.log('[Notion] Saving analysis summary...');
+        const analysisPage = await notionHelper.saveAnalysisToNotion(topicName, result.summary, {
           ...result.meta,
           articlesAnalyzed: articles.length,
         });
+        console.log(`[Notion] ✅ Analysis saved: ${analysisPage?.url || 'done'}`);
 
         // Save sources/articles to Notion
-        await notionHelper.batchSaveSourcesToNotion(articles, topicName);
+        console.log(`[Notion] Saving ${articles.length} sources...`);
+        const sourcesResult = await notionHelper.batchSaveSourcesToNotion(articles, topicName);
+        console.log(`[Notion] ✅ Sources saved: ${sourcesResult.success.length} success, ${sourcesResult.failed.length} failed`);
       } catch (notionError) {
-        console.error('[Notion] Failed to save to Notion:', notionError.message);
+        console.error('[Notion] ❌ Failed to save to Notion:', notionError.message);
+        console.error('[Notion] Full error:', notionError);
       }
+    } else {
+      console.log('[Notion] ⚠️ Notion not available - set NOTION_API_KEY environment variable');
     }
 
     // Include article references for frontend
