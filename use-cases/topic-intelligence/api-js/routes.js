@@ -2396,4 +2396,41 @@ function generateMockNews(limit = 20) {
   }));
 }
 
+/**
+ * GET /debug/llm-status
+ * Diagnostic endpoint to check LLM API key status
+ */
+router.get('/debug/llm-status', (req, res) => {
+  const status = {
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    llmKeys: {
+      deepseek: {
+        set: !!process.env.DEEPSEEK_API_KEY,
+        prefix: process.env.DEEPSEEK_API_KEY ? process.env.DEEPSEEK_API_KEY.substring(0, 8) + '...' : null,
+        length: process.env.DEEPSEEK_API_KEY ? process.env.DEEPSEEK_API_KEY.length : 0,
+      },
+      anthropic: {
+        set: !!process.env.ANTHROPIC_API_KEY,
+        isPlaceholder: process.env.ANTHROPIC_API_KEY === 'your-anthropic-api-key-here',
+      },
+      perplexity: {
+        set: !!process.env.PERPLEXITY_API_KEY,
+        isPlaceholder: process.env.PERPLEXITY_API_KEY === 'your-perplexity-api-key-here',
+      },
+      openai: {
+        set: !!process.env.OPENAI_API_KEY,
+      },
+    },
+    llmConfigsLoaded: !!LLM_CONFIGS,
+    availableLLMs: Object.keys(LLM_CONFIGS).filter(llm => {
+      const cfg = LLM_CONFIGS[llm];
+      return cfg && process.env[cfg.envKey] && process.env[cfg.envKey] !== `your-${llm}-api-key-here`;
+    }),
+  };
+
+  console.log('🔍 LLM Status Check:', JSON.stringify(status, null, 2));
+  res.json(status);
+});
+
 module.exports = router;
