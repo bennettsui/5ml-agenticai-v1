@@ -20,6 +20,12 @@ import {
   Star,
   Loader2,
   FolderOpen,
+  Sparkles,
+  ChevronUp,
+  Info,
+  DollarSign,
+  Cpu,
+  FileText,
 } from 'lucide-react';
 
 interface Topic {
@@ -52,6 +58,25 @@ interface DailyStats {
   topSources: Array<{ name: string; count: number }>;
 }
 
+interface SummaryData {
+  bullets: string[];
+  supportingInfo: Array<{
+    bullet: number;
+    sources: string[];
+    context: string;
+  }>;
+  overallTrend?: string;
+}
+
+interface SummaryMeta {
+  fetchingModel: string;
+  analysisModel: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+}
+
 export default function IntelligenceDashboardPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loadingTopics, setLoadingTopics] = useState(true);
@@ -64,6 +89,12 @@ export default function IntelligenceDashboardPage() {
   const [isSendingDigest, setIsSendingDigest] = useState(false);
   const [filter, setFilter] = useState<'all' | 'high' | 'medium'>('all');
   const [page, setPage] = useState(1);
+
+  // Summary state
+  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [summaryMeta, setSummaryMeta] = useState<SummaryMeta | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [showSummary, setShowSummary] = useState(true);
 
   // Fetch all topics on mount
   useEffect(() => {
@@ -190,6 +221,34 @@ export default function IntelligenceDashboardPage() {
       console.error('Failed to send digest:', error);
     } finally {
       setIsSendingDigest(false);
+    }
+  };
+
+  const handleGenerateSummary = async () => {
+    if (!topic) return;
+    setIsGeneratingSummary(true);
+    setSummary(null);
+    setSummaryMeta(null);
+
+    try {
+      const response = await fetch('/api/intelligence/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topicId: topic.topic_id, llm: 'claude-haiku' }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setSummary(data.summary);
+        setSummaryMeta(data.meta);
+        setShowSummary(true);
+      } else {
+        alert(`Failed to generate summary: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to generate summary:', error);
+    } finally {
+      setIsGeneratingSummary(false);
     }
   };
 
@@ -370,6 +429,147 @@ export default function IntelligenceDashboardPage() {
           <div className="grid grid-cols-4 gap-6">
             {/* Main Content - News Feed */}
             <div className="col-span-3">
+              {/* AI Summary Panel */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
+                <div
+                  className="flex items-center justify-between p-4 cursor-pointer"
+                  onClick={() => setShowSummary(!showSummary)}
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-purple-500" />
+                    <h3 className="font-semibold text-slate-900 dark:text-white">AI News Summary</h3>
+                    {summaryMeta && (
+                      <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded-full">
+                        {summaryMeta.totalTokens.toLocaleString()} tokens
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleGenerateSummary();
+                      }}
+                      disabled={isGeneratingSummary || articles.length === 0}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-purple-500 hover:bg-purple-600 disabled:bg-slate-400 text-white rounded-lg text-sm"
+                    >
+                      {isGeneratingSummary ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4" />
+                      )}
+                      {isGeneratingSummary ? 'Generating...' : 'Generate Summary'}
+                    </button>
+                    {showSummary ? (
+                      <ChevronUp className="w-5 h-5 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-slate-400" />
+                    )}
+                  </div>
+                </div>
+
+                {showSummary && (
+                  <div className="px-4 pb-4 border-t border-slate-200 dark:border-slate-700">
+                    {!summary && !isGeneratingSummary && (
+                      <div className="py-6 text-center">
+                        <Sparkles className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                        <p className="text-slate-500 dark:text-slate-400 text-sm">
+                          Click &quot;Generate Summary&quot; to create an AI-powered summary of the fetched articles
+                        </p>
+                      </div>
+                    )}
+
+                    {isGeneratingSummary && (
+                      <div className="py-8 text-center">
+                        <Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto mb-2" />
+                        <p className="text-slate-500 dark:text-slate-400 text-sm">
+                          Analyzing articles and generating summary...
+                        </p>
+                      </div>
+                    )}
+
+                    {summary && !isGeneratingSummary && (
+                      <div className="pt-4 space-y-4">
+                        {/* Summary Meta Info */}
+                        {summaryMeta && (
+                          <div className="flex flex-wrap gap-4 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg text-sm">
+                            <div className="flex items-center gap-1.5">
+                              <Cpu className="w-4 h-4 text-slate-400" />
+                              <span className="text-slate-500">Model:</span>
+                              <span className="font-medium text-slate-700 dark:text-slate-300">
+                                {summaryMeta.analysisModel}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <FileText className="w-4 h-4 text-slate-400" />
+                              <span className="text-slate-500">Tokens:</span>
+                              <span className="font-medium text-slate-700 dark:text-slate-300">
+                                {summaryMeta.inputTokens.toLocaleString()} in / {summaryMeta.outputTokens.toLocaleString()} out
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <DollarSign className="w-4 h-4 text-slate-400" />
+                              <span className="text-slate-500">Cost:</span>
+                              <span className="font-medium text-green-600 dark:text-green-400">
+                                ${summaryMeta.estimatedCost.toFixed(6)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Overall Trend */}
+                        {summary.overallTrend && (
+                          <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                            <div className="flex items-center gap-2 mb-1">
+                              <TrendingUp className="w-4 h-4 text-purple-500" />
+                              <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                                Overall Trend
+                              </span>
+                            </div>
+                            <p className="text-sm text-purple-800 dark:text-purple-200">
+                              {summary.overallTrend}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Bullet Points */}
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                            Key Findings
+                          </h4>
+                          <ul className="space-y-2">
+                            {summary.bullets.map((bullet, i) => {
+                              const support = summary.supportingInfo?.find(s => s.bullet === i);
+                              return (
+                                <li
+                                  key={i}
+                                  className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                                >
+                                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 text-xs flex items-center justify-center font-medium">
+                                    {i + 1}
+                                  </span>
+                                  <div className="flex-1">
+                                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                                      {bullet}
+                                    </p>
+                                    {support && support.sources?.length > 0 && (
+                                      <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                                        <Info className="w-3 h-3" />
+                                        <span>Sources: {support.sources.slice(0, 2).join(', ')}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Filters */}
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
