@@ -931,6 +931,8 @@ router.get('/topics/:id', async (req, res) => {
     if (db && process.env.DATABASE_URL) {
       try {
         topic = await db.getIntelligenceTopic(req.params.id);
+        console.log(`[GET /topics/:id] Loaded topic:`, topic?.name);
+        console.log(`[GET /topics/:id] weekly_digest_config:`, JSON.stringify(topic?.weekly_digest_config, null, 2));
       } catch (dbError) {
         console.error('Database fetch failed:', dbError.message);
         topic = inMemoryTopics.get(req.params.id);
@@ -988,9 +990,13 @@ router.put('/topics/:id', async (req, res) => {
       } : null,
     };
 
+    console.log(`[PUT /topics/:id] Saving updates for topic ${id}:`);
+    console.log(`[PUT /topics/:id] weekly_digest_config:`, JSON.stringify(updates.weekly_digest_config, null, 2));
+
     if (db && process.env.DATABASE_URL) {
       try {
         const topic = await db.updateIntelligenceTopic(id, updates);
+        console.log(`[PUT /topics/:id] Saved topic. Returned weekly_digest_config:`, JSON.stringify(topic?.weekly_digest_config, null, 2));
         if (topic) {
           return res.json({ success: true, topic, message: 'Topic updated successfully' });
         }
@@ -2510,6 +2516,245 @@ router.get('/edm/preview/:topicId', async (req, res) => {
     });
   } catch (error) {
     console.error('Error generating EDM preview:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /edm/send/:topicId
+ * Send EDM to recipients and save to database
+ */
+router.post('/edm/send/:topicId', async (req, res) => {
+  try {
+    const { topicId } = req.params;
+    const { recipients } = req.body; // Optional: override recipients from topic config
+
+    if (!db || !process.env.DATABASE_URL) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      return res.status(500).json({ success: false, error: 'RESEND_API_KEY not configured' });
+    }
+
+    // Get topic info
+    const topic = await db.getIntelligenceTopic(topicId);
+    if (!topic) {
+      return res.status(404).json({ success: false, error: 'Topic not found' });
+    }
+
+    // Get recipient list from request or topic config
+    const weeklyConfig = topic.weekly_digest_config || {};
+    const recipientList = recipients || weeklyConfig.recipientList || [];
+
+    if (!recipientList.length) {
+      return res.status(400).json({ success: false, error: 'No recipients configured' });
+    }
+
+    // Get recent news articles
+    const articles = await db.getIntelligenceNews(topicId);
+    const latestSummary = await db.getLatestIntelligenceSummary(topicId);
+
+    // Calculate date range
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+
+    // Format articles
+    const formattedArticles = articles.slice(0, 15).map(a => ({
+      title: a.title,
+      source_name: a.source_name,
+      source_url: a.url,
+      published_at: a.scraped_at,
+      importance_score: a.importance_score || 75,
+      content_summary: a.summary || a.content?.substring(0, 200) + '...' || 'No summary available',
+      key_insights: a.key_insights || [],
+      action_items: [],
+      tags: a.tags || [],
+    }));
+
+    const highImportanceCount = formattedArticles.filter(a => a.importance_score >= 80).length;
+
+    // Generate EDM HTML
+    const edmHtml = generateEdmHtml({
+      topicId,
+      topicName: topic.name,
+      articles: formattedArticles,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      totalArticlesThisWeek: formattedArticles.length,
+      highImportanceCount,
+      summary: latestSummary ? {
+        breakingNews: latestSummary.breaking_news || [],
+        practicalTips: latestSummary.practical_tips || [],
+        keyPoints: latestSummary.key_points || [],
+        overallTrend: latestSummary.overall_trend || null,
+      } : null,
+    });
+
+    const subject = `${topic.name} Weekly Brief - ${formattedArticles.length} must-read insights`;
+    const previewText = `本週 ${topic.name} 共發現 ${formattedArticles.length} 條新聞，其中 ${highImportanceCount} 條高重要性`;
+
+    console.log(`📧 Sending EDM to ${recipientList.length} recipients for topic: ${topic.name}`);
+
+    // Send email via Resend API
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'news@5ml.io',
+        to: recipientList,
+        subject: subject,
+        html: edmHtml,
+        reply_to: 'support@5ml.io',
+        tags: [
+          { name: 'type', value: 'weekly_digest' },
+          { name: 'topic_id', value: topicId },
+        ],
+      }),
+    });
+
+    const emailData = await response.json();
+
+    if (!response.ok) {
+      console.error('Resend API error:', emailData);
+      // Still save to database with failed status
+      await db.saveEdmHistory(topicId, {
+        subject,
+        previewText,
+        htmlContent: edmHtml,
+        recipients: recipientList,
+        articlesIncluded: formattedArticles.length,
+        status: 'failed',
+        resendId: null,
+      });
+      return res.status(response.status).json({ success: false, error: emailData.message || 'Failed to send email' });
+    }
+
+    // Save to database with sent status
+    const savedEdm = await db.saveEdmHistory(topicId, {
+      subject,
+      previewText,
+      htmlContent: edmHtml,
+      recipients: recipientList,
+      articlesIncluded: formattedArticles.length,
+      status: 'sent',
+      resendId: emailData.id,
+    });
+
+    console.log(`✅ EDM sent and saved: ${savedEdm.edm_id}`);
+
+    res.json({
+      success: true,
+      message: `EDM sent to ${recipientList.length} recipient(s)`,
+      edmId: savedEdm.edm_id,
+      resendId: emailData.id,
+      recipientCount: recipientList.length,
+    });
+  } catch (error) {
+    console.error('Error sending EDM:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /edm/save/:topicId
+ * Save EDM to database without sending (for preview/draft)
+ */
+router.post('/edm/save/:topicId', async (req, res) => {
+  try {
+    const { topicId } = req.params;
+
+    if (!db || !process.env.DATABASE_URL) {
+      return res.status(500).json({ success: false, error: 'Database not available' });
+    }
+
+    // Get topic info
+    const topic = await db.getIntelligenceTopic(topicId);
+    if (!topic) {
+      return res.status(404).json({ success: false, error: 'Topic not found' });
+    }
+
+    // Get recent news articles
+    const articles = await db.getIntelligenceNews(topicId);
+    const latestSummary = await db.getLatestIntelligenceSummary(topicId);
+
+    // Calculate date range
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+
+    // Format articles
+    const formattedArticles = articles.slice(0, 15).map(a => ({
+      title: a.title,
+      source_name: a.source_name,
+      source_url: a.url,
+      published_at: a.scraped_at,
+      importance_score: a.importance_score || 75,
+      content_summary: a.summary || a.content?.substring(0, 200) + '...' || 'No summary available',
+      key_insights: a.key_insights || [],
+      action_items: [],
+      tags: a.tags || [],
+    }));
+
+    const highImportanceCount = formattedArticles.filter(a => a.importance_score >= 80).length;
+
+    // Generate EDM HTML
+    const edmHtml = generateEdmHtml({
+      topicId,
+      topicName: topic.name,
+      articles: formattedArticles,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      totalArticlesThisWeek: formattedArticles.length,
+      highImportanceCount,
+      summary: latestSummary ? {
+        breakingNews: latestSummary.breaking_news || [],
+        practicalTips: latestSummary.practical_tips || [],
+        keyPoints: latestSummary.key_points || [],
+        overallTrend: latestSummary.overall_trend || null,
+      } : null,
+    });
+
+    const subject = `${topic.name} Weekly Brief - ${formattedArticles.length} must-read insights`;
+    const previewText = `本週 ${topic.name} 共發現 ${formattedArticles.length} 條新聞，其中 ${highImportanceCount} 條高重要性`;
+
+    // Get recipient list from topic config
+    const weeklyConfig = topic.weekly_digest_config || {};
+    const recipientList = weeklyConfig.recipientList || [];
+
+    // Save to database with draft status
+    const savedEdm = await db.saveEdmHistory(topicId, {
+      subject,
+      previewText,
+      htmlContent: edmHtml,
+      recipients: recipientList,
+      articlesIncluded: formattedArticles.length,
+      status: 'draft',
+      resendId: null,
+    });
+
+    console.log(`💾 EDM saved as draft: ${savedEdm.edm_id}`);
+
+    res.json({
+      success: true,
+      message: 'EDM saved to database',
+      edmId: savedEdm.edm_id,
+      edm: {
+        id: savedEdm.edm_id,
+        subject,
+        previewText,
+        articlesIncluded: formattedArticles.length,
+        status: 'draft',
+        savedAt: savedEdm.sent_at,
+      },
+    });
+  } catch (error) {
+    console.error('Error saving EDM:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
