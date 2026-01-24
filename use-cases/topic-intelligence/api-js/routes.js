@@ -1615,11 +1615,15 @@ Return ONLY the JSON object, no other text.`;
 
   // If no LLM available, return mock summary
   if (!config || !apiKey) {
-    console.log('   No LLM API available, using mock summary');
+    console.log('   ❌ No LLM API available, using mock summary');
+    console.log('   Available keys check:');
+    console.log(`     - DEEPSEEK_API_KEY: ${process.env.DEEPSEEK_API_KEY ? 'SET (' + process.env.DEEPSEEK_API_KEY.substring(0, 8) + '...)' : 'NOT SET'}`);
+    console.log(`     - ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? 'SET' : 'NOT SET'}`);
+    console.log(`     - PERPLEXITY_API_KEY: ${process.env.PERPLEXITY_API_KEY ? 'SET' : 'NOT SET'}`);
     return generateMockAISummary(articles, topicName);
   }
 
-  console.log(`   Using LLM: ${llmUsed} (${config.model})`);
+  console.log(`   ✅ Using LLM: ${llmUsed} (${config.model})`);
 
   let response;
   let content;
@@ -1715,7 +1719,8 @@ Return ONLY the JSON object, no other text.`;
       return parseSummaryResponse(content, llmUsed, config.model, inputTokens, outputTokens);
     }
   } catch (error) {
-    console.error('LLM summary generation failed:', error.message);
+    console.error('   ❌ LLM summary generation failed:', error.message);
+    console.error('   Full error:', error);
     return generateMockAISummary(articles, topicName);
   }
 }
