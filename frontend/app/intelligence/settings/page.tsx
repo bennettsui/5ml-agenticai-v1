@@ -169,9 +169,6 @@ export default function TopicSettingsPage() {
 
       if (data.success && data.topic) {
         const t = data.topic;
-        console.log('[Settings] Loaded topic:', t.name);
-        console.log('[Settings] weekly_digest_config:', t.weekly_digest_config);
-        console.log('[Settings] weeklyDigestConfig:', t.weeklyDigestConfig);
 
         // Normalize topic ID (API may return id or topic_id)
         const normalizedTopic = {
@@ -187,9 +184,6 @@ export default function TopicSettingsPage() {
         // Handle config from either camelCase or snake_case
         const dailyConfig = t.dailyScanConfig || t.daily_scan_config || {};
         const weeklyConfig = t.weeklyDigestConfig || t.weekly_digest_config || {};
-        console.log('[Settings] weeklyConfig (merged):', weeklyConfig);
-        console.log('[Settings] recipientList:', weeklyConfig.recipientList);
-        console.log('[Settings] recipient_list:', weeklyConfig.recipient_list);
 
         setDailyScanTime(dailyConfig.time || '06:00');
         setDailyScanEnabled(dailyConfig.enabled ?? true);
@@ -204,9 +198,7 @@ export default function TopicSettingsPage() {
         } else if (Array.isArray(weeklyConfig.recipient_list)) {
           recipientArray = weeklyConfig.recipient_list;
         }
-        const loadedRecipients = recipientArray.join('\n');
-        console.log('[Settings] Setting recipients to:', loadedRecipients, 'from array:', recipientArray);
-        setRecipients(loadedRecipients);
+        setRecipients(recipientArray.join('\n'));
       } else {
         console.error('API returned error:', data);
         setMessage({ type: 'error', text: data.error || 'Topic not found or failed to load' });
