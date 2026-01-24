@@ -130,7 +130,7 @@ let notionSourcesDbId = process.env.NOTION_SOURCES_DATABASE_ID || null;
 class NotionHelper {
   constructor() {
     this.baseUrl = 'https://api.notion.com/v1';
-    this.notionVersion = '2022-06-28';
+    this.notionVersion = '2025-09-03';
     this.initialized = false;
     this.parentPageId = null; // Will be fetched from analysis database
   }
