@@ -112,6 +112,455 @@ function getEdmCacheStats() {
 }
 
 // ==========================================
+// Notion Integration
+// ==========================================
+// Saves analysis results and sources to Notion databases
+
+const NOTION_API_KEY = process.env.NOTION_API_KEY;
+
+// Analysis database ID (provided by user)
+const NOTION_ANALYSIS_DB_ID = process.env.NOTION_ANALYSIS_DATABASE_ID || '2cb1f0bba67180b090b6ffb0619fc571';
+
+// Sources database ID - will be created automatically under the same parent as analysis DB
+let notionSourcesDbId = process.env.NOTION_SOURCES_DATABASE_ID || null;
+
+/**
+ * Notion API helper for saving analysis results
+ */
+class NotionHelper {
+  constructor() {
+    this.baseUrl = 'https://api.notion.com/v1';
+    this.notionVersion = '2022-06-28';
+    this.initialized = false;
+    this.parentPageId = null; // Will be fetched from analysis database
+  }
+
+  isAvailable() {
+    return !!NOTION_API_KEY;
+  }
+
+  async request(method, endpoint, data) {
+    if (!NOTION_API_KEY) {
+      throw new Error('NOTION_API_KEY not configured');
+    }
+
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      method,
+      headers: {
+        'Authorization': `Bearer ${NOTION_API_KEY}`,
+        'Notion-Version': this.notionVersion,
+        'Content-Type': 'application/json',
+      },
+      body: data ? JSON.stringify(data) : undefined,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Notion API error (${response.status}): ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Initialize Notion databases (create sources DB if not exist)
+   */
+  async initialize() {
+    if (this.initialized) return;
+    if (!NOTION_API_KEY) {
+      console.log('[Notion] NOTION_API_KEY not configured, skipping initialization');
+      return;
+    }
+
+    console.log('[Notion] Initializing Notion integration...');
+    console.log(`[Notion] Using Analysis database: ${NOTION_ANALYSIS_DB_ID}`);
+
+    // Get the parent page ID from the analysis database
+    if (!this.parentPageId) {
+      try {
+        const dbInfo = await this.request('GET', `/databases/${NOTION_ANALYSIS_DB_ID}`);
+        if (dbInfo.parent?.type === 'page_id') {
+          this.parentPageId = dbInfo.parent.page_id;
+          console.log(`[Notion] Found parent page: ${this.parentPageId}`);
+        }
+      } catch (error) {
+        console.error('[Notion] Failed to get analysis database info:', error.message);
+      }
+    }
+
+    // Create Sources Database if not exists (under the same parent)
+    if (!notionSourcesDbId && this.parentPageId) {
+      try {
+        const sourcesDb = await this.request('POST', '/databases', {
+          parent: { type: 'page_id', page_id: this.parentPageId },
+          title: [{ type: 'text', text: { content: '📰 資料來源' } }],
+          properties: {
+            '標題': { title: {} },
+            '主題': { select: { options: [] } },
+            '來源': { rich_text: {} },
+            '連結': { url: {} },
+            '重要性': { number: { format: 'number' } },
+            '相關性': { number: { format: 'number' } },
+            '影響力': { number: { format: 'number' } },
+            '日期': { date: {} },
+            '標籤': { multi_select: { options: [] } },
+            '分析模型': {
+              select: {
+                options: [
+                  { name: 'deepseek', color: 'blue' },
+                  { name: 'claude-haiku', color: 'purple' },
+                  { name: 'perplexity', color: 'green' },
+                  { name: '關鍵字分析', color: 'gray' },
+                ]
+              }
+            },
+            '優先級': {
+              select: {
+                options: [
+                  { name: '🔴 高', color: 'red' },
+                  { name: '🟡 中', color: 'yellow' },
+                  { name: '🟢 低', color: 'green' },
+                ]
+              }
+            },
+          },
+        });
+        notionSourcesDbId = sourcesDb.id;
+        console.log(`[Notion] ✅ Created Sources database: ${sourcesDb.url}`);
+      } catch (error) {
+        console.error('[Notion] Failed to create Sources database:', error.message);
+      }
+    }
+
+    this.initialized = true;
+    console.log('[Notion] Initialization complete');
+  }
+
+  /**
+   * Save analysis summary to Notion
+   */
+  async saveAnalysisToNotion(topicName, summary, meta = {}) {
+    await this.initialize();
+
+    if (!NOTION_ANALYSIS_DB_ID) {
+      console.log('[Notion] Analysis database not available, skipping');
+      return null;
+    }
+
+    const breakingNewsCount = summary.breakingNews?.length || 0;
+    const practicalTipsCount = summary.practicalTips?.length || 0;
+    const keyPointsCount = summary.keyPoints?.length || 0;
+
+    const properties = {
+      '主題': {
+        title: [{ type: 'text', text: { content: topicName } }],
+      },
+      '日期': {
+        date: { start: new Date().toISOString().split('T')[0] },
+      },
+      '分析模型': {
+        select: { name: meta.analysisModel || 'Unknown' },
+      },
+      '文章數量': {
+        number: meta.articlesAnalyzed || 0,
+      },
+      '重要快訊數': {
+        number: breakingNewsCount,
+      },
+      '實用建議數': {
+        number: practicalTipsCount,
+      },
+      '重點摘要數': {
+        number: keyPointsCount,
+      },
+      '狀態': {
+        select: { name: '已完成' },
+      },
+    };
+
+    // Create the page
+    const page = await this.request('POST', '/pages', {
+      parent: { database_id: NOTION_ANALYSIS_DB_ID },
+      properties,
+    });
+
+    // Add content blocks
+    const blocks = [];
+
+    // Overall Trend section
+    if (summary.overallTrend) {
+      blocks.push({
+        object: 'block',
+        type: 'heading_2',
+        heading_2: {
+          rich_text: [{ type: 'text', text: { content: '📈 本週趨勢' } }],
+        },
+      });
+      // Split by newlines and add as paragraphs
+      const trendParagraphs = summary.overallTrend.split('\n').filter(p => p.trim());
+      trendParagraphs.forEach(para => {
+        blocks.push({
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [{ type: 'text', text: { content: para.substring(0, 2000) } }],
+          },
+        });
+      });
+      blocks.push({ object: 'block', type: 'divider', divider: {} });
+    }
+
+    // Breaking News section
+    if (summary.breakingNews && summary.breakingNews.length > 0) {
+      blocks.push({
+        object: 'block',
+        type: 'heading_2',
+        heading_2: {
+          rich_text: [{ type: 'text', text: { content: '⚡ 重要快訊' } }],
+        },
+      });
+      summary.breakingNews.forEach(item => {
+        const text = typeof item === 'string' ? item : item.text || '';
+        blocks.push({
+          object: 'block',
+          type: 'bulleted_list_item',
+          bulleted_list_item: {
+            rich_text: [{ type: 'text', text: { content: text.substring(0, 2000) } }],
+          },
+        });
+      });
+      blocks.push({ object: 'block', type: 'divider', divider: {} });
+    }
+
+    // Practical Tips section
+    if (summary.practicalTips && summary.practicalTips.length > 0) {
+      blocks.push({
+        object: 'block',
+        type: 'heading_2',
+        heading_2: {
+          rich_text: [{ type: 'text', text: { content: '💡 實用建議' } }],
+        },
+      });
+      summary.practicalTips.forEach(item => {
+        const text = typeof item === 'string' ? item : item.text || '';
+        blocks.push({
+          object: 'block',
+          type: 'bulleted_list_item',
+          bulleted_list_item: {
+            rich_text: [{ type: 'text', text: { content: text.substring(0, 2000) } }],
+          },
+        });
+      });
+      blocks.push({ object: 'block', type: 'divider', divider: {} });
+    }
+
+    // Key Points section
+    if (summary.keyPoints && summary.keyPoints.length > 0) {
+      blocks.push({
+        object: 'block',
+        type: 'heading_2',
+        heading_2: {
+          rich_text: [{ type: 'text', text: { content: '📋 重點摘要' } }],
+        },
+      });
+      summary.keyPoints.forEach(item => {
+        const text = typeof item === 'string' ? item : item.text || '';
+        blocks.push({
+          object: 'block',
+          type: 'bulleted_list_item',
+          bulleted_list_item: {
+            rich_text: [{ type: 'text', text: { content: text.substring(0, 2000) } }],
+          },
+        });
+      });
+    }
+
+    // Append blocks to the page
+    if (blocks.length > 0) {
+      await this.request('PATCH', `/blocks/${page.id}/children`, {
+        children: blocks,
+      });
+    }
+
+    console.log(`[Notion] ✅ Analysis saved to Notion: ${page.url}`);
+    return page;
+  }
+
+  /**
+   * Save source/article to Notion
+   */
+  async saveSourceToNotion(article, topicName) {
+    await this.initialize();
+
+    if (!notionSourcesDbId) {
+      console.log('[Notion] Sources database not available, skipping');
+      return null;
+    }
+
+    // Determine priority based on importance score
+    const importanceScore = article.importance_score || 0;
+    let priority = '🟢 低';
+    if (importanceScore >= 80) priority = '🔴 高';
+    else if (importanceScore >= 60) priority = '🟡 中';
+
+    // Map analysis model name
+    let analysisModel = article.analysis_model || 'Unknown';
+    if (analysisModel.includes('關鍵字') || analysisModel.includes('Keyword')) {
+      analysisModel = '關鍵字分析';
+    }
+
+    const properties = {
+      '標題': {
+        title: [{ type: 'text', text: { content: (article.title || '').substring(0, 200) } }],
+      },
+      '主題': {
+        select: { name: topicName },
+      },
+      '來源': {
+        rich_text: [{ type: 'text', text: { content: article.source_name || '' } }],
+      },
+      '連結': {
+        url: article.source_url || article.url || null,
+      },
+      '重要性': {
+        number: importanceScore,
+      },
+      '相關性': {
+        number: article.relevancy_score || 0,
+      },
+      '影響力': {
+        number: article.impact_score || 0,
+      },
+      '日期': {
+        date: { start: new Date().toISOString().split('T')[0] },
+      },
+      '標籤': {
+        multi_select: (article.tags || []).slice(0, 5).map(tag => ({ name: String(tag).substring(0, 100) })),
+      },
+      '分析模型': {
+        select: { name: analysisModel },
+      },
+      '優先級': {
+        select: { name: priority },
+      },
+    };
+
+    const page = await this.request('POST', '/pages', {
+      parent: { database_id: notionSourcesDbId },
+      properties,
+    });
+
+    // Build content blocks
+    const contentBlocks = [];
+
+    // Add summary as content block
+    if (article.content_summary || article.summary) {
+      const summaryText = article.content_summary || article.summary;
+      contentBlocks.push({
+        object: 'block',
+        type: 'heading_3',
+        heading_3: {
+          rich_text: [{ type: 'text', text: { content: '📝 摘要' } }],
+        },
+      });
+      contentBlocks.push({
+        object: 'block',
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [{ type: 'text', text: { content: summaryText.substring(0, 2000) } }],
+        },
+      });
+      contentBlocks.push({ object: 'block', type: 'divider', divider: {} });
+    }
+
+    // Add key insights as content blocks
+    if (article.key_insights && article.key_insights.length > 0) {
+      contentBlocks.push({
+        object: 'block',
+        type: 'heading_3',
+        heading_3: {
+          rich_text: [{ type: 'text', text: { content: '💡 重點洞察' } }],
+        },
+      });
+      article.key_insights.forEach(insight => {
+        contentBlocks.push({
+          object: 'block',
+          type: 'bulleted_list_item',
+          bulleted_list_item: {
+            rich_text: [{ type: 'text', text: { content: String(insight).substring(0, 2000) } }],
+          },
+        });
+      });
+      contentBlocks.push({ object: 'block', type: 'divider', divider: {} });
+    }
+
+    // Add action items as content blocks
+    if (article.action_items && article.action_items.length > 0) {
+      contentBlocks.push({
+        object: 'block',
+        type: 'heading_3',
+        heading_3: {
+          rich_text: [{ type: 'text', text: { content: '✅ 行動建議' } }],
+        },
+      });
+      article.action_items.forEach(action => {
+        contentBlocks.push({
+          object: 'block',
+          type: 'to_do',
+          to_do: {
+            rich_text: [{ type: 'text', text: { content: String(action).substring(0, 2000) } }],
+            checked: false,
+          },
+        });
+      });
+    }
+
+    // Append all content blocks to the page
+    if (contentBlocks.length > 0) {
+      await this.request('PATCH', `/blocks/${page.id}/children`, {
+        children: contentBlocks,
+      });
+    }
+
+    console.log(`[Notion] ✅ Source saved to Notion: ${article.title?.substring(0, 50)}...`);
+    return page;
+  }
+
+  /**
+   * Batch save multiple sources to Notion
+   */
+  async batchSaveSourcesToNotion(articles, topicName) {
+    await this.initialize();
+
+    if (!notionSourcesDbId || !articles || articles.length === 0) {
+      return { success: [], failed: [] };
+    }
+
+    const success = [];
+    const failed = [];
+
+    for (const article of articles) {
+      try {
+        const page = await this.saveSourceToNotion(article, topicName);
+        if (page) {
+          success.push({ article: article.title, pageId: page.id });
+        }
+        // Rate limiting - wait 350ms between requests to avoid Notion API limits
+        await new Promise(resolve => setTimeout(resolve, 350));
+      } catch (error) {
+        console.error(`[Notion] Failed to save source "${article.title}":`, error.message);
+        failed.push({ article: article.title, error: error.message });
+      }
+    }
+
+    console.log(`[Notion] Batch save complete: ${success.length} success, ${failed.length} failed`);
+    return { success, failed };
+  }
+}
+
+const notionHelper = new NotionHelper();
+
+// ==========================================
 // Content Fetching & Analysis Helpers
 // ==========================================
 
@@ -1387,6 +1836,13 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
           }
         }
 
+        // Save article to Notion (non-blocking)
+        if (notionHelper.isAvailable()) {
+          notionHelper.saveSourceToNotion(articleData, topic.name).catch(err => {
+            console.error('[Notion] Failed to save article:', err.message);
+          });
+        }
+
         // Send article analyzed event
         wsServer.broadcast(topicId, {
           event: 'article_analyzed',
@@ -1665,6 +2121,22 @@ router.post('/summarize', async (req, res) => {
         console.log(`💾 Summary saved to database for topic: ${topicName}`);
       } catch (dbError) {
         console.error('Failed to save summary to database:', dbError.message);
+      }
+    }
+
+    // Save to Notion
+    if (notionHelper.isAvailable()) {
+      try {
+        // Save analysis summary to Notion
+        await notionHelper.saveAnalysisToNotion(topicName, result.summary, {
+          ...result.meta,
+          articlesAnalyzed: articles.length,
+        });
+
+        // Save sources/articles to Notion
+        await notionHelper.batchSaveSourcesToNotion(articles, topicName);
+      } catch (notionError) {
+        console.error('[Notion] Failed to save to Notion:', notionError.message);
       }
     }
 
