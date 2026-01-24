@@ -821,6 +821,9 @@ async function updateIntelligenceTopicStatus(topicId, status) {
 async function updateIntelligenceTopic(topicId, updates) {
   try {
     const { name, keywords, daily_scan_config, weekly_digest_config } = updates;
+    console.log('[DB] Updating topic:', topicId);
+    console.log('[DB] weekly_digest_config to save:', JSON.stringify(weekly_digest_config, null, 2));
+
     const result = await pool.query(
       `UPDATE intelligence_topics
        SET name = COALESCE($2, name),
@@ -834,6 +837,8 @@ async function updateIntelligenceTopic(topicId, updates) {
        daily_scan_config ? JSON.stringify(daily_scan_config) : null,
        weekly_digest_config ? JSON.stringify(weekly_digest_config) : null]
     );
+
+    console.log('[DB] Updated topic, returned weekly_digest_config:', JSON.stringify(result.rows[0]?.weekly_digest_config, null, 2));
     return result.rows[0];
   } catch (error) {
     console.error('Error updating topic:', error);

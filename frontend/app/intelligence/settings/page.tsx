@@ -196,8 +196,16 @@ export default function TopicSettingsPage() {
         setWeeklyDigestDay(weeklyConfig.day || 'monday');
         setWeeklyDigestTime(weeklyConfig.time || '08:00');
         setWeeklyDigestEnabled(weeklyConfig.enabled ?? true);
-        const loadedRecipients = weeklyConfig.recipientList?.join('\n') || weeklyConfig.recipient_list?.join('\n') || '';
-        console.log('[Settings] Setting recipients to:', loadedRecipients);
+
+        // Handle recipientList - could be array or might be missing in old configs
+        let recipientArray: string[] = [];
+        if (Array.isArray(weeklyConfig.recipientList)) {
+          recipientArray = weeklyConfig.recipientList;
+        } else if (Array.isArray(weeklyConfig.recipient_list)) {
+          recipientArray = weeklyConfig.recipient_list;
+        }
+        const loadedRecipients = recipientArray.join('\n');
+        console.log('[Settings] Setting recipients to:', loadedRecipients, 'from array:', recipientArray);
         setRecipients(loadedRecipients);
       } else {
         console.error('API returned error:', data);
