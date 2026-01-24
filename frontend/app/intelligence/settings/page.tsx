@@ -113,8 +113,44 @@ export default function TopicSettingsPage() {
     setMessage(null);
 
     try {
-      // In production, this would update the topic via API
-      setMessage({ type: 'success', text: 'Settings saved successfully' });
+      // Parse recipients from text (comma or newline separated)
+      const recipientList = recipients
+        .split(/[,\n]/)
+        .map(e => e.trim())
+        .filter(e => e && e.includes('@'));
+
+      const response = await fetch(`/api/intelligence/topics/${topic.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          keywords: keywords.split(',').map(k => k.trim()).filter(Boolean),
+          dailyScanConfig: {
+            enabled: dailyScanEnabled,
+            time: dailyScanTime,
+            timezone: 'Asia/Hong_Kong',
+          },
+          weeklyDigestConfig: {
+            enabled: weeklyDigestEnabled,
+            day: weeklyDigestDay,
+            time: weeklyDigestTime,
+            timezone: 'Asia/Hong_Kong',
+            recipientList,
+          },
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage({ type: 'success', text: 'Settings saved successfully' });
+        // Update local topic state with saved data
+        if (data.topic) {
+          setTopic(data.topic);
+        }
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to save settings' });
+      }
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to save settings' });
     } finally {
@@ -457,47 +493,153 @@ export default function TopicSettingsPage() {
               </div>
             </div>
 
-            {/* Email Settings */}
+            {/* Subscription Management */}
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                <Mail className="w-5 h-5 text-teal-500" />
-                Email Settings
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Users className="w-5 h-5 text-teal-500" />
+                  Subscription Management
+                </h2>
+                <span className="px-3 py-1 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-full text-sm font-medium">
+                  {recipients.split(/[,\n]/).filter(e => e.trim() && e.includes('@')).length} subscriber{recipients.split(/[,\n]/).filter(e => e.trim() && e.includes('@')).length !== 1 ? 's' : ''}
+                </span>
+              </div>
 
               <div className="space-y-4">
+                {/* Subscriber List */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Recipient List (one email per line or comma-separated)
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Recipient Emails
                   </label>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    Enter email addresses separated by commas or new lines. These subscribers will receive the weekly digest.
+                  </p>
                   <textarea
                     value={recipients}
                     onChange={e => setRecipients(e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"
-                    placeholder="email1@example.com, email2@example.com"
+                    rows={4}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 font-mono text-sm"
+                    placeholder="email1@example.com&#10;email2@example.com&#10;email3@example.com"
                   />
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <input
-                    type="email"
-                    value={testEmail}
-                    onChange={e => setTestEmail(e.target.value)}
-                    placeholder="Enter email for test"
-                    className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"
-                  />
-                  <button
-                    onClick={handleSendTestEmail}
-                    disabled={isSendingTest || !testEmail}
-                    className="flex items-center gap-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-slate-400 text-white rounded-lg"
-                  >
-                    {isSendingTest ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4" />
-                    )}
-                    Send Test
-                  </button>
+                {/* Current Subscribers Preview */}
+                {recipients.trim() && (
+                  <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
+                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+                      Current Subscribers:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {recipients
+                        .split(/[,\n]/)
+                        .map(e => e.trim())
+                        .filter(e => e && e.includes('@'))
+                        .map((email, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-slate-600 border border-slate-200 dark:border-slate-500 rounded text-xs text-slate-700 dark:text-slate-200"
+                          >
+                            <Mail className="w-3 h-3" />
+                            {email}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const emails = recipients
+                                  .split(/[,\n]/)
+                                  .map(e => e.trim())
+                                  .filter(e => e && e.includes('@') && e !== email);
+                                setRecipients(emails.join('\n'));
+                              }}
+                              className="ml-1 text-slate-400 hover:text-red-500"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Add */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Quick Add Subscriber
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      placeholder="newsubscriber@example.com"
+                      className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          const input = e.currentTarget;
+                          const email = input.value.trim();
+                          if (email && email.includes('@')) {
+                            const currentEmails = recipients
+                              .split(/[,\n]/)
+                              .map(e => e.trim())
+                              .filter(e => e && e.includes('@'));
+                            if (!currentEmails.includes(email)) {
+                              setRecipients([...currentEmails, email].join('\n'));
+                            }
+                            input.value = '';
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={e => {
+                        const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                        const email = input.value.trim();
+                        if (email && email.includes('@')) {
+                          const currentEmails = recipients
+                            .split(/[,\n]/)
+                            .map(e => e.trim())
+                            .filter(e => e && e.includes('@'));
+                          if (!currentEmails.includes(email)) {
+                            setRecipients([...currentEmails, email].join('\n'));
+                          }
+                          input.value = '';
+                        }
+                      }}
+                      className="flex items-center gap-1 px-3 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add
+                    </button>
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-slate-200 dark:border-slate-600 pt-4">
+                  <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Test Email
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    Send a test digest email to verify your configuration.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      value={testEmail}
+                      onChange={e => setTestEmail(e.target.value)}
+                      placeholder="Enter email for test"
+                      className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"
+                    />
+                    <button
+                      onClick={handleSendTestEmail}
+                      disabled={isSendingTest || !testEmail}
+                      className="flex items-center gap-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-slate-400 text-white rounded-lg"
+                    >
+                      {isSendingTest ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                      Send Test
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

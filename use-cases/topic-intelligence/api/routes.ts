@@ -158,6 +158,101 @@ export function getRouter(): Router {
   });
 
   /**
+   * PUT /intelligence/topics/:topicId
+   * Update topic settings (including subscription/recipient management)
+   */
+  router.put('/topics/:topicId', async (req: Request, res: Response) => {
+    try {
+      const { topicId } = req.params;
+      const {
+        name,
+        keywords,
+        dailyScanConfig,
+        weeklyDigestConfig,
+      } = req.body;
+
+      // Parse keywords if string
+      let parsedKeywords = keywords;
+      if (typeof keywords === 'string') {
+        parsedKeywords = keywords.split(',').map((k: string) => k.trim()).filter(Boolean);
+      }
+
+      // Parse recipients if string
+      let parsedRecipients = weeklyDigestConfig?.recipientList;
+      if (typeof weeklyDigestConfig?.recipientList === 'string') {
+        parsedRecipients = weeklyDigestConfig.recipientList
+          .split(/[,\n]/)
+          .map((e: string) => e.trim())
+          .filter((e: string) => e && e.includes('@'));
+      }
+
+      const updates: {
+        name?: string;
+        keywords?: string[];
+        dailyScanConfig?: {
+          enabled: boolean;
+          time: string;
+          timezone?: string;
+        };
+        weeklyDigestConfig?: {
+          enabled: boolean;
+          day: string;
+          time: string;
+          timezone?: string;
+          recipientList: string[];
+        };
+      } = {};
+
+      if (name !== undefined) {
+        updates.name = name;
+      }
+
+      if (parsedKeywords !== undefined) {
+        updates.keywords = parsedKeywords;
+      }
+
+      if (dailyScanConfig !== undefined) {
+        updates.dailyScanConfig = {
+          enabled: dailyScanConfig.enabled ?? true,
+          time: dailyScanConfig.time || '06:00',
+          timezone: dailyScanConfig.timezone || 'Asia/Hong_Kong',
+        };
+      }
+
+      if (weeklyDigestConfig !== undefined) {
+        updates.weeklyDigestConfig = {
+          enabled: weeklyDigestConfig.enabled ?? true,
+          day: weeklyDigestConfig.day || 'monday',
+          time: weeklyDigestConfig.time || '08:00',
+          timezone: weeklyDigestConfig.timezone || 'Asia/Hong_Kong',
+          recipientList: parsedRecipients || [],
+        };
+      }
+
+      const result = await orchestrator!.updateTopic(topicId, updates);
+
+      if (result.success) {
+        res.json({
+          success: true,
+          topic: result.topic,
+          message: 'Topic settings updated successfully',
+        });
+      } else {
+        res.status(result.error === 'Topic not found' ? 404 : 500).json({
+          success: false,
+          error: result.error,
+        });
+      }
+    } catch (error) {
+      console.error('[PUT /intelligence/topics/:topicId] Error:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Internal server error',
+      });
+    }
+  });
+
+  /**
    * PUT /intelligence/topics/:topicId/pause
    * Pause a topic
    */

@@ -377,6 +377,92 @@ export class TopicBasedNewsOrchestrator extends EventEmitter {
     return true;
   }
 
+  /**
+   * Update topic settings
+   */
+  async updateTopic(
+    topicId: string,
+    updates: {
+      name?: string;
+      keywords?: string[];
+      dailyScanConfig?: {
+        enabled: boolean;
+        time: string;
+        timezone?: string;
+      };
+      weeklyDigestConfig?: {
+        enabled: boolean;
+        day: string;
+        time: string;
+        timezone?: string;
+        recipientList: string[];
+      };
+    }
+  ): Promise<{ success: boolean; topic?: Topic; error?: string }> {
+    const topic = this.topics.get(topicId);
+    if (!topic) {
+      return { success: false, error: 'Topic not found' };
+    }
+
+    try {
+      // Update topic fields
+      if (updates.name !== undefined) {
+        topic.name = updates.name;
+      }
+
+      if (updates.keywords !== undefined) {
+        topic.keywords = updates.keywords;
+      }
+
+      if (updates.dailyScanConfig !== undefined) {
+        topic.dailyScanConfig = {
+          enabled: updates.dailyScanConfig.enabled,
+          time: updates.dailyScanConfig.time,
+          timezone: updates.dailyScanConfig.timezone || this.config.timeZone,
+        };
+      }
+
+      if (updates.weeklyDigestConfig !== undefined) {
+        topic.weeklyDigestConfig = {
+          enabled: updates.weeklyDigestConfig.enabled,
+          day: updates.weeklyDigestConfig.day,
+          time: updates.weeklyDigestConfig.time,
+          timezone: updates.weeklyDigestConfig.timezone || this.config.timeZone,
+          recipientList: updates.weeklyDigestConfig.recipientList,
+        };
+      }
+
+      // Update in Notion if database is configured
+      const topicsMasterDb = process.env.NOTION_TOPICS_MASTER_DB;
+      if (topicsMasterDb) {
+        await this.notionTool.updatePage(topicId, {
+          'Topic Name': { title: [{ text: { content: topic.name } }] },
+          'Keywords': { rich_text: [{ text: { content: topic.keywords.join(', ') } }] },
+          'Daily Scan Time': { rich_text: [{ text: { content: `${topic.dailyScanConfig.time} HKT` } }] },
+          'Weekly Digest Day': {
+            select: { name: topic.weeklyDigestConfig.day.charAt(0).toUpperCase() + topic.weeklyDigestConfig.day.slice(1) },
+          },
+          'Weekly Digest Time': { rich_text: [{ text: { content: `${topic.weeklyDigestConfig.time} HKT` } }] },
+          'Recipient Emails': { rich_text: [{ text: { content: topic.weeklyDigestConfig.recipientList.join(', ') } }] },
+        });
+      }
+
+      // Reschedule jobs with new settings
+      if (topic.status === 'active') {
+        this.scheduleTopicJobs(topicId);
+      }
+
+      console.log(`[${this.config.name}] Updated topic: ${topic.name}`);
+      this.emit('topic_updated', { topicId, topic });
+
+      return { success: true, topic };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[${this.config.name}] Failed to update topic ${topicId}:`, errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }
+
   // ==================== Manual Triggers ====================
 
   /**
