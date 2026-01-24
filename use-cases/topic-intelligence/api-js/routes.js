@@ -1898,6 +1898,196 @@ function generateMockAISummary(articles, topicName) {
 }
 
 /**
+ * POST /orchestration/trigger-digest
+ * Manually trigger digest email for a topic
+ */
+router.post('/orchestration/trigger-digest', async (req, res) => {
+  try {
+    const topicId = req.query.topic_id || req.body.topicId;
+
+    if (!topicId) {
+      return res.status(400).json({ success: false, error: 'topic_id is required' });
+    }
+
+    console.log(`📧 Triggering digest for topic: ${topicId}`);
+
+    // Check if Resend API key is configured
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'RESEND_API_KEY not configured. Please set up email service.',
+      });
+    }
+
+    // Get topic details
+    let topic = null;
+    let articles = [];
+    let summary = null;
+
+    if (db && process.env.DATABASE_URL) {
+      try {
+        topic = await db.getIntelligenceTopic(topicId);
+        if (!topic) {
+          return res.status(404).json({ success: false, error: 'Topic not found' });
+        }
+
+        // Get recent articles
+        articles = await db.getIntelligenceNews(topicId, 10);
+
+        // Get latest summary
+        const summaries = await db.getIntelligenceSummaries(topicId, 1);
+        summary = summaries?.[0] || null;
+      } catch (dbError) {
+        console.error('Database error:', dbError.message);
+        return res.status(500).json({ success: false, error: 'Database error' });
+      }
+    }
+
+    if (!topic) {
+      return res.status(404).json({ success: false, error: 'Topic not found' });
+    }
+
+    // Get subscribers from weekly_digest_config.recipientList
+    const digestConfig = topic.weekly_digest_config || {};
+    const subscribers = digestConfig.recipientList || [];
+
+    console.log(`   Topic: ${topic.name}, Subscribers: ${subscribers.length}`);
+
+    if (subscribers.length === 0) {
+      // If no subscribers, return with message
+      console.log('   No subscribers for this topic, skipping email');
+      return res.json({
+        success: true,
+        emailsSent: 0,
+        message: 'No subscribers configured for this topic. Add recipients in Settings.',
+      });
+    }
+
+    // Generate email HTML
+    const emailHtml = generateDigestEmailHtml(topic, articles, summary);
+
+    // Send emails via Resend
+    let emailsSent = 0;
+    let emailsFailed = 0;
+    const errors = [];
+
+    for (const subscriberEmail of subscribers) {
+      try {
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'Topic Intelligence <news@5ml.io>',
+            to: subscriberEmail,
+            subject: `📰 ${topic.name} - Intelligence Digest`,
+            html: emailHtml,
+            tags: [
+              { name: 'topic_id', value: topicId },
+              { name: 'type', value: 'digest' },
+            ],
+          }),
+        });
+
+        if (response.ok) {
+          emailsSent++;
+          console.log(`   ✅ Email sent to: ${subscriberEmail}`);
+        } else {
+          const errorData = await response.json();
+          emailsFailed++;
+          errors.push({ email: subscriberEmail, error: errorData.message || response.statusText });
+          console.error(`   ❌ Failed to send to ${subscriberEmail}:`, errorData);
+        }
+      } catch (emailError) {
+        emailsFailed++;
+        errors.push({ email: subscriberEmail, error: emailError.message });
+        console.error(`   ❌ Failed to send to ${subscriberEmail}:`, emailError.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      topicId,
+      topicName: topic.name,
+      emailsSent,
+      emailsFailed,
+      totalSubscribers: subscribers.length,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+  } catch (error) {
+    console.error('Error triggering digest:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Generate HTML email for digest
+ */
+function generateDigestEmailHtml(topic, articles, summary) {
+  const articlesHtml = articles.slice(0, 5).map((article, index) => `
+    <tr>
+      <td style="padding: 16px 0; border-bottom: 1px solid #e5e7eb;">
+        <a href="${article.url}" style="color: #2563eb; text-decoration: none; font-weight: 600;">
+          ${article.title}
+        </a>
+        <p style="margin: 8px 0 0; color: #6b7280; font-size: 14px;">
+          ${article.summary || 'No summary available'}
+        </p>
+        <p style="margin: 4px 0 0; color: #9ca3af; font-size: 12px;">
+          Source: ${article.source_name || 'Unknown'} | Importance: ${article.importance_score || 50}/100
+        </p>
+      </td>
+    </tr>
+  `).join('');
+
+  const summarySection = summary ? `
+    <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; margin-bottom: 24px;">
+      <h2 style="margin: 0 0 12px; color: #0369a1; font-size: 18px;">📊 AI Analysis</h2>
+      <p style="margin: 0; color: #334155; line-height: 1.6;">
+        ${summary.overall_trend || summary.overallTrend || 'Analysis pending...'}
+      </p>
+    </div>
+  ` : '';
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+      <div style="background: white; padding: 32px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <h1 style="margin: 0 0 8px; color: #1f2937; font-size: 24px;">
+          📰 ${topic.name}
+        </h1>
+        <p style="margin: 0 0 24px; color: #6b7280; font-size: 14px;">
+          Intelligence Digest • ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        </p>
+
+        ${summarySection}
+
+        <h2 style="margin: 0 0 16px; color: #374151; font-size: 18px;">📰 Top Stories</h2>
+        <table style="width: 100%; border-collapse: collapse;">
+          ${articlesHtml || '<tr><td style="color: #9ca3af; padding: 16px 0;">No articles found. Run a scan to gather news.</td></tr>'}
+        </table>
+
+        <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; text-align: center;">
+          <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+            Powered by 5ML Topic Intelligence<br>
+            <a href="https://5ml-agenticai-v1.fly.dev/intelligence/dashboard" style="color: #6b7280;">View Dashboard</a>
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
  * POST /email/test
  * Sends a test email
  */
