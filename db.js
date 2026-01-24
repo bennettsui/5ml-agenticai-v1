@@ -165,6 +165,26 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_sources_topic ON intelligence_sources(topic_id);
       CREATE INDEX IF NOT EXISTS idx_news_topic ON intelligence_news(topic_id);
       CREATE INDEX IF NOT EXISTS idx_news_scraped ON intelligence_news(scraped_at DESC);
+
+      -- Intelligence Summaries Table
+      CREATE TABLE IF NOT EXISTS intelligence_summaries (
+        id SERIAL PRIMARY KEY,
+        summary_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        topic_id UUID REFERENCES intelligence_topics(topic_id) ON DELETE CASCADE,
+        breaking_news JSONB DEFAULT '[]',
+        practical_tips JSONB DEFAULT '[]',
+        key_points JSONB DEFAULT '[]',
+        overall_trend TEXT,
+        model_used VARCHAR(100),
+        input_tokens INTEGER,
+        output_tokens INTEGER,
+        estimated_cost DECIMAL(10, 8),
+        articles_analyzed INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_summaries_topic ON intelligence_summaries(topic_id);
+      CREATE INDEX IF NOT EXISTS idx_summaries_created ON intelligence_summaries(created_at DESC);
     `);
     console.log('✅ Database schema initialized');
   } catch (error) {
@@ -870,6 +890,65 @@ async function getIntelligenceNews(topicId, limit = 50) {
   }
 }
 
+async function saveIntelligenceSummary(topicId, summaryData, meta) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO intelligence_summaries
+       (topic_id, breaking_news, practical_tips, key_points, overall_trend, model_used, input_tokens, output_tokens, estimated_cost, articles_analyzed)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [
+        topicId,
+        JSON.stringify(summaryData.breakingNews || []),
+        JSON.stringify(summaryData.practicalTips || []),
+        JSON.stringify(summaryData.keyPoints || []),
+        summaryData.overallTrend || '',
+        meta.analysisModel || 'unknown',
+        meta.inputTokens || 0,
+        meta.outputTokens || 0,
+        meta.estimatedCost || 0,
+        meta.articlesAnalyzed || 0
+      ]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving intelligence summary:', error);
+    throw error;
+  }
+}
+
+async function getIntelligenceSummaries(topicId, limit = 10) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM intelligence_summaries
+       WHERE topic_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [topicId, limit]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching intelligence summaries:', error);
+    throw error;
+  }
+}
+
+async function getLatestIntelligenceSummary(topicId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM intelligence_summaries
+       WHERE topic_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [topicId]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching latest intelligence summary:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -908,4 +987,7 @@ module.exports = {
   getIntelligenceSources,
   saveIntelligenceNews,
   getIntelligenceNews,
+  saveIntelligenceSummary,
+  getIntelligenceSummaries,
+  getLatestIntelligenceSummary,
 };

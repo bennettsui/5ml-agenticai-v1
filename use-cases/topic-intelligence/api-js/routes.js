@@ -1005,7 +1005,8 @@ router.get('/news', async (req, res) => {
 /**
  * POST /summarize
  * Generates an AI summary of fetched news articles for a topic
- * Returns bullet points with supporting info, model used, tokens, and cost
+ * Returns categorized analysis: breaking news, practical tips, key points
+ * Saves to database and includes source citations
  */
 router.post('/summarize', async (req, res) => {
   try {
@@ -1024,7 +1025,8 @@ router.post('/summarize', async (req, res) => {
         const topic = await db.getIntelligenceTopic(topicId);
         topicName = topic?.name || 'Unknown Topic';
         const dbNews = await db.getIntelligenceNews(topicId, 20);
-        articles = dbNews.map(item => ({
+        articles = dbNews.map((item, index) => ({
+          id: index + 1, // Reference number for citations
           title: item.title,
           summary: item.summary || '',
           importance_score: item.importance_score || 50,
@@ -1040,8 +1042,11 @@ router.post('/summarize', async (req, res) => {
       return res.json({
         success: true,
         summary: {
-          bullets: ['No articles found for this topic. Run a scan first to fetch news.'],
-          supportingInfo: [],
+          breakingNews: [],
+          practicalTips: [],
+          keyPoints: [{ text: 'No articles found for this topic. Run a scan first to fetch news.', sources: [] }],
+          overallTrend: '',
+          articles: [],
         },
         meta: {
           fetchingModel: 'N/A',
@@ -1050,22 +1055,74 @@ router.post('/summarize', async (req, res) => {
           outputTokens: 0,
           totalTokens: 0,
           estimatedCost: 0,
+          articlesAnalyzed: 0,
         },
       });
     }
 
-    console.log(`📝 Generating summary for ${articles.length} articles on topic: ${topicName}`);
+    console.log(`📝 Generating categorized summary for ${articles.length} articles on topic: ${topicName}`);
 
     // Generate summary using LLM
     const result = await generateNewsSummary(articles, topicName, llm);
 
+    // Save summary to database
+    if (db && process.env.DATABASE_URL) {
+      try {
+        await db.saveIntelligenceSummary(topicId, result.summary, {
+          ...result.meta,
+          articlesAnalyzed: articles.length,
+        });
+        console.log(`💾 Summary saved to database for topic: ${topicName}`);
+      } catch (dbError) {
+        console.error('Failed to save summary to database:', dbError.message);
+      }
+    }
+
+    // Include article references for frontend
+    result.summary.articles = articles.map(a => ({
+      id: a.id,
+      title: a.title,
+      source_name: a.source_name,
+      url: a.url,
+    }));
+
     res.json({
       success: true,
       summary: result.summary,
-      meta: result.meta,
+      meta: { ...result.meta, articlesAnalyzed: articles.length },
     });
   } catch (error) {
     console.error('Summary generation error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /summaries/:topicId
+ * Gets saved summaries for a topic
+ */
+router.get('/summaries/:topicId', async (req, res) => {
+  try {
+    const { topicId } = req.params;
+    const { latest } = req.query;
+
+    if (db && process.env.DATABASE_URL) {
+      try {
+        if (latest === 'true') {
+          const summary = await db.getLatestIntelligenceSummary(topicId);
+          return res.json({ success: true, summary });
+        } else {
+          const summaries = await db.getIntelligenceSummaries(topicId);
+          return res.json({ success: true, summaries });
+        }
+      } catch (dbError) {
+        console.error('Failed to fetch summaries:', dbError.message);
+      }
+    }
+
+    res.json({ success: true, summaries: [] });
+  } catch (error) {
+    console.error('Error fetching summaries:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1081,39 +1138,50 @@ const TOKEN_COSTS = {
 };
 
 /**
- * Generate news summary using LLM
+ * Generate news summary using LLM with categorized analysis
  */
 async function generateNewsSummary(articles, topicName, selectedLLM) {
-  // Build prompt with article content
-  const articleText = articles.map((a, i) =>
-    `${i + 1}. "${a.title}" (Importance: ${a.importance_score}/100)\n   Source: ${a.source_name}\n   Summary: ${a.summary}`
+  // Build prompt with article content - include reference IDs for citations
+  const articleText = articles.map(a =>
+    `[${a.id}] "${a.title}" (Importance: ${a.importance_score}/100)\n    Source: ${a.source_name}\n    Summary: ${a.summary}`
   ).join('\n\n');
 
-  const prompt = `You are a news analyst. Summarize the following ${articles.length} news articles about "${topicName}" into clear, actionable bullet points.
+  const prompt = `You are a senior news analyst for "${topicName}". Analyze the following ${articles.length} articles and categorize insights into three sections.
 
-Articles:
+Articles (use [number] for citations):
 ${articleText}
 
-Instructions:
-1. Create 5-7 key bullet points summarizing the most important developments
-2. For each bullet point, note which article(s) support it
-3. Prioritize high-importance articles (score 80+)
-4. Focus on actionable insights and trends
+INSTRUCTIONS:
+1. BREAKING NEWS / IMPORTANT UPDATES: Identify urgent or significant industry developments (if any)
+2. PRACTICAL TIPS: Extract actionable advice for industry practitioners
+3. KEY POINTS: Summarize the main takeaways from all articles
+
+For each point, include source citations like [1], [2], [3] referencing article numbers.
+Prioritize high-importance articles (score 80+).
 
 Output format - MUST return valid JSON:
 {
-  "bullets": [
-    "Key finding or development #1",
-    "Key finding or development #2",
-    ...
+  "breakingNews": [
+    {"text": "Major development or urgent update [1][3]", "sources": [1, 3]},
+    {"text": "Another breaking news item [2]", "sources": [2]}
   ],
-  "supportingInfo": [
-    {"bullet": 0, "sources": ["Article 1 title", "Article 3 title"], "context": "Brief context"},
-    {"bullet": 1, "sources": ["Article 2 title"], "context": "Brief context"},
-    ...
+  "practicalTips": [
+    {"text": "Actionable tip for practitioners [1][4]", "sources": [1, 4]},
+    {"text": "Another practical recommendation [2][5]", "sources": [2, 5]}
   ],
-  "overallTrend": "One sentence summary of overall trend direction"
+  "keyPoints": [
+    {"text": "Key takeaway from the articles [1][2][3]", "sources": [1, 2, 3]},
+    {"text": "Another important insight [4]", "sources": [4]}
+  ],
+  "overallTrend": "One sentence summary of the overall trend direction for ${topicName}"
 }
+
+Rules:
+- breakingNews: Only include if there are genuinely urgent/breaking items (can be empty array)
+- practicalTips: 2-4 actionable items
+- keyPoints: 3-5 main takeaways
+- Always include source citations in [n] format within the text
+- sources array should match the citation numbers in the text
 
 Return ONLY the JSON object, no other text.`;
 
@@ -1263,8 +1331,9 @@ function parseSummaryResponse(content, llmUsed, model, inputTokens, outputTokens
 
   return {
     summary: {
-      bullets: parsed.bullets || [],
-      supportingInfo: parsed.supportingInfo || [],
+      breakingNews: parsed.breakingNews || [],
+      practicalTips: parsed.practicalTips || [],
+      keyPoints: parsed.keyPoints || [],
       overallTrend: parsed.overallTrend || '',
     },
     meta: {
@@ -1283,21 +1352,44 @@ function parseSummaryResponse(content, llmUsed, model, inputTokens, outputTokens
  */
 function generateMockSummary(articles, topicName) {
   const highPriorityArticles = articles.filter(a => a.importance_score >= 80);
+  const topArticleIds = articles.slice(0, 3).map(a => a.id);
 
   return {
     summary: {
-      bullets: [
-        `${articles.length} articles analyzed for topic "${topicName}"`,
-        `${highPriorityArticles.length} high-priority developments identified (importance ≥80)`,
-        'Key themes include algorithm updates, content strategy changes, and engagement optimization',
-        'Industry experts recommend focusing on original content creation',
-        'New features are being rolled out that may impact content strategy',
+      breakingNews: highPriorityArticles.length > 0 ? [
+        {
+          text: `${highPriorityArticles.length} high-priority developments identified requiring attention [${topArticleIds[0]}]`,
+          sources: [topArticleIds[0]],
+        },
+      ] : [],
+      practicalTips: [
+        {
+          text: `Focus on original content creation for better engagement [${topArticleIds[0]}][${topArticleIds[1] || topArticleIds[0]}]`,
+          sources: topArticleIds.slice(0, 2),
+        },
+        {
+          text: `Monitor algorithm changes and adapt content strategy accordingly [${topArticleIds[1] || topArticleIds[0]}]`,
+          sources: [topArticleIds[1] || topArticleIds[0]],
+        },
+        {
+          text: `Stay updated with platform feature releases for competitive advantage [${topArticleIds[2] || topArticleIds[0]}]`,
+          sources: [topArticleIds[2] || topArticleIds[0]],
+        },
       ],
-      supportingInfo: articles.slice(0, 3).map((a, i) => ({
-        bullet: i,
-        sources: [a.title],
-        context: a.summary?.substring(0, 100) || 'No summary available',
-      })),
+      keyPoints: [
+        {
+          text: `${articles.length} articles analyzed for topic "${topicName}" [${topArticleIds.join('][')}]`,
+          sources: topArticleIds,
+        },
+        {
+          text: `Key themes include algorithm updates, content strategy changes, and engagement optimization [${topArticleIds[0]}][${topArticleIds[1] || topArticleIds[0]}]`,
+          sources: topArticleIds.slice(0, 2),
+        },
+        {
+          text: `New features are being rolled out that may impact content strategy [${topArticleIds[2] || topArticleIds[0]}]`,
+          sources: [topArticleIds[2] || topArticleIds[0]],
+        },
+      ],
       overallTrend: `The ${topicName} landscape is evolving with new features and algorithm changes that favor original, high-quality content.`,
     },
     meta: {
