@@ -2106,10 +2106,14 @@ router.post('/summarize', async (req, res) => {
       });
     }
 
-    console.log(`📝 Generating categorized summary for ${articles.length} articles on topic: ${topicName}`);
+    // Limit articles to prevent token overflow (top 10 by importance)
+    const sortedArticles = [...articles].sort((a, b) => (b.importance_score || 0) - (a.importance_score || 0));
+    const articlesToSummarize = sortedArticles.slice(0, 10);
+
+    console.log(`📝 Generating categorized summary for ${articlesToSummarize.length} articles (of ${articles.length} total) on topic: ${topicName}`);
 
     // Generate summary using LLM
-    const result = await generateNewsSummary(articles, topicName, llm);
+    const result = await generateNewsSummary(articlesToSummarize, topicName, llm);
 
     // Save summary to database
     if (db && process.env.DATABASE_URL) {
@@ -2155,7 +2159,19 @@ router.post('/summarize', async (req, res) => {
     });
   } catch (error) {
     console.error('Summary generation error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error stack:', error.stack);
+
+    // Provide more specific error messages
+    let errorMessage = error.message || 'Unknown error';
+    if (errorMessage.includes('429') || errorMessage.includes('rate')) {
+      errorMessage = 'API rate limit exceeded. Please wait a moment and try again.';
+    } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
+      errorMessage = 'API authentication failed. Please check your API key.';
+    } else if (errorMessage.includes('context') || errorMessage.includes('token')) {
+      errorMessage = 'Content too long for AI processing. Try scanning fewer articles.';
+    }
+
+    res.status(500).json({ success: false, error: errorMessage });
   }
 });
 
@@ -2200,87 +2216,168 @@ const TOKEN_COSTS = {
 };
 
 /**
- * Generate news summary using LLM with categorized analysis
+ * Map-Reduce Summary Generation
+ * Stage 1 (Map): Extract key points from article chunks
+ * Stage 2 (Reduce): Consolidate key points into final summary
  */
-async function generateNewsSummary(articles, topicName, selectedLLM) {
-  // Build prompt with article content - include reference IDs for citations
+const CHUNK_SIZE = 5; // Articles per chunk
+const MAX_DIRECT_ARTICLES = 6; // Use direct summarization if ≤ this number
+
+/**
+ * Extract key points from a chunk of articles (Map phase)
+ */
+async function extractKeyPointsFromChunk(articles, topicName, chunkIndex, llmConfig, apiKey) {
   const articleText = articles.map(a =>
-    `[${a.id}] "${a.title}" (重要性：${a.importance_score}/100)\n    來源：${a.source_name}\n    摘要：${a.summary}`
+    `[${a.id}] "${a.title}" (重要性：${a.importance_score}/100)\n   摘要：${a.summary}`
   ).join('\n\n');
 
-  const prompt = `你是一位資深策略分析師，同時也是個會講幹話的專家（但幹話要有料）。
-請用繁體中文撰寫，語氣要像跟老朋友分享業界八卦一樣 — 輕鬆、有梗，但每句話都要有乾貨。
+  const prompt = `你是情報分析師。從以下關於「${topicName}」的文章中提取關鍵情報。
 
-以下是關於「${topicName}」的新聞資料（引用請用 [編號]）：
+文章資料：
 ${articleText}
 
-=== 重要規則 ===
-1. 不要講有幾篇文章或資料怎麼來的（沒人在乎）
-2. 不要描述你的分析方法（直接講結論）
-3. 避免廢話如「多方來源指出」、「值得關注的是」
-4. 每個觀點都要包含：
-   - 具體的東西（功能、指標、政策、行為）
-   - 明確的變化（上升、下降、新推出、被砍掉）
-   - 至少一個 2-4 週內可執行的建議
-5. 如果證據不夠強，標註為「假說」並建議小規模測試
+請提取：
+1. 重要事件（最多3個）：發生什麼變化？影響誰？
+2. 實用發現（最多3個）：可以採取什麼行動？
+3. 趨勢觀察（1-2句）：整體方向是什麼？
 
-=== 各區段要求 ===
-
-**本週趨勢** (2-3 段)：
-• 每段要點名「${topicName}」的哪個部分
-• 說明正在發生什麼變化（要具體，不要「變化很快」這種廢話）
-• 給出調整建議（如：「把預算從 A 移到 B」、「測試新方法 X」）
-
-**重要快訊** (3-5 條)：
-每條必須包含：
-• 發生什麼事 — 一個具體的變化（新規則、新功能、新風險、新機會）
-• 誰會受影響 — 哪種人/團隊/使用場景
-• 馬上要做的事 (30天內) — 2-3 個具體行動
-  範例：「花兩週測試 A 跟 B 的差異」、「把對 X 的依賴降低 20%」
-
-**實用建議** (3-5 條)：
-每條必須包含：
-• 行動導向的標題（如：「用現有受眾測試簡化版本，為期 14 天」）
-• 具體怎麼做（頻率、時長、樣本大小）
-• 要看什麼指標（轉換率、互動率等）
-• 為什麼有效 — 一句話連結觀察到的模式
-避免「要數據驅動」這種正確的廢話
-
-**重點摘要** (4-6 條決策法則)：
-• 每條要能獨立成一個實用的經驗法則
-• 用「如果...就...」、「當...時...」的句式
-• 範例：
-  - 「如果目標對象很保守，優先選擇能降低複雜度的方案」
-  - 「新功能不確定時，先做最小版本給小群人測試」
-  - 「如果某策略太依賴單一管道，一個月內至少準備一個備案」
-
-=== 輸出格式 - 必須回傳 JSON ===
+回傳 JSON：
 {
-  "overallTrend": "2-3 段趨勢分析，用換行分隔",
+  "events": ["事件1 [文章編號]", "事件2 [文章編號]"],
+  "findings": ["發現1 [文章編號]", "發現2 [文章編號]"],
+  "trend": "趨勢觀察"
+}
+
+只回傳 JSON。`;
+
+  const response = await callLLM(prompt, llmConfig, apiKey, 512);
+
+  try {
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+  } catch (e) {
+    console.error(`   Chunk ${chunkIndex} parse error:`, e.message);
+  }
+
+  return { events: [], findings: [], trend: '' };
+}
+
+/**
+ * Consolidate extracted key points into final summary (Reduce phase)
+ */
+async function consolidateKeyPoints(keyPointsList, topicName, totalArticles, llmConfig, apiKey) {
+  // Merge all key points
+  const allEvents = keyPointsList.flatMap(kp => kp.events || []);
+  const allFindings = keyPointsList.flatMap(kp => kp.findings || []);
+  const allTrends = keyPointsList.map(kp => kp.trend).filter(t => t);
+
+  const consolidatedInput = `
+重要事件：
+${allEvents.map((e, i) => `${i + 1}. ${e}`).join('\n')}
+
+實用發現：
+${allFindings.map((f, i) => `${i + 1}. ${f}`).join('\n')}
+
+趨勢觀察：
+${allTrends.join('\n')}
+`;
+
+  const prompt = `你是資深策略分析師，要把情報整合成行動建議。
+語氣要輕鬆但專業，像跟朋友分享業界八卦。
+
+主題：${topicName}
+分析文章數：${totalArticles}
+
+已提取的情報：
+${consolidatedInput}
+
+請整合成以下格式（繁體中文）：
+
+=== 輸出格式 ===
+{
+  "overallTrend": "2-3段趨勢分析，說明正在發生什麼變化、對誰有影響、該怎麼調整",
   "breakingNews": [
-    {"text": "• 完整的重要快訊，包含變化、影響者、行動 [1][3]", "sources": [1, 3]}
+    {"text": "• 重要快訊：發生什麼、影響誰、該做什麼 [編號]", "sources": [1]}
   ],
   "practicalTips": [
-    {"text": "• 標題：具體行動。指標：X。因為 Y。[2][4]", "sources": [2, 4]}
+    {"text": "• 建議標題：具體做法。要看的指標。為什麼有效。[編號]", "sources": [1]}
   ],
   "keyPoints": [
-    {"text": "• 如果/當...決策法則 [1][2]", "sources": [1, 2]}
+    {"text": "• 如果...就...（決策法則）[編號]", "sources": [1]}
   ]
 }
 
 規則：
-- breakingNews：只放真的很重要的（可以是空陣列）
-- practicalTips：3-5 條有具體行動的建議
-- keyPoints：4-6 條決策法則
-- 文字中要有引用 [n]，sources 陣列要對應
-- 語氣像資深顧問跟客戶喝咖啡聊天：直接、具體、focused on 決策
-- Prefer action verbs: "increase", "reduce", "test", "validate", "prioritize"
+- breakingNews: 3-5條最重要的
+- practicalTips: 3-5條可執行的建議
+- keyPoints: 4-6條決策法則
+- 保留原本的文章編號引用
+- 語氣要有梗但有料
 
-Return ONLY the JSON object, no other text.`;
+只回傳 JSON。`;
 
-  // Estimate input tokens (rough: 4 chars = 1 token)
-  const inputTokensEstimate = Math.ceil(prompt.length / 4);
+  const response = await callLLM(prompt, llmConfig, apiKey, 2048);
+  return response;
+}
 
+/**
+ * Generic LLM call helper
+ */
+async function callLLM(prompt, config, apiKey, maxTokens = 1024) {
+  let response;
+
+  if (config.isAnthropic) {
+    response = await fetch(`${config.baseUrl}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: config.model,
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }],
+        system: '你是情報分析師。用繁體中文回覆。只回傳 JSON。',
+      }),
+    });
+
+    if (!response.ok) throw new Error(`Anthropic API error: ${response.status}`);
+    const data = await response.json();
+    return data.content[0].text;
+  } else {
+    response = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          { role: 'system', content: '你是情報分析師。用繁體中文回覆。只回傳 JSON。' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: maxTokens,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`LLM API error: ${response.status} - ${errorText}`);
+    }
+    const data = await response.json();
+    return data.choices[0].message.content;
+  }
+}
+
+/**
+ * Generate news summary using LLM with Map-Reduce for large article sets
+ */
+async function generateNewsSummary(articles, topicName, selectedLLM) {
   // Determine which LLM to use
   const llmPriority = [selectedLLM, 'claude-haiku', 'perplexity', 'deepseek'];
   let llmUsed = null;
@@ -2297,126 +2394,89 @@ Return ONLY the JSON object, no other text.`;
     }
   }
 
-  // If no LLM available, return mock summary
   if (!config || !apiKey) {
     console.log('   ❌ No LLM API available, using mock summary');
-    console.log('   Available keys check:');
-    console.log(`     - DEEPSEEK_API_KEY: ${process.env.DEEPSEEK_API_KEY ? 'SET (' + process.env.DEEPSEEK_API_KEY.substring(0, 8) + '...)' : 'NOT SET'}`);
-    console.log(`     - ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? 'SET' : 'NOT SET'}`);
-    console.log(`     - PERPLEXITY_API_KEY: ${process.env.PERPLEXITY_API_KEY ? 'SET' : 'NOT SET'}`);
     return generateMockAISummary(articles, topicName);
   }
 
   console.log(`   ✅ Using LLM: ${llmUsed} (${config.model})`);
 
-  let response;
-  let content;
-  let outputTokensEstimate;
+  // Decide strategy based on article count
+  if (articles.length <= MAX_DIRECT_ARTICLES) {
+    console.log(`   📝 Direct summarization (${articles.length} articles)`);
+    return generateDirectSummary(articles, topicName, config, apiKey, llmUsed);
+  }
+
+  // Map-Reduce for larger article sets
+  console.log(`   🔄 Map-Reduce summarization (${articles.length} articles in ${Math.ceil(articles.length / CHUNK_SIZE)} chunks)`);
 
   try {
-    if (config.isAnthropic) {
-      // Anthropic API
-      response = await fetch(`${config.baseUrl}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: config.model,
-          max_tokens: 1024,
-          messages: [{ role: 'user', content: prompt }],
-          system: '你是一位資深新聞分析師。用繁體中文回覆，語氣輕鬆幽默但專業。只回傳 JSON 格式。',
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Anthropic API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      content = data.content[0].text;
-
-      // Get actual token usage from API response
-      const inputTokens = data.usage?.input_tokens || inputTokensEstimate;
-      const outputTokens = data.usage?.output_tokens || Math.ceil(content.length / 4);
-
-      return parseSummaryResponse(content, llmUsed, config.model, inputTokens, outputTokens);
-    } else if (llmUsed === 'perplexity') {
-      // Perplexity API
-      response = await fetch(`${config.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: config.model,
-          messages: [
-            { role: 'system', content: '你是一位資深新聞分析師。用繁體中文回覆，語氣輕鬆幽默但專業。只回傳 JSON 格式。' },
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.2,
-          max_tokens: 1024,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Perplexity API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      content = data.choices[0].message.content;
-      const inputTokens = data.usage?.prompt_tokens || inputTokensEstimate;
-      const outputTokens = data.usage?.completion_tokens || Math.ceil(content.length / 4);
-
-      return parseSummaryResponse(content, llmUsed, config.model, inputTokens, outputTokens);
-    } else {
-      // OpenAI-compatible API (DeepSeek, etc.)
-      response = await fetch(`${config.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: config.model,
-          messages: [
-            { role: 'system', content: '你是一位資深新聞分析師。用繁體中文回覆，語氣輕鬆幽默但專業。只回傳 JSON 格式。' },
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.3,
-          max_tokens: 4096,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('   DeepSeek API error response:', errorText);
-        throw new Error(`LLM API error: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log('   DeepSeek response received, finish_reason:', data.choices?.[0]?.finish_reason);
-
-      content = data.choices[0].message.content;
-
-      // Log if response seems truncated
-      if (data.choices?.[0]?.finish_reason === 'length') {
-        console.warn('   ⚠️ Response was truncated due to max_tokens limit');
-      }
-
-      const inputTokens = data.usage?.prompt_tokens || inputTokensEstimate;
-      const outputTokens = data.usage?.completion_tokens || Math.ceil(content.length / 4);
-
-      return parseSummaryResponse(content, llmUsed, config.model, inputTokens, outputTokens);
+    // Stage 1: Map - Extract key points from each chunk
+    const chunks = [];
+    for (let i = 0; i < articles.length; i += CHUNK_SIZE) {
+      chunks.push(articles.slice(i, i + CHUNK_SIZE));
     }
+
+    console.log(`   📊 Stage 1: Extracting key points from ${chunks.length} chunks...`);
+    const keyPointsList = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+      console.log(`      Processing chunk ${i + 1}/${chunks.length}...`);
+      const keyPoints = await extractKeyPointsFromChunk(chunks[i], topicName, i + 1, config, apiKey);
+      keyPointsList.push(keyPoints);
+
+      // Small delay between chunks to avoid rate limits
+      if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 500));
+    }
+
+    // Stage 2: Reduce - Consolidate into final summary
+    console.log(`   📊 Stage 2: Consolidating into final summary...`);
+    const consolidatedResponse = await consolidateKeyPoints(keyPointsList, topicName, articles.length, config, apiKey);
+
+    return parseSummaryResponse(consolidatedResponse, llmUsed, config.model, 0, 0);
   } catch (error) {
-    console.error('   ❌ LLM summary generation failed:', error.message);
-    console.error('   Full error:', error);
-    return generateMockAISummary(articles, topicName);
+    console.error('   ❌ Map-Reduce failed:', error.message);
+    // Fallback to direct with limited articles
+    console.log('   ⚠️ Falling back to direct summarization with top 5 articles');
+    const topArticles = articles.slice(0, 5);
+    return generateDirectSummary(topArticles, topicName, config, apiKey, llmUsed);
   }
+}
+
+/**
+ * Direct summarization for small article sets
+ */
+async function generateDirectSummary(articles, topicName, config, apiKey, llmUsed) {
+  const articleText = articles.map(a =>
+    `[${a.id}] "${a.title}" (重要性：${a.importance_score}/100)\n    來源：${a.source_name}\n    摘要：${a.summary}`
+  ).join('\n\n');
+
+  const prompt = `你是一位資深策略分析師，同時也是個會講幹話的專家（但幹話要有料）。
+請用繁體中文撰寫，語氣要像跟老朋友分享業界八卦一樣 — 輕鬆、有梗，但每句話都要有乾貨。
+
+以下是關於「${topicName}」的新聞資料（引用請用 [編號]）：
+${articleText}
+
+=== 重要規則 ===
+1. 不要講有幾篇文章或資料怎麼來的
+2. 不要描述你的分析方法
+3. 每個觀點要有：具體的東西、明確的變化、可執行的建議
+
+=== 輸出格式 ===
+{
+  "overallTrend": "2-3段趨勢分析",
+  "breakingNews": [{"text": "• 重要快訊 [編號]", "sources": [1]}],
+  "practicalTips": [{"text": "• 實用建議 [編號]", "sources": [1]}],
+  "keyPoints": [{"text": "• 決策法則 [編號]", "sources": [1]}]
+}
+
+只回傳 JSON。`;
+
+  const response = await callLLM(prompt, config, apiKey, 2048);
+  const inputTokensEstimate = Math.ceil(prompt.length / 4);
+  const outputTokens = Math.ceil(response.length / 4);
+
+  return parseSummaryResponse(response, llmUsed, config.model, inputTokensEstimate, outputTokens);
 }
 
 /**
