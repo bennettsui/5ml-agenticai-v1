@@ -730,8 +730,9 @@ router.post('/scan/start', async (req, res) => {
 async function runScanWithUpdates(topicId, topic, sources, scanId) {
   const wsServer = require('../../../services/websocket-server');
 
-  const totalSources = sources.length || 5; // Use mock if no sources
-  const scanSources = sources.length > 0 ? sources : generateMockSources(topic.name, topic.keywords || [], 'quick').slice(0, 5);
+  // Track if we're using real sources from database or mock sources
+  const usingRealSources = sources.length > 0;
+  const scanSources = usingRealSources ? sources : generateMockSources(topic.name, topic.keywords || [], 'quick').slice(0, 5);
 
   let articlesFound = 0;
   let articlesAnalyzed = 0;
@@ -835,9 +836,12 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
       };
 
       // Save article to database
+      // Only use source_id if we have real sources from database, otherwise pass null
+      // (mock sources don't exist in intelligence_sources table, would violate FK constraint)
       if (db && process.env.DATABASE_URL) {
         try {
-          await db.saveIntelligenceNews(topicId, source.source_id || `src-${i}`, {
+          const sourceIdForDb = usingRealSources ? source.source_id : null;
+          await db.saveIntelligenceNews(topicId, sourceIdForDb, {
             title: articleData.title,
             url: articleData.source_url,
             summary: articleData.content_summary,
@@ -848,9 +852,12 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
               authority: Math.floor(Math.random() * 20) + 75,
               timeliness: Math.floor(Math.random() * 15) + 85,
               originality: Math.floor(Math.random() * 25) + 70,
+              key_insights: articleData.key_insights,
+              tags: articleData.tags,
             },
             published_at: new Date().toISOString(),
           });
+          console.log(`📰 Saved article to database: ${articleData.title.substring(0, 40)}...`);
         } catch (dbError) {
           console.error('Failed to save article to database:', dbError.message);
         }
