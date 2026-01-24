@@ -931,6 +931,8 @@ router.get('/topics/:id', async (req, res) => {
     if (db && process.env.DATABASE_URL) {
       try {
         topic = await db.getIntelligenceTopic(req.params.id);
+        console.log(`[GET /topics/:id] Loaded topic:`, topic?.name);
+        console.log(`[GET /topics/:id] weekly_digest_config:`, JSON.stringify(topic?.weekly_digest_config, null, 2));
       } catch (dbError) {
         console.error('Database fetch failed:', dbError.message);
         topic = inMemoryTopics.get(req.params.id);
@@ -988,9 +990,13 @@ router.put('/topics/:id', async (req, res) => {
       } : null,
     };
 
+    console.log(`[PUT /topics/:id] Saving updates for topic ${id}:`);
+    console.log(`[PUT /topics/:id] weekly_digest_config:`, JSON.stringify(updates.weekly_digest_config, null, 2));
+
     if (db && process.env.DATABASE_URL) {
       try {
         const topic = await db.updateIntelligenceTopic(id, updates);
+        console.log(`[PUT /topics/:id] Saved topic. Returned weekly_digest_config:`, JSON.stringify(topic?.weekly_digest_config, null, 2));
         if (topic) {
           return res.json({ success: true, topic, message: 'Topic updated successfully' });
         }
