@@ -1224,7 +1224,7 @@ Return ONLY the JSON object, no other text.`;
   // If no LLM available, return mock summary
   if (!config || !apiKey) {
     console.log('   No LLM API available, using mock summary');
-    return generateMockSummary(articles, topicName);
+    return generateMockAISummary(articles, topicName);
   }
 
   console.log(`   Using LLM: ${llmUsed} (${config.model})`);
@@ -1324,7 +1324,7 @@ Return ONLY the JSON object, no other text.`;
     }
   } catch (error) {
     console.error('LLM summary generation failed:', error.message);
-    return generateMockSummary(articles, topicName);
+    return generateMockAISummary(articles, topicName);
   }
 }
 
@@ -1365,9 +1365,9 @@ function parseSummaryResponse(content, llmUsed, model, inputTokens, outputTokens
 }
 
 /**
- * Generate mock summary when no LLM is available
+ * Generate mock AI summary when no LLM is available
  */
-function generateMockSummary(articles, topicName) {
+function generateMockAISummary(articles, topicName) {
   // Ensure articles is an array
   const articleList = Array.isArray(articles) ? articles : [];
 
