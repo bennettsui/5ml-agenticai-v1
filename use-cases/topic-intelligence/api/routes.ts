@@ -123,12 +123,17 @@ export function getRouter(): Router {
    */
   router.get('/topics/:topicId', async (req: Request, res: Response) => {
     try {
-      const topic = orchestrator!.getTopic(req.params.topicId);
+      const { topicId } = req.params;
+      const allTopics = orchestrator!.getAllTopics();
+      console.log(`[GET /intelligence/topics/${topicId}] Looking for topic. Available topics: ${allTopics.map(t => t.id).join(', ')}`);
+
+      const topic = orchestrator!.getTopic(topicId);
 
       if (!topic) {
+        console.log(`[GET /intelligence/topics/${topicId}] Topic not found in orchestrator`);
         return res.status(404).json({
           success: false,
-          error: 'Topic not found',
+          error: `Topic not found. Available topic IDs: ${allTopics.map(t => t.id).slice(0, 3).join(', ')}${allTopics.length > 3 ? '...' : ''}`,
         });
       }
 
