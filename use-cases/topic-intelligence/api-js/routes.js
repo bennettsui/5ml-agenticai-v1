@@ -863,6 +863,132 @@ router.get('/topics/:id', async (req, res) => {
 });
 
 /**
+ * PUT /topics/:id
+ * Updates topic settings (name, keywords, daily/weekly config, recipients)
+ */
+router.put('/topics/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, keywords, dailyScanConfig, weeklyDigestConfig } = req.body;
+
+    // Parse keywords if string
+    let parsedKeywords = keywords;
+    if (typeof keywords === 'string') {
+      parsedKeywords = keywords.split(',').map(k => k.trim()).filter(Boolean);
+    }
+
+    // Parse recipients if string
+    let recipientList = weeklyDigestConfig?.recipientList;
+    if (typeof recipientList === 'string') {
+      recipientList = recipientList.split(/[,\n]/).map(e => e.trim()).filter(e => e && e.includes('@'));
+    }
+
+    const updates = {
+      name,
+      keywords: parsedKeywords,
+      daily_scan_config: dailyScanConfig ? {
+        enabled: dailyScanConfig.enabled ?? true,
+        time: dailyScanConfig.time || '06:00',
+        timezone: dailyScanConfig.timezone || 'Asia/Hong_Kong',
+      } : null,
+      weekly_digest_config: weeklyDigestConfig ? {
+        enabled: weeklyDigestConfig.enabled ?? true,
+        day: weeklyDigestConfig.day || 'monday',
+        time: weeklyDigestConfig.time || '08:00',
+        timezone: weeklyDigestConfig.timezone || 'Asia/Hong_Kong',
+        recipientList: recipientList || [],
+      } : null,
+    };
+
+    if (db && process.env.DATABASE_URL) {
+      try {
+        const topic = await db.updateIntelligenceTopic(id, updates);
+        if (topic) {
+          return res.json({ success: true, topic, message: 'Topic updated successfully' });
+        }
+        return res.status(404).json({ success: false, error: 'Topic not found' });
+      } catch (dbError) {
+        console.error('Database update failed:', dbError.message);
+        return res.status(500).json({ success: false, error: dbError.message });
+      }
+    }
+
+    // Fallback to in-memory
+    const topic = inMemoryTopics.get(id);
+    if (!topic) {
+      return res.status(404).json({ success: false, error: 'Topic not found' });
+    }
+    Object.assign(topic, updates);
+    inMemoryTopics.set(id, topic);
+    res.json({ success: true, topic, message: 'Topic updated successfully' });
+  } catch (error) {
+    console.error('Error updating topic:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /topics/:id
+ * Deletes a topic and all its related data
+ */
+router.delete('/topics/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (db && process.env.DATABASE_URL) {
+      try {
+        const topic = await db.deleteIntelligenceTopic(id);
+        if (topic) {
+          return res.json({ success: true, message: 'Topic deleted successfully' });
+        }
+        return res.status(404).json({ success: false, error: 'Topic not found' });
+      } catch (dbError) {
+        console.error('Database delete failed:', dbError.message);
+        return res.status(500).json({ success: false, error: dbError.message });
+      }
+    }
+
+    // Fallback to in-memory
+    if (inMemoryTopics.has(id)) {
+      inMemoryTopics.delete(id);
+      return res.json({ success: true, message: 'Topic deleted successfully' });
+    }
+    res.status(404).json({ success: false, error: 'Topic not found' });
+  } catch (error) {
+    console.error('Error deleting topic:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /sources/:id
+ * Deletes a single source
+ */
+router.delete('/sources/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (db && process.env.DATABASE_URL) {
+      try {
+        const source = await db.deleteIntelligenceSource(id);
+        if (source) {
+          return res.json({ success: true, message: 'Source deleted successfully' });
+        }
+        return res.status(404).json({ success: false, error: 'Source not found' });
+      } catch (dbError) {
+        console.error('Database delete failed:', dbError.message);
+        return res.status(500).json({ success: false, error: dbError.message });
+      }
+    }
+
+    res.status(404).json({ success: false, error: 'Source not found' });
+  } catch (error) {
+    console.error('Error deleting source:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * PUT /topics/:id/pause
  * Pauses a topic's monitoring
  */
