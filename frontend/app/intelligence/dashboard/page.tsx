@@ -26,6 +26,9 @@ import {
   DollarSign,
   Cpu,
   FileText,
+  Zap,
+  Lightbulb,
+  List,
 } from 'lucide-react';
 
 interface Topic {
@@ -58,14 +61,24 @@ interface DailyStats {
   topSources: Array<{ name: string; count: number }>;
 }
 
+interface SummaryItem {
+  text: string;
+  sources: number[];
+}
+
+interface ArticleRef {
+  id: number;
+  title: string;
+  source_name: string;
+  url: string;
+}
+
 interface SummaryData {
-  bullets: string[];
-  supportingInfo: Array<{
-    bullet: number;
-    sources: string[];
-    context: string;
-  }>;
+  breakingNews: SummaryItem[];
+  practicalTips: SummaryItem[];
+  keyPoints: SummaryItem[];
   overallTrend?: string;
+  articles?: ArticleRef[];
 }
 
 interface SummaryMeta {
@@ -532,38 +545,123 @@ export default function IntelligenceDashboardPage() {
                           </div>
                         )}
 
-                        {/* Bullet Points */}
-                        <div className="space-y-3">
-                          <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                            Key Findings
-                          </h4>
-                          <ul className="space-y-2">
-                            {summary.bullets.map((bullet, i) => {
-                              const support = summary.supportingInfo?.find(s => s.bullet === i);
-                              return (
-                                <li
-                                  key={i}
-                                  className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                                >
-                                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 text-xs flex items-center justify-center font-medium">
-                                    {i + 1}
-                                  </span>
+                        {/* Breaking News Section */}
+                        {summary.breakingNews && summary.breakingNews.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-medium text-red-700 dark:text-red-400 flex items-center gap-2">
+                              <Zap className="w-4 h-4" />
+                              Breaking News / Important Updates
+                            </h4>
+                            <ul className="space-y-2">
+                              {summary.breakingNews.map((item, i) => (
+                                <li key={i} className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 text-xs flex items-center justify-center font-medium">!</span>
                                   <div className="flex-1">
-                                    <p className="text-sm text-slate-700 dark:text-slate-300">
-                                      {bullet}
-                                    </p>
-                                    {support && support.sources?.length > 0 && (
-                                      <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-                                        <Info className="w-3 h-3" />
-                                        <span>Sources: {support.sources.slice(0, 2).join(', ')}</span>
+                                    <p className="text-sm text-slate-700 dark:text-slate-300">{item.text}</p>
+                                    {item.sources?.length > 0 && (
+                                      <div className="mt-1 flex flex-wrap gap-1">
+                                        {item.sources.map(srcId => {
+                                          const article = summary.articles?.find(a => a.id === srcId);
+                                          return article ? (
+                                            <a key={srcId} href={article.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded text-xs hover:bg-red-200 dark:hover:bg-red-800">
+                                              [{srcId}] <ExternalLink className="w-2.5 h-2.5" />
+                                            </a>
+                                          ) : (
+                                            <span key={srcId} className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded text-xs">[{srcId}]</span>
+                                          );
+                                        })}
                                       </div>
                                     )}
                                   </div>
                                 </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Practical Tips Section */}
+                        {summary.practicalTips && summary.practicalTips.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-medium text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                              <Lightbulb className="w-4 h-4" />
+                              Practical Tips
+                            </h4>
+                            <ul className="space-y-2">
+                              {summary.practicalTips.map((item, i) => (
+                                <li key={i} className="flex items-start gap-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 text-xs flex items-center justify-center font-medium">{i + 1}</span>
+                                  <div className="flex-1">
+                                    <p className="text-sm text-slate-700 dark:text-slate-300">{item.text}</p>
+                                    {item.sources?.length > 0 && (
+                                      <div className="mt-1 flex flex-wrap gap-1">
+                                        {item.sources.map(srcId => {
+                                          const article = summary.articles?.find(a => a.id === srcId);
+                                          return article ? (
+                                            <a key={srcId} href={article.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded text-xs hover:bg-amber-200 dark:hover:bg-amber-800">
+                                              [{srcId}] <ExternalLink className="w-2.5 h-2.5" />
+                                            </a>
+                                          ) : (
+                                            <span key={srcId} className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded text-xs">[{srcId}]</span>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Key Points Section */}
+                        {summary.keyPoints && summary.keyPoints.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-medium text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                              <List className="w-4 h-4" />
+                              Key Points
+                            </h4>
+                            <ul className="space-y-2">
+                              {summary.keyPoints.map((item, i) => (
+                                <li key={i} className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-xs flex items-center justify-center font-medium">{i + 1}</span>
+                                  <div className="flex-1">
+                                    <p className="text-sm text-slate-700 dark:text-slate-300">{item.text}</p>
+                                    {item.sources?.length > 0 && (
+                                      <div className="mt-1 flex flex-wrap gap-1">
+                                        {item.sources.map(srcId => {
+                                          const article = summary.articles?.find(a => a.id === srcId);
+                                          return article ? (
+                                            <a key={srcId} href={article.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800">
+                                              [{srcId}] <ExternalLink className="w-2.5 h-2.5" />
+                                            </a>
+                                          ) : (
+                                            <span key={srcId} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">[{srcId}]</span>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Sources Reference */}
+                        {summary.articles && summary.articles.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                            <h4 className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Sources Referenced</h4>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              {summary.articles.map(article => (
+                                <a key={article.id} href={article.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 truncate">
+                                  <span className="font-medium">[{article.id}]</span>
+                                  <span className="truncate">{article.title}</span>
+                                  <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
