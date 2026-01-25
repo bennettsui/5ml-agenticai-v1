@@ -133,66 +133,43 @@ class GeminiImageClient {
    * Build a detailed prompt for the theme
    */
   buildThemePrompt(theme) {
-    const themePrompts = {
-      'versailles-court': `Transform this person into an 18th-century French aristocrat portrait in the style of the Versailles Court.
-        - Dress them in elaborate French baroque clothing: silk brocade coat, lace cravat, powdered wig
-        - Background: Opulent palace interior with gilded mirrors, chandeliers, and damask walls
-        - Style: Formal portrait painting style reminiscent of Hyacinthe Rigaud
-        - Keep the person's face and features recognizable
-        - Lighting: Soft, warm candlelight ambiance
-        - Colors: Rich golds, deep blues, and burgundy`,
+    // Base Renaissance portrait style prompt - works for all themes
+    const baseStyle = `Use this photo as the base.
+Portrait in the style of Leonardo da Vinci's "Mona Lisa", Renaissance oil painting, half-length figure seated in front of a soft atmospheric landscape, subtle sfumato shading, warm earthy color palette, soft diffused lighting, calm enigmatic smile, slightly turned body and front-facing gaze, detailed realistic skin texture, gentle folds in clothing, classic Renaissance composition, no modern objects, no text, high resolution, masterpiece, ultra detailed.`;
 
-      'georgian-england': `Transform this person into an 18th-century English Georgian era aristocrat portrait.
-        - Dress them in refined English fashion: tailored wool coat, white cravat, subtle powdered wig
-        - Background: English manor library or garden with classical architecture
-        - Style: Portrait painting style reminiscent of Thomas Gainsborough or Joshua Reynolds
-        - Keep the person's face and features recognizable
-        - Lighting: Natural daylight, soft and flattering
-        - Colors: Muted greens, browns, cream, and soft blues`,
+    // Theme-specific costume and background additions
+    const themeAdditions = {
+      'versailles-court': `
+Dress the subject in elaborate French baroque clothing: silk brocade coat with gold embroidery, lace cravat, powdered wig if appropriate.
+Background should hint at opulent palace interior with gilded elements visible in the atmospheric distance.`,
 
-      'austro-hungarian': `Transform this person into an 18th-century Austro-Hungarian nobility portrait.
-        - Dress them in Habsburg court fashion: military-inspired coat with gold braiding, medals, ornate embroidery
-        - Background: Imperial palace with baroque architecture, red velvet drapes
-        - Style: Formal court portrait style reminiscent of Martin van Meytens
-        - Keep the person's face and features recognizable
-        - Lighting: Dramatic, regal lighting
-        - Colors: Deep reds, imperial gold, black, and white`,
+      'georgian-england': `
+Dress the subject in refined English Georgian fashion: tailored wool coat, white cravat, subtle styling.
+Background should show soft English countryside or manor garden in the atmospheric distance.`,
 
-      'russian-imperial': `Transform this person into an 18th-century Russian Imperial Court portrait.
-        - Dress them in Russian imperial fashion: heavy brocade coat with fur trim, jeweled decorations, elaborate collar
-        - Background: Winter Palace interior with marble columns and crystal chandeliers
-        - Style: Formal portrait style reminiscent of Dmitry Levitzky
-        - Keep the person's face and features recognizable
-        - Lighting: Cool, majestic lighting with warm accents
-        - Colors: Rich blues, silver, white, and gold accents`,
+      'austro-hungarian': `
+Dress the subject in Habsburg court fashion: military-inspired coat with gold braiding and medals.
+Background should hint at imperial palace architecture in the atmospheric distance.`,
 
-      'italian-venetian': `Transform this person into an 18th-century Venetian nobility portrait.
-        - Dress them in Venetian carnival fashion: ornate mask nearby, silk doublet, rich velvet cape
-        - Background: Venetian palazzo with canal view, ornate mirrors, and carnival decorations
-        - Style: Portrait style reminiscent of Pietro Longhi or Rosalba Carriera
-        - Keep the person's face and features recognizable
-        - Lighting: Warm, golden Mediterranean light
-        - Colors: Vibrant reds, golds, deep greens, and rich purples`,
+      'russian-imperial': `
+Dress the subject in Russian imperial fashion: heavy brocade with fur trim, jeweled decorations.
+Background should show palatial marble columns in the atmospheric distance.`,
 
-      'spanish-colonial': `Transform this person into an 18th-century Spanish Colonial nobility portrait.
-        - Dress them in Spanish colonial fashion: dark velvet coat with silver embroidery, white ruffled shirt, medallion
-        - Background: Colonial hacienda with Spanish colonial architecture, courtyard with fountain
-        - Style: Portrait style reminiscent of colonial Spanish painters
-        - Keep the person's face and features recognizable
-        - Lighting: Warm, sun-drenched lighting with dramatic shadows
-        - Colors: Deep blacks, rich burgundy, gold, and cream`,
+      'italian-venetian': `
+Dress the subject in Venetian Renaissance fashion: rich velvet and silk, ornate patterns.
+Background should show Venetian canal and palazzo in the soft atmospheric distance.`,
+
+      'spanish-colonial': `
+Dress the subject in Spanish colonial fashion: dark velvet coat with silver embroidery, white ruffled shirt.
+Background should show colonial architecture and courtyard in the atmospheric distance.`,
     };
 
-    const basePrompt = themePrompts[theme.id] || themePrompts['versailles-court'];
+    const themeAddition = themeAdditions[theme.id] || themeAdditions['versailles-court'];
 
-    return `${basePrompt}
+    return `${baseStyle}
+${themeAddition}
 
-IMPORTANT INSTRUCTIONS:
-- This is a portrait transformation. Keep the person's face, expression, and identity clearly recognizable.
-- Generate a high-quality, realistic portrait image.
-- The output should look like a professional 18th-century oil painting portrait.
-- Ensure the costume and background match the specified historical era and region.
-- The image should be suitable for printing and sharing.`;
+CRITICAL: Keep the person's face, expression, and identity clearly recognizable. The face must look like the original person.`;
   }
 
   /**
