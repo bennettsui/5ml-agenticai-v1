@@ -549,6 +549,54 @@ export default function TopicSetupPage() {
     setEditingTopicId(null);
   };
 
+  // Add sources to existing topic (used when editing and discovering more sources)
+  const handleAddSourcesToTopic = async () => {
+    if (!editingTopicId || discoveredSources.length === 0) return;
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      // First update topic details
+      const updateResponse = await fetch(`/api/intelligence/topics/${editingTopicId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: topicName.trim(),
+          objectives: objectives.trim(),
+          keywords: keywords.split(',').map(k => k.trim()).filter(Boolean),
+        }),
+      });
+
+      const updateData = await updateResponse.json();
+      if (!updateData.success) {
+        setError(updateData.error || 'Failed to update topic');
+        setIsSaving(false);
+        return;
+      }
+
+      // Then add sources
+      const sourcesResponse = await fetch(`/api/intelligence/topics/${editingTopicId}/sources`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sources: discoveredSources }),
+      });
+
+      const sourcesData = await sourcesResponse.json();
+      if (sourcesData.success) {
+        setSuccess(`Updated topic and added ${discoveredSources.length} sources`);
+        resetForm();
+        fetchTopics();
+      } else {
+        setError(sourcesData.error || 'Failed to add sources');
+      }
+    } catch (err) {
+      setError('Failed to connect to server');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleAddSourcesToExistingTopic = async (topicId: string, sources: Source[]) => {
     try {
       const response = await fetch(`/api/intelligence/topics/${topicId}/sources`, {
@@ -821,6 +869,7 @@ export default function TopicSetupPage() {
                             </h4>
                             <button
                               onClick={() => {
+                                setEditingTopicId(topic.topic_id);
                                 setTopicName(topic.name);
                                 setObjectives(topic.objectives || '');
                                 setKeywords(topic.keywords?.join(', ') || '');
@@ -904,7 +953,9 @@ export default function TopicSetupPage() {
                   ) : null}
                   <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
                     {editingTopicId
-                      ? `Edit: ${topicName}`
+                      ? discoveredSources.length > 0
+                        ? `Add Sources to: ${topicName}`
+                        : `Edit: ${topicName}`
                       : discoveredSources.length > 0
                       ? 'Step 2: Review & Approve Sources'
                       : 'Step 1: Define Your Topic'}
@@ -1074,6 +1125,7 @@ export default function TopicSetupPage() {
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-sm text-slate-600 dark:text-slate-400">
                       Found {discoveredSources.length} sources for &quot;{topicName}&quot;
+                      {editingTopicId && <span className="text-amber-600 dark:text-amber-400 ml-1">(will be added to existing topic)</span>}
                     </p>
                     <button
                       onClick={handleAddCustomSource}
@@ -1105,23 +1157,43 @@ export default function TopicSetupPage() {
                       <ChevronRight className="w-4 h-4 rotate-180" />
                       Back to Edit Topic
                     </button>
-                    <button
-                      onClick={handleCreateTopic}
-                      disabled={isCreating}
-                      className="flex items-center gap-2 px-8 py-3 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
-                    >
-                      {isCreating ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          Creating Topic...
-                        </>
-                      ) : (
-                        <>
-                          <Check className="w-5 h-5" />
-                          Create Topic & Start Monitoring
-                        </>
-                      )}
-                    </button>
+                    {editingTopicId ? (
+                      <button
+                        onClick={handleAddSourcesToTopic}
+                        disabled={isSaving}
+                        className="flex items-center gap-2 px-8 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
+                      >
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Adding Sources...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-5 h-5" />
+                            Add {discoveredSources.length} Sources to Topic
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleCreateTopic}
+                        disabled={isCreating}
+                        className="flex items-center gap-2 px-8 py-3 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
+                      >
+                        {isCreating ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Creating Topic...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-5 h-5" />
+                            Create Topic & Start Monitoring
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </>
               )}
