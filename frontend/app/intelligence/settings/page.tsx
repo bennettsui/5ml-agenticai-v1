@@ -170,10 +170,10 @@ export default function TopicSettingsPage() {
       if (data.success && data.topic) {
         const t = data.topic;
 
-        // Normalize topic ID (API may return id or topic_id)
+        // Normalize topic ID - prefer topic_id (UUID) over id (serial integer)
         const normalizedTopic = {
           ...t,
-          id: t.id || t.topic_id,
+          id: t.topic_id || t.id,
         };
         setTopic(normalizedTopic);
         setName(t.name || '');
