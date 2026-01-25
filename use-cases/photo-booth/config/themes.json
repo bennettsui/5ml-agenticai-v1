@@ -29,6 +29,34 @@
       "costume_description": "Renaissance clothing with gentle folds, muted earthy colors, simple elegant dress"
     },
     {
+      "id": "ghibli-style",
+      "name": "Ghibli Style",
+      "country": "Japan",
+      "description": "Studio Ghibli anime portrait with magical whimsical atmosphere",
+      "era": "Fantasy",
+      "image_url": "/images/photo-booth/themes/ghibli-style.jpg",
+      "prompt_keywords": [
+        "Studio Ghibli",
+        "anime style",
+        "hand-drawn line art",
+        "watercolor shading",
+        "magical landscape",
+        "whimsical atmosphere",
+        "Hayao Miyazaki",
+        "Totoro",
+        "Howl's Moving Castle"
+      ],
+      "negative_keywords": [
+        "photorealistic",
+        "3D render",
+        "dark",
+        "horror",
+        "violent"
+      ],
+      "environment_description": "lush Ghibli-inspired landscape with ancient glowing tree, rolling green hills, European village with windmills, airships in bright blue sky",
+      "costume_description": "simple, comfortable clothing in soft warm colors typical of Ghibli characters"
+    },
+    {
       "id": "versailles-court",
       "name": "Versailles Court",
       "country": "France",
