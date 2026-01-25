@@ -721,17 +721,31 @@ export default function PhotoBoothPage() {
 
       {finalResult && (
         <div className="space-y-6">
-          {/* Generated image placeholder */}
+          {/* Generated image */}
           <div className="bg-slate-800 rounded-lg p-4 text-center border border-slate-700">
-            <div className="aspect-[3/4] bg-gradient-to-b from-purple-900/50 to-slate-800 rounded-lg flex items-center justify-center mb-4">
-              <div className="text-center">
-                <Sparkles className="w-12 h-12 text-purple-400 mx-auto mb-2" />
-                <p className="text-purple-300 font-medium">Your 18th-Century Portrait</p>
-                <p className="text-sm text-purple-400">
-                  {themes.find((t) => t.id === selectedTheme)?.name}
-                </p>
-              </div>
+            <div className="relative rounded-lg overflow-hidden">
+              <img
+                src={`${API_BASE}${finalResult.branded_image_url}`}
+                alt={`Your ${themes.find((t) => t.id === selectedTheme)?.name || '18th-Century'} Portrait`}
+                className="w-full h-auto rounded-lg"
+                onError={(e) => {
+                  // Fallback to placeholder on error
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  target.parentElement!.innerHTML = `
+                    <div class="aspect-[3/4] bg-gradient-to-b from-purple-900/50 to-slate-800 rounded-lg flex items-center justify-center">
+                      <div class="text-center">
+                        <p class="text-purple-300 font-medium">Your 18th-Century Portrait</p>
+                        <p class="text-sm text-purple-400">${themes.find((t) => t.id === selectedTheme)?.name || ''}</p>
+                      </div>
+                    </div>
+                  `;
+                }}
+              />
             </div>
+            <p className="text-sm text-gray-400 mt-2">
+              {themes.find((t) => t.id === selectedTheme)?.name} Theme
+            </p>
           </div>
 
           {/* QR Code */}
