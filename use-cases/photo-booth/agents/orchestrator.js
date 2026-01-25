@@ -278,18 +278,37 @@ Only return JSON.`,
         reportProgress(`🎬 Generating image... Step ${i}/10`, `step_${i}`, percentage);
       }
 
-      // Apply vintage/sepia effect to simulate 18th-century portrait
-      // In production, this would be replaced by actual ComfyUI generation
+      // Apply theme-specific effects (mock mode - simulates different historical styles)
+      // In production, this would be replaced by actual ComfyUI/Stable Diffusion generation
+      const themeEffects = {
+        'versailles-court': { tint: { r: 255, g: 230, b: 200 }, saturation: 0.6, brightness: 1.1, hue: 15 },
+        'georgian-england': { tint: { r: 220, g: 210, b: 190 }, saturation: 0.5, brightness: 1.0, hue: 0 },
+        'austro-hungarian': { tint: { r: 240, g: 220, b: 210 }, saturation: 0.65, brightness: 1.05, hue: 10 },
+        'russian-imperial': { tint: { r: 200, g: 210, b: 230 }, saturation: 0.55, brightness: 0.95, hue: -10 },
+        'italian-venetian': { tint: { r: 255, g: 220, b: 180 }, saturation: 0.7, brightness: 1.15, hue: 20 },
+        'spanish-colonial': { tint: { r: 230, g: 200, b: 170 }, saturation: 0.6, brightness: 1.0, hue: 5 },
+      };
+
+      const effect = themeEffects[themeName] || themeEffects['versailles-court'];
+
       await sharp(imageBuffer)
         .resize(768, 1024, { fit: 'cover', position: 'centre' })
         .modulate({
-          brightness: 1.05,
-          saturation: 0.7,
+          brightness: effect.brightness,
+          saturation: effect.saturation,
+          hue: effect.hue,
         })
-        .tint({ r: 240, g: 220, b: 180 }) // Sepia-like tint
+        .tint(effect.tint)
         .sharpen()
         .jpeg({ quality: 90 })
         .toFile(styledPath);
+
+      // Note: This is a MOCK. Real implementation requires:
+      // - ComfyUI with SD 1.5 + LoRA for 18th-century costumes
+      // - IP-Adapter or InstantID for face preservation
+      // - ControlNet for pose preservation
+      // - Inpainting for costume and background replacement
+      console.log(`[${this.agentName}] MOCK MODE: Applied ${themeName} color effect. Real AI generation requires ComfyUI setup.`);
 
       reportProgress('✓ Image generated successfully', 'done', 90);
 
