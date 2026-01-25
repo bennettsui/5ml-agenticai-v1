@@ -34,54 +34,91 @@ const CHUNK_SIZE = 5;
 const MAX_DIRECT_ARTICLES = 6;
 
 /**
- * Generic LLM call helper for summarization
+ * Generic LLM call helper for summarization with timeout and retry
  */
-async function callLLM(prompt, config, apiKey, maxTokens = 1024) {
-  let response;
+async function callLLM(prompt, config, apiKey, maxTokens = 4096) {
+  const timeout = 60000; // 60 seconds timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-  if (config.isAnthropic) {
-    response = await fetch(`${config.baseUrl}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: config.model,
-        max_tokens: maxTokens,
-        messages: [{ role: 'user', content: prompt }],
-        system: '你是情報分析師。用繁體中文回覆。只回傳 JSON。',
-      }),
-    });
+  try {
+    let response;
 
-    if (!response.ok) throw new Error(`Anthropic API error: ${response.status}`);
-    const data = await response.json();
-    return data.content[0].text;
-  } else {
-    response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [
-          { role: 'system', content: '你是情報分析師。用繁體中文回覆。只回傳 JSON。' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.3,
-        max_tokens: maxTokens,
-      }),
-    });
+    if (config.isAnthropic) {
+      response = await fetch(`${config.baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: config.model,
+          max_tokens: maxTokens,
+          messages: [{ role: 'user', content: prompt }],
+          system: '你是情報分析師。用繁體中文回覆。只回傳 JSON。',
+        }),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`LLM API error: ${response.status} - ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      return data.content[0].text;
+    } else {
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: [
+            { role: 'system', content: '你是情報分析師。用繁體中文回覆。只回傳 JSON。' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.3,
+          max_tokens: maxTokens,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`LLM API error: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      return data.choices[0].message.content;
     }
-    const data = await response.json();
-    return data.choices[0].message.content;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error(`LLM API timeout after ${timeout/1000}s - the API took too long to respond`);
+    }
+    // Enhance error message with more context
+    const errorDetails = {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      cause: error.cause,
+    };
+    console.error('LLM API call failed:', JSON.stringify(errorDetails, null, 2));
+
+    // Provide more descriptive error messages
+    if (error.message?.includes('ECONNREFUSED')) {
+      throw new Error(`Cannot connect to LLM API at ${config.baseUrl} - connection refused`);
+    } else if (error.message?.includes('ENOTFOUND')) {
+      throw new Error(`Cannot resolve LLM API host: ${config.baseUrl} - DNS lookup failed`);
+    } else if (error.message?.includes('ETIMEDOUT')) {
+      throw new Error(`Connection to LLM API timed out - network may be slow or blocked`);
+    } else if (error.message?.includes('fetch')) {
+      throw new Error(`Network error calling LLM API: ${error.message}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -112,7 +149,7 @@ ${articleText}
 
 只回傳 JSON。`;
 
-  const response = await callLLM(prompt, llmConfig, apiKey, 1024);
+  const response = await callLLM(prompt, llmConfig, apiKey, 2048);
 
   try {
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -179,7 +216,7 @@ ${consolidatedInput}
 
 只回傳 JSON。`;
 
-  const response = await callLLM(prompt, llmConfig, apiKey, 4096);
+  const response = await callLLM(prompt, llmConfig, apiKey, 8192);
   return response;
 }
 
@@ -255,7 +292,7 @@ ${articleText}
 
 只回傳 JSON。`;
 
-  const response = await callLLM(prompt, config, apiKey, 4096);
+  const response = await callLLM(prompt, config, apiKey, 8192);
   const inputTokensEstimate = Math.ceil(prompt.length / 4);
   const outputTokens = Math.ceil(response.length / 4);
 
@@ -460,8 +497,15 @@ async function summarize(req, res) {
 
     addLog('info', `Generating AI summary using ${llm}`, `${articlesToSummarize.length} of ${articles.length} articles`);
 
-    const result = await generateNewsSummary(articlesToSummarize, topicName, llm);
+    // Log which LLM will be used
+    const llmStatus = {
+      deepseek: !!process.env.DEEPSEEK_API_KEY,
+      anthropic: !!process.env.ANTHROPIC_API_KEY,
+      perplexity: !!process.env.PERPLEXITY_API_KEY,
+    };
+    addLog('info', 'Available LLMs', Object.entries(llmStatus).filter(([,v]) => v).map(([k]) => k).join(', ') || 'none');
 
+    const result = await generateNewsSummary(articlesToSummarize, topicName, llm);
     addLog('success', 'AI summary generated', `${result.meta?.totalTokens || 0} tokens used`);
 
     // Save summary to database
@@ -494,22 +538,42 @@ async function summarize(req, res) {
     });
   } catch (error) {
     console.error('Summary generation error:', error);
+    console.error('Error stack:', error.stack);
 
     let errorMessage = error.message || 'Unknown error';
+    let errorType = 'unknown';
+
+    // Categorize the error for better user feedback
     if (errorMessage.includes('429') || errorMessage.includes('rate')) {
       errorMessage = 'API rate limit exceeded. Please wait a moment and try again.';
-    } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
-      errorMessage = 'API authentication failed. Please check your API key.';
-    } else if (errorMessage.includes('context') || errorMessage.includes('token')) {
+      errorType = 'rate_limit';
+    } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized') || errorMessage.includes('Invalid API')) {
+      errorMessage = 'API authentication failed. Please check your API key configuration.';
+      errorType = 'auth';
+    } else if (errorMessage.includes('context') || errorMessage.includes('token') || errorMessage.includes('too long')) {
       errorMessage = 'Content too long for AI processing. Try scanning fewer articles.';
+      errorType = 'token_limit';
+    } else if (errorMessage.includes('timeout')) {
+      errorMessage = `LLM API timeout: ${error.message}`;
+      errorType = 'timeout';
+    } else if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('ENOTFOUND') || errorMessage.includes('ETIMEDOUT')) {
+      errorMessage = `Network error: ${error.message}`;
+      errorType = 'network';
+    } else if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+      errorMessage = `Failed to connect to LLM API: ${error.message}`;
+      errorType = 'network';
+    } else if (errorMessage.includes('JSON') || errorMessage.includes('parse')) {
+      errorMessage = `Failed to parse LLM response: ${error.message}`;
+      errorType = 'parse';
     }
 
-    addLog('error', 'Summary generation failed', errorMessage);
+    addLog('error', `Summary generation failed (${errorType})`, errorMessage);
 
     // Return logs even on error so user can see what happened
     res.status(500).json({
       success: false,
       error: errorMessage,
+      errorType,
       logs: processLogs,
     });
   }
