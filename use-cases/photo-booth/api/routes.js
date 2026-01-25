@@ -441,13 +441,13 @@ router.get('/admin/library', async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
 
-    // Get total count
+    // Get total count - only show final branded images to avoid duplicates
     const countResult = await pool.query(
-      `SELECT COUNT(*) FROM photo_booth_images WHERE image_type IN ('styled', 'branded')`
+      `SELECT COUNT(*) FROM photo_booth_images WHERE image_type = 'branded'`
     );
     const total = parseInt(countResult.rows[0].count);
 
-    // Get images with session and theme info
+    // Get images with session and theme info - only branded (final) images
     const result = await pool.query(
       `SELECT
         i.image_id, i.session_id, i.image_type, i.image_path, i.theme,
@@ -457,26 +457,26 @@ router.get('/admin/library', async (req, res) => {
        FROM photo_booth_images i
        LEFT JOIN photo_booth_sessions s ON i.session_id = s.session_id
        LEFT JOIN photo_booth_themes t ON i.theme = t.theme_id
-       WHERE i.image_type IN ('styled', 'branded')
+       WHERE i.image_type = 'branded'
        ORDER BY i.created_at DESC
        LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
 
-    // Get stats
+    // Get stats - count only branded images
     const statsResult = await pool.query(`
       SELECT
         COUNT(DISTINCT i.image_id) as total_images,
         COUNT(DISTINCT i.session_id) as total_sessions,
         AVG(i.generation_time_ms) as avg_generation_time_ms
       FROM photo_booth_images i
-      WHERE i.image_type IN ('styled', 'branded')
+      WHERE i.image_type = 'branded'
     `);
 
     const themeStats = await pool.query(`
       SELECT theme, COUNT(*) as count
       FROM photo_booth_images
-      WHERE image_type IN ('styled', 'branded') AND theme IS NOT NULL
+      WHERE image_type = 'branded' AND theme IS NOT NULL
       GROUP BY theme
       ORDER BY count DESC
     `);
@@ -581,6 +581,54 @@ router.post('/admin/regenerate', async (req, res) => {
     console.error('[CMS] Regenerate error:', error);
     res.write(`data: ${JSON.stringify({ type: 'error', error: { message: error.message } })}\n\n`);
     res.end();
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/image/{id}:
+ *   delete:
+ *     summary: Delete a specific image from the library
+ *     tags: [Photo Booth CMS]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Image deleted successfully
+ */
+router.delete('/admin/image/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Delete the image from database
+    const result = await pool.query(
+      'DELETE FROM photo_booth_images WHERE image_id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Image not found',
+      });
+    }
+
+    console.log(`[CMS] Deleted image: ${id}`);
+
+    res.json({
+      success: true,
+      message: 'Image deleted successfully',
+    });
+  } catch (error) {
+    console.error('[CMS] Delete image error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete image',
+    });
   }
 });
 
