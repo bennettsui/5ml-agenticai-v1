@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Save, Trash2, Plus, Eye, EyeOff, RefreshCw, ChevronDown, ChevronUp, Loader2, AlertCircle, CheckCircle2, GripVertical, Image as ImageIcon } from 'lucide-react';
 import Link from 'next/link';
+import ThemePreview from '../components/ThemePreview';
 
 interface Theme {
   id: number;
@@ -434,6 +435,16 @@ export default function PhotoBoothAdminPage() {
                   {/* Order Number */}
                   <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium text-gray-400">
                     {index + 1}
+                  </div>
+
+                  {/* Theme Preview Thumbnail */}
+                  <div className="w-16 h-20 rounded-lg overflow-hidden flex-shrink-0">
+                    <ThemePreview
+                      themeId={theme.theme_id}
+                      themeName={theme.name}
+                      size="sm"
+                      className="w-full h-full"
+                    />
                   </div>
 
                   {/* Theme Info */}

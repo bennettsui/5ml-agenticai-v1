@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Camera, Upload, Sparkles, QrCode, Download, Share2, RotateCcw, ChevronRight, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import ThemePreview from './components/ThemePreview';
 
 // Types
 interface Theme {
@@ -84,6 +85,8 @@ export default function PhotoBoothPage() {
   const [useCamera, setUseCamera] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [autoCapture, setAutoCapture] = useState(false);
 
   // Fetch themes on mount
   useEffect(() => {
@@ -118,6 +121,33 @@ export default function PhotoBoothPage() {
     };
   }, [cameraStream]);
 
+  // Auto-capture countdown effect
+  useEffect(() => {
+    if (autoCapture && cameraReady && countdown === null) {
+      // Start countdown when camera is ready
+      setCountdown(3);
+    }
+  }, [autoCapture, cameraReady, countdown]);
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (countdown === null) return;
+
+    if (countdown === 0) {
+      // Capture photo when countdown reaches 0
+      capturePhotoAuto();
+      setCountdown(null);
+      setAutoCapture(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setCountdown(countdown - 1);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
   const fetchThemes = async () => {
     try {
       const response = await fetch(`${API_BASE}/api/photo-booth/themes`);
@@ -130,7 +160,7 @@ export default function PhotoBoothPage() {
     }
   };
 
-  // Create session
+  // Create session and auto-start camera with countdown
   const createSession = async () => {
     try {
       setIsLoading(true);
@@ -147,6 +177,9 @@ export default function PhotoBoothPage() {
       if (data.success) {
         setSessionId(data.session_id);
         setCurrentStep('capture');
+        // Auto-start camera and enable countdown
+        setAutoCapture(true);
+        startCameraForCountdown();
       } else {
         setError(data.error || 'Failed to create session');
       }
@@ -154,6 +187,23 @@ export default function PhotoBoothPage() {
       setError('Failed to connect to server');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Start camera specifically for countdown flow
+  const startCameraForCountdown = async () => {
+    try {
+      setError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      setCameraStream(stream);
+      setUseCamera(true);
+    } catch (err) {
+      console.error('Camera error:', err);
+      setError('Failed to access camera. Please ensure camera permissions are granted.');
+      setAutoCapture(false);
     }
   };
 
@@ -211,6 +261,27 @@ export default function PhotoBoothPage() {
       }
     } else {
       setError('Camera not ready. Please wait a moment and try again.');
+    }
+  };
+
+  // Auto capture for countdown flow (same as capturePhoto but without error state)
+  const capturePhotoAuto = () => {
+    if (videoRef.current && videoRef.current.videoWidth > 0) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const file = new File([blob], 'capture.jpg', { type: 'image/jpeg' });
+            setUploadedFile(file);
+            setPreviewUrl(canvas.toDataURL('image/jpeg'));
+            stopCamera();
+          }
+        }, 'image/jpeg', 0.9);
+      }
     }
   };
 
@@ -490,7 +561,9 @@ export default function PhotoBoothPage() {
 
   const renderCaptureStep = () => (
     <div className="p-6">
-      <h2 className="text-xl font-semibold mb-4 text-white">Capture Your Photo</h2>
+      <h2 className="text-xl font-semibold mb-4 text-white">
+        {countdown !== null ? 'Get Ready!' : 'Capture Your Photo'}
+      </h2>
 
       {!previewUrl ? (
         <div className="space-y-4">
@@ -503,6 +576,7 @@ export default function PhotoBoothPage() {
                 muted
                 className="w-full rounded-lg bg-black aspect-video"
               />
+              {/* Loading overlay when camera starting */}
               {!cameraReady && (
                 <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 rounded-lg">
                   <div className="text-center">
@@ -511,22 +585,51 @@ export default function PhotoBoothPage() {
                   </div>
                 </div>
               )}
-              <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
-                <button
-                  onClick={capturePhoto}
-                  disabled={!cameraReady}
-                  className="bg-white text-gray-800 py-2 px-6 rounded-full font-semibold shadow-lg hover:bg-gray-100 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Camera className="w-5 h-5" />
-                  Capture
-                </button>
-                <button
-                  onClick={stopCamera}
-                  className="bg-slate-700 text-white py-2 px-4 rounded-full hover:bg-slate-600"
-                >
-                  Cancel
-                </button>
-              </div>
+              {/* Countdown overlay */}
+              {countdown !== null && cameraReady && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
+                  <div className="text-center">
+                    <div className="text-9xl font-bold text-white animate-pulse drop-shadow-lg">
+                      {countdown}
+                    </div>
+                    <p className="text-xl text-white mt-4">Strike a pose!</p>
+                  </div>
+                </div>
+              )}
+              {/* Show capture buttons only when not in auto-capture mode */}
+              {!autoCapture && (
+                <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                  <button
+                    onClick={capturePhoto}
+                    disabled={!cameraReady}
+                    className="bg-white text-gray-800 py-2 px-6 rounded-full font-semibold shadow-lg hover:bg-gray-100 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Camera className="w-5 h-5" />
+                    Capture
+                  </button>
+                  <button
+                    onClick={stopCamera}
+                    className="bg-slate-700 text-white py-2 px-4 rounded-full hover:bg-slate-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              {/* Cancel button during countdown */}
+              {autoCapture && (
+                <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+                  <button
+                    onClick={() => {
+                      setAutoCapture(false);
+                      setCountdown(null);
+                      stopCamera();
+                    }}
+                    className="bg-red-600 text-white py-2 px-6 rounded-full hover:bg-red-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4">
@@ -638,29 +741,48 @@ export default function PhotoBoothPage() {
         <p className="text-sm text-gray-400 mb-4">{analysis.style_compatibility.reasoning}</p>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
         {themes.map((theme) => (
           <button
             key={theme.id}
             onClick={() => setSelectedTheme(theme.id)}
-            className={`p-4 rounded-lg border-2 text-left transition-all ${
+            className={`relative rounded-lg overflow-hidden transition-all ${
               selectedTheme === theme.id
-                ? 'border-purple-500 bg-purple-900/30'
-                : 'border-slate-700 hover:border-purple-400 bg-slate-800'
+                ? 'ring-4 ring-purple-500 scale-[1.02]'
+                : 'hover:scale-[1.01]'
             } ${
               analysis?.style_compatibility?.recommended_themes?.includes(theme.id)
                 ? 'ring-2 ring-amber-500'
                 : ''
             }`}
           >
-            <h3 className="font-semibold text-sm text-white">{theme.name}</h3>
-            <p className="text-xs text-gray-400">{theme.country} &bull; {theme.era}</p>
-            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{theme.description}</p>
-            {analysis?.style_compatibility?.recommended_themes?.includes(theme.id) && (
-              <span className="inline-block mt-2 text-xs bg-amber-900/50 text-amber-300 px-2 py-0.5 rounded border border-amber-700">
-                Recommended
-              </span>
+            {/* Theme Preview Image */}
+            <ThemePreview
+              themeId={theme.id}
+              themeName={theme.name}
+              size="md"
+            />
+
+            {/* Selected checkmark */}
+            {selectedTheme === theme.id && (
+              <div className="absolute top-2 right-2 bg-purple-500 rounded-full p-1">
+                <CheckCircle2 className="w-4 h-4 text-white" />
+              </div>
             )}
+
+            {/* Recommended badge */}
+            {analysis?.style_compatibility?.recommended_themes?.includes(theme.id) && (
+              <div className="absolute top-2 left-2">
+                <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full font-medium">
+                  Recommended
+                </span>
+              </div>
+            )}
+
+            {/* Theme info overlay */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+              <p className="text-xs text-gray-300">{theme.country} &bull; {theme.era}</p>
+            </div>
           </button>
         ))}
       </div>
@@ -683,37 +805,63 @@ export default function PhotoBoothPage() {
     </div>
   );
 
-  const renderGeneratingStep = () => (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] p-8">
-      <div className="text-center max-w-md">
-        <div className="mb-6">
-          <Loader2 className="w-16 h-16 text-purple-500 animate-spin mx-auto" />
-        </div>
+  const renderGeneratingStep = () => {
+    // Get the latest progress message for the typewriter display
+    const currentStatus = progressMessages.length > 0
+      ? progressMessages[progressMessages.length - 1]
+      : 'Initializing...';
 
-        <h2 className="text-xl font-semibold mb-2 text-white">Creating Your Portrait</h2>
-        <p className="text-gray-400 mb-6">
-          {themes.find((t) => t.id === selectedTheme)?.name || 'Selected'} theme
-        </p>
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-8">
+        <div className="text-center max-w-md w-full">
+          <div className="mb-6">
+            <Loader2 className="w-16 h-16 text-purple-500 animate-spin mx-auto" />
+          </div>
 
-        {/* Progress bar */}
-        <div className="w-full bg-slate-700 rounded-full h-2 mb-4">
-          <div
-            className="bg-purple-500 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${currentProgress}%` }}
-          />
-        </div>
+          <h2 className="text-xl font-semibold mb-2 text-white">Creating Your Portrait</h2>
+          <p className="text-gray-400 mb-6">
+            {themes.find((t) => t.id === selectedTheme)?.name || 'Selected'} theme
+          </p>
 
-        {/* Progress messages */}
-        <div className="bg-slate-800 rounded-lg p-4 text-left text-sm max-h-48 overflow-y-auto border border-slate-700">
-          {progressMessages.map((msg, i) => (
-            <div key={i} className="text-gray-300 mb-1">
-              {msg}
+          {/* Typewriter-style current status */}
+          <div className="bg-slate-900 border border-purple-500/50 rounded-lg p-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1">
+                <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
+                <span className="w-2 h-2 bg-purple-400 rounded-full animate-pulse delay-100" />
+                <span className="w-2 h-2 bg-purple-300 rounded-full animate-pulse delay-200" />
+              </div>
+              <span className="text-purple-300 font-mono text-sm animate-pulse">
+                {currentStatus}
+              </span>
             </div>
-          ))}
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full bg-slate-700 rounded-full h-2 mb-4">
+            <div
+              className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${currentProgress}%` }}
+            />
+          </div>
+
+          {/* Progress log */}
+          <div className="bg-slate-800 rounded-lg p-4 text-left text-sm max-h-40 overflow-y-auto border border-slate-700">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Generation Log</p>
+            {progressMessages.map((msg, i) => (
+              <div key={i} className="text-gray-400 mb-1 flex items-start gap-2">
+                <span className="text-green-500">✓</span>
+                <span>{msg}</span>
+              </div>
+            ))}
+            {progressMessages.length === 0 && (
+              <div className="text-gray-500 italic">Waiting for updates...</div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderResultStep = () => (
     <div className="p-6">
