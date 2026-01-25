@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Camera, Upload, Sparkles, QrCode, Download, Share2, RotateCcw, ChevronRight, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { Camera, Upload, Sparkles, QrCode, Download, Share2, RotateCcw, ChevronRight, CheckCircle2, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import ThemePreview from './components/ThemePreview';
 
 // Types
@@ -89,6 +89,8 @@ export default function PhotoBoothPage() {
   const [autoCapture, setAutoCapture] = useState(false);
   const [transformationPhase, setTransformationPhase] = useState<'original' | 'transforming' | 'complete'>('original');
   const [showTransformAnimation, setShowTransformAnimation] = useState(true);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [showThemeSelector, setShowThemeSelector] = useState(false);
 
   // Fetch themes on mount
   useEffect(() => {
@@ -178,6 +180,81 @@ export default function PhotoBoothPage() {
     setTransformationPhase('original');
     setTimeout(() => setTransformationPhase('transforming'), 1000);
     setTimeout(() => setTransformationPhase('complete'), 3000);
+  };
+
+  // Regenerate with same input image (optionally with different theme)
+  const regenerateImage = async (newTheme?: string) => {
+    if (!sessionId) return;
+
+    const themeToUse = newTheme || selectedTheme;
+    if (!themeToUse) return;
+
+    try {
+      setIsRegenerating(true);
+      setShowThemeSelector(false);
+      setProgressMessages([]);
+      setCurrentProgress(0);
+      setCurrentStep('generating');
+
+      // Update selected theme if changed
+      if (newTheme) {
+        setSelectedTheme(newTheme);
+      }
+
+      const response = await fetch(`${API_BASE}/api/photo-booth/admin/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, theme_name: themeToUse }),
+      });
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) throw new Error('No response body');
+
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              handleProgressUpdate(data);
+
+              if (data.type === 'complete') {
+                // Update final result with new image
+                setFinalResult({
+                  branded_image_url: data.branded_image_url,
+                  qr_code_url: data.qr_code_url,
+                  qr_code_data_url: data.qr_code_data_url,
+                  download_link: data.download_link,
+                  share_link: data.share_link,
+                });
+                setShowTransformAnimation(true);
+                setCurrentStep('result');
+              } else if (data.type === 'error') {
+                setError(data.error?.message || 'Regeneration failed');
+                setCurrentStep('result');
+              }
+            } catch (e) {
+              console.error('Failed to parse SSE data:', e);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setError('Regeneration failed');
+      setCurrentStep('result');
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   const fetchThemes = async () => {
@@ -912,31 +989,150 @@ export default function PhotoBoothPage() {
                 />
               )}
 
-              {/* Transformation Sparkles Overlay */}
+              {/* Disney-style Magical Transformation Overlay */}
               {transformationPhase === 'transforming' && (
-                <div className="absolute inset-0 z-10 pointer-events-none">
-                  <div className="absolute inset-0 bg-gradient-to-b from-purple-500/30 via-pink-500/20 to-amber-500/30 animate-pulse" />
+                <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden">
+                  {/* Magical golden glow background */}
+                  <div className="absolute inset-0 bg-gradient-radial from-amber-400/40 via-purple-500/30 to-blue-600/20 animate-pulse" />
+
+                  {/* Swirling magic dust particles */}
+                  <div className="absolute inset-0">
+                    {[...Array(20)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="absolute w-2 h-2 rounded-full"
+                        style={{
+                          background: ['#FFD700', '#FF69B4', '#87CEEB', '#DDA0DD', '#F0E68C', '#E6E6FA'][i % 6],
+                          left: `${10 + (i * 4.5)}%`,
+                          top: `${20 + (i % 5) * 15}%`,
+                          animation: `float-${i % 4} ${1.5 + (i % 3) * 0.5}s ease-in-out infinite`,
+                          animationDelay: `${i * 0.1}s`,
+                          boxShadow: '0 0 10px currentColor, 0 0 20px currentColor',
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Central magic burst */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="relative">
-                      {/* Animated sparkles */}
-                      <Sparkles className="w-16 h-16 text-yellow-300 animate-spin" style={{ animationDuration: '3s' }} />
-                      <div className="absolute -top-4 -left-4 w-3 h-3 bg-white rounded-full animate-ping" />
-                      <div className="absolute -top-2 right-0 w-2 h-2 bg-purple-300 rounded-full animate-ping" style={{ animationDelay: '0.2s' }} />
-                      <div className="absolute bottom-0 -left-2 w-2 h-2 bg-pink-300 rounded-full animate-ping" style={{ animationDelay: '0.4s' }} />
-                      <div className="absolute -bottom-4 right-2 w-3 h-3 bg-amber-300 rounded-full animate-ping" style={{ animationDelay: '0.6s' }} />
+                      {/* Outer rotating ring */}
+                      <div
+                        className="absolute -inset-8 border-4 border-dashed border-amber-300/60 rounded-full"
+                        style={{ animation: 'spin 4s linear infinite' }}
+                      />
+
+                      {/* Inner rotating ring */}
+                      <div
+                        className="absolute -inset-4 border-2 border-dotted border-pink-300/80 rounded-full"
+                        style={{ animation: 'spin 3s linear infinite reverse' }}
+                      />
+
+                      {/* Central sparkle icon */}
+                      <Sparkles
+                        className="w-20 h-20 text-amber-300 drop-shadow-lg"
+                        style={{
+                          animation: 'pulse 0.5s ease-in-out infinite',
+                          filter: 'drop-shadow(0 0 20px #FFD700) drop-shadow(0 0 40px #FF69B4)',
+                        }}
+                      />
+
+                      {/* Starburst rays */}
+                      {[...Array(8)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="absolute w-1 h-16 bg-gradient-to-t from-amber-400 via-yellow-200 to-transparent origin-bottom"
+                          style={{
+                            left: '50%',
+                            bottom: '50%',
+                            transform: `translateX(-50%) rotate(${i * 45}deg)`,
+                            animation: `ray-pulse 1s ease-in-out infinite`,
+                            animationDelay: `${i * 0.125}s`,
+                            opacity: 0.7,
+                          }}
+                        />
+                      ))}
+
+                      {/* Floating stars around center */}
+                      {[...Array(6)].map((_, i) => (
+                        <div
+                          key={`star-${i}`}
+                          className="absolute text-2xl"
+                          style={{
+                            left: `${50 + 40 * Math.cos(i * Math.PI / 3)}%`,
+                            top: `${50 + 40 * Math.sin(i * Math.PI / 3)}%`,
+                            transform: 'translate(-50%, -50%)',
+                            animation: `twinkle 0.8s ease-in-out infinite`,
+                            animationDelay: `${i * 0.15}s`,
+                          }}
+                        >
+                          ✨
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  {/* Sweeping light effect */}
+
+                  {/* Sweeping magical light wave */}
                   <div
-                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
-                    style={{
-                      animation: 'sweep 2s ease-in-out infinite',
-                    }}
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+                    style={{ animation: 'sweep 1.5s ease-in-out infinite' }}
                   />
+
+                  {/* Second wave with different timing */}
+                  <div
+                    className="absolute inset-0 bg-gradient-to-l from-transparent via-amber-200/30 to-transparent"
+                    style={{ animation: 'sweep 2s ease-in-out infinite', animationDelay: '0.75s' }}
+                  />
+
+                  {/* Magical text */}
+                  <div className="absolute bottom-4 left-0 right-0 text-center">
+                    <span
+                      className="text-white text-lg font-medium px-4 py-2 rounded-full bg-gradient-to-r from-purple-600/80 via-pink-500/80 to-amber-500/80"
+                      style={{
+                        animation: 'glow 1s ease-in-out infinite',
+                        textShadow: '0 0 10px white',
+                      }}
+                    >
+                      ✨ Magic in progress... ✨
+                    </span>
+                  </div>
+
                   <style jsx>{`
                     @keyframes sweep {
                       0% { transform: translateX(-100%); }
                       100% { transform: translateX(100%); }
+                    }
+                    @keyframes float-0 {
+                      0%, 100% { transform: translateY(0) rotate(0deg); opacity: 1; }
+                      50% { transform: translateY(-30px) rotate(180deg); opacity: 0.6; }
+                    }
+                    @keyframes float-1 {
+                      0%, 100% { transform: translateY(0) scale(1); opacity: 0.8; }
+                      50% { transform: translateY(-40px) scale(1.5); opacity: 1; }
+                    }
+                    @keyframes float-2 {
+                      0%, 100% { transform: translate(0, 0); opacity: 1; }
+                      50% { transform: translate(20px, -20px); opacity: 0.5; }
+                    }
+                    @keyframes float-3 {
+                      0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.7; }
+                      50% { transform: translateY(-25px) rotate(-180deg); opacity: 1; }
+                    }
+                    @keyframes ray-pulse {
+                      0%, 100% { opacity: 0.3; transform: translateX(-50%) rotate(var(--rotation, 0deg)) scaleY(0.8); }
+                      50% { opacity: 0.8; transform: translateX(-50%) rotate(var(--rotation, 0deg)) scaleY(1.2); }
+                    }
+                    @keyframes twinkle {
+                      0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(0.8); }
+                      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.3); }
+                    }
+                    @keyframes glow {
+                      0%, 100% { box-shadow: 0 0 10px rgba(255,255,255,0.5); }
+                      50% { box-shadow: 0 0 25px rgba(255,255,255,0.8), 0 0 50px rgba(255,182,193,0.5); }
+                    }
+                    @keyframes spin {
+                      from { transform: rotate(0deg); }
+                      to { transform: rotate(360deg); }
                     }
                   `}</style>
                 </div>
@@ -1014,6 +1210,67 @@ export default function PhotoBoothPage() {
               )}
               <p className="text-xs text-center text-gray-500 mt-2">Scan to view/download</p>
             </div>
+          </div>
+
+          {/* Regenerate Section */}
+          <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-300">Try a Different Style?</h3>
+              <button
+                onClick={() => setShowThemeSelector(!showThemeSelector)}
+                className="text-xs text-purple-400 hover:text-purple-300"
+              >
+                {showThemeSelector ? 'Hide themes' : 'Change theme'}
+              </button>
+            </div>
+
+            {/* Theme selector for regeneration */}
+            {showThemeSelector && (
+              <div className="grid grid-cols-4 gap-2 mb-3">
+                {themes.map((theme) => (
+                  <button
+                    key={theme.id}
+                    onClick={() => regenerateImage(theme.id)}
+                    disabled={isRegenerating}
+                    className={`relative rounded-lg overflow-hidden aspect-square transition-all ${
+                      theme.id === selectedTheme
+                        ? 'ring-2 ring-purple-500'
+                        : 'hover:ring-2 hover:ring-purple-400'
+                    } ${isRegenerating ? 'opacity-50' : ''}`}
+                  >
+                    <ThemePreview
+                      themeId={theme.id}
+                      themeName={theme.name}
+                      size="sm"
+                    />
+                    {theme.id === selectedTheme && (
+                      <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                        <CheckCircle2 className="w-3 h-3 text-white" />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Regenerate button */}
+            <button
+              onClick={() => regenerateImage()}
+              disabled={isRegenerating}
+              className="w-full py-2 px-4 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isRegenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Regenerating...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  Regenerate with Same Photo
+                </>
+              )}
+            </button>
           </div>
 
           {/* Action buttons */}
