@@ -83,11 +83,40 @@ export default function PhotoBoothPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [useCamera, setUseCamera] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
 
   // Fetch themes on mount
   useEffect(() => {
     fetchThemes();
   }, []);
+
+  // Attach camera stream to video element when both are available
+  useEffect(() => {
+    if (cameraStream && videoRef.current) {
+      const video = videoRef.current;
+      video.srcObject = cameraStream;
+
+      const handleCanPlay = () => {
+        setCameraReady(true);
+      };
+
+      video.addEventListener('canplay', handleCanPlay);
+      video.play().catch(console.error);
+
+      return () => {
+        video.removeEventListener('canplay', handleCanPlay);
+      };
+    }
+  }, [cameraStream, useCamera]);
+
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [cameraStream]);
 
   const fetchThemes = async () => {
     try {
@@ -141,16 +170,16 @@ export default function PhotoBoothPage() {
   // Camera functions
   const startCamera = async () => {
     try {
+      setError(null);
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: 1280, height: 720 },
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
       });
       setCameraStream(stream);
       setUseCamera(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
     } catch (err) {
-      setError('Failed to access camera');
+      console.error('Camera error:', err);
+      setError('Failed to access camera. Please ensure camera permissions are granted.');
     }
   };
 
@@ -160,10 +189,11 @@ export default function PhotoBoothPage() {
       setCameraStream(null);
     }
     setUseCamera(false);
+    setCameraReady(false);
   };
 
   const capturePhoto = () => {
-    if (videoRef.current) {
+    if (videoRef.current && videoRef.current.videoWidth > 0) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
@@ -179,6 +209,8 @@ export default function PhotoBoothPage() {
           }
         }, 'image/jpeg', 0.9);
       }
+    } else {
+      setError('Camera not ready. Please wait a moment and try again.');
     }
   };
 
@@ -469,12 +501,21 @@ export default function PhotoBoothPage() {
                 autoPlay
                 playsInline
                 muted
-                className="w-full rounded-lg bg-black"
+                className="w-full rounded-lg bg-black aspect-video"
               />
+              {!cameraReady && (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 rounded-lg">
+                  <div className="text-center">
+                    <Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto mb-2" />
+                    <p className="text-gray-300 text-sm">Starting camera...</p>
+                  </div>
+                </div>
+              )}
               <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
                 <button
                   onClick={capturePhoto}
-                  className="bg-white text-gray-800 py-2 px-6 rounded-full font-semibold shadow-lg hover:bg-gray-100 flex items-center gap-2"
+                  disabled={!cameraReady}
+                  className="bg-white text-gray-800 py-2 px-6 rounded-full font-semibold shadow-lg hover:bg-gray-100 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Camera className="w-5 h-5" />
                   Capture
