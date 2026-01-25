@@ -7,9 +7,34 @@ dockerfile = "./Dockerfile"
 [env]
 PORT = "8080"
 
+[http_service]
+internal_port = 8080
+force_https = true
+auto_stop_machines = false
+auto_start_machines = true
+min_machines_running = 1
+
+[http_service.concurrency]
+type = "requests"
+hard_limit = 250
+soft_limit = 200
+
+# Increase timeout for LLM API calls (default is 60s)
+[[http_service.checks]]
+grace_period = "10s"
+interval = "30s"
+method = "GET"
+path = "/health"
+timeout = "5s"
+
 [[services]]
 internal_port = 8080
 protocol = "tcp"
+
+# HTTP timeout settings
+[services.concurrency]
+hard_limit = 250
+soft_limit = 200
 
 [[services.ports]]
 port = 80
@@ -19,12 +44,10 @@ handlers = ["http"]
 port = 443
 handlers = ["tls", "http"]
 
-[checks]
-[checks.http_check]
-type = "http"
-port = 8080
-grace_period = "5s"
+# Increase request timeout to 120 seconds for LLM calls
+[[services.http_checks]]
 interval = 10000
+grace_period = "5s"
 method = "get"
 path = "/health"
 protocol = "http"
