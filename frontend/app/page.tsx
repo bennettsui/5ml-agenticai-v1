@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera } from 'lucide-react';
 
 export default function Home() {
   const useCases = [
@@ -33,6 +33,16 @@ export default function Home() {
       href: '/intelligence',
       color: 'from-teal-500 to-cyan-600',
       features: ['Source Curator', 'News Analyst', 'Newsletter Writer', 'Real-time Scan'],
+      status: 'New'
+    },
+    {
+      id: 'photo-booth',
+      title: 'AI Photo Booth',
+      description: '18th-century fashion portrait generator for live events with real-time AI transformation',
+      icon: Camera,
+      href: '/photo-booth',
+      color: 'from-amber-500 to-orange-600',
+      features: ['Face Detection', 'Theme Selection', '18th Century Styles', 'QR Code Sharing'],
       status: 'New'
     },
     {
@@ -155,8 +165,8 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Active Agents</div>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white">8</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Creative, SEO, Social, Research, OCR, Source Curator, News Analyst, News Writer</div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">16</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Creative, SEO, Social, Research, OCR, Source Curator, News Analyst, News Writer, Photo Booth (8 agents)</div>
             </div>
             <div>
               <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Use Cases</div>

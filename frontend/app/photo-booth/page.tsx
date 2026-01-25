@@ -1,0 +1,820 @@
+'use client';
+
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { Camera, Upload, Sparkles, QrCode, Download, Share2, RotateCcw, ChevronRight, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+
+// Types
+interface Theme {
+  id: string;
+  name: string;
+  country: string;
+  description: string;
+  era: string;
+  image_url: string;
+}
+
+interface QualityCheck {
+  is_valid: boolean;
+  face_detected: boolean;
+  face_count: number;
+  face_confidence: number;
+  lighting_quality: 'good' | 'moderate' | 'poor';
+  warnings: string[];
+  suggestions: string[];
+}
+
+interface AnalysisResult {
+  face_analysis: {
+    detected: boolean;
+    count: number;
+    confidence: number;
+    expression?: string;
+  };
+  environment_analysis: {
+    scene_type: string;
+    lighting: string;
+    background_complexity: string;
+  };
+  style_compatibility: {
+    recommended_themes: string[];
+    reasoning: string;
+  };
+}
+
+interface FinalResult {
+  branded_image_url: string;
+  qr_code_url: string;
+  qr_code_data_url: string;
+  download_link: string;
+  share_link: string;
+}
+
+type Step = 'consent' | 'capture' | 'theme' | 'generating' | 'result';
+
+interface ProgressUpdate {
+  type: 'start' | 'progress' | 'complete' | 'error';
+  message?: string;
+  step?: string;
+  percentage?: number;
+}
+
+const API_BASE = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
+  : '';
+
+export default function PhotoBoothPage() {
+  // State
+  const [currentStep, setCurrentStep] = useState<Step>('consent');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [imageId, setImageId] = useState<string | null>(null);
+  const [themes, setThemes] = useState<Theme[]>([]);
+  const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [qualityCheck, setQualityCheck] = useState<QualityCheck | null>(null);
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [finalResult, setFinalResult] = useState<FinalResult | null>(null);
+  const [progressMessages, setProgressMessages] = useState<string[]>([]);
+  const [currentProgress, setCurrentProgress] = useState<number>(0);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [useCamera, setUseCamera] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+
+  // Fetch themes on mount
+  useEffect(() => {
+    fetchThemes();
+  }, []);
+
+  const fetchThemes = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/photo-booth/themes`);
+      const data = await response.json();
+      if (data.success) {
+        setThemes(data.themes);
+      }
+    } catch (err) {
+      console.error('Failed to fetch themes:', err);
+    }
+  };
+
+  // Create session
+  const createSession = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const response = await fetch(`${API_BASE}/api/photo-booth/session/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ consent_agreed: true }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSessionId(data.session_id);
+        setCurrentStep('capture');
+      } else {
+        setError(data.error || 'Failed to create session');
+      }
+    } catch (err) {
+      setError('Failed to connect to server');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle file upload
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      setError(null);
+    }
+  }, []);
+
+  // Camera functions
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: 1280, height: 720 },
+      });
+      setCameraStream(stream);
+      setUseCamera(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      setError('Failed to access camera');
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
+    }
+    setUseCamera(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const file = new File([blob], 'capture.jpg', { type: 'image/jpeg' });
+            setUploadedFile(file);
+            setPreviewUrl(canvas.toDataURL('image/jpeg'));
+            stopCamera();
+          }
+        }, 'image/jpeg', 0.9);
+      }
+    }
+  };
+
+  // Upload image
+  const uploadImage = async () => {
+    if (!sessionId || !uploadedFile) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const formData = new FormData();
+      formData.append('session_id', sessionId);
+      formData.append('image', uploadedFile);
+
+      const response = await fetch(`${API_BASE}/api/photo-booth/image/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setImageId(data.image_id);
+        setQualityCheck(data.quality_check);
+        // Start analysis
+        await analyzeImage();
+      } else {
+        setError(data.error || 'Upload failed');
+      }
+    } catch (err) {
+      setError('Failed to upload image');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Analyze image with SSE
+  const analyzeImage = async () => {
+    if (!sessionId) return;
+
+    setProgressMessages([]);
+    setCurrentProgress(0);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/photo-booth/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) throw new Error('No response body');
+
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              handleProgressUpdate(data);
+
+              if (data.type === 'complete') {
+                setAnalysis(data.analysis);
+                if (data.recommended_theme) {
+                  setSelectedTheme(data.recommended_theme);
+                }
+                setCurrentStep('theme');
+              } else if (data.type === 'error') {
+                setError(data.error?.message || 'Analysis failed');
+              }
+            } catch (e) {
+              console.error('Failed to parse SSE data:', e);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setError('Analysis failed');
+    }
+  };
+
+  // Generate image with SSE
+  const generateImage = async () => {
+    if (!sessionId || !selectedTheme) return;
+
+    setCurrentStep('generating');
+    setProgressMessages([]);
+    setCurrentProgress(0);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/photo-booth/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, theme_name: selectedTheme }),
+      });
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) throw new Error('No response body');
+
+      let buffer = '';
+      let generatedImageId: string | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              handleProgressUpdate(data);
+
+              if (data.type === 'complete') {
+                generatedImageId = data.image_id;
+                // Continue to finalize
+                await finalizeSession(data.image_id);
+              } else if (data.type === 'error') {
+                setError(data.error?.message || 'Generation failed');
+                setCurrentStep('theme');
+              }
+            } catch (e) {
+              console.error('Failed to parse SSE data:', e);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setError('Generation failed');
+      setCurrentStep('theme');
+    }
+  };
+
+  // Finalize session with SSE
+  const finalizeSession = async (generatedImageId: string) => {
+    if (!sessionId) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/photo-booth/finalize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, image_id: generatedImageId }),
+      });
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) throw new Error('No response body');
+
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              handleProgressUpdate(data);
+
+              if (data.type === 'complete') {
+                setFinalResult({
+                  branded_image_url: data.branded_image_url,
+                  qr_code_url: data.qr_code_url,
+                  qr_code_data_url: data.qr_code_data_url,
+                  download_link: data.download_link,
+                  share_link: data.share_link,
+                });
+                setCurrentStep('result');
+              } else if (data.type === 'error') {
+                setError(data.error?.message || 'Finalization failed');
+                setCurrentStep('theme');
+              }
+            } catch (e) {
+              console.error('Failed to parse SSE data:', e);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setError('Finalization failed');
+      setCurrentStep('theme');
+    }
+  };
+
+  // Handle SSE progress updates
+  const handleProgressUpdate = (data: ProgressUpdate) => {
+    if (data.message) {
+      setProgressMessages((prev) => [...prev, data.message!]);
+    }
+    if (data.percentage !== undefined) {
+      setCurrentProgress(data.percentage);
+    }
+  };
+
+  // Reset and start over
+  const resetSession = () => {
+    setCurrentStep('consent');
+    setSessionId(null);
+    setImageId(null);
+    setSelectedTheme(null);
+    setUploadedFile(null);
+    setPreviewUrl(null);
+    setQualityCheck(null);
+    setAnalysis(null);
+    setFinalResult(null);
+    setProgressMessages([]);
+    setCurrentProgress(0);
+    setError(null);
+    stopCamera();
+  };
+
+  // Render steps
+  const renderConsentStep = () => (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] p-8">
+      <div className="text-center max-w-md">
+        <h1 className="text-3xl font-bold mb-4">AI Photo Booth</h1>
+        <p className="text-gray-600 mb-2">Transform yourself into 18th-century aristocracy</p>
+        <p className="text-sm text-gray-500 mb-8">
+          Step into the world of Versailles, Georgian England, or Imperial Russia with AI-powered portrait transformation.
+        </p>
+
+        <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left text-sm">
+          <h3 className="font-semibold mb-2">By continuing, you agree to:</h3>
+          <ul className="list-disc list-inside text-gray-600 space-y-1">
+            <li>Your photo being processed by AI</li>
+            <li>Generated images being stored temporarily</li>
+            <li>5ML branding on final images</li>
+          </ul>
+        </div>
+
+        <button
+          onClick={createSession}
+          disabled={isLoading}
+          className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Creating Session...
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-5 h-5" />
+              Start Photo Booth
+            </>
+          )}
+        </button>
+
+        {error && (
+          <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            {error}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderCaptureStep = () => (
+    <div className="p-6">
+      <h2 className="text-xl font-semibold mb-4">Capture Your Photo</h2>
+
+      {!previewUrl ? (
+        <div className="space-y-4">
+          {useCamera ? (
+            <div className="relative">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full rounded-lg bg-black"
+              />
+              <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                <button
+                  onClick={capturePhoto}
+                  className="bg-white text-gray-800 py-2 px-6 rounded-full font-semibold shadow-lg hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <Camera className="w-5 h-5" />
+                  Capture
+                </button>
+                <button
+                  onClick={stopCamera}
+                  className="bg-gray-200 text-gray-800 py-2 px-4 rounded-full hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={startCamera}
+                className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors"
+              >
+                <Camera className="w-12 h-12 text-gray-400 mb-2" />
+                <span className="text-gray-600">Use Camera</span>
+              </button>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors"
+              >
+                <Upload className="w-12 h-12 text-gray-400 mb-2" />
+                <span className="text-gray-600">Upload Photo</span>
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="relative">
+            <img
+              src={previewUrl}
+              alt="Preview"
+              className="w-full max-h-96 object-contain rounded-lg bg-gray-100"
+            />
+          </div>
+
+          {qualityCheck && (
+            <div className={`p-3 rounded-lg text-sm ${
+              qualityCheck.is_valid ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'
+            }`}>
+              {qualityCheck.is_valid ? (
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Photo quality check passed
+                </div>
+              ) : (
+                <div>
+                  <p className="font-semibold">Quality issues detected:</p>
+                  <ul className="list-disc list-inside mt-1">
+                    {qualityCheck.warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => {
+                setUploadedFile(null);
+                setPreviewUrl(null);
+                setQualityCheck(null);
+              }}
+              className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Retake
+            </button>
+
+            <button
+              onClick={uploadImage}
+              disabled={isLoading}
+              className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  Continue
+                  <ChevronRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-center gap-2">
+          <AlertCircle className="w-4 h-4" />
+          {error}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderThemeStep = () => (
+    <div className="p-6">
+      <h2 className="text-xl font-semibold mb-2">Choose Your Theme</h2>
+      {analysis?.style_compatibility?.reasoning && (
+        <p className="text-sm text-gray-600 mb-4">{analysis.style_compatibility.reasoning}</p>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        {themes.map((theme) => (
+          <button
+            key={theme.id}
+            onClick={() => setSelectedTheme(theme.id)}
+            className={`p-4 rounded-lg border-2 text-left transition-all ${
+              selectedTheme === theme.id
+                ? 'border-purple-500 bg-purple-50'
+                : 'border-gray-200 hover:border-purple-300'
+            } ${
+              analysis?.style_compatibility?.recommended_themes?.includes(theme.id)
+                ? 'ring-2 ring-yellow-400'
+                : ''
+            }`}
+          >
+            <h3 className="font-semibold text-sm">{theme.name}</h3>
+            <p className="text-xs text-gray-500">{theme.country} • {theme.era}</p>
+            <p className="text-xs text-gray-600 mt-1 line-clamp-2">{theme.description}</p>
+            {analysis?.style_compatibility?.recommended_themes?.includes(theme.id) && (
+              <span className="inline-block mt-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                Recommended
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <button
+        onClick={generateImage}
+        disabled={!selectedTheme}
+        className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      >
+        <Sparkles className="w-5 h-5" />
+        Generate Portrait
+      </button>
+
+      {error && (
+        <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-center gap-2">
+          <AlertCircle className="w-4 h-4" />
+          {error}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderGeneratingStep = () => (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] p-8">
+      <div className="text-center max-w-md">
+        <div className="mb-6">
+          <Loader2 className="w-16 h-16 text-purple-600 animate-spin mx-auto" />
+        </div>
+
+        <h2 className="text-xl font-semibold mb-2">Creating Your Portrait</h2>
+        <p className="text-gray-600 mb-6">
+          {themes.find((t) => t.id === selectedTheme)?.name || 'Selected'} theme
+        </p>
+
+        {/* Progress bar */}
+        <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+          <div
+            className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+            style={{ width: `${currentProgress}%` }}
+          />
+        </div>
+
+        {/* Progress messages */}
+        <div className="bg-gray-50 rounded-lg p-4 text-left text-sm max-h-48 overflow-y-auto">
+          {progressMessages.map((msg, i) => (
+            <div key={i} className="text-gray-600 mb-1">
+              {msg}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderResultStep = () => (
+    <div className="p-6">
+      <h2 className="text-xl font-semibold mb-4 text-center">Your Portrait is Ready!</h2>
+
+      {finalResult && (
+        <div className="space-y-6">
+          {/* Generated image placeholder */}
+          <div className="bg-gray-100 rounded-lg p-4 text-center">
+            <div className="aspect-[3/4] bg-gradient-to-b from-purple-100 to-purple-200 rounded-lg flex items-center justify-center mb-4">
+              <div className="text-center">
+                <Sparkles className="w-12 h-12 text-purple-600 mx-auto mb-2" />
+                <p className="text-purple-700 font-medium">Your 18th-Century Portrait</p>
+                <p className="text-sm text-purple-500">
+                  {themes.find((t) => t.id === selectedTheme)?.name}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* QR Code */}
+          <div className="flex items-center justify-center">
+            <div className="bg-white p-4 rounded-lg shadow-md">
+              {finalResult.qr_code_data_url ? (
+                <img
+                  src={finalResult.qr_code_data_url}
+                  alt="QR Code"
+                  className="w-32 h-32"
+                />
+              ) : (
+                <QrCode className="w-32 h-32 text-gray-400" />
+              )}
+              <p className="text-xs text-center text-gray-500 mt-2">Scan to view/download</p>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="grid grid-cols-2 gap-4">
+            <a
+              href={finalResult.download_link}
+              download
+              className="flex items-center justify-center gap-2 py-3 px-4 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700"
+            >
+              <Download className="w-5 h-5" />
+              Download
+            </a>
+
+            <button
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: 'My 5ML Photo Booth Portrait',
+                    url: finalResult.share_link,
+                  });
+                } else {
+                  navigator.clipboard.writeText(finalResult.share_link);
+                  alert('Link copied to clipboard!');
+                }
+              }}
+              className="flex items-center justify-center gap-2 py-3 px-4 border border-purple-600 text-purple-600 rounded-lg font-semibold hover:bg-purple-50"
+            >
+              <Share2 className="w-5 h-5" />
+              Share
+            </button>
+          </div>
+
+          {/* Start over button */}
+          <button
+            onClick={resetSession}
+            className="w-full py-3 px-4 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2"
+          >
+            <RotateCcw className="w-5 h-5" />
+            Take Another Photo
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  // Main render
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white">
+      {/* Header */}
+      <header className="bg-white shadow-sm">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-6 h-6 text-purple-600" />
+            <span className="font-semibold">5ML Photo Booth</span>
+          </div>
+
+          {currentStep !== 'consent' && (
+            <button
+              onClick={resetSession}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              Start Over
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* Progress indicator */}
+      {currentStep !== 'consent' && (
+        <div className="max-w-2xl mx-auto px-4 py-3">
+          <div className="flex items-center gap-2 text-sm">
+            {['capture', 'theme', 'generating', 'result'].map((step, i) => (
+              <div key={step} className="flex items-center">
+                {i > 0 && <div className="w-8 h-0.5 bg-gray-200 mx-1" />}
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                    currentStep === step
+                      ? 'bg-purple-600 text-white'
+                      : ['capture', 'theme', 'generating', 'result'].indexOf(currentStep) > i
+                      ? 'bg-purple-200 text-purple-700'
+                      : 'bg-gray-200 text-gray-500'
+                  }`}
+                >
+                  {i + 1}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Main content */}
+      <main className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg m-4">
+        {currentStep === 'consent' && renderConsentStep()}
+        {currentStep === 'capture' && renderCaptureStep()}
+        {currentStep === 'theme' && renderThemeStep()}
+        {currentStep === 'generating' && renderGeneratingStep()}
+        {currentStep === 'result' && renderResultStep()}
+      </main>
+
+      {/* Footer */}
+      <footer className="text-center py-4 text-sm text-gray-500">
+        Powered by 5ML AI
+      </footer>
+    </div>
+  );
+}

@@ -1403,6 +1403,12 @@ app.use('/api/intelligence', topicIntelligenceRoutes);
 
 console.log('✅ Topic Intelligence routes loaded: /api/intelligence');
 
+// Photo Booth Routes
+const photoBoothRoutes = require('./use-cases/photo-booth/api/routes');
+app.use('/api/photo-booth', photoBoothRoutes);
+
+console.log('✅ Photo Booth routes loaded: /api/photo-booth');
+
 // Scheduler Service
 const scheduler = require('./services/scheduler');
 
