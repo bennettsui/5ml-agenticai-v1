@@ -2079,15 +2079,24 @@ router.get('/news', async (req, res) => {
  * Saves to database and includes source citations
  */
 router.post('/summarize', async (req, res) => {
+  console.log(`[Summary] ========== NEW SUMMARIZE REQUEST ==========`);
+  console.log(`[Summary] Request received at ${new Date().toISOString()}`);
+
+  // Set a response timeout to ensure we respond before Fly.io cuts us off
+  const requestStartTime = Date.now();
+  const maxRequestTime = 58000; // 58 seconds max (Fly.io has 60s limit)
+
   // Collect logs to return to frontend
   const processLogs = [];
   const addLog = (type, message, details = null) => {
+    const elapsed = Math.round((Date.now() - requestStartTime) / 1000);
     processLogs.push({ type, message, details, time: new Date().toISOString() });
-    console.log(`[Summary] ${type.toUpperCase()}: ${message}${details ? ` - ${details}` : ''}`);
+    console.log(`[Summary] [${elapsed}s] ${type.toUpperCase()}: ${message}${details ? ` - ${details}` : ''}`);
   };
 
   try {
     const { topicId, llm = 'deepseek' } = req.body;
+    console.log(`[Summary] Topic: ${topicId}, LLM: ${llm}`);
 
     if (!topicId) {
       return res.status(400).json({ success: false, error: 'Topic ID is required' });
@@ -2401,7 +2410,7 @@ ${consolidatedInput}
  * Generic LLM call helper
  */
 async function callLLM(prompt, config, apiKey, maxTokens = 4096) {
-  const timeout = 90000; // 90 seconds timeout
+  const timeout = 55000; // 55 seconds timeout (under Fly.io's 60s limit)
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
