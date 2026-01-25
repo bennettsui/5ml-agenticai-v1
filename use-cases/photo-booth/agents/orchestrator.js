@@ -7,9 +7,13 @@ const fs = require('fs');
 const QRCode = require('qrcode');
 const { nanoid } = require('nanoid');
 const sharp = require('sharp');
+const { createGeminiImageClient } = require('../lib/geminiImageClient');
 
 // Load themes configuration
 const themesConfig = require('../config/themes.json');
+
+// Gemini API key for image generation (set via environment variable)
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 class PhotoBoothOrchestrator {
   constructor(config) {
@@ -17,6 +21,8 @@ class PhotoBoothOrchestrator {
     this.anthropic = config.anthropic;
     this.themes = themesConfig.themes;
     this.agentName = 'Photo Booth Orchestrator';
+    this.geminiClient = GEMINI_API_KEY ? createGeminiImageClient(GEMINI_API_KEY) : null;
+    this.useAIGeneration = !!GEMINI_API_KEY; // Only use AI if API key is set
   }
 
   // Create a new session
@@ -271,30 +277,44 @@ Only return JSON.`,
 
       const styledPath = path.join(outputDir, `styled_${sessionId}_${Date.now()}.jpg`);
 
-      // Simulate generation progress
-      for (let i = 1; i <= 10; i++) {
-        await this.sleep(200);
-        const percentage = 20 + Math.round((i / 10) * 50);
-        reportProgress(`🎬 Generating image... Step ${i}/10`, `step_${i}`, percentage);
+      let styledBuffer;
+
+      if (this.useAIGeneration && this.geminiClient) {
+        // Use Gemini API for real AI generation
+        try {
+          reportProgress('🤖 Connecting to AI model...', 'ai_connect', 25);
+
+          styledBuffer = await this.geminiClient.generateStyledPortrait(
+            imageBuffer,
+            theme,
+            (update) => {
+              const basePercentage = 25;
+              const scaledPercentage = basePercentage + Math.round((update.percentage / 100) * 55);
+              reportProgress(update.message, `ai_${update.percentage}`, scaledPercentage);
+            }
+          );
+
+          console.log(`[${this.agentName}] AI generation completed for theme: ${themeName}`);
+        } catch (aiError) {
+          console.error(`[${this.agentName}] AI generation failed, falling back to mock:`, aiError.message);
+          reportProgress('⚠️ AI unavailable, using fallback...', 'fallback', 30);
+
+          // Fallback to mock mode
+          styledBuffer = await this.generateMockImage(imageBuffer, themeName);
+        }
+      } else {
+        // Mock mode - apply color filters
+        styledBuffer = await this.generateMockImage(imageBuffer, themeName);
       }
 
-      // Apply vintage/sepia effect to simulate 18th-century portrait
-      // In production, this would be replaced by actual ComfyUI generation
-      await sharp(imageBuffer)
-        .resize(768, 1024, { fit: 'cover', position: 'centre' })
-        .modulate({
-          brightness: 1.05,
-          saturation: 0.7,
-        })
-        .tint({ r: 240, g: 220, b: 180 }) // Sepia-like tint
-        .sharpen()
+      // Save to file
+      await sharp(styledBuffer)
         .jpeg({ quality: 90 })
         .toFile(styledPath);
 
       reportProgress('✓ Image generated successfully', 'done', 90);
 
-      // Read styled image and store as base64 (for persistence in ephemeral environments)
-      const styledBuffer = fs.readFileSync(styledPath);
+      // Store as base64 (for persistence in ephemeral environments)
       const styledBase64 = styledBuffer.toString('base64');
 
       // Save styled image record with base64 data
@@ -516,6 +536,34 @@ Only return JSON.`,
   // Get popular themes
   async getPopularThemes(eventId, days = 7) {
     return [];
+  }
+
+  // Generate mock image with theme-specific color effects (fallback)
+  async generateMockImage(imageBuffer, themeName) {
+    console.log(`[${this.agentName}] Using mock image generation for theme: ${themeName}`);
+
+    const themeEffects = {
+      'versailles-court': { tint: { r: 255, g: 230, b: 200 }, saturation: 0.6, brightness: 1.1, hue: 15 },
+      'georgian-england': { tint: { r: 220, g: 210, b: 190 }, saturation: 0.5, brightness: 1.0, hue: 0 },
+      'austro-hungarian': { tint: { r: 240, g: 220, b: 210 }, saturation: 0.65, brightness: 1.05, hue: 10 },
+      'russian-imperial': { tint: { r: 200, g: 210, b: 230 }, saturation: 0.55, brightness: 0.95, hue: -10 },
+      'italian-venetian': { tint: { r: 255, g: 220, b: 180 }, saturation: 0.7, brightness: 1.15, hue: 20 },
+      'spanish-colonial': { tint: { r: 230, g: 200, b: 170 }, saturation: 0.6, brightness: 1.0, hue: 5 },
+    };
+
+    const effect = themeEffects[themeName] || themeEffects['versailles-court'];
+
+    return await sharp(imageBuffer)
+      .resize(768, 1024, { fit: 'cover', position: 'centre' })
+      .modulate({
+        brightness: effect.brightness,
+        saturation: effect.saturation,
+        hue: effect.hue,
+      })
+      .tint(effect.tint)
+      .sharpen()
+      .jpeg({ quality: 90 })
+      .toBuffer();
   }
 
   // Helper
