@@ -6,6 +6,9 @@
 const topicHandlers = require('./topicHandlers');
 const sourceHandlers = require('./sourceHandlers');
 const scanHandlers = require('./scanHandlers');
+const summarizeHandlers = require('./summarizeHandlers');
+const newsHandlers = require('./newsHandlers');
+const edmHandlers = require('./edmHandlers');
 
 /**
  * Register all handlers with a router
@@ -15,6 +18,9 @@ function registerAllRoutes(router) {
   topicHandlers.registerRoutes(router);
   sourceHandlers.registerRoutes(router);
   scanHandlers.registerRoutes(router);
+  summarizeHandlers.registerRoutes(router);
+  newsHandlers.registerRoutes(router);
+  edmHandlers.registerRoutes(router);
 }
 
 module.exports = {
@@ -38,6 +44,20 @@ module.exports = {
   startScan: scanHandlers.startScan,
   runScanWithUpdates: scanHandlers.runScanWithUpdates,
   runScheduledScan: scanHandlers.runScheduledScan,
+
+  // Summarize handlers
+  summarize: summarizeHandlers.summarize,
+  getSummaries: summarizeHandlers.getSummaries,
+  generateNewsSummary: summarizeHandlers.generateNewsSummary,
+
+  // News handlers
+  getNews: newsHandlers.getNews,
+  generateMockNews: newsHandlers.generateMockNews,
+
+  // EDM handlers
+  getEdmPreview: edmHandlers.getEdmPreview,
+  sendEdm: edmHandlers.sendEdm,
+  getEdmHistory: edmHandlers.getEdmHistory,
 
   // Utilities
   generateMockSources: sourceHandlers.generateMockSources,
