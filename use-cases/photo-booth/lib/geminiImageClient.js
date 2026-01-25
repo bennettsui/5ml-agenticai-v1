@@ -30,12 +30,17 @@ class GeminiImageClient {
 
     // Convert image to base64
     const base64Image = imageBuffer.toString('base64');
+    const imageSizeKB = Math.round(imageBuffer.length / 1024);
+    console.log(`[GeminiImageClient] Input image size: ${imageBuffer.length} bytes (${imageSizeKB}KB), base64 length: ${base64Image.length} chars`);
+
+    reportProgress(`📤 Uploading image (${imageSizeKB}KB)...`, 15);
 
     // Use custom prompt from CMS if provided, otherwise build from theme
     const prompt = customPrompt || this.buildThemePrompt(theme);
     console.log(`[GeminiImageClient] Using ${customPrompt ? 'custom CMS' : 'default'} prompt for theme: ${theme.id}`);
+    console.log(`[GeminiImageClient] Prompt preview: ${prompt.substring(0, 100)}...`);
 
-    reportProgress('🎬 Sending to AI model...', 20);
+    reportProgress('🎬 Sending to AI model with your photo...', 20);
 
     try {
       // Use Gemini's generateContent with image input for transformation

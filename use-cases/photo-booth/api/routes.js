@@ -430,6 +430,162 @@ router.post('/admin/themes/:id/toggle', async (req, res) => {
 
 /**
  * @swagger
+ * /api/photo-booth/admin/library:
+ *   get:
+ *     summary: Get all generated images with metadata (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.get('/admin/library', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    // Get total count
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM photo_booth_images WHERE image_type IN ('styled', 'branded')`
+    );
+    const total = parseInt(countResult.rows[0].count);
+
+    // Get images with session and theme info
+    const result = await pool.query(
+      `SELECT
+        i.image_id, i.session_id, i.image_type, i.image_path, i.theme,
+        i.generation_time_ms, i.created_at,
+        s.status as session_status,
+        COALESCE(t.name, i.theme) as theme_name
+       FROM photo_booth_images i
+       LEFT JOIN photo_booth_sessions s ON i.session_id = s.session_id
+       LEFT JOIN photo_booth_themes t ON i.theme = t.theme_id
+       WHERE i.image_type IN ('styled', 'branded')
+       ORDER BY i.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    // Get stats
+    const statsResult = await pool.query(`
+      SELECT
+        COUNT(DISTINCT i.image_id) as total_images,
+        COUNT(DISTINCT i.session_id) as total_sessions,
+        AVG(i.generation_time_ms) as avg_generation_time_ms
+      FROM photo_booth_images i
+      WHERE i.image_type IN ('styled', 'branded')
+    `);
+
+    const themeStats = await pool.query(`
+      SELECT theme, COUNT(*) as count
+      FROM photo_booth_images
+      WHERE image_type IN ('styled', 'branded') AND theme IS NOT NULL
+      GROUP BY theme
+      ORDER BY count DESC
+    `);
+
+    const themes_used: { [key: string]: number } = {};
+    themeStats.rows.forEach(row => {
+      themes_used[row.theme] = parseInt(row.count);
+    });
+
+    res.json({
+      success: true,
+      images: result.rows,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+      stats: {
+        total_images: parseInt(statsResult.rows[0].total_images) || 0,
+        total_sessions: parseInt(statsResult.rows[0].total_sessions) || 0,
+        avg_generation_time_ms: Math.round(parseFloat(statsResult.rows[0].avg_generation_time_ms) || 0),
+        themes_used,
+      },
+    });
+  } catch (error) {
+    console.error('[CMS] Library error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/regenerate:
+ *   post:
+ *     summary: Regenerate an image with same or different theme (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.post('/admin/regenerate', async (req, res) => {
+  try {
+    const { session_id, theme_name } = req.body;
+
+    if (!session_id) {
+      return res.status(400).json({ success: false, error: 'session_id is required' });
+    }
+
+    // Get original image from session
+    const originalResult = await pool.query(
+      `SELECT * FROM photo_booth_images WHERE session_id = $1 AND image_type = 'original' ORDER BY created_at DESC LIMIT 1`,
+      [session_id]
+    );
+
+    if (!originalResult.rows[0]) {
+      return res.status(404).json({ success: false, error: 'Original image not found for this session' });
+    }
+
+    // Get theme to use (provided or from session)
+    let themeToUse = theme_name;
+    if (!themeToUse) {
+      const sessionResult = await pool.query(
+        `SELECT theme_selected FROM photo_booth_sessions WHERE session_id = $1`,
+        [session_id]
+      );
+      themeToUse = sessionResult.rows[0]?.theme_selected;
+    }
+
+    if (!themeToUse) {
+      return res.status(400).json({ success: false, error: 'No theme specified and no theme found in session' });
+    }
+
+    // Set up SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const sendProgress = (data) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const orch = getOrchestrator();
+
+    sendProgress({ type: 'start', message: 'Starting regeneration...' });
+
+    // Generate new styled image
+    const result = await orch.generateImage(session_id, themeToUse, (progress) => {
+      sendProgress({ type: 'progress', ...progress });
+    });
+
+    // Finalize with branding
+    const finalResult = await orch.finalizeSession(session_id, result.image_id, (progress) => {
+      sendProgress({ type: 'progress', ...progress });
+    });
+
+    sendProgress({
+      type: 'complete',
+      message: 'Regeneration complete!',
+      ...finalResult,
+    });
+
+    res.end();
+  } catch (error) {
+    console.error('[CMS] Regenerate error:', error);
+    res.write(`data: ${JSON.stringify({ type: 'error', error: { message: error.message } })}\n\n`);
+    res.end();
+  }
+});
+
+/**
+ * @swagger
  * /api/photo-booth/session/create:
  *   post:
  *     summary: Create a new photo booth session

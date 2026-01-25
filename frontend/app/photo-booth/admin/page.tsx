@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Save, Trash2, Plus, Eye, EyeOff, RefreshCw, ChevronDown, ChevronUp, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Save, Trash2, Plus, Eye, EyeOff, RefreshCw, ChevronDown, ChevronUp, Loader2, AlertCircle, CheckCircle2, GripVertical, Image as ImageIcon } from 'lucide-react';
+import Link from 'next/link';
 
 interface Theme {
   id: number;
@@ -31,6 +32,10 @@ export default function PhotoBoothAdminPage() {
   const [expandedTheme, setExpandedTheme] = useState<string | null>(null);
   const [editingPrompt, setEditingPrompt] = useState<{ [key: string]: string }>({});
   const [newTheme, setNewTheme] = useState<Partial<Theme> | null>(null);
+
+  // Drag and drop state
+  const [draggedTheme, setDraggedTheme] = useState<string | null>(null);
+  const [dragOverTheme, setDragOverTheme] = useState<string | null>(null);
 
   useEffect(() => {
     fetchThemes();
@@ -176,6 +181,70 @@ export default function PhotoBoothAdminPage() {
     }
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, themeId: string) => {
+    setDraggedTheme(themeId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, themeId: string) => {
+    e.preventDefault();
+    if (draggedTheme !== themeId) {
+      setDragOverTheme(themeId);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverTheme(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetThemeId: string) => {
+    e.preventDefault();
+    setDragOverTheme(null);
+
+    if (!draggedTheme || draggedTheme === targetThemeId) {
+      setDraggedTheme(null);
+      return;
+    }
+
+    // Reorder themes
+    const draggedIndex = themes.findIndex(t => t.theme_id === draggedTheme);
+    const targetIndex = themes.findIndex(t => t.theme_id === targetThemeId);
+
+    const newThemes = [...themes];
+    const [removed] = newThemes.splice(draggedIndex, 1);
+    newThemes.splice(targetIndex, 0, removed);
+
+    // Update display_order for all themes
+    const updatedThemes = newThemes.map((t, index) => ({ ...t, display_order: index }));
+    setThemes(updatedThemes);
+
+    // Save new order to database
+    try {
+      setSaving('reorder');
+      for (const theme of updatedThemes) {
+        await fetch(`${API_BASE}/api/photo-booth/admin/themes/${theme.theme_id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ display_order: theme.display_order }),
+        });
+      }
+      setSuccess('Theme order updated');
+    } catch (err) {
+      setError('Failed to save theme order');
+      fetchThemes(); // Revert on error
+    } finally {
+      setSaving(null);
+    }
+
+    setDraggedTheme(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTheme(null);
+    setDragOverTheme(null);
+  };
+
   // Clear messages after 3 seconds
   useEffect(() => {
     if (success || error) {
@@ -187,6 +256,8 @@ export default function PhotoBoothAdminPage() {
     }
   }, [success, error]);
 
+  const enabledCount = themes.filter(t => t.is_enabled).length;
+
   return (
     <div className="min-h-screen bg-slate-900">
       {/* Header */}
@@ -194,9 +265,18 @@ export default function PhotoBoothAdminPage() {
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-white">Photo Booth CMS</h1>
-            <p className="text-sm text-gray-400">Manage themes and prompts</p>
+            <p className="text-sm text-gray-400">
+              Manage themes and prompts • {enabledCount} of {themes.length} enabled
+            </p>
           </div>
           <div className="flex gap-2">
+            <Link
+              href="/photo-booth/admin/library"
+              className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 flex items-center gap-2 text-sm"
+            >
+              <ImageIcon className="w-4 h-4" />
+              Photo Library
+            </Link>
             <button
               onClick={seedThemes}
               disabled={saving === 'seed'}
@@ -234,6 +314,13 @@ export default function PhotoBoothAdminPage() {
         </div>
       )}
 
+      {/* Instructions */}
+      <div className="max-w-6xl mx-auto px-4 mt-4">
+        <div className="bg-slate-800/50 rounded-lg p-3 text-sm text-gray-400 border border-slate-700">
+          <span className="font-medium text-gray-300">Tip:</span> Drag themes by the handle (⋮⋮) to reorder. Only enabled themes appear in the photo booth.
+        </div>
+      </div>
+
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-6">
         {loading ? (
@@ -251,10 +338,10 @@ export default function PhotoBoothAdminPage() {
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-2">
             {/* New Theme Form */}
             {newTheme && (
-              <div className="bg-slate-800 rounded-lg border border-purple-500 p-4">
+              <div className="bg-slate-800 rounded-lg border border-purple-500 p-4 mb-4">
                 <h3 className="text-lg font-semibold text-white mb-4">New Theme</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                   <input
@@ -320,51 +407,94 @@ export default function PhotoBoothAdminPage() {
             )}
 
             {/* Theme List */}
-            {themes.map((theme) => (
+            {themes.map((theme, index) => (
               <div
                 key={theme.theme_id}
-                className={`bg-slate-800 rounded-lg border ${theme.is_enabled ? 'border-slate-700' : 'border-slate-700 opacity-60'}`}
+                draggable
+                onDragStart={(e) => handleDragStart(e, theme.theme_id)}
+                onDragOver={(e) => handleDragOver(e, theme.theme_id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, theme.theme_id)}
+                onDragEnd={handleDragEnd}
+                className={`bg-slate-800 rounded-lg border transition-all ${
+                  dragOverTheme === theme.theme_id
+                    ? 'border-purple-500 bg-purple-900/20'
+                    : theme.is_enabled
+                    ? 'border-slate-600'
+                    : 'border-slate-700 opacity-60'
+                } ${draggedTheme === theme.theme_id ? 'opacity-50' : ''}`}
               >
                 {/* Theme Header */}
-                <div className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <button
-                      onClick={() => toggleTheme(theme.theme_id)}
-                      disabled={saving === theme.theme_id}
-                      className={`p-2 rounded-lg ${theme.is_enabled ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-gray-500'}`}
-                      title={theme.is_enabled ? 'Enabled - Click to disable' : 'Disabled - Click to enable'}
-                    >
-                      {theme.is_enabled ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
-                    </button>
-                    <div>
-                      <h3 className="font-semibold text-white">{theme.name}</h3>
-                      <p className="text-sm text-gray-400">
-                        {theme.theme_id} • {theme.country} • {theme.era}
-                      </p>
-                    </div>
+                <div className="p-4 flex items-center gap-3">
+                  {/* Drag Handle */}
+                  <div className="cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-300">
+                    <GripVertical className="w-5 h-5" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">Order: {theme.display_order}</span>
-                    <button
-                      onClick={() => setExpandedTheme(expandedTheme === theme.theme_id ? null : theme.theme_id)}
-                      className="p-2 text-gray-400 hover:text-white"
-                    >
-                      {expandedTheme === theme.theme_id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                    </button>
+
+                  {/* Order Number */}
+                  <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium text-gray-400">
+                    {index + 1}
                   </div>
+
+                  {/* Theme Info */}
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-white">{theme.name}</h3>
+                    <p className="text-sm text-gray-400">
+                      {theme.theme_id} • {theme.country || 'No country'} • {theme.era || 'No era'}
+                    </p>
+                  </div>
+
+                  {/* Enable/Disable Toggle */}
+                  <button
+                    onClick={() => toggleTheme(theme.theme_id)}
+                    disabled={saving === theme.theme_id}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-colors ${
+                      theme.is_enabled
+                        ? 'bg-green-600 text-white hover:bg-green-700'
+                        : 'bg-slate-700 text-gray-400 hover:bg-slate-600'
+                    }`}
+                  >
+                    {saving === theme.theme_id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : theme.is_enabled ? (
+                      <Eye className="w-4 h-4" />
+                    ) : (
+                      <EyeOff className="w-4 h-4" />
+                    )}
+                    {theme.is_enabled ? 'Enabled' : 'Disabled'}
+                  </button>
+
+                  {/* Expand Button */}
+                  <button
+                    onClick={() => setExpandedTheme(expandedTheme === theme.theme_id ? null : theme.theme_id)}
+                    className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-slate-700"
+                  >
+                    {expandedTheme === theme.theme_id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </button>
                 </div>
 
                 {/* Expanded Content */}
                 {expandedTheme === theme.theme_id && (
-                  <div className="px-4 pb-4 border-t border-slate-700 pt-4">
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
-                      <input
-                        type="text"
-                        value={theme.description}
-                        onChange={(e) => setThemes(themes.map(t => t.theme_id === theme.theme_id ? { ...t, description: e.target.value } : t))}
-                        className="w-full bg-slate-700 text-white px-3 py-2 rounded-lg border border-slate-600 focus:border-purple-500 outline-none"
-                      />
+                  <div className="px-4 pb-4 border-t border-slate-700 pt-4 ml-16">
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Name</label>
+                        <input
+                          type="text"
+                          value={theme.name}
+                          onChange={(e) => setThemes(themes.map(t => t.theme_id === theme.theme_id ? { ...t, name: e.target.value } : t))}
+                          className="w-full bg-slate-700 text-white px-3 py-2 rounded-lg border border-slate-600 focus:border-purple-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
+                        <input
+                          type="text"
+                          value={theme.description}
+                          onChange={(e) => setThemes(themes.map(t => t.theme_id === theme.theme_id ? { ...t, description: e.target.value } : t))}
+                          className="w-full bg-slate-700 text-white px-3 py-2 rounded-lg border border-slate-600 focus:border-purple-500 outline-none"
+                        />
+                      </div>
                     </div>
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-300 mb-1">AI Prompt</label>
