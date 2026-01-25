@@ -187,6 +187,38 @@ function getPool(req) {
 
 /**
  * @swagger
+ * /api/photo-booth/diagnostic:
+ *   get:
+ *     summary: Get AI generation diagnostic info
+ *     tags: [Photo Booth]
+ */
+router.get('/diagnostic', (req, res) => {
+  const orch = getOrchestrator();
+  const geminiKeySet = !!process.env.GEMINI_API_KEY;
+  const geminiKeyPreview = geminiKeySet
+    ? `${process.env.GEMINI_API_KEY.slice(0, 10)}...${process.env.GEMINI_API_KEY.slice(-4)}`
+    : 'NOT SET';
+
+  res.json({
+    status: 'ok',
+    aiGeneration: {
+      enabled: orch.useAIGeneration,
+      hasGeminiClient: !!orch.geminiClient,
+      geminiApiKey: geminiKeyPreview,
+      model: orch.geminiClient ? 'gemini-2.0-flash-preview-image-generation' : 'none (mock mode)',
+    },
+    environment: {
+      PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL || 'NOT SET (using localhost:8080)',
+      NODE_ENV: process.env.NODE_ENV || 'development',
+    },
+    message: orch.useAIGeneration
+      ? '✅ AI generation is enabled and ready'
+      : '⚠️ AI generation is DISABLED. Set GEMINI_API_KEY to enable.',
+  });
+});
+
+/**
+ * @swagger
  * /api/photo-booth/session/create:
  *   post:
  *     summary: Create a new photo booth session
