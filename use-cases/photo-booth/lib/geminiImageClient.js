@@ -7,7 +7,10 @@ class GeminiImageClient {
   constructor(apiKey) {
     this.apiKey = apiKey;
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-    this.model = 'gemini-2.0-flash-exp'; // Supports image generation
+    // Use gemini-2.0-flash-preview-image-generation for image generation with multimodal input
+    // Alternative: 'gemini-2.0-flash-exp' also works
+    this.model = 'gemini-2.0-flash-preview-image-generation';
+    console.log('[GeminiImageClient] Initialized with model:', this.model);
   }
 
   /**
@@ -58,8 +61,8 @@ class GeminiImageClient {
               },
             ],
             generationConfig: {
-              responseModalities: ['image', 'text'],
-              responseMimeType: 'image/jpeg',
+              // Must include TEXT - image-only output is not supported
+              responseModalities: ['TEXT', 'IMAGE'],
             },
           }),
         }
@@ -75,17 +78,51 @@ class GeminiImageClient {
 
       const data = await response.json();
 
+      // Log response structure for debugging
+      console.log('[GeminiImageClient] Response structure:', JSON.stringify({
+        hasCandidates: !!data.candidates,
+        candidateCount: data.candidates?.length,
+        firstCandidate: data.candidates?.[0] ? {
+          hasContent: !!data.candidates[0].content,
+          partsCount: data.candidates[0].content?.parts?.length,
+          partTypes: data.candidates[0].content?.parts?.map(p => {
+            if (p.inlineData) return `inlineData(${p.inlineData.mimeType || p.inlineData.mime_type})`;
+            if (p.inline_data) return `inline_data(${p.inline_data.mime_type})`;
+            if (p.text) return 'text';
+            return 'unknown';
+          })
+        } : null,
+        promptFeedback: data.promptFeedback,
+        error: data.error
+      }, null, 2));
+
+      // Check for API errors
+      if (data.error) {
+        throw new Error(`Gemini API error: ${data.error.message || JSON.stringify(data.error)}`);
+      }
+
       // Extract the generated image from the response
+      // Handle both snake_case (REST API) and camelCase (SDK) formats
       if (data.candidates && data.candidates[0]?.content?.parts) {
         for (const part of data.candidates[0].content.parts) {
+          // Check for inlineData (camelCase - SDK format)
+          if (part.inlineData && part.inlineData.data) {
+            reportProgress('✓ Image generated successfully!', 90);
+            console.log('[GeminiImageClient] Successfully extracted image from response (inlineData format)');
+            return Buffer.from(part.inlineData.data, 'base64');
+          }
+          // Check for inline_data (snake_case - REST API format)
           if (part.inline_data && part.inline_data.data) {
             reportProgress('✓ Image generated successfully!', 90);
+            console.log('[GeminiImageClient] Successfully extracted image from response (inline_data format)');
             return Buffer.from(part.inline_data.data, 'base64');
           }
         }
       }
 
-      throw new Error('No image generated in response');
+      // Log what we got if no image found
+      console.error('[GeminiImageClient] No image in response. Full response:', JSON.stringify(data, null, 2).slice(0, 2000));
+      throw new Error('No image generated in response - check API response format');
     } catch (error) {
       console.error('Gemini image generation failed:', error);
       throw error;

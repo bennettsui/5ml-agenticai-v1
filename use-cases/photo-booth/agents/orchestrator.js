@@ -23,6 +23,14 @@ class PhotoBoothOrchestrator {
     this.agentName = 'Photo Booth Orchestrator';
     this.geminiClient = GEMINI_API_KEY ? createGeminiImageClient(GEMINI_API_KEY) : null;
     this.useAIGeneration = !!GEMINI_API_KEY; // Only use AI if API key is set
+
+    // Log AI generation mode status on startup
+    if (this.useAIGeneration) {
+      console.log(`[${this.agentName}] ✅ AI Generation ENABLED - Gemini API key detected`);
+    } else {
+      console.log(`[${this.agentName}] ⚠️ AI Generation DISABLED - No GEMINI_API_KEY env variable. Using mock mode.`);
+      console.log(`[${this.agentName}] To enable AI: fly secrets set GEMINI_API_KEY=your_api_key`);
+    }
   }
 
   // Create a new session
@@ -279,8 +287,11 @@ Only return JSON.`,
 
       let styledBuffer;
 
+      console.log(`[${this.agentName}] Generation mode check: useAIGeneration=${this.useAIGeneration}, hasGeminiClient=${!!this.geminiClient}`);
+
       if (this.useAIGeneration && this.geminiClient) {
         // Use Gemini API for real AI generation
+        console.log(`[${this.agentName}] 🤖 Using REAL AI generation with Gemini API`);
         try {
           reportProgress('🤖 Connecting to AI model...', 'ai_connect', 25);
 
@@ -304,6 +315,8 @@ Only return JSON.`,
         }
       } else {
         // Mock mode - apply color filters
+        console.log(`[${this.agentName}] ⚠️ Using MOCK mode (no AI) - applying color filters only`);
+        reportProgress('🎨 Applying theme effect...', 'mock_filter', 50);
         styledBuffer = await this.generateMockImage(imageBuffer, themeName);
       }
 
