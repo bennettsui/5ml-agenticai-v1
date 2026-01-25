@@ -112,7 +112,7 @@ ${articleText}
 
 只回傳 JSON。`;
 
-  const response = await callLLM(prompt, llmConfig, apiKey, 512);
+  const response = await callLLM(prompt, llmConfig, apiKey, 1024);
 
   try {
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -179,7 +179,7 @@ ${consolidatedInput}
 
 只回傳 JSON。`;
 
-  const response = await callLLM(prompt, llmConfig, apiKey, 2048);
+  const response = await callLLM(prompt, llmConfig, apiKey, 4096);
   return response;
 }
 
@@ -255,7 +255,7 @@ ${articleText}
 
 只回傳 JSON。`;
 
-  const response = await callLLM(prompt, config, apiKey, 2048);
+  const response = await callLLM(prompt, config, apiKey, 4096);
   const inputTokensEstimate = Math.ceil(prompt.length / 4);
   const outputTokens = Math.ceil(response.length / 4);
 
