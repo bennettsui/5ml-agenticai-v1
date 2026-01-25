@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const QRCode = require('qrcode');
 const { nanoid } = require('nanoid');
+const sharp = require('sharp');
 
 // Load themes configuration
 const themesConfig = require('../config/themes.json');
@@ -209,7 +210,7 @@ Only return JSON.`,
     }
   }
 
-  // Generate styled image (mock for Phase 1)
+  // Generate styled image (mock for Phase 1 - applies vintage filter to original)
   async generateImage(sessionId, themeName, onProgress) {
     console.log(`[${this.agentName}] Generating image for session ${sessionId} with theme ${themeName}...`);
 
@@ -229,16 +230,48 @@ Only return JSON.`,
       }
 
       reportProgress('🎬 Preparing image generation...', 'prepare', 10);
-      await this.sleep(500);
+
+      // Get original image path
+      const originalResult = await this.pool.query(
+        `SELECT image_path FROM photo_booth_images WHERE session_id = $1 AND image_type = 'original' ORDER BY created_at DESC LIMIT 1`,
+        [sessionId]
+      );
+
+      if (!originalResult.rows[0]) {
+        throw new Error('Original image not found');
+      }
+
+      const originalPath = originalResult.rows[0].image_path;
 
       reportProgress('🎬 Generating your 18th-century portrait...', 'generate', 20);
 
-      // Simulate generation progress
-      for (let i = 1; i <= 20; i++) {
-        await this.sleep(150);
-        const percentage = 20 + Math.round((i / 20) * 60);
-        reportProgress(`🎬 Generating image... Step ${i}/20`, `step_${i}`, percentage);
+      // Ensure output directory exists
+      const outputDir = '/tmp/photo-booth/outputs';
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
       }
+
+      const styledPath = path.join(outputDir, `styled_${sessionId}_${Date.now()}.jpg`);
+
+      // Simulate generation progress
+      for (let i = 1; i <= 10; i++) {
+        await this.sleep(200);
+        const percentage = 20 + Math.round((i / 10) * 50);
+        reportProgress(`🎬 Generating image... Step ${i}/10`, `step_${i}`, percentage);
+      }
+
+      // Apply vintage/sepia effect to simulate 18th-century portrait
+      // In production, this would be replaced by actual ComfyUI generation
+      await sharp(originalPath)
+        .resize(768, 1024, { fit: 'cover', position: 'centre' })
+        .modulate({
+          brightness: 1.05,
+          saturation: 0.7,
+        })
+        .tint({ r: 240, g: 220, b: 180 }) // Sepia-like tint
+        .sharpen()
+        .jpeg({ quality: 90 })
+        .toFile(styledPath);
 
       reportProgress('✓ Image generated successfully', 'done', 90);
 
@@ -249,7 +282,7 @@ Only return JSON.`,
          (session_id, image_type, image_path, theme, generation_time_ms)
          VALUES ($1, 'styled', $2, $3, $4)
          RETURNING image_id`,
-        [sessionId, `/tmp/photo-booth/outputs/styled_${sessionId}.jpg`, themeName, generationTimeMs]
+        [sessionId, styledPath, themeName, generationTimeMs]
       );
 
       // Update session
@@ -262,6 +295,7 @@ Only return JSON.`,
 
       return {
         image_id: result.rows[0].image_id,
+        styled_image_path: styledPath,
         generated_image_url: `/api/photo-booth/image/${result.rows[0].image_id}`,
         generation_time_ms: generationTimeMs,
       };
@@ -283,7 +317,73 @@ Only return JSON.`,
 
     try {
       reportProgress('🏷️ Applying 5ML branding...', 'branding', 20);
-      await this.sleep(500);
+
+      // Get styled image path
+      const styledResult = await this.pool.query(
+        `SELECT image_path FROM photo_booth_images WHERE session_id = $1 AND image_type = 'styled' ORDER BY created_at DESC LIMIT 1`,
+        [sessionId]
+      );
+
+      if (!styledResult.rows[0]) {
+        throw new Error('Styled image not found');
+      }
+
+      const styledPath = styledResult.rows[0].image_path;
+      const outputDir = '/tmp/photo-booth/outputs';
+      const brandedPath = path.join(outputDir, `branded_${sessionId}_${Date.now()}.jpg`);
+
+      // Apply branding overlay with sharp
+      const image = sharp(styledPath);
+      const metadata = await image.metadata();
+      const width = metadata.width || 768;
+      const height = metadata.height || 1024;
+
+      // Create hashtag text SVG
+      const hashtag = '#5MLPhotoBooth';
+      const fontSize = Math.round(height * 0.03);
+      const textSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${hashtag.length * fontSize * 0.6 + 20}" height="${fontSize + 20}">
+        <defs>
+          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="2" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.8"/>
+          </filter>
+        </defs>
+        <text x="10" y="${fontSize}" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="#FFFFFF" filter="url(#shadow)">
+          ${hashtag}
+        </text>
+      </svg>`;
+
+      // Create "5ML AI" watermark SVG
+      const watermark = '5ML AI';
+      const wmFontSize = Math.round(height * 0.025);
+      const watermarkSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${watermark.length * wmFontSize * 0.7 + 20}" height="${wmFontSize + 20}">
+        <defs>
+          <filter id="wmshadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="1" dy="1" stdDeviation="1" flood-color="#000000" flood-opacity="0.7"/>
+          </filter>
+        </defs>
+        <text x="10" y="${wmFontSize}" font-family="Arial, sans-serif" font-size="${wmFontSize}" font-weight="bold" fill="#FFFFFF" filter="url(#wmshadow)">
+          ${watermark}
+        </text>
+      </svg>`;
+
+      const margin = Math.round(width * 0.03);
+
+      // Composite the branding
+      await image
+        .composite([
+          {
+            input: Buffer.from(watermarkSvg),
+            top: margin,
+            left: margin,
+          },
+          {
+            input: Buffer.from(textSvg),
+            top: height - fontSize - margin - 20,
+            left: margin,
+          },
+        ])
+        .jpeg({ quality: 92 })
+        .toFile(brandedPath);
 
       reportProgress('✓ Branding applied', 'branding_done', 40);
 
@@ -293,7 +393,7 @@ Only return JSON.`,
          (session_id, image_type, image_path)
          VALUES ($1, 'branded', $2)
          RETURNING image_id`,
-        [sessionId, `/tmp/photo-booth/outputs/branded_${sessionId}.jpg`]
+        [sessionId, brandedPath]
       );
 
       reportProgress('📱 Generating QR code...', 'qr', 60);
@@ -316,7 +416,7 @@ Only return JSON.`,
         `INSERT INTO photo_booth_qr_codes
          (session_id, image_id, short_link, download_link, share_link)
          VALUES ($1, $2, $3, $4, $5)`,
-        [sessionId, brandedResult.rows[0].image_id, `${baseUrl}/pb/${shortId}`, downloadLink, shareLink]
+        [sessionId, brandedResult.rows[0].image_id, shortId, downloadLink, shareLink]
       );
 
       // Update session status
@@ -328,6 +428,7 @@ Only return JSON.`,
       reportProgress('✓ Session complete!', 'complete', 100);
 
       return {
+        branded_image_id: brandedResult.rows[0].image_id,
         branded_image_url: `/api/photo-booth/image/${brandedResult.rows[0].image_id}`,
         qr_code_url: `/api/photo-booth/qr/${shortId}`,
         qr_code_data_url: qrCodeDataUrl,
