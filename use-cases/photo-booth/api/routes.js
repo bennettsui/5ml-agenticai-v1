@@ -42,15 +42,15 @@ const upload = multer({
   },
 });
 
-// Lazy load orchestrator to avoid circular dependencies
+// Import orchestrator
+const { createPhotoBoothOrchestrator } = require('../agents/orchestrator');
+
+// Lazy load orchestrator
 let orchestrator = null;
 let anthropic = null;
 
-async function getOrchestrator(pool) {
+function getOrchestrator() {
   if (!orchestrator) {
-    // Dynamic import for TypeScript modules
-    const { createPhotoBoothOrchestrator } = await import('../agents/orchestrator');
-
     if (!anthropic) {
       anthropic = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
@@ -107,7 +107,7 @@ router.post('/session/create', async (req, res) => {
     }
 
     const pool = getPool(req);
-    const orch = await getOrchestrator(pool);
+    const orch = getOrchestrator();
 
     const session = await orch.createSession(event_id, language, consent_agreed);
 
@@ -167,7 +167,7 @@ router.post('/image/upload', upload.single('image'), async (req, res) => {
     }
 
     const pool = getPool(req);
-    const orch = await getOrchestrator(pool);
+    const orch = getOrchestrator();
 
     const result = await orch.uploadImage(session_id, req.file.path);
 
@@ -201,7 +201,7 @@ router.post('/image/upload', upload.single('image'), async (req, res) => {
 router.get('/themes', async (req, res) => {
   try {
     const pool = getPool(req);
-    const orch = await getOrchestrator(pool);
+    const orch = getOrchestrator();
 
     const themes = orch.getThemes();
 
@@ -265,7 +265,7 @@ router.post('/analyze', async (req, res) => {
 
   try {
     const pool = getPool(req);
-    const orch = await getOrchestrator(pool);
+    const orch = getOrchestrator();
 
     // Progress callback for SSE
     const onProgress = (update) => {
@@ -352,7 +352,7 @@ router.post('/generate', async (req, res) => {
 
   try {
     const pool = getPool(req);
-    const orch = await getOrchestrator(pool);
+    const orch = getOrchestrator();
 
     const onProgress = (update) => {
       res.write(
@@ -438,7 +438,7 @@ router.post('/finalize', async (req, res) => {
 
   try {
     const pool = getPool(req);
-    const orch = await getOrchestrator(pool);
+    const orch = getOrchestrator();
 
     const onProgress = (update) => {
       res.write(
@@ -506,7 +506,7 @@ router.get('/session/:session_id/status', async (req, res) => {
     const { session_id } = req.params;
 
     const pool = getPool(req);
-    const orch = await getOrchestrator(pool);
+    const orch = getOrchestrator();
 
     const status = await orch.getSessionStatus(session_id);
 
@@ -568,7 +568,7 @@ router.get('/event/:event_id/analytics', async (req, res) => {
     const days = parseInt(req.query.days) || 7;
 
     const pool = getPool(req);
-    const orch = await getOrchestrator(pool);
+    const orch = getOrchestrator();
 
     const analytics = await orch.getAnalytics(event_id === 'all' ? undefined : event_id, days);
     const popularThemes = await orch.getPopularThemes(event_id === 'all' ? undefined : event_id, days);
