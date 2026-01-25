@@ -18,9 +18,10 @@ class GeminiImageClient {
    * @param {Buffer} imageBuffer - The original image as a buffer
    * @param {Object} theme - The theme configuration
    * @param {Function} onProgress - Progress callback
+   * @param {string} customPrompt - Optional custom prompt from CMS
    * @returns {Promise<Buffer>} - The generated image as a buffer
    */
-  async generateStyledPortrait(imageBuffer, theme, onProgress) {
+  async generateStyledPortrait(imageBuffer, theme, onProgress, customPrompt = null) {
     const reportProgress = (message, percentage) => {
       if (onProgress) onProgress({ message, percentage });
     };
@@ -30,8 +31,9 @@ class GeminiImageClient {
     // Convert image to base64
     const base64Image = imageBuffer.toString('base64');
 
-    // Build the prompt based on theme
-    const prompt = this.buildThemePrompt(theme);
+    // Use custom prompt from CMS if provided, otherwise build from theme
+    const prompt = customPrompt || this.buildThemePrompt(theme);
+    console.log(`[GeminiImageClient] Using ${customPrompt ? 'custom CMS' : 'default'} prompt for theme: ${theme.id}`);
 
     reportProgress('🎬 Sending to AI model...', 20);
 

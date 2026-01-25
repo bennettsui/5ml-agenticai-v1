@@ -110,11 +110,28 @@ async function initializeSchema() {
         created_at TIMESTAMP DEFAULT NOW()
       );
 
+      -- Themes table (CMS managed)
+      CREATE TABLE IF NOT EXISTS photo_booth_themes (
+        id SERIAL PRIMARY KEY,
+        theme_id VARCHAR(100) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        country VARCHAR(100),
+        description TEXT,
+        era VARCHAR(100),
+        image_url TEXT,
+        prompt TEXT NOT NULL,
+        is_enabled BOOLEAN DEFAULT true,
+        display_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
       -- Indexes
       CREATE INDEX IF NOT EXISTS idx_pb_sessions_event ON photo_booth_sessions(event_id);
       CREATE INDEX IF NOT EXISTS idx_pb_sessions_status ON photo_booth_sessions(status);
       CREATE INDEX IF NOT EXISTS idx_pb_images_session ON photo_booth_images(session_id);
       CREATE INDEX IF NOT EXISTS idx_pb_qr_session ON photo_booth_qr_codes(session_id);
+      CREATE INDEX IF NOT EXISTS idx_pb_themes_enabled ON photo_booth_themes(is_enabled);
     `);
 
     schemaInitialized = true;
@@ -205,7 +222,7 @@ router.get('/diagnostic', (req, res) => {
       enabled: orch.useAIGeneration,
       hasGeminiClient: !!orch.geminiClient,
       geminiApiKey: geminiKeyPreview,
-      model: orch.geminiClient ? 'gemini-2.0-flash-preview-image-generation' : 'none (mock mode)',
+      model: orch.geminiClient ? 'gemini-2.0-flash-exp' : 'none (mock mode)',
     },
     environment: {
       PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL || 'NOT SET (using localhost:8080)',
@@ -215,6 +232,200 @@ router.get('/diagnostic', (req, res) => {
       ? '✅ AI generation is enabled and ready'
       : '⚠️ AI generation is DISABLED. Set GEMINI_API_KEY to enable.',
   });
+});
+
+// ============================================================
+// CMS ENDPOINTS - Theme Management
+// ============================================================
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/themes:
+ *   get:
+ *     summary: Get all themes (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.get('/admin/themes', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM photo_booth_themes ORDER BY display_order ASC, created_at ASC'
+    );
+    res.json({ success: true, themes: result.rows });
+  } catch (error) {
+    console.error('[CMS] Get themes error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/themes:
+ *   post:
+ *     summary: Create a new theme (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.post('/admin/themes', async (req, res) => {
+  try {
+    const { theme_id, name, country, description, era, image_url, prompt, is_enabled, display_order } = req.body;
+
+    if (!theme_id || !name || !prompt) {
+      return res.status(400).json({ success: false, error: 'theme_id, name, and prompt are required' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO photo_booth_themes (theme_id, name, country, description, era, image_url, prompt, is_enabled, display_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [theme_id, name, country || '', description || '', era || '', image_url || '', prompt, is_enabled !== false, display_order || 0]
+    );
+
+    res.json({ success: true, theme: result.rows[0] });
+  } catch (error) {
+    console.error('[CMS] Create theme error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/themes/:id:
+ *   put:
+ *     summary: Update a theme (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.put('/admin/themes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, country, description, era, image_url, prompt, is_enabled, display_order } = req.body;
+
+    const result = await pool.query(
+      `UPDATE photo_booth_themes
+       SET name = COALESCE($1, name),
+           country = COALESCE($2, country),
+           description = COALESCE($3, description),
+           era = COALESCE($4, era),
+           image_url = COALESCE($5, image_url),
+           prompt = COALESCE($6, prompt),
+           is_enabled = COALESCE($7, is_enabled),
+           display_order = COALESCE($8, display_order),
+           updated_at = NOW()
+       WHERE id = $9 OR theme_id = $9
+       RETURNING *`,
+      [name, country, description, era, image_url, prompt, is_enabled, display_order, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Theme not found' });
+    }
+
+    res.json({ success: true, theme: result.rows[0] });
+  } catch (error) {
+    console.error('[CMS] Update theme error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/themes/:id:
+ *   delete:
+ *     summary: Delete a theme (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.delete('/admin/themes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM photo_booth_themes WHERE id = $1 OR theme_id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Theme not found' });
+    }
+
+    res.json({ success: true, deleted: result.rows[0] });
+  } catch (error) {
+    console.error('[CMS] Delete theme error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/themes/seed:
+ *   post:
+ *     summary: Seed default themes from config (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.post('/admin/themes/seed', async (req, res) => {
+  try {
+    const themesConfig = require('../config/themes.json');
+    const defaultPrompts = require('../lib/geminiImageClient').defaultPrompts || {};
+
+    // Load prompts from geminiImageClient
+    const { GeminiImageClient } = require('../lib/geminiImageClient');
+    const tempClient = new GeminiImageClient('temp');
+
+    let seeded = 0;
+    for (let i = 0; i < themesConfig.themes.length; i++) {
+      const theme = themesConfig.themes[i];
+      const prompt = tempClient.buildThemePrompt(theme);
+
+      // Upsert theme
+      await pool.query(
+        `INSERT INTO photo_booth_themes (theme_id, name, country, description, era, image_url, prompt, is_enabled, display_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8)
+         ON CONFLICT (theme_id) DO UPDATE SET
+           name = EXCLUDED.name,
+           country = EXCLUDED.country,
+           description = EXCLUDED.description,
+           era = EXCLUDED.era,
+           image_url = EXCLUDED.image_url,
+           prompt = EXCLUDED.prompt,
+           display_order = EXCLUDED.display_order,
+           updated_at = NOW()`,
+        [theme.id, theme.name, theme.country || '', theme.description || '', theme.era || '', theme.image_url || '', prompt, i]
+      );
+      seeded++;
+    }
+
+    res.json({ success: true, message: `Seeded ${seeded} themes` });
+  } catch (error) {
+    console.error('[CMS] Seed themes error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/themes/:id/toggle:
+ *   post:
+ *     summary: Toggle theme enabled/disabled (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.post('/admin/themes/:id/toggle', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `UPDATE photo_booth_themes
+       SET is_enabled = NOT is_enabled, updated_at = NOW()
+       WHERE id = $1 OR theme_id = $1
+       RETURNING *`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Theme not found' });
+    }
+
+    res.json({ success: true, theme: result.rows[0] });
+  } catch (error) {
+    console.error('[CMS] Toggle theme error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 /**
@@ -347,22 +558,36 @@ router.post('/image/upload', upload.single('image'), async (req, res) => {
  */
 router.get('/themes', async (req, res) => {
   try {
-    const pool = getPool(req);
-    const orch = getOrchestrator();
+    // Try to get themes from database first (CMS managed)
+    const dbResult = await pool.query(
+      'SELECT theme_id as id, name, country, description, era, image_url FROM photo_booth_themes WHERE is_enabled = true ORDER BY display_order ASC'
+    );
 
-    const themes = orch.getThemes();
+    if (dbResult.rows.length > 0) {
+      // Use database themes
+      res.json({
+        success: true,
+        themes: dbResult.rows,
+        source: 'database',
+      });
+    } else {
+      // Fallback to config file
+      const orch = getOrchestrator();
+      const themes = orch.getThemes();
 
-    res.json({
-      success: true,
-      themes: themes.map((theme) => ({
-        id: theme.id,
-        name: theme.name,
-        country: theme.country,
-        description: theme.description,
-        era: theme.era,
-        image_url: theme.image_url,
-      })),
-    });
+      res.json({
+        success: true,
+        themes: themes.map((theme) => ({
+          id: theme.id,
+          name: theme.name,
+          country: theme.country,
+          description: theme.description,
+          era: theme.era,
+          image_url: theme.image_url,
+        })),
+        source: 'config',
+      });
+    }
   } catch (error) {
     console.error('[Photo Booth API] Get themes error:', error);
     res.status(500).json({
