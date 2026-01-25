@@ -316,14 +316,18 @@ function generateMockAISummary(articles, topicName) {
  * Generate news summary using LLM with Map-Reduce for large article sets
  */
 async function generateNewsSummary(articles, topicName, selectedLLM) {
-  const llmPriority = [selectedLLM, 'claude-haiku', 'perplexity', 'deepseek'];
+  const llmPriority = [selectedLLM, 'deepseek', 'claude-haiku', 'perplexity'];
   let llmUsed = null;
   let config = null;
   let apiKey = null;
 
+  console.log(`   🔍 Checking LLM availability, preferred: ${selectedLLM}`);
+
   for (const llm of llmPriority) {
     const cfg = LLM_CONFIGS[llm];
-    if (cfg && process.env[cfg.envKey]) {
+    const hasKey = cfg && process.env[cfg.envKey];
+    console.log(`      ${llm}: ${hasKey ? '✓ available' : '✗ no key'}`);
+    if (hasKey) {
       llmUsed = llm;
       config = cfg;
       apiKey = process.env[cfg.envKey];
@@ -356,8 +360,13 @@ async function generateNewsSummary(articles, topicName, selectedLLM) {
 
     for (let i = 0; i < chunks.length; i++) {
       console.log(`      Processing chunk ${i + 1}/${chunks.length}...`);
-      const keyPoints = await extractKeyPointsFromChunk(chunks[i], topicName, i + 1, config, apiKey);
-      keyPointsList.push(keyPoints);
+      try {
+        const keyPoints = await extractKeyPointsFromChunk(chunks[i], topicName, i + 1, config, apiKey);
+        keyPointsList.push(keyPoints);
+      } catch (chunkError) {
+        console.error(`      ❌ Chunk ${i + 1} failed:`, chunkError.message);
+        keyPointsList.push({ events: [], findings: [], trend: '' });
+      }
 
       if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 500));
     }
@@ -369,8 +378,13 @@ async function generateNewsSummary(articles, topicName, selectedLLM) {
   } catch (error) {
     console.error('   ❌ Map-Reduce failed:', error.message);
     console.log('   ⚠️ Falling back to direct summarization with top 5 articles');
-    const topArticles = articles.slice(0, 5);
-    return generateDirectSummary(topArticles, topicName, config, apiKey, llmUsed);
+    try {
+      const topArticles = articles.slice(0, 5);
+      return generateDirectSummary(topArticles, topicName, config, apiKey, llmUsed);
+    } catch (fallbackError) {
+      console.error('   ❌ Fallback also failed:', fallbackError.message);
+      throw new Error(`Summary generation failed: ${error.message}. Fallback also failed: ${fallbackError.message}`);
+    }
   }
 }
 
@@ -490,7 +504,14 @@ async function summarize(req, res) {
       errorMessage = 'Content too long for AI processing. Try scanning fewer articles.';
     }
 
-    res.status(500).json({ success: false, error: errorMessage });
+    addLog('error', 'Summary generation failed', errorMessage);
+
+    // Return logs even on error so user can see what happened
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      logs: processLogs,
+    });
   }
 }
 
