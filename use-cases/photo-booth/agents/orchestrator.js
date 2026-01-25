@@ -301,7 +301,7 @@ Only return JSON.`,
         throw new Error(`Original image not found: ${originalPath}`);
       }
 
-      reportProgress('🎬 Generating your 18th-century portrait...', 'generate', 20);
+      reportProgress(`🎬 Generating your ${theme.name} portrait...`, 'generate', 20);
 
       // Ensure output directory exists
       const outputDir = '/tmp/photo-booth/outputs';
