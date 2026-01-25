@@ -7,7 +7,9 @@ class GeminiImageClient {
   constructor(apiKey) {
     this.apiKey = apiKey;
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-    this.model = 'gemini-2.0-flash-exp'; // Supports image generation
+    // Use gemini-2.0-flash-exp for image generation with multimodal input
+    this.model = 'gemini-2.0-flash-exp';
+    console.log('[GeminiImageClient] Initialized with model:', this.model);
   }
 
   /**
@@ -75,17 +77,40 @@ class GeminiImageClient {
 
       const data = await response.json();
 
+      // Log response structure for debugging
+      console.log('[GeminiImageClient] Response structure:', JSON.stringify({
+        hasCandidates: !!data.candidates,
+        candidateCount: data.candidates?.length,
+        firstCandidate: data.candidates?.[0] ? {
+          hasContent: !!data.candidates[0].content,
+          partsCount: data.candidates[0].content?.parts?.length,
+          partTypes: data.candidates[0].content?.parts?.map(p =>
+            p.inline_data ? `inline_data(${p.inline_data.mime_type})` : p.text ? 'text' : 'unknown'
+          )
+        } : null,
+        promptFeedback: data.promptFeedback,
+        error: data.error
+      }, null, 2));
+
+      // Check for API errors
+      if (data.error) {
+        throw new Error(`Gemini API error: ${data.error.message || JSON.stringify(data.error)}`);
+      }
+
       // Extract the generated image from the response
       if (data.candidates && data.candidates[0]?.content?.parts) {
         for (const part of data.candidates[0].content.parts) {
           if (part.inline_data && part.inline_data.data) {
             reportProgress('✓ Image generated successfully!', 90);
+            console.log('[GeminiImageClient] Successfully extracted image from response');
             return Buffer.from(part.inline_data.data, 'base64');
           }
         }
       }
 
-      throw new Error('No image generated in response');
+      // Log what we got if no image found
+      console.error('[GeminiImageClient] No image in response. Full response:', JSON.stringify(data, null, 2).slice(0, 2000));
+      throw new Error('No image generated in response - check API response format');
     } catch (error) {
       console.error('Gemini image generation failed:', error);
       throw error;
