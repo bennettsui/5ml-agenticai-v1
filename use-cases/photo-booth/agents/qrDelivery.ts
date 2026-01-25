@@ -68,7 +68,7 @@ export class QRDeliveryAgent {
       reportProgress('🔗 Creating shareable links...', 'create_links', 30);
 
       const downloadLink = `${baseUrl}/api/photo-booth/download/${shortId}`;
-      const shareLink = `${baseUrl}/photo-booth/share/${shortId}`;
+      const shareLink = `${baseUrl}/photo-booth/share?id=${shortId}`;
       const shortLink = `${baseUrl}/pb/${shortId}`;
 
       // Step 3: Generate QR code

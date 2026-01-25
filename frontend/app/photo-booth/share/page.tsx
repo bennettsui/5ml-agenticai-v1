@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Download, Share2, Sparkles, ExternalLink } from 'lucide-react';
 
 interface ShareData {
@@ -16,8 +16,8 @@ const API_BASE = typeof window !== 'undefined' && window.location.hostname === '
   : '';
 
 export default function SharePage() {
-  const params = useParams();
-  const id = params.id as string;
+  const searchParams = useSearchParams();
+  const id = searchParams.get('id');
 
   const [shareData, setShareData] = useState<ShareData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,17 +25,20 @@ export default function SharePage() {
 
   useEffect(() => {
     if (id) {
-      fetchShareData();
+      fetchShareData(id);
+    } else {
+      setError('No image ID provided');
+      setLoading(false);
     }
   }, [id]);
 
-  const fetchShareData = async () => {
+  const fetchShareData = async (imageId: string) => {
     try {
       // For now, construct the download link from the short ID
       // In production, you'd fetch metadata from the API
       setShareData({
-        image_url: `${API_BASE}/api/photo-booth/download/${id}`,
-        download_link: `${API_BASE}/api/photo-booth/download/${id}`,
+        image_url: `${API_BASE}/api/photo-booth/download/${imageId}`,
+        download_link: `${API_BASE}/api/photo-booth/download/${imageId}`,
         theme_name: '18th Century Portrait',
         created_at: new Date().toISOString(),
       });
@@ -77,11 +80,11 @@ export default function SharePage() {
     );
   }
 
-  if (error) {
+  if (error || !id) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white flex items-center justify-center">
         <div className="text-center p-8">
-          <p className="text-red-600 mb-4">{error}</p>
+          <p className="text-red-600 mb-4">{error || 'Invalid share link'}</p>
           <a
             href="/photo-booth"
             className="text-purple-600 hover:underline"
@@ -119,13 +122,16 @@ export default function SharePage() {
                   onError={(e) => {
                     // Show placeholder on error
                     e.currentTarget.style.display = 'none';
-                    e.currentTarget.parentElement!.innerHTML = `
-                      <div class="text-center p-8">
-                        <div class="text-purple-600 text-6xl mb-4">🎨</div>
-                        <p class="text-purple-700 font-medium">18th Century Portrait</p>
-                        <p class="text-sm text-purple-500">${shareData?.theme_name || 'AI Generated'}</p>
-                      </div>
-                    `;
+                    const parent = e.currentTarget.parentElement;
+                    if (parent) {
+                      parent.innerHTML = `
+                        <div class="text-center p-8">
+                          <div class="text-purple-600 text-6xl mb-4">🎨</div>
+                          <p class="text-purple-700 font-medium">18th Century Portrait</p>
+                          <p class="text-sm text-purple-500">${shareData?.theme_name || 'AI Generated'}</p>
+                        </div>
+                      `;
+                    }
                   }}
                 />
               ) : (
