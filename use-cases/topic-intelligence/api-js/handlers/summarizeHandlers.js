@@ -95,7 +95,26 @@ async function callLLM(prompt, config, apiKey, maxTokens = 4096) {
     }
   } catch (error) {
     if (error.name === 'AbortError') {
-      throw new Error(`LLM API timeout after ${timeout/1000}s`);
+      throw new Error(`LLM API timeout after ${timeout/1000}s - the API took too long to respond`);
+    }
+    // Enhance error message with more context
+    const errorDetails = {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      cause: error.cause,
+    };
+    console.error('LLM API call failed:', JSON.stringify(errorDetails, null, 2));
+
+    // Provide more descriptive error messages
+    if (error.message?.includes('ECONNREFUSED')) {
+      throw new Error(`Cannot connect to LLM API at ${config.baseUrl} - connection refused`);
+    } else if (error.message?.includes('ENOTFOUND')) {
+      throw new Error(`Cannot resolve LLM API host: ${config.baseUrl} - DNS lookup failed`);
+    } else if (error.message?.includes('ETIMEDOUT')) {
+      throw new Error(`Connection to LLM API timed out - network may be slow or blocked`);
+    } else if (error.message?.includes('fetch')) {
+      throw new Error(`Network error calling LLM API: ${error.message}`);
     }
     throw error;
   } finally {
@@ -478,8 +497,15 @@ async function summarize(req, res) {
 
     addLog('info', `Generating AI summary using ${llm}`, `${articlesToSummarize.length} of ${articles.length} articles`);
 
-    const result = await generateNewsSummary(articlesToSummarize, topicName, llm);
+    // Log which LLM will be used
+    const llmStatus = {
+      deepseek: !!process.env.DEEPSEEK_API_KEY,
+      anthropic: !!process.env.ANTHROPIC_API_KEY,
+      perplexity: !!process.env.PERPLEXITY_API_KEY,
+    };
+    addLog('info', 'Available LLMs', Object.entries(llmStatus).filter(([,v]) => v).map(([k]) => k).join(', ') || 'none');
 
+    const result = await generateNewsSummary(articlesToSummarize, topicName, llm);
     addLog('success', 'AI summary generated', `${result.meta?.totalTokens || 0} tokens used`);
 
     // Save summary to database
@@ -512,22 +538,42 @@ async function summarize(req, res) {
     });
   } catch (error) {
     console.error('Summary generation error:', error);
+    console.error('Error stack:', error.stack);
 
     let errorMessage = error.message || 'Unknown error';
+    let errorType = 'unknown';
+
+    // Categorize the error for better user feedback
     if (errorMessage.includes('429') || errorMessage.includes('rate')) {
       errorMessage = 'API rate limit exceeded. Please wait a moment and try again.';
-    } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
-      errorMessage = 'API authentication failed. Please check your API key.';
-    } else if (errorMessage.includes('context') || errorMessage.includes('token')) {
+      errorType = 'rate_limit';
+    } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized') || errorMessage.includes('Invalid API')) {
+      errorMessage = 'API authentication failed. Please check your API key configuration.';
+      errorType = 'auth';
+    } else if (errorMessage.includes('context') || errorMessage.includes('token') || errorMessage.includes('too long')) {
       errorMessage = 'Content too long for AI processing. Try scanning fewer articles.';
+      errorType = 'token_limit';
+    } else if (errorMessage.includes('timeout')) {
+      errorMessage = `LLM API timeout: ${error.message}`;
+      errorType = 'timeout';
+    } else if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('ENOTFOUND') || errorMessage.includes('ETIMEDOUT')) {
+      errorMessage = `Network error: ${error.message}`;
+      errorType = 'network';
+    } else if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+      errorMessage = `Failed to connect to LLM API: ${error.message}`;
+      errorType = 'network';
+    } else if (errorMessage.includes('JSON') || errorMessage.includes('parse')) {
+      errorMessage = `Failed to parse LLM response: ${error.message}`;
+      errorType = 'parse';
     }
 
-    addLog('error', 'Summary generation failed', errorMessage);
+    addLog('error', `Summary generation failed (${errorType})`, errorMessage);
 
     // Return logs even on error so user can see what happened
     res.status(500).json({
       success: false,
       error: errorMessage,
+      errorType,
       logs: processLogs,
     });
   }
