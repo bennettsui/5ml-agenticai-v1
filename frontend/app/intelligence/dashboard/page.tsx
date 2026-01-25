@@ -43,6 +43,18 @@ interface Topic {
   keywords?: string[];
   lastUpdated?: string;
   sourcesCount?: number;
+  daily_scan_config?: {
+    enabled: boolean;
+    time: string;
+    timezone: string;
+  };
+  weekly_digest_config?: {
+    enabled: boolean;
+    day: string;
+    time: string;
+    timezone: string;
+    recipientList?: string[];
+  };
 }
 
 interface Article {
@@ -208,6 +220,13 @@ export default function IntelligenceDashboardPage() {
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
 
+  // Scheduler status
+  const [schedulerStatus, setSchedulerStatus] = useState<{
+    schedulerAvailable: boolean;
+    scheduledJobs: Array<{ id: string; running: boolean; config?: unknown; nextRun?: string }>;
+    serverTimezone?: string;
+  } | null>(null);
+
   // Fetch all topics on mount
   useEffect(() => {
     fetchTopics();
@@ -228,6 +247,7 @@ export default function IntelligenceDashboardPage() {
       loadTopic(selectedTopicId);
       loadArticles(selectedTopicId);
       loadSummaryHistory(selectedTopicId);
+      loadSchedulerStatus();
       // Update URL
       const url = new URL(window.location.href);
       url.searchParams.set('topic', selectedTopicId);
@@ -298,6 +318,16 @@ export default function IntelligenceDashboardPage() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadSchedulerStatus = async () => {
+    try {
+      const response = await fetch('/api/intelligence/debug/scheduler-status');
+      const data = await response.json();
+      setSchedulerStatus(data);
+    } catch (error) {
+      console.error('Failed to load scheduler status:', error);
     }
   };
 
@@ -1119,21 +1149,108 @@ export default function IntelligenceDashboardPage() {
                 )}
               </div>
 
-              {/* Quick Actions */}
+              {/* Schedule Info */}
               <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
                 <h3 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                   <Clock className="w-4 h-4 text-slate-500" />
                   Schedule Info
                 </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-400">Daily Scan</span>
-                    <span className="text-slate-900 dark:text-white">06:00 HKT</span>
+                <div className="space-y-3 text-sm">
+                  {/* Daily Scan */}
+                  <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-700/50">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-slate-600 dark:text-slate-400">Daily Scan</span>
+                      {topic?.daily_scan_config?.enabled ? (
+                        <span className="px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs rounded">Active</span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-400 text-xs rounded">Disabled</span>
+                      )}
+                    </div>
+                    {topic?.daily_scan_config?.enabled ? (
+                      <div className="text-slate-900 dark:text-white font-medium">
+                        {topic.daily_scan_config.time} ({topic.daily_scan_config.timezone || 'Asia/Hong_Kong'})
+                      </div>
+                    ) : (
+                      <div className="text-slate-500 dark:text-slate-400 text-xs">
+                        Configure in Settings
+                      </div>
+                    )}
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-400">Weekly Digest</span>
-                    <span className="text-slate-900 dark:text-white">Mon 08:00</span>
+
+                  {/* Weekly Digest */}
+                  <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-700/50">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-slate-600 dark:text-slate-400">Weekly Digest</span>
+                      {topic?.weekly_digest_config?.enabled ? (
+                        <span className="px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs rounded">Active</span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-400 text-xs rounded">Disabled</span>
+                      )}
+                    </div>
+                    {topic?.weekly_digest_config?.enabled ? (
+                      <div className="text-slate-900 dark:text-white font-medium">
+                        {topic.weekly_digest_config.day} {topic.weekly_digest_config.time} ({topic.weekly_digest_config.timezone || 'Asia/Hong_Kong'})
+                      </div>
+                    ) : (
+                      <div className="text-slate-500 dark:text-slate-400 text-xs">
+                        Configure in Settings
+                      </div>
+                    )}
                   </div>
+
+                  <Link
+                    href={`/intelligence/settings?topic=${topic?.topic_id}`}
+                    className="block w-full text-center px-3 py-2 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg text-xs font-medium"
+                  >
+                    Manage Schedule Settings →
+                  </Link>
+
+                  {/* Scheduler Status Debug */}
+                  {schedulerStatus && (
+                    <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Scheduler Status</span>
+                        {schedulerStatus.schedulerAvailable ? (
+                          <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                            Running
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                            Not Running
+                          </span>
+                        )}
+                      </div>
+                      {schedulerStatus.scheduledJobs.length > 0 ? (
+                        <div className="space-y-1">
+                          {schedulerStatus.scheduledJobs
+                            .filter(job => job.id.includes(topic?.topic_id || ''))
+                            .map(job => (
+                              <div key={job.id} className="text-xs p-1.5 bg-green-50 dark:bg-green-900/20 rounded text-green-700 dark:text-green-300">
+                                <div className="font-medium">{job.id}</div>
+                                <div className="text-green-600 dark:text-green-400">{job.nextRun}</div>
+                              </div>
+                            ))
+                          }
+                          {schedulerStatus.scheduledJobs.filter(job => job.id.includes(topic?.topic_id || '')).length === 0 && (
+                            <div className="text-xs text-amber-600 dark:text-amber-400 p-1.5 bg-amber-50 dark:bg-amber-900/20 rounded">
+                              No scheduled jobs for this topic. Save settings to register.
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          No jobs scheduled
+                        </div>
+                      )}
+                      {schedulerStatus.serverTimezone && (
+                        <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                          Server: {schedulerStatus.serverTimezone}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
