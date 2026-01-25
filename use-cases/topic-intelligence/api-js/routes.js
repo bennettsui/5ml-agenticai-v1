@@ -118,11 +118,12 @@ function getEdmCacheStats() {
 
 const NOTION_API_KEY = process.env.NOTION_API_KEY;
 
-// Analysis database ID (provided by user)
+// Database ID (for fetching schema)
 const NOTION_ANALYSIS_DB_ID = process.env.NOTION_ANALYSIS_DATABASE_ID || '2cb1f0bba67180b090b6ffb0619fc571';
 
-// Sources database ID - will be created automatically under the same parent as analysis DB
-let notionSourcesDbId = process.env.NOTION_SOURCES_DATABASE_ID || null;
+// Data Source IDs for multi-data-source databases
+const NOTION_ANALYSIS_DATA_SOURCE_ID = process.env.NOTION_ANALYSIS_DATA_SOURCE_ID || '2cb1f0bb-a671-81cb-b904-000bc0e233dc';
+const NOTION_SOURCES_DATA_SOURCE_ID = process.env.NOTION_SOURCES_DATA_SOURCE_ID || '3924ff64-2d7e-4df0-b50b-05a855f384ba';
 
 /**
  * Notion API helper for saving analysis results
@@ -313,9 +314,9 @@ class NotionHelper {
 
     console.log(`[Notion] Creating page with properties: ${Object.keys(properties).join(', ')}`);
 
-    // Create the page
+    // Create the page using data_source_id for multi-data-source databases
     const page = await this.request('POST', '/pages', {
-      parent: { database_id: NOTION_ANALYSIS_DB_ID },
+      parent: { type: 'data_source_id', data_source_id: NOTION_ANALYSIS_DATA_SOURCE_ID },
       properties,
     });
 
@@ -428,15 +429,7 @@ class NotionHelper {
    */
   async saveSourceToNotion(article, topicName) {
     console.log(`[Notion] saveSourceToNotion called for: ${article.title?.substring(0, 50)}...`);
-    await this.initialize();
-
-    if (!notionSourcesDbId) {
-      console.log('[Notion] Sources database ID not available, skipping source save');
-      console.log('[Notion] Parent page ID:', this.parentPageId);
-      return null;
-    }
-
-    console.log(`[Notion] Using Sources DB: ${notionSourcesDbId}`);
+    console.log(`[Notion] Using Sources data source: ${NOTION_SOURCES_DATA_SOURCE_ID}`);
 
     // Determine priority based on importance score
     const importanceScore = article.importance_score || 0;
@@ -486,8 +479,9 @@ class NotionHelper {
       },
     };
 
+    // Create the page using data_source_id for multi-data-source databases
     const page = await this.request('POST', '/pages', {
-      parent: { database_id: notionSourcesDbId },
+      parent: { type: 'data_source_id', data_source_id: NOTION_SOURCES_DATA_SOURCE_ID },
       properties,
     });
 
@@ -571,9 +565,7 @@ class NotionHelper {
    * Batch save multiple sources to Notion
    */
   async batchSaveSourcesToNotion(articles, topicName) {
-    await this.initialize();
-
-    if (!notionSourcesDbId || !articles || articles.length === 0) {
+    if (!articles || articles.length === 0) {
       return { success: [], failed: [] };
     }
 
