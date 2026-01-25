@@ -118,6 +118,7 @@ async function initDatabase() {
         id SERIAL PRIMARY KEY,
         topic_id UUID UNIQUE DEFAULT gen_random_uuid(),
         name VARCHAR(500) NOT NULL,
+        objectives TEXT,
         keywords JSONB DEFAULT '[]',
         status VARCHAR(50) DEFAULT 'active',
         daily_scan_config JSONB DEFAULT '{"enabled": true, "time": "06:00", "timezone": "Asia/Hong_Kong"}',
@@ -125,6 +126,9 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       );
+
+      -- Add objectives column if not exists (for existing databases)
+      ALTER TABLE intelligence_topics ADD COLUMN IF NOT EXISTS objectives TEXT;
 
       CREATE TABLE IF NOT EXISTS intelligence_sources (
         id SERIAL PRIMARY KEY,
@@ -747,6 +751,7 @@ async function query(text, params) {
 
 async function saveIntelligenceTopic(name, keywords = [], config = {}) {
   try {
+    const objectives = config.objectives || '';
     const dailyScanConfig = config.dailyScanConfig || {
       enabled: true,
       time: '06:00',
@@ -761,10 +766,10 @@ async function saveIntelligenceTopic(name, keywords = [], config = {}) {
     };
 
     const result = await pool.query(
-      `INSERT INTO intelligence_topics (name, keywords, daily_scan_config, weekly_digest_config)
-       VALUES ($1, $2, $3, $4)
-       RETURNING topic_id, name, keywords, status, daily_scan_config, weekly_digest_config, created_at`,
-      [name, JSON.stringify(keywords), JSON.stringify(dailyScanConfig), JSON.stringify(weeklyDigestConfig)]
+      `INSERT INTO intelligence_topics (name, objectives, keywords, daily_scan_config, weekly_digest_config)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING topic_id, name, objectives, keywords, status, daily_scan_config, weekly_digest_config, created_at`,
+      [name, objectives, JSON.stringify(keywords), JSON.stringify(dailyScanConfig), JSON.stringify(weeklyDigestConfig)]
     );
     return result.rows[0];
   } catch (error) {
@@ -776,7 +781,7 @@ async function saveIntelligenceTopic(name, keywords = [], config = {}) {
 async function getIntelligenceTopics() {
   try {
     const result = await pool.query(
-      `SELECT topic_id, name, keywords, status, daily_scan_config, weekly_digest_config, created_at, updated_at
+      `SELECT topic_id, name, objectives, keywords, status, daily_scan_config, weekly_digest_config, created_at, updated_at
        FROM intelligence_topics
        ORDER BY created_at DESC`
     );
@@ -790,7 +795,7 @@ async function getIntelligenceTopics() {
 async function getIntelligenceTopic(topicId) {
   try {
     const result = await pool.query(
-      `SELECT t.topic_id, t.name, t.keywords, t.status, t.daily_scan_config, t.weekly_digest_config, t.created_at, t.updated_at,
+      `SELECT t.topic_id, t.name, t.objectives, t.keywords, t.status, t.daily_scan_config, t.weekly_digest_config, t.created_at, t.updated_at,
               COALESCE(json_agg(s.*) FILTER (WHERE s.source_id IS NOT NULL), '[]') as sources
        FROM intelligence_topics t
        LEFT JOIN intelligence_sources s ON t.topic_id = s.topic_id
@@ -820,18 +825,20 @@ async function updateIntelligenceTopicStatus(topicId, status) {
 
 async function updateIntelligenceTopic(topicId, updates) {
   try {
-    const { name, keywords, daily_scan_config, weekly_digest_config } = updates;
+    const { name, objectives, keywords, daily_scan_config, weekly_digest_config } = updates;
 
     const result = await pool.query(
       `UPDATE intelligence_topics
        SET name = COALESCE($2, name),
-           keywords = COALESCE($3, keywords),
-           daily_scan_config = COALESCE($4, daily_scan_config),
-           weekly_digest_config = COALESCE($5, weekly_digest_config),
+           objectives = COALESCE($3, objectives),
+           keywords = COALESCE($4, keywords),
+           daily_scan_config = COALESCE($5, daily_scan_config),
+           weekly_digest_config = COALESCE($6, weekly_digest_config),
            updated_at = NOW()
        WHERE topic_id = $1
        RETURNING *`,
-      [topicId, name, keywords ? JSON.stringify(keywords) : null,
+      [topicId, name, objectives,
+       keywords ? JSON.stringify(keywords) : null,
        daily_scan_config ? JSON.stringify(daily_scan_config) : null,
        weekly_digest_config ? JSON.stringify(weekly_digest_config) : null]
     );

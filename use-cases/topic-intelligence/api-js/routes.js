@@ -861,7 +861,7 @@ const PROMPTS = {
   comprehensive: `You are a senior research analyst.
 
 Your task: Map out the BEST sources to research the topic: "{topic}".
-
+{objectives}
 Please:
 1) Focus on:
    - Language(s): {languages}
@@ -932,7 +932,7 @@ Output format - MUST return valid JSON:
 Return ONLY the JSON object, no other text.`,
 
   quick: `Map out key research sources for the topic: "{topic}".
-
+{objectives}
 Constraints:
 - Language: {languages}
 - Region focus: {regions}
@@ -982,7 +982,7 @@ Output format - MUST return valid JSON:
 Return ONLY the JSON object, no other text.`,
 
   trends: `You are analysing current and emerging trends for the topic: "{topic}".
-
+{objectives}
 Tasks:
 1) Identify where trends are visible:
    - Recurring reports (annual/quarterly) and who publishes them
@@ -1037,11 +1037,16 @@ Return ONLY the JSON object, no other text.`
 /**
  * Build prompt with parameters
  */
-function buildPrompt(topicName, keywords, mode, languages, regions, timeframe) {
+function buildPrompt(topicName, keywords, mode, languages, regions, timeframe, objectives = '') {
   const template = PROMPTS[mode] || PROMPTS.comprehensive;
+
+  const objectivesText = objectives?.trim()
+    ? `\n\nObjectives for this research:\n${objectives}\n\nUse these objectives to prioritize sources that are most relevant to achieving these goals.`
+    : '';
 
   return template
     .replace(/{topic}/g, topicName)
+    .replace(/{objectives}/g, objectivesText)
     .replace(/{languages}/g, languages || 'English, Traditional Chinese')
     .replace(/{regions}/g, regions || 'Global, Hong Kong, Asia')
     .replace(/{timeframe}/g, timeframe || '2024')
@@ -1060,6 +1065,7 @@ router.post('/sources/discover', async (req, res) => {
   try {
     const {
       topicName,
+      objectives = '',
       keywords = [],
       mode = 'comprehensive',
       llm = 'perplexity',
@@ -1073,6 +1079,7 @@ router.post('/sources/discover', async (req, res) => {
     }
 
     console.log(`🔍 Discovering sources for topic: ${topicName}`);
+    console.log(`   Objectives: ${objectives || '(none specified)'}`);
     console.log(`   Mode: ${mode}, LLM: ${llm}`);
     console.log(`   Keywords: ${keywords.join(', ')}`);
 
@@ -1092,7 +1099,7 @@ router.post('/sources/discover', async (req, res) => {
 
     if (llmAvailable) {
       try {
-        const result = await callLLMForSources(topicName, keywords, mode, llm, languages, regions, timeframe);
+        const result = await callLLMForSources(topicName, keywords, mode, llm, languages, regions, timeframe, objectives);
         discoveredSources = result.sources;
         executiveSummary = result.executiveSummary;
         searchQueries = result.searchQueries;
@@ -1157,8 +1164,8 @@ const LLM_CONFIGS = {
  * Call LLM API to discover sources
  * Supports multiple providers with automatic fallback
  */
-async function callLLMForSources(topicName, keywords, mode, selectedLLM, languages, regions, timeframe) {
-  const prompt = buildPrompt(topicName, keywords, mode, languages, regions, timeframe);
+async function callLLMForSources(topicName, keywords, mode, selectedLLM, languages, regions, timeframe, objectives = '') {
+  const prompt = buildPrompt(topicName, keywords, mode, languages, regions, timeframe, objectives);
 
   // Determine which LLM to use with fallback chain
   const llmPriority = [selectedLLM, 'perplexity', 'claude-sonnet', 'deepseek'];
@@ -1297,7 +1304,7 @@ function parseSourcesResponse(content, llmUsed) {
  */
 router.post('/topics', async (req, res) => {
   try {
-    const { topicName, keywords = [], sources: topicSources = [] } = req.body;
+    const { topicName, objectives = '', keywords = [], sources: topicSources = [] } = req.body;
 
     if (!topicName) {
       return res.status(400).json({ success: false, error: 'Topic name is required' });
@@ -1309,8 +1316,8 @@ router.post('/topics', async (req, res) => {
     // Try database first, fallback to in-memory
     if (db && process.env.DATABASE_URL) {
       try {
-        // Save topic to database
-        const savedTopic = await db.saveIntelligenceTopic(topicName, keywords);
+        // Save topic to database with objectives
+        const savedTopic = await db.saveIntelligenceTopic(topicName, keywords, { objectives });
         topicId = savedTopic.topic_id;
 
         // Save sources to database
@@ -1326,6 +1333,7 @@ router.post('/topics', async (req, res) => {
         inMemoryTopics.set(topicId, {
           id: topicId,
           name: topicName,
+          objectives,
           keywords,
           sources: topicSources,
           status: 'active',
@@ -1338,6 +1346,7 @@ router.post('/topics', async (req, res) => {
       const topic = {
         id: topicId,
         name: topicName,
+        objectives,
         keywords,
         sources: topicSources,
         status: 'active',
@@ -1435,12 +1444,12 @@ router.get('/topics/:id', async (req, res) => {
 
 /**
  * PUT /topics/:id
- * Updates topic settings (name, keywords, daily/weekly config, recipients)
+ * Updates topic settings (name, objectives, keywords, daily/weekly config, recipients)
  */
 router.put('/topics/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, keywords, dailyScanConfig, weeklyDigestConfig } = req.body;
+    const { name, objectives, keywords, dailyScanConfig, weeklyDigestConfig } = req.body;
 
     // Parse keywords if string
     let parsedKeywords = keywords;
@@ -1456,6 +1465,7 @@ router.put('/topics/:id', async (req, res) => {
 
     const updates = {
       name,
+      objectives,
       keywords: parsedKeywords,
       daily_scan_config: dailyScanConfig ? {
         enabled: dailyScanConfig.enabled ?? true,

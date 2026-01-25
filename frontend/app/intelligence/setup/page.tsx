@@ -212,6 +212,7 @@ interface Topic {
   id?: number;
   topic_id: string;
   name: string;
+  objectives?: string;
   keywords: string[];
   status: string;
   created_at?: string;
@@ -260,15 +261,18 @@ export default function TopicSetupPage() {
   const [topicSources, setTopicSources] = useState<Record<string, Source[]>>({});
   const [loadingSources, setLoadingSources] = useState<string | null>(null);
 
-  // New topic creation state
+  // New topic creation / edit state
   const [showNewTopicForm, setShowNewTopicForm] = useState(false);
+  const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
   const [topicName, setTopicName] = useState('');
+  const [objectives, setObjectives] = useState('');
   const [keywords, setKeywords] = useState('');
   const [researchMode, setResearchMode] = useState<ResearchMode>('comprehensive');
   const [selectedLLM, setSelectedLLM] = useState<LLMProvider>('perplexity');
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [discoveredSources, setDiscoveredSources] = useState<Source[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -394,6 +398,7 @@ export default function TopicSetupPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topicName: topicName.trim(),
+          objectives: objectives.trim(),
           keywords: keywords.split(',').map(k => k.trim()).filter(Boolean),
           mode: researchMode,
           llm: selectedLLM,
@@ -471,6 +476,7 @@ export default function TopicSetupPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topicName: topicName.trim(),
+          objectives: objectives.trim(),
           keywords: keywords.split(',').map(k => k.trim()).filter(Boolean),
           sources: discoveredSources,
         }),
@@ -480,10 +486,7 @@ export default function TopicSetupPage() {
 
       if (data.success) {
         setSuccess(`Topic "${topicName}" created successfully!`);
-        setTopicName('');
-        setKeywords('');
-        setDiscoveredSources([]);
-        setShowNewTopicForm(false);
+        resetForm();
         fetchTopics();
       } else {
         setError(data.error || 'Failed to create topic');
@@ -493,6 +496,57 @@ export default function TopicSetupPage() {
     } finally {
       setIsCreating(false);
     }
+  };
+
+  const handleEditTopic = (topic: Topic) => {
+    setEditingTopicId(topic.topic_id);
+    setTopicName(topic.name);
+    setObjectives(topic.objectives || '');
+    setKeywords(topic.keywords?.join(', ') || '');
+    setShowNewTopicForm(true);
+    setDiscoveredSources([]);
+  };
+
+  const handleUpdateTopic = async () => {
+    if (!editingTopicId) return;
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/intelligence/topics/${editingTopicId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: topicName.trim(),
+          objectives: objectives.trim(),
+          keywords: keywords.split(',').map(k => k.trim()).filter(Boolean),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSuccess(`Topic "${topicName}" updated successfully!`);
+        resetForm();
+        fetchTopics();
+      } else {
+        setError(data.error || 'Failed to update topic');
+      }
+    } catch (err) {
+      setError('Failed to connect to server');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const resetForm = () => {
+    setTopicName('');
+    setObjectives('');
+    setKeywords('');
+    setDiscoveredSources([]);
+    setShowNewTopicForm(false);
+    setEditingTopicId(null);
   };
 
   const handleAddSourcesToExistingTopic = async (topicId: string, sources: Source[]) => {
@@ -685,6 +739,13 @@ export default function TopicSetupPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleEditTopic(topic)}
+                        className="p-2 text-slate-400 hover:text-amber-500 transition-colors"
+                        title="Edit topic"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
                       {topic.status === 'active' ? (
                         <button
                           onClick={() => handlePauseTopic(topic.topic_id)}
@@ -807,29 +868,32 @@ export default function TopicSetupPage() {
           )}
         </div>
 
-        {/* New Topic Form */}
+        {/* New Topic Form / Edit Topic Form */}
         {showNewTopicForm && (
           <>
             {/* Topic Configuration */}
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-8">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  {discoveredSources.length > 0 && topicName && (
+                  {editingTopicId ? (
+                    <p className="text-sm font-medium text-amber-600 dark:text-amber-400 mb-1">
+                      Editing Topic
+                    </p>
+                  ) : discoveredSources.length > 0 && topicName ? (
                     <p className="text-sm font-medium text-teal-600 dark:text-teal-400 mb-1">
                       New Topic: {topicName}
                     </p>
-                  )}
+                  ) : null}
                   <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                    {discoveredSources.length > 0 ? 'Step 2: Review & Approve Sources' : 'Step 1: Define Your Topic'}
+                    {editingTopicId
+                      ? `Edit: ${topicName}`
+                      : discoveredSources.length > 0
+                      ? 'Step 2: Review & Approve Sources'
+                      : 'Step 1: Define Your Topic'}
                   </h2>
                 </div>
                 <button
-                  onClick={() => {
-                    setShowNewTopicForm(false);
-                    setTopicName('');
-                    setKeywords('');
-                    setDiscoveredSources([]);
-                  }}
+                  onClick={resetForm}
                   className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 >
                   <X className="w-5 h-5" />
@@ -857,6 +921,22 @@ export default function TopicSetupPage() {
                         placeholder="e.g., IG Growth Hacking, AI Latest News"
                         className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Objectives
+                      </label>
+                      <textarea
+                        value={objectives}
+                        onChange={e => setObjectives(e.target.value)}
+                        placeholder="e.g., Find the latest strategies for Instagram growth, understand algorithm changes, discover new engagement tactics..."
+                        rows={3}
+                        className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
+                      />
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        Describe what you want to achieve with this topic. This helps AI find more relevant sources.
+                      </p>
                     </div>
 
                     <div>
@@ -929,14 +1009,46 @@ export default function TopicSetupPage() {
                       </p>
                     </div>
 
-                    <button
-                      onClick={handleDiscoverSources}
-                      disabled={!topicName.trim()}
-                      className="flex items-center gap-2 px-6 py-3 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
-                    >
-                      <Search className="w-5 h-5" />
-                      Discover Information Sources
-                    </button>
+                    <div className="flex gap-3">
+                      {editingTopicId ? (
+                        <>
+                          <button
+                            onClick={handleUpdateTopic}
+                            disabled={!topicName.trim() || isSaving}
+                            className="flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
+                          >
+                            {isSaving ? (
+                              <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                <Check className="w-5 h-5" />
+                                Save Changes
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={handleDiscoverSources}
+                            disabled={!topicName.trim()}
+                            className="flex items-center gap-2 px-6 py-3 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
+                          >
+                            <Search className="w-5 h-5" />
+                            Discover More Sources
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={handleDiscoverSources}
+                          disabled={!topicName.trim()}
+                          className="flex items-center gap-2 px-6 py-3 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
+                        >
+                          <Search className="w-5 h-5" />
+                          Discover Information Sources
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )
               ) : (
