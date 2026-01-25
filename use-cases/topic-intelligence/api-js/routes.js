@@ -164,7 +164,7 @@ class NotionHelper {
   }
 
   /**
-   * Initialize Notion databases (create sources DB if not exist)
+   * Initialize Notion integration (simplified - using pre-existing data sources)
    */
   async initialize() {
     if (this.initialized) return;
@@ -174,82 +174,11 @@ class NotionHelper {
     }
 
     console.log('[Notion] 🔄 Initializing Notion integration...');
-    console.log(`[Notion] Analysis database ID: ${NOTION_ANALYSIS_DB_ID}`);
-
-    // Get the parent page ID from the analysis database
-    if (!this.parentPageId) {
-      try {
-        const dbInfo = await this.request('GET', `/databases/${NOTION_ANALYSIS_DB_ID}`);
-        console.log(`[Notion] Database parent type: ${dbInfo.parent?.type}`);
-
-        if (dbInfo.parent?.type === 'page_id') {
-          this.parentPageId = dbInfo.parent.page_id;
-          console.log(`[Notion] ✅ Found parent page: ${this.parentPageId}`);
-        } else if (dbInfo.parent?.type === 'workspace') {
-          console.log('[Notion] ⚠️ Database is in workspace root - cannot create child databases');
-          console.log('[Notion] Sources will be saved to the Analysis database as linked items');
-        } else {
-          console.log(`[Notion] ⚠️ Unknown parent type: ${dbInfo.parent?.type}`);
-        }
-      } catch (error) {
-        console.error('[Notion] ❌ Failed to get analysis database info:', error.message);
-        console.error('[Notion] Full error:', error);
-      }
-    }
-
-    // Create Sources Database if not exists (under the same parent)
-    if (!notionSourcesDbId && this.parentPageId) {
-      try {
-        console.log('[Notion] Creating Sources database under parent page...');
-        const sourcesDb = await this.request('POST', '/databases', {
-          parent: { type: 'page_id', page_id: this.parentPageId },
-          title: [{ type: 'text', text: { content: '📰 資料來源' } }],
-          properties: {
-            '標題': { title: {} },
-            '主題': { select: { options: [] } },
-            '來源': { rich_text: {} },
-            '連結': { url: {} },
-            '重要性': { number: { format: 'number' } },
-            '相關性': { number: { format: 'number' } },
-            '影響力': { number: { format: 'number' } },
-            '日期': { date: {} },
-            '標籤': { multi_select: { options: [] } },
-            '分析模型': {
-              select: {
-                options: [
-                  { name: 'deepseek', color: 'blue' },
-                  { name: 'claude-haiku', color: 'purple' },
-                  { name: 'perplexity', color: 'green' },
-                  { name: '關鍵字分析', color: 'gray' },
-                ]
-              }
-            },
-            '優先級': {
-              select: {
-                options: [
-                  { name: '🔴 高', color: 'red' },
-                  { name: '🟡 中', color: 'yellow' },
-                  { name: '🟢 低', color: 'green' },
-                ]
-              }
-            },
-          },
-        });
-        notionSourcesDbId = sourcesDb.id;
-        console.log(`[Notion] ✅ Created Sources database: ${sourcesDb.url}`);
-      } catch (error) {
-        console.error('[Notion] ❌ Failed to create Sources database:', error.message);
-        // Check if it's a duplicate - database might already exist
-        if (error.message.includes('duplicate') || error.message.includes('already exists')) {
-          console.log('[Notion] Sources database may already exist, searching...');
-        }
-      }
-    } else if (!notionSourcesDbId) {
-      console.log('[Notion] ⚠️ Cannot create Sources database - no parent page available');
-    }
+    console.log(`[Notion] Analysis data source: ${NOTION_ANALYSIS_DATA_SOURCE_ID}`);
+    console.log(`[Notion] Sources data source: ${NOTION_SOURCES_DATA_SOURCE_ID}`);
 
     this.initialized = true;
-    console.log(`[Notion] ✅ Initialization complete. Sources DB: ${notionSourcesDbId || 'not available'}`);
+    console.log('[Notion] ✅ Initialization complete');
   }
 
   /**
