@@ -267,11 +267,13 @@ export default function LiveScanPage() {
         setSummaryMeta(data.meta);
         addActivityLog('success', '✅ AI summary process complete', `${data.meta.totalTokens} tokens used`);
       } else {
-        addActivityLog('error', `Failed to generate summary: ${data.error}`);
+        const errorMsg = data.error || 'Unknown error occurred';
+        addActivityLog('error', `Failed to generate summary: ${errorMsg}`);
       }
     } catch (error) {
       console.error('Failed to generate summary:', error);
-      addActivityLog('error', 'Failed to generate summary');
+      const errorMsg = error instanceof Error ? error.message : 'Network error or server unavailable';
+      addActivityLog('error', `Failed to generate summary: ${errorMsg}`);
     } finally {
       setIsGeneratingSummary(false);
     }
