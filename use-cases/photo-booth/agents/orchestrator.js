@@ -140,7 +140,15 @@ class PhotoBoothOrchestrator {
   "lighting_quality": "good" | "moderate" | "poor",
   "is_valid": boolean,
   "warnings": string[],
-  "suggestions": string[]
+  "suggestions": string[],
+  "person_description": {
+    "gender": "male" | "female" | "unknown",
+    "age_range": string (e.g., "20-30", "30-40"),
+    "expression": string (e.g., "smiling", "neutral", "serious", "playful"),
+    "mood": string (e.g., "happy", "confident", "relaxed", "cheerful"),
+    "notable_features": string (brief description like "wearing glasses", "long hair", etc.),
+    "vibe": string (overall feeling in 2-3 words like "professional and confident", "fun and energetic")
+  }
 }
 Only return JSON.`,
               },
@@ -166,6 +174,14 @@ Only return JSON.`,
         is_valid: true,
         warnings: [],
         suggestions: [],
+        person_description: {
+          gender: 'unknown',
+          age_range: 'unknown',
+          expression: 'neutral',
+          mood: 'neutral',
+          notable_features: '',
+          vibe: 'ready for transformation',
+        },
       };
     }
   }
@@ -181,19 +197,7 @@ Only return JSON.`,
     };
 
     try {
-      reportProgress('🔍 Analyzing face recognition...', 'face', 20);
-      await this.sleep(300);
-
-      reportProgress('✓ Face detected with high confidence', 'face_done', 30);
-      await this.sleep(200);
-
-      reportProgress('🌍 Analyzing environment...', 'environment', 50);
-      await this.sleep(300);
-
-      reportProgress('✓ Environment analysis complete', 'env_done', 60);
-
-      reportProgress('🎨 Evaluating style compatibility...', 'style', 80);
-      await this.sleep(300);
+      reportProgress('🔍 Analyzing your photo...', 'face', 20);
 
       // Get original image
       const imageResult = await this.pool.query(
@@ -201,12 +205,49 @@ Only return JSON.`,
         [sessionId]
       );
 
+      let claudeAnalysis = null;
+      if (imageResult.rows.length > 0) {
+        const imagePath = imageResult.rows[0].image_path;
+        if (fs.existsSync(imagePath)) {
+          reportProgress('🤖 AI analyzing face and expression...', 'ai_analysis', 40);
+          claudeAnalysis = await this.analyzeImageWithClaude(imagePath);
+        }
+      }
+
+      reportProgress('✓ Face detected with high confidence', 'face_done', 50);
+
+      reportProgress('🌍 Analyzing environment...', 'environment', 60);
+      await this.sleep(200);
+
+      reportProgress('✓ Environment analysis complete', 'env_done', 70);
+
+      reportProgress('🎨 Evaluating style compatibility...', 'style', 80);
+      await this.sleep(200);
+
+      // Build analysis object with Claude results
+      const personDescription = claudeAnalysis?.person_description || {
+        gender: 'unknown',
+        age_range: 'unknown',
+        expression: 'neutral',
+        mood: 'neutral',
+        notable_features: '',
+        vibe: 'ready for transformation',
+      };
+
       const analysis = {
-        face_analysis: { detected: true, count: 1, confidence: 0.95 },
-        environment_analysis: { scene_type: 'indoor', lighting: 'good' },
+        face_analysis: {
+          detected: claudeAnalysis?.face_detected ?? true,
+          count: claudeAnalysis?.face_count ?? 1,
+          confidence: claudeAnalysis?.face_confidence ?? 0.95,
+        },
+        environment_analysis: {
+          scene_type: 'indoor',
+          lighting: claudeAnalysis?.lighting_quality || 'good',
+        },
+        person_description: personDescription,
         style_compatibility: {
           recommended_themes: ['versailles-court', 'georgian-england'],
-          reasoning: 'Good lighting and composition suitable for portrait transformation',
+          reasoning: `${personDescription.vibe || 'Great expression'} - perfect for portrait transformation`,
         },
       };
 
@@ -216,7 +257,11 @@ Only return JSON.`,
         [JSON.stringify(analysis), sessionId]
       );
 
-      reportProgress('✓ Analysis complete - Versailles Court recommended', 'complete', 100);
+      // Build completion message with person description
+      const descMsg = personDescription.expression !== 'unknown'
+        ? `${personDescription.expression} expression detected - ${personDescription.vibe}`
+        : 'Analysis complete - Versailles Court recommended';
+      reportProgress(`✓ ${descMsg}`, 'complete', 100);
 
       return {
         analysis,

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Image as ImageIcon, Calendar, Clock, Cpu, Palette, Download, ChevronLeft, ChevronRight, Loader2, AlertCircle, Eye, RefreshCw } from 'lucide-react';
+import { Image as ImageIcon, Calendar, Clock, Cpu, Palette, Download, ChevronLeft, ChevronRight, Loader2, AlertCircle, Eye, RefreshCw, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 interface GeneratedImage {
@@ -45,6 +45,7 @@ export default function PhotoBoothLibraryPage() {
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateProgress, setRegenerateProgress] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
   const limit = 20;
 
   useEffect(() => {
@@ -122,6 +123,28 @@ export default function PhotoBoothLibraryPage() {
     } catch (err) {
       setRegenerateProgress(prev => [...prev, '❌ Failed to regenerate']);
       setTimeout(() => setRegenerating(false), 2000);
+    }
+  };
+
+  const deleteImage = async (imageId: string) => {
+    if (!confirm('Are you sure you want to delete this image? This cannot be undone.')) return;
+
+    try {
+      setDeleting(true);
+      const response = await fetch(`${API_BASE}/api/photo-booth/admin/image/${imageId}`, {
+        method: 'DELETE',
+      });
+      const result = await response.json();
+      if (result.success) {
+        setSelectedImage(null);
+        fetchImages();
+      } else {
+        alert('Failed to delete image: ' + (result.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Failed to delete image');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -379,7 +402,7 @@ export default function PhotoBoothLibraryPage() {
                 <div className="flex gap-2 pt-4">
                   <button
                     onClick={() => regenerateImage(selectedImage.session_id, selectedImage.theme)}
-                    disabled={regenerating}
+                    disabled={regenerating || deleting}
                     className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {regenerating ? (
@@ -398,12 +421,23 @@ export default function PhotoBoothLibraryPage() {
                     Download
                   </a>
                   <button
+                    onClick={() => deleteImage(selectedImage.image_id)}
+                    disabled={regenerating || deleting}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {deleting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                  </button>
+                  <button
                     onClick={() => {
                       setSelectedImage(null);
                       setRegenerating(false);
                       setRegenerateProgress([]);
                     }}
-                    disabled={regenerating}
+                    disabled={regenerating || deleting}
                     className="px-4 py-2 border border-slate-600 text-gray-300 rounded-lg hover:bg-slate-700 disabled:opacity-50"
                   >
                     Close

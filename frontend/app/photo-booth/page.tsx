@@ -50,7 +50,7 @@ interface FinalResult {
   share_link: string;
 }
 
-type Step = 'consent' | 'capture' | 'theme' | 'generating' | 'result';
+type Step = 'consent' | 'theme' | 'capture' | 'generating' | 'result';
 
 interface ProgressUpdate {
   type: 'start' | 'progress' | 'complete' | 'error';
@@ -160,7 +160,7 @@ export default function PhotoBoothPage() {
     }
   };
 
-  // Create session and auto-start camera with countdown
+  // Create session and go to theme selection
   const createSession = async () => {
     try {
       setIsLoading(true);
@@ -176,10 +176,8 @@ export default function PhotoBoothPage() {
 
       if (data.success) {
         setSessionId(data.session_id);
-        setCurrentStep('capture');
-        // Auto-start camera and enable countdown
-        setAutoCapture(true);
-        startCameraForCountdown();
+        // Go to theme selection first
+        setCurrentStep('theme');
       } else {
         setError(data.error || 'Failed to create session');
       }
@@ -188,6 +186,14 @@ export default function PhotoBoothPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Start camera after theme selection with countdown
+  const proceedToCapture = () => {
+    if (!selectedTheme) return;
+    setCurrentStep('capture');
+    setAutoCapture(true);
+    startCameraForCountdown();
   };
 
   // Start camera specifically for countdown flow
@@ -355,10 +361,8 @@ export default function PhotoBoothPage() {
 
               if (data.type === 'complete') {
                 setAnalysis(data.analysis);
-                if (data.recommended_theme) {
-                  setSelectedTheme(data.recommended_theme);
-                }
-                setCurrentStep('theme');
+                // Theme is already selected, go directly to generate
+                generateImage();
               } else if (data.type === 'error') {
                 setError(data.error?.message || 'Analysis failed');
               }
@@ -736,10 +740,8 @@ export default function PhotoBoothPage() {
 
   const renderThemeStep = () => (
     <div className="p-6">
-      <h2 className="text-xl font-semibold mb-2 text-white">Choose Your Theme</h2>
-      {analysis?.style_compatibility?.reasoning && (
-        <p className="text-sm text-gray-400 mb-4">{analysis.style_compatibility.reasoning}</p>
-      )}
+      <h2 className="text-xl font-semibold mb-2 text-white">Choose Your Style</h2>
+      <p className="text-sm text-gray-400 mb-4">Select a theme, then we&apos;ll take your photo</p>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
         {themes.map((theme) => (
@@ -750,10 +752,6 @@ export default function PhotoBoothPage() {
               selectedTheme === theme.id
                 ? 'ring-4 ring-purple-500 scale-[1.02]'
                 : 'hover:scale-[1.01]'
-            } ${
-              analysis?.style_compatibility?.recommended_themes?.includes(theme.id)
-                ? 'ring-2 ring-amber-500'
-                : ''
             }`}
           >
             {/* Theme Preview Image */}
@@ -770,15 +768,6 @@ export default function PhotoBoothPage() {
               </div>
             )}
 
-            {/* Recommended badge */}
-            {analysis?.style_compatibility?.recommended_themes?.includes(theme.id) && (
-              <div className="absolute top-2 left-2">
-                <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full font-medium">
-                  Recommended
-                </span>
-              </div>
-            )}
-
             {/* Theme info overlay */}
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
               <p className="text-xs text-gray-300">{theme.country} &bull; {theme.era}</p>
@@ -788,12 +777,12 @@ export default function PhotoBoothPage() {
       </div>
 
       <button
-        onClick={generateImage}
+        onClick={proceedToCapture}
         disabled={!selectedTheme}
         className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
-        <Sparkles className="w-5 h-5" />
-        Generate Portrait
+        <Camera className="w-5 h-5" />
+        Take Photo
       </button>
 
       {error && (
@@ -996,14 +985,14 @@ export default function PhotoBoothPage() {
       {currentStep !== 'consent' && (
         <div className="max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center gap-2 text-sm">
-            {['capture', 'theme', 'generating', 'result'].map((step, i) => (
+            {['theme', 'capture', 'generating', 'result'].map((step, i) => (
               <div key={step} className="flex items-center">
                 {i > 0 && <div className="w-8 h-0.5 bg-slate-700 mx-1" />}
                 <div
                   className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
                     currentStep === step
                       ? 'bg-purple-600 text-white'
-                      : ['capture', 'theme', 'generating', 'result'].indexOf(currentStep) > i
+                      : ['theme', 'capture', 'generating', 'result'].indexOf(currentStep) > i
                       ? 'bg-purple-800 text-purple-300'
                       : 'bg-slate-700 text-slate-500'
                   }`}
