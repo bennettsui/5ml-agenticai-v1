@@ -12,8 +12,8 @@ const { createGeminiImageClient } = require('../lib/geminiImageClient');
 // Load themes configuration
 const themesConfig = require('../config/themes.json');
 
-// Gemini API key for image generation
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDqUbjaq5oBuS9xJx99z7lgPJq-QapiKNY';
+// Gemini API key for image generation (set via environment variable)
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 class PhotoBoothOrchestrator {
   constructor(config) {
@@ -21,8 +21,8 @@ class PhotoBoothOrchestrator {
     this.anthropic = config.anthropic;
     this.themes = themesConfig.themes;
     this.agentName = 'Photo Booth Orchestrator';
-    this.geminiClient = createGeminiImageClient(GEMINI_API_KEY);
-    this.useAIGeneration = true; // Set to false to use mock mode
+    this.geminiClient = GEMINI_API_KEY ? createGeminiImageClient(GEMINI_API_KEY) : null;
+    this.useAIGeneration = !!GEMINI_API_KEY; // Only use AI if API key is set
   }
 
   // Create a new session
@@ -279,7 +279,7 @@ Only return JSON.`,
 
       let styledBuffer;
 
-      if (this.useAIGeneration) {
+      if (this.useAIGeneration && this.geminiClient) {
         // Use Gemini API for real AI generation
         try {
           reportProgress('🤖 Connecting to AI model...', 'ai_connect', 25);
