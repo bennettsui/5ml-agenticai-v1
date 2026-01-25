@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Download, Share2, Sparkles, ExternalLink } from 'lucide-react';
@@ -15,7 +16,18 @@ const API_BASE = typeof window !== 'undefined' && window.location.hostname === '
   ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
   : '';
 
-export default function SharePage() {
+function LoadingState() {
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white flex items-center justify-center">
+      <div className="text-center">
+        <Sparkles className="w-12 h-12 text-purple-600 animate-pulse mx-auto mb-4" />
+        <p className="text-gray-600">Loading your portrait...</p>
+      </div>
+    </div>
+  );
+}
+
+function ShareContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
 
@@ -34,8 +46,6 @@ export default function SharePage() {
 
   const fetchShareData = async (imageId: string) => {
     try {
-      // For now, construct the download link from the short ID
-      // In production, you'd fetch metadata from the API
       setShareData({
         image_url: `${API_BASE}/api/photo-booth/download/${imageId}`,
         download_link: `${API_BASE}/api/photo-booth/download/${imageId}`,
@@ -63,21 +73,13 @@ export default function SharePage() {
         // User cancelled or error
       }
     } else {
-      // Fallback: copy to clipboard
       await navigator.clipboard.writeText(shareUrl);
       alert('Link copied to clipboard!');
     }
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white flex items-center justify-center">
-        <div className="text-center">
-          <Sparkles className="w-12 h-12 text-purple-600 animate-pulse mx-auto mb-4" />
-          <p className="text-gray-600">Loading your portrait...</p>
-        </div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   if (error || !id) {
@@ -98,7 +100,6 @@ export default function SharePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white">
-      {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -108,10 +109,8 @@ export default function SharePage() {
         </div>
       </header>
 
-      {/* Main content */}
       <main className="max-w-2xl mx-auto p-4">
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          {/* Image */}
           <div className="bg-gradient-to-b from-purple-100 to-purple-200 p-8">
             <div className="aspect-[3/4] bg-white rounded-lg shadow-inner flex items-center justify-center">
               {shareData?.image_url ? (
@@ -120,7 +119,6 @@ export default function SharePage() {
                   alt="18th Century Portrait"
                   className="w-full h-full object-contain rounded-lg"
                   onError={(e) => {
-                    // Show placeholder on error
                     e.currentTarget.style.display = 'none';
                     const parent = e.currentTarget.parentElement;
                     if (parent) {
@@ -143,7 +141,6 @@ export default function SharePage() {
             </div>
           </div>
 
-          {/* Info & Actions */}
           <div className="p-6">
             <h1 className="text-xl font-semibold text-center mb-2">
               18th Century Portrait
@@ -152,7 +149,6 @@ export default function SharePage() {
               Created with 5ML AI Photo Booth
             </p>
 
-            {/* Action buttons */}
             <div className="grid grid-cols-2 gap-4 mb-6">
               <a
                 href={shareData?.download_link}
@@ -172,7 +168,6 @@ export default function SharePage() {
               </button>
             </div>
 
-            {/* CTA */}
             <div className="bg-purple-50 rounded-lg p-4 text-center">
               <p className="text-purple-700 font-medium mb-2">
                 Want your own 18th century portrait?
@@ -189,7 +184,6 @@ export default function SharePage() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="text-center py-6 text-sm text-gray-500">
         <p>Powered by 5ML AI</p>
         <p className="mt-1">
@@ -199,5 +193,13 @@ export default function SharePage() {
         </p>
       </footer>
     </div>
+  );
+}
+
+export default function SharePage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <ShareContent />
+    </Suspense>
   );
 }
