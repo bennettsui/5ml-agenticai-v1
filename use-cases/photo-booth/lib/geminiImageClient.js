@@ -7,10 +7,10 @@ class GeminiImageClient {
   constructor(apiKey) {
     this.apiKey = apiKey;
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-    // Use gemini-2.0-flash-preview-image-generation for image generation with multimodal input
-    // Alternative: 'gemini-2.0-flash-exp' also works
-    this.model = 'gemini-2.0-flash-preview-image-generation';
-    console.log('[GeminiImageClient] Initialized with model:', this.model);
+    // Use gemini-2.0-flash-exp for native image generation (aka "nanobanana")
+    // This model supports both image input and image output
+    this.model = 'gemini-2.0-flash-exp';
+    console.log('[GeminiImageClient] Initialized with model:', this.model, '(nanobanana)');
   }
 
   /**
@@ -139,6 +139,11 @@ Portrait in the style of Leonardo da Vinci's "Mona Lisa", Renaissance oil painti
 
     // Theme-specific costume and background additions
     const themeAdditions = {
+      'mona-lisa': `
+Keep the classic Mona Lisa composition exactly: simple dark Renaissance dress, hands gently folded,
+soft atmospheric landscape with winding paths and distant mountains in the background.
+This is the pure Leonardo da Vinci style - no additional costume elements needed.`,
+
       'versailles-court': `
 Dress the subject in elaborate French baroque clothing: silk brocade coat with gold embroidery, lace cravat, powdered wig if appropriate.
 Background should hint at opulent palace interior with gilded elements visible in the atmospheric distance.`,
@@ -164,7 +169,7 @@ Dress the subject in Spanish colonial fashion: dark velvet coat with silver embr
 Background should show colonial architecture and courtyard in the atmospheric distance.`,
     };
 
-    const themeAddition = themeAdditions[theme.id] || themeAdditions['versailles-court'];
+    const themeAddition = themeAdditions[theme.id] || themeAdditions['mona-lisa'];
 
     return `${baseStyle}
 ${themeAddition}
