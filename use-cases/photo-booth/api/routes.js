@@ -481,7 +481,7 @@ router.get('/admin/library', async (req, res) => {
       ORDER BY count DESC
     `);
 
-    const themes_used: { [key: string]: number } = {};
+    const themes_used = {};
     themeStats.rows.forEach(row => {
       themes_used[row.theme] = parseInt(row.count);
     });
