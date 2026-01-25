@@ -23,6 +23,19 @@ try {
 const inMemoryTopics = new Map();
 const inMemorySources = new Map();
 
+// Scheduler service (lazy-loaded to avoid circular dependencies)
+let scheduler = null;
+function getScheduler() {
+  if (!scheduler) {
+    try {
+      scheduler = require('../../../services/scheduler');
+    } catch (e) {
+      console.warn('[Routes] Scheduler service not available');
+    }
+  }
+  return scheduler;
+}
+
 // ==========================================
 // EDM Cache (Key-Value Store)
 // ==========================================
@@ -1414,6 +1427,12 @@ router.put('/topics/:id', async (req, res) => {
       try {
         const topic = await db.updateIntelligenceTopic(id, updates);
         if (topic) {
+          // Update scheduler if daily scan config changed
+          const sched = getScheduler();
+          if (sched && updates.daily_scan_config) {
+            sched.updateTopicSchedule(id, topic.name, updates.daily_scan_config, updates.weekly_digest_config);
+            console.log(`[Routes] Updated scheduler for topic: ${topic.name}`);
+          }
           return res.json({ success: true, topic, message: 'Topic updated successfully' });
         }
         return res.status(404).json({ success: false, error: 'Topic not found' });
@@ -1444,6 +1463,13 @@ router.put('/topics/:id', async (req, res) => {
 router.delete('/topics/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Remove scheduler jobs for this topic
+    const sched = getScheduler();
+    if (sched) {
+      sched.removeTopicSchedules(id);
+      console.log(`[Routes] Removed scheduler for topic: ${id}`);
+    }
 
     if (db && process.env.DATABASE_URL) {
       try {
@@ -1504,6 +1530,13 @@ router.delete('/sources/:id', async (req, res) => {
  */
 router.put('/topics/:id/pause', async (req, res) => {
   try {
+    // Remove scheduler jobs when paused
+    const sched = getScheduler();
+    if (sched) {
+      sched.removeTopicSchedules(req.params.id);
+      console.log(`[Routes] Paused scheduler for topic: ${req.params.id}`);
+    }
+
     if (db && process.env.DATABASE_URL) {
       try {
         await db.updateIntelligenceTopicStatus(req.params.id, 'paused');
@@ -1537,6 +1570,25 @@ router.put('/topics/:id/resume', async (req, res) => {
     if (db && process.env.DATABASE_URL) {
       try {
         await db.updateIntelligenceTopicStatus(req.params.id, 'active');
+
+        // Re-enable scheduler for resumed topic
+        const topic = await db.getIntelligenceTopic(req.params.id);
+        if (topic) {
+          const sched = getScheduler();
+          if (sched) {
+            const dailyConfig = typeof topic.daily_scan_config === 'string'
+              ? JSON.parse(topic.daily_scan_config)
+              : topic.daily_scan_config;
+            const weeklyConfig = typeof topic.weekly_digest_config === 'string'
+              ? JSON.parse(topic.weekly_digest_config)
+              : topic.weekly_digest_config;
+
+            if (dailyConfig?.enabled) {
+              sched.updateTopicSchedule(req.params.id, topic.name, dailyConfig, weeklyConfig);
+              console.log(`[Routes] Resumed scheduler for topic: ${topic.name}`);
+            }
+          }
+        }
         return res.json({ success: true, message: 'Topic resumed' });
       } catch (dbError) {
         console.error('Database update failed:', dbError.message);
@@ -3970,4 +4022,64 @@ router.get('/debug/llm-status', (req, res) => {
   res.json(status);
 });
 
+/**
+ * GET /debug/scheduler-status
+ * Diagnostic endpoint to check scheduler status
+ */
+router.get('/debug/scheduler-status', (req, res) => {
+  const sched = getScheduler();
+
+  const status = {
+    timestamp: new Date().toISOString(),
+    schedulerAvailable: !!sched,
+    scheduledJobs: sched ? sched.getScheduleStatus() : [],
+    message: sched ? 'Scheduler is running' : 'Scheduler not initialized',
+  };
+
+  console.log('🕐 Scheduler Status:', JSON.stringify(status, null, 2));
+  res.json(status);
+});
+
+/**
+ * Standalone scan function for scheduled scans
+ * Can be called by the scheduler without requiring HTTP request/response
+ * @param {string} topicId - The topic ID to scan
+ * @param {string} topicName - The topic name (for logging)
+ */
+async function runScheduledScan(topicId, topicName) {
+  console.log(`[ScheduledScan] 🔄 Starting scheduled scan for: ${topicName}`);
+
+  try {
+    let topic;
+    let sources = [];
+
+    if (db && process.env.DATABASE_URL) {
+      topic = await db.getIntelligenceTopic(topicId);
+      sources = await db.getIntelligenceSources(topicId);
+    } else {
+      topic = inMemoryTopics.get(topicId);
+      sources = Array.from(inMemorySources.values()).filter(s => s.topicId === topicId);
+    }
+
+    if (!topic) {
+      console.error(`[ScheduledScan] ❌ Topic not found: ${topicId}`);
+      return { success: false, error: 'Topic not found' };
+    }
+
+    const scanId = `scheduled-scan-${Date.now()}`;
+    console.log(`[ScheduledScan] 📡 Scanning ${sources.length} sources for topic: ${topicName}`);
+
+    // Run the actual scan (this is the same function used by manual scans)
+    await runScanWithUpdates(topicId, topic, sources, scanId);
+
+    console.log(`[ScheduledScan] ✅ Completed scheduled scan for: ${topicName}`);
+    return { success: true, scanId, sourcesScanned: sources.length };
+  } catch (error) {
+    console.error(`[ScheduledScan] ❌ Error scanning ${topicName}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Export both the router and the scheduled scan function
 module.exports = router;
+module.exports.runScheduledScan = runScheduledScan;

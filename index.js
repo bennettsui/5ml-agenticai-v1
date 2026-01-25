@@ -1398,9 +1398,13 @@ console.log('✅ Receipt tracking routes loaded: /api/receipts');
 
 // Topic Intelligence Routes
 const topicIntelligenceRoutes = require('./use-cases/topic-intelligence/api-js/routes');
+const { runScheduledScan } = require('./use-cases/topic-intelligence/api-js/routes');
 app.use('/api/intelligence', topicIntelligenceRoutes);
 
 console.log('✅ Topic Intelligence routes loaded: /api/intelligence');
+
+// Scheduler Service
+const scheduler = require('./services/scheduler');
 
 // ==========================================
 // Next.js Client-Side Routing Fallback
@@ -1460,7 +1464,7 @@ const server = http.createServer(app);
 // Initialize WebSocket server
 wsServer.initialize(server);
 
-server.listen(port, '0.0.0.0', () => {
+server.listen(port, '0.0.0.0', async () => {
   console.log(`
 ╔════════════════════════════════════════╗
 ║  🚀 5ML Agentic AI Platform v1         ║
@@ -1477,6 +1481,20 @@ server.listen(port, '0.0.0.0', () => {
 ║  🌍 Region: IAD (Ashburn, Virginia)   ║
 ╚════════════════════════════════════════╝
   `);
+
+  // Initialize scheduler for Topic Intelligence
+  if (process.env.DATABASE_URL) {
+    try {
+      const db = require('./db');
+      scheduler.initialize(db, runScheduledScan);
+      await scheduler.loadAllSchedules();
+      console.log('✅ Scheduler service initialized');
+    } catch (error) {
+      console.error('⚠️ Scheduler initialization failed:', error.message);
+    }
+  } else {
+    console.log('⚠️ Scheduler not initialized - DATABASE_URL not set');
+  }
 });
 
 
