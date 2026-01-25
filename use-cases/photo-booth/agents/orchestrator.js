@@ -63,6 +63,10 @@ class PhotoBoothOrchestrator {
         throw new Error('Image file not found');
       }
 
+      // Read file and convert to base64 for storage (ephemeral /tmp won't persist)
+      const imageBuffer = fs.readFileSync(imagePath);
+      const base64Image = imageBuffer.toString('base64');
+
       reportProgress('Analyzing image with AI...', 'analyze', 50);
 
       // Use Claude Vision to analyze the image
@@ -70,13 +74,13 @@ class PhotoBoothOrchestrator {
 
       reportProgress('Saving image...', 'save', 80);
 
-      // Save to database
+      // Save to database with base64 data in metadata
       const result = await this.pool.query(
         `INSERT INTO photo_booth_images
-         (session_id, image_type, image_path, quality_check_json)
-         VALUES ($1, 'original', $2, $3)
+         (session_id, image_type, image_path, quality_check_json, metadata_json)
+         VALUES ($1, 'original', $2, $3, $4)
          RETURNING image_id`,
-        [sessionId, imagePath, JSON.stringify(qualityCheck)]
+        [sessionId, imagePath, JSON.stringify(qualityCheck), JSON.stringify({ base64_data: base64Image })]
       );
 
       reportProgress('Upload complete', 'complete', 100);
@@ -231,9 +235,9 @@ Only return JSON.`,
 
       reportProgress('🎬 Preparing image generation...', 'prepare', 10);
 
-      // Get original image path
+      // Get original image with base64 data from database
       const originalResult = await this.pool.query(
-        `SELECT image_path FROM photo_booth_images WHERE session_id = $1 AND image_type = 'original' ORDER BY created_at DESC LIMIT 1`,
+        `SELECT image_path, metadata_json FROM photo_booth_images WHERE session_id = $1 AND image_type = 'original' ORDER BY created_at DESC LIMIT 1`,
         [sessionId]
       );
 
@@ -241,7 +245,21 @@ Only return JSON.`,
         throw new Error('Original image not found');
       }
 
-      const originalPath = originalResult.rows[0].image_path;
+      const { image_path: originalPath, metadata_json } = originalResult.rows[0];
+
+      // Get image buffer - either from stored base64 or from file
+      let imageBuffer;
+      if (metadata_json && metadata_json.base64_data) {
+        // Use stored base64 data (preferred - persists across ephemeral storage)
+        imageBuffer = Buffer.from(metadata_json.base64_data, 'base64');
+        console.log(`[${this.agentName}] Using stored base64 image data`);
+      } else if (fs.existsSync(originalPath)) {
+        // Fallback to file system
+        imageBuffer = fs.readFileSync(originalPath);
+        console.log(`[${this.agentName}] Using file system image`);
+      } else {
+        throw new Error(`Original image not found: ${originalPath}`);
+      }
 
       reportProgress('🎬 Generating your 18th-century portrait...', 'generate', 20);
 
@@ -262,7 +280,7 @@ Only return JSON.`,
 
       // Apply vintage/sepia effect to simulate 18th-century portrait
       // In production, this would be replaced by actual ComfyUI generation
-      await sharp(originalPath)
+      await sharp(imageBuffer)
         .resize(768, 1024, { fit: 'cover', position: 'centre' })
         .modulate({
           brightness: 1.05,
@@ -275,14 +293,18 @@ Only return JSON.`,
 
       reportProgress('✓ Image generated successfully', 'done', 90);
 
-      // Save styled image record
+      // Read styled image and store as base64 (for persistence in ephemeral environments)
+      const styledBuffer = fs.readFileSync(styledPath);
+      const styledBase64 = styledBuffer.toString('base64');
+
+      // Save styled image record with base64 data
       const generationTimeMs = Date.now() - startTime;
       const result = await this.pool.query(
         `INSERT INTO photo_booth_images
-         (session_id, image_type, image_path, theme, generation_time_ms)
-         VALUES ($1, 'styled', $2, $3, $4)
+         (session_id, image_type, image_path, theme, generation_time_ms, metadata_json)
+         VALUES ($1, 'styled', $2, $3, $4, $5)
          RETURNING image_id`,
-        [sessionId, styledPath, themeName, generationTimeMs]
+        [sessionId, styledPath, themeName, generationTimeMs, JSON.stringify({ base64_data: styledBase64 })]
       );
 
       // Update session
@@ -318,9 +340,9 @@ Only return JSON.`,
     try {
       reportProgress('🏷️ Applying 5ML branding...', 'branding', 20);
 
-      // Get styled image path
+      // Get styled image with base64 data from database
       const styledResult = await this.pool.query(
-        `SELECT image_path FROM photo_booth_images WHERE session_id = $1 AND image_type = 'styled' ORDER BY created_at DESC LIMIT 1`,
+        `SELECT image_path, metadata_json FROM photo_booth_images WHERE session_id = $1 AND image_type = 'styled' ORDER BY created_at DESC LIMIT 1`,
         [sessionId]
       );
 
@@ -328,12 +350,28 @@ Only return JSON.`,
         throw new Error('Styled image not found');
       }
 
-      const styledPath = styledResult.rows[0].image_path;
+      const { image_path: styledPath, metadata_json } = styledResult.rows[0];
+
+      // Get image buffer - either from stored base64 or from file
+      let styledBuffer;
+      if (metadata_json && metadata_json.base64_data) {
+        styledBuffer = Buffer.from(metadata_json.base64_data, 'base64');
+        console.log(`[${this.agentName}] Using stored base64 styled image`);
+      } else if (fs.existsSync(styledPath)) {
+        styledBuffer = fs.readFileSync(styledPath);
+        console.log(`[${this.agentName}] Using file system styled image`);
+      } else {
+        throw new Error(`Styled image not found: ${styledPath}`);
+      }
+
       const outputDir = '/tmp/photo-booth/outputs';
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
       const brandedPath = path.join(outputDir, `branded_${sessionId}_${Date.now()}.jpg`);
 
       // Apply branding overlay with sharp
-      const image = sharp(styledPath);
+      const image = sharp(styledBuffer);
       const metadata = await image.metadata();
       const width = metadata.width || 768;
       const height = metadata.height || 1024;
@@ -387,13 +425,17 @@ Only return JSON.`,
 
       reportProgress('✓ Branding applied', 'branding_done', 40);
 
-      // Save branded image
+      // Read branded image and store as base64 (for persistence)
+      const brandedBuffer = fs.readFileSync(brandedPath);
+      const brandedBase64 = brandedBuffer.toString('base64');
+
+      // Save branded image with base64 data
       const brandedResult = await this.pool.query(
         `INSERT INTO photo_booth_images
-         (session_id, image_type, image_path)
-         VALUES ($1, 'branded', $2)
+         (session_id, image_type, image_path, metadata_json)
+         VALUES ($1, 'branded', $2, $3)
          RETURNING image_id`,
-        [sessionId, brandedPath]
+        [sessionId, brandedPath, JSON.stringify({ base64_data: brandedBase64 })]
       );
 
       reportProgress('📱 Generating QR code...', 'qr', 60);

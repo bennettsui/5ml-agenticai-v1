@@ -723,9 +723,9 @@ router.get('/image/:image_id', async (req, res) => {
     const { image_id } = req.params;
     const pool = getPool(req);
 
-    // Get image path from database
+    // Get image with metadata from database
     const result = await pool.query(
-      'SELECT image_path, image_type FROM photo_booth_images WHERE image_id = $1',
+      'SELECT image_path, image_type, metadata_json FROM photo_booth_images WHERE image_id = $1',
       [image_id]
     );
 
@@ -736,18 +736,27 @@ router.get('/image/:image_id', async (req, res) => {
       });
     }
 
-    const { image_path } = result.rows[0];
+    const { image_path, metadata_json } = result.rows[0];
 
-    if (!fs.existsSync(image_path)) {
-      // Return placeholder for mock mode
-      return res.status(404).json({
-        success: false,
-        error: 'Image file not found (mock mode)',
-        image_path,
-      });
+    // Try to serve from file system first
+    if (fs.existsSync(image_path)) {
+      return res.sendFile(image_path);
     }
 
-    res.sendFile(image_path);
+    // Fallback to base64 data stored in database
+    if (metadata_json && metadata_json.base64_data) {
+      const imageBuffer = Buffer.from(metadata_json.base64_data, 'base64');
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Content-Length', imageBuffer.length);
+      return res.send(imageBuffer);
+    }
+
+    // Neither file nor base64 available
+    return res.status(404).json({
+      success: false,
+      error: 'Image file not found',
+      image_path,
+    });
   } catch (error) {
     console.error('[Photo Booth API] Get image error:', error);
     res.status(500).json({
@@ -778,13 +787,10 @@ router.get('/download/:short_id', async (req, res) => {
     const { short_id } = req.params;
     const pool = getPool(req);
 
-    // Get QR code record
-    const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:8080';
-    const shortLink = `${baseUrl}/pb/${short_id}`;
-
+    // Get QR code record - try both short_link formats
     const qrResult = await pool.query(
-      'SELECT * FROM photo_booth_qr_codes WHERE short_link = $1',
-      [shortLink]
+      'SELECT * FROM photo_booth_qr_codes WHERE short_link = $1 OR short_link LIKE $2',
+      [short_id, `%${short_id}`]
     );
 
     if (qrResult.rows.length === 0) {
@@ -802,25 +808,40 @@ router.get('/download/:short_id', async (req, res) => {
       [qrRecord.qr_id]
     );
 
-    // Get branded image
+    // Get branded image with metadata
     const imageResult = await pool.query(
-      'SELECT image_path FROM photo_booth_images WHERE image_id = $1',
+      'SELECT image_path, metadata_json FROM photo_booth_images WHERE image_id = $1',
       [qrRecord.image_id]
     );
 
-    if (imageResult.rows.length === 0 || !fs.existsSync(imageResult.rows[0].image_path)) {
+    if (imageResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Image file not found',
+        error: 'Image not found',
       });
     }
 
-    const imagePath = imageResult.rows[0].image_path;
+    const { image_path, metadata_json } = imageResult.rows[0];
     const filename = `5ml-photo-booth-${short_id}.jpg`;
 
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', 'image/jpeg');
-    res.sendFile(imagePath);
+
+    // Try file system first, then fallback to base64
+    if (fs.existsSync(image_path)) {
+      return res.sendFile(image_path);
+    }
+
+    if (metadata_json && metadata_json.base64_data) {
+      const imageBuffer = Buffer.from(metadata_json.base64_data, 'base64');
+      res.setHeader('Content-Length', imageBuffer.length);
+      return res.send(imageBuffer);
+    }
+
+    return res.status(404).json({
+      success: false,
+      error: 'Image file not found',
+    });
   } catch (error) {
     console.error('[Photo Booth API] Download error:', error);
     res.status(500).json({
