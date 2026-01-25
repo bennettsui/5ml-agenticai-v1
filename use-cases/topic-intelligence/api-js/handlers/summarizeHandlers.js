@@ -41,6 +41,14 @@ async function callLLM(prompt, config, apiKey, maxTokens = 4096) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+  const apiUrl = config.isAnthropic
+    ? `${config.baseUrl}/messages`
+    : `${config.baseUrl}/chat/completions`;
+
+  console.log(`   🌐 Calling LLM API: ${apiUrl}`);
+  console.log(`   📊 Model: ${config.model}, Max tokens: ${maxTokens}`);
+  console.log(`   🔑 API key length: ${apiKey?.length || 0}, prefix: ${apiKey?.substring(0, 8)}...`);
+
   try {
     let response;
 
