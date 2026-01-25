@@ -150,6 +150,7 @@ export default function LiveScanPage() {
   const [scanStalled, setScanStalled] = useState(false);
   const lastProgressTime = useRef<number>(0);
   const stalledCheckInterval = useRef<NodeJS.Timeout | null>(null);
+  const currentScanId = useRef<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const activityLogRef = useRef<HTMLDivElement>(null);
@@ -375,7 +376,14 @@ export default function LiveScanPage() {
   const handleWebSocketMessage = (message: { event?: string; type?: string; data?: unknown; batchId?: string }) => {
     // Handle different message formats
     const event = message.event || message.type;
-    const data = message.data;
+    const data = message.data as Record<string, unknown> | undefined;
+
+    // Filter out messages from old/different scans
+    const messageScanId = data?.scanId as string | undefined;
+    if (messageScanId && currentScanId.current && messageScanId !== currentScanId.current) {
+      console.log(`[WS] Ignoring message from old scan: ${messageScanId} (current: ${currentScanId.current})`);
+      return;
+    }
 
     switch (event) {
       case 'connected':
@@ -388,7 +396,7 @@ export default function LiveScanPage() {
         break;
 
       case 'progress_update':
-        setProgress(data as ScanProgress);
+        setProgress(data as unknown as ScanProgress);
         lastProgressTime.current = Date.now();
         setScanStalled(false);
         break;
@@ -396,7 +404,7 @@ export default function LiveScanPage() {
       case 'source_status_update':
         lastProgressTime.current = Date.now();
         setScanStalled(false);
-        const sourceStatus = data as SourceStatus;
+        const sourceStatus = data as unknown as SourceStatus;
         setSourceStatuses(prev => {
           const newMap = new Map(prev);
           newMap.set(sourceStatus.sourceId, sourceStatus);
@@ -419,13 +427,13 @@ export default function LiveScanPage() {
       case 'article_analyzed':
         lastProgressTime.current = Date.now();
         setScanStalled(false);
-        const article = data as AnalyzedArticle;
+        const article = data as unknown as AnalyzedArticle;
         setAnalyzedArticles(prev => [article, ...prev].slice(0, 50));
         addActivityLog('article', `Analyzed: ${article.title.substring(0, 50)}...`, `Score: ${article.importance_score}/100`);
         break;
 
       case 'error_occurred':
-        const error = data as { sourceId?: string; message: string };
+        const error = data as unknown as { sourceId?: string; message: string };
         setErrorLogs(prev => [
           { time: new Date().toISOString(), ...error },
           ...prev,
@@ -435,7 +443,7 @@ export default function LiveScanPage() {
 
       case 'scan_complete':
         setProgress(prev => ({ ...prev, status: 'complete' }));
-        addActivityLog('success', 'Scan completed successfully!', `Analyzed ${(data as { articlesAnalyzed?: number })?.articlesAnalyzed || 0} articles`);
+        addActivityLog('success', 'Scan completed successfully!', `Analyzed ${(data as unknown as { articlesAnalyzed?: number })?.articlesAnalyzed || 0} articles`);
         break;
 
       case 'update':
@@ -499,11 +507,17 @@ export default function LiveScanPage() {
       const data = await response.json();
 
       if (data.success) {
+        // Store the current scan ID to filter out updates from old scans
+        currentScanId.current = data.scanId;
         addActivityLog('info', `Scan initiated with ${data.totalSources || 0} sources`, `Scan ID: ${data.scanId}`);
         addActivityLog('info', `WebSocket status: ${isConnected ? 'Connected' : 'Disconnected'}`, 'Waiting for updates...');
         setProgress(prev => ({
           ...prev,
+          sourcesScanned: 0,
           totalSources: data.totalSources || 0,
+          articlesFound: 0,
+          articlesAnalyzed: 0,
+          highImportanceCount: 0,
           status: 'scanning',
         }));
       } else {

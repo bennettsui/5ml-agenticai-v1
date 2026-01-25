@@ -150,6 +150,7 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
     reliableBroadcast(topicId, {
       event: 'progress_update',
       data: {
+        scanId,
         sourcesScanned: 0,
         totalSources: scanSources.length,
         articlesFound: 0,
@@ -171,6 +172,7 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
       reliableBroadcast(topicId, {
         event: 'source_status_update',
         data: {
+          scanId,
           sourceId: source.source_id || `src-${i}`,
           sourceName,
           status: 'active',
@@ -225,6 +227,7 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
       reliableBroadcast(topicId, {
         event: 'source_status_update',
         data: {
+          scanId,
           sourceId: source.source_id || `src-${i}`,
           sourceName,
           status: 'active',
@@ -300,7 +303,7 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
         // Send article analyzed event
         reliableBroadcast(topicId, {
           event: 'article_analyzed',
-          data: articleData,
+          data: { ...articleData, scanId },
         });
 
         await sleep(200);
@@ -310,6 +313,7 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
       reliableBroadcast(topicId, {
         event: 'source_status_update',
         data: {
+          scanId,
           sourceId: source.source_id || `src-${i}`,
           sourceName,
           status: 'complete',
@@ -322,6 +326,7 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
       reliableBroadcast(topicId, {
         event: 'progress_update',
         data: {
+          scanId,
           sourcesScanned: i + 1,
           totalSources: scanSources.length,
           articlesFound,
