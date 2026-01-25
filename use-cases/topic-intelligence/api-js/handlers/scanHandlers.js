@@ -47,6 +47,30 @@ function getNotionHelper() {
 }
 
 /**
+ * Reliable broadcast with subscriber check
+ * Returns true if broadcast was sent to at least one client
+ */
+function reliableBroadcast(topicId, message) {
+  const ws = getWsServer();
+  if (!ws) {
+    console.warn(`[Broadcast] WebSocket server not available`);
+    return false;
+  }
+
+  const clients = ws.clients?.get(topicId);
+  const clientCount = clients?.size || 0;
+
+  if (clientCount === 0) {
+    // Log but don't fail - client may reconnect
+    console.warn(`[Broadcast] No subscribers for topic ${topicId}, message: ${message.event}`);
+    return false;
+  }
+
+  ws.broadcast(topicId, message);
+  return true;
+}
+
+/**
  * POST /scan/start - Start a manual scan
  */
 async function startScan(req, res) {
@@ -81,12 +105,21 @@ async function startScan(req, res) {
     const scanId = `scan-${Date.now()}`;
     console.log(`🔄 Starting scan for topic: ${topic.name} (${sources.length} sources)`);
 
+    // Check WebSocket subscribers
+    const ws = getWsServer();
+    const subscriberCount = ws ? (ws.clients?.get(topicId)?.size || 0) : 0;
+    console.log(`   WebSocket subscribers for ${topicId}: ${subscriberCount}`);
+
     res.json({
       success: true,
       message: 'Scan started',
       scanId,
       totalSources: sources.length,
+      subscriberCount,
     });
+
+    // Small delay to ensure client receives response before broadcasts start
+    await sleep(100);
 
     // Run scan asynchronously
     runScanWithUpdates(topicId, topic, sources, scanId);
@@ -101,7 +134,6 @@ async function startScan(req, res) {
  * Run scan asynchronously with WebSocket updates
  */
 async function runScanWithUpdates(topicId, topic, sources, scanId) {
-  const ws = getWsServer();
   const database = getDb();
 
   try {
@@ -115,20 +147,18 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
     let highImportanceCount = 0;
 
     // Send initial progress
-    if (ws) {
-      ws.broadcast(topicId, {
-        event: 'progress_update',
-        data: {
-          sourcesScanned: 0,
-          totalSources: scanSources.length,
-          articlesFound: 0,
-          articlesAnalyzed: 0,
-          highImportanceCount: 0,
-          status: 'scanning',
-          currentSource: null,
-        },
-      });
-    }
+    reliableBroadcast(topicId, {
+      event: 'progress_update',
+      data: {
+        sourcesScanned: 0,
+        totalSources: scanSources.length,
+        articlesFound: 0,
+        articlesAnalyzed: 0,
+        highImportanceCount: 0,
+        status: 'scanning',
+        currentSource: null,
+      },
+    });
 
     for (let i = 0; i < scanSources.length; i++) {
       const source = scanSources[i];
@@ -138,24 +168,27 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
       console.log(`   Scanning source ${i + 1}/${scanSources.length}: ${sourceName} (${sourceUrl})`);
 
       // Send source status updates
-      if (ws) {
-        ws.broadcast(topicId, {
-          event: 'source_status_update',
-          data: {
-            sourceId: source.source_id || `src-${i}`,
-            sourceName,
-            status: 'active',
-            url: sourceUrl,
-            step: 'fetching',
-            message: `Fetching content from ${sourceUrl}`,
-          },
-        });
-      }
+      reliableBroadcast(topicId, {
+        event: 'source_status_update',
+        data: {
+          sourceId: source.source_id || `src-${i}`,
+          sourceName,
+          status: 'active',
+          url: sourceUrl,
+          step: 'fetching',
+          message: `Fetching content from ${sourceUrl}`,
+        },
+      });
 
-      // Fetch and extract articles
+      // Fetch and extract articles with timeout protection
       let sourceArticles = [];
       try {
-        const sourceContent = await fetchPageContent(sourceUrl);
+        const fetchPromise = fetchPageContent(sourceUrl);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Fetch timeout after 30s')), 30000)
+        );
+
+        const sourceContent = await Promise.race([fetchPromise, timeoutPromise]);
 
         if (sourceContent.success) {
           sourceArticles = extractArticleLinks(sourceUrl, sourceContent.content);
@@ -167,6 +200,7 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
             }];
           }
         } else {
+          console.warn(`   ⚠️ Failed to fetch ${sourceName}: ${sourceContent.error}`);
           sourceArticles = [{
             url: sourceUrl,
             title: `${sourceName} - Unable to fetch`,
@@ -188,18 +222,16 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
       articlesFound += foundInSource;
 
       // Send analyzing status
-      if (ws) {
-        ws.broadcast(topicId, {
-          event: 'source_status_update',
-          data: {
-            sourceId: source.source_id || `src-${i}`,
-            sourceName,
-            status: 'active',
-            step: 'analyzing',
-            message: `Analyzing ${foundInSource} articles with AI...`,
-          },
-        });
-      }
+      reliableBroadcast(topicId, {
+        event: 'source_status_update',
+        data: {
+          sourceId: source.source_id || `src-${i}`,
+          sourceName,
+          status: 'active',
+          step: 'analyzing',
+          message: `Analyzing ${foundInSource} articles with AI...`,
+        },
+      });
 
       // Process articles (limit to 5 per source)
       for (let j = 0; j < Math.min(foundInSource, 5); j++) {
@@ -266,75 +298,67 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
         }
 
         // Send article analyzed event
-        if (ws) {
-          ws.broadcast(topicId, {
-            event: 'article_analyzed',
-            data: articleData,
-          });
-        }
+        reliableBroadcast(topicId, {
+          event: 'article_analyzed',
+          data: articleData,
+        });
 
         await sleep(200);
       }
 
       // Send source complete
-      if (ws) {
-        ws.broadcast(topicId, {
-          event: 'source_status_update',
-          data: {
-            sourceId: source.source_id || `src-${i}`,
-            sourceName,
-            status: 'complete',
-            articlesFound: Math.min(foundInSource, 5),
-            step: 'complete',
-            message: `Completed: ${Math.min(foundInSource, 5)} articles analyzed`,
-          },
-        });
+      reliableBroadcast(topicId, {
+        event: 'source_status_update',
+        data: {
+          sourceId: source.source_id || `src-${i}`,
+          sourceName,
+          status: 'complete',
+          articlesFound: Math.min(foundInSource, 5),
+          step: 'complete',
+          message: `Completed: ${Math.min(foundInSource, 5)} articles analyzed`,
+        },
+      });
 
-        ws.broadcast(topicId, {
-          event: 'progress_update',
-          data: {
-            sourcesScanned: i + 1,
-            totalSources: scanSources.length,
-            articlesFound,
-            articlesAnalyzed,
-            highImportanceCount,
-            status: i === scanSources.length - 1 ? 'complete' : 'scanning',
-            currentSource: i < scanSources.length - 1 ? scanSources[i + 1]?.name : null,
-          },
-        });
-      }
+      reliableBroadcast(topicId, {
+        event: 'progress_update',
+        data: {
+          sourcesScanned: i + 1,
+          totalSources: scanSources.length,
+          articlesFound,
+          articlesAnalyzed,
+          highImportanceCount,
+          status: i === scanSources.length - 1 ? 'complete' : 'scanning',
+          currentSource: i < scanSources.length - 1 ? scanSources[i + 1]?.name : null,
+        },
+      });
 
       await sleep(300);
     }
 
     // Send completion
-    if (ws) {
-      ws.broadcast(topicId, {
-        event: 'scan_complete',
-        data: {
-          scanId,
-          totalSources: scanSources.length,
-          articlesFound,
-          articlesAnalyzed,
-          highImportanceCount,
-          completedAt: new Date().toISOString(),
-        },
-      });
-    }
+    reliableBroadcast(topicId, {
+      event: 'scan_complete',
+      data: {
+        scanId,
+        totalSources: scanSources.length,
+        articlesFound,
+        articlesAnalyzed,
+        highImportanceCount,
+        completedAt: new Date().toISOString(),
+      },
+    });
 
     console.log(`✅ Scan complete for topic: ${topic.name} - ${articlesAnalyzed} articles analyzed`);
 
   } catch (error) {
     console.error(`❌ Scan error for topic ${topicId}:`, error);
-    if (ws) {
-      ws.broadcast(topicId, {
-        event: 'error_occurred',
-        data: {
-          message: `Scan failed: ${error.message}`,
-          scanId,
-        },
-      });
-    }
+    reliableBroadcast(topicId, {
+      event: 'error_occurred',
+      data: {
+        message: `Scan failed: ${error.message}`,
+        scanId,
+      },
+    });
   }
 }
 

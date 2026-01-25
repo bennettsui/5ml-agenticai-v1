@@ -146,6 +146,11 @@ export default function LiveScanPage() {
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const summaryTriggered = useRef(false);
 
+  // Stale scan detection
+  const [scanStalled, setScanStalled] = useState(false);
+  const lastProgressTime = useRef<number>(0);
+  const stalledCheckInterval = useRef<NodeJS.Timeout | null>(null);
+
   const wsRef = useRef<WebSocket | null>(null);
   const activityLogRef = useRef<HTMLDivElement>(null);
   const autostartTriggered = useRef(false);
@@ -382,9 +387,13 @@ export default function LiveScanPage() {
 
       case 'progress_update':
         setProgress(data as ScanProgress);
+        lastProgressTime.current = Date.now();
+        setScanStalled(false);
         break;
 
       case 'source_status_update':
+        lastProgressTime.current = Date.now();
+        setScanStalled(false);
         const sourceStatus = data as SourceStatus;
         setSourceStatuses(prev => {
           const newMap = new Map(prev);
@@ -406,6 +415,8 @@ export default function LiveScanPage() {
         break;
 
       case 'article_analyzed':
+        lastProgressTime.current = Date.now();
+        setScanStalled(false);
         const article = data as AnalyzedArticle;
         setAnalyzedArticles(prev => [article, ...prev].slice(0, 50));
         addActivityLog('article', `Analyzed: ${article.title.substring(0, 50)}...`, `Score: ${article.importance_score}/100`);
@@ -434,6 +445,31 @@ export default function LiveScanPage() {
     }
   };
 
+  // Stale scan detection - check every 5 seconds if scanning
+  useEffect(() => {
+    if (progress.status === 'scanning') {
+      stalledCheckInterval.current = setInterval(() => {
+        const timeSinceLastProgress = Date.now() - lastProgressTime.current;
+        if (timeSinceLastProgress > 15000 && progress.sourcesScanned < progress.totalSources) {
+          setScanStalled(true);
+          addActivityLog('error', 'Scan appears to be stalled - no updates received for 15 seconds');
+        }
+      }, 5000);
+    } else {
+      if (stalledCheckInterval.current) {
+        clearInterval(stalledCheckInterval.current);
+        stalledCheckInterval.current = null;
+      }
+      setScanStalled(false);
+    }
+
+    return () => {
+      if (stalledCheckInterval.current) {
+        clearInterval(stalledCheckInterval.current);
+      }
+    };
+  }, [progress.status, progress.sourcesScanned, progress.totalSources]);
+
   // Internal function for starting scan - can be called from useEffect
   const handleStartScanInternal = async () => {
     if (!topicId) return;
@@ -446,6 +482,8 @@ export default function LiveScanPage() {
     setSummary(null);
     setSummaryMeta(null);
     summaryTriggered.current = false;
+    setScanStalled(false);
+    lastProgressTime.current = Date.now();
 
     addActivityLog('info', `Starting scan for topic: ${topicName}`);
 
@@ -701,6 +739,36 @@ export default function LiveScanPage() {
               <div className="text-xs text-slate-600 dark:text-slate-400">High Importance</div>
             </div>
           </div>
+
+          {/* Stalled Scan Warning */}
+          {scanStalled && progress.status === 'scanning' && (
+            <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  <div>
+                    <p className="font-medium text-amber-700 dark:text-amber-300">
+                      Scan appears to be stalled
+                    </p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                      No updates received for 15+ seconds. This may be due to network issues or slow source responses.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setScanStalled(false);
+                    handleStopScan();
+                    setTimeout(() => handleStartScanInternal(), 500);
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm"
+                >
+                  <Radio className="w-4 h-4" />
+                  Restart Scan
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* AI Summary Panel - Shows when scan completes */}
