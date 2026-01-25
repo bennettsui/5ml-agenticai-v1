@@ -87,6 +87,8 @@ export default function PhotoBoothPage() {
   const [cameraReady, setCameraReady] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [autoCapture, setAutoCapture] = useState(false);
+  const [transformationPhase, setTransformationPhase] = useState<'original' | 'transforming' | 'complete'>('original');
+  const [showTransformAnimation, setShowTransformAnimation] = useState(true);
 
   // Fetch themes on mount
   useEffect(() => {
@@ -147,6 +149,36 @@ export default function PhotoBoothPage() {
 
     return () => clearTimeout(timer);
   }, [countdown]);
+
+  // Transformation animation effect when result is shown
+  useEffect(() => {
+    if (currentStep === 'result' && showTransformAnimation && finalResult) {
+      // Start transformation sequence
+      setTransformationPhase('original');
+
+      // Show original for 1 second
+      const timer1 = setTimeout(() => {
+        setTransformationPhase('transforming');
+      }, 1000);
+
+      // Complete transformation after 2 more seconds
+      const timer2 = setTimeout(() => {
+        setTransformationPhase('complete');
+      }, 3000);
+
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
+    }
+  }, [currentStep, showTransformAnimation, finalResult]);
+
+  // Replay transformation animation
+  const replayTransformation = () => {
+    setTransformationPhase('original');
+    setTimeout(() => setTransformationPhase('transforming'), 1000);
+    setTimeout(() => setTransformationPhase('complete'), 3000);
+  };
 
   const fetchThemes = async () => {
     try {
@@ -854,35 +886,103 @@ export default function PhotoBoothPage() {
 
   const renderResultStep = () => (
     <div className="p-6">
-      <h2 className="text-xl font-semibold mb-4 text-center text-white">Your Portrait is Ready!</h2>
+      <h2 className="text-xl font-semibold mb-4 text-center text-white">
+        {transformationPhase === 'original' && 'Preparing Transformation...'}
+        {transformationPhase === 'transforming' && '✨ Transforming...'}
+        {transformationPhase === 'complete' && 'Your Portrait is Ready!'}
+      </h2>
 
       {finalResult && (
         <div className="space-y-6">
-          {/* Generated image */}
+          {/* Transformation Animation Container */}
           <div className="bg-slate-800 rounded-lg p-4 text-center border border-slate-700">
             <div className="relative rounded-lg overflow-hidden">
+              {/* Original Image */}
+              {previewUrl && (
+                <img
+                  src={previewUrl}
+                  alt="Original"
+                  className={`w-full h-auto rounded-lg absolute inset-0 transition-all duration-1000 ${
+                    transformationPhase === 'original'
+                      ? 'opacity-100 scale-100 blur-0'
+                      : transformationPhase === 'transforming'
+                      ? 'opacity-50 scale-105 blur-sm'
+                      : 'opacity-0 scale-110 blur-lg'
+                  }`}
+                />
+              )}
+
+              {/* Transformation Sparkles Overlay */}
+              {transformationPhase === 'transforming' && (
+                <div className="absolute inset-0 z-10 pointer-events-none">
+                  <div className="absolute inset-0 bg-gradient-to-b from-purple-500/30 via-pink-500/20 to-amber-500/30 animate-pulse" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="relative">
+                      {/* Animated sparkles */}
+                      <Sparkles className="w-16 h-16 text-yellow-300 animate-spin" style={{ animationDuration: '3s' }} />
+                      <div className="absolute -top-4 -left-4 w-3 h-3 bg-white rounded-full animate-ping" />
+                      <div className="absolute -top-2 right-0 w-2 h-2 bg-purple-300 rounded-full animate-ping" style={{ animationDelay: '0.2s' }} />
+                      <div className="absolute bottom-0 -left-2 w-2 h-2 bg-pink-300 rounded-full animate-ping" style={{ animationDelay: '0.4s' }} />
+                      <div className="absolute -bottom-4 right-2 w-3 h-3 bg-amber-300 rounded-full animate-ping" style={{ animationDelay: '0.6s' }} />
+                    </div>
+                  </div>
+                  {/* Sweeping light effect */}
+                  <div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
+                    style={{
+                      animation: 'sweep 2s ease-in-out infinite',
+                    }}
+                  />
+                  <style jsx>{`
+                    @keyframes sweep {
+                      0% { transform: translateX(-100%); }
+                      100% { transform: translateX(100%); }
+                    }
+                  `}</style>
+                </div>
+              )}
+
+              {/* Transformed Image */}
               <img
                 src={`${API_BASE}${finalResult.branded_image_url}`}
-                alt={`Your ${themes.find((t) => t.id === selectedTheme)?.name || '18th-Century'} Portrait`}
-                className="w-full h-auto rounded-lg"
-                onError={(e) => {
-                  // Fallback to placeholder on error
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  target.parentElement!.innerHTML = `
-                    <div class="aspect-[3/4] bg-gradient-to-b from-purple-900/50 to-slate-800 rounded-lg flex items-center justify-center">
-                      <div class="text-center">
-                        <p class="text-purple-300 font-medium">Your 18th-Century Portrait</p>
-                        <p class="text-sm text-purple-400">${themes.find((t) => t.id === selectedTheme)?.name || ''}</p>
-                      </div>
-                    </div>
-                  `;
-                }}
+                alt={`Your ${themes.find((t) => t.id === selectedTheme)?.name || ''} Portrait`}
+                className={`w-full h-auto rounded-lg transition-all duration-1000 ${
+                  transformationPhase === 'original'
+                    ? 'opacity-0 scale-90 blur-lg'
+                    : transformationPhase === 'transforming'
+                    ? 'opacity-50 scale-95 blur-sm'
+                    : 'opacity-100 scale-100 blur-0'
+                }`}
               />
+
+              {/* Phase labels */}
+              <div className={`absolute top-3 left-3 px-2 py-1 rounded text-xs font-medium transition-opacity duration-500 ${
+                transformationPhase === 'original' ? 'opacity-100 bg-slate-600/80 text-white' : 'opacity-0'
+              }`}>
+                Original Photo
+              </div>
+              <div className={`absolute top-3 right-3 px-2 py-1 rounded text-xs font-medium transition-opacity duration-500 ${
+                transformationPhase === 'complete' ? 'opacity-100 bg-purple-600/80 text-white' : 'opacity-0'
+              }`}>
+                AI Transformed
+              </div>
             </div>
-            <p className="text-sm text-gray-400 mt-2">
-              {themes.find((t) => t.id === selectedTheme)?.name} Theme
-            </p>
+
+            {/* Theme name and replay button */}
+            <div className="flex items-center justify-center gap-3 mt-3">
+              <p className="text-sm text-gray-400">
+                {themes.find((t) => t.id === selectedTheme)?.name} Theme
+              </p>
+              {transformationPhase === 'complete' && (
+                <button
+                  onClick={replayTransformation}
+                  className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Replay
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Generation process log */}
