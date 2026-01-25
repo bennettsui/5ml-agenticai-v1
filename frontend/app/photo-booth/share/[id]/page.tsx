@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { Download, Share2, Sparkles, ExternalLink } from 'lucide-react';
 
 interface ShareData {
@@ -14,22 +15,27 @@ const API_BASE = typeof window !== 'undefined' && window.location.hostname === '
   ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
   : '';
 
-export default function SharePage({ params }: { params: { id: string } }) {
+export default function SharePage() {
+  const params = useParams();
+  const id = params.id as string;
+
   const [shareData, setShareData] = useState<ShareData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchShareData();
-  }, [params.id]);
+    if (id) {
+      fetchShareData();
+    }
+  }, [id]);
 
   const fetchShareData = async () => {
     try {
       // For now, construct the download link from the short ID
       // In production, you'd fetch metadata from the API
       setShareData({
-        image_url: `${API_BASE}/api/photo-booth/download/${params.id}`,
-        download_link: `${API_BASE}/api/photo-booth/download/${params.id}`,
+        image_url: `${API_BASE}/api/photo-booth/download/${id}`,
+        download_link: `${API_BASE}/api/photo-booth/download/${id}`,
         theme_name: '18th Century Portrait',
         created_at: new Date().toISOString(),
       });
