@@ -18,9 +18,10 @@ class GeminiImageClient {
    * @param {Buffer} imageBuffer - The original image as a buffer
    * @param {Object} theme - The theme configuration
    * @param {Function} onProgress - Progress callback
+   * @param {string} customPrompt - Optional custom prompt from CMS
    * @returns {Promise<Buffer>} - The generated image as a buffer
    */
-  async generateStyledPortrait(imageBuffer, theme, onProgress) {
+  async generateStyledPortrait(imageBuffer, theme, onProgress, customPrompt = null) {
     const reportProgress = (message, percentage) => {
       if (onProgress) onProgress({ message, percentage });
     };
@@ -30,8 +31,9 @@ class GeminiImageClient {
     // Convert image to base64
     const base64Image = imageBuffer.toString('base64');
 
-    // Build the prompt based on theme
-    const prompt = this.buildThemePrompt(theme);
+    // Use custom prompt from CMS if provided, otherwise build from theme
+    const prompt = customPrompt || this.buildThemePrompt(theme);
+    console.log(`[GeminiImageClient] Using ${customPrompt ? 'custom CMS' : 'default'} prompt for theme: ${theme.id}`);
 
     reportProgress('🎬 Sending to AI model...', 20);
 
@@ -133,57 +135,109 @@ class GeminiImageClient {
    * Build a detailed prompt for the theme
    */
   buildThemePrompt(theme) {
-    // Base Renaissance portrait style prompt - works for all themes
-    const baseStyle = `Use this photo as the base.
-Portrait in the style of Leonardo da Vinci's "Mona Lisa", Renaissance oil painting, half-length figure seated in front of a soft atmospheric landscape, subtle sfumato shading, warm earthy color palette, soft diffused lighting, calm enigmatic smile, slightly turned body and front-facing gaze, detailed realistic skin texture, gentle folds in clothing, classic Renaissance composition, no modern objects, no text, high resolution, masterpiece, ultra detailed.`;
+    // Theme-specific prompts - each is self-contained
+    const themePrompts = {
+      'mona-lisa': `Edit this photo to transform the person into a Renaissance portrait in the style of Leonardo da Vinci's "Mona Lisa".
 
-    // Theme-specific costume and background additions
-    const themeAdditions = {
-      'mona-lisa': `
-Keep the classic Mona Lisa composition exactly: simple dark Renaissance dress, hands gently folded,
-soft atmospheric landscape with winding paths and distant mountains in the background.
-This is the pure Leonardo da Vinci style - no additional costume elements needed.`,
+IMPORTANT: You MUST use the person's face from the input photo. Keep their exact facial features, expression, and likeness.
 
-      'ghibli-style': `
-IGNORE the Renaissance style instructions above. Instead use this style:
-A high-quality anime-style portrait reimagined as a character in a Studio Ghibli film.
-The subject has a kind, peaceful expression and is drawn with clean, hand-drawn line art and soft watercolor-style shading.
-Standing in a lush, vibrant Ghibli-inspired landscape featuring a massive, ancient glowing tree with hanging lanterns,
-rolling green hills, a small European-style village with windmills, and airships floating in a bright blue sky with fluffy white clouds.
-The lighting is warm and nostalgic, capturing the magical and whimsical atmosphere of 'My Neighbor Totoro' or 'Howl's Moving Castle'.
-Keep the person's face recognizable but stylized in anime form.`,
+Style requirements:
+- Renaissance oil painting with subtle sfumato shading
+- Warm earthy color palette with soft diffused lighting
+- Half-length figure with slightly turned body and front-facing gaze
+- Simple dark Renaissance dress with gentle folds
+- Soft atmospheric landscape background with winding paths and distant mountains
+- Calm, enigmatic expression
+- No modern objects, no text
+- High resolution, masterpiece quality`,
 
-      'versailles-court': `
-Dress the subject in elaborate French baroque clothing: silk brocade coat with gold embroidery, lace cravat, powdered wig if appropriate.
-Background should hint at opulent palace interior with gilded elements visible in the atmospheric distance.`,
+      'ghibli-style': `Edit this photo to transform the person into a Studio Ghibli anime character.
 
-      'georgian-england': `
-Dress the subject in refined English Georgian fashion: tailored wool coat, white cravat, subtle styling.
-Background should show soft English countryside or manor garden in the atmospheric distance.`,
+IMPORTANT: You MUST use the person's face from the input photo. Keep their facial features recognizable but stylized in anime form.
 
-      'austro-hungarian': `
-Dress the subject in Habsburg court fashion: military-inspired coat with gold braiding and medals.
-Background should hint at imperial palace architecture in the atmospheric distance.`,
+Style requirements:
+- High-quality anime-style portrait as a character in a Studio Ghibli film
+- Kind, peaceful expression with clean hand-drawn line art
+- Soft watercolor-style shading
+- Lush, vibrant Ghibli-inspired landscape background featuring:
+  - A massive, ancient glowing tree with hanging lanterns
+  - Rolling green hills
+  - A small European-style village with windmills
+  - Airships floating in a bright blue sky with fluffy white clouds
+- Warm, nostalgic lighting
+- Magical whimsical atmosphere like 'My Neighbor Totoro' or 'Howl's Moving Castle'`,
 
-      'russian-imperial': `
-Dress the subject in Russian imperial fashion: heavy brocade with fur trim, jeweled decorations.
-Background should show palatial marble columns in the atmospheric distance.`,
+      'versailles-court': `Edit this photo to transform the person into an 18th-century French aristocrat portrait.
 
-      'italian-venetian': `
-Dress the subject in Venetian Renaissance fashion: rich velvet and silk, ornate patterns.
-Background should show Venetian canal and palazzo in the soft atmospheric distance.`,
+IMPORTANT: You MUST use the person's face from the input photo. Keep their exact facial features and likeness.
 
-      'spanish-colonial': `
-Dress the subject in Spanish colonial fashion: dark velvet coat with silver embroidery, white ruffled shirt.
-Background should show colonial architecture and courtyard in the atmospheric distance.`,
+Style requirements:
+- Renaissance/Baroque oil painting style
+- Elaborate French baroque clothing: silk brocade coat with gold embroidery, lace cravat
+- Powdered wig if appropriate for the subject
+- Opulent palace interior background with gilded mirrors and chandeliers
+- Warm candlelight ambiance
+- Rich golds, deep blues, and burgundy colors
+- Formal portrait composition`,
+
+      'georgian-england': `Edit this photo to transform the person into an 18th-century English Georgian aristocrat portrait.
+
+IMPORTANT: You MUST use the person's face from the input photo. Keep their exact facial features and likeness.
+
+Style requirements:
+- Portrait painting style reminiscent of Thomas Gainsborough
+- Refined English fashion: tailored wool coat, white cravat
+- Subtle powdered styling
+- English manor library or garden background
+- Natural daylight, soft and flattering
+- Muted greens, browns, cream, and soft blues`,
+
+      'austro-hungarian': `Edit this photo to transform the person into an 18th-century Austro-Hungarian nobility portrait.
+
+IMPORTANT: You MUST use the person's face from the input photo. Keep their exact facial features and likeness.
+
+Style requirements:
+- Formal court portrait style
+- Habsburg court fashion: military-inspired coat with gold braiding and medals
+- Imperial palace background with baroque architecture
+- Dramatic, regal lighting
+- Deep reds, imperial gold, black, and white`,
+
+      'russian-imperial': `Edit this photo to transform the person into an 18th-century Russian Imperial Court portrait.
+
+IMPORTANT: You MUST use the person's face from the input photo. Keep their exact facial features and likeness.
+
+Style requirements:
+- Formal portrait style
+- Russian imperial fashion: heavy brocade coat with fur trim, jeweled decorations
+- Winter Palace interior background with marble columns
+- Cool, majestic lighting with warm accents
+- Rich blues, silver, white, and gold accents`,
+
+      'italian-venetian': `Edit this photo to transform the person into an 18th-century Venetian nobility portrait.
+
+IMPORTANT: You MUST use the person's face from the input photo. Keep their exact facial features and likeness.
+
+Style requirements:
+- Portrait style reminiscent of Pietro Longhi
+- Venetian Renaissance fashion: rich velvet and silk, ornate patterns
+- Venetian palazzo background with canal view
+- Warm, golden Mediterranean light
+- Vibrant reds, golds, deep greens, and rich purples`,
+
+      'spanish-colonial': `Edit this photo to transform the person into an 18th-century Spanish Colonial nobility portrait.
+
+IMPORTANT: You MUST use the person's face from the input photo. Keep their exact facial features and likeness.
+
+Style requirements:
+- Colonial Spanish portrait style
+- Spanish colonial fashion: dark velvet coat with silver embroidery, white ruffled shirt
+- Colonial hacienda background with courtyard
+- Warm, sun-drenched lighting with dramatic shadows
+- Deep blacks, rich burgundy, gold, and cream`,
     };
 
-    const themeAddition = themeAdditions[theme.id] || themeAdditions['mona-lisa'];
-
-    return `${baseStyle}
-${themeAddition}
-
-CRITICAL: Keep the person's face, expression, and identity clearly recognizable. The face must look like the original person.`;
+    return themePrompts[theme.id] || themePrompts['mona-lisa'];
   }
 
   /**

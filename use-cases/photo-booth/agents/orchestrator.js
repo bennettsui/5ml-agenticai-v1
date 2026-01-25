@@ -241,8 +241,34 @@ Only return JSON.`,
     const startTime = Date.now();
 
     try {
-      // Validate theme
-      const theme = this.themes.find((t) => t.id === themeName);
+      // Validate theme - check database first, then config
+      let theme = this.themes.find((t) => t.id === themeName);
+      let customPrompt = null;
+
+      // Try to get custom prompt from database (CMS managed)
+      try {
+        const dbTheme = await this.pool.query(
+          'SELECT * FROM photo_booth_themes WHERE theme_id = $1 AND is_enabled = true',
+          [themeName]
+        );
+        if (dbTheme.rows.length > 0) {
+          customPrompt = dbTheme.rows[0].prompt;
+          // Use database theme info if no config theme found
+          if (!theme) {
+            theme = {
+              id: dbTheme.rows[0].theme_id,
+              name: dbTheme.rows[0].name,
+              country: dbTheme.rows[0].country,
+              description: dbTheme.rows[0].description,
+              era: dbTheme.rows[0].era,
+            };
+          }
+          console.log(`[${this.agentName}] Using custom prompt from database for theme: ${themeName}`);
+        }
+      } catch (dbError) {
+        console.log(`[${this.agentName}] No database prompt found, using default`);
+      }
+
       if (!theme) {
         throw new Error(`Theme not found: ${themeName}`);
       }
@@ -302,7 +328,8 @@ Only return JSON.`,
               const basePercentage = 25;
               const scaledPercentage = basePercentage + Math.round((update.percentage / 100) * 55);
               reportProgress(update.message, `ai_${update.percentage}`, scaledPercentage);
-            }
+            },
+            customPrompt // Pass custom prompt from CMS if available
           );
 
           console.log(`[${this.agentName}] AI generation completed for theme: ${themeName}`);
