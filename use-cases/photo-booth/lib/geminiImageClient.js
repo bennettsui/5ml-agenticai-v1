@@ -144,6 +144,15 @@ Keep the classic Mona Lisa composition exactly: simple dark Renaissance dress, h
 soft atmospheric landscape with winding paths and distant mountains in the background.
 This is the pure Leonardo da Vinci style - no additional costume elements needed.`,
 
+      'ghibli-style': `
+IGNORE the Renaissance style instructions above. Instead use this style:
+A high-quality anime-style portrait reimagined as a character in a Studio Ghibli film.
+The subject has a kind, peaceful expression and is drawn with clean, hand-drawn line art and soft watercolor-style shading.
+Standing in a lush, vibrant Ghibli-inspired landscape featuring a massive, ancient glowing tree with hanging lanterns,
+rolling green hills, a small European-style village with windmills, and airships floating in a bright blue sky with fluffy white clouds.
+The lighting is warm and nostalgic, capturing the magical and whimsical atmosphere of 'My Neighbor Totoro' or 'Howl's Moving Castle'.
+Keep the person's face recognizable but stylized in anime form.`,
+
       'versailles-court': `
 Dress the subject in elaborate French baroque clothing: silk brocade coat with gold embroidery, lace cravat, powdered wig if appropriate.
 Background should hint at opulent palace interior with gilded elements visible in the atmospheric distance.`,
