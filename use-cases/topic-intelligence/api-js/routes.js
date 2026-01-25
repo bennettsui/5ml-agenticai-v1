@@ -23,6 +23,19 @@ try {
 const inMemoryTopics = new Map();
 const inMemorySources = new Map();
 
+// Scheduler service (lazy-loaded to avoid circular dependencies)
+let scheduler = null;
+function getScheduler() {
+  if (!scheduler) {
+    try {
+      scheduler = require('../../../services/scheduler');
+    } catch (e) {
+      console.warn('[Routes] Scheduler service not available');
+    }
+  }
+  return scheduler;
+}
+
 // ==========================================
 // EDM Cache (Key-Value Store)
 // ==========================================
@@ -164,7 +177,7 @@ class NotionHelper {
   }
 
   /**
-   * Initialize Notion databases (create sources DB if not exist)
+   * Initialize Notion integration (simplified - using pre-existing data sources)
    */
   async initialize() {
     if (this.initialized) return;
@@ -174,82 +187,11 @@ class NotionHelper {
     }
 
     console.log('[Notion] 🔄 Initializing Notion integration...');
-    console.log(`[Notion] Analysis database ID: ${NOTION_ANALYSIS_DB_ID}`);
-
-    // Get the parent page ID from the analysis database
-    if (!this.parentPageId) {
-      try {
-        const dbInfo = await this.request('GET', `/databases/${NOTION_ANALYSIS_DB_ID}`);
-        console.log(`[Notion] Database parent type: ${dbInfo.parent?.type}`);
-
-        if (dbInfo.parent?.type === 'page_id') {
-          this.parentPageId = dbInfo.parent.page_id;
-          console.log(`[Notion] ✅ Found parent page: ${this.parentPageId}`);
-        } else if (dbInfo.parent?.type === 'workspace') {
-          console.log('[Notion] ⚠️ Database is in workspace root - cannot create child databases');
-          console.log('[Notion] Sources will be saved to the Analysis database as linked items');
-        } else {
-          console.log(`[Notion] ⚠️ Unknown parent type: ${dbInfo.parent?.type}`);
-        }
-      } catch (error) {
-        console.error('[Notion] ❌ Failed to get analysis database info:', error.message);
-        console.error('[Notion] Full error:', error);
-      }
-    }
-
-    // Create Sources Database if not exists (under the same parent)
-    if (!notionSourcesDbId && this.parentPageId) {
-      try {
-        console.log('[Notion] Creating Sources database under parent page...');
-        const sourcesDb = await this.request('POST', '/databases', {
-          parent: { type: 'page_id', page_id: this.parentPageId },
-          title: [{ type: 'text', text: { content: '📰 資料來源' } }],
-          properties: {
-            '標題': { title: {} },
-            '主題': { select: { options: [] } },
-            '來源': { rich_text: {} },
-            '連結': { url: {} },
-            '重要性': { number: { format: 'number' } },
-            '相關性': { number: { format: 'number' } },
-            '影響力': { number: { format: 'number' } },
-            '日期': { date: {} },
-            '標籤': { multi_select: { options: [] } },
-            '分析模型': {
-              select: {
-                options: [
-                  { name: 'deepseek', color: 'blue' },
-                  { name: 'claude-haiku', color: 'purple' },
-                  { name: 'perplexity', color: 'green' },
-                  { name: '關鍵字分析', color: 'gray' },
-                ]
-              }
-            },
-            '優先級': {
-              select: {
-                options: [
-                  { name: '🔴 高', color: 'red' },
-                  { name: '🟡 中', color: 'yellow' },
-                  { name: '🟢 低', color: 'green' },
-                ]
-              }
-            },
-          },
-        });
-        notionSourcesDbId = sourcesDb.id;
-        console.log(`[Notion] ✅ Created Sources database: ${sourcesDb.url}`);
-      } catch (error) {
-        console.error('[Notion] ❌ Failed to create Sources database:', error.message);
-        // Check if it's a duplicate - database might already exist
-        if (error.message.includes('duplicate') || error.message.includes('already exists')) {
-          console.log('[Notion] Sources database may already exist, searching...');
-        }
-      }
-    } else if (!notionSourcesDbId) {
-      console.log('[Notion] ⚠️ Cannot create Sources database - no parent page available');
-    }
+    console.log(`[Notion] Analysis data source: ${NOTION_ANALYSIS_DATA_SOURCE_ID}`);
+    console.log(`[Notion] Sources data source: ${NOTION_SOURCES_DATA_SOURCE_ID}`);
 
     this.initialized = true;
-    console.log(`[Notion] ✅ Initialization complete. Sources DB: ${notionSourcesDbId || 'not available'}`);
+    console.log('[Notion] ✅ Initialization complete');
   }
 
   /**
@@ -861,7 +803,7 @@ const PROMPTS = {
   comprehensive: `You are a senior research analyst.
 
 Your task: Map out the BEST sources to research the topic: "{topic}".
-
+{objectives}
 Please:
 1) Focus on:
    - Language(s): {languages}
@@ -932,7 +874,7 @@ Output format - MUST return valid JSON:
 Return ONLY the JSON object, no other text.`,
 
   quick: `Map out key research sources for the topic: "{topic}".
-
+{objectives}
 Constraints:
 - Language: {languages}
 - Region focus: {regions}
@@ -982,7 +924,7 @@ Output format - MUST return valid JSON:
 Return ONLY the JSON object, no other text.`,
 
   trends: `You are analysing current and emerging trends for the topic: "{topic}".
-
+{objectives}
 Tasks:
 1) Identify where trends are visible:
    - Recurring reports (annual/quarterly) and who publishes them
@@ -1037,11 +979,16 @@ Return ONLY the JSON object, no other text.`
 /**
  * Build prompt with parameters
  */
-function buildPrompt(topicName, keywords, mode, languages, regions, timeframe) {
+function buildPrompt(topicName, keywords, mode, languages, regions, timeframe, objectives = '') {
   const template = PROMPTS[mode] || PROMPTS.comprehensive;
+
+  const objectivesText = objectives?.trim()
+    ? `\n\nObjectives for this research:\n${objectives}\n\nUse these objectives to prioritize sources that are most relevant to achieving these goals.`
+    : '';
 
   return template
     .replace(/{topic}/g, topicName)
+    .replace(/{objectives}/g, objectivesText)
     .replace(/{languages}/g, languages || 'English, Traditional Chinese')
     .replace(/{regions}/g, regions || 'Global, Hong Kong, Asia')
     .replace(/{timeframe}/g, timeframe || '2024')
@@ -1060,6 +1007,7 @@ router.post('/sources/discover', async (req, res) => {
   try {
     const {
       topicName,
+      objectives = '',
       keywords = [],
       mode = 'comprehensive',
       llm = 'perplexity',
@@ -1073,6 +1021,7 @@ router.post('/sources/discover', async (req, res) => {
     }
 
     console.log(`🔍 Discovering sources for topic: ${topicName}`);
+    console.log(`   Objectives: ${objectives || '(none specified)'}`);
     console.log(`   Mode: ${mode}, LLM: ${llm}`);
     console.log(`   Keywords: ${keywords.join(', ')}`);
 
@@ -1092,7 +1041,7 @@ router.post('/sources/discover', async (req, res) => {
 
     if (llmAvailable) {
       try {
-        const result = await callLLMForSources(topicName, keywords, mode, llm, languages, regions, timeframe);
+        const result = await callLLMForSources(topicName, keywords, mode, llm, languages, regions, timeframe, objectives);
         discoveredSources = result.sources;
         executiveSummary = result.executiveSummary;
         searchQueries = result.searchQueries;
@@ -1157,8 +1106,8 @@ const LLM_CONFIGS = {
  * Call LLM API to discover sources
  * Supports multiple providers with automatic fallback
  */
-async function callLLMForSources(topicName, keywords, mode, selectedLLM, languages, regions, timeframe) {
-  const prompt = buildPrompt(topicName, keywords, mode, languages, regions, timeframe);
+async function callLLMForSources(topicName, keywords, mode, selectedLLM, languages, regions, timeframe, objectives = '') {
+  const prompt = buildPrompt(topicName, keywords, mode, languages, regions, timeframe, objectives);
 
   // Determine which LLM to use with fallback chain
   const llmPriority = [selectedLLM, 'perplexity', 'claude-sonnet', 'deepseek'];
@@ -1297,7 +1246,7 @@ function parseSourcesResponse(content, llmUsed) {
  */
 router.post('/topics', async (req, res) => {
   try {
-    const { topicName, keywords = [], sources: topicSources = [] } = req.body;
+    const { topicName, objectives = '', keywords = [], sources: topicSources = [] } = req.body;
 
     if (!topicName) {
       return res.status(400).json({ success: false, error: 'Topic name is required' });
@@ -1309,8 +1258,8 @@ router.post('/topics', async (req, res) => {
     // Try database first, fallback to in-memory
     if (db && process.env.DATABASE_URL) {
       try {
-        // Save topic to database
-        const savedTopic = await db.saveIntelligenceTopic(topicName, keywords);
+        // Save topic to database with objectives
+        const savedTopic = await db.saveIntelligenceTopic(topicName, keywords, { objectives });
         topicId = savedTopic.topic_id;
 
         // Save sources to database
@@ -1326,6 +1275,7 @@ router.post('/topics', async (req, res) => {
         inMemoryTopics.set(topicId, {
           id: topicId,
           name: topicName,
+          objectives,
           keywords,
           sources: topicSources,
           status: 'active',
@@ -1338,6 +1288,7 @@ router.post('/topics', async (req, res) => {
       const topic = {
         id: topicId,
         name: topicName,
+        objectives,
         keywords,
         sources: topicSources,
         status: 'active',
@@ -1435,12 +1386,12 @@ router.get('/topics/:id', async (req, res) => {
 
 /**
  * PUT /topics/:id
- * Updates topic settings (name, keywords, daily/weekly config, recipients)
+ * Updates topic settings (name, objectives, keywords, daily/weekly config, recipients)
  */
 router.put('/topics/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, keywords, dailyScanConfig, weeklyDigestConfig } = req.body;
+    const { name, objectives, keywords, dailyScanConfig, weeklyDigestConfig } = req.body;
 
     // Parse keywords if string
     let parsedKeywords = keywords;
@@ -1456,6 +1407,7 @@ router.put('/topics/:id', async (req, res) => {
 
     const updates = {
       name,
+      objectives,
       keywords: parsedKeywords,
       daily_scan_config: dailyScanConfig ? {
         enabled: dailyScanConfig.enabled ?? true,
@@ -1475,6 +1427,12 @@ router.put('/topics/:id', async (req, res) => {
       try {
         const topic = await db.updateIntelligenceTopic(id, updates);
         if (topic) {
+          // Update scheduler if daily scan config changed
+          const sched = getScheduler();
+          if (sched && updates.daily_scan_config) {
+            sched.updateTopicSchedule(id, topic.name, updates.daily_scan_config, updates.weekly_digest_config);
+            console.log(`[Routes] Updated scheduler for topic: ${topic.name}`);
+          }
           return res.json({ success: true, topic, message: 'Topic updated successfully' });
         }
         return res.status(404).json({ success: false, error: 'Topic not found' });
@@ -1505,6 +1463,13 @@ router.put('/topics/:id', async (req, res) => {
 router.delete('/topics/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Remove scheduler jobs for this topic
+    const sched = getScheduler();
+    if (sched) {
+      sched.removeTopicSchedules(id);
+      console.log(`[Routes] Removed scheduler for topic: ${id}`);
+    }
 
     if (db && process.env.DATABASE_URL) {
       try {
@@ -1565,6 +1530,13 @@ router.delete('/sources/:id', async (req, res) => {
  */
 router.put('/topics/:id/pause', async (req, res) => {
   try {
+    // Remove scheduler jobs when paused
+    const sched = getScheduler();
+    if (sched) {
+      sched.removeTopicSchedules(req.params.id);
+      console.log(`[Routes] Paused scheduler for topic: ${req.params.id}`);
+    }
+
     if (db && process.env.DATABASE_URL) {
       try {
         await db.updateIntelligenceTopicStatus(req.params.id, 'paused');
@@ -1598,6 +1570,25 @@ router.put('/topics/:id/resume', async (req, res) => {
     if (db && process.env.DATABASE_URL) {
       try {
         await db.updateIntelligenceTopicStatus(req.params.id, 'active');
+
+        // Re-enable scheduler for resumed topic
+        const topic = await db.getIntelligenceTopic(req.params.id);
+        if (topic) {
+          const sched = getScheduler();
+          if (sched) {
+            const dailyConfig = typeof topic.daily_scan_config === 'string'
+              ? JSON.parse(topic.daily_scan_config)
+              : topic.daily_scan_config;
+            const weeklyConfig = typeof topic.weekly_digest_config === 'string'
+              ? JSON.parse(topic.weekly_digest_config)
+              : topic.weekly_digest_config;
+
+            if (dailyConfig?.enabled) {
+              sched.updateTopicSchedule(req.params.id, topic.name, dailyConfig, weeklyConfig);
+              console.log(`[Routes] Resumed scheduler for topic: ${topic.name}`);
+            }
+          }
+        }
         return res.json({ success: true, message: 'Topic resumed' });
       } catch (dbError) {
         console.error('Database update failed:', dbError.message);
@@ -4221,4 +4212,64 @@ router.get('/debug/llm-status', (req, res) => {
   res.json(status);
 });
 
+/**
+ * GET /debug/scheduler-status
+ * Diagnostic endpoint to check scheduler status
+ */
+router.get('/debug/scheduler-status', (req, res) => {
+  const sched = getScheduler();
+
+  const status = {
+    timestamp: new Date().toISOString(),
+    schedulerAvailable: !!sched,
+    scheduledJobs: sched ? sched.getScheduleStatus() : [],
+    message: sched ? 'Scheduler is running' : 'Scheduler not initialized',
+  };
+
+  console.log('🕐 Scheduler Status:', JSON.stringify(status, null, 2));
+  res.json(status);
+});
+
+/**
+ * Standalone scan function for scheduled scans
+ * Can be called by the scheduler without requiring HTTP request/response
+ * @param {string} topicId - The topic ID to scan
+ * @param {string} topicName - The topic name (for logging)
+ */
+async function runScheduledScan(topicId, topicName) {
+  console.log(`[ScheduledScan] 🔄 Starting scheduled scan for: ${topicName}`);
+
+  try {
+    let topic;
+    let sources = [];
+
+    if (db && process.env.DATABASE_URL) {
+      topic = await db.getIntelligenceTopic(topicId);
+      sources = await db.getIntelligenceSources(topicId);
+    } else {
+      topic = inMemoryTopics.get(topicId);
+      sources = Array.from(inMemorySources.values()).filter(s => s.topicId === topicId);
+    }
+
+    if (!topic) {
+      console.error(`[ScheduledScan] ❌ Topic not found: ${topicId}`);
+      return { success: false, error: 'Topic not found' };
+    }
+
+    const scanId = `scheduled-scan-${Date.now()}`;
+    console.log(`[ScheduledScan] 📡 Scanning ${sources.length} sources for topic: ${topicName}`);
+
+    // Run the actual scan (this is the same function used by manual scans)
+    await runScanWithUpdates(topicId, topic, sources, scanId);
+
+    console.log(`[ScheduledScan] ✅ Completed scheduled scan for: ${topicName}`);
+    return { success: true, scanId, sourcesScanned: sources.length };
+  } catch (error) {
+    console.error(`[ScheduledScan] ❌ Error scanning ${topicName}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Export both the router and the scheduled scan function
 module.exports = router;
+module.exports.runScheduledScan = runScheduledScan;
