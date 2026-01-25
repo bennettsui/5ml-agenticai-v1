@@ -1,6 +1,34 @@
 {
   "themes": [
     {
+      "id": "mona-lisa",
+      "name": "Mona Lisa",
+      "country": "Italy",
+      "description": "Renaissance portrait in the style of Leonardo da Vinci's masterpiece",
+      "era": "1503-1519",
+      "image_url": "/images/photo-booth/themes/mona-lisa.jpg",
+      "prompt_keywords": [
+        "Leonardo da Vinci",
+        "Mona Lisa",
+        "Renaissance portrait",
+        "sfumato technique",
+        "oil painting",
+        "atmospheric landscape",
+        "enigmatic smile",
+        "warm earthy tones",
+        "masterpiece"
+      ],
+      "negative_keywords": [
+        "modern clothing",
+        "text",
+        "watermark",
+        "contemporary",
+        "digital"
+      ],
+      "environment_description": "soft atmospheric landscape with winding paths, distant mountains, and hazy horizon in sfumato style",
+      "costume_description": "Renaissance clothing with gentle folds, muted earthy colors, simple elegant dress"
+    },
+    {
       "id": "versailles-court",
       "name": "Versailles Court",
       "country": "France",

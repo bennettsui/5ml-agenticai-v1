@@ -748,6 +748,21 @@ export default function PhotoBoothPage() {
             </p>
           </div>
 
+          {/* Generation process log */}
+          {progressMessages.length > 0 && (
+            <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+              <h3 className="text-sm font-medium text-gray-300 mb-2">Generation Process</h3>
+              <div className="text-xs text-gray-500 space-y-1 max-h-32 overflow-y-auto">
+                {progressMessages.map((msg, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>{msg}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* QR Code */}
           <div className="flex items-center justify-center">
             <div className="bg-white p-4 rounded-lg shadow-md">
