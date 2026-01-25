@@ -2213,15 +2213,40 @@ router.post('/summarize', async (req, res) => {
 
     // Provide more specific error messages
     let errorMessage = error.message || 'Unknown error';
+    let errorType = 'unknown';
+
     if (errorMessage.includes('429') || errorMessage.includes('rate')) {
       errorMessage = 'API rate limit exceeded. Please wait a moment and try again.';
-    } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
-      errorMessage = 'API authentication failed. Please check your API key.';
-    } else if (errorMessage.includes('context') || errorMessage.includes('token')) {
+      errorType = 'rate_limit';
+    } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized') || errorMessage.includes('Invalid API')) {
+      errorMessage = 'API authentication failed. Please check your API key configuration.';
+      errorType = 'auth';
+    } else if (errorMessage.includes('context') || errorMessage.includes('too long')) {
       errorMessage = 'Content too long for AI processing. Try scanning fewer articles.';
+      errorType = 'token_limit';
+    } else if (errorMessage.includes('timeout')) {
+      errorMessage = `LLM API timeout: ${error.message}`;
+      errorType = 'timeout';
+    } else if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('ENOTFOUND') || errorMessage.includes('ETIMEDOUT')) {
+      errorMessage = `Network error: ${error.message}`;
+      errorType = 'network';
+    } else if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+      errorMessage = `Failed to connect to LLM API: ${error.message}`;
+      errorType = 'network';
+    } else if (errorMessage.includes('JSON') || errorMessage.includes('parse')) {
+      errorMessage = `Failed to parse LLM response: ${error.message}`;
+      errorType = 'parse';
     }
 
-    res.status(500).json({ success: false, error: errorMessage });
+    addLog('error', `Summary generation failed (${errorType})`, errorMessage);
+
+    // Return logs even on error so user can see what happened
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      errorType,
+      logs: processLogs,
+    });
   }
 });
 
@@ -2368,59 +2393,100 @@ ${consolidatedInput}
 
 只回傳 JSON。`;
 
-  const response = await callLLM(prompt, llmConfig, apiKey, 2048);
+  const response = await callLLM(prompt, llmConfig, apiKey, 8192);
   return response;
 }
 
 /**
  * Generic LLM call helper
  */
-async function callLLM(prompt, config, apiKey, maxTokens = 1024) {
-  let response;
+async function callLLM(prompt, config, apiKey, maxTokens = 4096) {
+  const timeout = 90000; // 90 seconds timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-  if (config.isAnthropic) {
-    response = await fetch(`${config.baseUrl}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: config.model,
-        max_tokens: maxTokens,
-        messages: [{ role: 'user', content: prompt }],
-        system: '你是情報分析師。用繁體中文回覆。只回傳 JSON。',
-      }),
-    });
+  const apiUrl = config.isAnthropic
+    ? `${config.baseUrl}/messages`
+    : `${config.baseUrl}/chat/completions`;
 
-    if (!response.ok) throw new Error(`Anthropic API error: ${response.status}`);
-    const data = await response.json();
-    return data.content[0].text;
-  } else {
-    response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [
-          { role: 'system', content: '你是情報分析師。用繁體中文回覆。只回傳 JSON。' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.3,
-        max_tokens: maxTokens,
-      }),
-    });
+  console.log(`   🌐 Calling LLM API: ${apiUrl}`);
+  console.log(`   📊 Model: ${config.model}, Max tokens: ${maxTokens}`);
+  console.log(`   🔑 API key: ${apiKey?.substring(0, 8)}...${apiKey?.slice(-4)} (length: ${apiKey?.length})`);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`LLM API error: ${response.status} - ${errorText}`);
+  try {
+    let response;
+
+    if (config.isAnthropic) {
+      response = await fetch(`${config.baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: config.model,
+          max_tokens: maxTokens,
+          messages: [{ role: 'user', content: prompt }],
+          system: '你是情報分析師。用繁體中文回覆。只回傳 JSON。',
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      console.log(`   ✅ LLM response received, length: ${data.content[0].text?.length || 0}`);
+      return data.content[0].text;
+    } else {
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: [
+            { role: 'system', content: '你是情報分析師。用繁體中文回覆。只回傳 JSON。' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.3,
+          max_tokens: maxTokens,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`LLM API error: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      console.log(`   ✅ LLM response received, length: ${data.choices[0].message.content?.length || 0}`);
+      return data.choices[0].message.content;
     }
-    const data = await response.json();
-    return data.choices[0].message.content;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error(`LLM API timeout after ${timeout/1000}s - the API took too long to respond`);
+    }
+    // Provide more descriptive error messages
+    const errorMsg = error.message || 'Unknown error';
+    console.error(`   ❌ LLM API error: ${errorMsg}`);
+
+    if (errorMsg.includes('ECONNREFUSED')) {
+      throw new Error(`Cannot connect to LLM API at ${config.baseUrl} - connection refused`);
+    } else if (errorMsg.includes('ENOTFOUND')) {
+      throw new Error(`Cannot resolve LLM API host: ${config.baseUrl} - DNS lookup failed`);
+    } else if (errorMsg.includes('ETIMEDOUT')) {
+      throw new Error(`Connection to LLM API timed out - network may be slow or blocked`);
+    } else if (errorMsg.includes('fetch failed')) {
+      throw new Error(`Network error calling LLM API: ${errorMsg}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -2428,15 +2494,19 @@ async function callLLM(prompt, config, apiKey, maxTokens = 1024) {
  * Generate news summary using LLM with Map-Reduce for large article sets
  */
 async function generateNewsSummary(articles, topicName, selectedLLM) {
-  // Determine which LLM to use
-  const llmPriority = [selectedLLM, 'claude-haiku', 'perplexity', 'deepseek'];
+  // Determine which LLM to use - prefer deepseek for cost efficiency
+  const llmPriority = [selectedLLM, 'deepseek', 'claude-haiku', 'perplexity'];
   let llmUsed = null;
   let config = null;
   let apiKey = null;
 
+  console.log(`   🔍 Checking LLM availability, preferred: ${selectedLLM}`);
+
   for (const llm of llmPriority) {
     const cfg = LLM_CONFIGS[llm];
-    if (cfg && process.env[cfg.envKey]) {
+    const hasKey = cfg && process.env[cfg.envKey];
+    console.log(`      ${llm}: ${hasKey ? '✓ available' : '✗ no key'}`);
+    if (hasKey) {
       llmUsed = llm;
       config = cfg;
       apiKey = process.env[cfg.envKey];
@@ -2522,7 +2592,7 @@ ${articleText}
 
 只回傳 JSON。`;
 
-  const response = await callLLM(prompt, config, apiKey, 2048);
+  const response = await callLLM(prompt, config, apiKey, 8192);
   const inputTokensEstimate = Math.ceil(prompt.length / 4);
   const outputTokens = Math.ceil(response.length / 4);
 
