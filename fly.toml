@@ -22,11 +22,11 @@ soft_limit = 200
 
 # Increase timeout for LLM API calls (default is 60s)
 [[http_service.checks]]
-grace_period = "10s"
+grace_period = "60s"
 interval = "30s"
 method = "GET"
 path = "/health"
-timeout = "5s"
+timeout = "10s"
 
 [[services]]
 internal_port = 8080
@@ -48,8 +48,8 @@ handlers = ["tls", "http"]
 # Increase request timeout to 120 seconds for LLM calls
 [[services.http_checks]]
 interval = 10000
-grace_period = "5s"
+grace_period = "60s"
 method = "get"
 path = "/health"
 protocol = "http"
-timeout = 5000
+timeout = 10000
