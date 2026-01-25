@@ -56,7 +56,12 @@ function scheduleDailyScan(topicId, topicName, config) {
 
   // Cancel existing job if any
   if (scheduledJobs.has(jobId)) {
-    scheduledJobs.get(jobId).stop();
+    const existing = scheduledJobs.get(jobId);
+    if (existing.job) {
+      existing.job.stop();
+    } else if (existing.stop) {
+      existing.stop(); // backwards compatibility
+    }
     scheduledJobs.delete(jobId);
     console.log(`[Scheduler] Cancelled existing daily scan for: ${topicName}`);
   }
@@ -86,7 +91,18 @@ function scheduleDailyScan(topicId, topicName, config) {
     timezone: config.timezone || 'Asia/Hong_Kong',
   });
 
-  scheduledJobs.set(jobId, job);
+  // Store job with config info for debugging
+  scheduledJobs.set(jobId, {
+    job,
+    config: {
+      topicId,
+      topicName,
+      time: config.time,
+      timezone: config.timezone || 'Asia/Hong_Kong',
+      cronExpression,
+    },
+    nextRun: `Daily at ${config.time} (${config.timezone || 'Asia/Hong_Kong'})`,
+  });
   console.log(`[Scheduler] ✅ Daily scan scheduled for: ${topicName}`);
 }
 
@@ -98,7 +114,12 @@ function scheduleWeeklyDigest(topicId, topicName, config, digestFunction) {
 
   // Cancel existing job if any
   if (scheduledJobs.has(jobId)) {
-    scheduledJobs.get(jobId).stop();
+    const existing = scheduledJobs.get(jobId);
+    if (existing.job) {
+      existing.job.stop();
+    } else if (existing.stop) {
+      existing.stop();
+    }
     scheduledJobs.delete(jobId);
   }
 
@@ -128,7 +149,19 @@ function scheduleWeeklyDigest(topicId, topicName, config, digestFunction) {
     timezone: config.timezone || 'Asia/Hong_Kong',
   });
 
-  scheduledJobs.set(jobId, job);
+  // Store job with config info for debugging
+  scheduledJobs.set(jobId, {
+    job,
+    config: {
+      topicId,
+      topicName,
+      day: config.day,
+      time: config.time || '08:00',
+      timezone: config.timezone || 'Asia/Hong_Kong',
+      cronExpression,
+    },
+    nextRun: `Weekly on ${config.day} at ${config.time || '08:00'} (${config.timezone || 'Asia/Hong_Kong'})`,
+  });
   console.log(`[Scheduler] ✅ Weekly digest scheduled for: ${topicName}`);
 }
 
@@ -190,13 +223,23 @@ function removeTopicSchedules(topicId) {
   const weeklyId = `weekly-${topicId}`;
 
   if (scheduledJobs.has(dailyId)) {
-    scheduledJobs.get(dailyId).stop();
+    const existing = scheduledJobs.get(dailyId);
+    if (existing.job) {
+      existing.job.stop();
+    } else if (existing.stop) {
+      existing.stop();
+    }
     scheduledJobs.delete(dailyId);
     console.log(`[Scheduler] Removed daily scan for topic: ${topicId}`);
   }
 
   if (scheduledJobs.has(weeklyId)) {
-    scheduledJobs.get(weeklyId).stop();
+    const existing = scheduledJobs.get(weeklyId);
+    if (existing.job) {
+      existing.job.stop();
+    } else if (existing.stop) {
+      existing.stop();
+    }
     scheduledJobs.delete(weeklyId);
     console.log(`[Scheduler] Removed weekly digest for topic: ${topicId}`);
   }
@@ -207,10 +250,12 @@ function removeTopicSchedules(topicId) {
  */
 function getScheduleStatus() {
   const status = [];
-  for (const [jobId, job] of scheduledJobs) {
+  for (const [jobId, jobInfo] of scheduledJobs) {
     status.push({
       id: jobId,
-      running: true, // node-cron doesn't have a simple way to check this
+      running: true,
+      config: jobInfo.config || null,
+      nextRun: jobInfo.nextRun || 'unknown',
     });
   }
   return status;
@@ -220,8 +265,12 @@ function getScheduleStatus() {
  * Stop all scheduled jobs
  */
 function stopAll() {
-  for (const [jobId, job] of scheduledJobs) {
-    job.stop();
+  for (const [jobId, entry] of scheduledJobs) {
+    if (entry.job) {
+      entry.job.stop();
+    } else if (entry.stop) {
+      entry.stop();
+    }
   }
   scheduledJobs.clear();
   console.log('[Scheduler] ⏹️ All scheduled jobs stopped');

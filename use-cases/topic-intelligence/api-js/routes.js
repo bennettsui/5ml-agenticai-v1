@@ -4096,18 +4096,70 @@ router.get('/debug/llm-status', (req, res) => {
  * GET /debug/scheduler-status
  * Diagnostic endpoint to check scheduler status
  */
-router.get('/debug/scheduler-status', (req, res) => {
+router.get('/debug/scheduler-status', async (req, res) => {
   const sched = getScheduler();
+
+  // Get topics with their schedule configs
+  let topicsWithSchedules = [];
+  if (db && process.env.DATABASE_URL) {
+    try {
+      const topics = await db.getIntelligenceTopics();
+      topicsWithSchedules = topics.map(t => ({
+        topic_id: t.topic_id,
+        name: t.name,
+        status: t.status,
+        daily_scan_config: t.daily_scan_config,
+        weekly_digest_config: t.weekly_digest_config,
+      }));
+    } catch (e) {
+      console.error('[Debug] Failed to load topics:', e.message);
+    }
+  }
 
   const status = {
     timestamp: new Date().toISOString(),
+    serverTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     schedulerAvailable: !!sched,
     scheduledJobs: sched ? sched.getScheduleStatus() : [],
-    message: sched ? 'Scheduler is running' : 'Scheduler not initialized',
+    topicsWithSchedules,
+    message: sched ? 'Scheduler is running' : 'Scheduler not initialized - check DATABASE_URL',
   };
 
   console.log('🕐 Scheduler Status:', JSON.stringify(status, null, 2));
   res.json(status);
+});
+
+/**
+ * POST /debug/trigger-scan/:topicId
+ * Manually trigger a scheduled scan for testing
+ */
+router.post('/debug/trigger-scan/:topicId', async (req, res) => {
+  const { topicId } = req.params;
+
+  try {
+    let topic;
+    if (db && process.env.DATABASE_URL) {
+      topic = await db.getIntelligenceTopic(topicId);
+    } else {
+      topic = inMemoryTopics.get(topicId);
+    }
+
+    if (!topic) {
+      return res.status(404).json({ success: false, error: 'Topic not found' });
+    }
+
+    console.log(`[Debug] 🧪 Manually triggering scan for: ${topic.name}`);
+    const result = await runScheduledScan(topicId, topic.name);
+
+    res.json({
+      success: true,
+      message: `Scan triggered for ${topic.name}`,
+      result,
+    });
+  } catch (error) {
+    console.error('[Debug] Manual scan trigger failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 /**

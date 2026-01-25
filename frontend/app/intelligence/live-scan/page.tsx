@@ -144,6 +144,7 @@ export default function LiveScanPage() {
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [summaryMeta, setSummaryMeta] = useState<SummaryMeta | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [summaryError, setSummaryError] = useState<{ message: string; type: string; details?: string } | null>(null);
   const summaryTriggered = useRef(false);
 
   // Stale scan detection
@@ -231,6 +232,7 @@ export default function LiveScanPage() {
     setIsGeneratingSummary(true);
     setSummary(null);
     setSummaryMeta(null);
+    setSummaryError(null);
     addActivityLog('info', '🤖 Starting AI summary generation...');
 
     try {
@@ -266,14 +268,22 @@ export default function LiveScanPage() {
       if (data.success) {
         setSummary(data.summary);
         setSummaryMeta(data.meta);
+        setSummaryError(null);
         addActivityLog('success', '✅ AI summary process complete', `${data.meta.totalTokens} tokens used`);
       } else {
         const errorMsg = data.error || 'Unknown error occurred';
+        const errorType = data.errorType || 'unknown';
+        setSummaryError({ message: errorMsg, type: errorType, details: data.errorType });
         addActivityLog('error', `Failed to generate summary: ${errorMsg}`);
       }
     } catch (error) {
       console.error('Failed to generate summary:', error);
       const errorMsg = error instanceof Error ? error.message : 'Network error or server unavailable';
+      setSummaryError({
+        message: errorMsg,
+        type: 'network',
+        details: 'The request failed to reach the server. Check server logs for details.'
+      });
       addActivityLog('error', `Failed to generate summary: ${errorMsg}`);
     } finally {
       setIsGeneratingSummary(false);
@@ -788,7 +798,7 @@ export default function LiveScanPage() {
         </div>
 
         {/* AI Summary Panel - Shows when scan completes */}
-        {(progress.status === 'complete' || isGeneratingSummary || summary) && (
+        {(progress.status === 'complete' || isGeneratingSummary || summary || summaryError) && (
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -799,14 +809,19 @@ export default function LiveScanPage() {
                     {summaryMeta.totalTokens.toLocaleString()} tokens
                   </span>
                 )}
+                {summaryError && (
+                  <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs rounded-full">
+                    Error: {summaryError.type}
+                  </span>
+                )}
               </div>
-              {!isGeneratingSummary && summary && (
+              {!isGeneratingSummary && (summary || summaryError) && (
                 <button
                   onClick={generateSummary}
                   className="flex items-center gap-1 px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm"
                 >
                   <Sparkles className="w-4 h-4" />
-                  Regenerate
+                  {summaryError ? 'Retry' : 'Regenerate'}
                 </button>
               )}
             </div>
@@ -817,6 +832,31 @@ export default function LiveScanPage() {
                 <p className="text-slate-500 dark:text-slate-400 text-sm">
                   Analyzing {progress.articlesAnalyzed} articles and generating summary...
                 </p>
+              </div>
+            )}
+
+            {/* Error Display */}
+            {summaryError && !isGeneratingSummary && (
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-medium text-red-700 dark:text-red-300">
+                      Summary Generation Failed
+                    </h4>
+                    <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                      {summaryError.message}
+                    </p>
+                    {summaryError.details && summaryError.details !== summaryError.type && (
+                      <p className="text-xs text-red-500 dark:text-red-400 mt-2 font-mono bg-red-100 dark:bg-red-900/30 px-2 py-1 rounded">
+                        Error Type: {summaryError.type}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                      Check the Activity Log below for detailed error information. If the issue persists, check the server console logs.
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
