@@ -34,54 +34,72 @@ const CHUNK_SIZE = 5;
 const MAX_DIRECT_ARTICLES = 6;
 
 /**
- * Generic LLM call helper for summarization
+ * Generic LLM call helper for summarization with timeout and retry
  */
-async function callLLM(prompt, config, apiKey, maxTokens = 1024) {
-  let response;
+async function callLLM(prompt, config, apiKey, maxTokens = 4096) {
+  const timeout = 60000; // 60 seconds timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-  if (config.isAnthropic) {
-    response = await fetch(`${config.baseUrl}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: config.model,
-        max_tokens: maxTokens,
-        messages: [{ role: 'user', content: prompt }],
-        system: '你是情報分析師。用繁體中文回覆。只回傳 JSON。',
-      }),
-    });
+  try {
+    let response;
 
-    if (!response.ok) throw new Error(`Anthropic API error: ${response.status}`);
-    const data = await response.json();
-    return data.content[0].text;
-  } else {
-    response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [
-          { role: 'system', content: '你是情報分析師。用繁體中文回覆。只回傳 JSON。' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.3,
-        max_tokens: maxTokens,
-      }),
-    });
+    if (config.isAnthropic) {
+      response = await fetch(`${config.baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: config.model,
+          max_tokens: maxTokens,
+          messages: [{ role: 'user', content: prompt }],
+          system: '你是情報分析師。用繁體中文回覆。只回傳 JSON。',
+        }),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`LLM API error: ${response.status} - ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      return data.content[0].text;
+    } else {
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: [
+            { role: 'system', content: '你是情報分析師。用繁體中文回覆。只回傳 JSON。' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.3,
+          max_tokens: maxTokens,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`LLM API error: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      return data.choices[0].message.content;
     }
-    const data = await response.json();
-    return data.choices[0].message.content;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error(`LLM API timeout after ${timeout/1000}s`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -112,7 +130,7 @@ ${articleText}
 
 只回傳 JSON。`;
 
-  const response = await callLLM(prompt, llmConfig, apiKey, 1024);
+  const response = await callLLM(prompt, llmConfig, apiKey, 2048);
 
   try {
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -179,7 +197,7 @@ ${consolidatedInput}
 
 只回傳 JSON。`;
 
-  const response = await callLLM(prompt, llmConfig, apiKey, 4096);
+  const response = await callLLM(prompt, llmConfig, apiKey, 8192);
   return response;
 }
 
@@ -255,7 +273,7 @@ ${articleText}
 
 只回傳 JSON。`;
 
-  const response = await callLLM(prompt, config, apiKey, 4096);
+  const response = await callLLM(prompt, config, apiKey, 8192);
   const inputTokensEstimate = Math.ceil(prompt.length / 4);
   const outputTokens = Math.ceil(response.length / 4);
 
