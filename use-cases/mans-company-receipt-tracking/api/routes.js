@@ -380,7 +380,9 @@ router.get('/batches/:batchId', async (req, res) => {
       `SELECT
         receipt_id, receipt_date, vendor, description, amount, currency,
         category_id, category_name, deductible_amount, non_deductible_amount,
-        categorization_confidence, requires_review, reviewed
+        categorization_confidence, categorization_reasoning,
+        ocr_confidence, ocr_warnings, ocr_raw_text,
+        requires_review, reviewed
        FROM receipts
        WHERE batch_id = $1
        ORDER BY receipt_date DESC`,

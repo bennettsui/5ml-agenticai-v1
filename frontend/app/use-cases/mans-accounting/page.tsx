@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Download, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 
 interface BatchStatus {
@@ -21,6 +21,24 @@ interface BatchStatus {
   updated_at: string;
 }
 
+interface ReceiptResult {
+  receipt_id: string;
+  receipt_date: string;
+  vendor: string;
+  description: string | null;
+  amount: number | string;
+  currency: string;
+  category_id: string | null;
+  category_name: string | null;
+  categorization_confidence?: number | string | null;
+  categorization_reasoning?: string | null;
+  ocr_confidence?: number | string | null;
+  ocr_warnings?: string[] | null;
+  ocr_raw_text?: string | null;
+  deductible_amount?: number | string | null;
+  non_deductible_amount?: number | string | null;
+}
+
 export default function ReceiptProcessor() {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [clientName, setClientName] = useState("Man's Accounting Firm");
@@ -29,7 +47,11 @@ export default function ReceiptProcessor() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
+  const [receiptResults, setReceiptResults] = useState<ReceiptResult[]>([]);
+  const [isReceiptLoading, setIsReceiptLoading] = useState(false);
+  const [receiptError, setReceiptError] = useState<string>('');
   const [error, setError] = useState<string>('');
+  const receiptFetchKeyRef = useRef<string>('');
   const isLocalhost = () => {
     if (typeof window === 'undefined') return false;
     return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -52,6 +74,12 @@ export default function ReceiptProcessor() {
     if (typeof value === 'number') return String(value);
     if (value && typeof value === 'object') return JSON.stringify(value);
     return '';
+  };
+
+  const formatAmount = (value: unknown): string => {
+    const parsed = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(parsed)) return '0.00';
+    return parsed.toFixed(2);
   };
 
   const readFileAsBase64 = (file: File): Promise<string> => (
@@ -208,11 +236,58 @@ export default function ReceiptProcessor() {
     };
   }, [batchId]);
 
+  useEffect(() => {
+    if (!batchId) return;
+    const processedCount = batchStatus?.processed_receipts ?? 0;
+    if (processedCount === 0) return;
+
+    const statusValue = batchStatus ? normalizeStatus(batchStatus.status) : 'processing';
+    const fetchKey = `${batchId}:${processedCount}:${statusValue}`;
+    if (receiptFetchKeyRef.current === fetchKey) return;
+
+    let cancelled = false;
+    setIsReceiptLoading(true);
+    setReceiptError('');
+
+    const fetchReceiptDetails = async () => {
+      try {
+        const response = await fetch(apiUrl(`/api/receipts/batches/${batchId}`));
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error ? formatErrorMessage(data.error) : 'Failed to fetch receipt results');
+        }
+
+        if (!cancelled) {
+          setReceiptResults(Array.isArray(data.receipts) ? data.receipts : []);
+          receiptFetchKeyRef.current = fetchKey;
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setReceiptError(formatErrorMessage(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsReceiptLoading(false);
+        }
+      }
+    };
+
+    fetchReceiptDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [batchId, batchStatus?.processed_receipts, batchStatus?.status]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsProcessing(true);
     setBatchStatus(null);
+    setReceiptResults([]);
+    setReceiptError('');
+    receiptFetchKeyRef.current = '';
 
     if (uploadedFiles.length === 0) {
       setError('Please select at least one receipt image.');
@@ -513,6 +588,90 @@ export default function ReceiptProcessor() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {(receiptResults.length > 0 || isReceiptLoading || receiptError.length > 0) && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Receipt Results</h2>
+              {isReceiptLoading && (
+                <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Loading receipts...
+                </div>
+              )}
+            </div>
+
+            {receiptError.length > 0 && (
+              <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                <div className="flex">
+                  <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Receipt Fetch Error</h3>
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{toDisplayText(receiptError)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {receiptResults.length === 0 && !isReceiptLoading && receiptError.length === 0 && (
+              <p className="text-sm text-slate-600 dark:text-slate-400">No OCR results available yet.</p>
+            )}
+
+            <div className="space-y-4">
+              {receiptResults.map((receipt) => {
+                const vendorLabel = receipt.vendor || 'Unknown vendor';
+                const dateLabel = receipt.receipt_date || 'Unknown date';
+                const currencyLabel = receipt.currency || 'HKD';
+                const amountLabel = `${currencyLabel} ${formatAmount(receipt.amount)}`;
+                const descriptionLabel = receipt.description || 'No description provided.';
+                const categoryLabel = receipt.category_name || 'Uncategorized';
+                const categoryIdLabel = receipt.category_id ? ` (${receipt.category_id})` : '';
+                const confidenceValue = typeof receipt.categorization_confidence === 'number'
+                  ? receipt.categorization_confidence
+                  : Number(receipt.categorization_confidence);
+                const confidenceLabel = Number.isFinite(confidenceValue)
+                  ? `${Math.round(confidenceValue * 100)}%`
+                  : 'n/a';
+                const contextualText = receipt.categorization_reasoning
+                  ? receipt.categorization_reasoning
+                  : `No contextual analysis recorded yet. Category: ${categoryLabel}${categoryIdLabel}. Confidence: ${confidenceLabel}.`;
+                const ocrText = receipt.ocr_raw_text || 'No OCR result available yet.';
+
+                return (
+                  <div key={receipt.receipt_id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900 dark:text-white">{vendorLabel}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">{dateLabel}</div>
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{descriptionLabel}</div>
+                      </div>
+                      <div className="text-sm font-medium text-slate-700 dark:text-slate-300">{amountLabel}</div>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">OCR Result</h4>
+                        <pre className="mt-2 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
+                          {ocrText}
+                        </pre>
+                      </div>
+
+                      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">Contextual Analysis</h4>
+                        <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                          {contextualText}
+                        </p>
+                        <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                          Category: {categoryLabel}{categoryIdLabel} • Confidence: {confidenceLabel}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
