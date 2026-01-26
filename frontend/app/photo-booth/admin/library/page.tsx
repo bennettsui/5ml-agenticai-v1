@@ -239,10 +239,9 @@ export default function PhotoBoothLibraryPage() {
               {data.images.map((image) => (
                 <div
                   key={image.image_id}
-                  className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden hover:border-purple-500 transition-colors cursor-pointer"
-                  onClick={() => setSelectedImage(image)}
+                  className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden hover:border-purple-500 transition-colors cursor-pointer group relative"
                 >
-                  <div className="aspect-[3/4] bg-slate-700 relative">
+                  <div className="aspect-[3/4] bg-slate-700 relative" onClick={() => setSelectedImage(image)}>
                     <img
                       src={`${API_BASE}/api/photo-booth/image/${image.image_id}`}
                       alt={`Generated ${image.theme}`}
@@ -252,6 +251,17 @@ export default function PhotoBoothLibraryPage() {
                         target.style.display = 'none';
                       }}
                     />
+                    {/* Delete button overlay - appears on hover */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteImage(image.image_id);
+                      }}
+                      className="absolute top-2 left-2 p-1.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 shadow-lg"
+                      title="Delete image"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                     <div className="absolute top-2 right-2">
                       <span className={`px-2 py-0.5 text-xs rounded-full ${
                         image.image_type === 'branded' ? 'bg-purple-600 text-white' :
@@ -262,7 +272,7 @@ export default function PhotoBoothLibraryPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="p-3">
+                  <div className="p-3" onClick={() => setSelectedImage(image)}>
                     <p className="text-sm font-medium text-white truncate">
                       {image.theme_name || image.theme || 'Unknown'}
                     </p>
