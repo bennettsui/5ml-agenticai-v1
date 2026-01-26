@@ -544,6 +544,13 @@ router.get('/batches/:batchId/download', async (req, res) => {
   }
 });
 
+// =============================================================================
+// DATABASE INITIALIZATION ENDPOINT
+// =============================================================================
+
+const initDbRouter = require('./init-db-endpoint');
+router.use('/', initDbRouter);
+
 /**
  * GET /receipts/:receiptId
  *
@@ -656,13 +663,6 @@ router.get('/analytics/compliance', async (req, res) => {
     });
   }
 });
-
-// =============================================================================
-// DATABASE INITIALIZATION ENDPOINT
-// =============================================================================
-
-const initDbRouter = require('./init-db-endpoint');
-router.use('/', initDbRouter);
 
 // =============================================================================
 // HELPER FUNCTIONS
