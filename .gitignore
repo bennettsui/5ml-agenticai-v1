@@ -9,3 +9,4 @@ dist/
 # Frontend build output
 frontend/out/
 frontend/.next/
+docker-compose.yml
