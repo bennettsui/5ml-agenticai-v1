@@ -100,27 +100,51 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     );
     console.log(`✅ Collected ${downloadedFiles.length} receipts\n`);
 
-    // CHECKPOINT 4A: Tesseract OCR for bounding boxes
+    // CHECKPOINT 4A: Tesseract OCR for bounding boxes (with timeout protection)
     console.log('✓ CHECKPOINT 4A: Extracting bounding boxes with Tesseract...');
     await logProcessing(batchId, 'info', 'tesseract_start', 'Extracting bounding boxes');
     wsServer.sendProgress(batchId, { progress: 30, message: 'Extracting bounding boxes...' });
 
-    const TesseractOCR = require('../../../tools/tesseract-ocr');
-    const tesseract = new TesseractOCR();
+    let tesseractResults = [];
+    try {
+      const TesseractOCR = require('../../../tools/tesseract-ocr');
+      const tesseract = new TesseractOCR();
 
-    const imagePaths = downloadedFiles.map(f => f.path);
-    const tesseractResults = await tesseract.processBatch(imagePaths, (p) => {
-      const progress = 30 + (p.progress * 0.2);
-      wsServer.sendProgress(batchId, {
-        progress: Math.round(progress),
-        message: `Tesseract ${p.current}/${p.total}`
+      const imagePaths = downloadedFiles.map(f => f.path);
+
+      // Add overall timeout for batch processing (10 minutes for Chinese OCR)
+      const batchPromise = tesseract.processBatch(imagePaths, (p) => {
+        const progress = 30 + (p.progress * 0.2);
+        wsServer.sendProgress(batchId, {
+          progress: Math.round(progress),
+          message: `Tesseract ${p.current}/${p.total} (Chinese OCR may take 30-60s per receipt)`
+        });
       });
-    });
 
-    // Terminate Tesseract worker to free resources
-    await tesseract.terminate();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Tesseract batch timeout (10 minutes) - Chinese OCR processing exceeded time limit')), 600000)
+      );
 
-    console.log(`✅ Tesseract: ${tesseractResults.filter(r => r.success).length} successful\n`);
+      tesseractResults = await Promise.race([batchPromise, timeoutPromise]);
+
+      // Terminate Tesseract worker to free resources
+      await tesseract.terminate();
+
+      console.log(`✅ Tesseract: ${tesseractResults.filter(r => r.success).length} successful\n`);
+      await logProcessing(batchId, 'info', 'tesseract_complete', `Tesseract completed: ${tesseractResults.filter(r => r.success).length} successful`);
+
+    } catch (error) {
+      console.error(`⚠️ [Tesseract] Failed, continuing without bounding boxes:`, error.message);
+      await logProcessing(batchId, 'warning', 'tesseract_failed', `Tesseract failed: ${error.message}`);
+
+      // Create empty results so processing can continue
+      tesseractResults = downloadedFiles.map(f => ({
+        success: false,
+        imagePath: f.path,
+        error: 'Tesseract timeout or failure',
+        boxes: []
+      }));
+    }
 
     // CHECKPOINT 4B: Claude Vision OCR for structured data
     console.log('✓ CHECKPOINT 4B: Running Claude Vision OCR...');
