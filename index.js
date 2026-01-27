@@ -7,7 +7,14 @@ require('dotenv').config();
 
 const app = express();
 const path = require('path');
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
+// const cors = require('cors');
+
+// app.use(cors({
+//   origin: ['http://localhost:3000', 'http://localhost:5173', 'https://5ml-agenticai-v1.fly.dev'],
+//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type', 'Authorization'],
+// }));
 
 // Swagger API Documentation (before static files)
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
@@ -26,11 +33,14 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance } = require('./db');
+const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
-  initDatabase();
+  initDatabase().catch(err => {
+    console.error('⚠️ Database initialization failed:', err.message);
+    console.log('⚠️ App will continue running without database');
+  });
   console.log('📊 Database initialization started');
 } else {
   console.log('⚠️ DATABASE_URL not set - running without database');
@@ -419,13 +429,23 @@ ${brief}
  */
 app.post('/agents/creative', async (req, res) => {
   try {
-    const { client_name, brief, model, no_fallback } = req.body;
+    const { client_name, brief, industry, model, no_fallback } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeCreative } = require('./agents/creativeAgent');
     const analysis = await analyzeCreative(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'creative', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
 
     res.json({
       success: true,
@@ -467,13 +487,23 @@ app.post('/agents/creative', async (req, res) => {
  */
 app.post('/agents/seo', async (req, res) => {
   try {
-    const { client_name, brief, model, no_fallback } = req.body;
+    const { client_name, brief, industry, model, no_fallback } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeSEO } = require('./agents/seoAgent');
     const analysis = await analyzeSEO(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'seo', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
 
     res.json({
       success: true,
@@ -515,13 +545,23 @@ app.post('/agents/seo', async (req, res) => {
  */
 app.post('/agents/social', async (req, res) => {
   try {
-    const { client_name, brief, model, no_fallback } = req.body;
+    const { client_name, brief, industry, model, no_fallback } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeSocial } = require('./agents/socialAgent');
     const analysis = await analyzeSocial(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'social', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
 
     res.json({
       success: true,
@@ -540,9 +580,9 @@ app.post('/agents/social', async (req, res) => {
  * @swagger
  * /agents/research:
  *   post:
- *     summary: Web research with Perplexity AI
+ *     summary: Brand Research Agent - Real-time brand status scan and asset audit
  *     tags: [Agents]
- *     description: Performs comprehensive web-based research using Perplexity Sonar Pro - provides market insights, competitor analysis, current trends, opportunities and risks with real-time web data
+ *     description: Combines real-time intelligence with brand asset auditing. Provides data sufficiency check, dynamic scanning (3-month news, campaigns), product/pricing analysis, positioning verification, VOC analysis, 3Cs framework, SWOT analysis, and strategic diagnosis with reasoning tracking.
  *     requestBody:
  *       required: true
  *       content:
@@ -551,25 +591,38 @@ app.post('/agents/social', async (req, res) => {
  *             $ref: '#/components/schemas/AgentRequest'
  *     responses:
  *       200:
- *         description: Research analysis completed
+ *         description: Brand research analysis completed
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/AgentResponse'
  *       400:
- *         description: Missing required fields or PERPLEXITY_API_KEY not configured
+ *         description: Missing required fields
  *       500:
  *         description: Server error
  */
 app.post('/agents/research', async (req, res) => {
   try {
-    const { client_name, brief, model, no_fallback } = req.body;
+    const { client_name, brief, industry, model, no_fallback } = req.body;
     if (!client_name || !brief) {
       return res.status(400).json({ error: 'Missing client_name or brief' });
     }
 
     const { analyzeResearch } = require('./agents/researchAgent');
     const analysis = await analyzeResearch(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        // Save/update brand
+        await saveBrand(client_name, industry, { brief });
+        // Update brand with analysis results
+        await updateBrandResults(client_name, 'research', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+        // Don't fail the request if DB save fails
+      }
+    }
 
     res.json({
       success: true,
@@ -580,6 +633,183 @@ app.post('/agents/research', async (req, res) => {
     });
   } catch (error) {
     console.error('Research agent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Customer Insight Agent
+app.post('/agents/customer', async (req, res) => {
+  try {
+    const { client_name, brief, industry, model, no_fallback } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { analyzeCustomerInsight } = require('./agents/customerInsightAgent');
+    const analysis = await analyzeCustomerInsight(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'customer', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
+
+    res.json({
+      success: true,
+      agent: 'customer',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Customer insight agent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Competitor Analysis Agent
+app.post('/agents/competitor', async (req, res) => {
+  try {
+    const { client_name, brief, industry, model, no_fallback } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { analyzeCompetitor } = require('./agents/competitorAgent');
+    const analysis = await analyzeCompetitor(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'competitor', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
+
+    res.json({
+      success: true,
+      agent: 'competitor',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Competitor analysis agent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Brand Strategy Agent
+app.post('/agents/strategy', async (req, res) => {
+  try {
+    const { client_name, brief, industry, model, no_fallback } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { analyzeBrandStrategy } = require('./agents/brandStrategyAgent');
+    const analysis = await analyzeBrandStrategy(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'strategy', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
+
+    res.json({
+      success: true,
+      agent: 'strategy',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Brand strategy agent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// CSO Orchestrator (高階品牌策略戰略長) - Layer 6
+app.post('/agents/cso', async (req, res) => {
+  try {
+    const { client_name, brief, industry, model, conversation_history, existing_data } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { orchestrateBrandDiagnosis } = require('./agents/csoOrchestrator');
+    const analysis = await orchestrateBrandDiagnosis(client_name, brief, {
+      model: model || 'deepseek', // CSO requires DeepSeek R1
+      conversationHistory: conversation_history || [],
+      existingData: existing_data || {}
+    });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'cso_orchestration', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
+
+    res.json({
+      success: true,
+      agent: 'cso',
+      mode: 'orchestration',
+      role: '高階品牌策略戰略長 (CSO)',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('CSO Orchestrator error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Market Sentinel Agent (市場哨兵) - Layer 3
+app.post('/agents/sentinel', async (req, res) => {
+  try {
+    const { client_name, brief, industry, model, no_fallback } = req.body;
+    if (!client_name || !brief) {
+      return res.status(400).json({ error: 'Missing client_name or brief' });
+    }
+
+    const { monitorMarketTrends } = require('./agents/marketSentinelAgent');
+    const analysis = await monitorMarketTrends(client_name, brief, { model, no_fallback });
+
+    // Save to brand database if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await saveBrand(client_name, industry, { brief });
+        await updateBrandResults(client_name, 'market_sentinel', analysis);
+      } catch (dbError) {
+        console.error('Error saving to brand database:', dbError);
+      }
+    }
+
+    res.json({
+      success: true,
+      agent: 'sentinel',
+      role: '市場哨兵 (Market Sentinel)',
+      client_name,
+      analysis,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Market Sentinel agent error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -620,11 +850,293 @@ app.get('/agents', (req, res) => {
       {
         name: 'research',
         endpoint: '/agents/research',
-        description: '🔍 Web research with Perplexity AI'
+        description: 'Brand Research Agent - Real-time brand status scan and asset audit'
       }
     ],
     timestamp: new Date().toISOString(),
   });
+});
+
+// ==========================================
+// Sandbox Test History Endpoints
+// ==========================================
+
+// Save sandbox test
+app.post('/api/sandbox/tests', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const { agent_type, client_name, brief, results } = req.body;
+
+    if (!agent_type || !client_name || !brief || !results) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const test = await saveSandboxTest(agent_type, client_name, brief, results);
+    res.json({ success: true, test_id: test.test_id, created_at: test.created_at });
+  } catch (error) {
+    console.error('Error saving sandbox test:', error);
+    res.status(500).json({ error: 'Failed to save sandbox test' });
+  }
+});
+
+// Get sandbox test history
+app.get('/api/sandbox/tests', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const tests = await getSandboxTests(limit);
+    res.json({ success: true, tests });
+  } catch (error) {
+    console.error('Error fetching sandbox tests:', error);
+    res.status(500).json({ error: 'Failed to fetch sandbox tests' });
+  }
+});
+
+// Clear all sandbox tests
+app.delete('/api/sandbox/tests', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    await clearSandboxTests();
+    res.json({ success: true, message: 'All sandbox tests cleared' });
+  } catch (error) {
+    console.error('Error clearing sandbox tests:', error);
+    res.status(500).json({ error: 'Failed to clear sandbox tests' });
+  }
+});
+
+// ==========================================
+// Brand Database Endpoints
+// ==========================================
+
+// Search brands for autocomplete
+app.get('/api/brands/search', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const query = req.query.q || '';
+    const limit = parseInt(req.query.limit) || 10;
+
+    if (!query || query.trim().length < 2) {
+      return res.json({ success: true, brands: [] });
+    }
+
+    const brands = await searchBrands(query, limit);
+    res.json({ success: true, brands });
+  } catch (error) {
+    console.error('Error searching brands:', error);
+    res.status(500).json({ error: 'Failed to search brands' });
+  }
+});
+
+// Get all brands
+app.get('/api/brands', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const brands = await getAllBrands(limit);
+    res.json({ success: true, brands });
+  } catch (error) {
+    console.error('Error fetching brands:', error);
+    res.status(500).json({ error: 'Failed to fetch brands' });
+  }
+});
+
+// Get specific brand by name
+app.get('/api/brands/:name', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const brand = await getBrandWithResults(req.params.name);
+    if (!brand) {
+      return res.status(404).json({ error: 'Brand not found' });
+    }
+    res.json({ success: true, brand });
+  } catch (error) {
+    console.error('Error fetching brand:', error);
+    res.status(500).json({ error: 'Failed to fetch brand' });
+  }
+});
+
+// Save or update brand
+app.post('/api/brands', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const { brand_name, industry, brand_info } = req.body;
+
+    if (!brand_name) {
+      return res.status(400).json({ error: 'brand_name is required' });
+    }
+
+    const brand = await saveBrand(brand_name, industry, brand_info);
+    res.json({ success: true, brand });
+  } catch (error) {
+    console.error('Error saving brand:', error);
+    res.status(500).json({ error: 'Failed to save brand' });
+  }
+});
+
+// ==========================================
+// Conversation History Endpoints
+// ==========================================
+
+// Get conversation history for a brand
+app.get('/api/conversations/:brand_name', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const conversations = await getConversationsByBrand(req.params.brand_name, limit);
+    res.json({ success: true, conversations });
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    res.status(500).json({ error: 'Failed to fetch conversations' });
+  }
+});
+
+// Save a new conversation
+app.post('/api/conversations', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const { brand_name, agent_type, initial_brief, messages } = req.body;
+
+    if (!brand_name || !agent_type || !messages) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const conversation = await saveConversation(brand_name, agent_type, initial_brief, messages);
+    res.json({ success: true, conversation });
+  } catch (error) {
+    console.error('Error saving conversation:', error);
+    res.status(500).json({ error: 'Failed to save conversation' });
+  }
+});
+
+// Get specific conversation
+app.get('/api/conversation/:id', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const conversation = await getConversation(req.params.id);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    res.json({ success: true, conversation });
+  } catch (error) {
+    console.error('Error fetching conversation:', error);
+    res.status(500).json({ error: 'Failed to fetch conversation' });
+  }
+});
+
+// Delete a conversation
+app.delete('/api/conversation/:id', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    await deleteConversation(req.params.id);
+    res.json({ success: true, message: 'Conversation deleted' });
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    res.status(500).json({ error: 'Failed to delete conversation' });
+  }
+});
+
+// Delete a brand (and all its conversations)
+app.delete('/api/brands/:brand_name', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    await deleteBrand(req.params.brand_name);
+    res.json({ success: true, message: 'Brand deleted' });
+  } catch (error) {
+    console.error('Error deleting brand:', error);
+    res.status(500).json({ error: 'Failed to delete brand' });
+  }
+});
+
+// Delete a project (all conversations for a brand + brief)
+app.delete('/api/brands/:brand_name/projects', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const brief = req.query.brief;
+    if (!brief) {
+      return res.status(400).json({ error: 'Brief parameter required' });
+    }
+
+    await deleteProject(req.params.brand_name, brief);
+    res.json({ success: true, message: 'Project deleted' });
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    res.status(500).json({ error: 'Failed to delete project' });
+  }
+});
+
+// Get projects for a brand (grouped by brief)
+app.get('/api/brands/:brand_name/projects', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const projects = await getProjectsByBrand(req.params.brand_name);
+    res.json({ success: true, projects });
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+    res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+// Get conversations for a specific project (brand + brief)
+app.get('/api/brands/:brand_name/projects/:brief_index/conversations', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  try {
+    const brief = req.query.brief;
+    if (!brief) {
+      return res.status(400).json({ error: 'Brief parameter required' });
+    }
+
+    const limit = parseInt(req.query.limit) || 20;
+    const conversations = await getConversationsByBrandAndBrief(req.params.brand_name, brief, limit);
+    res.json({ success: true, conversations });
+  } catch (error) {
+    console.error('Error fetching project conversations:', error);
+    res.status(500).json({ error: 'Failed to fetch project conversations' });
+  }
 });
 
 // ==========================================
@@ -785,10 +1297,17 @@ app.get('/stats', async (req, res) => {
   try {
     const stats = {
       agents: [
-        { id: 'creative', name: 'Creative Agent', description: 'Brand concepts & visual direction', status: 'active' },
-        { id: 'seo', name: 'SEO Agent', description: 'Search optimization with web research', status: 'active' },
-        { id: 'social', name: 'Social Media Agent', description: 'Social strategy & trending formats', status: 'active' },
-        { id: 'research', name: 'Research Agent', description: 'Market intelligence & insights', status: 'active' },
+        // Social Media & SEO Agents
+        { id: 'creative', name: 'Creative Agent', description: 'Brand concepts & visual direction', status: 'active', category: 'social' },
+        { id: 'seo', name: 'SEO Agent', description: 'Search optimization with web research', status: 'active', category: 'social' },
+        { id: 'social', name: 'Social Media Agent', description: 'Social strategy & trending formats', status: 'active', category: 'social' },
+        { id: 'research', name: 'Research Agent', description: 'Market intelligence & insights', status: 'active', category: 'social' },
+        // Topic Intelligence Agents
+        { id: 'source-curator', name: 'Source Curator', description: 'Discovers & qualifies news sources using Perplexity', status: 'active', category: 'intelligence' },
+        { id: 'news-analyst', name: 'News Analyst', description: 'Analyzes articles with Claude for relevance & insights', status: 'active', category: 'intelligence' },
+        { id: 'news-writer', name: 'News Writer', description: 'Generates digests & newsletters with DeepSeek', status: 'active', category: 'intelligence' },
+        // OCR Agent
+        { id: 'ocr', name: 'OCR Agent', description: 'Receipt processing with Claude Vision', status: 'active', category: 'accounting' },
       ],
       models: [
         { id: 'deepseek', name: 'DeepSeek Reasoner', type: 'primary', status: 'available' },
@@ -798,19 +1317,56 @@ app.get('/stats', async (req, res) => {
       ],
       layers: {
         total: 7,
-        active: 5,
-        planned: 2,
-        completion: 71,
+        active: 6,
+        planned: 1,
+        completion: 86,
+        details: [
+          { id: 'L1', name: 'Core Infrastructure', status: 'active' },
+          { id: 'L2', name: 'Tools & Utilities', status: 'active' },
+          { id: 'L3', name: 'Specialized Agents', status: 'active' },
+          { id: 'L4', name: 'Knowledge Management', status: 'partial' },
+          { id: 'L5', name: 'Workflows', status: 'active' },
+          { id: 'L6', name: 'Orchestration', status: 'active' },
+          { id: 'L7', name: 'Governance', status: 'planned' },
+        ],
       },
+      databaseTables: [
+        { name: 'projects', description: 'Social media projects', category: 'social' },
+        { name: 'analyses', description: 'Agent analysis results', category: 'social' },
+        { name: 'receipts', description: 'Receipt records from OCR', category: 'accounting' },
+        { name: 'intelligence_topics', description: 'Monitored news topics', category: 'intelligence' },
+        { name: 'intelligence_sources', description: 'Curated news sources', category: 'intelligence' },
+        { name: 'intelligence_news', description: 'Collected news articles', category: 'intelligence' },
+      ],
     };
 
     // Add database stats if available
     if (process.env.DATABASE_URL) {
       try {
         const analytics = await getAnalytics();
+
+        // Get Topic Intelligence counts
+        let topicsCount = 0;
+        let sourcesCount = 0;
+        let newsCount = 0;
+        try {
+          const { getIntelligenceTopics, getIntelligenceSources, getIntelligenceNews } = require('./db');
+          const topics = await getIntelligenceTopics();
+          topicsCount = topics.length;
+          // Sum sources across all topics
+          for (const topic of topics) {
+            const sources = await getIntelligenceSources(topic.topic_id);
+            sourcesCount += sources.length;
+          }
+        } catch (e) {
+          // Ignore if Topic Intelligence tables not yet created
+        }
+
         stats.database = {
           projects: analytics.totalProjects,
           analyses: analytics.totalAnalyses,
+          topics: topicsCount,
+          sources: sourcesCount,
           status: 'connected',
         };
       } catch (error) {
@@ -840,6 +1396,22 @@ app.use('/api/receipts', receiptTrackingRoutes);
 
 console.log('✅ Receipt tracking routes loaded: /api/receipts');
 
+// Topic Intelligence Routes
+const topicIntelligenceRoutes = require('./use-cases/topic-intelligence/api-js/routes');
+const { runScheduledScan } = require('./use-cases/topic-intelligence/api-js/routes');
+app.use('/api/intelligence', topicIntelligenceRoutes);
+
+console.log('✅ Topic Intelligence routes loaded: /api/intelligence');
+
+// Photo Booth Routes
+const photoBoothRoutes = require('./use-cases/photo-booth/api/routes');
+app.use('/api/photo-booth', photoBoothRoutes);
+
+console.log('✅ Photo Booth routes loaded: /api/photo-booth');
+
+// Scheduler Service
+const scheduler = require('./services/scheduler');
+
 // ==========================================
 // Next.js Client-Side Routing Fallback
 // ==========================================
@@ -853,18 +1425,29 @@ app.get('*', (req, res, next) => {
   }
 
   // For Next.js routes, try to serve the corresponding HTML file
+  const fs = require('fs');
   const nextJsPath = path.join(__dirname, 'frontend/out');
-  const htmlPath = path.join(nextJsPath, req.path, 'index.html');
-  const directHtmlPath = path.join(nextJsPath, req.path + '.html');
+
+  // Remove trailing slash for path lookups
+  const cleanPath = req.path.endsWith('/') && req.path !== '/'
+    ? req.path.slice(0, -1)
+    : req.path;
+
+  const htmlPath = path.join(nextJsPath, cleanPath, 'index.html');
+  const directHtmlPath = path.join(nextJsPath, cleanPath + '.html');
 
   // Check if path/index.html exists
-  const fs = require('fs');
   if (fs.existsSync(htmlPath)) {
     return res.sendFile(htmlPath);
   }
   // Check if path.html exists
   if (fs.existsSync(directHtmlPath)) {
     return res.sendFile(directHtmlPath);
+  }
+
+  // If original path had trailing slash and we didn't find anything, redirect to without trailing slash
+  if (req.path.endsWith('/') && req.path !== '/') {
+    return res.redirect(301, cleanPath);
   }
 
   // Otherwise continue to next middleware
@@ -887,19 +1470,38 @@ const server = http.createServer(app);
 // Initialize WebSocket server
 wsServer.initialize(server);
 
-server.listen(port, () => {
+server.listen(port, '0.0.0.0', async () => {
   console.log(`
 ╔════════════════════════════════════════╗
 ║  🚀 5ML Agentic AI Platform v1         ║
 ║  📍 Port: ${port}                           ║
+║  📍 Host: 0.0.0.0 (Fly.io compatible)  ║
 ║  🏥 Health: GET /health               ║
 ║  📊 Analyze: POST /analyze             ║
 ║  🪝 Webhook: POST /webhook/github     ║
 ║  🤖 Agents: GET /agents               ║
 ║  💾 Projects: GET /projects           ║
 ║  📝 Receipts: POST /api/receipts      ║
-║  🔌 WebSocket: ws://localhost:${port}/ws   ║
+║  📰 Intelligence: /api/intelligence    ║
+║  🔌 WebSocket: /ws                     ║
 ║  🌍 Region: IAD (Ashburn, Virginia)   ║
 ╚════════════════════════════════════════╝
   `);
+
+  // Initialize scheduler for Topic Intelligence
+  if (process.env.DATABASE_URL) {
+    try {
+      const db = require('./db');
+      scheduler.initialize(db, runScheduledScan);
+      await scheduler.loadAllSchedules();
+      console.log('✅ Scheduler service initialized');
+    } catch (error) {
+      console.error('⚠️ Scheduler initialization failed:', error.message);
+    }
+  } else {
+    console.log('⚠️ Scheduler not initialized - DATABASE_URL not set');
+  }
 });
+
+
+//push test

@@ -1,0 +1,1378 @@
+// Photo Booth API Routes
+// Express router for Photo Booth endpoints with SSE support
+
+const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const Anthropic = require('@anthropic-ai/sdk').default;
+
+// Import pool from main db module
+const { pool } = require('../../../db');
+
+const router = express.Router();
+
+// Initialize database schema
+let schemaInitialized = false;
+async function initializeSchema() {
+  if (schemaInitialized) return;
+
+  try {
+    // Create tables if they don't exist
+    await pool.query(`
+      -- Events table
+      CREATE TABLE IF NOT EXISTS photo_booth_events (
+        id SERIAL PRIMARY KEY,
+        event_id UUID DEFAULT gen_random_uuid() UNIQUE,
+        name VARCHAR(255) NOT NULL,
+        brand_name VARCHAR(255),
+        logo_path TEXT,
+        hashtag VARCHAR(100),
+        metadata_json JSONB DEFAULT '{}',
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- Sessions table
+      CREATE TABLE IF NOT EXISTS photo_booth_sessions (
+        id SERIAL PRIMARY KEY,
+        session_id UUID DEFAULT gen_random_uuid() UNIQUE,
+        event_id UUID REFERENCES photo_booth_events(event_id),
+        user_consent BOOLEAN DEFAULT false,
+        language VARCHAR(10) DEFAULT 'en',
+        theme_selected VARCHAR(100),
+        analysis_json JSONB,
+        status VARCHAR(50) DEFAULT 'created',
+        error_code VARCHAR(50),
+        error_message TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        completed_at TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- Images table
+      CREATE TABLE IF NOT EXISTS photo_booth_images (
+        id SERIAL PRIMARY KEY,
+        image_id UUID DEFAULT gen_random_uuid() UNIQUE,
+        session_id UUID REFERENCES photo_booth_sessions(session_id) ON DELETE CASCADE,
+        image_type VARCHAR(20) NOT NULL,
+        image_path TEXT NOT NULL,
+        image_hash VARCHAR(64),
+        theme VARCHAR(100),
+        comfyui_prompt TEXT,
+        generation_time_ms INTEGER,
+        quality_check_json JSONB,
+        metadata_json JSONB DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- Errors table
+      CREATE TABLE IF NOT EXISTS photo_booth_errors (
+        id SERIAL PRIMARY KEY,
+        error_id UUID DEFAULT gen_random_uuid() UNIQUE,
+        session_id UUID REFERENCES photo_booth_sessions(session_id) ON DELETE SET NULL,
+        error_code VARCHAR(50) NOT NULL,
+        error_message TEXT NOT NULL,
+        agent_name VARCHAR(100),
+        input_params JSONB,
+        stack_trace TEXT,
+        recovery_action VARCHAR(100),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- Analytics table
+      CREATE TABLE IF NOT EXISTS photo_booth_analytics (
+        id SERIAL PRIMARY KEY,
+        event_id UUID REFERENCES photo_booth_events(event_id),
+        date DATE NOT NULL,
+        total_sessions INTEGER DEFAULT 0,
+        completed_count INTEGER DEFAULT 0,
+        failed_count INTEGER DEFAULT 0,
+        avg_generation_time_ms INTEGER,
+        theme_distribution_json JSONB DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(event_id, date)
+      );
+
+      -- QR codes table
+      CREATE TABLE IF NOT EXISTS photo_booth_qr_codes (
+        id SERIAL PRIMARY KEY,
+        qr_id UUID DEFAULT gen_random_uuid() UNIQUE,
+        session_id UUID REFERENCES photo_booth_sessions(session_id) ON DELETE CASCADE,
+        image_id UUID REFERENCES photo_booth_images(image_id) ON DELETE CASCADE,
+        qr_code_path TEXT,
+        short_link VARCHAR(255),
+        download_link TEXT,
+        share_link TEXT,
+        scan_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- Themes table (CMS managed)
+      CREATE TABLE IF NOT EXISTS photo_booth_themes (
+        id SERIAL PRIMARY KEY,
+        theme_id VARCHAR(100) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        country VARCHAR(100),
+        description TEXT,
+        era VARCHAR(100),
+        image_url TEXT,
+        prompt TEXT NOT NULL,
+        is_enabled BOOLEAN DEFAULT true,
+        display_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- Indexes
+      CREATE INDEX IF NOT EXISTS idx_pb_sessions_event ON photo_booth_sessions(event_id);
+      CREATE INDEX IF NOT EXISTS idx_pb_sessions_status ON photo_booth_sessions(status);
+      CREATE INDEX IF NOT EXISTS idx_pb_images_session ON photo_booth_images(session_id);
+      CREATE INDEX IF NOT EXISTS idx_pb_qr_session ON photo_booth_qr_codes(session_id);
+      CREATE INDEX IF NOT EXISTS idx_pb_themes_enabled ON photo_booth_themes(is_enabled);
+    `);
+
+    schemaInitialized = true;
+    console.log('Photo booth database schema initialized');
+  } catch (error) {
+    console.error('Failed to initialize photo booth schema:', error.message);
+  }
+}
+
+// Initialize schema on module load
+initializeSchema();
+
+// Multer configuration for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = process.env.UPLOAD_PATH || '/tmp/photo-booth/uploads';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `upload-${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, and WebP are allowed.'));
+    }
+  },
+});
+
+// Import orchestrator
+const { createPhotoBoothOrchestrator } = require('../agents/orchestrator');
+
+// Lazy load orchestrator
+let orchestrator = null;
+let anthropic = null;
+
+function getOrchestrator() {
+  if (!orchestrator) {
+    if (!anthropic) {
+      anthropic = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+    }
+
+    orchestrator = createPhotoBoothOrchestrator({
+      pool,
+      anthropic,
+    });
+  }
+  return orchestrator;
+}
+
+// Get database pool
+function getPool(req) {
+  return pool;
+}
+
+/**
+ * @swagger
+ * /api/photo-booth/diagnostic:
+ *   get:
+ *     summary: Get AI generation diagnostic info
+ *     tags: [Photo Booth]
+ */
+router.get('/diagnostic', (req, res) => {
+  const orch = getOrchestrator();
+  const geminiKeySet = !!process.env.GEMINI_API_KEY;
+  const geminiKeyPreview = geminiKeySet
+    ? `${process.env.GEMINI_API_KEY.slice(0, 10)}...${process.env.GEMINI_API_KEY.slice(-4)}`
+    : 'NOT SET';
+
+  res.json({
+    status: 'ok',
+    aiGeneration: {
+      enabled: orch.useAIGeneration,
+      hasGeminiClient: !!orch.geminiClient,
+      geminiApiKey: geminiKeyPreview,
+      model: orch.geminiClient ? 'gemini-2.0-flash-exp' : 'none (mock mode)',
+    },
+    environment: {
+      PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL || 'NOT SET (using localhost:8080)',
+      NODE_ENV: process.env.NODE_ENV || 'development',
+    },
+    message: orch.useAIGeneration
+      ? '✅ AI generation is enabled and ready'
+      : '⚠️ AI generation is DISABLED. Set GEMINI_API_KEY to enable.',
+  });
+});
+
+// ============================================================
+// CMS ENDPOINTS - Theme Management
+// ============================================================
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/themes:
+ *   get:
+ *     summary: Get all themes (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.get('/admin/themes', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM photo_booth_themes ORDER BY display_order ASC, created_at ASC'
+    );
+    res.json({ success: true, themes: result.rows });
+  } catch (error) {
+    console.error('[CMS] Get themes error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/themes:
+ *   post:
+ *     summary: Create a new theme (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.post('/admin/themes', async (req, res) => {
+  try {
+    const { theme_id, name, country, description, era, image_url, prompt, is_enabled, display_order } = req.body;
+
+    if (!theme_id || !name || !prompt) {
+      return res.status(400).json({ success: false, error: 'theme_id, name, and prompt are required' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO photo_booth_themes (theme_id, name, country, description, era, image_url, prompt, is_enabled, display_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [theme_id, name, country || '', description || '', era || '', image_url || '', prompt, is_enabled !== false, display_order || 0]
+    );
+
+    res.json({ success: true, theme: result.rows[0] });
+  } catch (error) {
+    console.error('[CMS] Create theme error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/themes/:id:
+ *   put:
+ *     summary: Update a theme (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.put('/admin/themes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, country, description, era, image_url, prompt, is_enabled, display_order } = req.body;
+
+    const result = await pool.query(
+      `UPDATE photo_booth_themes
+       SET name = COALESCE($1, name),
+           country = COALESCE($2, country),
+           description = COALESCE($3, description),
+           era = COALESCE($4, era),
+           image_url = COALESCE($5, image_url),
+           prompt = COALESCE($6, prompt),
+           is_enabled = COALESCE($7, is_enabled),
+           display_order = COALESCE($8, display_order),
+           updated_at = NOW()
+       WHERE id = $9 OR theme_id = $9
+       RETURNING *`,
+      [name, country, description, era, image_url, prompt, is_enabled, display_order, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Theme not found' });
+    }
+
+    res.json({ success: true, theme: result.rows[0] });
+  } catch (error) {
+    console.error('[CMS] Update theme error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/themes/:id:
+ *   delete:
+ *     summary: Delete a theme (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.delete('/admin/themes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM photo_booth_themes WHERE id = $1 OR theme_id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Theme not found' });
+    }
+
+    res.json({ success: true, deleted: result.rows[0] });
+  } catch (error) {
+    console.error('[CMS] Delete theme error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/themes/seed:
+ *   post:
+ *     summary: Seed default themes from config (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.post('/admin/themes/seed', async (req, res) => {
+  try {
+    const themesConfig = require('../config/themes.json');
+    const defaultPrompts = require('../lib/geminiImageClient').defaultPrompts || {};
+
+    // Load prompts from geminiImageClient
+    const { GeminiImageClient } = require('../lib/geminiImageClient');
+    const tempClient = new GeminiImageClient('temp');
+
+    let seeded = 0;
+    for (let i = 0; i < themesConfig.themes.length; i++) {
+      const theme = themesConfig.themes[i];
+      const prompt = tempClient.buildThemePrompt(theme);
+
+      // Upsert theme
+      await pool.query(
+        `INSERT INTO photo_booth_themes (theme_id, name, country, description, era, image_url, prompt, is_enabled, display_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8)
+         ON CONFLICT (theme_id) DO UPDATE SET
+           name = EXCLUDED.name,
+           country = EXCLUDED.country,
+           description = EXCLUDED.description,
+           era = EXCLUDED.era,
+           image_url = EXCLUDED.image_url,
+           prompt = EXCLUDED.prompt,
+           display_order = EXCLUDED.display_order,
+           updated_at = NOW()`,
+        [theme.id, theme.name, theme.country || '', theme.description || '', theme.era || '', theme.image_url || '', prompt, i]
+      );
+      seeded++;
+    }
+
+    res.json({ success: true, message: `Seeded ${seeded} themes` });
+  } catch (error) {
+    console.error('[CMS] Seed themes error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/themes/:id/toggle:
+ *   post:
+ *     summary: Toggle theme enabled/disabled (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.post('/admin/themes/:id/toggle', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `UPDATE photo_booth_themes
+       SET is_enabled = NOT is_enabled, updated_at = NOW()
+       WHERE id = $1 OR theme_id = $1
+       RETURNING *`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Theme not found' });
+    }
+
+    res.json({ success: true, theme: result.rows[0] });
+  } catch (error) {
+    console.error('[CMS] Toggle theme error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/library:
+ *   get:
+ *     summary: Get all generated images with metadata (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.get('/admin/library', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    // Get total count - only show final branded images to avoid duplicates
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM photo_booth_images WHERE image_type = 'branded'`
+    );
+    const total = parseInt(countResult.rows[0].count);
+
+    // Get images with session and theme info - only branded (final) images
+    const result = await pool.query(
+      `SELECT
+        i.image_id, i.session_id, i.image_type, i.image_path, i.theme,
+        i.generation_time_ms, i.created_at,
+        s.status as session_status,
+        COALESCE(t.name, i.theme) as theme_name
+       FROM photo_booth_images i
+       LEFT JOIN photo_booth_sessions s ON i.session_id = s.session_id
+       LEFT JOIN photo_booth_themes t ON i.theme = t.theme_id
+       WHERE i.image_type = 'branded'
+       ORDER BY i.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    // Get stats - count only branded images
+    const statsResult = await pool.query(`
+      SELECT
+        COUNT(DISTINCT i.image_id) as total_images,
+        COUNT(DISTINCT i.session_id) as total_sessions,
+        AVG(i.generation_time_ms) as avg_generation_time_ms
+      FROM photo_booth_images i
+      WHERE i.image_type = 'branded'
+    `);
+
+    const themeStats = await pool.query(`
+      SELECT theme, COUNT(*) as count
+      FROM photo_booth_images
+      WHERE image_type = 'branded' AND theme IS NOT NULL
+      GROUP BY theme
+      ORDER BY count DESC
+    `);
+
+    const themes_used = {};
+    themeStats.rows.forEach(row => {
+      themes_used[row.theme] = parseInt(row.count);
+    });
+
+    res.json({
+      success: true,
+      images: result.rows,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+      stats: {
+        total_images: parseInt(statsResult.rows[0].total_images) || 0,
+        total_sessions: parseInt(statsResult.rows[0].total_sessions) || 0,
+        avg_generation_time_ms: Math.round(parseFloat(statsResult.rows[0].avg_generation_time_ms) || 0),
+        themes_used,
+      },
+    });
+  } catch (error) {
+    console.error('[CMS] Library error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/regenerate:
+ *   post:
+ *     summary: Regenerate an image with same or different theme (CMS)
+ *     tags: [Photo Booth CMS]
+ */
+router.post('/admin/regenerate', async (req, res) => {
+  try {
+    const { session_id, theme_name } = req.body;
+
+    if (!session_id) {
+      return res.status(400).json({ success: false, error: 'session_id is required' });
+    }
+
+    // Get original image from session
+    const originalResult = await pool.query(
+      `SELECT * FROM photo_booth_images WHERE session_id = $1 AND image_type = 'original' ORDER BY created_at DESC LIMIT 1`,
+      [session_id]
+    );
+
+    if (!originalResult.rows[0]) {
+      return res.status(404).json({ success: false, error: 'Original image not found for this session' });
+    }
+
+    // Get theme to use (provided or from session)
+    let themeToUse = theme_name;
+    if (!themeToUse) {
+      const sessionResult = await pool.query(
+        `SELECT theme_selected FROM photo_booth_sessions WHERE session_id = $1`,
+        [session_id]
+      );
+      themeToUse = sessionResult.rows[0]?.theme_selected;
+    }
+
+    if (!themeToUse) {
+      return res.status(400).json({ success: false, error: 'No theme specified and no theme found in session' });
+    }
+
+    // Set up SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const sendProgress = (data) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const orch = getOrchestrator();
+
+    sendProgress({ type: 'start', message: 'Starting regeneration...' });
+
+    // Generate new styled image
+    const result = await orch.generateImage(session_id, themeToUse, (progress) => {
+      sendProgress({ type: 'progress', ...progress });
+    });
+
+    // Finalize with branding
+    const finalResult = await orch.finalizeSession(session_id, result.image_id, (progress) => {
+      sendProgress({ type: 'progress', ...progress });
+    });
+
+    sendProgress({
+      type: 'complete',
+      message: 'Regeneration complete!',
+      ...finalResult,
+    });
+
+    res.end();
+  } catch (error) {
+    console.error('[CMS] Regenerate error:', error);
+    res.write(`data: ${JSON.stringify({ type: 'error', error: { message: error.message } })}\n\n`);
+    res.end();
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/admin/image/{id}:
+ *   delete:
+ *     summary: Delete a specific image from the library
+ *     tags: [Photo Booth CMS]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Image deleted successfully
+ */
+router.delete('/admin/image/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Delete the image from database
+    const result = await pool.query(
+      'DELETE FROM photo_booth_images WHERE image_id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Image not found',
+      });
+    }
+
+    console.log(`[CMS] Deleted image: ${id}`);
+
+    res.json({
+      success: true,
+      message: 'Image deleted successfully',
+    });
+  } catch (error) {
+    console.error('[CMS] Delete image error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete image',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/session/create:
+ *   post:
+ *     summary: Create a new photo booth session
+ *     tags: [Photo Booth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               event_id:
+ *                 type: string
+ *               language:
+ *                 type: string
+ *                 default: en
+ *               consent_agreed:
+ *                 type: boolean
+ *                 required: true
+ *     responses:
+ *       200:
+ *         description: Session created successfully
+ */
+router.post('/session/create', async (req, res) => {
+  try {
+    const { event_id, language = 'en', consent_agreed } = req.body;
+
+    if (!consent_agreed) {
+      return res.status(400).json({
+        success: false,
+        error: 'User consent is required',
+      });
+    }
+
+    const pool = getPool(req);
+    const orch = getOrchestrator();
+
+    const session = await orch.createSession(event_id, language, consent_agreed);
+
+    res.json({
+      success: true,
+      session_id: session.session_id,
+      created_at: session.created_at,
+    });
+  } catch (error) {
+    console.error('[Photo Booth API] Create session error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create session',
+      code: error.code || 'FB_DB_001',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/image/upload:
+ *   post:
+ *     summary: Upload an image to an existing session
+ *     tags: [Photo Booth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               session_id:
+ *                 type: string
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Image uploaded and validated
+ */
+router.post('/image/upload', upload.single('image'), async (req, res) => {
+  try {
+    const { session_id } = req.body;
+
+    if (!session_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'session_id is required',
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No image file provided',
+      });
+    }
+
+    const pool = getPool(req);
+    const orch = getOrchestrator();
+
+    const result = await orch.uploadImage(session_id, req.file.path);
+
+    res.json({
+      success: true,
+      image_id: result.image_id,
+      quality_check: result.quality_check,
+    });
+  } catch (error) {
+    console.error('[Photo Booth API] Upload error:', error);
+    res.status(error.code?.startsWith('FB_') ? 400 : 500).json({
+      success: false,
+      error: error.message || 'Upload failed',
+      code: error.code || 'FB_UPLOAD_002',
+      details: error.details,
+      recovery_action: error.recovery_action,
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/themes:
+ *   get:
+ *     summary: Get available themes
+ *     tags: [Photo Booth]
+ *     responses:
+ *       200:
+ *         description: List of available themes
+ */
+router.get('/themes', async (req, res) => {
+  try {
+    // Try to get themes from database first (CMS managed)
+    const dbResult = await pool.query(
+      'SELECT theme_id as id, name, country, description, era, image_url FROM photo_booth_themes WHERE is_enabled = true ORDER BY display_order ASC'
+    );
+
+    if (dbResult.rows.length > 0) {
+      // Use database themes
+      res.json({
+        success: true,
+        themes: dbResult.rows,
+        source: 'database',
+      });
+    } else {
+      // Fallback to config file
+      const orch = getOrchestrator();
+      const themes = orch.getThemes();
+
+      res.json({
+        success: true,
+        themes: themes.map((theme) => ({
+          id: theme.id,
+          name: theme.name,
+          country: theme.country,
+          description: theme.description,
+          era: theme.era,
+          image_url: theme.image_url,
+        })),
+        source: 'config',
+      });
+    }
+  } catch (error) {
+    console.error('[Photo Booth API] Get themes error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get themes',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/analyze:
+ *   post:
+ *     summary: Analyze uploaded image (with SSE progress)
+ *     tags: [Photo Booth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               session_id:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: SSE stream of analysis progress
+ */
+router.post('/analyze', async (req, res) => {
+  const { session_id } = req.body;
+
+  if (!session_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'session_id is required',
+    });
+  }
+
+  // Set up SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  // Send initial event
+  res.write(`data: ${JSON.stringify({ type: 'start', message: 'Starting analysis...' })}\n\n`);
+
+  try {
+    const pool = getPool(req);
+    const orch = getOrchestrator();
+
+    // Progress callback for SSE
+    const onProgress = (update) => {
+      res.write(
+        `data: ${JSON.stringify({
+          type: 'progress',
+          step: update.current_step,
+          substep: update.substep,
+          message: update.message,
+          percentage: update.progress_percentage,
+          timestamp: update.timestamp,
+        })}\n\n`
+      );
+    };
+
+    const result = await orch.analyzeImage(session_id, onProgress);
+
+    // Send completion event
+    res.write(
+      `data: ${JSON.stringify({
+        type: 'complete',
+        analysis: result.analysis,
+        recommended_theme: result.recommended_theme,
+      })}\n\n`
+    );
+
+    res.end();
+  } catch (error) {
+    console.error('[Photo Booth API] Analyze error:', error);
+
+    res.write(
+      `data: ${JSON.stringify({
+        type: 'error',
+        error: {
+          code: error.code || 'FB_DB_001',
+          message: error.message || 'Analysis failed',
+          recovery_action: error.recovery_action,
+        },
+      })}\n\n`
+    );
+
+    res.end();
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/generate:
+ *   post:
+ *     summary: Generate styled image (with SSE progress)
+ *     tags: [Photo Booth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               session_id:
+ *                 type: string
+ *               theme_name:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: SSE stream of generation progress
+ */
+router.post('/generate', async (req, res) => {
+  const { session_id, theme_name } = req.body;
+
+  if (!session_id || !theme_name) {
+    return res.status(400).json({
+      success: false,
+      error: 'session_id and theme_name are required',
+    });
+  }
+
+  // Set up SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  res.write(`data: ${JSON.stringify({ type: 'start', message: 'Starting generation...' })}\n\n`);
+
+  try {
+    const pool = getPool(req);
+    const orch = getOrchestrator();
+
+    const onProgress = (update) => {
+      res.write(
+        `data: ${JSON.stringify({
+          type: 'progress',
+          step: update.current_step,
+          substep: update.substep,
+          message: update.message,
+          percentage: update.progress_percentage,
+          timestamp: update.timestamp,
+        })}\n\n`
+      );
+    };
+
+    const result = await orch.generateImage(session_id, theme_name, onProgress);
+
+    res.write(
+      `data: ${JSON.stringify({
+        type: 'complete',
+        image_id: result.image_id,
+        generated_image_url: result.generated_image_url,
+        generation_time_ms: result.generation_time_ms,
+      })}\n\n`
+    );
+
+    res.end();
+  } catch (error) {
+    console.error('[Photo Booth API] Generate error:', error);
+
+    res.write(
+      `data: ${JSON.stringify({
+        type: 'error',
+        error: {
+          code: error.code || 'FB_GENAI_001',
+          message: error.message || 'Generation failed',
+          recovery_action: error.recovery_action,
+        },
+      })}\n\n`
+    );
+
+    res.end();
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/finalize:
+ *   post:
+ *     summary: Finalize session with branding and QR code
+ *     tags: [Photo Booth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               session_id:
+ *                 type: string
+ *               image_id:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Session finalized successfully
+ */
+router.post('/finalize', async (req, res) => {
+  const { session_id, image_id } = req.body;
+
+  if (!session_id || !image_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'session_id and image_id are required',
+    });
+  }
+
+  // Set up SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  res.write(`data: ${JSON.stringify({ type: 'start', message: 'Finalizing...' })}\n\n`);
+
+  try {
+    const pool = getPool(req);
+    const orch = getOrchestrator();
+
+    const onProgress = (update) => {
+      res.write(
+        `data: ${JSON.stringify({
+          type: 'progress',
+          step: update.current_step,
+          substep: update.substep,
+          message: update.message,
+          percentage: update.progress_percentage,
+          timestamp: update.timestamp,
+        })}\n\n`
+      );
+    };
+
+    const result = await orch.finalizeSession(session_id, image_id, onProgress);
+
+    res.write(
+      `data: ${JSON.stringify({
+        type: 'complete',
+        branded_image_url: result.branded_image_url,
+        qr_code_url: result.qr_code_url,
+        qr_code_data_url: result.qr_code_data_url,
+        download_link: result.download_link,
+        share_link: result.share_link,
+      })}\n\n`
+    );
+
+    res.end();
+  } catch (error) {
+    console.error('[Photo Booth API] Finalize error:', error);
+
+    res.write(
+      `data: ${JSON.stringify({
+        type: 'error',
+        error: {
+          code: error.code || 'FB_BRAND_002',
+          message: error.message || 'Finalization failed',
+          recovery_action: error.recovery_action,
+        },
+      })}\n\n`
+    );
+
+    res.end();
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/session/{session_id}/status:
+ *   get:
+ *     summary: Get session status
+ *     tags: [Photo Booth]
+ *     parameters:
+ *       - in: path
+ *         name: session_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Session status
+ */
+router.get('/session/:session_id/status', async (req, res) => {
+  try {
+    const { session_id } = req.params;
+
+    const pool = getPool(req);
+    const orch = getOrchestrator();
+
+    const status = await orch.getSessionStatus(session_id);
+
+    if (!status.session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found',
+        code: 'FB_DB_002',
+      });
+    }
+
+    res.json({
+      success: true,
+      session: {
+        session_id: status.session.session_id,
+        status: status.session.status,
+        theme_selected: status.session.theme_selected,
+        created_at: status.session.created_at,
+        completed_at: status.session.completed_at,
+        error_code: status.session.error_code,
+        error_message: status.session.error_message,
+      },
+      progress: status.progress,
+      recent_updates: status.statusUpdates.slice(-10),
+    });
+  } catch (error) {
+    console.error('[Photo Booth API] Get status error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get session status',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/event/{event_id}/analytics:
+ *   get:
+ *     summary: Get event analytics
+ *     tags: [Photo Booth]
+ *     parameters:
+ *       - in: path
+ *         name: event_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 7
+ *     responses:
+ *       200:
+ *         description: Event analytics
+ */
+router.get('/event/:event_id/analytics', async (req, res) => {
+  try {
+    const { event_id } = req.params;
+    const days = parseInt(req.query.days) || 7;
+
+    const pool = getPool(req);
+    const orch = getOrchestrator();
+
+    const analytics = await orch.getAnalytics(event_id === 'all' ? undefined : event_id, days);
+    const popularThemes = await orch.getPopularThemes(event_id === 'all' ? undefined : event_id, days);
+
+    res.json({
+      success: true,
+      analytics,
+      popular_themes: popularThemes,
+    });
+  } catch (error) {
+    console.error('[Photo Booth API] Get analytics error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get analytics',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/image/{image_id}:
+ *   get:
+ *     summary: Get image by ID
+ *     tags: [Photo Booth]
+ *     parameters:
+ *       - in: path
+ *         name: image_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Image file
+ */
+router.get('/image/:image_id', async (req, res) => {
+  try {
+    const { image_id } = req.params;
+    const pool = getPool(req);
+
+    // Get image with metadata from database
+    const result = await pool.query(
+      'SELECT image_path, image_type, metadata_json FROM photo_booth_images WHERE image_id = $1',
+      [image_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Image not found',
+      });
+    }
+
+    const { image_path, metadata_json } = result.rows[0];
+
+    // Try to serve from file system first
+    if (fs.existsSync(image_path)) {
+      return res.sendFile(image_path);
+    }
+
+    // Fallback to base64 data stored in database
+    if (metadata_json && metadata_json.base64_data) {
+      const imageBuffer = Buffer.from(metadata_json.base64_data, 'base64');
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Content-Length', imageBuffer.length);
+      return res.send(imageBuffer);
+    }
+
+    // Neither file nor base64 available
+    return res.status(404).json({
+      success: false,
+      error: 'Image file not found',
+      image_path,
+    });
+  } catch (error) {
+    console.error('[Photo Booth API] Get image error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get image',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/download/{short_id}:
+ *   get:
+ *     summary: Download image by short link
+ *     tags: [Photo Booth]
+ *     parameters:
+ *       - in: path
+ *         name: short_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Image file download
+ */
+router.get('/download/:short_id', async (req, res) => {
+  try {
+    const { short_id } = req.params;
+    const pool = getPool(req);
+
+    // Get QR code record - try both short_link formats
+    const qrResult = await pool.query(
+      'SELECT * FROM photo_booth_qr_codes WHERE short_link = $1 OR short_link LIKE $2',
+      [short_id, `%${short_id}`]
+    );
+
+    if (qrResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Download link not found',
+      });
+    }
+
+    const qrRecord = qrResult.rows[0];
+
+    // Increment scan count
+    await pool.query(
+      'UPDATE photo_booth_qr_codes SET scan_count = scan_count + 1 WHERE qr_id = $1',
+      [qrRecord.qr_id]
+    );
+
+    // Get branded image with metadata
+    const imageResult = await pool.query(
+      'SELECT image_path, metadata_json FROM photo_booth_images WHERE image_id = $1',
+      [qrRecord.image_id]
+    );
+
+    if (imageResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Image not found',
+      });
+    }
+
+    const { image_path, metadata_json } = imageResult.rows[0];
+    const filename = `5ml-photo-booth-${short_id}.jpg`;
+
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'image/jpeg');
+
+    // Try file system first, then fallback to base64
+    if (fs.existsSync(image_path)) {
+      return res.sendFile(image_path);
+    }
+
+    if (metadata_json && metadata_json.base64_data) {
+      const imageBuffer = Buffer.from(metadata_json.base64_data, 'base64');
+      res.setHeader('Content-Length', imageBuffer.length);
+      return res.send(imageBuffer);
+    }
+
+    return res.status(404).json({
+      success: false,
+      error: 'Image file not found',
+    });
+  } catch (error) {
+    console.error('[Photo Booth API] Download error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Download failed',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/photo-booth/qr/{qr_id}:
+ *   get:
+ *     summary: Get QR code image
+ *     tags: [Photo Booth]
+ *     parameters:
+ *       - in: path
+ *         name: qr_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: QR code PNG image
+ */
+router.get('/qr/:qr_id', async (req, res) => {
+  try {
+    const { qr_id } = req.params;
+    const pool = getPool(req);
+
+    const result = await pool.query(
+      'SELECT qr_code_path FROM photo_booth_qr_codes WHERE qr_id = $1',
+      [qr_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'QR code not found',
+      });
+    }
+
+    const { qr_code_path } = result.rows[0];
+
+    if (!fs.existsSync(qr_code_path)) {
+      return res.status(404).json({
+        success: false,
+        error: 'QR code file not found',
+      });
+    }
+
+    res.setHeader('Content-Type', 'image/png');
+    res.sendFile(qr_code_path);
+  } catch (error) {
+    console.error('[Photo Booth API] Get QR error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get QR code',
+    });
+  }
+});
+
+// Health check endpoint
+router.get('/health', (req, res) => {
+  res.json({
+    success: true,
+    service: 'photo-booth',
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+module.exports = router;

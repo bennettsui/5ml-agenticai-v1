@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Download, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 
 interface BatchStatus {
@@ -21,15 +21,96 @@ interface BatchStatus {
   updated_at: string;
 }
 
+interface ReceiptResult {
+  receipt_id: string;
+  receipt_date: string;
+  vendor: string;
+  description: string | null;
+  amount: number | string;
+  currency: string;
+  category_id: string | null;
+  category_name: string | null;
+  categorization_confidence?: number | string | null;
+  categorization_reasoning?: string | null;
+  ocr_confidence?: number | string | null;
+  ocr_warnings?: string[] | null;
+  ocr_raw_text?: string | null;
+  deductible_amount?: number | string | null;
+  non_deductible_amount?: number | string | null;
+}
+
 export default function ReceiptProcessor() {
-  const [dropboxUrl, setDropboxUrl] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [clientName, setClientName] = useState("Man's Accounting Firm");
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [receiptResults, setReceiptResults] = useState<ReceiptResult[]>([]);
+  const [isReceiptLoading, setIsReceiptLoading] = useState(false);
+  const [receiptError, setReceiptError] = useState<string>('');
+  const [error, setError] = useState<string>('');
+  const receiptFetchKeyRef = useRef<string>('');
+  const isLocalhost = () => {
+    if (typeof window === 'undefined') return false;
+    return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  };
+  const API_BASE = isLocalhost() ? (process.env.NEXT_PUBLIC_API_URL || '') : '';
+
+  const formatErrorMessage = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object') {
+      const message = (value as { message?: string }).message;
+      const status = (value as { status?: string | number }).status;
+      if (message && status !== undefined) return `${message} (status ${status})`;
+      if (message) return message;
+    }
+    return 'Unexpected error occurred';
+  };
+
+  const toDisplayText = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return String(value);
+    if (value && typeof value === 'object') return JSON.stringify(value);
+    return '';
+  };
+
+  const formatAmount = (value: unknown): string => {
+    const parsed = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(parsed)) return '0.00';
+    return parsed.toFixed(2);
+  };
+
+  const readFileAsBase64 = (file: File): Promise<string> => (
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result?.toString() || '';
+        const commaIndex = result.indexOf(',');
+        resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    })
+  );
+
+  const normalizeStatus = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object') {
+      const nested = (value as { status?: unknown }).status;
+      if (typeof nested === 'string') return nested;
+    }
+    return 'processing';
+  };
+
+  const normalizeProgress = (value: unknown): number => {
+    if (typeof value === 'number') return value;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const apiUrl = (path: string) => (API_BASE ? `${API_BASE}${path}` : path);
 
   // Real-time updates with WebSocket (fallback to polling)
   useEffect(() => {
@@ -38,7 +119,39 @@ export default function ReceiptProcessor() {
     let pollInterval: NodeJS.Timeout | null = null;
     let ws: WebSocket | null = null;
 
-    // Try WebSocket first
+    function startPolling() {
+      if (pollInterval) return; // Already polling
+
+      pollInterval = setInterval(async () => {
+        try {
+          const response = await fetch(apiUrl(`/api/receipts/batches/${batchId}/status`));
+          const data = await response.json();
+
+          if (data.success) {
+            const normalized = {
+              ...data,
+              status: normalizeStatus(data.status),
+              progress: normalizeProgress(data.progress),
+            } as BatchStatus;
+            setBatchStatus(normalized);
+
+            if (normalized.status === 'completed' || normalized.status === 'failed') {
+              setIsProcessing(false);
+              if (pollInterval) clearInterval(pollInterval);
+            }
+          } else {
+            setError(data.error ? formatErrorMessage(data.error) : 'Failed to fetch status');
+          }
+        } catch (err) {
+          console.error('Error polling status:', err);
+        }
+      }, 2000);
+    }
+
+    // Start polling immediately to keep UI in sync even if WebSocket is quiet.
+    startPolling();
+
+    // Try WebSocket for real-time updates.
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
@@ -57,12 +170,37 @@ export default function ReceiptProcessor() {
           if (message.type === 'update') {
             const { event: updateEvent, data } = message;
 
-            if (updateEvent === 'progress' && data) {
-              setBatchStatus(prev => prev ? { ...prev, ...data } : data as BatchStatus);
-            } else if (updateEvent === 'status' && data) {
-              setBatchStatus(prev => prev ? { ...prev, status: data.status } : data as BatchStatus);
+            if ((updateEvent === 'progress' || updateEvent === 'status') && data) {
+              const nextData = (data && typeof data === 'object') ? { ...(data as Record<string, unknown>) } : {};
+              console.log('📨 WebSocket update received:', nextData);
+              if ('status' in nextData) {
+                nextData.status = normalizeStatus(nextData.status);
+              }
+              if ('progress' in nextData) {
+                nextData.progress = normalizeProgress(nextData.progress);
+              }
+              setBatchStatus(prev => {
+                console.log('batchStatus prevData', prev);
+                console.log('🔄 Merging batch status update:', { prev, nextData });
+                if (prev) {
+                  return { ...prev, ...nextData };
+                }
+                const fallback: BatchStatus = {
+                  batch_id: batchId || '',
+                  status: normalizeStatus(nextData.status),
+                  progress: normalizeProgress(nextData.progress),
+                  total_receipts: 0,
+                  processed_receipts: 0,
+                  failed_receipts: 0,
+                  total_amount: 0,
+                  deductible_amount: 0,
+                  recent_logs: [],
+                  updated_at: new Date().toISOString(),
+                };
+                return { ...fallback, ...nextData } as BatchStatus;
+              });
 
-              if (data.status === 'completed' || data.status === 'failed') {
+              if (normalizeStatus(nextData.status) === 'completed' || normalizeStatus(nextData.status) === 'failed') {
                 setIsProcessing(false);
               }
             } else if (updateEvent === 'completed') {
@@ -82,32 +220,11 @@ export default function ReceiptProcessor() {
 
       ws.onclose = () => {
         console.log('WebSocket disconnected');
+        startPolling();
       };
     } catch (err) {
       console.warn('WebSocket not available, using polling', err);
       startPolling();
-    }
-
-    function startPolling() {
-      if (pollInterval) return; // Already polling
-
-      pollInterval = setInterval(async () => {
-        try {
-          const response = await fetch(`/api/receipts/batches/${batchId}/status`);
-          const data = await response.json();
-
-          if (data.success) {
-            setBatchStatus(data);
-
-            if (data.status === 'completed' || data.status === 'failed') {
-              setIsProcessing(false);
-              if (pollInterval) clearInterval(pollInterval);
-            }
-          }
-        } catch (err) {
-          console.error('Error polling status:', err);
-        }
-      }, 2000);
     }
 
     return () => {
@@ -119,23 +236,83 @@ export default function ReceiptProcessor() {
     };
   }, [batchId]);
 
+  useEffect(() => {
+    if (!batchId) return;
+    const processedCount = batchStatus?.processed_receipts ?? 0;
+    if (processedCount === 0) return;
+
+    const statusValue = batchStatus ? normalizeStatus(batchStatus.status) : 'processing';
+    const fetchKey = `${batchId}:${processedCount}:${statusValue}`;
+    if (receiptFetchKeyRef.current === fetchKey) return;
+
+    let cancelled = false;
+    setIsReceiptLoading(true);
+    setReceiptError('');
+
+    const fetchReceiptDetails = async () => {
+      try {
+        const response = await fetch(apiUrl(`/api/receipts/batches/${batchId}`));
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error ? formatErrorMessage(data.error) : 'Failed to fetch receipt results');
+        }
+
+        if (!cancelled) {
+          setReceiptResults(Array.isArray(data.receipts) ? data.receipts : []);
+          receiptFetchKeyRef.current = fetchKey;
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setReceiptError(formatErrorMessage(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsReceiptLoading(false);
+        }
+      }
+    };
+
+    fetchReceiptDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [batchId, batchStatus?.processed_receipts, batchStatus?.status]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setError('');
     setIsProcessing(true);
     setBatchStatus(null);
+    setReceiptResults([]);
+    setReceiptError('');
+    receiptFetchKeyRef.current = '';
+
+    if (uploadedFiles.length === 0) {
+      setError('Please select at least one receipt image.');
+      setIsProcessing(false);
+      return;
+    }
 
     try {
-      const response = await fetch('/api/receipts/process', {
+      const images = await Promise.all(
+        uploadedFiles.map(async (file) => ({
+          filename: file.name,
+          data: await readFileAsBase64(file),
+        }))
+      );
+
+      const response = await fetch(apiUrl('/api/receipts/process-upload'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           client_name: clientName,
-          dropbox_url: dropboxUrl,
           period_start: periodStart || null,
           period_end: periodEnd || null,
+          images,
         }),
       });
 
@@ -143,8 +320,20 @@ export default function ReceiptProcessor() {
 
       if (data.success) {
         setBatchId(data.batch_id);
+        setBatchStatus({
+          batch_id: data.batch_id,
+          status: normalizeStatus(data.status),
+          progress: 0,
+          total_receipts: 0,
+          processed_receipts: 0,
+          failed_receipts: 0,
+          total_amount: 0,
+          deductible_amount: 0,
+          recent_logs: [],
+          updated_at: new Date().toISOString(),
+        });
       } else {
-        setError(data.error || 'Failed to start processing');
+        setError(data.error ? formatErrorMessage(data.error) : 'Failed to start processing');
         setIsProcessing(false);
       }
     } catch (err) {
@@ -155,7 +344,7 @@ export default function ReceiptProcessor() {
 
   const handleDownload = () => {
     if (batchId) {
-      window.location.href = `/api/receipts/batches/${batchId}/download`;
+      window.location.href = apiUrl(`/api/receipts/batches/${batchId}/download`);
     }
   };
 
@@ -192,7 +381,7 @@ export default function ReceiptProcessor() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Receipt to P&L Automation</h1>
           <p className="mt-2 text-slate-600 dark:text-slate-400">
-            Upload receipts from Dropbox and get a complete P&L statement in under 3 minutes
+            Upload receipts and get a complete P&L statement in under 3 minutes
           </p>
         </div>
 
@@ -214,27 +403,27 @@ export default function ReceiptProcessor() {
               />
             </div>
 
-            <div>
-              <label htmlFor="dropboxUrl" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Dropbox Shared Folder URL
-              </label>
-              <div className="mt-1 relative">
-                <input
-                  type="url"
-                  id="dropboxUrl"
-                  value={dropboxUrl}
-                  onChange={(e) => setDropboxUrl(e.target.value)}
-                  className="block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                  placeholder="https://www.dropbox.com/sh/abc123..."
-                  required
-                  disabled={isProcessing}
-                />
-                <Upload className="absolute right-3 top-2.5 h-5 w-5 text-slate-400 dark:text-slate-500" />
-              </div>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Share your Dropbox folder and paste the link here
-              </p>
-            </div>
+                <div>
+                  <label htmlFor="receiptFiles" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Receipt Images
+                  </label>
+                  <div className="mt-1 relative">
+                    <input
+                      type="file"
+                      id="receiptFiles"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => setUploadedFiles(Array.from(e.target.files || []))}
+                      className="block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      required
+                      disabled={isProcessing}
+                    />
+                    <Upload className="absolute right-3 top-2.5 h-5 w-5 text-slate-400 dark:text-slate-500" />
+                  </div>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Upload one or more receipt images (JPG, PNG, WEBP)
+                  </p>
+                </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -285,13 +474,13 @@ export default function ReceiptProcessor() {
             </button>
           </form>
 
-          {error && (
+          {error.length > 0 && (
             <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
               <div className="flex">
                 <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
                 <div className="ml-3">
                   <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Error</h3>
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{toDisplayText(error)}</p>
                 </div>
               </div>
             </div>
@@ -303,9 +492,9 @@ export default function ReceiptProcessor() {
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Processing Status</h2>
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${getStatusColor(batchStatus.status)}`}>
-                {getStatusIcon(batchStatus.status)}
-                <span className="text-sm font-medium capitalize">{batchStatus.status}</span>
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${getStatusColor(normalizeStatus(batchStatus.status))}`}>
+                {getStatusIcon(normalizeStatus(batchStatus.status))}
+                <span className="text-sm font-medium capitalize">{normalizeStatus(batchStatus.status)}</span>
               </div>
             </div>
 
@@ -313,12 +502,12 @@ export default function ReceiptProcessor() {
             <div className="mb-6">
               <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400 mb-2">
                 <span>Progress</span>
-                <span>{batchStatus.progress}%</span>
+                <span>{normalizeProgress(batchStatus.progress)}%</span>
               </div>
               <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
                 <div
                   className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${batchStatus.progress}%` }}
+                  style={{ width: `${normalizeProgress(batchStatus.progress)}%` }}
                 />
               </div>
               <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
@@ -375,7 +564,7 @@ export default function ReceiptProcessor() {
             )}
 
             {/* Download Button */}
-            {batchStatus.status === 'completed' && (
+            {normalizeStatus(batchStatus.status) === 'completed' && (
               <button
                 onClick={handleDownload}
                 className="w-full flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
@@ -386,7 +575,7 @@ export default function ReceiptProcessor() {
             )}
 
             {/* Failed State */}
-            {batchStatus.status === 'failed' && (
+            {normalizeStatus(batchStatus.status) === 'failed' && (
               <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
                 <div className="flex">
                   <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
@@ -402,12 +591,96 @@ export default function ReceiptProcessor() {
           </div>
         )}
 
+        {(receiptResults.length > 0 || isReceiptLoading || receiptError.length > 0) && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Receipt Results</h2>
+              {isReceiptLoading && (
+                <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Loading receipts...
+                </div>
+              )}
+            </div>
+
+            {receiptError.length > 0 && (
+              <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                <div className="flex">
+                  <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Receipt Fetch Error</h3>
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{toDisplayText(receiptError)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {receiptResults.length === 0 && !isReceiptLoading && receiptError.length === 0 && (
+              <p className="text-sm text-slate-600 dark:text-slate-400">No OCR results available yet.</p>
+            )}
+
+            <div className="space-y-4">
+              {receiptResults.map((receipt) => {
+                const vendorLabel = receipt.vendor || 'Unknown vendor';
+                const dateLabel = receipt.receipt_date || 'Unknown date';
+                const currencyLabel = receipt.currency || 'HKD';
+                const amountLabel = `${currencyLabel} ${formatAmount(receipt.amount)}`;
+                const descriptionLabel = receipt.description || 'No description provided.';
+                const categoryLabel = receipt.category_name || 'Uncategorized';
+                const categoryIdLabel = receipt.category_id ? ` (${receipt.category_id})` : '';
+                const confidenceValue = typeof receipt.categorization_confidence === 'number'
+                  ? receipt.categorization_confidence
+                  : Number(receipt.categorization_confidence);
+                const confidenceLabel = Number.isFinite(confidenceValue)
+                  ? `${Math.round(confidenceValue * 100)}%`
+                  : 'n/a';
+                const contextualText = receipt.categorization_reasoning
+                  ? receipt.categorization_reasoning
+                  : `No contextual analysis recorded yet. Category: ${categoryLabel}${categoryIdLabel}. Confidence: ${confidenceLabel}.`;
+                const ocrText = receipt.ocr_raw_text || 'No OCR result available yet.';
+
+                return (
+                  <div key={receipt.receipt_id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900 dark:text-white">{vendorLabel}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">{dateLabel}</div>
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{descriptionLabel}</div>
+                      </div>
+                      <div className="text-sm font-medium text-slate-700 dark:text-slate-300">{amountLabel}</div>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">OCR Result</h4>
+                        <pre className="mt-2 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
+                          {ocrText}
+                        </pre>
+                      </div>
+
+                      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">Contextual Analysis</h4>
+                        <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                          {contextualText}
+                        </p>
+                        <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                          Category: {categoryLabel}{categoryIdLabel} • Confidence: {confidenceLabel}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Info Section */}
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
           <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">How it works</h3>
           <ol className="list-decimal list-inside space-y-2 text-sm text-blue-700 dark:text-blue-400">
-            <li>Share your Dropbox folder containing receipt images (JPG, PNG, WEBP)</li>
-            <li>Paste the shared link above and click "Process Receipts"</li>
+            <li>Upload your receipt images (JPG, PNG, WEBP)</li>
+            <li>Click "Process Receipts" to start OCR and categorization</li>
             <li>Our AI extracts data from receipts using Claude Vision (supports Chinese + English)</li>
             <li>Receipts are automatically categorized with HK IRD compliance checks</li>
             <li>Download your complete P&L Excel report in under 3 minutes</li>

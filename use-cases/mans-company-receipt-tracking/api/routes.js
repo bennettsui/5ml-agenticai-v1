@@ -15,6 +15,8 @@ const router = express.Router();
 const db = require('../../../db');
 const path = require('path');
 const fs = require('fs').promises;
+const crypto = require('crypto');
+const { Dropbox } = require('dropbox');
 const { processReceiptBatch } = require('../lib/batch-processor');
 
 // Import tools (will be compiled from TypeScript)
@@ -91,6 +93,207 @@ router.post('/process', async (req, res) => {
       success: false,
       error: 'Failed to start receipt processing',
       details: error.message,
+    });
+  }
+});
+
+/**
+ * POST /receipts/process-upload
+ *
+ * Start processing receipts from uploaded images (base64).
+ *
+ * Body:
+ * {
+ *   "client_name": "Man's Accounting Firm",
+ *   "period_start": "2026-01-01",
+ *   "period_end": "2026-01-31",
+ *   "images": [{ "filename": "receipt.png", "data": "base64..." }]
+ * }
+ */
+router.post('/process-upload', async (req, res) => {
+  try {
+    const { client_name, period_start, period_end, images } = req.body;
+
+    if (!client_name || !Array.isArray(images) || images.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'client_name and images are required',
+      });
+    }
+
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not configured',
+        details: 'DATABASE_URL environment variable is not set. Please configure PostgreSQL database.',
+        help: 'Run: fly postgres create && fly postgres attach <postgres-app-name>',
+      });
+    }
+
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(503).json({
+        success: false,
+        error: 'OCR not configured',
+        details: 'ANTHROPIC_API_KEY environment variable is not set.',
+      });
+    }
+
+    const batchResult = await db.query(
+      `INSERT INTO receipt_batches (
+        client_name, status, period_start, period_end
+      ) VALUES ($1, 'pending', $2, $3)
+      RETURNING batch_id, created_at`,
+      [client_name, period_start || null, period_end || null]
+    );
+
+    const batchId = batchResult.rows[0].batch_id;
+    const uploadDir = path.join('/tmp/receipts', batchId, 'uploads');
+    await fs.mkdir(uploadDir, { recursive: true });
+
+    const uploadedFiles = [];
+    for (let i = 0; i < images.length; i += 1) {
+      const image = images[i] || {};
+      const filename = typeof image.filename === 'string' ? image.filename : `receipt_${i + 1}.png`;
+      const data = typeof image.data === 'string' ? image.data : '';
+      if (!data) continue;
+
+      const safeName = path.basename(filename);
+      const outputPath = path.join(uploadDir, safeName);
+      const buffer = Buffer.from(data, 'base64');
+      await fs.writeFile(outputPath, buffer);
+
+      const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+      uploadedFiles.push({
+        success: true,
+        filename: safeName,
+        path: outputPath,
+        hash,
+        size: buffer.length,
+      });
+    }
+
+    if (uploadedFiles.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No valid images provided',
+      });
+    }
+
+    await db.query(
+      `INSERT INTO processing_logs (batch_id, log_level, step, message)
+       VALUES ($1, 'info', 'batch_created', 'New batch created for upload processing')`,
+      [batchId]
+    );
+
+    processReceiptBatch(batchId, null, client_name, uploadedFiles).catch(error => {
+      console.error(`Error processing batch ${batchId}:`, error);
+    });
+
+    res.json({
+      success: true,
+      batch_id: batchId,
+      status: 'pending',
+      message: 'Receipt processing started. Use /batches/:batchId/status to check progress.',
+      created_at: batchResult.rows[0].created_at,
+    });
+  } catch (error) {
+    console.error('Error starting upload receipt processing:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to start receipt processing',
+      details: error.message,
+    });
+  }
+});
+
+/**
+ * GET /receipts/debug/table
+ *
+ * Render receipt_batches and receipts in simple HTML tables.
+ *
+ * Query:
+ *   limit=50
+ */
+router.get('/debug/table', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 500);
+    const escapeHtml = (value) => {
+      if (value === null || value === undefined) return '';
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
+
+    const batchesResult = await db.query(
+      `SELECT
+        batch_id, client_name, status, total_receipts, processed_receipts, failed_receipts,
+        total_amount, deductible_amount, non_deductible_amount, period_start, period_end,
+        created_at, updated_at, completed_at
+       FROM receipt_batches
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    const receiptsResult = await db.query(
+      `SELECT
+        receipt_id, batch_id, receipt_date, vendor, amount, currency, category_name,
+        deductible, created_at
+       FROM receipts
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    const renderTable = (title, rows) => {
+      if (rows.length === 0) {
+        return `<h2>${escapeHtml(title)}</h2><p>No rows.</p>`;
+      }
+      const headers = Object.keys(rows[0]);
+      const headerRow = headers.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+      const bodyRows = rows.map(row => {
+        const cells = headers.map(h => `<td>${escapeHtml(row[h])}</td>`).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
+      return `
+        <h2>${escapeHtml(title)}</h2>
+        <table>
+          <thead><tr>${headerRow}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      `;
+    };
+
+    res.type('html').send(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Receipt Tables</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 16px; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 24px; }
+            th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 12px; }
+            th { background: #f3f4f6; text-align: left; }
+            h1 { margin: 0 0 12px; }
+            h2 { margin: 20px 0 8px; }
+          </style>
+        </head>
+        <body>
+          <h1>Receipt Debug Tables</h1>
+          ${renderTable('receipt_batches', batchesResult.rows)}
+          ${renderTable('receipts', receiptsResult.rows)}
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Error rendering debug table:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to render tables',
     });
   }
 });
@@ -177,7 +380,9 @@ router.get('/batches/:batchId', async (req, res) => {
       `SELECT
         receipt_id, receipt_date, vendor, description, amount, currency,
         category_id, category_name, deductible_amount, non_deductible_amount,
-        categorization_confidence, requires_review, reviewed
+        categorization_confidence, categorization_reasoning,
+        ocr_confidence, ocr_warnings, ocr_raw_text,
+        requires_review, reviewed
        FROM receipts
        WHERE batch_id = $1
        ORDER BY receipt_date DESC`,
@@ -341,6 +546,13 @@ router.get('/batches/:batchId/download', async (req, res) => {
   }
 });
 
+// =============================================================================
+// DATABASE INITIALIZATION ENDPOINT
+// =============================================================================
+
+const initDbRouter = require('./init-db-endpoint');
+router.use('/', initDbRouter);
+
 /**
  * GET /receipts/:receiptId
  *
@@ -453,20 +665,6 @@ router.get('/analytics/compliance', async (req, res) => {
     });
   }
 });
-
-// =============================================================================
-// OCR VIEWER ENDPOINTS
-// =============================================================================
-
-const ocrViewerRouter = require('./ocr-viewer');
-router.use('/', ocrViewerRouter);
-
-// =============================================================================
-// DATABASE INITIALIZATION ENDPOINT
-// =============================================================================
-
-const initDbRouter = require('./init-db-endpoint');
-router.use('/', initDbRouter);
 
 // =============================================================================
 // HELPER FUNCTIONS

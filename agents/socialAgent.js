@@ -12,7 +12,12 @@ async function analyzeSocial(client_name, brief, options = {}) {
   const modelsUsed = [];
   let webResearch = null;
 
-  // Optionally use Perplexity for current social media trends
+  // If Perplexity is selected, use it for the full analysis
+  if (modelSelection === 'perplexity' && perplexityService.isAvailable()) {
+    return await analyzeWithPerplexity(client_name, brief, modelsUsed);
+  }
+
+  // Optionally use Perplexity for current social media trends (when using other models)
   if (shouldUsePerplexity(modelSelection)) {
     try {
       console.log('🔍 Gathering current social media trends via Perplexity...');
@@ -160,6 +165,74 @@ async function analyzeWithDeepSeek(client_name, brief, webResearch, modelSelecti
     }
     console.error('DeepSeek error, falling back to Claude Haiku:', error.message);
     return await analyzeSocial(client_name, brief, { model: 'haiku', no_fallback: false });
+  }
+}
+
+async function analyzeWithPerplexity(client_name, brief, modelsUsed = []) {
+  const jsonSchema = `{
+  "primary_platforms": ["平台1", "平台2"],
+  "content_pillars": ["支柱1", "支柱2"],
+  "posting_frequency": "每周次數",
+  "engagement_strategy": "互動策略描述",
+  "hashtag_strategy": ["hashtag1", "hashtag2"],
+  "trending_formats": ["格式1", "格式2"]
+}`;
+
+  const systemPrompt = `你是一個社交媒體策略師。請為以下項目提供社交媒體策略，結合2026年最新的社交媒體趨勢和平台更新。
+請返回 JSON 格式（只返回 JSON，不需要其他文本）。`;
+
+  const userPrompt = `**客户**: ${client_name}
+**簡報**: ${brief}
+
+請提供完整的社交媒體策略，包括平台選擇、內容支柱、發布頻率、互動策略、標籤策略和流行格式。
+
+請返回以下 JSON 格式:
+${jsonSchema}`;
+
+  try {
+    const result = await perplexityService.research(
+      userPrompt,
+      {
+        systemPrompt,
+        maxTokens: 2000,
+        searchRecency: 'week',
+        temperature: 0.3
+      }
+    );
+
+    // Track Perplexity usage
+    modelsUsed.push({
+      model: getModelDisplayName('perplexity'),
+      model_id: 'sonar-pro',
+      usage: result.usage || {}
+    });
+
+    const text = result.content;
+
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
+
+      return {
+        ...analysis,
+        _meta: {
+          models_used: modelsUsed,
+          enhanced_with_web_research: true,
+          sources: result.citations || []
+        }
+      };
+    } catch {
+      return {
+        raw: text,
+        _meta: {
+          models_used: modelsUsed,
+          enhanced_with_web_research: true,
+          sources: result.citations || []
+        }
+      };
+    }
+  } catch (error) {
+    throw new Error(`Perplexity API error: ${error.message}`);
   }
 }
 

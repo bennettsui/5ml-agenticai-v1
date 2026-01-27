@@ -9,7 +9,7 @@ class DeepSeekService {
   constructor() {
     this.apiKey = process.env.DEEPSEEK_API_KEY;
     this.baseURL = 'https://api.deepseek.com';
-    this.model = 'deepseek-chat';
+    this.model = 'deepseek-reasoner';
   }
 
   isAvailable() {
@@ -41,7 +41,7 @@ class DeepSeekService {
             'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
           },
-          timeout: 30000, // 30 second timeout
+          timeout: 90000, // 90 second timeout for complex queries
         }
       );
 

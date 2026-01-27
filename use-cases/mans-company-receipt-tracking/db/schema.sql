@@ -243,7 +243,19 @@ FROM
   receipt_batches rb
   LEFT JOIN receipts r ON rb.batch_id = r.batch_id
 GROUP BY
-  rb.batch_id
+  rb.batch_id,
+  rb.client_name,
+  rb.status,
+  rb.total_receipts,
+  rb.processed_receipts,
+  rb.failed_receipts,
+  rb.total_amount,
+  rb.deductible_amount,
+  rb.non_deductible_amount,
+  rb.period_start,
+  rb.period_end,
+  rb.created_at,
+  rb.completed_at
 ORDER BY
   rb.created_at DESC;
 
