@@ -18,14 +18,30 @@ class TesseractOCR {
   async initialize() {
     if (!this.worker) {
       console.log('🔧 [Tesseract] Initializing OCR worker...');
-      this.worker = await Tesseract.createWorker('eng+chi_tra', 1, {
+
+      // Use Promise.race to add timeout
+      const initPromise = Tesseract.createWorker('eng', 1, {
         logger: m => {
           if (m.status === 'recognizing text') {
             console.log(`   Progress: ${Math.round(m.progress * 100)}%`);
           }
+          if (m.status === 'loading tesseract core' || m.status === 'initializing tesseract') {
+            console.log(`   ${m.status}...`);
+          }
         }
       });
-      console.log('✅ [Tesseract] Worker initialized');
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Tesseract initialization timeout (60s)')), 60000)
+      );
+
+      try {
+        this.worker = await Promise.race([initPromise, timeoutPromise]);
+        console.log('✅ [Tesseract] Worker initialized');
+      } catch (error) {
+        console.error('❌ [Tesseract] Initialization failed:', error.message);
+        throw error;
+      }
     }
     return this.worker;
   }
@@ -51,7 +67,13 @@ class TesseractOCR {
 
     await this.initialize();
 
-    const { data } = await this.worker.recognize(imagePath);
+    // Add timeout to recognition (30s per image)
+    const recognizePromise = this.worker.recognize(imagePath);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Tesseract recognition timeout (30s)')), 30000)
+    );
+
+    const { data } = await Promise.race([recognizePromise, timeoutPromise]);
 
     // Extract words with bounding boxes
     const boxes = data.words.map((word, index) => {
