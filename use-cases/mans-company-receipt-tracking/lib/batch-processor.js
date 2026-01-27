@@ -85,20 +85,41 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName) {
     );
     console.log(`✅ Downloaded ${downloadedFiles.length} receipts\n`);
 
-    // CHECKPOINT 4: OCR Processing
-    console.log('✓ CHECKPOINT 4: Running OCR...');
-    await logProcessing(batchId, 'info', 'ocr_start', 'Starting OCR');
-    wsServer.sendProgress(batchId, { progress: 30, message: 'Processing with Claude Vision...' });
+    // CHECKPOINT 4A: Tesseract OCR for bounding boxes
+    console.log('✓ CHECKPOINT 4A: Extracting bounding boxes with Tesseract...');
+    await logProcessing(batchId, 'info', 'tesseract_start', 'Extracting bounding boxes');
+    wsServer.sendProgress(batchId, { progress: 30, message: 'Extracting bounding boxes...' });
+
+    const TesseractOCR = require('../../../tools/tesseract-ocr');
+    const tesseract = new TesseractOCR();
+
+    const imagePaths = downloadedFiles.map(f => f.path);
+    const tesseractResults = await tesseract.processBatch(imagePaths, (p) => {
+      const progress = 30 + (p.progress * 0.2);
+      wsServer.sendProgress(batchId, {
+        progress: Math.round(progress),
+        message: `Tesseract ${p.current}/${p.total}`
+      });
+    });
+
+    // Terminate Tesseract worker to free resources
+    await tesseract.terminate();
+
+    console.log(`✅ Tesseract: ${tesseractResults.filter(r => r.success).length} successful\n`);
+
+    // CHECKPOINT 4B: Claude Vision OCR for structured data
+    console.log('✓ CHECKPOINT 4B: Running Claude Vision OCR...');
+    await logProcessing(batchId, 'info', 'ocr_start', 'Starting Claude OCR');
+    wsServer.sendProgress(batchId, { progress: 50, message: 'Processing with Claude Vision...' });
 
     const OCRProcessor = require('../../../tools/ocr-processor');
     const ocr = new OCRProcessor(process.env.ANTHROPIC_API_KEY);
 
-    const imagePaths = downloadedFiles.map(f => f.path);
     const ocrResults = await ocr.processBatch(imagePaths, (p) => {
-      const progress = 30 + (p.progress * 0.4);
+      const progress = 50 + (p.progress * 0.2);
       wsServer.sendProgress(batchId, {
         progress: Math.round(progress),
-        message: `OCR ${p.current}/${p.total}`
+        message: `Claude OCR ${p.current}/${p.total}`
       });
 
       db.query(
@@ -107,7 +128,7 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName) {
       ).catch(console.error);
     });
 
-    console.log(`✅ OCR: ${ocrResults.successful} successful\n`);
+    console.log(`✅ Claude OCR: ${ocrResults.successful} successful\n`);
 
     // CHECKPOINT 5: Save to database
     console.log('✓ CHECKPOINT 5: Saving to database...');
@@ -124,15 +145,19 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName) {
         const filename = path.basename(result.image_path);
         const fileData = downloadedFiles.find(f => f.path === result.image_path);
 
+        // Find corresponding Tesseract result for bounding boxes
+        const tesseractResult = tesseractResults.find(tr => tr.imagePath === result.image_path);
+        const ocrBoxes = tesseractResult?.success ? tesseractResult.boxes : null;
+
         await db.query(
           `INSERT INTO receipts (
             batch_id, image_path, image_hash,
             receipt_date, vendor, description, amount, currency,
             tax_amount, receipt_number, payment_method,
-            ocr_confidence, ocr_raw_text,
+            ocr_confidence, ocr_raw_text, ocr_boxes,
             category_id, category_name, categorization_confidence,
             deductible, deductible_amount, non_deductible_amount
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
           [
             batchId, filename, fileData?.hash || '',
             data.date || new Date().toISOString().split('T')[0],
@@ -140,7 +165,8 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName) {
             data.amount || 0, data.currency || 'HKD',
             data.tax_amount || 0, data.receipt_number || '',
             data.payment_method || '', data.confidence || 0.8,
-            result.raw_text || '', '5100', 'Office Expenses',
+            result.raw_text || '', ocrBoxes ? JSON.stringify(ocrBoxes) : null,
+            '5100', 'Office Expenses',
             0.8, true, data.amount || 0, 0
           ]
         );
