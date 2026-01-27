@@ -37,6 +37,8 @@ interface ReceiptResult {
   ocr_raw_text?: string | null;
   deductible_amount?: number | string | null;
   non_deductible_amount?: number | string | null;
+  image_path?: string | null;
+  image_url?: string | null;
 }
 
 export default function ReceiptProcessor() {
@@ -639,33 +641,103 @@ export default function ReceiptProcessor() {
                   : `No contextual analysis recorded yet. Category: ${categoryLabel}${categoryIdLabel}. Confidence: ${confidenceLabel}.`;
                 const ocrText = receipt.ocr_raw_text || 'No OCR result available yet.';
 
+                const imageUrl = receipt.image_url || (receipt.receipt_id ? apiUrl(`/api/receipts/${receipt.receipt_id}/image`) : null);
+
                 return (
                   <div key={receipt.receipt_id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
+                    {/* Receipt Header */}
+                    <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
                       <div>
-                        <div className="text-sm font-semibold text-slate-900 dark:text-white">{vendorLabel}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">{dateLabel}</div>
-                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{descriptionLabel}</div>
+                        <div className="text-lg font-semibold text-slate-900 dark:text-white">{vendorLabel}</div>
+                        <div className="text-sm text-slate-500 dark:text-slate-400">{dateLabel}</div>
                       </div>
-                      <div className="text-sm font-medium text-slate-700 dark:text-slate-300">{amountLabel}</div>
+                      <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{amountLabel}</div>
                     </div>
 
-                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
-                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">OCR Result</h4>
-                        <pre className="mt-2 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
-                          {ocrText}
-                        </pre>
+                    {/* Side by Side: Image + Extracted Data */}
+                    <div className="grid gap-6 lg:grid-cols-2">
+                      {/* Left: Receipt Image */}
+                      <div>
+                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Receipt Image</h4>
+                        {imageUrl ? (
+                          <div className="bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden">
+                            <img
+                              src={imageUrl}
+                              alt={`Receipt from ${vendorLabel}`}
+                              className="w-full h-auto max-h-96 object-contain"
+                              onError={(e) => {
+                                const img = e.target as HTMLImageElement;
+                                img.style.display = 'none';
+                                const parent = img.parentElement;
+                                if (parent) {
+                                  parent.innerHTML = '<div class="p-8 text-center text-sm text-slate-500">Image not available</div>';
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-8 text-center">
+                            <p className="text-sm text-slate-500 dark:text-slate-400">No image available</p>
+                          </div>
+                        )}
                       </div>
 
-                      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
-                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">Contextual Analysis</h4>
-                        <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-                          {contextualText}
-                        </p>
-                        <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                          Category: {categoryLabel}{categoryIdLabel} • Confidence: {confidenceLabel}
+                      {/* Right: Extracted Data */}
+                      <div className="space-y-4">
+                        {/* Structured Data */}
+                        <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                          <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Extracted Information</h4>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-slate-600 dark:text-slate-400">Vendor:</span>
+                              <span className="font-medium text-slate-900 dark:text-white">{vendorLabel}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-600 dark:text-slate-400">Date:</span>
+                              <span className="font-medium text-slate-900 dark:text-white">{dateLabel}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-600 dark:text-slate-400">Amount:</span>
+                              <span className="font-medium text-slate-900 dark:text-white">{amountLabel}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-600 dark:text-slate-400">Category:</span>
+                              <span className="font-medium text-slate-900 dark:text-white">{categoryLabel}</span>
+                            </div>
+                            {descriptionLabel !== 'No description provided.' && (
+                              <div className="pt-2 border-t border-slate-200 dark:border-slate-600">
+                                <span className="text-slate-600 dark:text-slate-400">Description:</span>
+                                <p className="mt-1 text-slate-900 dark:text-white">{descriptionLabel}</p>
+                              </div>
+                            )}
+                          </div>
                         </div>
+
+                        {/* Raw OCR Text (Collapsible) */}
+                        <details className="bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                          <summary className="p-4 cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
+                            View Raw OCR Text
+                          </summary>
+                          <div className="px-4 pb-4">
+                            <pre className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+                              {ocrText}
+                            </pre>
+                          </div>
+                        </details>
+
+                        {/* Analysis (Collapsible) */}
+                        {contextualText && contextualText !== `No contextual analysis recorded yet. Category: ${categoryLabel}${categoryIdLabel}. Confidence: ${confidenceLabel}.` && (
+                          <details className="bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                            <summary className="p-4 cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
+                              View Analysis
+                            </summary>
+                            <div className="px-4 pb-4">
+                              <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                                {contextualText}
+                              </p>
+                            </div>
+                          </details>
+                        )}
                       </div>
                     </div>
                   </div>

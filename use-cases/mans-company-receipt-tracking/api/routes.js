@@ -378,7 +378,7 @@ router.get('/batches/:batchId', async (req, res) => {
     // Get receipts
     const receiptsResult = await db.query(
       `SELECT
-        receipt_id, receipt_date, vendor, description, amount, currency,
+        receipt_id, image_path, receipt_date, vendor, description, amount, currency,
         category_id, category_name, deductible_amount, non_deductible_amount,
         categorization_confidence, categorization_reasoning,
         ocr_confidence, ocr_warnings, ocr_raw_text,
