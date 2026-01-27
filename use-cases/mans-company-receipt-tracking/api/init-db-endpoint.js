@@ -13,19 +13,31 @@ router.get('/init-database', async (req, res) => {
   try {
     console.log('\n🗄️  Database initialization requested via web endpoint\n');
 
-    // Check if tables already exist
-    const checkTables = await db.query(`
+    // Check if all required tables already exist
+    const requiredTables = [
+      'receipt_batches',
+      'receipts',
+      'category_statistics',
+      'processing_logs',
+      'receipt_batch_items'
+    ];
+
+    const existingTables = await db.query(`
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
-      AND table_name = 'receipt_batches'
+      AND table_type = 'BASE TABLE'
     `);
 
-    if (checkTables.rows.length > 0) {
+    const existingSet = new Set(existingTables.rows.map(row => row.table_name));
+    const missingTables = requiredTables.filter(name => !existingSet.has(name));
+
+    if (missingTables.length === 0) {
       return res.json({
         success: true,
         message: '✅ Database already initialized',
-        tables_exist: true
+        tables_exist: true,
+        tables: requiredTables
       });
     }
 
@@ -64,7 +76,8 @@ router.get('/init-database', async (req, res) => {
       success: true,
       message: '✅ Database initialized successfully',
       tables_created: result.rows.length,
-      tables: result.rows.map(r => r.table_name)
+      tables: result.rows.map(r => r.table_name),
+      missing_tables_before: missingTables
     });
 
   } catch (error) {
