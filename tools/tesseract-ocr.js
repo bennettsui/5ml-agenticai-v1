@@ -20,19 +20,30 @@ class TesseractOCR {
       console.log('🔧 [Tesseract] Initializing OCR worker...');
 
       // Use Promise.race to add timeout
-      const initPromise = Tesseract.createWorker('eng', 1, {
+      // Supporting English + Traditional Chinese (chi_tra) for Hong Kong receipts
+      const initPromise = Tesseract.createWorker('eng+chi_tra', 1, {
         logger: m => {
           if (m.status === 'recognizing text') {
-            console.log(`   Progress: ${Math.round(m.progress * 100)}%`);
+            console.log(`   OCR Progress: ${Math.round(m.progress * 100)}%`);
           }
-          if (m.status === 'loading tesseract core' || m.status === 'initializing tesseract') {
-            console.log(`   ${m.status}...`);
+          if (m.status === 'loading tesseract core') {
+            console.log(`   Loading Tesseract core...`);
+          }
+          if (m.status === 'initializing tesseract') {
+            console.log(`   Initializing Tesseract...`);
+          }
+          if (m.status === 'loading language traineddata') {
+            console.log(`   Downloading language files (eng + chi_tra)... This may take 30-60s on first run`);
+          }
+          if (m.status === 'initializing api') {
+            console.log(`   Initializing OCR API...`);
           }
         }
       });
 
+      // Longer timeout for Chinese language files (they're large ~50MB)
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Tesseract initialization timeout (60s)')), 60000)
+        setTimeout(() => reject(new Error('Tesseract initialization timeout (120s) - language files may be too large or network slow')), 120000)
       );
 
       try {
@@ -67,10 +78,10 @@ class TesseractOCR {
 
     await this.initialize();
 
-    // Add timeout to recognition (30s per image)
+    // Add timeout to recognition (60s per image for Chinese text)
     const recognizePromise = this.worker.recognize(imagePath);
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Tesseract recognition timeout (30s)')), 30000)
+      setTimeout(() => reject(new Error(`Tesseract recognition timeout (60s) for ${path.basename(imagePath)}`)), 60000)
     );
 
     const { data } = await Promise.race([recognizePromise, timeoutPromise]);

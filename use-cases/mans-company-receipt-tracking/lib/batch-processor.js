@@ -112,17 +112,17 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
 
       const imagePaths = downloadedFiles.map(f => f.path);
 
-      // Add overall timeout for batch processing (5 minutes)
+      // Add overall timeout for batch processing (10 minutes for Chinese OCR)
       const batchPromise = tesseract.processBatch(imagePaths, (p) => {
         const progress = 30 + (p.progress * 0.2);
         wsServer.sendProgress(batchId, {
           progress: Math.round(progress),
-          message: `Tesseract ${p.current}/${p.total}`
+          message: `Tesseract ${p.current}/${p.total} (Chinese OCR may take 30-60s per receipt)`
         });
       });
 
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Tesseract batch timeout (5 minutes)')), 300000)
+        setTimeout(() => reject(new Error('Tesseract batch timeout (10 minutes) - Chinese OCR processing exceeded time limit')), 600000)
       );
 
       tesseractResults = await Promise.race([batchPromise, timeoutPromise]);
