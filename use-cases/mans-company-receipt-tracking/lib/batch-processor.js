@@ -100,11 +100,23 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     );
     console.log(`✅ Collected ${downloadedFiles.length} receipts\n`);
 
-    // CHECKPOINT 4A: Tesseract OCR for bounding boxes (with timeout protection)
-    console.log('✓ CHECKPOINT 4A: Extracting bounding boxes with Tesseract...');
-    await logProcessing(batchId, 'info', 'tesseract_start', 'Extracting bounding boxes');
-    wsServer.sendProgress(batchId, { progress: 30, message: 'Extracting bounding boxes...' });
+    // CHECKPOINT 4A: Tesseract OCR - TEMPORARILY SKIPPED
+    console.log('✓ CHECKPOINT 4A: Skipping Tesseract (temporary)...');
+    await logProcessing(batchId, 'info', 'tesseract_skipped', 'Tesseract temporarily disabled for faster processing');
+    wsServer.sendProgress(batchId, { progress: 30, message: 'Skipping bounding box extraction (using Claude only)...' });
 
+    // Create empty results (no bounding boxes)
+    const imagePaths = downloadedFiles.map(f => f.path);
+    const tesseractResults = imagePaths.map(path => ({
+      success: false,
+      imagePath: path,
+      error: 'Tesseract temporarily disabled',
+      boxes: []
+    }));
+
+    console.log(`⏭️ Tesseract skipped, continuing to Claude Vision\n`);
+
+    /* TESSERACT CODE DISABLED - UNCOMMENT WHEN READY TO DEBUG
     let tesseractResults = [];
     try {
       const TesseractOCR = require('../../../tools/tesseract-ocr');
@@ -145,6 +157,7 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
         boxes: []
       }));
     }
+    */
 
     // CHECKPOINT 4B: Claude Vision OCR for structured data
     console.log('✓ CHECKPOINT 4B: Running Claude Vision OCR...');
