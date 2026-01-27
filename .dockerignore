@@ -11,3 +11,4 @@ out
 README.md
 .vscode
 *.md
+docker-compose.yml
