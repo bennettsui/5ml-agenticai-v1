@@ -158,7 +158,7 @@ export default function ReceiptProcessor() {
     try {
       const response = await fetch(apiUrl(`/api/receipts/batches/${targetBatchId}/excel-preview`));
       if (!response.ok) {
-        if (response.status === 404) {
+        if (response.status === 404 || response.status === 202) {
           scheduleExcelRetry(targetBatchId, 2000);
           return;
         }
@@ -166,7 +166,8 @@ export default function ReceiptProcessor() {
       const data = await response.json();
 
       if (!data.success) {
-        scheduleExcelRetry(targetBatchId, 2000);
+        const retryDelay = typeof data.retry_after === 'number' ? data.retry_after * 1000 : 2000;
+        scheduleExcelRetry(targetBatchId, retryDelay);
         return;
       }
 

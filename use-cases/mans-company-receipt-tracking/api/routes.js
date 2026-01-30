@@ -634,17 +634,20 @@ router.get('/batches/:batchId/download', async (req, res) => {
     const batch = result.rows[0];
 
     if (batch.status !== 'completed') {
-      return res.status(400).json({
+      return res.status(202).json({
         success: false,
-        error: 'Batch processing not completed yet',
         status: batch.status,
+        message: 'Excel preview not ready yet',
+        retry_after: 2,
       });
     }
 
     if (!batch.excel_file_path) {
-      return res.status(404).json({
+      return res.status(202).json({
         success: false,
-        error: 'Excel file not available',
+        status: batch.status,
+        message: 'Excel preview not ready yet',
+        retry_after: 2,
       });
     }
 
@@ -656,9 +659,11 @@ router.get('/batches/:batchId/download', async (req, res) => {
         await regenerateExcelForBatch(batchId);
       } catch (regenError) {
         console.error('Error regenerating Excel file:', regenError);
-        return res.status(404).json({
+        return res.status(202).json({
           success: false,
-          error: 'Excel file not found on server',
+          status: batch.status,
+          message: 'Excel preview not ready yet',
+          retry_after: 2,
         });
       }
     }
