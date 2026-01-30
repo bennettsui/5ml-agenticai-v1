@@ -648,14 +648,19 @@ router.get('/batches/:batchId/download', async (req, res) => {
       });
     }
 
-    // Check if file exists
+    // Check if file exists; regenerate on demand if missing
     try {
       await fs.access(batch.excel_file_path);
     } catch {
-      return res.status(404).json({
-        success: false,
-        error: 'Excel file not found on server',
-      });
+      try {
+        await regenerateExcelForBatch(batchId);
+      } catch (regenError) {
+        console.error('Error regenerating Excel file:', regenError);
+        return res.status(404).json({
+          success: false,
+          error: 'Excel file not found on server',
+        });
+      }
     }
 
     // Send file
@@ -728,8 +733,25 @@ router.get('/batches/:batchId/excel-preview', async (req, res) => {
       });
     }
 
+    let filePath = batch.excel_file_path;
+
+    // Check if file exists; regenerate on demand if missing
+    try {
+      await fs.access(filePath);
+    } catch {
+      try {
+        filePath = await regenerateExcelForBatch(batchId);
+      } catch (regenError) {
+        console.error('Error regenerating Excel file:', regenError);
+        return res.status(404).json({
+          success: false,
+          error: 'Excel file not found on server',
+        });
+      }
+    }
+
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(batch.excel_file_path);
+    await workbook.xlsx.readFile(filePath);
 
     const worksheet = workbook.worksheets[0];
     if (!worksheet) {
