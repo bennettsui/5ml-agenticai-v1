@@ -91,6 +91,7 @@ export default function ReceiptProcessor() {
   const [error, setError] = useState<string>('');
   const receiptFetchKeyRef = useRef<string>('');
   const excelFetchKeyRef = useRef<string>('');
+  const excelRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isLocalhost = () => {
     if (typeof window === 'undefined') return false;
     return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -138,6 +139,15 @@ export default function ReceiptProcessor() {
     return String(value);
   };
 
+  const scheduleExcelRetry = (targetBatchId: string, delayMs = 2000) => {
+    if (excelRetryTimeoutRef.current) {
+      clearTimeout(excelRetryTimeoutRef.current);
+    }
+    excelRetryTimeoutRef.current = setTimeout(() => {
+      void loadExcelPreview(targetBatchId, true);
+    }, delayMs);
+  };
+
   const loadExcelPreview = async (targetBatchId: string, force = false) => {
     if (!targetBatchId) return;
     if (!force && excelFetchKeyRef.current === targetBatchId) return;
@@ -147,10 +157,17 @@ export default function ReceiptProcessor() {
 
     try {
       const response = await fetch(apiUrl(`/api/receipts/batches/${targetBatchId}/excel-preview`));
+      if (!response.ok) {
+        if (response.status === 404) {
+          scheduleExcelRetry(targetBatchId, 2000);
+          return;
+        }
+      }
       const data = await response.json();
 
       if (!data.success) {
-        throw new Error(data.error ? formatErrorMessage(data.error) : 'Failed to fetch Excel preview');
+        scheduleExcelRetry(targetBatchId, 2000);
+        return;
       }
 
       setExcelPreview({
@@ -366,9 +383,15 @@ export default function ReceiptProcessor() {
   }, [batchId, batchStatus?.processed_receipts, batchStatus?.status]);
 
   useEffect(() => {
-    if (!batchId || !batchStatus) return;
-    if (normalizeStatus(batchStatus.status) !== 'completed') return;
+    if (!batchId || !batchStatus) return undefined;
+    if (normalizeStatus(batchStatus.status) !== 'completed') return undefined;
     void loadExcelPreview(batchId);
+    return () => {
+      if (excelRetryTimeoutRef.current) {
+        clearTimeout(excelRetryTimeoutRef.current);
+        excelRetryTimeoutRef.current = null;
+      }
+    };
   }, [batchId, batchStatus?.status]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -382,6 +405,10 @@ export default function ReceiptProcessor() {
     setExcelPreview(null);
     setExcelError('');
     excelFetchKeyRef.current = '';
+    if (excelRetryTimeoutRef.current) {
+      clearTimeout(excelRetryTimeoutRef.current);
+      excelRetryTimeoutRef.current = null;
+    }
     setEditingReceiptId(null);
     setEditDraft(null);
     setSaveError('');
