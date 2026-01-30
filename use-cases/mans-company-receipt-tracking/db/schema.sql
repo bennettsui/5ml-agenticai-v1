@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS receipts (
   -- 0.00 - 1.00
   ocr_warnings TEXT[],
   ocr_raw_text TEXT,
+  ocr_boxes JSONB,
 
   -- Categorization
   category_id VARCHAR(10) NOT NULL,

@@ -7,6 +7,17 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const db = require('../../../db');
 
+let receiptsSchemaChecked = false;
+
+async function ensureReceiptsSchema() {
+  if (receiptsSchemaChecked) return;
+  await db.query(`
+    ALTER TABLE receipts
+    ADD COLUMN IF NOT EXISTS ocr_boxes JSONB
+  `);
+  receiptsSchemaChecked = true;
+}
+
 /**
  * Log processing step to database and console
  */
@@ -59,6 +70,7 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     if (!process.env.ANTHROPIC_API_KEY) {
       throw new Error('ANTHROPIC_API_KEY not configured');
     }
+    await ensureReceiptsSchema();
     console.log('✅ Environment OK\n');
 
     // CHECKPOINT 3: Collect receipts

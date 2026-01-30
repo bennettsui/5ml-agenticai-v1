@@ -73,6 +73,8 @@ export default function ReceiptProcessor() {
   const [clientName, setClientName] = useState("Man's Accounting Firm");
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
+  const [inputMode, setInputMode] = useState<'upload' | 'dropbox'>('upload');
+  const [dropboxUrl, setDropboxUrl] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
@@ -384,32 +386,54 @@ export default function ReceiptProcessor() {
     setEditDraft(null);
     setSaveError('');
 
-    if (uploadedFiles.length === 0) {
-      setError('Please select at least one receipt image.');
-      setIsProcessing(false);
-      return;
-    }
-
     try {
-      const images = await Promise.all(
-        uploadedFiles.map(async (file) => ({
-          filename: file.name,
-          data: await readFileAsBase64(file),
-        }))
-      );
+      let response: Response;
 
-      const response = await fetch(apiUrl('/api/receipts/process-upload'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          client_name: clientName,
-          period_start: periodStart || null,
-          period_end: periodEnd || null,
-          images,
-        }),
-      });
+      if (inputMode === 'dropbox') {
+        if (!dropboxUrl.trim()) {
+          setError('Please enter a Dropbox folder URL.');
+          setIsProcessing(false);
+          return;
+        }
+        response = await fetch(apiUrl('/api/receipts/process'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            client_name: clientName,
+            dropbox_url: dropboxUrl.trim(),
+            period_start: periodStart || null,
+            period_end: periodEnd || null,
+          }),
+        });
+      } else {
+        if (uploadedFiles.length === 0) {
+          setError('Please select at least one receipt image.');
+          setIsProcessing(false);
+          return;
+        }
+
+        const images = await Promise.all(
+          uploadedFiles.map(async (file) => ({
+            filename: file.name,
+            data: await readFileAsBase64(file),
+          }))
+        );
+
+        response = await fetch(apiUrl('/api/receipts/process-upload'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            client_name: clientName,
+            period_start: periodStart || null,
+            period_end: periodEnd || null,
+            images,
+          }),
+        });
+      }
 
       const data = await response.json();
 
@@ -606,27 +630,76 @@ export default function ReceiptProcessor() {
               />
             </div>
 
-                <div>
-                  <label htmlFor="receiptFiles" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Receipt Images
-                  </label>
-                  <div className="mt-1 relative">
-                    <input
-                      type="file"
-                      id="receiptFiles"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) => setUploadedFiles(Array.from(e.target.files || []))}
-                      className="block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                      required
-                      disabled={isProcessing}
-                    />
-                    <Upload className="absolute right-3 top-2.5 h-5 w-5 text-slate-400 dark:text-slate-500" />
-                  </div>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Upload one or more receipt images (JPG, PNG, WEBP)
-                  </p>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Receipt Source
+              </label>
+              <div className="mt-2 flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                  <input
+                    type="radio"
+                    name="inputMode"
+                    value="upload"
+                    checked={inputMode === 'upload'}
+                    onChange={() => setInputMode('upload')}
+                    disabled={isProcessing}
+                  />
+                  Upload Images
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                  <input
+                    type="radio"
+                    name="inputMode"
+                    value="dropbox"
+                    checked={inputMode === 'dropbox'}
+                    onChange={() => setInputMode('dropbox')}
+                    disabled={isProcessing}
+                  />
+                  Dropbox Folder URL
+                </label>
+              </div>
+            </div>
+
+            {inputMode === 'upload' ? (
+              <div>
+                <label htmlFor="receiptFiles" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Receipt Images
+                </label>
+                <div className="mt-1 relative">
+                  <input
+                    type="file"
+                    id="receiptFiles"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => setUploadedFiles(Array.from(e.target.files || []))}
+                    className="block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    disabled={isProcessing}
+                  />
+                  <Upload className="absolute right-3 top-2.5 h-5 w-5 text-slate-400 dark:text-slate-500" />
                 </div>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Upload one or more receipt images (JPG, PNG, WEBP)
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label htmlFor="dropboxUrl" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Dropbox Folder URL
+                </label>
+                <input
+                  type="url"
+                  id="dropboxUrl"
+                  value={dropboxUrl}
+                  onChange={(e) => setDropboxUrl(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  placeholder="https://www.dropbox.com/sh/..."
+                  disabled={isProcessing}
+                />
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Paste a shared Dropbox folder link that contains receipt images.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>
