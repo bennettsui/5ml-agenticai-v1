@@ -7,6 +7,7 @@
  * - GET /receipts/batches/:batchId - Get batch details
  * - GET /receipts/batches/:batchId/status - Get real-time status
  * - GET /receipts/batches/:batchId/download - Download Excel export
+ * - GET /receipts/batches/:batchId/excel-preview - Preview Excel export
  * - GET /receipts/:receiptId - Get individual receipt details
  */
 
@@ -15,9 +16,142 @@ const router = express.Router();
 const db = require('../../../db');
 const path = require('path');
 const fs = require('fs').promises;
+const ExcelJS = require('exceljs');
 const crypto = require('crypto');
 const { Dropbox } = require('dropbox');
 const { processReceiptBatch } = require('../lib/batch-processor');
+
+const normalizeExcelValue = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number') return value;
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (value instanceof Date) return value.toISOString().split('T')[0];
+  if (typeof value === 'object') {
+    if (value.text) return value.text;
+    if (value.richText) return value.richText.map(part => part.text).join('');
+    if (value.hyperlink) return value.text || value.hyperlink;
+    if (value.formula !== undefined) return value.result !== undefined ? value.result : value.formula;
+    if (value.sharedFormula) return value.result !== undefined ? value.result : value.sharedFormula;
+    if (value.result !== undefined) return value.result;
+  }
+  return String(value);
+};
+
+const findHeaderRow = (worksheet) => {
+  const maxScan = Math.min(worksheet.rowCount, 10);
+  for (let i = 1; i <= maxScan; i += 1) {
+    const row = worksheet.getRow(i);
+    const values = Array.isArray(row.values) ? row.values.slice(1) : [];
+    const nonEmptyCount = values.filter(value => {
+      const normalized = normalizeExcelValue(value);
+      return String(normalized).trim().length > 0;
+    }).length;
+    if (nonEmptyCount >= 2) {
+      return row;
+    }
+  }
+  return worksheet.getRow(1);
+};
+
+const parseNumberField = (value, fieldName, required = false) => {
+  if (value === undefined || value === null || value === '') {
+    if (required) {
+      throw new Error(`${fieldName} is required`);
+    }
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${fieldName} must be a number`);
+  }
+  return parsed;
+};
+
+const parseBooleanField = (value, fallback = null) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    if (value.toLowerCase() === 'true') return true;
+    if (value.toLowerCase() === 'false') return false;
+  }
+  return fallback;
+};
+
+const regenerateExcelForBatch = async (batchId) => {
+  const batchResult = await db.query(
+    'SELECT excel_file_path FROM receipt_batches WHERE batch_id = $1',
+    [batchId]
+  );
+  if (batchResult.rows.length === 0) {
+    throw new Error('Batch not found');
+  }
+
+  const receiptsResult = await db.query(
+    `SELECT
+      receipt_date, vendor, description, amount, currency,
+      tax_amount, receipt_number, payment_method,
+      category_id, category_name, deductible, deductible_amount, non_deductible_amount
+     FROM receipts
+     WHERE batch_id = $1
+     ORDER BY receipt_date DESC`,
+    [batchId]
+  );
+
+  const exportDir = process.env.EXCEL_OUTPUT_DIR || '/tmp/excel-exports';
+  const outputPath = batchResult.rows[0].excel_file_path
+    || path.join(exportDir, `receipts_${batchId}.xlsx`);
+
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = '5ML Agentic AI';
+  workbook.created = new Date();
+
+  const sheet = workbook.addWorksheet('Receipts');
+  sheet.columns = [
+    { header: 'Date', key: 'receipt_date', width: 12 },
+    { header: 'Vendor', key: 'vendor', width: 24 },
+    { header: 'Description', key: 'description', width: 36 },
+    { header: 'Amount', key: 'amount', width: 12 },
+    { header: 'Currency', key: 'currency', width: 8 },
+    { header: 'Tax', key: 'tax_amount', width: 10 },
+    { header: 'Receipt #', key: 'receipt_number', width: 16 },
+    { header: 'Payment', key: 'payment_method', width: 12 },
+    { header: 'Category ID', key: 'category_id', width: 12 },
+    { header: 'Category', key: 'category_name', width: 20 },
+    { header: 'Deductible', key: 'deductible', width: 12 },
+    { header: 'Deductible Amount', key: 'deductible_amount', width: 18 },
+    { header: 'Non-Deductible', key: 'non_deductible_amount', width: 18 },
+  ];
+
+  receiptsResult.rows.forEach(row => {
+    sheet.addRow({
+      receipt_date: row.receipt_date,
+      vendor: row.vendor,
+      description: row.description,
+      amount: row.amount,
+      currency: row.currency,
+      tax_amount: row.tax_amount,
+      receipt_number: row.receipt_number,
+      payment_method: row.payment_method,
+      category_id: row.category_id,
+      category_name: row.category_name,
+      deductible: row.deductible,
+      deductible_amount: row.deductible_amount,
+      non_deductible_amount: row.non_deductible_amount,
+    });
+  });
+
+  await workbook.xlsx.writeFile(outputPath);
+
+  await db.query(
+    `UPDATE receipt_batches
+     SET excel_file_path = $1, updated_at = NOW()
+     WHERE batch_id = $2`,
+    [outputPath, batchId]
+  );
+
+  return outputPath;
+};
 
 // Import tools (will be compiled from TypeScript)
 // For now, using placeholder functions - will be replaced with actual imports
@@ -379,7 +513,8 @@ router.get('/batches/:batchId', async (req, res) => {
     const receiptsResult = await db.query(
       `SELECT
         receipt_id, receipt_date, vendor, description, amount, currency,
-        category_id, category_name, deductible_amount, non_deductible_amount,
+        tax_amount, receipt_number, payment_method,
+        category_id, category_name, deductible, deductible_amount, non_deductible_amount,
         categorization_confidence, categorization_reasoning,
         ocr_confidence, ocr_warnings, ocr_raw_text,
         requires_review, reviewed
@@ -546,6 +681,100 @@ router.get('/batches/:batchId/download', async (req, res) => {
   }
 });
 
+/**
+ * GET /receipts/batches/:batchId/excel-preview
+ *
+ * Preview Excel export for completed batch
+ */
+router.get('/batches/:batchId/excel-preview', async (req, res) => {
+  try {
+    const { batchId } = req.params;
+
+    const result = await db.query(
+      'SELECT status, excel_file_path FROM receipt_batches WHERE batch_id = $1',
+      [batchId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Batch not found',
+      });
+    }
+
+    const batch = result.rows[0];
+
+    if (batch.status !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        error: 'Batch processing not completed yet',
+        status: batch.status,
+      });
+    }
+
+    if (!batch.excel_file_path) {
+      return res.status(404).json({
+        success: false,
+        error: 'Excel file not available',
+      });
+    }
+
+    try {
+      await fs.access(batch.excel_file_path);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        error: 'Excel file not found on server',
+      });
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(batch.excel_file_path);
+
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) {
+      return res.status(404).json({
+        success: false,
+        error: 'Excel worksheet not found',
+      });
+    }
+
+    const headerRow = findHeaderRow(worksheet);
+    const headerValues = Array.isArray(headerRow.values) ? headerRow.values.slice(1) : [];
+    const columnCount = headerValues.length || worksheet.columnCount || 0;
+    const columns = Array.from({ length: columnCount }, (_, index) => {
+      const value = headerValues[index];
+      const normalized = normalizeExcelValue(value);
+      const label = String(normalized).trim();
+      return label.length > 0 ? label : `Column ${index + 1}`;
+    });
+
+    const rows = [];
+    worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber <= headerRow.number) return;
+      const rowValues = columns.map((_, index) => normalizeExcelValue(row.getCell(index + 1).value));
+      const hasContent = rowValues.some(value => String(value).trim().length > 0);
+      if (hasContent) {
+        rows.push(rowValues);
+      }
+    });
+
+    res.json({
+      success: true,
+      sheet_name: worksheet.name,
+      columns,
+      rows,
+      total_rows: rows.length,
+    });
+  } catch (error) {
+    console.error('Error preparing excel preview:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to prepare excel preview',
+    });
+  }
+});
+
 // =============================================================================
 // DATABASE INITIALIZATION ENDPOINT
 // =============================================================================
@@ -583,6 +812,164 @@ router.get('/:receiptId', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch receipt',
+    });
+  }
+});
+
+/**
+ * PUT /receipts/:receiptId
+ *
+ * Update receipt details (manual edits)
+ */
+router.put('/:receiptId', async (req, res) => {
+  try {
+    const { receiptId } = req.params;
+    const {
+      receipt_date,
+      vendor,
+      description,
+      amount,
+      currency,
+      tax_amount,
+      receipt_number,
+      payment_method,
+      category_id,
+      category_name,
+      deductible,
+      deductible_amount,
+      non_deductible_amount,
+    } = req.body || {};
+
+    const existingResult = await db.query(
+      'SELECT batch_id FROM receipts WHERE receipt_id = $1',
+      [receiptId]
+    );
+
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Receipt not found',
+      });
+    }
+
+    const updateFields = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (receipt_date !== undefined) {
+      updateFields.push(`receipt_date = $${paramIndex}`);
+      values.push(receipt_date);
+      paramIndex += 1;
+    }
+
+    if (vendor !== undefined) {
+      updateFields.push(`vendor = $${paramIndex}`);
+      values.push(vendor);
+      paramIndex += 1;
+    }
+
+    if (description !== undefined) {
+      updateFields.push(`description = $${paramIndex}`);
+      values.push(description);
+      paramIndex += 1;
+    }
+
+    if (amount !== undefined) {
+      updateFields.push(`amount = $${paramIndex}`);
+      values.push(parseNumberField(amount, 'amount', true));
+      paramIndex += 1;
+    }
+
+    if (currency !== undefined) {
+      updateFields.push(`currency = $${paramIndex}`);
+      values.push(currency);
+      paramIndex += 1;
+    }
+
+    if (tax_amount !== undefined) {
+      updateFields.push(`tax_amount = $${paramIndex}`);
+      values.push(parseNumberField(tax_amount, 'tax_amount'));
+      paramIndex += 1;
+    }
+
+    if (receipt_number !== undefined) {
+      updateFields.push(`receipt_number = $${paramIndex}`);
+      values.push(receipt_number);
+      paramIndex += 1;
+    }
+
+    if (payment_method !== undefined) {
+      updateFields.push(`payment_method = $${paramIndex}`);
+      values.push(payment_method);
+      paramIndex += 1;
+    }
+
+    if (category_id !== undefined) {
+      updateFields.push(`category_id = $${paramIndex}`);
+      values.push(category_id);
+      paramIndex += 1;
+    }
+
+    if (category_name !== undefined) {
+      updateFields.push(`category_name = $${paramIndex}`);
+      values.push(category_name);
+      paramIndex += 1;
+    }
+
+    if (deductible !== undefined) {
+      updateFields.push(`deductible = $${paramIndex}`);
+      values.push(parseBooleanField(deductible, false));
+      paramIndex += 1;
+    }
+
+    if (deductible_amount !== undefined) {
+      updateFields.push(`deductible_amount = $${paramIndex}`);
+      values.push(parseNumberField(deductible_amount, 'deductible_amount', true));
+      paramIndex += 1;
+    }
+
+    if (non_deductible_amount !== undefined) {
+      updateFields.push(`non_deductible_amount = $${paramIndex}`);
+      values.push(parseNumberField(non_deductible_amount, 'non_deductible_amount'));
+      paramIndex += 1;
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No fields provided for update',
+      });
+    }
+
+    updateFields.push('reviewed = true');
+    updateFields.push('reviewed_at = NOW()');
+    updateFields.push('updated_at = NOW()');
+
+    values.push(receiptId);
+
+    const updateQuery = `
+      UPDATE receipts
+      SET ${updateFields.join(', ')}
+      WHERE receipt_id = $${paramIndex}
+      RETURNING *
+    `;
+
+    const updatedResult = await db.query(updateQuery, values);
+    const updatedReceipt = updatedResult.rows[0];
+
+    await regenerateExcelForBatch(existingResult.rows[0].batch_id);
+
+    res.json({
+      success: true,
+      receipt: updatedReceipt,
+    });
+  } catch (error) {
+    console.error('Error updating receipt:', error);
+    const message = error.message || 'Failed to update receipt';
+    const status = message.includes('required') || message.includes('must be a number') ? 400 : 500;
+    res.status(status).json({
+      success: false,
+      error: message,
     });
   }
 });
