@@ -7,6 +7,7 @@
  * - GET /receipts/batches/:batchId - Get batch details
  * - GET /receipts/batches/:batchId/status - Get real-time status
  * - GET /receipts/batches/:batchId/download - Download Excel export
+ * - GET /receipts/batches/:batchId/excel-preview - Preview Excel export
  * - GET /receipts/:receiptId - Get individual receipt details
  */
 
@@ -15,9 +16,42 @@ const router = express.Router();
 const db = require('../../../db');
 const path = require('path');
 const fs = require('fs').promises;
+const ExcelJS = require('exceljs');
 const crypto = require('crypto');
 const { Dropbox } = require('dropbox');
 const { processReceiptBatch } = require('../lib/batch-processor');
+
+const normalizeExcelValue = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number') return value;
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (value instanceof Date) return value.toISOString().split('T')[0];
+  if (typeof value === 'object') {
+    if (value.text) return value.text;
+    if (value.richText) return value.richText.map(part => part.text).join('');
+    if (value.hyperlink) return value.text || value.hyperlink;
+    if (value.formula !== undefined) return value.result !== undefined ? value.result : value.formula;
+    if (value.sharedFormula) return value.result !== undefined ? value.result : value.sharedFormula;
+    if (value.result !== undefined) return value.result;
+  }
+  return String(value);
+};
+
+const findHeaderRow = (worksheet) => {
+  const maxScan = Math.min(worksheet.rowCount, 10);
+  for (let i = 1; i <= maxScan; i += 1) {
+    const row = worksheet.getRow(i);
+    const values = Array.isArray(row.values) ? row.values.slice(1) : [];
+    const nonEmptyCount = values.filter(value => {
+      const normalized = normalizeExcelValue(value);
+      return String(normalized).trim().length > 0;
+    }).length;
+    if (nonEmptyCount >= 2) {
+      return row;
+    }
+  }
+  return worksheet.getRow(1);
+};
 
 // Import tools (will be compiled from TypeScript)
 // For now, using placeholder functions - will be replaced with actual imports
@@ -542,6 +576,100 @@ router.get('/batches/:batchId/download', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to prepare download',
+    });
+  }
+});
+
+/**
+ * GET /receipts/batches/:batchId/excel-preview
+ *
+ * Preview Excel export for completed batch
+ */
+router.get('/batches/:batchId/excel-preview', async (req, res) => {
+  try {
+    const { batchId } = req.params;
+
+    const result = await db.query(
+      'SELECT status, excel_file_path FROM receipt_batches WHERE batch_id = $1',
+      [batchId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Batch not found',
+      });
+    }
+
+    const batch = result.rows[0];
+
+    if (batch.status !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        error: 'Batch processing not completed yet',
+        status: batch.status,
+      });
+    }
+
+    if (!batch.excel_file_path) {
+      return res.status(404).json({
+        success: false,
+        error: 'Excel file not available',
+      });
+    }
+
+    try {
+      await fs.access(batch.excel_file_path);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        error: 'Excel file not found on server',
+      });
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(batch.excel_file_path);
+
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) {
+      return res.status(404).json({
+        success: false,
+        error: 'Excel worksheet not found',
+      });
+    }
+
+    const headerRow = findHeaderRow(worksheet);
+    const headerValues = Array.isArray(headerRow.values) ? headerRow.values.slice(1) : [];
+    const columnCount = headerValues.length || worksheet.columnCount || 0;
+    const columns = Array.from({ length: columnCount }, (_, index) => {
+      const value = headerValues[index];
+      const normalized = normalizeExcelValue(value);
+      const label = String(normalized).trim();
+      return label.length > 0 ? label : `Column ${index + 1}`;
+    });
+
+    const rows = [];
+    worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber <= headerRow.number) return;
+      const rowValues = columns.map((_, index) => normalizeExcelValue(row.getCell(index + 1).value));
+      const hasContent = rowValues.some(value => String(value).trim().length > 0);
+      if (hasContent) {
+        rows.push(rowValues);
+      }
+    });
+
+    res.json({
+      success: true,
+      sheet_name: worksheet.name,
+      columns,
+      rows,
+      total_rows: rows.length,
+    });
+  } catch (error) {
+    console.error('Error preparing excel preview:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to prepare excel preview',
     });
   }
 });

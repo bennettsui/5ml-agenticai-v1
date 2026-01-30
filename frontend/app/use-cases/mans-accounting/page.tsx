@@ -39,6 +39,13 @@ interface ReceiptResult {
   non_deductible_amount?: number | string | null;
 }
 
+interface ExcelPreview {
+  sheet_name: string;
+  columns: string[];
+  rows: Array<Array<string | number | null>>;
+  total_rows: number;
+}
+
 export default function ReceiptProcessor() {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [clientName, setClientName] = useState("Man's Accounting Firm");
@@ -50,8 +57,12 @@ export default function ReceiptProcessor() {
   const [receiptResults, setReceiptResults] = useState<ReceiptResult[]>([]);
   const [isReceiptLoading, setIsReceiptLoading] = useState(false);
   const [receiptError, setReceiptError] = useState<string>('');
+  const [excelPreview, setExcelPreview] = useState<ExcelPreview | null>(null);
+  const [isExcelLoading, setIsExcelLoading] = useState(false);
+  const [excelError, setExcelError] = useState<string>('');
   const [error, setError] = useState<string>('');
   const receiptFetchKeyRef = useRef<string>('');
+  const excelFetchKeyRef = useRef<string>('');
   const isLocalhost = () => {
     if (typeof window === 'undefined') return false;
     return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -80,6 +91,16 @@ export default function ReceiptProcessor() {
     const parsed = typeof value === 'number' ? value : Number(value);
     if (!Number.isFinite(parsed)) return '0.00';
     return parsed.toFixed(2);
+  };
+
+  const formatCellValue = (value: unknown): string => {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return value.toString();
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (value instanceof Date) return value.toISOString().split('T')[0];
+    const stringified = JSON.stringify(value);
+    return stringified === undefined ? String(value) : stringified;
   };
 
   const readFileAsBase64 = (file: File): Promise<string> => (
@@ -280,6 +301,51 @@ export default function ReceiptProcessor() {
     };
   }, [batchId, batchStatus?.processed_receipts, batchStatus?.status]);
 
+  useEffect(() => {
+    if (!batchId || !batchStatus) return;
+    if (normalizeStatus(batchStatus.status) !== 'completed') return;
+    if (excelFetchKeyRef.current === batchId) return;
+
+    let cancelled = false;
+    setIsExcelLoading(true);
+    setExcelError('');
+
+    const fetchExcelPreview = async () => {
+      try {
+        const response = await fetch(apiUrl(`/api/receipts/batches/${batchId}/excel-preview`));
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error ? formatErrorMessage(data.error) : 'Failed to fetch Excel preview');
+        }
+
+        if (!cancelled) {
+          setExcelPreview({
+            sheet_name: data.sheet_name,
+            columns: Array.isArray(data.columns) ? data.columns : [],
+            rows: Array.isArray(data.rows) ? data.rows : [],
+            total_rows: typeof data.total_rows === 'number' ? data.total_rows : 0,
+          });
+          excelFetchKeyRef.current = batchId;
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setExcelError(formatErrorMessage(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsExcelLoading(false);
+        }
+      }
+    };
+
+    fetchExcelPreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [batchId, batchStatus?.status]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -288,6 +354,9 @@ export default function ReceiptProcessor() {
     setReceiptResults([]);
     setReceiptError('');
     receiptFetchKeyRef.current = '';
+    setExcelPreview(null);
+    setExcelError('');
+    excelFetchKeyRef.current = '';
 
     if (uploadedFiles.length === 0) {
       setError('Please select at least one receipt image.');
@@ -672,6 +741,71 @@ export default function ReceiptProcessor() {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {batchStatus && normalizeStatus(batchStatus.status) === 'completed' && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Excel Preview</h2>
+              {isExcelLoading && (
+                <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Loading spreadsheet...
+                </div>
+              )}
+            </div>
+
+            {excelError.length > 0 && (
+              <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                <div className="flex">
+                  <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Excel Preview Error</h3>
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{toDisplayText(excelError)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {excelPreview && excelPreview.columns.length > 0 ? (
+              <>
+                <div className="mb-3 text-sm text-slate-600 dark:text-slate-400">
+                  Sheet: {excelPreview.sheet_name} • Rows: {excelPreview.total_rows}
+                </div>
+                <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                      <tr>
+                        {excelPreview.columns.map((column, index) => (
+                          <th key={`${column}-${index}`} className="px-3 py-2 font-semibold whitespace-nowrap">
+                            {column}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                      {excelPreview.rows.map((row, rowIndex) => (
+                        <tr key={`excel-row-${rowIndex}`} className="bg-white dark:bg-slate-800">
+                          {excelPreview.columns.map((_, cellIndex) => (
+                            <td key={`excel-cell-${rowIndex}-${cellIndex}`} className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                              {formatCellValue(row[cellIndex])}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {excelPreview.rows.length === 0 && !isExcelLoading && (
+                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">No rows found in the spreadsheet.</p>
+                )}
+              </>
+            ) : (
+              !isExcelLoading && excelError.length === 0 && (
+                <p className="text-sm text-slate-600 dark:text-slate-400">Excel preview will appear once the export is ready.</p>
+              )
+            )}
           </div>
         )}
 
