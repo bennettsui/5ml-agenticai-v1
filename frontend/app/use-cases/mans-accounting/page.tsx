@@ -28,6 +28,9 @@ interface ReceiptResult {
   description: string | null;
   amount: number | string;
   currency: string;
+  tax_amount?: number | string | null;
+  receipt_number?: string | null;
+  payment_method?: string | null;
   category_id: string | null;
   category_name: string | null;
   categorization_confidence?: number | string | null;
@@ -35,8 +38,11 @@ interface ReceiptResult {
   ocr_confidence?: number | string | null;
   ocr_warnings?: string[] | null;
   ocr_raw_text?: string | null;
+  deductible?: boolean | null;
   deductible_amount?: number | string | null;
   non_deductible_amount?: number | string | null;
+  requires_review?: boolean | null;
+  reviewed?: boolean | null;
 }
 
 interface ExcelPreview {
@@ -44,6 +50,22 @@ interface ExcelPreview {
   columns: string[];
   rows: Array<Array<string | number | null>>;
   total_rows: number;
+}
+
+interface ReceiptEditDraft {
+  receipt_date: string;
+  vendor: string;
+  description: string;
+  amount: string;
+  currency: string;
+  tax_amount: string;
+  receipt_number: string;
+  payment_method: string;
+  category_id: string;
+  category_name: string;
+  deductible: boolean;
+  deductible_amount: string;
+  non_deductible_amount: string;
 }
 
 export default function ReceiptProcessor() {
@@ -60,6 +82,10 @@ export default function ReceiptProcessor() {
   const [excelPreview, setExcelPreview] = useState<ExcelPreview | null>(null);
   const [isExcelLoading, setIsExcelLoading] = useState(false);
   const [excelError, setExcelError] = useState<string>('');
+  const [editingReceiptId, setEditingReceiptId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<ReceiptEditDraft | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [error, setError] = useState<string>('');
   const receiptFetchKeyRef = useRef<string>('');
   const excelFetchKeyRef = useRef<string>('');
@@ -101,6 +127,42 @@ export default function ReceiptProcessor() {
     if (value instanceof Date) return value.toISOString().split('T')[0];
     const stringified = JSON.stringify(value);
     return stringified === undefined ? String(value) : stringified;
+  };
+
+  const toInputValue = (value: unknown, fallback = ''): string => {
+    if (value === null || value === undefined) return fallback;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return value.toString();
+    return String(value);
+  };
+
+  const loadExcelPreview = async (targetBatchId: string, force = false) => {
+    if (!targetBatchId) return;
+    if (!force && excelFetchKeyRef.current === targetBatchId) return;
+
+    setIsExcelLoading(true);
+    setExcelError('');
+
+    try {
+      const response = await fetch(apiUrl(`/api/receipts/batches/${targetBatchId}/excel-preview`));
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error ? formatErrorMessage(data.error) : 'Failed to fetch Excel preview');
+      }
+
+      setExcelPreview({
+        sheet_name: data.sheet_name,
+        columns: Array.isArray(data.columns) ? data.columns : [],
+        rows: Array.isArray(data.rows) ? data.rows : [],
+        total_rows: typeof data.total_rows === 'number' ? data.total_rows : 0,
+      });
+      excelFetchKeyRef.current = targetBatchId;
+    } catch (err) {
+      setExcelError(formatErrorMessage(err));
+    } finally {
+      setIsExcelLoading(false);
+    }
   };
 
   const readFileAsBase64 = (file: File): Promise<string> => (
@@ -304,46 +366,7 @@ export default function ReceiptProcessor() {
   useEffect(() => {
     if (!batchId || !batchStatus) return;
     if (normalizeStatus(batchStatus.status) !== 'completed') return;
-    if (excelFetchKeyRef.current === batchId) return;
-
-    let cancelled = false;
-    setIsExcelLoading(true);
-    setExcelError('');
-
-    const fetchExcelPreview = async () => {
-      try {
-        const response = await fetch(apiUrl(`/api/receipts/batches/${batchId}/excel-preview`));
-        const data = await response.json();
-
-        if (!data.success) {
-          throw new Error(data.error ? formatErrorMessage(data.error) : 'Failed to fetch Excel preview');
-        }
-
-        if (!cancelled) {
-          setExcelPreview({
-            sheet_name: data.sheet_name,
-            columns: Array.isArray(data.columns) ? data.columns : [],
-            rows: Array.isArray(data.rows) ? data.rows : [],
-            total_rows: typeof data.total_rows === 'number' ? data.total_rows : 0,
-          });
-          excelFetchKeyRef.current = batchId;
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setExcelError(formatErrorMessage(err));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsExcelLoading(false);
-        }
-      }
-    };
-
-    fetchExcelPreview();
-
-    return () => {
-      cancelled = true;
-    };
+    void loadExcelPreview(batchId);
   }, [batchId, batchStatus?.status]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -357,6 +380,9 @@ export default function ReceiptProcessor() {
     setExcelPreview(null);
     setExcelError('');
     excelFetchKeyRef.current = '';
+    setEditingReceiptId(null);
+    setEditDraft(null);
+    setSaveError('');
 
     if (uploadedFiles.length === 0) {
       setError('Please select at least one receipt image.');
@@ -414,6 +440,114 @@ export default function ReceiptProcessor() {
   const handleDownload = () => {
     if (batchId) {
       window.location.href = apiUrl(`/api/receipts/batches/${batchId}/download`);
+    }
+  };
+
+  const startEditingReceipt = (receipt: ReceiptResult) => {
+    setEditingReceiptId(receipt.receipt_id);
+    setEditDraft({
+      receipt_date: toInputValue(receipt.receipt_date),
+      vendor: toInputValue(receipt.vendor),
+      description: toInputValue(receipt.description),
+      amount: toInputValue(receipt.amount, '0'),
+      currency: toInputValue(receipt.currency || 'HKD', 'HKD'),
+      tax_amount: toInputValue(receipt.tax_amount, '0'),
+      receipt_number: toInputValue(receipt.receipt_number),
+      payment_method: toInputValue(receipt.payment_method),
+      category_id: toInputValue(receipt.category_id),
+      category_name: toInputValue(receipt.category_name),
+      deductible: Boolean(receipt.deductible ?? true),
+      deductible_amount: toInputValue(receipt.deductible_amount, '0'),
+      non_deductible_amount: toInputValue(receipt.non_deductible_amount, '0'),
+    });
+    setSaveError('');
+  };
+
+  const cancelEditingReceipt = () => {
+    setEditingReceiptId(null);
+    setEditDraft(null);
+    setSaveError('');
+  };
+
+  const handleSaveReceipt = async () => {
+    if (!editingReceiptId || !editDraft) return;
+
+    const parsedAmount = Number(editDraft.amount);
+    const parsedDeductibleAmount = Number(editDraft.deductible_amount);
+    const parsedNonDeductible = editDraft.non_deductible_amount.trim().length > 0
+      ? Number(editDraft.non_deductible_amount)
+      : Math.max(parsedAmount - parsedDeductibleAmount, 0);
+    const parsedTaxAmount = editDraft.tax_amount.trim().length > 0
+      ? Number(editDraft.tax_amount)
+      : 0;
+
+    if (!editDraft.receipt_date || !editDraft.vendor.trim()) {
+      setSaveError('Receipt date and vendor are required.');
+      return;
+    }
+    if (!Number.isFinite(parsedAmount) || !Number.isFinite(parsedDeductibleAmount)) {
+      setSaveError('Amount and deductible amount must be valid numbers.');
+      return;
+    }
+    if (!Number.isFinite(parsedNonDeductible) || !Number.isFinite(parsedTaxAmount)) {
+      setSaveError('Non-deductible and tax amounts must be valid numbers.');
+      return;
+    }
+    if (!editDraft.currency.trim()) {
+      setSaveError('Currency is required.');
+      return;
+    }
+    if (!editDraft.category_id.trim() || !editDraft.category_name.trim()) {
+      setSaveError('Category ID and name are required.');
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setSaveError('');
+
+    try {
+      const response = await fetch(apiUrl(`/api/receipts/${editingReceiptId}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receipt_date: editDraft.receipt_date,
+          vendor: editDraft.vendor.trim(),
+          description: editDraft.description.trim() || null,
+          amount: parsedAmount,
+          currency: editDraft.currency.trim().toUpperCase(),
+          tax_amount: parsedTaxAmount,
+          receipt_number: editDraft.receipt_number.trim() || null,
+          payment_method: editDraft.payment_method.trim() || null,
+          category_id: editDraft.category_id.trim(),
+          category_name: editDraft.category_name.trim(),
+          deductible: editDraft.deductible,
+          deductible_amount: parsedDeductibleAmount,
+          non_deductible_amount: parsedNonDeductible,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error ? formatErrorMessage(data.error) : 'Failed to save receipt');
+      }
+
+      const updatedReceipt = data.receipt as ReceiptResult;
+      setReceiptResults(prev =>
+        prev.map(item => item.receipt_id === updatedReceipt.receipt_id ? { ...item, ...updatedReceipt } : item)
+      );
+
+      setEditingReceiptId(null);
+      setEditDraft(null);
+
+      if (batchId && batchStatus && normalizeStatus(batchStatus.status) === 'completed') {
+        excelFetchKeyRef.current = '';
+        await loadExcelPreview(batchId, true);
+      }
+    } catch (err) {
+      setSaveError(formatErrorMessage(err));
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -707,6 +841,7 @@ export default function ReceiptProcessor() {
                   ? receipt.categorization_reasoning
                   : `No contextual analysis recorded yet. Category: ${categoryLabel}${categoryIdLabel}. Confidence: ${confidenceLabel}.`;
                 const ocrText = receipt.ocr_raw_text || 'No OCR result available yet.';
+                const isEditing = editingReceiptId === receipt.receipt_id;
 
                 return (
                   <div key={receipt.receipt_id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
@@ -716,8 +851,169 @@ export default function ReceiptProcessor() {
                         <div className="text-xs text-slate-500 dark:text-slate-400">{dateLabel}</div>
                         <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{descriptionLabel}</div>
                       </div>
-                      <div className="text-sm font-medium text-slate-700 dark:text-slate-300">{amountLabel}</div>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="text-sm font-medium text-slate-700 dark:text-slate-300">{amountLabel}</div>
+                        {isEditing ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleSaveReceipt}
+                              disabled={isSavingEdit}
+                              className="px-3 py-1 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:bg-slate-400"
+                            >
+                              {isSavingEdit ? 'Saving...' : 'Save'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditingReceipt}
+                              disabled={isSavingEdit}
+                              className="px-3 py-1 text-xs font-medium rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => startEditingReceipt(receipt)}
+                            className="px-3 py-1 text-xs font-medium rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+                          >
+                            Edit Receipt
+                          </button>
+                        )}
+                      </div>
                     </div>
+
+                    {isEditing && editDraft && (
+                      <div className="mt-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Receipt Date</label>
+                            <input
+                              type="date"
+                              value={editDraft.receipt_date}
+                              onChange={(e) => setEditDraft({ ...editDraft, receipt_date: e.target.value })}
+                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Vendor</label>
+                            <input
+                              type="text"
+                              value={editDraft.vendor}
+                              onChange={(e) => setEditDraft({ ...editDraft, vendor: e.target.value })}
+                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Description</label>
+                            <input
+                              type="text"
+                              value={editDraft.description}
+                              onChange={(e) => setEditDraft({ ...editDraft, description: e.target.value })}
+                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Amount</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editDraft.amount}
+                              onChange={(e) => setEditDraft({ ...editDraft, amount: e.target.value })}
+                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Currency</label>
+                            <input
+                              type="text"
+                              value={editDraft.currency}
+                              onChange={(e) => setEditDraft({ ...editDraft, currency: e.target.value })}
+                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Tax / Service Charge</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editDraft.tax_amount}
+                              onChange={(e) => setEditDraft({ ...editDraft, tax_amount: e.target.value })}
+                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Payment Method</label>
+                            <input
+                              type="text"
+                              value={editDraft.payment_method}
+                              onChange={(e) => setEditDraft({ ...editDraft, payment_method: e.target.value })}
+                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Receipt Number</label>
+                            <input
+                              type="text"
+                              value={editDraft.receipt_number}
+                              onChange={(e) => setEditDraft({ ...editDraft, receipt_number: e.target.value })}
+                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Category ID</label>
+                            <input
+                              type="text"
+                              value={editDraft.category_id}
+                              onChange={(e) => setEditDraft({ ...editDraft, category_id: e.target.value })}
+                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Category Name</label>
+                            <input
+                              type="text"
+                              value={editDraft.category_name}
+                              onChange={(e) => setEditDraft({ ...editDraft, category_name: e.target.value })}
+                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Deductible Amount</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editDraft.deductible_amount}
+                              onChange={(e) => setEditDraft({ ...editDraft, deductible_amount: e.target.value })}
+                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Non-Deductible Amount</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editDraft.non_deductible_amount}
+                              onChange={(e) => setEditDraft({ ...editDraft, non_deductible_amount: e.target.value })}
+                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={editDraft.deductible}
+                              onChange={(e) => setEditDraft({ ...editDraft, deductible: e.target.checked })}
+                              className="h-4 w-4 rounded border-slate-300 dark:border-slate-600"
+                            />
+                            <span className="text-xs text-slate-600 dark:text-slate-300">Deductible</span>
+                          </div>
+                        </div>
+                        {saveError && (
+                          <p className="mt-3 text-sm text-red-600 dark:text-red-400">{saveError}</p>
+                        )}
+                      </div>
+                    )}
 
                     <div className="mt-4 grid gap-4 lg:grid-cols-2">
                       <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
