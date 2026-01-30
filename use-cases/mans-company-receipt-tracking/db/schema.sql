@@ -63,6 +63,9 @@ CREATE TABLE IF NOT EXISTS receipts (
   ocr_warnings TEXT[],
   ocr_raw_text TEXT,
   ocr_boxes JSONB,
+  -- Bounding boxes from Tesseract for visual overlay
+  -- Format: [{id, text, x, y, width, height, confidence}]
+  -- Coordinates are normalized (0-1) relative to image dimensions
 
   -- Categorization
   category_id VARCHAR(10) NOT NULL,

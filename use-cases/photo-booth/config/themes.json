@@ -1,0 +1,255 @@
+{
+  "themes": [
+    {
+      "id": "mona-lisa",
+      "name": "Mona Lisa",
+      "country": "Italy",
+      "description": "Renaissance portrait in the style of Leonardo da Vinci's masterpiece",
+      "era": "1503-1519",
+      "image_url": "/images/photo-booth/themes/mona-lisa.jpg",
+      "prompt_keywords": [
+        "Leonardo da Vinci",
+        "Mona Lisa",
+        "Renaissance portrait",
+        "sfumato technique",
+        "oil painting",
+        "atmospheric landscape",
+        "enigmatic smile",
+        "warm earthy tones",
+        "masterpiece"
+      ],
+      "negative_keywords": [
+        "modern clothing",
+        "text",
+        "watermark",
+        "contemporary",
+        "digital"
+      ],
+      "environment_description": "soft atmospheric landscape with winding paths, distant mountains, and hazy horizon in sfumato style",
+      "costume_description": "Renaissance clothing with gentle folds, muted earthy colors, simple elegant dress"
+    },
+    {
+      "id": "ghibli-style",
+      "name": "Ghibli Style",
+      "country": "Japan",
+      "description": "Studio Ghibli anime portrait with magical whimsical atmosphere",
+      "era": "Fantasy",
+      "image_url": "/images/photo-booth/themes/ghibli-style.jpg",
+      "prompt_keywords": [
+        "Studio Ghibli",
+        "anime style",
+        "hand-drawn line art",
+        "watercolor shading",
+        "magical landscape",
+        "whimsical atmosphere",
+        "Hayao Miyazaki",
+        "Totoro",
+        "Howl's Moving Castle"
+      ],
+      "negative_keywords": [
+        "photorealistic",
+        "3D render",
+        "dark",
+        "horror",
+        "violent"
+      ],
+      "environment_description": "lush Ghibli-inspired landscape with ancient glowing tree, rolling green hills, European village with windmills, airships in bright blue sky",
+      "costume_description": "simple, comfortable clothing in soft warm colors typical of Ghibli characters"
+    },
+    {
+      "id": "versailles-court",
+      "name": "Versailles Court",
+      "country": "France",
+      "description": "French court dress with ornate wigs, in the opulent halls of the Palace of Versailles",
+      "era": "1700-1789",
+      "image_url": "/images/photo-booth/themes/versailles-court.jpg",
+      "prompt_keywords": [
+        "18th century French aristocrat",
+        "Versailles palace interior",
+        "ornate baroque wig",
+        "silk brocade court dress",
+        "gold embroidery",
+        "lace cuffs",
+        "powdered hair",
+        "rococo style",
+        "crystal chandeliers",
+        "gilded mirrors",
+        "marble columns",
+        "French court fashion"
+      ],
+      "negative_keywords": [
+        "modern clothing",
+        "jeans",
+        "t-shirt",
+        "sneakers",
+        "casual",
+        "contemporary",
+        "outdoor",
+        "nature"
+      ],
+      "environment_description": "grand hall of Palace of Versailles with gilded walls, crystal chandeliers, ornate ceiling paintings, marble floors, tall windows with velvet drapes",
+      "costume_description": "elaborate French court dress with wide panniers, silk brocade fabric, intricate gold embroidery, lace trim, powdered periwig, beauty patches, fan accessory"
+    },
+    {
+      "id": "georgian-england",
+      "name": "Georgian England",
+      "country": "United Kingdom",
+      "description": "British high society fashion in an elegant stately home setting",
+      "era": "1714-1830",
+      "image_url": "/images/photo-booth/themes/georgian-england.jpg",
+      "prompt_keywords": [
+        "18th century British aristocrat",
+        "Georgian era fashion",
+        "English stately home interior",
+        "powdered wig",
+        "embroidered waistcoat",
+        "silk cravat",
+        "tailcoat",
+        "empire waist gown",
+        "mahogany furniture",
+        "portrait gallery",
+        "hunting lodge aesthetic"
+      ],
+      "negative_keywords": [
+        "modern clothing",
+        "casual wear",
+        "contemporary interior",
+        "minimalist",
+        "industrial"
+      ],
+      "environment_description": "grand English manor house library with mahogany bookcases, oil paintings, Persian rugs, fireplace with ornate mantle, tall sash windows, hunting trophies",
+      "costume_description": "refined Georgian attire with tailored coat, embroidered silk waistcoat, knee breeches, white stockings, buckled shoes, or elegant empire waist gown with delicate muslin fabric"
+    },
+    {
+      "id": "austro-hungarian",
+      "name": "Austro-Hungarian Empire",
+      "country": "Austria-Hungary",
+      "description": "Habsburg court grandeur with baroque embroidered coats and imperial splendor",
+      "era": "1700-1800",
+      "image_url": "/images/photo-booth/themes/austro-hungarian.jpg",
+      "prompt_keywords": [
+        "18th century Habsburg aristocrat",
+        "Austrian imperial court",
+        "baroque embroidered coat",
+        "Schönbrunn Palace interior",
+        "imperial grandeur",
+        "military dress uniform",
+        "gold braiding",
+        "velvet cape",
+        "imperial eagle motif",
+        "baroque architecture",
+        "Maria Theresa era"
+      ],
+      "negative_keywords": [
+        "modern",
+        "casual",
+        "minimalist",
+        "industrial",
+        "contemporary"
+      ],
+      "environment_description": "ornate hall of Schönbrunn Palace with baroque ceiling frescoes, white and gold rococo decorations, crystal chandeliers, polished parquet floors, imperial portraits",
+      "costume_description": "richly embroidered court coat with gold braiding, velvet collar, ceremonial sash, decorative medals, or elaborate court gown with wide skirts and intricate lacework"
+    },
+    {
+      "id": "russian-imperial",
+      "name": "Russian Imperial",
+      "country": "Russia",
+      "description": "Noble Russian court fashion with fur-trimmed robes in ornate imperial halls",
+      "era": "1700-1800",
+      "image_url": "/images/photo-booth/themes/russian-imperial.jpg",
+      "prompt_keywords": [
+        "18th century Russian aristocrat",
+        "Imperial Russia",
+        "Catherine the Great era",
+        "Winter Palace interior",
+        "fur-trimmed noble robes",
+        "ermine cape",
+        "gold brocade",
+        "kokoshnik headdress",
+        "military uniform with epaulettes",
+        "Fabergé aesthetic",
+        "Byzantine influenced"
+      ],
+      "negative_keywords": [
+        "modern",
+        "casual",
+        "contemporary",
+        "minimalist",
+        "western casual"
+      ],
+      "environment_description": "grand hall of the Winter Palace with malachite columns, golden double-headed eagles, massive chandeliers, intricate parquet floors, imperial portraits, winter snow visible through windows",
+      "costume_description": "luxurious Russian court dress with ermine-trimmed robes, heavy gold brocade, elaborate headdress, or military uniform with gold epaulettes, sash, and ceremonial sword"
+    },
+    {
+      "id": "italian-venetian",
+      "name": "Italian Venetian",
+      "country": "Italy",
+      "description": "Venetian carnival-inspired fashion with masks, set against gondolas and canals",
+      "era": "1700-1800",
+      "image_url": "/images/photo-booth/themes/italian-venetian.jpg",
+      "prompt_keywords": [
+        "18th century Venetian aristocrat",
+        "Venice carnival",
+        "masquerade ball",
+        "ornate Venetian mask",
+        "domino cape",
+        "silk tabarro cloak",
+        "tricorn hat",
+        "Palazzo interior",
+        "Murano glass chandelier",
+        "gondola",
+        "Grand Canal",
+        "commedia dell'arte"
+      ],
+      "negative_keywords": [
+        "modern",
+        "casual",
+        "contemporary",
+        "minimalist",
+        "industrial"
+      ],
+      "environment_description": "opulent Venetian palazzo with Murano glass chandeliers, frescoed ceilings, marble terrazzo floors, views of the Grand Canal, gilded mirrors, carnival decorations",
+      "costume_description": "elaborate Venetian carnival costume with ornate mask, flowing silk cape (tabarro), tricorn hat with feathers, rich velvet and brocade fabrics, theatrical accessories"
+    },
+    {
+      "id": "spanish-colonial",
+      "name": "Spanish Colonial",
+      "country": "Spain",
+      "description": "Spanish court fashion and conquistador elegance with golden architecture",
+      "era": "1700-1800",
+      "image_url": "/images/photo-booth/themes/spanish-colonial.jpg",
+      "prompt_keywords": [
+        "18th century Spanish aristocrat",
+        "Spanish Bourbon court",
+        "colonial era fashion",
+        "Royal Palace of Madrid interior",
+        "mantilla lace veil",
+        "high collar ruff",
+        "embroidered doublet",
+        "gold filigree jewelry",
+        "conquistador aesthetic",
+        "flamenco influence",
+        "Moorish architectural details"
+      ],
+      "negative_keywords": [
+        "modern",
+        "casual",
+        "contemporary",
+        "minimalist",
+        "industrial"
+      ],
+      "environment_description": "grand throne room of the Royal Palace of Madrid with crimson velvet drapes, golden baroque decorations, Moorish tile details, ornate ceiling paintings, crystal chandeliers",
+      "costume_description": "formal Spanish court dress with high collar, richly embroidered doublet or gown, mantilla lace veil, gold filigree jewelry, fan accessory, or military uniform with gold braiding"
+    }
+  ],
+  "default_negative_prompt": "blurry, low quality, distorted face, extra limbs, bad anatomy, watermark, text, signature, modern elements, contemporary clothing, jeans, t-shirt, sneakers, smartphone, computer, car, plastic",
+  "generation_settings": {
+    "model": "sd_v1-5_pruned_emaonly.safetensors",
+    "steps": 20,
+    "cfg_scale": 7.0,
+    "sampler": "euler_a",
+    "width": 512,
+    "height": 768,
+    "seed": -1
+  }
+}
