@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Sparkles, MousePointer2, Layers, Zap, Code2, Palette } from 'lucide-react';
+import { ArrowLeft, Sparkles, MousePointer2, Layers, Zap, Code2, Palette, Globe, ArrowUpRight } from 'lucide-react';
 
 export default function VibeDemoPage() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -87,6 +87,18 @@ export default function VibeDemoPage() {
       description: 'Procedurally generated visuals that are unique every time',
       icon: Palette,
       color: 'from-emerald-500 to-teal-500',
+    },
+  ];
+
+  const demoSites = [
+    {
+      id: 'rotary-hkie',
+      title: 'Rotary Club HK Island East',
+      titleZh: '香港島東扶輪社',
+      description: 'Interactive timeline, project gallery with filters, network visualization, and bilingual content',
+      href: '/vibe-demo/rotary-hkie',
+      color: 'from-blue-600 to-indigo-700',
+      tags: ['Timeline', 'Gallery', 'Network Diagram', 'Bilingual'],
     },
   ];
 
@@ -347,6 +359,72 @@ export default function VibeDemoPage() {
                 <InteractiveBox key={i} color={colors[i]} delay={i * 100} />
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* Demo Sites Showcase Section */}
+      <section className="relative py-32 px-4 bg-slate-900/50">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <Globe className="w-8 h-8 text-blue-400" />
+            <h2 className="text-4xl font-bold text-center">Demo Sites</h2>
+          </div>
+          <p className="text-slate-400 text-center mb-16 max-w-2xl mx-auto">
+            Full website demonstrations showcasing vibe code capabilities in action
+          </p>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {demoSites.map((site) => (
+              <Link
+                key={site.id}
+                href={site.href}
+                className="group relative block"
+              >
+                {/* Card Glow */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${site.color} rounded-2xl blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500`} />
+
+                {/* Card */}
+                <div className="relative bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden group-hover:border-white/30 transition-all duration-500">
+                  {/* Header */}
+                  <div className={`bg-gradient-to-br ${site.color} p-6`}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold text-white mb-1">{site.title}</h3>
+                        <p className="text-white/80 text-sm">{site.titleZh}</p>
+                      </div>
+                      <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors">
+                        <ArrowUpRight className="w-5 h-5 text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div className="p-6">
+                    <p className="text-slate-300 text-sm mb-4">{site.description}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {site.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-xs px-2 py-1 bg-white/10 text-slate-300 rounded-full"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+
+            {/* Coming Soon Card */}
+            <div className="relative bg-slate-900/40 backdrop-blur-xl border border-dashed border-white/20 rounded-2xl p-6 flex flex-col items-center justify-center min-h-[280px]">
+              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                <Sparkles className="w-8 h-8 text-slate-500" />
+              </div>
+              <p className="text-slate-500 font-medium">More demos coming soon</p>
+              <p className="text-slate-600 text-sm mt-2">Stay tuned for new showcases</p>
+            </div>
           </div>
         </div>
       </section>
