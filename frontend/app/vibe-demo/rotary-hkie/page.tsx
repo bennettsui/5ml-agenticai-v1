@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { ArrowLeft, X, Calendar, Users, Globe, Award, Heart, GraduationCap, Handshake, MapPin, Clock, Mail, Camera, Building, Landmark, Network, Smartphone, Trophy, Star, ChevronRight, BookOpen } from 'lucide-react';
+import { ArrowLeft, X, Calendar, Users, Globe, Award, Heart, GraduationCap, Handshake, MapPin, Clock, Mail, Camera, Building, Landmark, Network, Smartphone, Trophy, Star, ChevronRight, BookOpen, Lightbulb, Quote, TrendingUp } from 'lucide-react';
 
 // ==================== DATA ====================
 const clubMeta = {
@@ -15,6 +14,43 @@ const clubMeta = {
   descriptionEn: 'The Rotary Club of Hong Kong Island East (RCHKIE) has been a pillar of community service for seven decades. Our members are dedicated professionals and business leaders committed to making a positive impact through humanitarian projects, youth development, and international fellowship.',
   descriptionZh: '香港島東扶輪社自創立以來，一直致力服務社區超過七十載。我們的社員來自不同專業領域，透過人道服務、青年發展及國際交流，為社會帶來正面影響。',
 };
+
+// Fun facts about Rotary
+const rotaryFunFacts = [
+  {
+    fact: 'Rotary International has over 1.4 million members worldwide',
+    factZh: '國際扶輪在全球擁有超過140萬名社員',
+    icon: Users,
+  },
+  {
+    fact: 'Rotary has contributed over $2.1 billion to eradicate polio since 1985',
+    factZh: '自1985年起，扶輪已捐獻超過21億美元用於根除小兒麻痺症',
+    icon: Heart,
+  },
+  {
+    fact: 'The first Rotary club was founded in Chicago in 1905',
+    factZh: '第一個扶輪社於1905年在芝加哥成立',
+    icon: Landmark,
+  },
+  {
+    fact: 'District 3450 covers Hong Kong, Macao, and Mongolia',
+    factZh: '3450地區涵蓋香港、澳門及蒙古',
+    icon: Globe,
+  },
+  {
+    fact: '"Service Above Self" is the principal motto of Rotary',
+    factZh: '「超我服務」是扶輪的主要座右銘',
+    icon: Award,
+  },
+];
+
+// Stats for animated counters
+const clubStats = [
+  { label: 'Years of Service', value: 70, suffix: '+', icon: Calendar },
+  { label: 'Active Members', value: 50, suffix: '+', icon: Users },
+  { label: 'Projects Completed', value: 200, suffix: '+', icon: Award },
+  { label: 'Students Supported', value: 1000, suffix: '+', icon: GraduationCap },
+];
 
 // Updated history timeline with accurate data
 const historyTimeline = [
@@ -62,6 +98,7 @@ const serviceFocusAreas = [
     descZh: '學生領袖培訓、服務學習，以及面向中小學生的創意項目，例如學生手機攝影比賽。',
     icon: GraduationCap,
     color: 'from-blue-500 to-cyan-500',
+    stat: '500+ students engaged annually',
   },
   {
     id: 'community',
@@ -71,6 +108,7 @@ const serviceFocusAreas = [
     descZh: '透過實際行動，支援港島東區的家庭、長者和有需要人士。',
     icon: Heart,
     color: 'from-rose-500 to-pink-500',
+    stat: '12+ community programs',
   },
   {
     id: 'international',
@@ -80,6 +118,7 @@ const serviceFocusAreas = [
     descZh: '與3450地區及友社合作，參與健康、教育、救災等更廣泛的國際服務。',
     icon: Globe,
     color: 'from-emerald-500 to-teal-500',
+    stat: '3 countries in District 3450',
   },
 ];
 
@@ -234,18 +273,140 @@ const joiningInfo = {
   ],
 };
 
-// ==================== COMPONENTS ====================
+// ==================== SVG ROTARY WHEEL COMPONENT ====================
+function RotaryWheel({ className = '', spin = false }: { className?: string; spin?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      className={`${className} ${spin ? 'animate-spin' : ''}`}
+      style={spin ? { animationDuration: '20s' } : {}}
+    >
+      {/* Outer gear teeth */}
+      <g fill="#F7A81B">
+        {[...Array(24)].map((_, i) => (
+          <rect
+            key={i}
+            x="47"
+            y="2"
+            width="6"
+            height="8"
+            rx="1"
+            transform={`rotate(${i * 15} 50 50)`}
+          />
+        ))}
+      </g>
+      {/* Main wheel */}
+      <circle cx="50" cy="50" r="42" fill="#F7A81B" />
+      <circle cx="50" cy="50" r="35" fill="#17458F" />
+      {/* Spokes */}
+      <g fill="#F7A81B">
+        {[...Array(6)].map((_, i) => (
+          <rect
+            key={i}
+            x="48"
+            y="18"
+            width="4"
+            height="28"
+            rx="2"
+            transform={`rotate(${i * 60} 50 50)`}
+          />
+        ))}
+      </g>
+      {/* Center */}
+      <circle cx="50" cy="50" r="12" fill="#F7A81B" />
+      <circle cx="50" cy="50" r="6" fill="#17458F" />
+    </svg>
+  );
+}
 
+// ==================== ANIMATED COUNTER COMPONENT ====================
+function AnimatedCounter({ value, suffix = '', duration = 2000 }: { value: number; suffix?: string; duration?: number }) {
+  const [count, setCount] = useState(0);
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !hasAnimated) {
+          setHasAnimated(true);
+          let start = 0;
+          const end = value;
+          const increment = end / (duration / 16);
+          const timer = setInterval(() => {
+            start += increment;
+            if (start >= end) {
+              setCount(end);
+              clearInterval(timer);
+            } else {
+              setCount(Math.floor(start));
+            }
+          }, 16);
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => observer.disconnect();
+  }, [value, duration, hasAnimated]);
+
+  return (
+    <span ref={ref} className="tabular-nums">
+      {count}{suffix}
+    </span>
+  );
+}
+
+// ==================== MAIN COMPONENT ====================
 export default function RotaryHKIEPage() {
+  const [scrollY, setScrollY] = useState(0);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [activeFilter, setActiveFilter] = useState('All');
   const [selectedProject, setSelectedProject] = useState<typeof projects[0] | null>(null);
   const [hoveredRelation, setHoveredRelation] = useState<string | null>(null);
   const [activeTimelineItem, setActiveTimelineItem] = useState<string | null>(null);
+  const [currentFactIndex, setCurrentFactIndex] = useState(0);
+  const [isFactPaused, setIsFactPaused] = useState(false);
 
+  const containerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const serviceRef = useRef<HTMLDivElement>(null);
   const contestRef = useRef<HTMLDivElement>(null);
   const joinRef = useRef<HTMLDivElement>(null);
+
+  // Parallax scroll effect
+  useEffect(() => {
+    const handleScroll = () => setScrollY(window.scrollY);
+    const handleMouseMove = (e: MouseEvent) => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setMousePos({
+          x: (e.clientX - rect.left) / rect.width - 0.5,
+          y: (e.clientY - rect.top) / rect.height - 0.5,
+        });
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
+
+  // Auto-rotate fun facts
+  useEffect(() => {
+    if (isFactPaused) return;
+    const interval = setInterval(() => {
+      setCurrentFactIndex((prev) => (prev + 1) % rotaryFunFacts.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isFactPaused]);
 
   const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
     ref.current?.scrollIntoView({ behavior: 'smooth' });
@@ -258,7 +419,51 @@ export default function RotaryHKIEPage() {
     : projects.filter(p => p.tags.includes(activeFilter));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950 text-white">
+    <div ref={containerRef} className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950 text-white overflow-hidden">
+      {/* Parallax Background Elements */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        {/* Floating gradient orbs */}
+        <div
+          className="absolute w-[600px] h-[600px] rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/10 blur-3xl"
+          style={{
+            left: '10%',
+            top: '20%',
+            transform: `translate(${mousePos.x * 30}px, ${scrollY * 0.1 + mousePos.y * 30}px)`,
+            transition: 'transform 0.3s ease-out',
+          }}
+        />
+        <div
+          className="absolute w-[400px] h-[400px] rounded-full bg-gradient-to-br from-yellow-500/10 to-orange-500/5 blur-3xl"
+          style={{
+            right: '10%',
+            top: '60%',
+            transform: `translate(${mousePos.x * -20}px, ${scrollY * -0.05 + mousePos.y * -20}px)`,
+            transition: 'transform 0.3s ease-out',
+          }}
+        />
+        {/* Floating Rotary wheels */}
+        <div
+          className="absolute opacity-10"
+          style={{
+            left: '5%',
+            top: '30%',
+            transform: `translateY(${scrollY * 0.2}px) rotate(${scrollY * 0.05}deg)`,
+          }}
+        >
+          <RotaryWheel className="w-32 h-32" />
+        </div>
+        <div
+          className="absolute opacity-5"
+          style={{
+            right: '8%',
+            top: '70%',
+            transform: `translateY(${scrollY * -0.15}px) rotate(${scrollY * -0.03}deg)`,
+          }}
+        >
+          <RotaryWheel className="w-48 h-48" />
+        </div>
+      </div>
+
       {/* Header */}
       <header className="sticky top-0 z-50 bg-blue-950/90 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -288,35 +493,45 @@ export default function RotaryHKIEPage() {
         </div>
       </header>
 
-      {/* Hero Section with Logo */}
+      {/* Hero Section with Parallax */}
       <section className="relative py-16 lg:py-24 overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-br from-blue-500/20 via-purple-500/10 to-transparent rounded-full blur-3xl" />
-        </div>
-
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Logo */}
-          <div className="flex justify-center mb-8">
-            <div className="bg-white rounded-2xl p-6 shadow-2xl shadow-blue-500/20">
-              <Image
-                src="/images/rotary-hkie-logo.png"
-                alt="Rotary Club of Hong Kong Island East"
-                width={400}
-                height={120}
-                className="h-auto w-auto max-w-[300px] md:max-w-[400px]"
-                priority
-              />
+        <div
+          className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+          style={{
+            transform: `translateY(${scrollY * -0.1}px)`,
+          }}
+        >
+          {/* Logo with Rotary Wheel */}
+          <div className="flex flex-col items-center mb-8">
+            <div
+              className="relative"
+              style={{
+                transform: `rotate(${scrollY * 0.02}deg)`,
+              }}
+            >
+              <RotaryWheel className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl" spin />
+            </div>
+            <div className="mt-6 text-center">
+              <h1 className="text-3xl md:text-5xl font-bold text-white mb-2">
+                <span className="text-[#17458F] drop-shadow-lg">Rotary</span>
+              </h1>
+              <p className="text-xl md:text-2xl text-blue-200">Club of Hong Kong Island East</p>
+              <p className="text-lg text-yellow-400 mt-1">{clubMeta.nameChinese}</p>
             </div>
           </div>
 
-          {/* Text content */}
-          <div className="text-center">
+          {/* Text content with mouse parallax */}
+          <div
+            className="text-center"
+            style={{
+              transform: `translate(${mousePos.x * -10}px, ${mousePos.y * -10}px)`,
+              transition: 'transform 0.2s ease-out',
+            }}
+          >
             <p className="text-lg text-blue-200 mb-4">
               {clubMeta.subtitle} | {clubMeta.subtitleChinese}
             </p>
 
-            {/* Bilingual Description */}
             <div className="max-w-3xl mx-auto mb-10 space-y-3">
               <p className="text-blue-100 leading-relaxed">
                 {clubMeta.descriptionEn}
@@ -330,56 +545,162 @@ export default function RotaryHKIEPage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <button
                 onClick={() => scrollToSection(timelineRef)}
-                className="px-8 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600 text-blue-900 font-semibold rounded-full hover:from-yellow-400 hover:to-yellow-500 transition-all shadow-lg shadow-yellow-500/30 hover:shadow-yellow-500/50"
+                className="px-8 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600 text-blue-900 font-semibold rounded-full hover:from-yellow-400 hover:to-yellow-500 transition-all shadow-lg shadow-yellow-500/30 hover:shadow-yellow-500/50 hover:scale-105"
               >
                 Explore Our Journey
               </button>
               <button
                 onClick={() => scrollToSection(joinRef)}
-                className="px-8 py-3 bg-white/10 backdrop-blur-sm border border-white/30 text-white font-semibold rounded-full hover:bg-white/20 transition-all"
+                className="px-8 py-3 bg-white/10 backdrop-blur-sm border border-white/30 text-white font-semibold rounded-full hover:bg-white/20 transition-all hover:scale-105"
               >
                 Contact / Join
               </button>
             </div>
           </div>
         </div>
+
+        {/* Scroll indicator */}
+        <div
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center text-blue-400"
+          style={{ opacity: Math.max(0, 1 - scrollY / 200) }}
+        >
+          <span className="text-sm mb-2">Scroll to explore</span>
+          <div className="w-6 h-10 rounded-full border-2 border-blue-400 flex justify-center pt-2">
+            <div className="w-1.5 h-3 bg-blue-400 rounded-full animate-bounce" />
+          </div>
+        </div>
       </section>
 
-      {/* ============ INFOGRAPHIC 1: History Timeline ============ */}
-      <section ref={timelineRef} className="py-20 bg-gradient-to-b from-blue-950/50 to-indigo-950/50">
+      {/* ============ ANIMATED STATS SECTION ============ */}
+      <section className="relative py-16 bg-blue-900/30">
+        <div
+          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+          style={{
+            transform: `translateY(${Math.max(0, (scrollY - 200) * -0.05)}px)`,
+          }}
+        >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {clubStats.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <div
+                  key={stat.label}
+                  className="text-center p-6 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 hover:border-yellow-500/30 transition-all hover:transform hover:-translate-y-2"
+                >
+                  <Icon className="w-8 h-8 mx-auto mb-3 text-yellow-500" />
+                  <div className="text-3xl md:text-4xl font-bold text-white mb-1">
+                    <AnimatedCounter value={stat.value} suffix={stat.suffix} />
+                  </div>
+                  <p className="text-blue-300 text-sm">{stat.label}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ============ FUN FACTS CAROUSEL ============ */}
+      <section className="relative py-12 overflow-hidden">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div
+            className="bg-gradient-to-r from-yellow-500/20 via-yellow-500/10 to-yellow-500/20 rounded-2xl p-6 border border-yellow-500/30 relative"
+            onMouseEnter={() => setIsFactPaused(true)}
+            onMouseLeave={() => setIsFactPaused(false)}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <Lightbulb className="w-6 h-6 text-yellow-500" />
+              <span className="text-yellow-500 font-medium">Did You Know?</span>
+            </div>
+
+            <div className="relative h-20 overflow-hidden">
+              {rotaryFunFacts.map((fact, idx) => {
+                const Icon = fact.icon;
+                return (
+                  <div
+                    key={idx}
+                    className={`absolute inset-0 flex items-center gap-4 transition-all duration-500 ${
+                      idx === currentFactIndex
+                        ? 'opacity-100 translate-y-0'
+                        : idx < currentFactIndex
+                        ? 'opacity-0 -translate-y-full'
+                        : 'opacity-0 translate-y-full'
+                    }`}
+                  >
+                    <Icon className="w-10 h-10 text-yellow-500/50 flex-shrink-0" />
+                    <div>
+                      <p className="text-white text-lg">{fact.fact}</p>
+                      <p className="text-yellow-300/70 text-sm">{fact.factZh}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Dots indicator */}
+            <div className="flex justify-center gap-2 mt-4">
+              {rotaryFunFacts.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentFactIndex(idx)}
+                  className={`w-2 h-2 rounded-full transition-all ${
+                    idx === currentFactIndex ? 'bg-yellow-500 w-6' : 'bg-yellow-500/30'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============ INFOGRAPHIC 1: History Timeline with Parallax ============ */}
+      <section ref={timelineRef} className="py-20 bg-gradient-to-b from-blue-950/50 to-indigo-950/50 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
+          <div
+            className="text-center mb-12"
+            style={{
+              transform: `translateY(${Math.max(0, (scrollY - 600) * -0.05)}px)`,
+            }}
+          >
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Journey</h2>
             <p className="text-blue-300 max-w-2xl mx-auto">
               Seven decades of service, fellowship, and community impact
             </p>
           </div>
 
-          {/* Timeline Infographic */}
+          {/* Timeline Infographic with Parallax */}
           <div className="relative">
             {/* Desktop: Horizontal Timeline */}
             <div className="hidden lg:block">
-              {/* Timeline Line */}
-              <div className="absolute top-24 left-0 right-0 h-1 bg-gradient-to-r from-yellow-500 via-blue-400 to-purple-500 rounded-full" />
+              {/* Timeline Line with gradient */}
+              <div
+                className="absolute top-24 left-0 right-0 h-1 bg-gradient-to-r from-yellow-500 via-blue-400 to-purple-500 rounded-full"
+                style={{
+                  transform: `scaleX(${Math.min(1, (scrollY - 500) / 400)})`,
+                  transformOrigin: 'left',
+                }}
+              />
 
               <div className="grid grid-cols-4 gap-4">
                 {historyTimeline.map((item, idx) => {
                   const Icon = item.icon;
+                  const itemOffset = idx * 100;
                   return (
                     <div
                       key={item.id}
                       className="relative"
+                      style={{
+                        transform: `translateY(${Math.max(0, (scrollY - 600 - itemOffset) * -0.03)}px)`,
+                        opacity: Math.min(1, Math.max(0, (scrollY - 500 - itemOffset) / 200)),
+                      }}
                       onMouseEnter={() => setActiveTimelineItem(item.id)}
                       onMouseLeave={() => setActiveTimelineItem(null)}
                     >
-                      {/* Year Badge */}
                       <div className="text-center mb-4">
                         <span className="inline-block px-4 py-2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-blue-900 font-bold rounded-full text-sm shadow-lg">
                           {item.year}
                         </span>
                       </div>
 
-                      {/* Node */}
                       <div className="flex justify-center mb-4">
                         <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
                           activeTimelineItem === item.id
@@ -390,10 +711,9 @@ export default function RotaryHKIEPage() {
                         </div>
                       </div>
 
-                      {/* Content Card */}
                       <div className={`bg-white/5 backdrop-blur-sm rounded-xl p-5 border transition-all duration-300 ${
                         activeTimelineItem === item.id
-                          ? 'border-yellow-500/50 bg-white/10 transform -translate-y-2'
+                          ? 'border-yellow-500/50 bg-white/10 transform -translate-y-2 shadow-xl'
                           : 'border-white/10'
                       }`}>
                         <h3 className="font-bold text-lg mb-1">{item.title}</h3>
@@ -415,21 +735,16 @@ export default function RotaryHKIEPage() {
                   const Icon = item.icon;
                   return (
                     <div key={item.id} className="relative">
-                      {/* Node */}
                       <div className="absolute -left-[25px] top-0 w-12 h-12 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center shadow-lg">
                         <Icon className="w-6 h-6 text-blue-900" />
                       </div>
-
-                      {/* Content */}
                       <div className="ml-8 bg-white/5 backdrop-blur-sm rounded-xl p-5 border border-white/10">
                         <span className="inline-block px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm font-medium mb-3">
                           {item.year}
                         </span>
                         <h3 className="font-bold text-lg mb-1">{item.title}</h3>
                         <p className="text-blue-300 text-sm mb-2">{item.titleZh}</p>
-                        <p className="text-blue-200/80 text-sm leading-relaxed">
-                          {item.description}
-                        </p>
+                        <p className="text-blue-200/80 text-sm leading-relaxed">{item.description}</p>
                       </div>
                     </div>
                   );
@@ -438,19 +753,25 @@ export default function RotaryHKIEPage() {
             </div>
           </div>
 
-          {/* Timeline Footer */}
           <div className="text-center mt-12">
-            <p className="text-blue-400 text-sm italic">
-              &quot;A connected family of service, from Mother Club to community.&quot;
+            <p className="text-blue-400 text-sm italic flex items-center justify-center gap-2">
+              <Quote className="w-4 h-4" />
+              A connected family of service, from Mother Club to community.
+              <Quote className="w-4 h-4 rotate-180" />
             </p>
           </div>
         </div>
       </section>
 
-      {/* ============ INFOGRAPHIC 2: Service Focus Areas ============ */}
-      <section ref={serviceRef} className="py-20">
+      {/* ============ INFOGRAPHIC 2: Service Focus Areas with Parallax ============ */}
+      <section ref={serviceRef} className="py-20 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
+          <div
+            className="text-center mb-12"
+            style={{
+              transform: `translateY(${Math.max(0, (scrollY - 1000) * -0.05)}px)`,
+            }}
+          >
             <h2 className="text-3xl md:text-4xl font-bold mb-2">What We Do</h2>
             <p className="text-2xl text-blue-300 mb-4">我們在香港東區做的事</p>
             <p className="text-blue-400 max-w-2xl mx-auto">
@@ -459,33 +780,36 @@ export default function RotaryHKIEPage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            {serviceFocusAreas.map((area) => {
+            {serviceFocusAreas.map((area, idx) => {
               const Icon = area.icon;
+              const cardOffset = idx * 80;
               return (
                 <div
                   key={area.id}
                   className="group relative"
+                  style={{
+                    transform: `translateY(${Math.max(0, (scrollY - 1100 - cardOffset) * -0.04)}px)`,
+                    opacity: Math.min(1, Math.max(0, (scrollY - 1000 - cardOffset) / 200)),
+                  }}
                 >
-                  {/* Glow Effect */}
                   <div className={`absolute inset-0 bg-gradient-to-br ${area.color} rounded-2xl blur-xl opacity-0 group-hover:opacity-30 transition-opacity duration-500`} />
 
                   <div className="relative bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 h-full group-hover:border-white/20 transition-all duration-300 group-hover:transform group-hover:-translate-y-2">
-                    {/* Icon */}
-                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${area.color} flex items-center justify-center mb-6 shadow-lg`}>
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${area.color} flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform`}>
                       <Icon className="w-8 h-8 text-white" />
                     </div>
 
-                    {/* Title - Bilingual */}
                     <h3 className="text-xl font-bold mb-1">{area.titleEn}</h3>
                     <p className="text-blue-300 text-lg mb-4">{area.titleZh}</p>
 
-                    {/* Description - Bilingual */}
-                    <p className="text-blue-100 leading-relaxed mb-3">
-                      {area.descEn}
-                    </p>
-                    <p className="text-blue-200/70 text-sm leading-relaxed">
-                      {area.descZh}
-                    </p>
+                    <p className="text-blue-100 leading-relaxed mb-3">{area.descEn}</p>
+                    <p className="text-blue-200/70 text-sm leading-relaxed mb-4">{area.descZh}</p>
+
+                    {/* Stat badge */}
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-sm text-blue-300">
+                      <TrendingUp className="w-4 h-4" />
+                      {area.stat}
+                    </div>
                   </div>
                 </div>
               );
@@ -494,12 +818,30 @@ export default function RotaryHKIEPage() {
         </div>
       </section>
 
-      {/* ============ INFOGRAPHIC 3: Photo Contest Feature ============ */}
-      <section ref={contestRef} className="py-20 bg-gradient-to-b from-indigo-950/50 to-purple-950/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* ============ INFOGRAPHIC 3: Photo Contest Feature with Parallax ============ */}
+      <section ref={contestRef} className="py-20 bg-gradient-to-b from-indigo-950/50 to-purple-950/50 relative overflow-hidden">
+        {/* Parallax camera icons */}
+        <div
+          className="absolute left-10 top-20 opacity-10"
+          style={{ transform: `translateY(${(scrollY - 1400) * 0.1}px)` }}
+        >
+          <Camera className="w-32 h-32 text-purple-400" />
+        </div>
+        <div
+          className="absolute right-10 bottom-20 opacity-10"
+          style={{ transform: `translateY(${(scrollY - 1400) * -0.1}px)` }}
+        >
+          <Smartphone className="w-24 h-24 text-pink-400" />
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left: Contest Info */}
-            <div>
+            <div
+              style={{
+                transform: `translateX(${Math.max(0, (scrollY - 1400) * -0.03)}px)`,
+              }}
+            >
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500/20 rounded-full text-yellow-400 text-sm font-medium mb-6">
                 <Camera className="w-4 h-4" />
                 <span>{photoContest.edition} • {photoContest.year}</span>
@@ -522,7 +864,6 @@ export default function RotaryHKIEPage() {
 
               <p className="text-blue-100 mb-6">{photoContest.description}</p>
 
-              {/* Rules */}
               <div className="grid grid-cols-2 gap-3 mb-6">
                 {photoContest.rules.map((rule, idx) => (
                   <div key={idx} className="flex items-center gap-2 text-blue-200 text-sm">
@@ -534,12 +875,21 @@ export default function RotaryHKIEPage() {
             </div>
 
             {/* Right: Awards & Visual */}
-            <div>
-              {/* Phone Frame Visual */}
-              <div className="relative max-w-sm mx-auto mb-8">
+            <div
+              style={{
+                transform: `translateX(${Math.max(0, (scrollY - 1400) * 0.03)}px)`,
+              }}
+            >
+              {/* Phone Frame Visual with parallax */}
+              <div
+                className="relative max-w-sm mx-auto mb-8"
+                style={{
+                  transform: `rotateY(${mousePos.x * 5}deg) rotateX(${mousePos.y * -5}deg)`,
+                  transition: 'transform 0.1s ease-out',
+                }}
+              >
                 <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-[3rem] p-3 shadow-2xl">
                   <div className="bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 rounded-[2.5rem] aspect-[9/16] flex items-center justify-center relative overflow-hidden">
-                    {/* Camera UI mockup */}
                     <div className="absolute inset-4 border-2 border-white/30 rounded-2xl" />
                     <div className="absolute top-6 left-1/2 -translate-x-1/2 w-16 h-6 bg-black/50 rounded-full" />
                     <div className="text-center p-8">
@@ -559,7 +909,7 @@ export default function RotaryHKIEPage() {
                   {photoContest.awards.map((award) => {
                     const Icon = award.icon;
                     return (
-                      <div key={award.place} className="flex items-center justify-between bg-white/5 rounded-xl p-4">
+                      <div key={award.place} className="flex items-center justify-between bg-white/5 rounded-xl p-4 hover:bg-white/10 transition-colors">
                         <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                             award.place === 'Champion' ? 'bg-yellow-500' :
@@ -581,32 +931,36 @@ export default function RotaryHKIEPage() {
         </div>
       </section>
 
-      {/* ============ INFOGRAPHIC 4: Rotary Network ============ */}
-      <section className="py-20">
+      {/* ============ INFOGRAPHIC 4: Rotary Network with Interactive Hover ============ */}
+      <section className="py-20 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
+          <div
+            className="text-center mb-12"
+            style={{
+              transform: `translateY(${Math.max(0, (scrollY - 1800) * -0.05)}px)`,
+            }}
+          >
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Rotary Family</h2>
             <p className="text-blue-300 max-w-2xl mx-auto">
               Connected through service and fellowship across District 3450
             </p>
           </div>
 
-          {/* Network Diagram - Cards Layout */}
+          {/* Interactive Network Diagram */}
           <div className="max-w-5xl mx-auto">
-            {/* Top Row: Mother Club & District */}
             <div className="grid md:grid-cols-2 gap-6 mb-6">
               {relationships.slice(0, 2).map((rel) => (
                 <div
                   key={rel.id}
                   className={`relative group cursor-pointer transition-all duration-300 ${
-                    hoveredRelation === rel.id ? 'transform -translate-y-2' : ''
+                    hoveredRelation === rel.id ? 'transform -translate-y-2 z-10' : ''
                   }`}
                   onMouseEnter={() => setHoveredRelation(rel.id)}
                   onMouseLeave={() => setHoveredRelation(null)}
                 >
                   <div className={`absolute inset-0 rounded-2xl blur-xl transition-opacity duration-300 ${
                     rel.id === 'mother' ? 'bg-yellow-500' : 'bg-blue-500'
-                  } ${hoveredRelation === rel.id ? 'opacity-30' : 'opacity-0'}`} />
+                  } ${hoveredRelation === rel.id ? 'opacity-40' : 'opacity-0'}`} />
 
                   <div className={`relative p-6 rounded-2xl border transition-all duration-300 ${
                     rel.id === 'mother'
@@ -614,13 +968,11 @@ export default function RotaryHKIEPage() {
                       : 'bg-gradient-to-br from-blue-500/20 to-cyan-500/10 border-blue-500/30'
                   }`}>
                     <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                          rel.id === 'mother' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'
-                        }`}>
-                          {rel.relationType}
-                        </span>
-                      </div>
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                        rel.id === 'mother' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'
+                      }`}>
+                        {rel.relationType}
+                      </span>
                       <span className="text-xs text-blue-400">{rel.year}</span>
                     </div>
                     <h3 className="font-bold text-xl mb-1">{rel.name}</h3>
@@ -631,13 +983,18 @@ export default function RotaryHKIEPage() {
               ))}
             </div>
 
-            {/* Center: RCHKIE */}
+            {/* Center: RCHKIE with spinning wheel */}
             <div className="flex justify-center my-8">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full blur-2xl opacity-40" />
+              <div
+                className="relative group cursor-pointer"
+                style={{
+                  transform: `scale(${1 + Math.sin(scrollY * 0.002) * 0.05})`,
+                }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full blur-2xl opacity-40 group-hover:opacity-60 transition-opacity" />
                 <div className="relative w-48 h-48 rounded-full bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center p-6 border-4 border-white/20 shadow-2xl">
                   <div className="text-center">
-                    <Network className="w-10 h-10 mx-auto mb-2 text-white" />
+                    <RotaryWheel className="w-16 h-16 mx-auto mb-2" spin />
                     <p className="font-bold text-sm">RCHKIE</p>
                     <p className="text-xs text-blue-200">{clubMeta.nameChinese}</p>
                     <p className="text-xs text-blue-300 mt-1">Est. 1954</p>
@@ -646,7 +1003,7 @@ export default function RotaryHKIEPage() {
               </div>
             </div>
 
-            {/* Bottom Row: Partner & Youth */}
+            {/* Bottom Row */}
             <div className="grid md:grid-cols-3 gap-6">
               {relationships.slice(2).map((rel) => (
                 <div
@@ -688,7 +1045,6 @@ export default function RotaryHKIEPage() {
             Service Above Self | 超我服務
           </p>
 
-          {/* Filter Buttons */}
           <div className="flex flex-wrap justify-center gap-2 mb-12">
             {filters.map((filter) => (
               <button
@@ -705,7 +1061,6 @@ export default function RotaryHKIEPage() {
             ))}
           </div>
 
-          {/* Project Cards Grid */}
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProjects.map((project) => {
               const iconMap: Record<string, typeof Award> = {
@@ -720,11 +1075,11 @@ export default function RotaryHKIEPage() {
                 <div
                   key={project.id}
                   onClick={() => setSelectedProject(project)}
-                  className="group cursor-pointer bg-white/5 backdrop-blur-sm rounded-2xl overflow-hidden border border-white/10 hover:border-blue-400/50 transition-all hover:shadow-lg hover:shadow-blue-500/10"
+                  className="group cursor-pointer bg-white/5 backdrop-blur-sm rounded-2xl overflow-hidden border border-white/10 hover:border-blue-400/50 transition-all hover:shadow-lg hover:shadow-blue-500/10 hover:transform hover:-translate-y-1"
                 >
                   <div className="p-6 border-b border-white/10">
                     <div className="flex items-start justify-between mb-4">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
                         <Icon className="w-6 h-6 text-white" />
                       </div>
                       <span className="text-xs text-blue-300 bg-blue-500/20 px-2 py-1 rounded-full">
@@ -761,7 +1116,6 @@ export default function RotaryHKIEPage() {
             Be part of a global network of service-minded individuals
           </p>
 
-          {/* Meeting Info */}
           <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 rounded-2xl p-8 border border-yellow-500/30 mb-12 max-w-3xl mx-auto">
             <div className="grid md:grid-cols-3 gap-6 text-center">
               <div className="flex flex-col items-center gap-2">
@@ -782,9 +1136,8 @@ export default function RotaryHKIEPage() {
             </div>
           </div>
 
-          {/* Three Columns */}
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-blue-400/30 transition-all hover:transform hover:-translate-y-1">
               <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center mb-4">
                 <Users className="w-6 h-6 text-blue-400" />
               </div>
@@ -801,7 +1154,7 @@ export default function RotaryHKIEPage() {
               </ol>
             </div>
 
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-purple-400/30 transition-all hover:transform hover:-translate-y-1">
               <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center mb-4">
                 <GraduationCap className="w-6 h-6 text-purple-400" />
               </div>
@@ -816,7 +1169,7 @@ export default function RotaryHKIEPage() {
               </ul>
             </div>
 
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-emerald-400/30 transition-all hover:transform hover:-translate-y-1">
               <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center mb-4">
                 <Handshake className="w-6 h-6 text-emerald-400" />
               </div>
@@ -832,11 +1185,10 @@ export default function RotaryHKIEPage() {
             </div>
           </div>
 
-          {/* Contact Button */}
           <div className="text-center mt-12">
             <a
               href="mailto:info@rotaryhkie.org"
-              className="inline-flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-full hover:from-blue-400 hover:to-purple-500 transition-all shadow-lg shadow-blue-500/30"
+              className="inline-flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-full hover:from-blue-400 hover:to-purple-500 transition-all shadow-lg shadow-blue-500/30 hover:scale-105"
             >
               <Mail className="w-5 h-5" />
               Contact Us
@@ -848,6 +1200,7 @@ export default function RotaryHKIEPage() {
       {/* Footer */}
       <footer className="py-8 border-t border-white/10 bg-blue-950/50">
         <div className="max-w-7xl mx-auto px-4 text-center">
+          <RotaryWheel className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p className="text-blue-400 text-sm">
             Rotary Club of Hong Kong Island East | 香港島東扶輪社
           </p>
