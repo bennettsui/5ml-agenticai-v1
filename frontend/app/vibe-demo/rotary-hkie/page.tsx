@@ -2,7 +2,8 @@
 
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, X, Calendar, Users, Globe, Award, Heart, GraduationCap, Handshake, MapPin, Clock, Mail } from 'lucide-react';
+import Image from 'next/image';
+import { ArrowLeft, X, Calendar, Users, Globe, Award, Heart, GraduationCap, Handshake, MapPin, Clock, Mail, Camera, Building, Landmark, Network, Smartphone, Trophy, Star, ChevronRight, BookOpen } from 'lucide-react';
 
 // ==================== DATA ====================
 const clubMeta = {
@@ -15,79 +16,108 @@ const clubMeta = {
   descriptionZh: '香港島東扶輪社自創立以來，一直致力服務社區超過七十載。我們的社員來自不同專業領域，透過人道服務、青年發展及國際交流，為社會帶來正面影響。',
 };
 
-const eras = [
+// Updated history timeline with accurate data
+const historyTimeline = [
   {
     id: 'founding',
-    range: '1954-1969',
-    title: 'Founding Years',
-    titleZh: '創社時期',
-    description: 'Established as one of the early Rotary clubs in Hong Kong, RCHKIE was founded by visionary community leaders who saw the need for organized service in the rapidly developing Hong Kong Island East district.',
-    bullets: [
-      'Charter members from diverse business backgrounds',
-      'Focus on post-war community rebuilding',
-      'Established core service traditions',
-    ],
+    year: '1931',
+    title: 'Mother Club Founded',
+    titleZh: '母社成立',
+    description: 'Rotary Club of Hong Kong established as the first Rotary club in the area, becoming the foundation for future clubs.',
+    icon: Landmark,
   },
   {
-    id: 'factories',
-    range: '1970s-1980s',
-    title: 'From Factories to Communities',
-    titleZh: '工業社區時代',
-    description: 'As Hong Kong industrialized, the club evolved to serve factory workers and their families. Projects focused on education, vocational training, and improving working conditions in the Eastern district.',
-    bullets: [
-      'Vocational training programs for workers',
-      'Scholarships for workers\' children',
-      'Community health initiatives',
-    ],
+    id: 'birth',
+    year: '1954',
+    title: 'Hong Kong Island East is Born',
+    titleZh: '港島東扶輪社誕生',
+    description: 'Rotary Club of Hong Kong sponsors Rotary Club of Hong Kong Island East to serve the growing communities on the eastern side of Hong Kong Island.',
+    icon: Building,
   },
   {
-    id: 'professionals',
-    range: '1990s-2000s',
-    title: 'Middle-Class & Professionals',
-    titleZh: '專業人士年代',
-    description: 'With Hong Kong\'s economic transformation, RCHKIE attracted professionals from finance, law, medicine, and technology. Service projects became more sophisticated and international in scope.',
-    bullets: [
-      'International service partnerships',
-      'Professional mentorship programs',
-      'Major fundraising initiatives',
-    ],
+    id: 'growth',
+    year: '1960s-1990s',
+    title: 'Growing with the City',
+    titleZh: '與城市共同成長',
+    description: 'Supporting education, youth development and community needs as Hong Kong Island East transforms from factories and resettlement areas to modern neighborhoods.',
+    icon: Users,
   },
   {
-    id: 'brand',
-    range: '2010s',
-    title: 'Brand & International Links',
-    titleZh: '品牌與國際連結',
-    description: 'The club strengthened its brand identity and expanded international connections. Signature events were established, and collaboration with overseas Rotary clubs flourished.',
-    bullets: [
-      'Established signature annual events',
-      'Sister club relationships worldwide',
-      'Social media presence launched',
-    ],
-  },
-  {
-    id: 'digital',
-    range: '2020s',
-    title: 'Digital & Creative Era',
-    titleZh: '數碼創意時代',
-    description: 'Embracing digital transformation, RCHKIE now leverages technology for service and engagement. Youth-focused creative projects reflect the changing demographics of Hong Kong.',
-    bullets: [
-      'Student Smartphone Photo Contest launched',
-      'Virtual meetings and hybrid events',
-      'Focus on youth creativity and innovation',
-    ],
+    id: 'today',
+    year: 'Today',
+    title: 'Part of District 3450',
+    titleZh: '地區3450成員',
+    description: 'An active English-speaking club connecting professionals, youth and partners in Hong Kong and beyond as part of Rotary District 3450.',
+    icon: Globe,
   },
 ];
 
+// Service focus areas
+const serviceFocusAreas = [
+  {
+    id: 'youth',
+    titleEn: 'Youth & Education',
+    titleZh: '青年與教育',
+    descEn: 'Student leadership, service learning, and creative programs such as the Student Smartphone Photo Contest for primary and secondary students.',
+    descZh: '學生領袖培訓、服務學習，以及面向中小學生的創意項目，例如學生手機攝影比賽。',
+    icon: GraduationCap,
+    color: 'from-blue-500 to-cyan-500',
+  },
+  {
+    id: 'community',
+    titleEn: 'Community Care',
+    titleZh: '社區關懷',
+    descEn: 'Supporting families, elderly and vulnerable groups in Hong Kong Island East through practical community projects.',
+    descZh: '透過實際行動，支援港島東區的家庭、長者和有需要人士。',
+    icon: Heart,
+    color: 'from-rose-500 to-pink-500',
+  },
+  {
+    id: 'international',
+    titleEn: 'International & District 3450',
+    titleZh: '地區與國際連結',
+    descEn: 'Working with Rotary District 3450 and partner clubs to contribute to wider causes such as health, education and disaster relief.',
+    descZh: '與3450地區及友社合作，參與健康、教育、救災等更廣泛的國際服務。',
+    icon: Globe,
+    color: 'from-emerald-500 to-teal-500',
+  },
+];
+
+// Photo contest data
+const photoContest = {
+  title: 'Student Smartphone Photo Contest',
+  titleZh: '學生手機攝影比賽',
+  edition: '4th Edition',
+  year: '2025-2026',
+  theme: 'Hong Kong Through Your Phone Cam',
+  themeZh: '用手機鏡頭看香港',
+  target: 'Open to all primary and secondary school students in Hong Kong',
+  targetZh: '參賽對象：全港中小學生',
+  description: 'Capture local moments that show how you see Hong Kong – from cityscapes to everyday life.',
+  rules: [
+    'One photo per student',
+    'Smartphone only',
+    'Local Hong Kong content',
+    'Online submission via QR code',
+  ],
+  awards: [
+    { place: 'Champion', amount: 2500, icon: Trophy },
+    { place: '1st Runner-up', amount: 1500, icon: Star },
+    { place: '2nd Runner-up', amount: 1000, icon: Award },
+  ],
+};
+
+// Updated projects with accurate data
 const projects = [
   {
     id: 'photo-contest',
     title: 'Student Smartphone Photo Contest',
     titleZh: '學生手機攝影比賽',
-    years: '2023-present',
+    years: '2022-present',
     tags: ['Youth & Education', 'Signature Events'],
     category: 'youth',
-    short: 'Annual photography competition encouraging students to capture Hong Kong through their smartphone lenses.',
-    long: 'The Student Smartphone Photo Contest is an annual competition open to primary and secondary school students across Hong Kong. Participants use their smartphones to capture images that tell stories about their community, culture, and daily life. The contest promotes creativity, visual literacy, and appreciation for Hong Kong\'s unique urban landscape. Winning entries are exhibited publicly and winners receive scholarships and photography workshops.',
+    short: '4th annual photography competition encouraging students to capture Hong Kong through their smartphone lenses.',
+    long: 'The Student Smartphone Photo Contest is an annual competition now in its 4th edition, open to primary and secondary school students across Hong Kong. Participants use their smartphones to capture images under the theme "Hong Kong Through Your Phone Cam". The contest promotes creativity, visual literacy, and appreciation for Hong Kong\'s unique urban landscape. Winning entries are exhibited publicly and winners receive book vouchers (Champion: $2,500, 1st Runner-up: $1,500, 2nd Runner-up: $1,000) plus certificates.',
   },
   {
     id: '70th-anniversary',
@@ -101,13 +131,13 @@ const projects = [
   },
   {
     id: 'joint-service',
-    title: 'Joint Service with Overseas Clubs',
-    titleZh: '海外社聯合服務',
+    title: 'Joint Service with District 3450',
+    titleZh: '地區3450聯合服務',
     years: 'Ongoing',
     tags: ['International'],
     category: 'international',
-    short: 'Collaborative humanitarian projects with Rotary clubs from Japan, Taiwan, and Southeast Asia.',
-    long: 'RCHKIE maintains active partnerships with Rotary clubs across Asia Pacific. Joint service projects include disaster relief efforts, educational exchanges, and cross-border charitable initiatives. Annual friendship visits strengthen bonds between clubs, and members participate in international conventions together. These partnerships exemplify Rotary\'s global reach and fellowship.',
+    short: 'Collaborative humanitarian projects with Rotary clubs across Hong Kong, Macao, and Mongolia.',
+    long: 'RCHKIE actively participates in District 3450 initiatives covering Hong Kong, Macao, and Mongolia. Joint service projects include global causes such as polio eradication, disaster relief efforts, educational exchanges, and cross-border charitable initiatives. These partnerships exemplify Rotary\'s global reach and fellowship.',
   },
   {
     id: 'elderly-care',
@@ -129,64 +159,61 @@ const projects = [
     short: 'Annual scholarships for outstanding students demonstrating leadership and community service.',
     long: 'The Youth Leadership Scholarship recognizes secondary school students who excel academically while contributing to their communities. Recipients receive financial support for further education and mentorship from Rotary members. The program has supported over 100 students, many of whom have gone on to become community leaders themselves.',
   },
-  {
-    id: 'disaster-relief',
-    title: 'Global Disaster Relief Fund',
-    titleZh: '全球災難救援基金',
-    years: 'Ongoing',
-    tags: ['International', 'Community Care'],
-    category: 'international',
-    short: 'Rapid response funding for natural disasters and humanitarian crises worldwide.',
-    long: 'RCHKIE maintains a disaster relief fund that enables rapid response to natural disasters and humanitarian emergencies. Working through Rotary International\'s network, contributions reach affected communities quickly and efficiently. Past responses include support for earthquake victims, flood relief, and pandemic assistance.',
-  },
 ];
 
+// Updated relationships with accurate data
 const relationships = [
   {
     id: 'mother',
     name: 'Rotary Club of Hong Kong',
     nameZh: '香港扶輪社',
     relationType: 'Mother Club',
-    description: 'Founded in 1930, the Rotary Club of Hong Kong sponsored the establishment of RCHKIE in 1954.',
-    position: 'top',
+    relationTypeZh: '母社',
+    description: 'Founded in 1931, the Rotary Club of Hong Kong sponsored the establishment of RCHKIE in 1954.',
+    year: 'Est. 1931',
+  },
+  {
+    id: 'district',
+    name: 'District 3450',
+    nameZh: '3450地區',
+    relationType: 'Rotary District',
+    relationTypeZh: '所屬地區',
+    description: 'Rotary District 3450 covers Hong Kong, Macao, and Mongolia with numerous clubs working together.',
+    year: 'HK, Macao, Mongolia',
   },
   {
     id: 'harbour',
     name: 'RC Hong Kong Harbour',
     nameZh: '香港海港扶輪社',
-    relationType: 'Sister Club',
-    description: 'A fellow club serving the central harbor district, with frequent joint projects.',
-    position: 'left',
-  },
-  {
-    id: 'south',
-    name: 'RC Hong Kong South',
-    nameZh: '香港南區扶輪社',
-    relationType: 'Sister Club',
-    description: 'Neighboring club serving the Southern district, partner in district-wide initiatives.',
-    position: 'right',
+    relationType: 'Partner Club',
+    relationTypeZh: '友社',
+    description: 'A fellow club serving the central harbor district, with frequent joint projects and friendship visits.',
+    year: 'Partner Club',
   },
   {
     id: 'rotaract',
     name: 'Rotaract Club of HKIE',
     nameZh: '香港島東扶青社',
-    relationType: 'Youth Wing',
+    relationType: 'Youth Wing (18-30)',
+    relationTypeZh: '扶青社',
     description: 'Young professionals (18-30) carrying forward Rotary values to the next generation.',
-    position: 'bottom-left',
+    year: 'Ages 18-30',
   },
   {
     id: 'interact',
     name: 'Interact Clubs',
     nameZh: '扶少團',
     relationType: 'Student Wing',
+    relationTypeZh: '扶少團',
     description: 'Secondary school service clubs sponsored by RCHKIE in local schools.',
-    position: 'bottom-right',
+    year: 'Secondary Students',
   },
 ];
 
 const joiningInfo = {
   meetingTime: 'Every Thursday, 12:30 PM',
-  meetingLocation: 'Causeway Bay Hotel (name TBC)',
+  meetingLocation: 'Causeway Bay Hotel',
+  language: 'English (Bilingual environment)',
   membershipSteps: [
     'Attend as a guest at a weekly meeting',
     'Meet with membership committee',
@@ -196,7 +223,7 @@ const joiningInfo = {
   youthOpportunities: [
     'Join Rotaract (ages 18-30)',
     'Participate in Interact at your school',
-    'Enter the Student Photo Contest',
+    'Enter the Student Smartphone Photo Contest',
     'Apply for Youth Leadership Scholarship',
   ],
   partnerOpportunities: [
@@ -210,20 +237,18 @@ const joiningInfo = {
 // ==================== COMPONENTS ====================
 
 export default function RotaryHKIEPage() {
-  const [activeEra, setActiveEra] = useState('digital');
   const [activeFilter, setActiveFilter] = useState('All');
   const [selectedProject, setSelectedProject] = useState<typeof projects[0] | null>(null);
   const [hoveredRelation, setHoveredRelation] = useState<string | null>(null);
+  const [activeTimelineItem, setActiveTimelineItem] = useState<string | null>(null);
 
   const timelineRef = useRef<HTMLDivElement>(null);
+  const serviceRef = useRef<HTMLDivElement>(null);
+  const contestRef = useRef<HTMLDivElement>(null);
   const joinRef = useRef<HTMLDivElement>(null);
 
-  const scrollToTimeline = () => {
-    timelineRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const scrollToJoin = () => {
-    joinRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
+    ref.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const filters = ['All', 'Youth & Education', 'Community Care', 'International', 'Signature Events'];
@@ -232,12 +257,10 @@ export default function RotaryHKIEPage() {
     ? projects
     : projects.filter(p => p.tags.includes(activeFilter));
 
-  const currentEra = eras.find(e => e.id === activeEra) || eras[eras.length - 1];
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950 text-white">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-blue-950/80 backdrop-blur-xl border-b border-white/10">
+      <header className="sticky top-0 z-50 bg-blue-950/90 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <Link
@@ -247,164 +270,422 @@ export default function RotaryHKIEPage() {
               <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
               <span>Back to Demos</span>
             </Link>
-            <div className="hidden sm:flex items-center gap-6 text-sm">
-              <button onClick={scrollToTimeline} className="text-blue-300 hover:text-white transition-colors">
+            <nav className="hidden md:flex items-center gap-6 text-sm">
+              <button onClick={() => scrollToSection(timelineRef)} className="text-blue-300 hover:text-white transition-colors">
                 Our History
               </button>
-              <button onClick={scrollToJoin} className="text-blue-300 hover:text-white transition-colors">
+              <button onClick={() => scrollToSection(serviceRef)} className="text-blue-300 hover:text-white transition-colors">
+                What We Do
+              </button>
+              <button onClick={() => scrollToSection(contestRef)} className="text-blue-300 hover:text-white transition-colors">
+                Photo Contest
+              </button>
+              <button onClick={() => scrollToSection(joinRef)} className="text-blue-300 hover:text-white transition-colors">
                 Join Us
               </button>
-            </div>
+            </nav>
           </div>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="relative py-20 lg:py-32 overflow-hidden">
+      {/* Hero Section with Logo */}
+      <section className="relative py-16 lg:py-24 overflow-hidden">
         {/* Background decoration */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-br from-blue-500/20 via-purple-500/10 to-transparent rounded-full blur-3xl" />
-          <div className="absolute top-20 right-20 w-32 h-32 border border-yellow-500/30 rounded-full" />
-          <div className="absolute bottom-20 left-20 w-24 h-24 border border-blue-400/30 rounded-full" />
         </div>
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          {/* Rotary Wheel Icon */}
-          <div className="inline-flex items-center justify-center w-20 h-20 mb-8 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 shadow-lg shadow-yellow-500/30">
-            <div className="w-12 h-12 border-4 border-blue-900 rounded-full flex items-center justify-center">
-              <div className="w-4 h-4 bg-blue-900 rounded-full" />
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Logo */}
+          <div className="flex justify-center mb-8">
+            <div className="bg-white rounded-2xl p-6 shadow-2xl shadow-blue-500/20">
+              <Image
+                src="/images/rotary-hkie-logo.png"
+                alt="Rotary Club of Hong Kong Island East"
+                width={400}
+                height={120}
+                className="h-auto w-auto max-w-[300px] md:max-w-[400px]"
+                priority
+              />
             </div>
           </div>
 
-          <h1 className="text-4xl md:text-6xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white via-blue-100 to-yellow-200">
-            {clubMeta.name}
-          </h1>
-          <p className="text-2xl md:text-3xl text-yellow-400 font-medium mb-2">
-            {clubMeta.nameChinese}
-          </p>
-          <p className="text-lg text-blue-200 mb-8">
-            {clubMeta.subtitle} | {clubMeta.subtitleChinese}
-          </p>
-
-          {/* Bilingual Description */}
-          <div className="max-w-3xl mx-auto mb-12 space-y-4">
-            <p className="text-blue-100 leading-relaxed">
-              {clubMeta.descriptionEn}
+          {/* Text content */}
+          <div className="text-center">
+            <p className="text-lg text-blue-200 mb-4">
+              {clubMeta.subtitle} | {clubMeta.subtitleChinese}
             </p>
-            <p className="text-blue-200/80 leading-relaxed">
-              {clubMeta.descriptionZh}
-            </p>
-          </div>
 
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button
-              onClick={scrollToTimeline}
-              className="px-8 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600 text-blue-900 font-semibold rounded-full hover:from-yellow-400 hover:to-yellow-500 transition-all shadow-lg shadow-yellow-500/30 hover:shadow-yellow-500/50"
-            >
-              Explore Our Journey
-            </button>
-            <button
-              onClick={scrollToJoin}
-              className="px-8 py-3 bg-white/10 backdrop-blur-sm border border-white/30 text-white font-semibold rounded-full hover:bg-white/20 transition-all"
-            >
-              Contact / Join
-            </button>
+            {/* Bilingual Description */}
+            <div className="max-w-3xl mx-auto mb-10 space-y-3">
+              <p className="text-blue-100 leading-relaxed">
+                {clubMeta.descriptionEn}
+              </p>
+              <p className="text-blue-200/80 leading-relaxed text-sm">
+                {clubMeta.descriptionZh}
+              </p>
+            </div>
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <button
+                onClick={() => scrollToSection(timelineRef)}
+                className="px-8 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600 text-blue-900 font-semibold rounded-full hover:from-yellow-400 hover:to-yellow-500 transition-all shadow-lg shadow-yellow-500/30 hover:shadow-yellow-500/50"
+              >
+                Explore Our Journey
+              </button>
+              <button
+                onClick={() => scrollToSection(joinRef)}
+                className="px-8 py-3 bg-white/10 backdrop-blur-sm border border-white/30 text-white font-semibold rounded-full hover:bg-white/20 transition-all"
+              >
+                Contact / Join
+              </button>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Era Timeline Section */}
-      <section ref={timelineRef} className="py-20 bg-blue-950/50">
+      {/* ============ INFOGRAPHIC 1: History Timeline ============ */}
+      <section ref={timelineRef} className="py-20 bg-gradient-to-b from-blue-950/50 to-indigo-950/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-center mb-4">Our Journey Through Time</h2>
-          <p className="text-blue-300 text-center mb-12 max-w-2xl mx-auto">
-            Seven decades of service, fellowship, and community impact
-          </p>
-
-          {/* Timeline Navigation */}
-          <div className="flex flex-wrap justify-center gap-2 mb-12">
-            {eras.map((era) => (
-              <button
-                key={era.id}
-                onClick={() => setActiveEra(era.id)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                  activeEra === era.id
-                    ? 'bg-yellow-500 text-blue-900 shadow-lg shadow-yellow-500/30'
-                    : 'bg-white/10 text-blue-200 hover:bg-white/20'
-                }`}
-              >
-                {era.range}
-              </button>
-            ))}
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Journey</h2>
+            <p className="text-blue-300 max-w-2xl mx-auto">
+              Seven decades of service, fellowship, and community impact
+            </p>
           </div>
 
-          {/* Timeline Content */}
-          <div className="grid lg:grid-cols-2 gap-8 items-start">
-            {/* Era Details */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-              <div className="flex items-center gap-3 mb-4">
-                <Calendar className="w-6 h-6 text-yellow-500" />
-                <span className="text-yellow-500 font-medium">{currentEra.range}</span>
+          {/* Timeline Infographic */}
+          <div className="relative">
+            {/* Desktop: Horizontal Timeline */}
+            <div className="hidden lg:block">
+              {/* Timeline Line */}
+              <div className="absolute top-24 left-0 right-0 h-1 bg-gradient-to-r from-yellow-500 via-blue-400 to-purple-500 rounded-full" />
+
+              <div className="grid grid-cols-4 gap-4">
+                {historyTimeline.map((item, idx) => {
+                  const Icon = item.icon;
+                  return (
+                    <div
+                      key={item.id}
+                      className="relative"
+                      onMouseEnter={() => setActiveTimelineItem(item.id)}
+                      onMouseLeave={() => setActiveTimelineItem(null)}
+                    >
+                      {/* Year Badge */}
+                      <div className="text-center mb-4">
+                        <span className="inline-block px-4 py-2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-blue-900 font-bold rounded-full text-sm shadow-lg">
+                          {item.year}
+                        </span>
+                      </div>
+
+                      {/* Node */}
+                      <div className="flex justify-center mb-4">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
+                          activeTimelineItem === item.id
+                            ? 'bg-yellow-500 scale-125 shadow-xl shadow-yellow-500/50'
+                            : 'bg-blue-700 border-2 border-blue-500'
+                        }`}>
+                          <Icon className={`w-6 h-6 ${activeTimelineItem === item.id ? 'text-blue-900' : 'text-white'}`} />
+                        </div>
+                      </div>
+
+                      {/* Content Card */}
+                      <div className={`bg-white/5 backdrop-blur-sm rounded-xl p-5 border transition-all duration-300 ${
+                        activeTimelineItem === item.id
+                          ? 'border-yellow-500/50 bg-white/10 transform -translate-y-2'
+                          : 'border-white/10'
+                      }`}>
+                        <h3 className="font-bold text-lg mb-1">{item.title}</h3>
+                        <p className="text-blue-300 text-sm mb-2">{item.titleZh}</p>
+                        <p className="text-blue-200/80 text-sm leading-relaxed">
+                          {item.description}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <h3 className="text-2xl font-bold mb-2">{currentEra.title}</h3>
-              <p className="text-blue-300 mb-1">{currentEra.titleZh}</p>
-              <p className="text-blue-100 leading-relaxed mt-4 mb-6">
-                {currentEra.description}
-              </p>
-              <ul className="space-y-3">
-                {currentEra.bullets.map((bullet, idx) => (
-                  <li key={idx} className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 flex-shrink-0" />
-                    <span className="text-blue-200">{bullet}</span>
-                  </li>
-                ))}
-              </ul>
             </div>
 
-            {/* Visual Timeline */}
-            <div className="relative">
-              <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-yellow-500 via-blue-400 to-purple-500" />
-              <div className="space-y-6 pl-12">
-                {eras.map((era, idx) => (
-                  <div
-                    key={era.id}
-                    className={`relative cursor-pointer transition-all ${
-                      activeEra === era.id ? 'scale-105' : 'opacity-60 hover:opacity-100'
-                    }`}
-                    onClick={() => setActiveEra(era.id)}
-                  >
-                    <div
-                      className={`absolute -left-12 top-1 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                        activeEra === era.id
-                          ? 'bg-yellow-500 shadow-lg shadow-yellow-500/50'
-                          : 'bg-blue-800 border border-blue-600'
-                      }`}
-                    >
-                      <span className="text-xs font-bold">{idx + 1}</span>
+            {/* Mobile: Vertical Timeline */}
+            <div className="lg:hidden">
+              <div className="relative pl-8 border-l-2 border-yellow-500/50 space-y-8">
+                {historyTimeline.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.id} className="relative">
+                      {/* Node */}
+                      <div className="absolute -left-[25px] top-0 w-12 h-12 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center shadow-lg">
+                        <Icon className="w-6 h-6 text-blue-900" />
+                      </div>
+
+                      {/* Content */}
+                      <div className="ml-8 bg-white/5 backdrop-blur-sm rounded-xl p-5 border border-white/10">
+                        <span className="inline-block px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm font-medium mb-3">
+                          {item.year}
+                        </span>
+                        <h3 className="font-bold text-lg mb-1">{item.title}</h3>
+                        <p className="text-blue-300 text-sm mb-2">{item.titleZh}</p>
+                        <p className="text-blue-200/80 text-sm leading-relaxed">
+                          {item.description}
+                        </p>
+                      </div>
                     </div>
-                    <div className={`p-4 rounded-xl transition-all ${
-                      activeEra === era.id
-                        ? 'bg-white/10 border border-yellow-500/30'
-                        : 'bg-white/5'
-                    }`}>
-                      <p className="text-yellow-500 text-sm font-medium">{era.range}</p>
-                      <p className="font-semibold">{era.title}</p>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Timeline Footer */}
+          <div className="text-center mt-12">
+            <p className="text-blue-400 text-sm italic">
+              &quot;A connected family of service, from Mother Club to community.&quot;
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ============ INFOGRAPHIC 2: Service Focus Areas ============ */}
+      <section ref={serviceRef} className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold mb-2">What We Do</h2>
+            <p className="text-2xl text-blue-300 mb-4">我們在香港東區做的事</p>
+            <p className="text-blue-400 max-w-2xl mx-auto">
+              Making a difference through service above self
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {serviceFocusAreas.map((area) => {
+              const Icon = area.icon;
+              return (
+                <div
+                  key={area.id}
+                  className="group relative"
+                >
+                  {/* Glow Effect */}
+                  <div className={`absolute inset-0 bg-gradient-to-br ${area.color} rounded-2xl blur-xl opacity-0 group-hover:opacity-30 transition-opacity duration-500`} />
+
+                  <div className="relative bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 h-full group-hover:border-white/20 transition-all duration-300 group-hover:transform group-hover:-translate-y-2">
+                    {/* Icon */}
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${area.color} flex items-center justify-center mb-6 shadow-lg`}>
+                      <Icon className="w-8 h-8 text-white" />
                     </div>
+
+                    {/* Title - Bilingual */}
+                    <h3 className="text-xl font-bold mb-1">{area.titleEn}</h3>
+                    <p className="text-blue-300 text-lg mb-4">{area.titleZh}</p>
+
+                    {/* Description - Bilingual */}
+                    <p className="text-blue-100 leading-relaxed mb-3">
+                      {area.descEn}
+                    </p>
+                    <p className="text-blue-200/70 text-sm leading-relaxed">
+                      {area.descZh}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ============ INFOGRAPHIC 3: Photo Contest Feature ============ */}
+      <section ref={contestRef} className="py-20 bg-gradient-to-b from-indigo-950/50 to-purple-950/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Left: Contest Info */}
+            <div>
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500/20 rounded-full text-yellow-400 text-sm font-medium mb-6">
+                <Camera className="w-4 h-4" />
+                <span>{photoContest.edition} • {photoContest.year}</span>
+              </div>
+
+              <h2 className="text-3xl md:text-4xl font-bold mb-2">{photoContest.title}</h2>
+              <p className="text-2xl text-purple-300 mb-4">{photoContest.titleZh}</p>
+
+              <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 mb-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Smartphone className="w-8 h-8 text-purple-400" />
+                  <div>
+                    <p className="font-bold text-lg">&quot;{photoContest.theme}&quot;</p>
+                    <p className="text-purple-300">{photoContest.themeZh}</p>
+                  </div>
+                </div>
+                <p className="text-blue-200 mb-2">{photoContest.target}</p>
+                <p className="text-blue-300 text-sm">{photoContest.targetZh}</p>
+              </div>
+
+              <p className="text-blue-100 mb-6">{photoContest.description}</p>
+
+              {/* Rules */}
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                {photoContest.rules.map((rule, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-blue-200 text-sm">
+                    <ChevronRight className="w-4 h-4 text-yellow-500" />
+                    {rule}
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Right: Awards & Visual */}
+            <div>
+              {/* Phone Frame Visual */}
+              <div className="relative max-w-sm mx-auto mb-8">
+                <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-[3rem] p-3 shadow-2xl">
+                  <div className="bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 rounded-[2.5rem] aspect-[9/16] flex items-center justify-center relative overflow-hidden">
+                    {/* Camera UI mockup */}
+                    <div className="absolute inset-4 border-2 border-white/30 rounded-2xl" />
+                    <div className="absolute top-6 left-1/2 -translate-x-1/2 w-16 h-6 bg-black/50 rounded-full" />
+                    <div className="text-center p-8">
+                      <Camera className="w-16 h-16 text-white/80 mx-auto mb-4" />
+                      <p className="text-white font-bold text-lg">Hong Kong</p>
+                      <p className="text-white/80">Through Your Lens</p>
+                    </div>
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-16 h-16 rounded-full border-4 border-white/80" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Awards */}
+              <div className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 rounded-2xl p-6 border border-yellow-500/30">
+                <h3 className="font-bold text-lg mb-4 text-center">Awards 獎項</h3>
+                <div className="space-y-3">
+                  {photoContest.awards.map((award) => {
+                    const Icon = award.icon;
+                    return (
+                      <div key={award.place} className="flex items-center justify-between bg-white/5 rounded-xl p-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                            award.place === 'Champion' ? 'bg-yellow-500' :
+                            award.place === '1st Runner-up' ? 'bg-slate-400' : 'bg-amber-700'
+                          }`}>
+                            <Icon className="w-5 h-5 text-white" />
+                          </div>
+                          <span className="font-medium">{award.place}</span>
+                        </div>
+                        <span className="text-yellow-400 font-bold">${award.amount}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-center text-blue-300 text-sm mt-4">+ Merit Awards & Certificates</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============ INFOGRAPHIC 4: Rotary Network ============ */}
+      <section className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Rotary Family</h2>
+            <p className="text-blue-300 max-w-2xl mx-auto">
+              Connected through service and fellowship across District 3450
+            </p>
+          </div>
+
+          {/* Network Diagram - Cards Layout */}
+          <div className="max-w-5xl mx-auto">
+            {/* Top Row: Mother Club & District */}
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              {relationships.slice(0, 2).map((rel) => (
+                <div
+                  key={rel.id}
+                  className={`relative group cursor-pointer transition-all duration-300 ${
+                    hoveredRelation === rel.id ? 'transform -translate-y-2' : ''
+                  }`}
+                  onMouseEnter={() => setHoveredRelation(rel.id)}
+                  onMouseLeave={() => setHoveredRelation(null)}
+                >
+                  <div className={`absolute inset-0 rounded-2xl blur-xl transition-opacity duration-300 ${
+                    rel.id === 'mother' ? 'bg-yellow-500' : 'bg-blue-500'
+                  } ${hoveredRelation === rel.id ? 'opacity-30' : 'opacity-0'}`} />
+
+                  <div className={`relative p-6 rounded-2xl border transition-all duration-300 ${
+                    rel.id === 'mother'
+                      ? 'bg-gradient-to-br from-yellow-500/20 to-orange-500/10 border-yellow-500/30'
+                      : 'bg-gradient-to-br from-blue-500/20 to-cyan-500/10 border-blue-500/30'
+                  }`}>
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                          rel.id === 'mother' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'
+                        }`}>
+                          {rel.relationType}
+                        </span>
+                      </div>
+                      <span className="text-xs text-blue-400">{rel.year}</span>
+                    </div>
+                    <h3 className="font-bold text-xl mb-1">{rel.name}</h3>
+                    <p className="text-blue-300 mb-3">{rel.nameZh}</p>
+                    <p className="text-blue-200/80 text-sm">{rel.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Center: RCHKIE */}
+            <div className="flex justify-center my-8">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full blur-2xl opacity-40" />
+                <div className="relative w-48 h-48 rounded-full bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center p-6 border-4 border-white/20 shadow-2xl">
+                  <div className="text-center">
+                    <Network className="w-10 h-10 mx-auto mb-2 text-white" />
+                    <p className="font-bold text-sm">RCHKIE</p>
+                    <p className="text-xs text-blue-200">{clubMeta.nameChinese}</p>
+                    <p className="text-xs text-blue-300 mt-1">Est. 1954</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Row: Partner & Youth */}
+            <div className="grid md:grid-cols-3 gap-6">
+              {relationships.slice(2).map((rel) => (
+                <div
+                  key={rel.id}
+                  className={`relative group cursor-pointer transition-all duration-300 ${
+                    hoveredRelation === rel.id ? 'transform -translate-y-2' : ''
+                  }`}
+                  onMouseEnter={() => setHoveredRelation(rel.id)}
+                  onMouseLeave={() => setHoveredRelation(null)}
+                >
+                  <div className={`absolute inset-0 rounded-xl blur-xl transition-opacity duration-300 ${
+                    rel.id === 'harbour' ? 'bg-cyan-500' :
+                    rel.id === 'rotaract' ? 'bg-purple-500' : 'bg-pink-500'
+                  } ${hoveredRelation === rel.id ? 'opacity-30' : 'opacity-0'}`} />
+
+                  <div className="relative bg-white/5 backdrop-blur-sm p-5 rounded-xl border border-white/10 h-full group-hover:border-white/20 transition-all">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium px-2 py-1 bg-white/10 rounded-full text-blue-300">
+                        {rel.relationType}
+                      </span>
+                      <span className="text-xs text-blue-400">{rel.year}</span>
+                    </div>
+                    <h4 className="font-bold mb-1">{rel.name}</h4>
+                    <p className="text-blue-300 text-sm mb-2">{rel.nameZh}</p>
+                    <p className="text-blue-200/70 text-xs">{rel.description}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
       {/* Project Gallery Section */}
-      <section className="py-20">
+      <section className="py-20 bg-blue-950/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-center mb-4">Our Projects & Initiatives</h2>
           <p className="text-blue-300 text-center mb-12 max-w-2xl mx-auto">
-            Making a difference through service above self
+            Service Above Self | 超我服務
           </p>
 
           {/* Filter Buttons */}
@@ -441,7 +722,6 @@ export default function RotaryHKIEPage() {
                   onClick={() => setSelectedProject(project)}
                   className="group cursor-pointer bg-white/5 backdrop-blur-sm rounded-2xl overflow-hidden border border-white/10 hover:border-blue-400/50 transition-all hover:shadow-lg hover:shadow-blue-500/10"
                 >
-                  {/* Card Header */}
                   <div className="p-6 border-b border-white/10">
                     <div className="flex items-start justify-between mb-4">
                       <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
@@ -456,16 +736,11 @@ export default function RotaryHKIEPage() {
                     </h3>
                     <p className="text-blue-300 text-sm">{project.titleZh}</p>
                   </div>
-
-                  {/* Card Body */}
                   <div className="p-6">
                     <p className="text-blue-200 text-sm mb-4 line-clamp-2">{project.short}</p>
                     <div className="flex flex-wrap gap-2">
                       {project.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="text-xs px-2 py-1 bg-white/10 text-blue-200 rounded-full"
-                        >
+                        <span key={tag} className="text-xs px-2 py-1 bg-white/10 text-blue-200 rounded-full">
                           {tag}
                         </span>
                       ))}
@@ -474,110 +749,6 @@ export default function RotaryHKIEPage() {
                 </div>
               );
             })}
-          </div>
-        </div>
-      </section>
-
-      {/* Rotary Network Section */}
-      <section className="py-20 bg-blue-950/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-center mb-4">Our Rotary Family</h2>
-          <p className="text-blue-300 text-center mb-12 max-w-2xl mx-auto">
-            Connected through service and fellowship
-          </p>
-
-          {/* Network Diagram */}
-          <div className="relative max-w-3xl mx-auto py-16">
-            {/* Center Node */}
-            <div className="relative z-10 flex flex-col items-center">
-              {/* Top Connection */}
-              <div className="absolute -top-16 left-1/2 -translate-x-1/2 flex flex-col items-center">
-                <div
-                  className={`p-4 rounded-xl bg-gradient-to-br from-yellow-500 to-yellow-600 text-blue-900 text-center cursor-pointer transition-all ${
-                    hoveredRelation === 'mother' ? 'scale-110 shadow-lg shadow-yellow-500/50' : ''
-                  }`}
-                  onMouseEnter={() => setHoveredRelation('mother')}
-                  onMouseLeave={() => setHoveredRelation(null)}
-                >
-                  <p className="font-bold text-sm">{relationships[0].name}</p>
-                  <p className="text-xs opacity-80">{relationships[0].relationType}</p>
-                </div>
-                <div className="w-0.5 h-8 bg-yellow-500/50" />
-              </div>
-
-              {/* Left Connection */}
-              <div className="absolute top-1/2 -left-32 md:-left-48 -translate-y-1/2 flex items-center">
-                <div
-                  className={`p-3 rounded-xl bg-white/10 border border-white/20 text-center cursor-pointer transition-all ${
-                    hoveredRelation === 'harbour' ? 'scale-110 bg-white/20' : ''
-                  }`}
-                  onMouseEnter={() => setHoveredRelation('harbour')}
-                  onMouseLeave={() => setHoveredRelation(null)}
-                >
-                  <p className="font-bold text-xs">{relationships[1].name}</p>
-                  <p className="text-xs text-blue-300">{relationships[1].relationType}</p>
-                </div>
-                <div className="w-8 h-0.5 bg-blue-400/50" />
-              </div>
-
-              {/* Right Connection */}
-              <div className="absolute top-1/2 -right-32 md:-right-48 -translate-y-1/2 flex items-center">
-                <div className="w-8 h-0.5 bg-blue-400/50" />
-                <div
-                  className={`p-3 rounded-xl bg-white/10 border border-white/20 text-center cursor-pointer transition-all ${
-                    hoveredRelation === 'south' ? 'scale-110 bg-white/20' : ''
-                  }`}
-                  onMouseEnter={() => setHoveredRelation('south')}
-                  onMouseLeave={() => setHoveredRelation(null)}
-                >
-                  <p className="font-bold text-xs">{relationships[2].name}</p>
-                  <p className="text-xs text-blue-300">{relationships[2].relationType}</p>
-                </div>
-              </div>
-
-              {/* Center */}
-              <div className="w-48 h-48 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-6 shadow-2xl shadow-blue-500/30 border-4 border-white/20">
-                <div className="text-center">
-                  <Users className="w-10 h-10 mx-auto mb-2" />
-                  <p className="font-bold text-sm">RCHKIE</p>
-                  <p className="text-xs text-blue-200">{clubMeta.nameChinese}</p>
-                </div>
-              </div>
-
-              {/* Bottom Connections */}
-              <div className="w-0.5 h-8 bg-purple-500/50" />
-              <div className="flex gap-8">
-                <div
-                  className={`p-3 rounded-xl bg-gradient-to-br from-purple-500/30 to-pink-500/30 border border-purple-400/30 text-center cursor-pointer transition-all ${
-                    hoveredRelation === 'rotaract' ? 'scale-110 shadow-lg shadow-purple-500/30' : ''
-                  }`}
-                  onMouseEnter={() => setHoveredRelation('rotaract')}
-                  onMouseLeave={() => setHoveredRelation(null)}
-                >
-                  <p className="font-bold text-xs">{relationships[3].name}</p>
-                  <p className="text-xs text-purple-300">{relationships[3].relationType}</p>
-                </div>
-                <div
-                  className={`p-3 rounded-xl bg-gradient-to-br from-pink-500/30 to-orange-500/30 border border-pink-400/30 text-center cursor-pointer transition-all ${
-                    hoveredRelation === 'interact' ? 'scale-110 shadow-lg shadow-pink-500/30' : ''
-                  }`}
-                  onMouseEnter={() => setHoveredRelation('interact')}
-                  onMouseLeave={() => setHoveredRelation(null)}
-                >
-                  <p className="font-bold text-xs">{relationships[4].name}</p>
-                  <p className="text-xs text-pink-300">{relationships[4].relationType}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Hover Tooltip */}
-            {hoveredRelation && (
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-xl p-4 rounded-xl border border-white/20 max-w-sm text-center">
-                <p className="text-blue-100 text-sm">
-                  {relationships.find(r => r.id === hoveredRelation)?.description}
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </section>
@@ -591,29 +762,28 @@ export default function RotaryHKIEPage() {
           </p>
 
           {/* Meeting Info */}
-          <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 rounded-2xl p-8 border border-yellow-500/30 mb-12 max-w-2xl mx-auto">
-            <div className="flex flex-col md:flex-row items-center justify-center gap-8 text-center md:text-left">
-              <div className="flex items-center gap-3">
+          <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 rounded-2xl p-8 border border-yellow-500/30 mb-12 max-w-3xl mx-auto">
+            <div className="grid md:grid-cols-3 gap-6 text-center">
+              <div className="flex flex-col items-center gap-2">
                 <Clock className="w-8 h-8 text-yellow-500" />
-                <div>
-                  <p className="text-sm text-yellow-300">Meeting Time</p>
-                  <p className="font-bold">{joiningInfo.meetingTime}</p>
-                </div>
+                <p className="text-sm text-yellow-300">Meeting Time</p>
+                <p className="font-bold">{joiningInfo.meetingTime}</p>
               </div>
-              <div className="w-px h-12 bg-yellow-500/30 hidden md:block" />
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col items-center gap-2">
                 <MapPin className="w-8 h-8 text-yellow-500" />
-                <div>
-                  <p className="text-sm text-yellow-300">Location</p>
-                  <p className="font-bold">{joiningInfo.meetingLocation}</p>
-                </div>
+                <p className="text-sm text-yellow-300">Location</p>
+                <p className="font-bold">{joiningInfo.meetingLocation}</p>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <BookOpen className="w-8 h-8 text-yellow-500" />
+                <p className="text-sm text-yellow-300">Language</p>
+                <p className="font-bold">{joiningInfo.language}</p>
               </div>
             </div>
           </div>
 
           {/* Three Columns */}
           <div className="grid md:grid-cols-3 gap-8">
-            {/* For Members */}
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
               <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center mb-4">
                 <Users className="w-6 h-6 text-blue-400" />
@@ -631,7 +801,6 @@ export default function RotaryHKIEPage() {
               </ol>
             </div>
 
-            {/* For Youth */}
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
               <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center mb-4">
                 <GraduationCap className="w-6 h-6 text-purple-400" />
@@ -647,7 +816,6 @@ export default function RotaryHKIEPage() {
               </ul>
             </div>
 
-            {/* For Partners */}
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
               <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center mb-4">
                 <Handshake className="w-6 h-6 text-emerald-400" />
@@ -685,6 +853,9 @@ export default function RotaryHKIEPage() {
           </p>
           <p className="text-blue-500 text-xs mt-2">
             &quot;Service Above Self&quot; | 超我服務
+          </p>
+          <p className="text-blue-500 text-xs mt-1">
+            Part of Rotary District 3450 (Hong Kong, Macao, Mongolia)
           </p>
           <p className="text-blue-600 text-xs mt-4">
             Demo site for 5ML Vibe Code Showcase
