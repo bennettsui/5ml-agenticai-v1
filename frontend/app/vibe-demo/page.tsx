@@ -100,6 +100,15 @@ export default function VibeDemoPage() {
       color: 'from-blue-600 to-indigo-700',
       tags: ['Timeline', 'Gallery', 'Network Diagram', 'Bilingual'],
     },
+    {
+      id: 'ai-human-connection',
+      title: 'AI Mastery for Human Connection',
+      titleZh: 'AI賦能・人情為本',
+      description: 'Parallax storytelling with infographics: automate the mundane, design the meaningful',
+      href: '/vibe-demo/ai-human-connection',
+      color: 'from-emerald-500 to-cyan-600',
+      tags: ['Storytelling', 'Infographics', 'Parallax', 'Interactive Charts'],
+    },
   ];
 
   return (
