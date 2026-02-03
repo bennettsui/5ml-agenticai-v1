@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, User, Mic, Copy, Check, ExternalLink, Sparkles, MessageSquare, Volume2, Video } from 'lucide-react';
+import { ArrowLeft, User, Mic, Copy, Check, ExternalLink, Sparkles, MessageSquare, Volume2, Video, Camera, Monitor, Zap } from 'lucide-react';
 
 export default function FictionalCharacterPage() {
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
@@ -120,11 +120,11 @@ If no [character: ] is specified, default to 老花生叔.`;
             Overview
           </h2>
           <p className="text-slate-700 dark:text-slate-300 mb-4">
-            Use Claude Code as a <strong>Character Script Engine</strong> - the LLM transforms what you say into a specific persona&apos;s voice,
-            which can then be passed to TTS (Text-to-Speech) or avatar systems for live streaming or content creation.
+            Transform <strong>both your voice AND appearance</strong> into a fictional character in real-time. Use Claude as a <strong>Character Script Engine</strong> for dialogue,
+            combined with face-tracking and voice conversion tools to create a complete live persona transformation pipeline.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
             <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
               <MessageSquare className="w-6 h-6 text-rose-500 mb-2" />
               <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Persona Engine</h3>
@@ -134,16 +134,23 @@ If no [character: ] is specified, default to 老花生叔.`;
             </div>
             <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
               <Volume2 className="w-6 h-6 text-rose-500 mb-2" />
-              <h3 className="font-semibold text-slate-900 dark:text-white text-sm">TTS-Ready Output</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Voice Conversion</h3>
               <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                Short sentences optimized for voice synthesis
+                Real-time voice cloning and TTS synthesis
+              </p>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+              <Camera className="w-6 h-6 text-rose-500 mb-2" />
+              <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Face Transform</h3>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                Live face swap, deepfake, or avatar puppeteering
               </p>
             </div>
             <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
               <Video className="w-6 h-6 text-rose-500 mb-2" />
               <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Avatar Integration</h3>
               <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                Works with Open-LLM-VTuber, Live2D, and more
+                Works with Live2D, VTuber, and streaming tools
               </p>
             </div>
           </div>
@@ -345,62 +352,361 @@ If no [character: ] is specified, default to 老花生叔.`;
           </p>
         </section>
 
+        {/* Live Camera & Visual Transformation Section */}
+        <section className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6 mb-8 border border-slate-200 dark:border-slate-700">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+            <Camera className="w-5 h-5 text-rose-500" />
+            6. Live Camera & Visual Transformation
+          </h2>
+
+          <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+            To transform your <strong>appearance</strong> (not just voice), you need face tracking + visual transformation. Here&apos;s the tech stack:
+          </p>
+
+          <div className="space-y-4 mb-6">
+            {/* Face Input */}
+            <div className="bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-900/20 dark:to-pink-900/20 rounded-lg p-4 border border-rose-200 dark:border-rose-800">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-full bg-rose-500 flex items-center justify-center text-white">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <h3 className="font-semibold text-slate-900 dark:text-white">Camera Input & Face Tracking</h3>
+              </div>
+              <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-2 ml-10">
+                <li><strong>MediaPipe Face Mesh</strong> - Google&apos;s real-time face landmark detection (468 points)</li>
+                <li><strong>OpenCV</strong> - Webcam capture and image processing</li>
+                <li><strong>dlib</strong> - Alternative face detection with 68 landmark points</li>
+              </ul>
+            </div>
+
+            {/* Visual Transformation */}
+            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white">
+                  <Zap className="w-4 h-4" />
+                </div>
+                <h3 className="font-semibold text-slate-900 dark:text-white">Visual Transformation Options</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-10">
+                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                  <div className="font-medium text-slate-900 dark:text-white text-sm">Option A: Face Swap / Deepfake</div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Your face → Character face in real-time</p>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">Tools: DeepFaceLive, FaceFusion, SimSwap</p>
+                </div>
+                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                  <div className="font-medium text-slate-900 dark:text-white text-sm">Option B: Avatar Puppeteering</div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Your face controls a 2D/3D avatar</p>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">Tools: Live2D, VTube Studio, Open-LLM-VTuber</p>
+                </div>
+                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                  <div className="font-medium text-slate-900 dark:text-white text-sm">Option C: Talking Head Generation</div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Static image + audio → animated video</p>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">Tools: SadTalker, Wav2Lip, Linly-Talker</p>
+                </div>
+                <div className="bg-white/60 dark:bg-slate-800/60 rounded p-3">
+                  <div className="font-medium text-slate-900 dark:text-white text-sm">Option D: Full Body Motion</div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Track body + face for full avatar control</p>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">Tools: MediaPipe Holistic, OpenPose</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Output */}
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white">
+                  <Monitor className="w-4 h-4" />
+                </div>
+                <h3 className="font-semibold text-slate-900 dark:text-white">Streaming Output</h3>
+              </div>
+              <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-2 ml-10">
+                <li><strong>OBS Studio</strong> - Capture virtual camera output for streaming</li>
+                <li><strong>Virtual Camera</strong> - Route transformed video to Zoom, Discord, etc.</li>
+                <li><strong>NDI</strong> - Network-based video routing for professional setups</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Complete Pipeline Diagram */}
+          <div className="bg-slate-900 dark:bg-slate-950 rounded-lg p-4 overflow-x-auto">
+            <div className="text-xs text-slate-400 mb-2 font-mono">Complete Live Transformation Pipeline:</div>
+            <pre className="text-sm text-slate-300 whitespace-pre font-mono">{`
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   CAMERA    │───▶│ FACE TRACK  │───▶│  TRANSFORM  │───▶│   OUTPUT    │
+│   INPUT     │    │  MediaPipe  │    │ DeepFaceLive│    │ OBS/Stream  │
+└─────────────┘    └─────────────┘    │ or Live2D   │    └─────────────┘
+                                      └─────────────┘
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐         │
+│    MIC      │───▶│   WHISPER   │───▶│   CLAUDE    │         │
+│   INPUT     │    │ Speech→Text │    │ Persona Eng │         │
+└─────────────┘    └─────────────┘    └──────┬──────┘         │
+                                             │                 │
+                                      ┌──────▼──────┐         │
+                                      │  TTS / RVC  │─────────┘
+                                      │ Voice Clone │    (sync audio+video)
+                                      └─────────────┘
+`}</pre>
+          </div>
+        </section>
+
         {/* Resources Section */}
         <section className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6 mb-8 border border-slate-200 dark:border-slate-700">
           <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-            Related Resources
+            GitHub Libraries & Resources
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* VTuber & Avatar Systems */}
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+            <Video className="w-4 h-4 text-rose-500" />
+            VTuber & Avatar Systems
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
             <a
               href="https://github.com/Open-LLM-VTuber/Open-LLM-VTuber"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             >
-              <ExternalLink className="w-5 h-5 text-rose-500" />
+              <ExternalLink className="w-4 h-4 text-rose-500 flex-shrink-0" />
               <div>
                 <div className="font-semibold text-slate-900 dark:text-white text-sm">Open-LLM-VTuber</div>
-                <div className="text-xs text-slate-600 dark:text-slate-400">Open-source VTuber framework with LLM integration</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">VTuber framework with LLM + Live2D integration</div>
               </div>
             </a>
-
-            <a
-              href="https://open-llm-vtuber.github.io/en/docs/user-guide/backend/structure/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-            >
-              <ExternalLink className="w-5 h-5 text-rose-500" />
-              <div>
-                <div className="font-semibold text-slate-900 dark:text-white text-sm">Open-LLM-VTuber Docs</div>
-                <div className="text-xs text-slate-600 dark:text-slate-400">Backend structure and integration guide</div>
-              </div>
-            </a>
-
             <a
               href="https://github.com/Kedreamix/Linly-Talker"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             >
-              <ExternalLink className="w-5 h-5 text-rose-500" />
+              <ExternalLink className="w-4 h-4 text-rose-500 flex-shrink-0" />
               <div>
                 <div className="font-semibold text-slate-900 dark:text-white text-sm">Linly-Talker</div>
-                <div className="text-xs text-slate-600 dark:text-slate-400">Digital avatar with voice synthesis</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Digital human with voice synthesis</div>
               </div>
             </a>
+          </div>
 
+          {/* Face Swap & Deepfake */}
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+            <User className="w-4 h-4 text-purple-500" />
+            Face Swap & Deepfake (Real-time)
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+            <a
+              href="https://github.com/iperov/DeepFaceLive"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-purple-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">DeepFaceLive</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Real-time face swap for streaming</div>
+              </div>
+            </a>
+            <a
+              href="https://github.com/facefusion/facefusion"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-purple-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">FaceFusion</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Next-gen face swapper and enhancer</div>
+              </div>
+            </a>
+            <a
+              href="https://github.com/neuralchen/SimSwap"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-purple-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">SimSwap</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Arbitrary face swapping framework</div>
+              </div>
+            </a>
+            <a
+              href="https://github.com/s0md3v/roop"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-purple-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">Roop</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">One-click face swap</div>
+              </div>
+            </a>
+          </div>
+
+          {/* Talking Head / Lip Sync */}
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-blue-500" />
+            Talking Head & Lip Sync
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+            <a
+              href="https://github.com/OpenTalker/SadTalker"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-blue-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">SadTalker</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Audio-driven talking face generation</div>
+              </div>
+            </a>
+            <a
+              href="https://github.com/Rudrabha/Wav2Lip"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-blue-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">Wav2Lip</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Accurate lip-sync from audio</div>
+              </div>
+            </a>
+            <a
+              href="https://github.com/OpenTalker/video-retalking"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-blue-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">Video-Retalking</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Audio-based lip sync editing</div>
+              </div>
+            </a>
+            <a
+              href="https://github.com/yerfor/GeneFacePlusPlus"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-blue-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">GeneFace++</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Generalized talking face generation</div>
+              </div>
+            </a>
+          </div>
+
+          {/* Voice Conversion & TTS */}
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+            <Volume2 className="w-4 h-4 text-green-500" />
+            Voice Conversion & TTS
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
             <a
               href="https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             >
-              <ExternalLink className="w-5 h-5 text-rose-500" />
+              <ExternalLink className="w-4 h-4 text-green-500 flex-shrink-0" />
               <div>
-                <div className="font-semibold text-slate-900 dark:text-white text-sm">RVC (Voice Conversion)</div>
-                <div className="text-xs text-slate-600 dark:text-slate-400">Real-time voice conversion for character voices</div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">RVC WebUI</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Real-time voice conversion</div>
+              </div>
+            </a>
+            <a
+              href="https://github.com/Plachtaa/seed-vc"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-green-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">Seed-VC</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Zero-shot voice conversion</div>
+              </div>
+            </a>
+            <a
+              href="https://github.com/coqui-ai/TTS"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-green-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">Coqui TTS</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Deep learning TTS library</div>
+              </div>
+            </a>
+            <a
+              href="https://github.com/fishaudio/fish-speech"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-green-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">Fish Speech</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Multilingual voice cloning TTS</div>
+              </div>
+            </a>
+          </div>
+
+          {/* Face Tracking */}
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+            <Camera className="w-4 h-4 text-amber-500" />
+            Face Tracking & Detection
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <a
+              href="https://github.com/google/mediapipe"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-amber-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">MediaPipe</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Google&apos;s ML solutions for face/body tracking</div>
+              </div>
+            </a>
+            <a
+              href="https://github.com/CMU-Perceptual-Computing-Lab/openpose"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-amber-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">OpenPose</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Real-time body/face/hand keypoint detection</div>
+              </div>
+            </a>
+            <a
+              href="https://github.com/deepinsight/insightface"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-amber-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">InsightFace</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">2D/3D face analysis toolkit</div>
+              </div>
+            </a>
+            <a
+              href="https://open-llm-vtuber.github.io/en/docs/user-guide/backend/structure/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-amber-500 flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-slate-900 dark:text-white text-sm">Open-LLM-VTuber Docs</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Backend architecture guide</div>
               </div>
             </a>
           </div>
