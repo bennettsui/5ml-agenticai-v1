@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles } from 'lucide-react';
 
 export default function Home() {
   const useCases = [
@@ -64,6 +64,16 @@ export default function Home() {
       color: 'from-slate-500 to-slate-700',
       features: ['REST API', 'Agent Endpoints', 'Authentication', 'Code Examples'],
       status: 'Documentation'
+    },
+    {
+      id: 'vibe-demo',
+      title: 'Vibe Code Demo',
+      description: 'Interactive showcase of modern web effects including parallax scrolling and dynamic animations',
+      icon: Sparkles,
+      href: '/vibe-demo',
+      color: 'from-indigo-500 to-purple-600',
+      features: ['Parallax Effects', 'Mouse Tracking', 'Click Animations', 'Dynamic Gradients'],
+      status: 'Demo'
     },
   ];
 
