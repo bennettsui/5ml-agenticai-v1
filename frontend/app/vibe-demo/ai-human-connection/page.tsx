@@ -288,7 +288,7 @@ function StickyNarrative({
           }
         });
       },
-      { threshold: 0.7, rootMargin: '-20% 0px -20% 0px' }
+      { threshold: 0.5, rootMargin: '-40% 0px -40% 0px' }
     );
 
     paragraphRefs.current.forEach((ref) => {
@@ -299,11 +299,11 @@ function StickyNarrative({
   }, []);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative min-h-[150vh]">
       <div className="grid md:grid-cols-2 gap-8 md:gap-16">
         {/* Sticky Visual */}
-        <div className="hidden md:block">
-          <div className="sticky top-32">
+        <div className="hidden md:block relative">
+          <div className="sticky top-1/3 transform -translate-y-1/4">
             <h2 className="text-3xl md:text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400">
               {title}
             </h2>
@@ -326,7 +326,7 @@ function StickyNarrative({
         </div>
 
         {/* Scrolling Text */}
-        <div className="space-y-[50vh]">
+        <div className="pt-[20vh]">
           <div className="md:hidden mb-8">
             <h2 className="text-3xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400">
               {title}
@@ -337,7 +337,7 @@ function StickyNarrative({
             <div
               key={i}
               ref={(el) => { paragraphRefs.current[i] = el; }}
-              className={`transition-all duration-500 ${
+              className={`min-h-[50vh] flex flex-col justify-center transition-all duration-500 ${
                 i === activeIndex ? 'opacity-100 translate-x-0' : 'opacity-30 translate-x-4'
               }`}
             >
@@ -829,9 +829,20 @@ export default function AIHumanConnectionPage() {
                 </div>
 
                 {choice.highlight && (
-                  <div className="hidden md:flex absolute -bottom-12 left-1/2 -translate-x-1/2 flex-col items-center">
-                    <div className="w-0.5 h-8 bg-gradient-to-b from-emerald-500 to-transparent" />
+                  <div className="hidden md:flex absolute -bottom-16 left-1/2 -translate-x-1/2 flex-col items-center">
+                    <div
+                      className="w-0.5 bg-gradient-to-b from-emerald-500 to-emerald-500/30"
+                      style={{
+                        animation: 'arrowPulse 2s ease-in-out infinite',
+                      }}
+                    />
                     <ChevronDown className="w-5 h-5 text-emerald-500 animate-bounce" />
+                    <style jsx>{`
+                      @keyframes arrowPulse {
+                        0%, 100% { height: 24px; }
+                        50% { height: 48px; }
+                      }
+                    `}</style>
                   </div>
                 )}
               </div>
@@ -901,7 +912,7 @@ export default function AIHumanConnectionPage() {
         ref={(el) => { sectionRefs.current['experiment'] = el; }}
         className="py-32 px-6"
       >
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <div className={`text-center mb-16 transition-all duration-700 ${isVisible('experiment') ? 'opacity-100' : 'opacity-0'}`}>
             <h2 className="text-3xl md:text-5xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400">
               Try This Week
@@ -909,7 +920,7 @@ export default function AIHumanConnectionPage() {
             <p className="text-xl text-emerald-400/80">一週實驗</p>
           </div>
 
-          <div className={`flex flex-col md:flex-row items-center gap-4 transition-all duration-700 delay-200 ${isVisible('experiment') ? 'opacity-100' : 'opacity-0'}`}>
+          <div className={`flex flex-col md:flex-row items-center justify-center gap-4 transition-all duration-700 delay-200 ${isVisible('experiment') ? 'opacity-100' : 'opacity-0'}`}>
             {[
               { emoji: '🎯', step: 'Pick', stepZh: '選擇', desc: 'One admin task' },
               { emoji: '🤖', step: 'Delegate', stepZh: '委派', desc: 'Give it to AI' },
@@ -917,9 +928,16 @@ export default function AIHumanConnectionPage() {
               { emoji: '💚', step: 'Connect', stepZh: '連繫', desc: 'Reach out' },
             ].map((item, idx) => (
               <div key={item.step} className="flex items-center">
-                <InteractiveCard
-                  delay={idx * 100}
-                  className="flex-1 p-6 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-center hover:border-emerald-500/50 transition-all"
+                <div
+                  className={`w-40 p-6 rounded-2xl bg-slate-800/50 text-center transition-all duration-500 ${
+                    isVisible('experiment')
+                      ? 'border-2 border-emerald-500 shadow-lg shadow-emerald-500/20'
+                      : 'border border-slate-700/50'
+                  }`}
+                  style={{
+                    transitionDelay: isVisible('experiment') ? `${idx * 400}ms` : '0ms',
+                    borderColor: isVisible('experiment') ? undefined : 'rgb(51 65 85 / 0.5)',
+                  }}
                 >
                   <span className="text-4xl mb-3 block">{item.emoji}</span>
                   <div className="w-8 h-8 mx-auto mb-2 rounded-full bg-emerald-500 text-white flex items-center justify-center text-sm font-bold">
@@ -928,7 +946,7 @@ export default function AIHumanConnectionPage() {
                   <h3 className="font-semibold text-white">{item.step}</h3>
                   <p className="text-xs text-emerald-400">{item.stepZh}</p>
                   <p className="text-xs text-slate-500 mt-2">{item.desc}</p>
-                </InteractiveCard>
+                </div>
                 {idx < 3 && (
                   <ArrowRight className="w-5 h-5 text-emerald-500/50 mx-2 hidden md:block" />
                 )}
