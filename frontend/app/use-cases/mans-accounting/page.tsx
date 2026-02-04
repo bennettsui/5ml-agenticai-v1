@@ -703,7 +703,7 @@ export default function ReceiptProcessor() {
                 disabled={isProcessing}
               >
                 <option value="claude-haiku">Claude Haiku (Vision)</option>
-                <option value="deepseek">DeepSeek (Vision)</option>
+                <option value="deepseek">DeepSeek (Tesseract + LLM)</option>
               </select>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 Choose the OCR model for receipt extraction.
