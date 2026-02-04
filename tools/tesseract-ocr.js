@@ -8,8 +8,11 @@ const Tesseract = require('tesseract.js');
 const path = require('path');
 
 class TesseractOCR {
-  constructor() {
+  constructor(languages = null) {
     this.worker = null;
+    this.languages = typeof languages === 'string' && languages.trim().length > 0
+      ? languages.trim()
+      : (process.env.TESSERACT_LANGS || 'eng+chi_tra');
   }
 
   /**
@@ -17,11 +20,11 @@ class TesseractOCR {
    */
   async initialize() {
     if (!this.worker) {
-      console.log('🔧 [Tesseract] Initializing OCR worker...');
+      console.log(`🔧 [Tesseract] Initializing OCR worker (${this.languages})...`);
 
       // Use Promise.race to add timeout
-      // Supporting English + Traditional Chinese (chi_tra) for Hong Kong receipts
-      const initPromise = Tesseract.createWorker('eng+chi_tra', 1, {
+      // Default supports English + Traditional Chinese (chi_tra) for Hong Kong receipts
+      const initPromise = Tesseract.createWorker(this.languages, 1, {
         logger: m => {
           if (m.status === 'recognizing text') {
             console.log(`   OCR Progress: ${Math.round(m.progress * 100)}%`);
@@ -33,7 +36,7 @@ class TesseractOCR {
             console.log(`   Initializing Tesseract...`);
           }
           if (m.status === 'loading language traineddata') {
-            console.log(`   Downloading language files (eng + chi_tra)... This may take 30-60s on first run`);
+            console.log(`   Downloading language files (${this.languages})... This may take 30-60s on first run`);
           }
           if (m.status === 'initializing api') {
             console.log(`   Initializing OCR API...`);

@@ -148,13 +148,13 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
 
     if (ocrConfig.provider === 'deepseek') {
       // CHECKPOINT 4A: Tesseract OCR for text extraction (required for DeepSeek)
-      console.log('✓ CHECKPOINT 4A: Running Tesseract OCR for DeepSeek...');
-      await logProcessing(batchId, 'info', 'tesseract_start', 'Starting Tesseract OCR for DeepSeek');
-      wsServer.sendProgress(batchId, { progress: 30, message: 'Extracting text with Tesseract...' });
+      console.log('✓ CHECKPOINT 4A: Running Tesseract OCR for DeepSeek (eng only)...');
+      await logProcessing(batchId, 'info', 'tesseract_start', 'Starting Tesseract OCR for DeepSeek (eng only)');
+      wsServer.sendProgress(batchId, { progress: 30, message: 'Extracting text with Tesseract (eng)...' });
 
       try {
         const TesseractOCR = require('../../../tools/tesseract-ocr');
-        const tesseract = new TesseractOCR();
+        const tesseract = new TesseractOCR('eng');
 
         const batchPromise = tesseract.processBatch(imagePaths, (p) => {
           const progress = 30 + (p.progress * 0.2);
