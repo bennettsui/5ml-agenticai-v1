@@ -66,6 +66,8 @@ export default function FictionalCharacterPage() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const filterNodesRef = useRef<BiquadFilterNode[]>([]);
 
   // Text transformation state
   const [inputText, setInputText] = useState('');
@@ -177,18 +179,15 @@ export default function FictionalCharacterPage() {
         const currentShowOverlay = showOverlayRef.current;
         const currentCharacter = selectedCharacterRef.current;
 
-        // Apply filter for video
-        const filterValue = FILTER_EFFECTS[currentFilter];
-        ctx.filter = filterValue || 'none';
+        // Get filter value
+        const filterValue = FILTER_EFFECTS[currentFilter] || '';
 
-        // Mirror and draw video
+        // Mirror and draw video with filter
         ctx.save();
+        ctx.filter = filterValue || 'none'; // Apply filter inside save block
         ctx.scale(-1, 1);
         ctx.drawImage(video, -width, 0, width, height);
-        ctx.restore();
-
-        // Reset filter for overlay
-        ctx.filter = 'none';
+        ctx.restore(); // Restores transform AND filter
 
         // Draw overlay
         if (currentShowOverlay) {
@@ -242,7 +241,7 @@ export default function FictionalCharacterPage() {
     };
   }, [stopCamera]);
 
-  // Start voice conversion with simple passthrough
+  // Start voice conversion with character-specific audio effects
   const startVoiceConversion = async () => {
     try {
       setIsVoiceConverting(true);
@@ -273,14 +272,80 @@ export default function FictionalCharacterPage() {
 
       // Create gain node for volume control
       const gainNode = ctx.createGain();
-      gainNode.gain.value = 2.0; // Boost volume
+      gainNode.gain.value = 1.5;
+      gainNodeRef.current = gainNode;
 
-      // Connect: mic -> gain -> speakers
-      sourceNodeRef.current.connect(gainNode);
+      // Create character-specific audio effects
+      const filters: BiquadFilterNode[] = [];
+
+      if (selectedCharacter.id === 'uncle-peanut') {
+        // Deep voice: boost low frequencies, reduce highs
+        const lowBoost = ctx.createBiquadFilter();
+        lowBoost.type = 'lowshelf';
+        lowBoost.frequency.value = 300;
+        lowBoost.gain.value = 8; // Boost bass
+        filters.push(lowBoost);
+
+        const highCut = ctx.createBiquadFilter();
+        highCut.type = 'highshelf';
+        highCut.frequency.value = 3000;
+        highCut.gain.value = -4; // Reduce treble
+        filters.push(highCut);
+
+        gainNode.gain.value = 2.0;
+      } else if (selectedCharacter.id === 'anime-girl') {
+        // High-pitched voice: boost high frequencies, reduce lows
+        const highBoost = ctx.createBiquadFilter();
+        highBoost.type = 'highshelf';
+        highBoost.frequency.value = 2000;
+        highBoost.gain.value = 10; // Boost treble significantly
+        filters.push(highBoost);
+
+        const lowCut = ctx.createBiquadFilter();
+        lowCut.type = 'lowshelf';
+        lowCut.frequency.value = 400;
+        lowCut.gain.value = -6; // Reduce bass
+        filters.push(lowCut);
+
+        // Add presence boost for clarity
+        const presence = ctx.createBiquadFilter();
+        presence.type = 'peaking';
+        presence.frequency.value = 4000;
+        presence.Q.value = 1;
+        presence.gain.value = 6;
+        filters.push(presence);
+
+        gainNode.gain.value = 1.8;
+      } else {
+        // News anchor: clear, professional voice
+        const clarity = ctx.createBiquadFilter();
+        clarity.type = 'peaking';
+        clarity.frequency.value = 2500;
+        clarity.Q.value = 1;
+        clarity.gain.value = 4;
+        filters.push(clarity);
+
+        // Slight compression via limiting highs
+        const limiter = ctx.createBiquadFilter();
+        limiter.type = 'highshelf';
+        limiter.frequency.value = 6000;
+        limiter.gain.value = -2;
+        filters.push(limiter);
+      }
+
+      filterNodesRef.current = filters;
+
+      // Connect audio chain: source -> filters -> gain -> output
+      let lastNode: AudioNode = sourceNodeRef.current;
+      for (const filter of filters) {
+        lastNode.connect(filter);
+        lastNode = filter;
+      }
+      lastNode.connect(gainNode);
       gainNode.connect(ctx.destination);
 
-      setVoiceConversionStatus(`🔊 Live - speak into mic (use headphones!)`);
-      console.log('Voice conversion started, AudioContext state:', ctx.state);
+      setVoiceConversionStatus(`🔊 ${selectedCharacter.name} voice active`);
+      console.log('Voice conversion started with', filters.length, 'filters');
 
     } catch (err) {
       console.error('Voice conversion error:', err);
@@ -290,6 +355,16 @@ export default function FictionalCharacterPage() {
   };
 
   const stopVoiceConversion = useCallback(() => {
+    // Disconnect all filter nodes
+    for (const filter of filterNodesRef.current) {
+      filter.disconnect();
+    }
+    filterNodesRef.current = [];
+
+    if (gainNodeRef.current) {
+      gainNodeRef.current.disconnect();
+      gainNodeRef.current = null;
+    }
     if (sourceNodeRef.current) {
       sourceNodeRef.current.disconnect();
       sourceNodeRef.current = null;
@@ -411,7 +486,7 @@ export default function FictionalCharacterPage() {
 
                 <canvas
                   ref={canvasRef}
-                  className={`w-full h-full object-cover ${isCameraOn ? 'block' : 'hidden'}`}
+                  className={`w-full h-full object-contain ${isCameraOn ? 'block' : 'hidden'}`}
                 />
 
                 {/* Camera off state */}
