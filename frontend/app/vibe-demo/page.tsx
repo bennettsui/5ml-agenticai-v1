@@ -11,6 +11,7 @@ export default function VibeDemoPage() {
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; size: number; color: string }>>([]);
   const [clicks, setClicks] = useState<Array<{ id: number; x: number; y: number }>>([]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const clickTimersRef = useRef<Map<number, NodeJS.Timeout>>(new Map());
 
   // Track mouse position for parallax effects
   useEffect(() => {
@@ -58,9 +59,19 @@ export default function VibeDemoPage() {
       y: e.clientY - rect.top,
     };
     setClicks(prev => [...prev, newClick]);
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setClicks(prev => prev.filter(c => c.id !== newClick.id));
+      clickTimersRef.current.delete(newClick.id);
     }, 1000);
+    clickTimersRef.current.set(newClick.id, timer);
+  }, []);
+
+  // Cleanup click timers on unmount
+  useEffect(() => {
+    return () => {
+      clickTimersRef.current.forEach(timer => clearTimeout(timer));
+      clickTimersRef.current.clear();
+    };
   }, []);
 
   const features = [
@@ -488,11 +499,25 @@ export default function VibeDemoPage() {
 function InteractiveBox({ color, delay }: { color: string; delay: number }) {
   const [isActive, setIsActive] = useState(false);
   const [rotation, setRotation] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
 
   const handleClick = () => {
+    // Clear any existing timer
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
     setIsActive(true);
     setRotation(prev => prev + 180);
-    setTimeout(() => setIsActive(false), 600);
+    timerRef.current = setTimeout(() => setIsActive(false), 600);
   };
 
   return (
