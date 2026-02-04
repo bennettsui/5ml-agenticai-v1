@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Camera, CameraOff, Mic, MicOff, Send, Sparkles, User, Volume2, RefreshCw, Settings, Waveform, Radio, StopCircle } from 'lucide-react';
+import { ArrowLeft, Camera, CameraOff, Mic, MicOff, Send, Sparkles, User, Volume2, RefreshCw, Settings, AudioWaveform, Radio, StopCircle } from 'lucide-react';
 
 // Character presets
 const CHARACTERS = [
@@ -543,7 +543,7 @@ export default function FictionalCharacterPage() {
                 {/* Voice conversion indicator */}
                 {isVoiceConverting && (
                   <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 bg-purple-600 rounded-full">
-                    <Waveform className="w-4 h-4 text-white animate-pulse" />
+                    <AudioWaveform className="w-4 h-4 text-white animate-pulse" />
                     <span className="text-white text-sm font-medium">Voice Converting</span>
                   </div>
                 )}
