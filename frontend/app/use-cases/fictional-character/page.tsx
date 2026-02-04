@@ -49,8 +49,11 @@ const FILTER_EFFECTS = {
 type VoiceMode = 'text' | 'realtime';
 type ConverterType = 'rvc' | 'sovits';
 
-// Voice conversion service URL
-const VOICE_CONVERSION_URL = process.env.NEXT_PUBLIC_VOICE_CONVERSION_URL || 'http://localhost:8765';
+// Voice conversion service URL - use Fly.io in production, localhost for dev
+const VOICE_CONVERSION_URL = process.env.NEXT_PUBLIC_VOICE_CONVERSION_URL ||
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? 'https://5ml-voice-conversion.fly.dev'
+    : 'http://localhost:8765');
 
 export default function FictionalCharacterPage() {
   // Camera state
