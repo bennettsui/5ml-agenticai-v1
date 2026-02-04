@@ -92,6 +92,9 @@ export default function PhotoBoothPage() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
 
+  // Refs for cleanup
+  const replayTimersRef = useRef<NodeJS.Timeout[]>([]);
+
   // Fetch themes on mount
   useEffect(() => {
     fetchThemes();
@@ -124,6 +127,15 @@ export default function PhotoBoothPage() {
       }
     };
   }, [cameraStream]);
+
+  // Cleanup timers and blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      // Clear replay timers
+      replayTimersRef.current.forEach(timer => clearTimeout(timer));
+      // Note: previewUrl cleanup happens in resetSession
+    };
+  }, []);
 
   // Auto-capture countdown effect
   useEffect(() => {
@@ -177,9 +189,14 @@ export default function PhotoBoothPage() {
 
   // Replay transformation animation
   const replayTransformation = () => {
+    // Clear any existing replay timers
+    replayTimersRef.current.forEach(timer => clearTimeout(timer));
+    replayTimersRef.current = [];
+
     setTransformationPhase('original');
-    setTimeout(() => setTransformationPhase('transforming'), 1000);
-    setTimeout(() => setTransformationPhase('complete'), 3000);
+    const timer1 = setTimeout(() => setTransformationPhase('transforming'), 1000);
+    const timer2 = setTimeout(() => setTransformationPhase('complete'), 3000);
+    replayTimersRef.current = [timer1, timer2];
   };
 
   // Regenerate with same input image (optionally with different theme)
@@ -327,7 +344,11 @@ export default function PhotoBoothPage() {
     const file = e.target.files?.[0];
     if (file) {
       setUploadedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+      // Revoke old preview URL before creating new one
+      setPreviewUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(file);
+      });
       setError(null);
     }
   }, []);
@@ -615,6 +636,10 @@ export default function PhotoBoothPage() {
     setImageId(null);
     setSelectedTheme(null);
     setUploadedFile(null);
+    // Revoke the preview URL to free memory
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
     setPreviewUrl(null);
     setQualityCheck(null);
     setAnalysis(null);
@@ -622,6 +647,9 @@ export default function PhotoBoothPage() {
     setProgressMessages([]);
     setCurrentProgress(0);
     setError(null);
+    // Clear replay timers
+    replayTimersRef.current.forEach(timer => clearTimeout(timer));
+    replayTimersRef.current = [];
     stopCamera();
   };
 
