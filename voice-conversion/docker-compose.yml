@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  voice-conversion:
+    build: .
+    ports:
+      - "8765:8765"
+    volumes:
+      # Persist models
+      - ./models:/app/models
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    # For GPU support, uncomment below:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
