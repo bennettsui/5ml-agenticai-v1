@@ -105,8 +105,46 @@ class OCRProcessor {
     }
   }
 
-  async requestOCR(image) {
-    const prompt = `Extract all information from this receipt image. Return ONLY a JSON object with this exact structure (no other text):
+  async processReceiptFromText(ocrText, imagePath = '') {
+    try {
+      const filename = imagePath ? path.basename(imagePath) : 'OCR text';
+      console.log(`🔍 [OCR] Processing (${this.providerLabel}): ${filename} (text)`);
+
+      const prompt = this.buildPrompt('text');
+      const { contentText, usage } = await this.requestTextOCR(ocrText, prompt);
+
+      const jsonMatch = contentText.match(/\{[\s\S]*\}/);
+
+      if (!jsonMatch) {
+        throw new Error(`Failed to extract JSON from ${this.providerLabel} response`);
+      }
+
+      const extracted = JSON.parse(jsonMatch[0]);
+
+      console.log(`✅ [OCR] Extracted: ${extracted.vendor} - ${extracted.currency} ${extracted.amount}`);
+
+      return {
+        success: true,
+        data: extracted,
+        raw_text: contentText,
+        usage,
+      };
+    } catch (error) {
+      console.error(`❌ [OCR] Error processing ${imagePath || 'text'}:`, error.message);
+      return {
+        success: false,
+        error: error.message,
+        data: null,
+      };
+    }
+  }
+
+  buildPrompt(source = 'image') {
+    const header = source === 'text'
+      ? 'You are given OCR text extracted from a receipt image. Extract all information from the OCR text.'
+      : 'Extract all information from this receipt image.';
+
+    return `${header} Return ONLY a JSON object with this exact structure (no other text):
 
 {
   "date": "YYYY-MM-DD",
@@ -132,11 +170,22 @@ Instructions:
 - Set confidence 0-1 based on image clarity
 - Add warnings array for any unclear fields
 `;
+  }
+
+  async requestOCR(image) {
+    const prompt = this.buildPrompt('image');
 
     if (this.provider === 'deepseek') {
-      return this.requestDeepseekOCR(image, prompt);
+      throw new Error('DeepSeek OCR requires pre-extracted text (image input not supported).');
     }
     return this.requestClaudeOCR(image, prompt);
+  }
+
+  async requestTextOCR(ocrText, prompt) {
+    if (this.provider === 'deepseek') {
+      return this.requestDeepseekTextOCR(ocrText, prompt);
+    }
+    throw new Error('Text-based OCR is only supported for DeepSeek.');
   }
 
   async requestClaudeOCR(image, prompt) {
@@ -172,9 +221,7 @@ Instructions:
     };
   }
 
-  async requestDeepseekOCR(image, prompt) {
-    const imageUrl = `data:${image.media_type};base64,${image.data}`;
-
+  async requestDeepseekTextOCR(ocrText, prompt) {
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -187,10 +234,7 @@ Instructions:
         messages: [
           {
             role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: imageUrl } },
-            ],
+            content: `${prompt}\n\nOCR TEXT:\n${ocrText}`,
           },
         ],
       }),
@@ -219,16 +263,31 @@ Instructions:
   /**
    * Process multiple receipts
    */
-  async processBatch(imagePaths, onProgress = null) {
+  async processBatch(imagePaths, onProgress = null, options = {}) {
     console.log(`🚀 [OCR] Starting batch OCR: ${imagePaths.length} images`);
 
     const results = [];
     let processed = 0;
     let successful = 0;
     let failed = 0;
+    const ocrTextByPath = options.ocrTextByPath || {};
 
     for (const imagePath of imagePaths) {
-      const result = await this.processReceipt(imagePath);
+      let result;
+      if (this.provider === 'deepseek') {
+        const ocrText = ocrTextByPath[imagePath];
+        if (!ocrText) {
+          result = {
+            success: false,
+            error: 'Missing OCR text for DeepSeek processing.',
+            data: null,
+          };
+        } else {
+          result = await this.processReceiptFromText(ocrText, imagePath);
+        }
+      } else {
+        result = await this.processReceipt(imagePath);
+      }
       results.push({
         image_path: imagePath,
         ...result

@@ -143,21 +143,67 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     );
     console.log(`✅ Collected ${downloadedFiles.length} receipts\n`);
 
-    // CHECKPOINT 4A: Tesseract OCR - TEMPORARILY SKIPPED
-    console.log('✓ CHECKPOINT 4A: Skipping Tesseract (temporary)...');
-    await logProcessing(batchId, 'info', 'tesseract_skipped', 'Tesseract temporarily disabled for faster processing');
-    wsServer.sendProgress(batchId, { progress: 30, message: 'Skipping bounding box extraction (vision OCR only)...' });
-
-    // Create empty results (no bounding boxes)
     const imagePaths = downloadedFiles.map(f => f.path);
-    const tesseractResults = imagePaths.map(path => ({
-      success: false,
-      imagePath: path,
-      error: 'Tesseract temporarily disabled',
-      boxes: []
-    }));
+    let tesseractResults = [];
 
-    console.log(`⏭️ Tesseract skipped, continuing to vision OCR\n`);
+    if (ocrConfig.provider === 'deepseek') {
+      // CHECKPOINT 4A: Tesseract OCR for text extraction (required for DeepSeek)
+      console.log('✓ CHECKPOINT 4A: Running Tesseract OCR for DeepSeek...');
+      await logProcessing(batchId, 'info', 'tesseract_start', 'Starting Tesseract OCR for DeepSeek');
+      wsServer.sendProgress(batchId, { progress: 30, message: 'Extracting text with Tesseract...' });
+
+      try {
+        const TesseractOCR = require('../../../tools/tesseract-ocr');
+        const tesseract = new TesseractOCR();
+
+        const batchPromise = tesseract.processBatch(imagePaths, (p) => {
+          const progress = 30 + (p.progress * 0.2);
+          wsServer.sendProgress(batchId, {
+            progress: Math.round(progress),
+            message: `Tesseract ${p.current}/${p.total}`
+          });
+        });
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Tesseract batch timeout (10 minutes) - Chinese OCR processing exceeded time limit')), 600000)
+        );
+
+        tesseractResults = await Promise.race([batchPromise, timeoutPromise]);
+
+        await tesseract.terminate();
+
+        const successCount = tesseractResults.filter(r => r.success).length;
+        console.log(`✅ Tesseract: ${successCount} successful\n`);
+        await logProcessing(batchId, 'info', 'tesseract_complete', `Tesseract completed: ${successCount} successful`);
+      } catch (error) {
+        console.error(`⚠️ [Tesseract] Failed, continuing with empty text:`, error.message);
+        await logProcessing(batchId, 'warning', 'tesseract_failed', `Tesseract failed: ${error.message}`);
+
+        tesseractResults = imagePaths.map(path => ({
+          success: false,
+          imagePath: path,
+          error: error.message,
+          boxes: [],
+          fullText: '',
+        }));
+      }
+    } else {
+      // CHECKPOINT 4A: Tesseract OCR - TEMPORARILY SKIPPED
+      console.log('✓ CHECKPOINT 4A: Skipping Tesseract (temporary)...');
+      await logProcessing(batchId, 'info', 'tesseract_skipped', 'Tesseract temporarily disabled for faster processing');
+      wsServer.sendProgress(batchId, { progress: 30, message: 'Skipping bounding box extraction (vision OCR only)...' });
+
+      // Create empty results (no bounding boxes)
+      tesseractResults = imagePaths.map(path => ({
+        success: false,
+        imagePath: path,
+        error: 'Tesseract temporarily disabled',
+        boxes: [],
+        fullText: '',
+      }));
+
+      console.log(`⏭️ Tesseract skipped, continuing to vision OCR\n`);
+    }
 
     /* TESSERACT CODE DISABLED - UNCOMMENT WHEN READY TO DEBUG
     let tesseractResults = [];
@@ -218,6 +264,15 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
       apiKey: ocrConfig.provider === 'deepseek' ? process.env.DEEPSEEK_API_KEY : process.env.ANTHROPIC_API_KEY,
     });
 
+    const ocrTextByPath = ocrConfig.provider === 'deepseek'
+      ? tesseractResults.reduce((acc, result) => {
+        if (result?.imagePath && result?.fullText) {
+          acc[result.imagePath] = result.fullText;
+        }
+        return acc;
+      }, {})
+      : {};
+
     const ocrResults = await ocr.processBatch(imagePaths, (p) => {
       const progress = 50 + (p.progress * 0.2);
       wsServer.sendProgress(batchId, {
@@ -229,7 +284,7 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
         'UPDATE receipt_batches SET processed_receipts = $1, failed_receipts = $2 WHERE batch_id = $3',
         [p.successful, p.failed, batchId]
       ).catch(console.error);
-    });
+    }, { ocrTextByPath });
 
     console.log(`✅ ${ocrConfig.label} OCR: ${ocrResults.successful} successful\n`);
 
