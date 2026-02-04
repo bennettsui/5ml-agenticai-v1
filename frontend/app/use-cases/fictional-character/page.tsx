@@ -191,7 +191,7 @@ export default function FictionalCharacterPage() {
         canvas.width = video.videoWidth || 640;
         canvas.height = video.videoHeight || 480;
 
-        // Apply filter
+        // Apply filter for video only
         ctx.filter = FILTER_EFFECTS[activeFilter] || 'none';
 
         // Mirror the video (selfie mode)
@@ -200,9 +200,52 @@ export default function FictionalCharacterPage() {
         ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
         ctx.restore();
 
+        // Reset filter before drawing overlay
+        ctx.filter = 'none';
+
         // Draw character overlay if enabled
         if (showOverlay) {
-          drawCharacterOverlay(ctx, canvas.width, canvas.height);
+          // Get current character color
+          const borderColor = selectedCharacter.id === 'uncle-peanut'
+            ? '#f59e0b'
+            : selectedCharacter.id === 'anime-girl'
+              ? '#ec4899'
+              : '#3b82f6';
+
+          // Draw bottom bar with character name
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 20px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`🎭 ${selectedCharacter.name}`, canvas.width / 2, canvas.height - 30);
+
+          // Draw frame border
+          ctx.strokeStyle = borderColor;
+          ctx.lineWidth = 4;
+          ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+
+          // Draw corner decorations
+          const cornerSize = 30;
+          ctx.fillStyle = borderColor;
+
+          // Top-left
+          ctx.fillRect(0, 0, cornerSize, 4);
+          ctx.fillRect(0, 0, 4, cornerSize);
+
+          // Top-right
+          ctx.fillRect(canvas.width - cornerSize, 0, cornerSize, 4);
+          ctx.fillRect(canvas.width - 4, 0, 4, cornerSize);
+
+          // Bottom-left
+          ctx.fillRect(0, canvas.height - 4, cornerSize, 4);
+          ctx.fillRect(0, canvas.height - cornerSize, 4, cornerSize);
+
+          // Bottom-right
+          ctx.fillRect(canvas.width - cornerSize, canvas.height - 4, cornerSize, 4);
+          ctx.fillRect(canvas.width - 4, canvas.height - cornerSize, 4, cornerSize);
         }
       }
 
@@ -210,52 +253,7 @@ export default function FictionalCharacterPage() {
     };
 
     render();
-  }, [activeFilter, showOverlay]);
-
-  // Draw character overlay elements
-  const drawCharacterOverlay = (
-    ctx: CanvasRenderingContext2D,
-    width: number,
-    height: number
-  ) => {
-    // Add character-specific overlays
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(0, height - 60, width, 60);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 18px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`🎭 ${selectedCharacter.name}`, width / 2, height - 30);
-
-    // Add frame border based on character
-    ctx.strokeStyle = selectedCharacter.id === 'uncle-peanut'
-      ? '#f59e0b'
-      : selectedCharacter.id === 'anime-girl'
-        ? '#ec4899'
-        : '#3b82f6';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(2, 2, width - 4, height - 4);
-
-    // Add corner decorations
-    const cornerSize = 30;
-    ctx.fillStyle = ctx.strokeStyle;
-
-    // Top-left
-    ctx.fillRect(0, 0, cornerSize, 4);
-    ctx.fillRect(0, 0, 4, cornerSize);
-
-    // Top-right
-    ctx.fillRect(width - cornerSize, 0, cornerSize, 4);
-    ctx.fillRect(width - 4, 0, 4, cornerSize);
-
-    // Bottom-left
-    ctx.fillRect(0, height - 4, cornerSize, 4);
-    ctx.fillRect(0, height - cornerSize, 4, cornerSize);
-
-    // Bottom-right
-    ctx.fillRect(width - cornerSize, height - 4, cornerSize, 4);
-    ctx.fillRect(width - 4, height - cornerSize, 4, cornerSize);
-  };
+  }, [activeFilter, showOverlay, selectedCharacter]);
 
   // Update rendering when filter or overlay changes
   useEffect(() => {
