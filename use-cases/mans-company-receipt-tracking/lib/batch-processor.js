@@ -37,12 +37,38 @@ async function logProcessing(batchId, level, step, message, details = null) {
 /**
  * Process receipt batch with detailed checkpoints
  */
-async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFiles = null) {
+const resolveOcrConfig = (value) => {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (!normalized || normalized === 'claude' || normalized === 'claude-haiku' || normalized === 'haiku') {
+    return {
+      modelKey: 'claude-haiku',
+      label: 'Claude Haiku',
+      provider: 'claude',
+      model: 'claude-3-haiku-20240307',
+    };
+  }
+  if (normalized === 'deepseek') {
+    return {
+      modelKey: 'deepseek',
+      label: 'DeepSeek',
+      provider: 'deepseek',
+      model: process.env.DEEPSEEK_OCR_MODEL || 'deepseek-chat',
+    };
+  }
+  return null;
+};
+
+async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFiles = null, ocrModel = 'claude-haiku') {
   const wsServer = require('../../../services/websocket-server');
   let downloadedFiles = [];
   const useUploads = Array.isArray(uploadedFiles) && uploadedFiles.length > 0;
+  const ocrConfig = resolveOcrConfig(ocrModel);
 
   try {
+    if (!ocrConfig) {
+      throw new Error(`Unsupported OCR model: ${ocrModel}`);
+    }
+
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🚀 [BATCH ${batchId}] Starting receipt processing`);
     if (useUploads) {
@@ -51,6 +77,7 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
       console.log(`📁 Dropbox: ${dropboxUrl.substring(0, 50)}...`);
     }
     console.log(`👤 Client: ${clientName}`);
+    console.log(`🧠 OCR Model: ${ocrConfig.label}`);
     console.log(`${'='.repeat(60)}\n`);
 
     // CHECKPOINT 1: Update status
@@ -67,7 +94,11 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     if (!useUploads && !process.env.DROPBOX_ACCESS_TOKEN) {
       throw new Error('DROPBOX_ACCESS_TOKEN not configured');
     }
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (ocrConfig.provider === 'deepseek') {
+      if (!process.env.DEEPSEEK_API_KEY) {
+        throw new Error('DEEPSEEK_API_KEY not configured');
+      }
+    } else if (!process.env.ANTHROPIC_API_KEY) {
       throw new Error('ANTHROPIC_API_KEY not configured');
     }
     await ensureReceiptsSchema();
@@ -115,7 +146,7 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     // CHECKPOINT 4A: Tesseract OCR - TEMPORARILY SKIPPED
     console.log('✓ CHECKPOINT 4A: Skipping Tesseract (temporary)...');
     await logProcessing(batchId, 'info', 'tesseract_skipped', 'Tesseract temporarily disabled for faster processing');
-    wsServer.sendProgress(batchId, { progress: 30, message: 'Skipping bounding box extraction (using Claude only)...' });
+    wsServer.sendProgress(batchId, { progress: 30, message: 'Skipping bounding box extraction (vision OCR only)...' });
 
     // Create empty results (no bounding boxes)
     const imagePaths = downloadedFiles.map(f => f.path);
@@ -126,7 +157,7 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
       boxes: []
     }));
 
-    console.log(`⏭️ Tesseract skipped, continuing to Claude Vision\n`);
+    console.log(`⏭️ Tesseract skipped, continuing to vision OCR\n`);
 
     /* TESSERACT CODE DISABLED - UNCOMMENT WHEN READY TO DEBUG
     let tesseractResults = [];
@@ -171,19 +202,27 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     }
     */
 
-    // CHECKPOINT 4B: Claude Vision OCR for structured data
-    console.log('✓ CHECKPOINT 4B: Running Claude Vision OCR...');
-    await logProcessing(batchId, 'info', 'ocr_start', 'Starting Claude OCR');
-    wsServer.sendProgress(batchId, { progress: 50, message: 'Processing with Claude Vision...' });
+    // CHECKPOINT 4B: Vision OCR for structured data
+    console.log(`✓ CHECKPOINT 4B: Running ${ocrConfig.label} OCR...`);
+    await logProcessing(batchId, 'info', 'ocr_start', `Starting OCR (${ocrConfig.label})`, {
+      ocr_model: ocrConfig.modelKey,
+      provider: ocrConfig.provider,
+      model: ocrConfig.model,
+    });
+    wsServer.sendProgress(batchId, { progress: 50, message: `Processing with ${ocrConfig.label}...` });
 
     const OCRProcessor = require('../../../tools/ocr-processor');
-    const ocr = new OCRProcessor(process.env.ANTHROPIC_API_KEY);
+    const ocr = new OCRProcessor({
+      provider: ocrConfig.provider,
+      model: ocrConfig.model,
+      apiKey: ocrConfig.provider === 'deepseek' ? process.env.DEEPSEEK_API_KEY : process.env.ANTHROPIC_API_KEY,
+    });
 
     const ocrResults = await ocr.processBatch(imagePaths, (p) => {
       const progress = 50 + (p.progress * 0.2);
       wsServer.sendProgress(batchId, {
         progress: Math.round(progress),
-        message: `Claude OCR ${p.current}/${p.total}`
+        message: `${ocrConfig.label} OCR ${p.current}/${p.total}`
       });
 
       db.query(
@@ -192,7 +231,7 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
       ).catch(console.error);
     });
 
-    console.log(`✅ Claude OCR: ${ocrResults.successful} successful\n`);
+    console.log(`✅ ${ocrConfig.label} OCR: ${ocrResults.successful} successful\n`);
 
     // CHECKPOINT 5: Save to database
     console.log('✓ CHECKPOINT 5: Saving to database...');
