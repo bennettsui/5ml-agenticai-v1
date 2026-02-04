@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User } from 'lucide-react';
 
 export default function Home() {
   const useCases = [
@@ -74,6 +74,16 @@ export default function Home() {
       color: 'from-indigo-500 to-purple-600',
       features: ['Parallax Effects', 'Mouse Tracking', 'Click Animations', 'Dynamic Gradients'],
       status: 'Demo'
+    },
+    {
+      id: 'fictional-character',
+      title: 'Live Fictional Character',
+      description: 'AI persona engine that transforms your speech into character-voiced content for VTubers and avatars',
+      icon: User,
+      href: '/use-cases/fictional-character',
+      color: 'from-rose-500 to-pink-600',
+      features: ['Persona Engine', 'TTS-Ready Output', 'Multi-Character', 'Avatar Integration'],
+      status: 'New'
     },
   ];
 
