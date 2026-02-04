@@ -288,7 +288,7 @@ function StickyNarrative({
           }
         });
       },
-      { threshold: 0.5, rootMargin: '-40% 0px -40% 0px' }
+      { threshold: 0.6, rootMargin: '-30% 0px -30% 0px' }
     );
 
     paragraphRefs.current.forEach((ref) => {
@@ -299,11 +299,11 @@ function StickyNarrative({
   }, []);
 
   return (
-    <div ref={containerRef} className="relative min-h-[150vh]">
+    <div ref={containerRef} className="relative">
       <div className="grid md:grid-cols-2 gap-8 md:gap-16">
         {/* Sticky Visual */}
-        <div className="hidden md:block relative">
-          <div className="sticky top-1/3 transform -translate-y-1/4">
+        <div className="hidden md:block h-fit">
+          <div className="sticky top-32">
             <h2 className="text-3xl md:text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400">
               {title}
             </h2>
@@ -326,7 +326,7 @@ function StickyNarrative({
         </div>
 
         {/* Scrolling Text */}
-        <div className="pt-[20vh]">
+        <div className="space-y-0">
           <div className="md:hidden mb-8">
             <h2 className="text-3xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400">
               {title}
@@ -337,14 +337,16 @@ function StickyNarrative({
             <div
               key={i}
               ref={(el) => { paragraphRefs.current[i] = el; }}
-              className={`min-h-[50vh] flex flex-col justify-center transition-all duration-500 ${
-                i === activeIndex ? 'opacity-100 translate-x-0' : 'opacity-30 translate-x-4'
-              }`}
+              className="min-h-[60vh] flex flex-col justify-center py-8"
             >
-              <p className="text-xl md:text-2xl text-slate-200 leading-relaxed mb-4">
+              <p className={`text-xl md:text-2xl leading-relaxed mb-4 transition-all duration-500 ${
+                i === activeIndex ? 'text-white opacity-100 translate-x-0' : 'text-slate-500 opacity-50 translate-x-4'
+              }`}>
                 {p.en}
               </p>
-              <p className="text-lg text-slate-400">
+              <p className={`text-lg transition-all duration-500 ${
+                i === activeIndex ? 'text-slate-300 opacity-100' : 'text-slate-600 opacity-50'
+              }`}>
                 {p.zh}
               </p>
             </div>
