@@ -242,7 +242,7 @@ export default function FictionalCharacterPage() {
     };
   }, [stopCamera]);
 
-  // Start voice conversion with simple pitch shift
+  // Start voice conversion with simple passthrough
   const startVoiceConversion = async () => {
     try {
       setIsVoiceConverting(true);
@@ -250,7 +250,7 @@ export default function FictionalCharacterPage() {
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: false, // Disable for better quality
+          echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
         },
@@ -263,19 +263,24 @@ export default function FictionalCharacterPage() {
       audioContextRef.current = new AudioContextClass();
       const ctx = audioContextRef.current;
 
+      // Resume audio context if suspended (required by browsers)
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+
       // Create source from microphone
       sourceNodeRef.current = ctx.createMediaStreamSource(stream);
 
-      // Create a simple delay + gain for monitoring (pitch shift is complex in browser)
-      // For now, just pass through with gain adjustment
+      // Create gain node for volume control
       const gainNode = ctx.createGain();
-      gainNode.gain.value = 1.5;
+      gainNode.gain.value = 2.0; // Boost volume
 
-      // Connect to output
+      // Connect: mic -> gain -> speakers
       sourceNodeRef.current.connect(gainNode);
       gainNode.connect(ctx.destination);
 
-      setVoiceConversionStatus(`Active (pitch: ${pitchShift > 0 ? '+' : ''}${pitchShift})`);
+      setVoiceConversionStatus(`🔊 Live - speak into mic (use headphones!)`);
+      console.log('Voice conversion started, AudioContext state:', ctx.state);
 
     } catch (err) {
       console.error('Voice conversion error:', err);
