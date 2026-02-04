@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     libsndfile1 \
     libsndfile1-dev \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching
@@ -25,12 +26,15 @@ COPY . .
 # Create models directory
 RUN mkdir -p models/rvc models/sovits
 
+# Default port (can be overridden by PORT env var)
+ENV PORT=8765
+
 # Expose port
 EXPOSE 8765
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8765/ || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/ || exit 1
 
-# Run the server
-CMD ["python", "server.py"]
+# Run the server with dynamic port
+CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port ${PORT}"]
