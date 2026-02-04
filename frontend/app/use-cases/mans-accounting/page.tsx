@@ -75,6 +75,7 @@ export default function ReceiptProcessor() {
   const [periodEnd, setPeriodEnd] = useState('');
   const [inputMode, setInputMode] = useState<'upload' | 'dropbox'>('upload');
   const [dropboxUrl, setDropboxUrl] = useState('');
+  const [ocrModel, setOcrModel] = useState<'claude-haiku' | 'deepseek'>('claude-haiku');
   const [isProcessing, setIsProcessing] = useState(false);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
@@ -433,6 +434,7 @@ export default function ReceiptProcessor() {
             dropbox_url: dropboxUrl.trim(),
             period_start: periodStart || null,
             period_end: periodEnd || null,
+            ocr_model: ocrModel,
           }),
         });
       } else {
@@ -458,6 +460,7 @@ export default function ReceiptProcessor() {
             client_name: clientName,
             period_start: periodStart || null,
             period_end: periodEnd || null,
+            ocr_model: ocrModel,
             images,
           }),
         });
@@ -686,6 +689,25 @@ export default function ReceiptProcessor() {
                   Dropbox Folder URL
                 </label>
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="ocrModel" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                OCR Model
+              </label>
+              <select
+                id="ocrModel"
+                value={ocrModel}
+                onChange={(e) => setOcrModel(e.target.value as 'claude-haiku' | 'deepseek')}
+                className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                disabled={isProcessing}
+              >
+                <option value="claude-haiku">Claude Haiku (Vision)</option>
+                <option value="deepseek">DeepSeek (Vision)</option>
+              </select>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Choose the OCR model for receipt extraction.
+              </p>
             </div>
 
             {inputMode === 'upload' ? (
@@ -1212,7 +1234,7 @@ export default function ReceiptProcessor() {
           <ol className="list-decimal list-inside space-y-2 text-sm text-blue-700 dark:text-blue-400">
             <li>Upload your receipt images (JPG, PNG, WEBP)</li>
             <li>Click "Process Receipts" to start OCR and categorization</li>
-            <li>Our AI extracts data from receipts using Claude Vision (supports Chinese + English)</li>
+            <li>Our AI extracts data from receipts using your selected OCR model (supports Chinese + English)</li>
             <li>Receipts are automatically categorized with HK IRD compliance checks</li>
             <li>Download your complete P&L Excel report in under 3 minutes</li>
           </ol>

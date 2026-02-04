@@ -1,17 +1,47 @@
 /**
- * OCR Processor - Claude Vision API Integration
- * Extracts receipt data from images using Claude Vision
+ * OCR Processor - Vision OCR Integration
+ * Extracts receipt data from images using selectable OCR providers
  */
 
 const Anthropic = require('@anthropic-ai/sdk');
+const fetch = require('node-fetch');
 const fs = require('fs').promises;
 const path = require('path');
 
 class OCRProcessor {
-  constructor(apiKey) {
+  constructor(options = {}) {
+    if (typeof options === 'string') {
+      this.provider = 'claude';
+      this.model = 'claude-3-haiku-20240307';
+      this.client = new Anthropic({ apiKey: options });
+      this.providerLabel = 'Claude';
+      return;
+    }
+
+    const {
+      provider = 'claude',
+      model,
+      apiKey,
+      baseUrl,
+    } = options;
+
+    this.provider = provider;
+    this.providerLabel = provider === 'deepseek' ? 'DeepSeek' : 'Claude';
+
+    if (provider === 'deepseek') {
+      if (!apiKey) {
+        throw new Error('DEEPSEEK_API_KEY is required');
+      }
+      this.model = model || process.env.DEEPSEEK_OCR_MODEL || 'deepseek-chat';
+      this.baseUrl = baseUrl || process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
+      this.apiKey = apiKey;
+      return;
+    }
+
     if (!apiKey) {
       throw new Error('ANTHROPIC_API_KEY is required');
     }
+    this.model = model || 'claude-3-haiku-20240307';
     this.client = new Anthropic({ apiKey });
   }
 
@@ -39,31 +69,44 @@ class OCRProcessor {
   }
 
   /**
-   * Process a single receipt image with Claude Vision
+   * Process a single receipt image with the configured OCR provider
    */
   async processReceipt(imagePath) {
     try {
-      console.log(`🔍 [OCR] Processing: ${path.basename(imagePath)}`);
+      console.log(`🔍 [OCR] Processing (${this.providerLabel}): ${path.basename(imagePath)}`);
 
       const image = await this.encodeImage(imagePath);
 
-      const response = await this.client.messages.create({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 2048,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: image.media_type,
-                data: image.data
-              }
-            },
-            {
-              type: 'text',
-              text: `Extract all information from this receipt image. Return ONLY a JSON object with this exact structure (no other text):
+      const { contentText, usage } = await this.requestOCR(image);
+
+      const jsonMatch = contentText.match(/\{[\s\S]*\}/);
+
+      if (!jsonMatch) {
+        throw new Error(`Failed to extract JSON from ${this.providerLabel} response`);
+      }
+
+      const extracted = JSON.parse(jsonMatch[0]);
+
+      console.log(`✅ [OCR] Extracted: ${extracted.vendor} - ${extracted.currency} ${extracted.amount}`);
+
+      return {
+        success: true,
+        data: extracted,
+        raw_text: contentText,
+        usage,
+      };
+    } catch (error) {
+      console.error(`❌ [OCR] Error processing ${path.basename(imagePath)}:`, error.message);
+      return {
+        success: false,
+        error: error.message,
+        data: null,
+      };
+    }
+  }
+
+  async requestOCR(image) {
+    const prompt = `Extract all information from this receipt image. Return ONLY a JSON object with this exact structure (no other text):
 
 {
   "date": "YYYY-MM-DD",
@@ -87,41 +130,90 @@ Instructions:
 - If currency not stated, assume HKD
 - Extract individual line items if visible
 - Set confidence 0-1 based on image clarity
-- Add warnings array for any unclear fields`
-            }
-          ]
-        }]
-      });
+- Add warnings array for any unclear fields
+`;
 
-      // Parse the response
-      const content = response.content[0].text;
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-
-      if (!jsonMatch) {
-        throw new Error('Failed to extract JSON from Claude response');
-      }
-
-      const extracted = JSON.parse(jsonMatch[0]);
-
-      console.log(`✅ [OCR] Extracted: ${extracted.vendor} - ${extracted.currency} ${extracted.amount}`);
-
-      return {
-        success: true,
-        data: extracted,
-        raw_text: content,
-        usage: {
-          input_tokens: response.usage.input_tokens,
-          output_tokens: response.usage.output_tokens
-        }
-      };
-    } catch (error) {
-      console.error(`❌ [OCR] Error processing ${path.basename(imagePath)}:`, error.message);
-      return {
-        success: false,
-        error: error.message,
-        data: null
-      };
+    if (this.provider === 'deepseek') {
+      return this.requestDeepseekOCR(image, prompt);
     }
+    return this.requestClaudeOCR(image, prompt);
+  }
+
+  async requestClaudeOCR(image, prompt) {
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 2048,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: image.media_type,
+              data: image.data,
+            },
+          },
+          {
+            type: 'text',
+            text: prompt,
+          },
+        ],
+      }],
+    });
+
+    const contentText = response?.content?.[0]?.text || '';
+    return {
+      contentText,
+      usage: response?.usage ? {
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+      } : undefined,
+    };
+  }
+
+  async requestDeepseekOCR(image, prompt) {
+    const imageUrl = `data:${image.media_type};base64,${image.data}`;
+
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: 2048,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: imageUrl } },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`DeepSeek API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const messageContent = data?.choices?.[0]?.message?.content;
+    const contentText = Array.isArray(messageContent)
+      ? messageContent.map(part => part?.text || '').join('')
+      : (messageContent || '');
+
+    return {
+      contentText,
+      usage: data?.usage ? {
+        input_tokens: data.usage.prompt_tokens,
+        output_tokens: data.usage.completion_tokens,
+      } : undefined,
+    };
   }
 
   /**

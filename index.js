@@ -1403,11 +1403,15 @@ app.use('/api/intelligence', topicIntelligenceRoutes);
 
 console.log('✅ Topic Intelligence routes loaded: /api/intelligence');
 
-// Photo Booth Routes
-const photoBoothRoutes = require('./use-cases/photo-booth/api/routes');
-app.use('/api/photo-booth', photoBoothRoutes);
-
-console.log('✅ Photo Booth routes loaded: /api/photo-booth');
+// Photo Booth Routes (optional dependency on multer)
+try {
+  const photoBoothRoutes = require('./use-cases/photo-booth/api/routes');
+  app.use('/api/photo-booth', photoBoothRoutes);
+  console.log('✅ Photo Booth routes loaded: /api/photo-booth');
+} catch (error) {
+  console.warn('⚠️ Photo Booth routes not loaded:', error.message);
+  console.warn('   Install missing dependencies (e.g. `multer`) to enable /api/photo-booth');
+}
 
 // Scheduler Service
 const scheduler = require('./services/scheduler');

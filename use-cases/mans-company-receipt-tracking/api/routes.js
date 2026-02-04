@@ -76,6 +76,15 @@ const parseBooleanField = (value, fallback = null) => {
   return fallback;
 };
 
+const normalizeOcrModel = (value) => {
+  if (!value) return 'claude-haiku';
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  if (['claude', 'claude-haiku', 'haiku'].includes(normalized)) return 'claude-haiku';
+  if (normalized === 'deepseek') return 'deepseek';
+  return null;
+};
+
 const regenerateExcelForBatch = async (batchId) => {
   const batchResult = await db.query(
     'SELECT excel_file_path FROM receipt_batches WHERE batch_id = $1',
@@ -166,18 +175,27 @@ const regenerateExcelForBatch = async (batchId) => {
  *   "client_name": "Man's Accounting Firm",
  *   "dropbox_url": "https://www.dropbox.com/sh/abc123",
  *   "period_start": "2026-01-01",
- *   "period_end": "2026-01-31"
+ *   "period_end": "2026-01-31",
+ *   "ocr_model": "claude-haiku"
  * }
  */
 router.post('/process', async (req, res) => {
   try {
-    const { client_name, dropbox_url, period_start, period_end } = req.body;
+    const { client_name, dropbox_url, period_start, period_end, ocr_model } = req.body;
+    const ocrModel = normalizeOcrModel(ocr_model);
 
     // Validate required fields
     if (!client_name || !dropbox_url) {
       return res.status(400).json({
         success: false,
         error: 'client_name and dropbox_url are required',
+      });
+    }
+
+    if (!ocrModel) {
+      return res.status(400).json({
+        success: false,
+        error: 'Unsupported ocr_model. Use "claude-haiku" or "deepseek".',
       });
     }
 
@@ -188,6 +206,22 @@ router.post('/process', async (req, res) => {
         error: 'Database not configured',
         details: 'DATABASE_URL environment variable is not set. Please configure PostgreSQL database.',
         help: 'Run: fly postgres create && fly postgres attach <postgres-app-name>',
+      });
+    }
+
+    if (ocrModel === 'deepseek') {
+      if (!process.env.DEEPSEEK_API_KEY) {
+        return res.status(503).json({
+          success: false,
+          error: 'OCR not configured',
+          details: 'DEEPSEEK_API_KEY environment variable is not set.',
+        });
+      }
+    } else if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(503).json({
+        success: false,
+        error: 'OCR not configured',
+        details: 'ANTHROPIC_API_KEY environment variable is not set.',
       });
     }
 
@@ -210,13 +244,14 @@ router.post('/process', async (req, res) => {
     );
 
     // Start async processing (don't wait for completion)
-    processReceiptBatch(batchId, dropbox_url, client_name).catch(error => {
+    processReceiptBatch(batchId, dropbox_url, client_name, null, ocrModel).catch(error => {
       console.error(`Error processing batch ${batchId}:`, error);
     });
 
     res.json({
       success: true,
       batch_id: batchId,
+      ocr_model: ocrModel,
       status: 'pending',
       message: 'Receipt processing started. Use /batches/:batchId/status to check progress.',
       created_at: batchResult.rows[0].created_at,
@@ -241,17 +276,26 @@ router.post('/process', async (req, res) => {
  *   "client_name": "Man's Accounting Firm",
  *   "period_start": "2026-01-01",
  *   "period_end": "2026-01-31",
+ *   "ocr_model": "claude-haiku",
  *   "images": [{ "filename": "receipt.png", "data": "base64..." }]
  * }
  */
 router.post('/process-upload', async (req, res) => {
   try {
-    const { client_name, period_start, period_end, images } = req.body;
+    const { client_name, period_start, period_end, images, ocr_model } = req.body;
+    const ocrModel = normalizeOcrModel(ocr_model);
 
     if (!client_name || !Array.isArray(images) || images.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'client_name and images are required',
+      });
+    }
+
+    if (!ocrModel) {
+      return res.status(400).json({
+        success: false,
+        error: 'Unsupported ocr_model. Use "claude-haiku" or "deepseek".',
       });
     }
 
@@ -264,7 +308,15 @@ router.post('/process-upload', async (req, res) => {
       });
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (ocrModel === 'deepseek') {
+      if (!process.env.DEEPSEEK_API_KEY) {
+        return res.status(503).json({
+          success: false,
+          error: 'OCR not configured',
+          details: 'DEEPSEEK_API_KEY environment variable is not set.',
+        });
+      }
+    } else if (!process.env.ANTHROPIC_API_KEY) {
       return res.status(503).json({
         success: false,
         error: 'OCR not configured',
@@ -319,13 +371,14 @@ router.post('/process-upload', async (req, res) => {
       [batchId]
     );
 
-    processReceiptBatch(batchId, null, client_name, uploadedFiles).catch(error => {
+    processReceiptBatch(batchId, null, client_name, uploadedFiles, ocrModel).catch(error => {
       console.error(`Error processing batch ${batchId}:`, error);
     });
 
     res.json({
       success: true,
       batch_id: batchId,
+      ocr_model: ocrModel,
       status: 'pending',
       message: 'Receipt processing started. Use /batches/:batchId/status to check progress.',
       created_at: batchResult.rows[0].created_at,
