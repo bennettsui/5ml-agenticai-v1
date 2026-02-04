@@ -13,7 +13,7 @@ const CHARACTERS = [
     avatar: '/avatars/uncle-peanut.png',
     color: 'from-amber-500 to-orange-600',
     overlayStyle: 'cartoon-uncle',
-    pitchShift: -3, // Lower pitch for uncle voice
+    pitchShift: -4, // Lower pitch for uncle voice
   },
   {
     id: 'news-anchor',
@@ -31,7 +31,7 @@ const CHARACTERS = [
     avatar: '/avatars/anime.png',
     color: 'from-pink-500 to-rose-600',
     overlayStyle: 'anime',
-    pitchShift: 4, // Higher pitch for anime voice
+    pitchShift: 6, // Higher pitch for anime voice
   },
 ];
 
@@ -47,13 +47,107 @@ const FILTER_EFFECTS = {
 
 // Voice conversion modes
 type VoiceMode = 'text' | 'realtime';
-type ConverterType = 'rvc' | 'sovits';
 
-// Voice conversion service URL - use Fly.io in production, localhost for dev
-const VOICE_CONVERSION_URL = process.env.NEXT_PUBLIC_VOICE_CONVERSION_URL ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? 'https://5ml-voice-conversion.fly.dev'
-    : 'http://localhost:8765');
+// Simple pitch shifter class using granular synthesis
+class BrowserPitchShifter {
+  private audioContext: AudioContext;
+  private sourceNode: MediaStreamAudioSourceNode | null = null;
+  private processorNode: ScriptProcessorNode | null = null;
+  private gainNode: GainNode;
+  private pitchRatio: number = 1.0;
+  private grainSize: number = 512;
+  private overlapRatio: number = 0.5;
+  private inputBuffer: Float32Array;
+  private outputBuffer: Float32Array;
+  private inputWriteIndex: number = 0;
+  private outputReadIndex: number = 0;
+
+  constructor(audioContext: AudioContext) {
+    this.audioContext = audioContext;
+    this.gainNode = audioContext.createGain();
+    this.gainNode.gain.value = 1.5; // Boost output slightly
+    this.inputBuffer = new Float32Array(this.grainSize * 4);
+    this.outputBuffer = new Float32Array(this.grainSize * 4);
+  }
+
+  setPitchShift(semitones: number) {
+    // Convert semitones to pitch ratio
+    this.pitchRatio = Math.pow(2, semitones / 12);
+  }
+
+  connect(stream: MediaStream, destination: AudioNode) {
+    this.sourceNode = this.audioContext.createMediaStreamSource(stream);
+
+    // Use ScriptProcessorNode for real-time processing
+    const bufferSize = 2048;
+    this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+    this.processorNode.onaudioprocess = (e) => {
+      const inputData = e.inputBuffer.getChannelData(0);
+      const outputData = e.outputBuffer.getChannelData(0);
+
+      if (Math.abs(this.pitchRatio - 1.0) < 0.01) {
+        // No pitch shift needed, pass through
+        outputData.set(inputData);
+        return;
+      }
+
+      // Simple pitch shift using resampling with linear interpolation
+      this.processAudio(inputData, outputData);
+    };
+
+    this.sourceNode.connect(this.processorNode);
+    this.processorNode.connect(this.gainNode);
+    this.gainNode.connect(destination);
+  }
+
+  private processAudio(input: Float32Array, output: Float32Array) {
+    const ratio = this.pitchRatio;
+    const inputLength = input.length;
+    const outputLength = output.length;
+
+    // Write input to circular buffer
+    for (let i = 0; i < inputLength; i++) {
+      this.inputBuffer[this.inputWriteIndex] = input[i];
+      this.inputWriteIndex = (this.inputWriteIndex + 1) % this.inputBuffer.length;
+    }
+
+    // Read from buffer with pitch-shifted rate
+    for (let i = 0; i < outputLength; i++) {
+      const readPos = this.outputReadIndex;
+      const readPosInt = Math.floor(readPos);
+      const readPosFrac = readPos - readPosInt;
+
+      // Linear interpolation
+      const idx1 = readPosInt % this.inputBuffer.length;
+      const idx2 = (readPosInt + 1) % this.inputBuffer.length;
+
+      output[i] = this.inputBuffer[idx1] * (1 - readPosFrac) +
+                  this.inputBuffer[idx2] * readPosFrac;
+
+      this.outputReadIndex = (this.outputReadIndex + ratio) % this.inputBuffer.length;
+    }
+
+    // Apply simple windowing to reduce artifacts
+    const fadeLength = Math.min(64, outputLength / 4);
+    for (let i = 0; i < fadeLength; i++) {
+      const fade = i / fadeLength;
+      output[i] *= fade;
+      output[outputLength - 1 - i] *= fade;
+    }
+  }
+
+  disconnect() {
+    if (this.processorNode) {
+      this.processorNode.disconnect();
+      this.processorNode = null;
+    }
+    if (this.sourceNode) {
+      this.sourceNode.disconnect();
+      this.sourceNode = null;
+    }
+  }
+}
 
 export default function FictionalCharacterPage() {
   // Camera state
@@ -72,61 +166,39 @@ export default function FictionalCharacterPage() {
 
   // Audio state
   const [isMicOn, setIsMicOn] = useState(false);
-  const [isListening, setIsListening] = useState(false);
 
   // Voice conversion state
   const [voiceMode, setVoiceMode] = useState<VoiceMode>('text');
-  const [converterType, setConverterType] = useState<ConverterType>('rvc');
   const [isVoiceConverting, setIsVoiceConverting] = useState(false);
-  const [voiceConversionStatus, setVoiceConversionStatus] = useState<string>('idle');
-  const [pitchShift, setPitchShift] = useState(0);
-  const [indexRate, setIndexRate] = useState(0.75);
-  const [availableModels, setAvailableModels] = useState<string[]>(['default']);
-  const [selectedModel, setSelectedModel] = useState('default');
-  const [voiceServiceConnected, setVoiceServiceConnected] = useState(false);
+  const [voiceConversionStatus, setVoiceConversionStatus] = useState<string>('Ready');
+  const [pitchShift, setPitchShift] = useState(-4);
+  const [volume, setVolume] = useState(1.0);
 
   // Audio processing refs
   const audioContextRef = useRef<AudioContext | null>(null);
-  const mediaStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const audioOutputRef = useRef<HTMLAudioElement | null>(null);
+  const pitchShifterRef = useRef<BrowserPitchShifter | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
 
   // Text transformation state
   const [inputText, setInputText] = useState('');
   const [transformedText, setTransformedText] = useState('');
   const [isTransforming, setIsTransforming] = useState(false);
 
-  // Check voice conversion service on mount
-  useEffect(() => {
-    checkVoiceService();
-    return () => {
-      stopVoiceConversion();
-    };
-  }, []);
-
   // Update pitch shift when character changes
   useEffect(() => {
     setPitchShift(selectedCharacter.pitchShift);
+    // Update pitch shifter in real-time if active
+    if (pitchShifterRef.current) {
+      pitchShifterRef.current.setPitchShift(selectedCharacter.pitchShift);
+    }
   }, [selectedCharacter]);
 
-  const checkVoiceService = async () => {
-    try {
-      const response = await fetch(`${VOICE_CONVERSION_URL}/`);
-      const data = await response.json();
-      setVoiceServiceConnected(data.status === 'ok');
-
-      if (data.status === 'ok') {
-        // Fetch available models
-        const modelsResponse = await fetch(`${VOICE_CONVERSION_URL}/models`);
-        const modelsData = await modelsResponse.json();
-        const rvcModels = modelsData.rvc?.map((m: { name: string }) => m.name) || ['default'];
-        setAvailableModels(rvcModels);
-      }
-    } catch {
-      setVoiceServiceConnected(false);
+  // Update pitch shifter when pitch changes during conversion
+  useEffect(() => {
+    if (pitchShifterRef.current && isVoiceConverting) {
+      pitchShifterRef.current.setPitchShift(pitchShift);
     }
-  };
+  }, [pitchShift, isVoiceConverting]);
 
   // Start camera
   const startCamera = useCallback(async () => {
@@ -274,70 +346,34 @@ export default function FictionalCharacterPage() {
     };
   }, [stopCamera]);
 
-  // Start real-time voice conversion
+  // Start browser-based voice conversion
   const startVoiceConversion = async () => {
-    if (!voiceServiceConnected) {
-      setVoiceConversionStatus('Voice service not connected');
-      return;
-    }
-
     try {
       setIsVoiceConverting(true);
-      setVoiceConversionStatus('Starting...');
+      setVoiceConversionStatus('Starting microphone...');
 
       // Get microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          sampleRate: 44100,
+          autoGainControl: true,
         },
       });
 
+      micStreamRef.current = stream;
+
       // Create audio context
-      audioContextRef.current = new AudioContext({ sampleRate: 44100 });
-      mediaStreamSourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
+      audioContextRef.current = new AudioContext();
 
-      // Create WebSocket connection
-      const wsProtocol = VOICE_CONVERSION_URL.startsWith('https') ? 'wss' : 'ws';
-      const wsUrl = `${wsProtocol}://${VOICE_CONVERSION_URL.replace(/^https?:\/\//, '')}/ws/convert`;
-      wsRef.current = new WebSocket(wsUrl);
+      // Create pitch shifter
+      pitchShifterRef.current = new BrowserPitchShifter(audioContextRef.current);
+      pitchShifterRef.current.setPitchShift(pitchShift);
 
-      wsRef.current.onopen = () => {
-        setVoiceConversionStatus('Connected');
-        // Send config
-        wsRef.current?.send(JSON.stringify({
-          converter: converterType,
-          model: selectedModel,
-          pitch_shift: pitchShift,
-          index_rate: indexRate,
-        }));
-      };
+      // Connect: mic -> pitch shifter -> speakers
+      pitchShifterRef.current.connect(stream, audioContextRef.current.destination);
 
-      wsRef.current.onmessage = async (event) => {
-        if (event.data instanceof Blob) {
-          // Received converted audio
-          const arrayBuffer = await event.data.arrayBuffer();
-          playConvertedAudio(arrayBuffer);
-        } else {
-          const msg = JSON.parse(event.data);
-          if (msg.status === 'ready') {
-            setVoiceConversionStatus('Converting...');
-            startAudioCapture();
-          } else if (msg.error) {
-            setVoiceConversionStatus(`Error: ${msg.error}`);
-          }
-        }
-      };
-
-      wsRef.current.onerror = () => {
-        setVoiceConversionStatus('Connection error');
-        stopVoiceConversion();
-      };
-
-      wsRef.current.onclose = () => {
-        setVoiceConversionStatus('Disconnected');
-      };
+      setVoiceConversionStatus('Converting... Speak now!');
 
     } catch (err) {
       console.error('Voice conversion error:', err);
@@ -346,78 +382,26 @@ export default function FictionalCharacterPage() {
     }
   };
 
-  const startAudioCapture = () => {
-    if (!audioContextRef.current || !mediaStreamSourceRef.current) return;
-
-    // Create script processor for audio capture
-    const bufferSize = 4096;
-    processorRef.current = audioContextRef.current.createScriptProcessor(bufferSize, 1, 1);
-
-    processorRef.current.onaudioprocess = (e) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        const inputData = e.inputBuffer.getChannelData(0);
-        // Convert to Int16 PCM
-        const pcm16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-          pcm16[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
-        }
-        wsRef.current.send(pcm16.buffer);
-      }
-    };
-
-    mediaStreamSourceRef.current.connect(processorRef.current);
-    processorRef.current.connect(audioContextRef.current.destination);
-  };
-
-  const playConvertedAudio = async (arrayBuffer: ArrayBuffer) => {
-    if (!audioContextRef.current) return;
-
-    try {
-      // Convert Int16 PCM back to Float32
-      const int16Array = new Int16Array(arrayBuffer);
-      const float32Array = new Float32Array(int16Array.length);
-      for (let i = 0; i < int16Array.length; i++) {
-        float32Array[i] = int16Array[i] / 32768;
-      }
-
-      // Create audio buffer and play
-      const audioBuffer = audioContextRef.current.createBuffer(1, float32Array.length, 44100);
-      audioBuffer.getChannelData(0).set(float32Array);
-
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
-      source.start();
-    } catch (err) {
-      console.error('Audio playback error:', err);
-    }
-  };
-
   const stopVoiceConversion = () => {
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
-    }
-    if (mediaStreamSourceRef.current) {
-      mediaStreamSourceRef.current.disconnect();
-      mediaStreamSourceRef.current = null;
+    if (pitchShifterRef.current) {
+      pitchShifterRef.current.disconnect();
+      pitchShifterRef.current = null;
     }
     if (audioContextRef.current) {
       audioContextRef.current.close();
       audioContextRef.current = null;
     }
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(track => track.stop());
+      micStreamRef.current = null;
     }
     setIsVoiceConverting(false);
-    setVoiceConversionStatus('idle');
+    setVoiceConversionStatus('Ready');
   };
 
   // Toggle microphone (text mode)
   const toggleMic = () => {
     setIsMicOn(!isMicOn);
-    setIsListening(!isMicOn);
   };
 
   // Transform text to character voice
@@ -462,10 +446,8 @@ export default function FictionalCharacterPage() {
               <h1 className="text-lg font-bold text-white">Live Fictional Character</h1>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${voiceServiceConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-              <span className="text-xs text-slate-400">
-                {voiceServiceConnected ? 'Voice Ready' : 'Voice Offline'}
-              </span>
+              <span className="w-2 h-2 rounded-full bg-green-500" />
+              <span className="text-xs text-slate-400">Browser Mode</span>
             </div>
           </div>
         </div>
@@ -545,7 +527,7 @@ export default function FictionalCharacterPage() {
                 {isVoiceConverting && (
                   <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 bg-purple-600 rounded-full">
                     <AudioWaveform className="w-4 h-4 text-white animate-pulse" />
-                    <span className="text-white text-sm font-medium">Voice Converting</span>
+                    <span className="text-white text-sm font-medium">Voice Active</span>
                   </div>
                 )}
               </div>
@@ -616,7 +598,7 @@ export default function FictionalCharacterPage() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-white font-semibold flex items-center gap-2">
                   <Volume2 className="w-5 h-5 text-rose-500" />
-                  Voice Transformation Mode
+                  Voice Transformation
                 </h3>
                 <div className="flex bg-slate-900 rounded-lg p-1">
                   <button
@@ -637,7 +619,7 @@ export default function FictionalCharacterPage() {
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    Audio → Audio
+                    Real-time Voice
                   </button>
                 </div>
               </div>
@@ -682,82 +664,68 @@ export default function FictionalCharacterPage() {
                   )}
                 </div>
               ) : (
-                /* Real-time Audio Conversion */
+                /* Real-time Voice Conversion (Browser-based) */
                 <div className="space-y-4">
-                  <div className="p-4 bg-purple-900/20 border border-purple-700 rounded-lg">
-                    <p className="text-purple-300 text-sm">
-                      Real-time voice conversion using {converterType.toUpperCase()}.
-                      Your voice will be transformed to match the selected character.
+                  <div className="p-4 bg-green-900/20 border border-green-700 rounded-lg">
+                    <p className="text-green-300 text-sm">
+                      🎤 Browser-based voice conversion - no server needed!
+                      Your voice will be pitch-shifted to match the character.
                     </p>
                   </div>
 
-                  {/* Converter Settings */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-slate-400 text-sm mb-1 block">Converter:</label>
-                      <select
-                        value={converterType}
-                        onChange={(e) => setConverterType(e.target.value as ConverterType)}
-                        disabled={isVoiceConverting}
-                        className="w-full bg-slate-900 text-white rounded-lg px-3 py-2 border border-slate-700 focus:border-purple-500 focus:outline-none disabled:opacity-50"
-                      >
-                        <option value="rvc">RVC (Real-time)</option>
-                        <option value="sovits">so-vits-svc (High Quality)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-slate-400 text-sm mb-1 block">Voice Model:</label>
-                      <select
-                        value={selectedModel}
-                        onChange={(e) => setSelectedModel(e.target.value)}
-                        disabled={isVoiceConverting}
-                        className="w-full bg-slate-900 text-white rounded-lg px-3 py-2 border border-slate-700 focus:border-purple-500 focus:outline-none disabled:opacity-50"
-                      >
-                        {availableModels.map(model => (
-                          <option key={model} value={model}>{model}</option>
-                        ))}
-                      </select>
+                  {/* Pitch Shift Control */}
+                  <div>
+                    <label className="text-slate-400 text-sm mb-2 block">
+                      Pitch Shift: {pitchShift > 0 ? `+${pitchShift}` : pitchShift} semitones
+                    </label>
+                    <input
+                      type="range"
+                      min="-12"
+                      max="12"
+                      value={pitchShift}
+                      onChange={(e) => setPitchShift(parseInt(e.target.value))}
+                      className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                    />
+                    <div className="flex justify-between text-xs text-slate-500 mt-1">
+                      <span>-12 (Lower)</span>
+                      <span>0</span>
+                      <span>+12 (Higher)</span>
                     </div>
                   </div>
 
-                  {/* Pitch & Index Rate */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-slate-400 text-sm mb-1 block">
-                        Pitch Shift: {pitchShift > 0 ? `+${pitchShift}` : pitchShift}
-                      </label>
-                      <input
-                        type="range"
-                        min="-12"
-                        max="12"
-                        value={pitchShift}
-                        onChange={(e) => setPitchShift(parseInt(e.target.value))}
-                        disabled={isVoiceConverting}
-                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-slate-400 text-sm mb-1 block">
-                        Index Rate: {indexRate.toFixed(2)}
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={indexRate}
-                        onChange={(e) => setIndexRate(parseFloat(e.target.value))}
-                        disabled={isVoiceConverting}
-                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                      />
-                    </div>
+                  {/* Quick Presets */}
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => setPitchShift(-4)}
+                      className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                        pitchShift === -4 ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >
+                      🎭 Uncle (-4)
+                    </button>
+                    <button
+                      onClick={() => setPitchShift(0)}
+                      className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                        pitchShift === 0 ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >
+                      📺 Neutral (0)
+                    </button>
+                    <button
+                      onClick={() => setPitchShift(6)}
+                      className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                        pitchShift === 6 ? 'bg-pink-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >
+                      ✨ Anime (+6)
+                    </button>
                   </div>
 
                   {/* Status */}
                   <div className="flex items-center justify-between p-3 bg-slate-900 rounded-lg">
                     <span className="text-slate-400 text-sm">Status:</span>
                     <span className={`text-sm font-medium ${
-                      isVoiceConverting ? 'text-purple-400' : 'text-slate-500'
+                      isVoiceConverting ? 'text-green-400' : 'text-slate-500'
                     }`}>
                       {voiceConversionStatus}
                     </span>
@@ -766,11 +734,10 @@ export default function FictionalCharacterPage() {
                   {/* Start/Stop Button */}
                   <button
                     onClick={isVoiceConverting ? stopVoiceConversion : startVoiceConversion}
-                    disabled={!voiceServiceConnected}
                     className={`w-full py-3 font-medium rounded-lg transition-colors flex items-center justify-center gap-2 ${
                       isVoiceConverting
                         ? 'bg-red-600 hover:bg-red-700 text-white'
-                        : 'bg-purple-600 hover:bg-purple-700 text-white disabled:bg-slate-700 disabled:cursor-not-allowed'
+                        : 'bg-purple-600 hover:bg-purple-700 text-white'
                     }`}
                   >
                     {isVoiceConverting ? (
@@ -786,14 +753,9 @@ export default function FictionalCharacterPage() {
                     )}
                   </button>
 
-                  {!voiceServiceConnected && (
-                    <p className="text-amber-400 text-sm text-center">
-                      Voice conversion service is not running. Start it with:
-                      <code className="block mt-2 p-2 bg-slate-900 rounded text-xs">
-                        cd voice-conversion && python server.py
-                      </code>
-                    </p>
-                  )}
+                  <p className="text-slate-500 text-xs text-center">
+                    💡 Tip: Use headphones to prevent feedback loop
+                  </p>
                 </div>
               )}
             </div>
@@ -861,11 +823,11 @@ export default function FictionalCharacterPage() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Voice Service</span>
+                  <span className="text-slate-400">Voice Active</span>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    voiceServiceConnected ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'
+                    isVoiceConverting ? 'bg-green-900 text-green-400' : 'bg-slate-700 text-slate-400'
                   }`}>
-                    {voiceServiceConnected ? 'Connected' : 'Offline'}
+                    {isVoiceConverting ? 'Converting' : 'Off'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -881,9 +843,9 @@ export default function FictionalCharacterPage() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Converter</span>
-                  <span className="px-2 py-1 bg-purple-900 text-purple-400 rounded text-xs font-medium uppercase">
-                    {converterType}
+                  <span className="text-slate-400">Pitch Shift</span>
+                  <span className="px-2 py-1 bg-purple-900 text-purple-400 rounded text-xs font-medium">
+                    {pitchShift > 0 ? `+${pitchShift}` : pitchShift}
                   </span>
                 </div>
               </div>
@@ -895,23 +857,23 @@ export default function FictionalCharacterPage() {
               <ol className="text-slate-400 text-sm space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="text-rose-500 font-bold">1.</span>
-                  Click "Start Camera" to enable your webcam
+                  Click &quot;Start Camera&quot; to enable your webcam
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-rose-500 font-bold">2.</span>
-                  Select a character persona from the right panel
+                  Select a character persona from above
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-rose-500 font-bold">3.</span>
-                  Choose voice mode: Text or Real-time Audio
+                  Choose &quot;Real-time Voice&quot; mode
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-rose-500 font-bold">4.</span>
-                  For real-time: Start the voice conversion service
+                  Click &quot;Start Voice Conversion&quot;
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-rose-500 font-bold">5.</span>
-                  Speak and hear your transformed voice!
+                  Speak and hear your transformed voice! 🎤
                 </li>
               </ol>
             </div>
