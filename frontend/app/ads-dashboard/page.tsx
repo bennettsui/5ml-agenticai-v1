@@ -11,6 +11,13 @@ import {
   BarChart3,
   RefreshCw,
   Users,
+  ChevronDown,
+  ChevronUp,
+  Link2,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
 } from 'lucide-react';
 import {
   LineChart,
@@ -64,6 +71,36 @@ interface CampaignRow {
   avg_cpc: string;
 }
 
+interface MetaAdAccount {
+  id: string;
+  name: string;
+  account_id: string;
+  account_status: number;
+  currency: string;
+  business_name?: string;
+}
+
+interface SyncResult {
+  accountId: string;
+  status: 'syncing' | 'success' | 'error';
+  message?: string;
+  fetched?: number;
+  upserted?: number;
+}
+
+const ACCOUNT_STATUS_MAP: Record<number, { label: string; color: string }> = {
+  1: { label: 'Active', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+  2: { label: 'Disabled', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+  3: { label: 'Unsettled', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },
+  7: { label: 'Pending Risk Review', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },
+  8: { label: 'Pending Settlement', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },
+  9: { label: 'In Grace Period', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
+  100: { label: 'Pending Closure', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+  101: { label: 'Closed', color: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300' },
+  201: { label: 'Any Active', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+  202: { label: 'Any Closed', color: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300' },
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 function formatCurrency(val: string | number | null): string {
@@ -96,6 +133,19 @@ export default function AdsDashboardPage() {
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Ad Account Discovery state
+  const [accountsPanelOpen, setAccountsPanelOpen] = useState(false);
+  const [adAccounts, setAdAccounts] = useState<MetaAdAccount[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [syncResults, setSyncResults] = useState<Record<string, SyncResult>>({});
+  const [syncDateFrom, setSyncDateFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [syncDateTo, setSyncDateTo] = useState(() => new Date().toISOString().split('T')[0]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -137,6 +187,92 @@ export default function AdsDashboardPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Ad Account Discovery functions
+  const fetchAdAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountsError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/ads/meta/adaccounts`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(body.error || `Failed to fetch ad accounts (${res.status})`);
+      }
+      const json = await res.json();
+      setAdAccounts(json.data || []);
+    } catch (err) {
+      setAccountsError(err instanceof Error ? err.message : 'Failed to fetch ad accounts');
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
+
+  const syncAccount = useCallback(async (account: MetaAdAccount) => {
+    const accountId = account.id;
+    setSyncResults((prev) => ({
+      ...prev,
+      [accountId]: { accountId, status: 'syncing' },
+    }));
+
+    try {
+      const res = await fetch(`${API_BASE}/api/ads/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: '5ml-internal',
+          since: syncDateFrom,
+          until: syncDateTo,
+          platforms: ['meta'],
+          meta_account_id: accountId,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (json.success && json.data?.meta) {
+        setSyncResults((prev) => ({
+          ...prev,
+          [accountId]: {
+            accountId,
+            status: 'success',
+            fetched: json.data.meta.fetched,
+            upserted: json.data.meta.upserted,
+            message: `Synced ${json.data.meta.upserted} rows`,
+          },
+        }));
+        // Refresh dashboard data after successful sync
+        fetchData();
+      } else {
+        const errMsg = json.data?.errors?.[0]?.error || json.error || 'Sync returned no data';
+        setSyncResults((prev) => ({
+          ...prev,
+          [accountId]: { accountId, status: 'error', message: errMsg },
+        }));
+      }
+    } catch (err) {
+      setSyncResults((prev) => ({
+        ...prev,
+        [accountId]: {
+          accountId,
+          status: 'error',
+          message: err instanceof Error ? err.message : 'Sync failed',
+        },
+      }));
+    }
+  }, [syncDateFrom, syncDateTo, fetchData]);
+
+  const syncAllAccounts = useCallback(async () => {
+    const activeAccounts = adAccounts.filter((a) => a.account_status === 1);
+    for (const account of activeAccounts) {
+      await syncAccount(account);
+    }
+  }, [adAccounts, syncAccount]);
+
+  useEffect(() => {
+    if (accountsPanelOpen && adAccounts.length === 0 && !accountsLoading) {
+      fetchAdAccounts();
+    }
+  }, [accountsPanelOpen, adAccounts.length, accountsLoading, fetchAdAccounts]);
 
   const lineChartData = chartData.map((row) => ({
     date: row.date,
@@ -196,6 +332,159 @@ export default function AdsDashboardPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Connect Ad Accounts Panel */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
+          <button
+            onClick={() => setAccountsPanelOpen(!accountsPanelOpen)}
+            className="w-full flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Link2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                  Connect Ad Accounts
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Discover and sync your Meta ad accounts
+                </p>
+              </div>
+            </div>
+            {accountsPanelOpen ? (
+              <ChevronUp className="w-5 h-5 text-slate-400" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-slate-400" />
+            )}
+          </button>
+
+          {accountsPanelOpen && (
+            <div className="border-t border-slate-200 dark:border-slate-700 p-4">
+              {/* Sync Date Range */}
+              <div className="flex flex-wrap items-center gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Sync From:</label>
+                  <input
+                    type="date"
+                    value={syncDateFrom}
+                    onChange={(e) => setSyncDateFrom(e.target.value)}
+                    className="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Sync To:</label>
+                  <input
+                    type="date"
+                    value={syncDateTo}
+                    onChange={(e) => setSyncDateTo(e.target.value)}
+                    className="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+                <button
+                  onClick={fetchAdAccounts}
+                  disabled={accountsLoading}
+                  className="px-3 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 ${accountsLoading ? 'animate-spin' : ''}`} />
+                  Refresh Accounts
+                </button>
+                {adAccounts.filter((a) => a.account_status === 1).length > 0 && (
+                  <button
+                    onClick={syncAllAccounts}
+                    className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-medium hover:bg-blue-600 transition-colors flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Sync All Active
+                  </button>
+                )}
+              </div>
+
+              {accountsError && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 mb-4 text-red-700 dark:text-red-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {accountsError}
+                </div>
+              )}
+
+              {accountsLoading && adAccounts.length === 0 ? (
+                <div className="flex items-center justify-center py-8 text-slate-400 text-sm gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading ad accounts...
+                </div>
+              ) : adAccounts.length === 0 && !accountsLoading ? (
+                <div className="text-center py-8 text-slate-400 text-sm">
+                  No ad accounts found. Make sure META_ACCESS_TOKEN is set in your environment.
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {adAccounts.map((account) => {
+                    const status = ACCOUNT_STATUS_MAP[account.account_status] || {
+                      label: `Status ${account.account_status}`,
+                      color: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+                    };
+                    const sync = syncResults[account.id];
+                    const isSyncing = sync?.status === 'syncing';
+
+                    return (
+                      <div
+                        key={account.id}
+                        className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-200 dark:border-slate-600"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                              {account.name || 'Unnamed Account'}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${status.color}`}>
+                              {status.label}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                            <span className="font-mono">{account.id}</span>
+                            {account.currency && <span>{account.currency}</span>}
+                            {account.business_name && <span>{account.business_name}</span>}
+                          </div>
+                          {sync && sync.status !== 'syncing' && (
+                            <div className={`flex items-center gap-1.5 mt-1.5 text-xs ${
+                              sync.status === 'success'
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-red-600 dark:text-red-400'
+                            }`}>
+                              {sync.status === 'success' ? (
+                                <CheckCircle2 className="w-3 h-3" />
+                              ) : (
+                                <XCircle className="w-3 h-3" />
+                              )}
+                              {sync.message}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => syncAccount(account)}
+                          disabled={isSyncing}
+                          className="ml-3 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-medium hover:bg-orange-600 transition-colors flex items-center gap-1.5 disabled:opacity-50 flex-shrink-0"
+                        >
+                          {isSyncing ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Syncing...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-3 h-3" />
+                              Sync Data
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Filters */}
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 mb-6">
           <div className="flex flex-wrap items-center gap-4">
