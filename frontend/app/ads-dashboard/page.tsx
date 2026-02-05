@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -18,6 +18,9 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  Target,
+  Image as ImageIcon,
+  ExternalLink,
 } from 'lucide-react';
 import {
   LineChart,
@@ -31,6 +34,10 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+
+// ==========================================
+// Types
+// ==========================================
 
 interface KpiData {
   total_spend: string | null;
@@ -62,6 +69,7 @@ interface CampaignRow {
   platform: string;
   campaign_id: string;
   campaign_name: string;
+  tenant_id: string;
   impressions: string;
   clicks: string;
   spend: string;
@@ -69,6 +77,17 @@ interface CampaignRow {
   revenue: string;
   roas: string;
   avg_cpc: string;
+  // Campaign detail fields (from JOIN)
+  objective?: string;
+  campaign_status?: string;
+  campaign_effective_status?: string;
+  buying_type?: string;
+  bid_strategy?: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+  budget_remaining?: string;
+  start_time?: string;
+  stop_time?: string;
 }
 
 interface MetaAdAccount {
@@ -88,6 +107,54 @@ interface SyncResult {
   upserted?: number;
 }
 
+interface TenantInfo {
+  tenant_id: string;
+  account_id: string;
+  campaign_count: number;
+  earliest_date: string;
+  latest_date: string;
+  total_spend: string;
+}
+
+interface AdSetRow {
+  adset_id: string;
+  adset_name: string;
+  campaign_id: string;
+  status: string;
+  effective_status: string;
+  optimization_goal: string;
+  billing_event: string;
+  bid_strategy: string;
+  bid_amount: string | null;
+  daily_budget: string | null;
+  lifetime_budget: string | null;
+  targeting: Record<string, unknown> | null;
+  start_time: string | null;
+  end_time: string | null;
+}
+
+interface CreativeRow {
+  ad_id: string;
+  ad_name: string;
+  campaign_id: string;
+  adset_id: string;
+  creative_id: string;
+  creative_name: string;
+  title: string | null;
+  body: string | null;
+  image_url: string | null;
+  thumbnail_url: string | null;
+  video_id: string | null;
+  link_url: string | null;
+  call_to_action_type: string | null;
+  status: string;
+  effective_status: string;
+}
+
+// ==========================================
+// Constants
+// ==========================================
+
 const ACCOUNT_STATUS_MAP: Record<number, { label: string; color: string }> = {
   1: { label: 'Active', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
   2: { label: 'Disabled', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
@@ -102,6 +169,10 @@ const ACCOUNT_STATUS_MAP: Record<number, { label: string; color: string }> = {
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+
+// ==========================================
+// Helpers
+// ==========================================
 
 function formatCurrency(val: string | number | null): string {
   if (val === null || val === undefined) return '$0.00';
@@ -118,21 +189,71 @@ function formatNumber(val: string | number | null): string {
 function getDefaultDateRange(): { from: string; to: string } {
   const now = new Date();
   const to = now.toISOString().split('T')[0];
-  const fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const fromDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const from = fromDate.toISOString().split('T')[0];
   return { from, to };
 }
+
+function formatTargeting(targeting: Record<string, unknown> | null): string[] {
+  if (!targeting) return [];
+  const parts: string[] = [];
+
+  const t = targeting as Record<string, unknown>;
+  if (t.age_min || t.age_max) parts.push(`Age: ${t.age_min || '?'}-${t.age_max || '?'}`);
+  if (t.genders && Array.isArray(t.genders)) {
+    const gMap: Record<number, string> = { 1: 'Male', 2: 'Female' };
+    parts.push(`Gender: ${(t.genders as number[]).map((g) => gMap[g] || 'All').join(', ')}`);
+  }
+  if (t.geo_locations && typeof t.geo_locations === 'object') {
+    const geo = t.geo_locations as Record<string, unknown[]>;
+    if (geo.countries) parts.push(`Countries: ${(geo.countries as string[]).join(', ')}`);
+    if (geo.cities && Array.isArray(geo.cities)) {
+      parts.push(`Cities: ${(geo.cities as Array<{ name?: string }>).map((c) => c.name || '?').join(', ')}`);
+    }
+    if (geo.regions && Array.isArray(geo.regions)) {
+      parts.push(`Regions: ${(geo.regions as Array<{ name?: string }>).map((r) => r.name || '?').join(', ')}`);
+    }
+  }
+  if (t.interests && Array.isArray(t.interests)) {
+    parts.push(`Interests: ${(t.interests as Array<{ name?: string }>).map((i) => i.name || '?').join(', ')}`);
+  }
+  if (t.behaviors && Array.isArray(t.behaviors)) {
+    parts.push(`Behaviors: ${(t.behaviors as Array<{ name?: string }>).map((b) => b.name || '?').join(', ')}`);
+  }
+  if (t.custom_audiences && Array.isArray(t.custom_audiences)) {
+    parts.push(`Custom Audiences: ${(t.custom_audiences as Array<{ name?: string }>).map((a) => a.name || a).join(', ')}`);
+  }
+  if (t.publisher_platforms && Array.isArray(t.publisher_platforms)) {
+    parts.push(`Platforms: ${(t.publisher_platforms as string[]).join(', ')}`);
+  }
+  if (t.facebook_positions && Array.isArray(t.facebook_positions)) {
+    parts.push(`FB Positions: ${(t.facebook_positions as string[]).join(', ')}`);
+  }
+  if (t.instagram_positions && Array.isArray(t.instagram_positions)) {
+    parts.push(`IG Positions: ${(t.instagram_positions as string[]).join(', ')}`);
+  }
+
+  return parts.length > 0 ? parts : ['No targeting details available'];
+}
+
+// ==========================================
+// Component
+// ==========================================
 
 export default function AdsDashboardPage() {
   const defaults = getDefaultDateRange();
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
   const [platform, setPlatform] = useState<'all' | 'meta' | 'google'>('all');
+  const [selectedTenant, setSelectedTenant] = useState<string>('all');
   const [kpis, setKpis] = useState<KpiData | null>(null);
   const [chartData, setChartData] = useState<AggregatedRow[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Tenant list
+  const [tenants, setTenants] = useState<TenantInfo[]>([]);
 
   // Ad Account Discovery state
   const [accountsPanelOpen, setAccountsPanelOpen] = useState(false);
@@ -140,12 +261,27 @@ export default function AdsDashboardPage() {
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [syncResults, setSyncResults] = useState<Record<string, SyncResult>>({});
-  const [syncDateFrom, setSyncDateFrom] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString().split('T')[0];
-  });
-  const [syncDateTo, setSyncDateTo] = useState(() => new Date().toISOString().split('T')[0]);
+  const [syncDateFrom, setSyncDateFrom] = useState(defaults.from);
+  const [syncDateTo, setSyncDateTo] = useState(defaults.to);
+
+  // Campaign detail expansion
+  const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
+  const [adSets, setAdSets] = useState<AdSetRow[]>([]);
+  const [creatives, setCreatives] = useState<CreativeRow[]>([]);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+
+  // Data fetchers
+  const fetchTenants = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/ads/tenants`);
+      if (res.ok) {
+        const json = await res.json();
+        setTenants(json.data || []);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -155,7 +291,7 @@ export default function AdsDashboardPage() {
       from,
       to,
       platform,
-      tenant_id: '5ml-internal',
+      tenant_id: selectedTenant,
     });
 
     try {
@@ -182,11 +318,12 @@ export default function AdsDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, platform]);
+  }, [from, to, platform, selectedTenant]);
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    fetchTenants();
+  }, [fetchData, fetchTenants]);
 
   // Ad Account Discovery functions
   const fetchAdAccounts = useCallback(async () => {
@@ -219,17 +356,23 @@ export default function AdsDashboardPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tenant_id: '5ml-internal',
+          // Use the ad account ID as tenant_id for client separation
+          tenant_id: accountId,
           since: syncDateFrom,
           until: syncDateTo,
           platforms: ['meta'],
           meta_account_id: accountId,
+          sync_details: true,
         }),
       });
 
       const json = await res.json();
 
       if (json.success && json.data?.meta) {
+        const details = json.data.meta.details;
+        const detailMsg = details
+          ? ` + ${details.campaigns} campaigns, ${details.adsets} ad sets, ${details.ads} ads`
+          : '';
         setSyncResults((prev) => ({
           ...prev,
           [accountId]: {
@@ -237,11 +380,12 @@ export default function AdsDashboardPage() {
             status: 'success',
             fetched: json.data.meta.fetched,
             upserted: json.data.meta.upserted,
-            message: `Synced ${json.data.meta.upserted} rows`,
+            message: `Synced ${json.data.meta.upserted} perf rows${detailMsg}`,
           },
         }));
-        // Refresh dashboard data after successful sync
+        // Refresh dashboard data and tenant list after successful sync
         fetchData();
+        fetchTenants();
       } else {
         const errMsg = json.data?.errors?.[0]?.error || json.error || 'Sync returned no data';
         setSyncResults((prev) => ({
@@ -259,7 +403,7 @@ export default function AdsDashboardPage() {
         },
       }));
     }
-  }, [syncDateFrom, syncDateTo, fetchData]);
+  }, [syncDateFrom, syncDateTo, fetchData, fetchTenants]);
 
   const syncAllAccounts = useCallback(async () => {
     const activeAccounts = adAccounts.filter((a) => a.account_status === 1);
@@ -274,6 +418,45 @@ export default function AdsDashboardPage() {
     }
   }, [accountsPanelOpen, adAccounts.length, accountsLoading, fetchAdAccounts]);
 
+  // Campaign detail expansion
+  const toggleCampaignDetails = useCallback(async (campaignId: string, tenantId: string) => {
+    if (expandedCampaign === campaignId) {
+      setExpandedCampaign(null);
+      setAdSets([]);
+      setCreatives([]);
+      return;
+    }
+
+    setExpandedCampaign(campaignId);
+    setDetailsLoading(true);
+
+    try {
+      const params = new URLSearchParams({
+        tenant_id: tenantId,
+        campaign_id: campaignId,
+      });
+
+      const [adsetRes, creativeRes] = await Promise.all([
+        fetch(`${API_BASE}/api/ads/adsets/details?${params}`),
+        fetch(`${API_BASE}/api/ads/creatives/details?${params}`),
+      ]);
+
+      if (adsetRes.ok) {
+        const json = await adsetRes.json();
+        setAdSets(json.data || []);
+      }
+      if (creativeRes.ok) {
+        const json = await creativeRes.json();
+        setCreatives(json.data || []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setDetailsLoading(false);
+    }
+  }, [expandedCampaign]);
+
+  // Chart data transforms
   const lineChartData = chartData.map((row) => ({
     date: row.date,
     spend: parseFloat(row.spend) || 0,
@@ -306,7 +489,7 @@ export default function AdsDashboardPage() {
                   Social Ad Performance
                 </h1>
                 <p className="text-slate-600 dark:text-slate-400 mt-1">
-                  Meta & Google Ads dashboard for 5ML internal accounts
+                  Meta & Google Ads dashboard with per-account separation
                 </p>
               </div>
             </div>
@@ -347,7 +530,7 @@ export default function AdsDashboardPage() {
                   Connect Ad Accounts
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Discover and sync your Meta ad accounts
+                  Discover and sync your Meta ad accounts (each synced as a separate client)
                 </p>
               </div>
             </div>
@@ -488,6 +671,22 @@ export default function AdsDashboardPage() {
         {/* Filters */}
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 mb-6">
           <div className="flex flex-wrap items-center gap-4">
+            {/* Account Selector */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Account:</label>
+              <select
+                value={selectedTenant}
+                onChange={(e) => setSelectedTenant(e.target.value)}
+                className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white min-w-[200px]"
+              >
+                <option value="all">All Accounts</option>
+                {tenants.map((t) => (
+                  <option key={t.tenant_id} value={t.tenant_id}>
+                    {t.tenant_id} ({t.campaign_count} campaigns, {formatCurrency(t.total_spend)})
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-slate-700 dark:text-slate-300">From:</label>
               <input
@@ -674,61 +873,12 @@ export default function AdsDashboardPage() {
           </div>
         </div>
 
-        {/* Top 3 Campaigns Table */}
-        {kpis?.top_campaigns_by_roas && kpis.top_campaigns_by_roas.length > 0 && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-8">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-              Top 3 Campaigns by ROAS
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700">
-                    <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400">Rank</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400">Campaign</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400">Platform</th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-600 dark:text-slate-400">ROAS</th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-600 dark:text-slate-400">Spend</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {kpis.top_campaigns_by_roas.map((camp, idx) => (
-                    <tr
-                      key={idx}
-                      className="border-b border-slate-100 dark:border-slate-700/50"
-                    >
-                      <td className="py-3 px-4 text-slate-900 dark:text-white font-medium">#{idx + 1}</td>
-                      <td className="py-3 px-4 text-slate-900 dark:text-white">{camp.campaign_name}</td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                            camp.platform === 'meta'
-                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                              : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                          }`}
-                        >
-                          {camp.platform === 'meta' ? 'Meta' : 'Google'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-slate-900 dark:text-white">
-                        {parseFloat(camp.roas).toFixed(2)}x
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-slate-900 dark:text-white">
-                        {formatCurrency(camp.spend)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Campaign Details Table */}
+        {/* Campaign Details Table - now with expandable rows */}
         {campaigns.length > 0 && (
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
               All Campaigns ({campaigns.length})
+              <span className="text-sm font-normal text-slate-500 ml-2">Click a row to see targeting, budget, and creatives</span>
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -736,58 +886,259 @@ export default function AdsDashboardPage() {
                   <tr className="border-b border-slate-200 dark:border-slate-700">
                     <th className="text-left py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Campaign</th>
                     <th className="text-left py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Platform</th>
-                    <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Impressions</th>
-                    <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Clicks</th>
+                    <th className="text-left py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Objective</th>
+                    <th className="text-left py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Status</th>
+                    <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Budget</th>
                     <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Spend</th>
+                    <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Clicks</th>
                     <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Conv.</th>
-                    <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Revenue</th>
                     <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">ROAS</th>
-                    <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Avg CPC</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {campaigns.map((camp, idx) => (
-                    <tr
-                      key={idx}
-                      className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30"
-                    >
-                      <td className="py-2.5 px-3 text-slate-900 dark:text-white max-w-[200px] truncate">
-                        {camp.campaign_name}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                            camp.platform === 'meta'
-                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                              : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                  {campaigns.map((camp) => {
+                    const isExpanded = expandedCampaign === camp.campaign_id;
+                    const budget = camp.daily_budget
+                      ? `${formatCurrency(camp.daily_budget)}/day`
+                      : camp.lifetime_budget
+                        ? `${formatCurrency(camp.lifetime_budget)} lifetime`
+                        : '--';
+
+                    return (
+                      <Fragment key={`${camp.campaign_id}-${camp.tenant_id}`}>
+                        <tr
+                          className={`border-b border-slate-100 dark:border-slate-700/50 cursor-pointer transition-colors ${
+                            isExpanded
+                              ? 'bg-blue-50 dark:bg-blue-900/10'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-700/30'
                           }`}
+                          onClick={() => toggleCampaignDetails(camp.campaign_id, camp.tenant_id)}
                         >
-                          {camp.platform === 'meta' ? 'Meta' : 'Google'}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
-                        {formatNumber(camp.impressions)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
-                        {formatNumber(camp.clicks)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
-                        {formatCurrency(camp.spend)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
-                        {formatNumber(camp.conversions)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
-                        {formatCurrency(camp.revenue)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-medium text-slate-900 dark:text-white">
-                        {parseFloat(camp.roas || '0').toFixed(2)}x
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
-                        {formatCurrency(camp.avg_cpc)}
-                      </td>
-                    </tr>
-                  ))}
+                          <td className="py-2.5 px-3 text-slate-900 dark:text-white max-w-[200px]">
+                            <div className="flex items-center gap-1.5">
+                              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} />
+                              <span className="truncate">{camp.campaign_name}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                camp.platform === 'meta'
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                  : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                              }`}
+                            >
+                              {camp.platform === 'meta' ? 'Meta' : 'Google'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400 text-xs">
+                            {camp.objective?.replace(/_/g, ' ') || '--'}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            {camp.campaign_effective_status ? (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                camp.campaign_effective_status === 'ACTIVE'
+                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                  : camp.campaign_effective_status === 'PAUSED'
+                                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
+                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+                              }`}>
+                                {camp.campaign_effective_status}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-xs">--</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-xs text-slate-600 dark:text-slate-400">
+                            {budget}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
+                            {formatCurrency(camp.spend)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
+                            {formatNumber(camp.clicks)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
+                            {formatNumber(camp.conversions)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-medium text-slate-900 dark:text-white">
+                            {parseFloat(camp.roas || '0').toFixed(2)}x
+                          </td>
+                        </tr>
+
+                        {/* Expanded Detail Row */}
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={9} className="p-0">
+                              <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 p-4">
+                                {detailsLoading ? (
+                                  <div className="flex items-center justify-center py-6 text-slate-400 text-sm gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Loading campaign details...
+                                  </div>
+                                ) : (
+                                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    {/* Campaign Info */}
+                                    <div>
+                                      <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                                        Campaign Details
+                                      </h4>
+                                      <div className="bg-white dark:bg-slate-700 rounded-lg p-3 text-xs space-y-1.5">
+                                        {camp.bid_strategy && (
+                                          <div><span className="text-slate-500">Bid Strategy:</span> <span className="text-slate-900 dark:text-white font-medium">{camp.bid_strategy.replace(/_/g, ' ')}</span></div>
+                                        )}
+                                        {camp.buying_type && (
+                                          <div><span className="text-slate-500">Buying Type:</span> <span className="text-slate-900 dark:text-white font-medium">{camp.buying_type}</span></div>
+                                        )}
+                                        {camp.start_time && (
+                                          <div><span className="text-slate-500">Start:</span> <span className="text-slate-900 dark:text-white">{new Date(camp.start_time).toLocaleDateString()}</span></div>
+                                        )}
+                                        {camp.stop_time && (
+                                          <div><span className="text-slate-500">End:</span> <span className="text-slate-900 dark:text-white">{new Date(camp.stop_time).toLocaleDateString()}</span></div>
+                                        )}
+                                        {camp.budget_remaining && (
+                                          <div><span className="text-slate-500">Budget Remaining:</span> <span className="text-slate-900 dark:text-white font-medium">{formatCurrency(camp.budget_remaining)}</span></div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Ad Sets with Targeting */}
+                                    <div>
+                                      <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                        <Target className="w-3.5 h-3.5" />
+                                        Ad Sets & Targeting ({adSets.length})
+                                      </h4>
+                                      {adSets.length === 0 ? (
+                                        <div className="text-xs text-slate-400 italic">No ad set details synced yet</div>
+                                      ) : (
+                                        <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                          {adSets.map((adset) => (
+                                            <div key={adset.adset_id} className="bg-white dark:bg-slate-700 rounded-lg p-3 text-xs">
+                                              <div className="flex items-center justify-between mb-1.5">
+                                                <span className="font-medium text-slate-900 dark:text-white truncate">{adset.adset_name}</span>
+                                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                                  adset.effective_status === 'ACTIVE'
+                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-600 dark:text-slate-300'
+                                                }`}>
+                                                  {adset.effective_status || adset.status}
+                                                </span>
+                                              </div>
+                                              <div className="space-y-1 text-slate-600 dark:text-slate-400">
+                                                {adset.optimization_goal && (
+                                                  <div>Optimization: <span className="text-slate-900 dark:text-white">{adset.optimization_goal.replace(/_/g, ' ')}</span></div>
+                                                )}
+                                                {adset.billing_event && (
+                                                  <div>Billing: <span className="text-slate-900 dark:text-white">{adset.billing_event.replace(/_/g, ' ')}</span></div>
+                                                )}
+                                                {adset.daily_budget && (
+                                                  <div>Budget: <span className="text-slate-900 dark:text-white">{formatCurrency(adset.daily_budget)}/day</span></div>
+                                                )}
+                                                {adset.lifetime_budget && (
+                                                  <div>Lifetime Budget: <span className="text-slate-900 dark:text-white">{formatCurrency(adset.lifetime_budget)}</span></div>
+                                                )}
+                                                {adset.bid_amount && (
+                                                  <div>Bid: <span className="text-slate-900 dark:text-white">{formatCurrency(adset.bid_amount)}</span></div>
+                                                )}
+                                                {adset.start_time && (
+                                                  <div>Period: <span className="text-slate-900 dark:text-white">{new Date(adset.start_time).toLocaleDateString()}{adset.end_time ? ` - ${new Date(adset.end_time).toLocaleDateString()}` : ' - Ongoing'}</span></div>
+                                                )}
+                                              </div>
+                                              {/* Targeting breakdown */}
+                                              {adset.targeting && (
+                                                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-600">
+                                                  <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Targeting</div>
+                                                  <div className="flex flex-wrap gap-1">
+                                                    {formatTargeting(adset.targeting).map((part, i) => (
+                                                      <span key={i} className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-600 rounded text-[10px] text-slate-700 dark:text-slate-300">
+                                                        {part}
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Ad Creatives */}
+                                    <div className="lg:col-span-2">
+                                      <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                        <ImageIcon className="w-3.5 h-3.5" />
+                                        Ad Creatives ({creatives.length})
+                                      </h4>
+                                      {creatives.length === 0 ? (
+                                        <div className="text-xs text-slate-400 italic">No creative details synced yet</div>
+                                      ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                          {creatives.map((cr) => (
+                                            <div key={cr.ad_id} className="bg-white dark:bg-slate-700 rounded-lg p-3 text-xs">
+                                              {/* Creative preview image */}
+                                              {(cr.image_url || cr.thumbnail_url) && (
+                                                <div className="mb-2 rounded-md overflow-hidden bg-slate-100 dark:bg-slate-600">
+                                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                  <img
+                                                    src={cr.image_url || cr.thumbnail_url || ''}
+                                                    alt={cr.ad_name || 'Ad creative'}
+                                                    className="w-full h-32 object-cover"
+                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                  />
+                                                </div>
+                                              )}
+                                              <div className="font-medium text-slate-900 dark:text-white mb-1 truncate">
+                                                {cr.ad_name || cr.creative_name || 'Unnamed Ad'}
+                                              </div>
+                                              <div className="flex items-center justify-between mb-1.5">
+                                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                                  cr.effective_status === 'ACTIVE'
+                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-600 dark:text-slate-300'
+                                                }`}>
+                                                  {cr.effective_status || cr.status}
+                                                </span>
+                                                {cr.call_to_action_type && (
+                                                  <span className="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded text-[10px]">
+                                                    {cr.call_to_action_type.replace(/_/g, ' ')}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              {cr.title && (
+                                                <div className="text-slate-900 dark:text-white font-medium mb-0.5">{cr.title}</div>
+                                              )}
+                                              {cr.body && (
+                                                <div className="text-slate-600 dark:text-slate-400 line-clamp-3">{cr.body}</div>
+                                              )}
+                                              {cr.link_url && (
+                                                <a
+                                                  href={cr.link_url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="mt-1.5 flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline truncate"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                >
+                                                  <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                                  <span className="truncate">{cr.link_url}</span>
+                                                </a>
+                                              )}
+                                              {cr.video_id && (
+                                                <div className="mt-1 text-slate-400">Video ID: {cr.video_id}</div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
