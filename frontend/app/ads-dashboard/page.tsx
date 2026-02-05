@@ -222,6 +222,19 @@ interface CreativeRow {
 // Constants
 // ==========================================
 
+// Brand name mapping for ad accounts (customize as needed)
+const ACCOUNT_BRAND_MAP: Record<string, string> = {
+  '5ml-internal': '5 Miles Lab (Internal)',
+  'act_1249401425701453': 'Brand A (Meta)',
+  'act_46494346': 'Brand B (Meta)',
+  'act_1358670397894732': 'Brand C (Meta)',
+};
+
+// Get display name for an account (falls back to account ID if no mapping)
+function getAccountDisplayName(accountId: string): string {
+  return ACCOUNT_BRAND_MAP[accountId] || accountId;
+}
+
 const ACCOUNT_STATUS_MAP: Record<number, { label: string; color: string }> = {
   1: { label: 'Active', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
   2: { label: 'Disabled', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
@@ -336,6 +349,8 @@ export default function AdsDashboardPage() {
   const [googleAccounts, setGoogleAccounts] = useState<GoogleAdsAccount[]>([]);
   const [googleAccountsLoading, setGoogleAccountsLoading] = useState(false);
   const [googleAccountsError, setGoogleAccountsError] = useState<string | null>(null);
+  const [googleAccountsFetched, setGoogleAccountsFetched] = useState(false);
+  const [metaAccountsFetched, setMetaAccountsFetched] = useState(false);
 
   // Monthly data for chart
   const [monthlyData, setMonthlyData] = useState<MonthlyRow[]>([]);
@@ -419,6 +434,7 @@ export default function AdsDashboardPage() {
   const fetchAdAccounts = useCallback(async () => {
     setAccountsLoading(true);
     setAccountsError(null);
+    setMetaAccountsFetched(true);
     try {
       const res = await fetch(`${API_BASE}/api/ads/meta/adaccounts`);
       if (!res.ok) {
@@ -506,6 +522,7 @@ export default function AdsDashboardPage() {
   const fetchGoogleAccounts = useCallback(async () => {
     setGoogleAccountsLoading(true);
     setGoogleAccountsError(null);
+    setGoogleAccountsFetched(true);
     try {
       const res = await fetch(`${API_BASE}/api/ads/google/accounts`);
       if (!res.ok) {
@@ -586,13 +603,13 @@ export default function AdsDashboardPage() {
   }, [googleAccounts, syncGoogleAccount]);
 
   useEffect(() => {
-    if (accountsPanelOpen && adAccounts.length === 0 && !accountsLoading) {
+    if (accountsPanelOpen && adAccounts.length === 0 && !accountsLoading && !metaAccountsFetched) {
       fetchAdAccounts();
     }
-    if (accountsPanelOpen && googleAccounts.length === 0 && !googleAccountsLoading) {
+    if (accountsPanelOpen && googleAccounts.length === 0 && !googleAccountsLoading && !googleAccountsFetched) {
       fetchGoogleAccounts();
     }
-  }, [accountsPanelOpen, adAccounts.length, accountsLoading, fetchAdAccounts, googleAccounts.length, googleAccountsLoading, fetchGoogleAccounts]);
+  }, [accountsPanelOpen, adAccounts.length, accountsLoading, metaAccountsFetched, fetchAdAccounts, googleAccounts.length, googleAccountsLoading, googleAccountsFetched, fetchGoogleAccounts]);
 
   // Campaign detail expansion
   const toggleCampaignDetails = useCallback(async (campaignId: string) => {
@@ -1097,7 +1114,7 @@ export default function AdsDashboardPage() {
                 <option value="all">All Accounts</option>
                 {tenants.map((t) => (
                   <option key={t.tenant_id} value={t.tenant_id}>
-                    {t.tenant_id} ({t.campaign_count} campaigns, {formatCurrency(t.total_spend)})
+                    {getAccountDisplayName(t.tenant_id)} ({t.campaign_count} campaigns, {formatCurrency(t.total_spend)})
                   </option>
                 ))}
               </select>
@@ -1245,7 +1262,7 @@ export default function AdsDashboardPage() {
         </div>
 
         {/* Secondary KPI row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
             <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Impressions</div>
             <div className="text-lg font-bold text-slate-900 dark:text-white">{kpis ? formatNumber(kpis.total_impressions) : '--'}</div>
@@ -1261,6 +1278,25 @@ export default function AdsDashboardPage() {
               const change = getPctChange(kpis?.total_clicks, kpis?.previous_period?.total_clicks);
               return change ? <span className={`text-xs font-medium ${change.color}`}>{change.label}</span> : null;
             })()}
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Target className="w-3.5 h-3.5 text-emerald-500" />
+              <div className="text-xs text-slate-500 dark:text-slate-400">Leads / Conversions</div>
+            </div>
+            <div className="text-lg font-bold text-slate-900 dark:text-white">{kpis ? formatNumber(kpis.total_conversions) : '--'}</div>
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+            <div className="flex items-center gap-1.5 mb-1">
+              <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />
+              <div className="text-xs text-slate-500 dark:text-slate-400">Blended ROAS</div>
+            </div>
+            <div className="text-lg font-bold text-slate-900 dark:text-white">
+              {kpis && parseFloat(kpis.blended_roas || '0') > 0 ? `${parseFloat(kpis.blended_roas || '0').toFixed(2)}x` : '--'}
+            </div>
+            {kpis && parseFloat(kpis.total_revenue || '0') > 0 && (
+              <div className="text-xs text-slate-500 mt-0.5">Revenue: {formatCurrency(kpis.total_revenue)}</div>
+            )}
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
             <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Top Campaign by Spend</div>
@@ -1405,6 +1441,9 @@ export default function AdsDashboardPage() {
                     <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('conversions')}>
                       <span className="flex items-center justify-end">Conv.<SortIndicator col="conversions" /></span>
                     </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('roas')}>
+                      <span className="flex items-center justify-end">ROAS<SortIndicator col="roas" /></span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1479,12 +1518,15 @@ export default function AdsDashboardPage() {
                           <td className="py-2.5 px-2 text-right font-mono text-slate-700 dark:text-slate-300">
                             {formatNumber(ad.conversions)}
                           </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-slate-700 dark:text-slate-300">
+                            {parseFloat(ad.roas || '0') > 0 ? `${parseFloat(ad.roas).toFixed(2)}x` : '-'}
+                          </td>
                         </tr>
 
                         {/* Expanded Creative Detail Row */}
                         {isExpanded && (
                           <tr>
-                            <td colSpan={10} className="p-0">
+                            <td colSpan={11} className="p-0">
                               <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 p-4">
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                                   {/* Creative Preview */}
@@ -1667,6 +1709,9 @@ export default function AdsDashboardPage() {
                     <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('conversions')}>
                       <span className="flex items-center justify-end">Conv.<SortIndicator col="conversions" /></span>
                     </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('roas')}>
+                      <span className="flex items-center justify-end">ROAS<SortIndicator col="roas" /></span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1719,12 +1764,15 @@ export default function AdsDashboardPage() {
                           <td className="py-2.5 px-2 text-right font-mono text-slate-700 dark:text-slate-300">
                             {formatNumber(ad.conversions)}
                           </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-slate-700 dark:text-slate-300">
+                            {parseFloat(ad.roas || '0') > 0 ? `${parseFloat(ad.roas).toFixed(2)}x` : '-'}
+                          </td>
                         </tr>
 
                         {/* Expanded Detail Row */}
                         {isExpanded && (
                           <tr>
-                            <td colSpan={10} className="p-0">
+                            <td colSpan={11} className="p-0">
                               <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 p-4">
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                   {/* Ad Details */}
