@@ -1,0 +1,70 @@
+{
+  "id": "ads-weekly-report-internal",
+  "name": "Weekly Ads Performance Report (5ML Internal)",
+  "description": "Read last 7 days and previous 7 days from DB, aggregate metrics, and call the analyzer agent for an executive summary.",
+  "trigger": {
+    "type": "scheduled",
+    "cron": "0 9 * * 1",
+    "timezone": "Asia/Hong_Kong",
+    "description": "Runs every Monday at 09:00 HKT"
+  },
+  "input": {
+    "tenantId": "5ml-internal"
+  },
+  "steps": [
+    {
+      "id": "query-current-week",
+      "name": "Query Current 7-Day Performance",
+      "type": "tool",
+      "tool": "db-ops/queryAdsPerformance",
+      "params": {
+        "tenantId": "5ml-internal",
+        "from": "${date.daysAgo(7)}",
+        "to": "${date.yesterday}"
+      },
+      "output": "currentWeekData"
+    },
+    {
+      "id": "query-previous-week",
+      "name": "Query Previous 7-Day Performance",
+      "type": "tool",
+      "tool": "db-ops/queryAdsPerformance",
+      "params": {
+        "tenantId": "5ml-internal",
+        "from": "${date.daysAgo(14)}",
+        "to": "${date.daysAgo(8)}"
+      },
+      "output": "previousWeekData"
+    },
+    {
+      "id": "aggregate-metrics",
+      "name": "Aggregate and Compare Metrics",
+      "type": "transform",
+      "function": "aggregateWeeklyComparison",
+      "params": {
+        "current": "${currentWeekData}",
+        "previous": "${previousWeekData}"
+      },
+      "dependsOn": ["query-current-week", "query-previous-week"],
+      "output": "aggregatedStats"
+    },
+    {
+      "id": "run-analyzer-agent",
+      "name": "Run Analyzer Agent",
+      "type": "agent",
+      "agent": "analyzer",
+      "params": {
+        "tenantId": "5ml-internal",
+        "period": "${date.daysAgo(7)} to ${date.yesterday}",
+        "previousPeriod": "${date.daysAgo(14)} to ${date.daysAgo(8)}",
+        "metrics": "${aggregatedStats}"
+      },
+      "dependsOn": ["aggregate-metrics"],
+      "output": "analysisReport"
+    }
+  ],
+  "output": {
+    "report": "${analysisReport}",
+    "aggregatedStats": "${aggregatedStats}"
+  }
+}

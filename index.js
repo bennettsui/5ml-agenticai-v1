@@ -1413,6 +1413,15 @@ try {
   console.warn('   Install missing dependencies (e.g. `multer`) to enable /api/photo-booth');
 }
 
+// Ads Performance Dashboard Routes
+try {
+  const adsPerformanceRoutes = require('./use-cases/5ml-ads-performance-internal/api/routes');
+  app.use('/api/ads', adsPerformanceRoutes);
+  console.log('✅ Ads Performance routes loaded: /api/ads');
+} catch (error) {
+  console.warn('⚠️ Ads Performance routes not loaded:', error.message);
+}
+
 // Scheduler Service
 const scheduler = require('./services/scheduler');
 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone } from 'lucide-react';
 
 export default function Home() {
   const useCases = [
@@ -83,6 +83,16 @@ export default function Home() {
       href: '/use-cases/fictional-character',
       color: 'from-rose-500 to-pink-600',
       features: ['Persona Engine', 'TTS-Ready Output', 'Multi-Character', 'Avatar Integration'],
+      status: 'New'
+    },
+    {
+      id: 'ads-performance',
+      title: 'Social Ad Performance',
+      description: 'Meta & Google Ads performance dashboard with AI-powered analysis, multi-tenant client support, and automated reporting',
+      icon: Megaphone,
+      href: '/ads-dashboard',
+      color: 'from-orange-500 to-red-600',
+      features: ['Meta Ads Analytics', 'Google Ads Analytics', 'AI Weekly Reports', 'Multi-Tenant Clients'],
       status: 'New'
     },
   ];

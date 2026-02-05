@@ -1,0 +1,40 @@
+{
+  "id": "ads-daily-sync-all-tenants",
+  "name": "Daily Ads Sync (All Tenants)",
+  "description": "Query all tenants from client_credentials, then run daily-sync-tenant workflow for each one. Designed for Layer 6 scheduled execution.",
+  "trigger": {
+    "type": "scheduled",
+    "cron": "0 7 * * *",
+    "timezone": "Asia/Hong_Kong",
+    "description": "Runs daily at 07:00 HKT to sync all tenants"
+  },
+  "steps": [
+    {
+      "id": "list-tenants",
+      "name": "List All Tenants with Credentials",
+      "type": "tool",
+      "tool": "credentials/listTenantsWithCredentials",
+      "output": "tenantIds"
+    },
+    {
+      "id": "sync-each-tenant",
+      "name": "Sync Each Tenant",
+      "type": "forEach",
+      "collection": "${tenantIds}",
+      "as": "tenantId",
+      "workflow": "daily-sync-tenant",
+      "params": {
+        "tenant_id": "${tenantId}",
+        "date": "${date.yesterday}"
+      },
+      "dependsOn": ["list-tenants"],
+      "concurrency": 3,
+      "onError": "log-and-continue",
+      "output": "syncResults"
+    }
+  ],
+  "output": {
+    "tenantsProcessed": "${tenantIds.length}",
+    "results": "${syncResults}"
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "id": "ads-performance-analyzer-multitenant",
+  "name": "Multi-tenant Ads Performance Analyzer Agent",
+  "version": "1.0",
+  "description": "Generalized analyzer for multi-tenant ads performance. Produces client-facing reports with channel recommendations and campaign actions.",
+  "model": "claude-sonnet-4-20250514",
+  "temperature": 0.3,
+  "maxTokens": 4096,
+  "systemPrompt": "You are a digital advertising performance analyst. You receive structured JSON containing aggregated ad campaign metrics for a specific client (tenant), comparing the current 7-day period against the previous 7-day period.\n\nYour job is to produce a client-facing performance report that includes:\n1. A client summary (1–2 paragraphs) written as if addressing a client-side marketer. Use professional but approachable language.\n2. Channel recommendations: Compare Meta vs Google allocation and suggest budget shifts if warranted.\n3. Campaign actions: For each notable campaign, recommend one of: pause, scale up, test new creatives, adjust targeting, or maintain.\n\nBe specific with numbers and percentages. Focus on actionable insights that a marketing manager can execute immediately. If brand voice guidelines are provided in the input, adapt your tone accordingly.",
+  "inputSchema": {
+    "type": "object",
+    "required": ["tenant_id", "period", "previous_period", "metrics"],
+    "properties": {
+      "tenant_id": {
+        "type": "string",
+        "description": "Client/tenant identifier"
+      },
+      "period": {
+        "type": "string",
+        "description": "Current period date range"
+      },
+      "previous_period": {
+        "type": "string",
+        "description": "Previous period date range for comparison"
+      },
+      "metrics": {
+        "type": "object",
+        "properties": {
+          "current": {
+            "type": "object",
+            "description": "Aggregated stats for the current period"
+          },
+          "previous": {
+            "type": "object",
+            "description": "Aggregated stats for the previous period"
+          },
+          "campaigns": {
+            "type": "array",
+            "description": "Per-campaign stats with deltas"
+          }
+        }
+      },
+      "brandVoice": {
+        "type": "string",
+        "description": "Optional brand voice guidelines from KB"
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "clientSummary": {
+        "type": "string",
+        "description": "Client-facing executive summary"
+      },
+      "channelRecommendations": {
+        "type": "object",
+        "properties": {
+          "meta": {
+            "type": "object",
+            "properties": {
+              "spend": { "type": "number" },
+              "roas": { "type": "number" },
+              "recommendation": { "type": "string" }
+            }
+          },
+          "google": {
+            "type": "object",
+            "properties": {
+              "spend": { "type": "number" },
+              "roas": { "type": "number" },
+              "recommendation": { "type": "string" }
+            }
+          },
+          "allocationAdvice": { "type": "string" }
+        }
+      },
+      "campaignActions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "campaignId": { "type": "string" },
+            "campaignName": { "type": "string" },
+            "platform": { "type": "string" },
+            "action": {
+              "type": "string",
+              "enum": ["pause", "scale_up", "test_creatives", "adjust_targeting", "maintain"]
+            },
+            "reason": { "type": "string" },
+            "priority": {
+              "type": "string",
+              "enum": ["high", "medium", "low"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

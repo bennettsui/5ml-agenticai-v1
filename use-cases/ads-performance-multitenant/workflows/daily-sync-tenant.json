@@ -1,0 +1,67 @@
+{
+  "id": "ads-daily-sync-tenant",
+  "name": "Daily Ads Sync (Per Tenant)",
+  "description": "Fetch yesterday's campaign metrics for a specific tenant from Meta and Google Ads, then upsert into the database with tenant isolation.",
+  "input": {
+    "tenantId": "${input.tenant_id}",
+    "date": "${input.date || date.yesterday}"
+  },
+  "steps": [
+    {
+      "id": "resolve-credentials",
+      "name": "Resolve Tenant Credentials",
+      "type": "tool",
+      "tool": "credentials/getMetaCredentialsForTenant",
+      "params": {
+        "tenantId": "${input.tenantId}"
+      },
+      "output": "metaCredentials",
+      "onError": "log-and-continue"
+    },
+    {
+      "id": "fetch-meta-tenant",
+      "name": "Fetch Meta Ads for Tenant",
+      "type": "tool",
+      "tool": "meta-ads-api/fetchMetaInsightsForTenant",
+      "params": {
+        "tenantId": "${input.tenantId}",
+        "since": "${input.date}",
+        "until": "${input.date}"
+      },
+      "output": "metaMetrics",
+      "onError": "log-and-continue"
+    },
+    {
+      "id": "fetch-google-tenant",
+      "name": "Fetch Google Ads for Tenant",
+      "type": "tool",
+      "tool": "google-ads-api/fetchGoogleAdsMetricsForTenant",
+      "params": {
+        "tenantId": "${input.tenantId}",
+        "since": "${input.date}",
+        "until": "${input.date}"
+      },
+      "output": "googleMetrics",
+      "onError": "log-and-continue"
+    },
+    {
+      "id": "upsert-tenant-metrics",
+      "name": "Upsert Tenant Metrics to Database",
+      "type": "tool",
+      "tool": "db-ops/upsertAdsDailyPerformance",
+      "params": {
+        "metrics": "${merge(metaMetrics, googleMetrics)}",
+        "tenantId": "${input.tenantId}"
+      },
+      "dependsOn": ["fetch-meta-tenant", "fetch-google-tenant"],
+      "output": "upsertResult"
+    }
+  ],
+  "output": {
+    "tenantId": "${input.tenantId}",
+    "date": "${input.date}",
+    "metaCount": "${metaMetrics.length}",
+    "googleCount": "${googleMetrics.length}",
+    "totalUpserted": "${upsertResult}"
+  }
+}
