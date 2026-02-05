@@ -69,7 +69,8 @@ async function initAdsDatabase() {
         refresh_token TEXT,
         extra JSONB,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (tenant_id, service)
       );
 
       CREATE INDEX IF NOT EXISTS idx_client_credentials_tenant_service
@@ -96,6 +97,271 @@ function getDateRange(from, to) {
     from: from || defaultFrom,
     to: to || defaultTo,
   };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ==========================================
+// Meta Ads API - Fetch + Normalize
+// ==========================================
+
+const META_API_BASE = 'https://graph.facebook.com/v20.0';
+const META_INSIGHT_FIELDS = [
+  'campaign_id', 'campaign_name', 'date_start', 'date_stop',
+  'impressions', 'reach', 'clicks', 'spend',
+  'actions', 'action_values', 'website_purchase_roas',
+  'cpc', 'cpm', 'ctr',
+].join(',');
+
+function extractConversions(actions) {
+  if (!actions) return null;
+  const pa = actions.find(
+    (a) => a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase'
+  );
+  return pa ? parseFloat(pa.value) : null;
+}
+
+function extractRevenue(actionValues) {
+  if (!actionValues) return null;
+  const pv = actionValues.find(
+    (a) => a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase'
+  );
+  return pv ? parseFloat(pv.value) : null;
+}
+
+function extractRoas(roas) {
+  if (!roas || roas.length === 0) return null;
+  const pr = roas.find((r) => r.action_type === 'offsite_conversion.fb_pixel_purchase');
+  return pr ? parseFloat(pr.value) : (roas[0] ? parseFloat(roas[0].value) : null);
+}
+
+function normalizeMetaRow(accountId, row) {
+  return {
+    platform: 'meta',
+    accountId,
+    campaignId: row.campaign_id,
+    campaignName: row.campaign_name,
+    date: row.date_start,
+    impressions: parseInt(row.impressions, 10) || 0,
+    reach: parseInt(row.reach, 10) || 0,
+    clicks: parseInt(row.clicks, 10) || 0,
+    spend: parseFloat(row.spend) || 0,
+    conversions: extractConversions(row.actions),
+    revenue: extractRevenue(row.action_values),
+    cpc: row.cpc ? parseFloat(row.cpc) : null,
+    cpm: row.cpm ? parseFloat(row.cpm) : null,
+    ctr: row.ctr ? parseFloat(row.ctr) : null,
+    roas: extractRoas(row.website_purchase_roas),
+  };
+}
+
+async function fetchMetaInsights(accountId, since, until, accessToken) {
+  const token = accessToken || process.env.META_ACCESS_TOKEN;
+  if (!token) throw new Error('META_ACCESS_TOKEN is required');
+
+  const acctId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
+  const results = [];
+
+  let url =
+    `${META_API_BASE}/${acctId}/insights?` +
+    new URLSearchParams({
+      time_range: JSON.stringify({ since, until }),
+      level: 'campaign',
+      time_increment: '1',
+      fields: META_INSIGHT_FIELDS,
+      limit: '500',
+      access_token: token,
+    }).toString();
+
+  let retries = 0;
+  while (url) {
+    const response = await fetch(url);
+
+    if (response.status === 429) {
+      retries++;
+      if (retries > 3) throw new Error('Meta API rate limit exceeded after max retries');
+      const wait = Math.pow(2, retries) * 1000;
+      console.warn(`[Meta API] Rate limited, retrying in ${wait}ms`);
+      await sleep(wait);
+      continue;
+    }
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Meta API error ${response.status}: ${body}`);
+    }
+
+    const json = await response.json();
+    retries = 0;
+
+    for (const row of json.data) {
+      results.push(normalizeMetaRow(accountId, row));
+    }
+
+    url = json.paging?.next || null;
+  }
+
+  console.log(`[Meta API] Fetched ${results.length} daily metrics for ${acctId}`);
+  return results;
+}
+
+// ==========================================
+// Google Ads API - Fetch + Normalize
+// ==========================================
+
+const GOOGLE_ADS_API_VERSION = 'v17';
+const GOOGLE_ADS_BASE = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
+
+async function getGoogleAccessToken(clientId, clientSecret, refreshToken) {
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+    }).toString(),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Google OAuth error ${response.status}: ${body}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+function normalizeGoogleRow(customerId, row) {
+  if (!row.campaign?.id || !row.segments?.date) return null;
+
+  const costMicros = row.metrics?.costMicros ? parseInt(row.metrics.costMicros, 10) : 0;
+  const spend = costMicros / 1_000_000;
+  const impressions = row.metrics?.impressions ? parseInt(row.metrics.impressions, 10) : 0;
+  const clicks = row.metrics?.clicks ? parseInt(row.metrics.clicks, 10) : 0;
+  const conversions = row.metrics?.conversions ?? null;
+  const revenue = row.metrics?.conversionsValue ?? null;
+
+  return {
+    platform: 'google',
+    customerId,
+    campaignId: String(row.campaign.id),
+    campaignName: row.campaign.name || '',
+    date: row.segments.date,
+    impressions,
+    clicks,
+    spend,
+    conversions,
+    revenue,
+    cpc: clicks > 0 ? spend / clicks : null,
+    cpm: impressions > 0 ? (spend / impressions) * 1000 : null,
+    ctr: row.metrics?.ctr ?? null,
+    roas: revenue !== null && spend > 0 ? revenue / spend : null,
+  };
+}
+
+async function fetchGoogleAdsMetrics(customerId, since, until, credentials) {
+  const devToken = credentials.developerToken || process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
+  const cId = credentials.clientId || process.env.GOOGLE_ADS_CLIENT_ID;
+  const cSecret = credentials.clientSecret || process.env.GOOGLE_ADS_CLIENT_SECRET;
+  const rToken = credentials.refreshToken || process.env.GOOGLE_ADS_REFRESH_TOKEN;
+  const loginCid = credentials.loginCustomerId || process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
+
+  if (!devToken) throw new Error('GOOGLE_ADS_DEVELOPER_TOKEN is required');
+  if (!cId) throw new Error('GOOGLE_ADS_CLIENT_ID is required');
+  if (!cSecret) throw new Error('GOOGLE_ADS_CLIENT_SECRET is required');
+  if (!rToken) throw new Error('GOOGLE_ADS_REFRESH_TOKEN is required');
+
+  const accessToken = await getGoogleAccessToken(cId, cSecret, rToken);
+  const cleanId = customerId.replace(/-/g, '');
+
+  const query = `
+    SELECT
+      campaign.id, campaign.name, segments.date,
+      metrics.impressions, metrics.clicks, metrics.ctr,
+      metrics.average_cpc, metrics.cost_micros,
+      metrics.conversions, metrics.conversions_value
+    FROM campaign
+    WHERE segments.date BETWEEN '${since}' AND '${until}'
+  `.trim();
+
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+    'developer-token': devToken,
+    'Content-Type': 'application/json',
+  };
+  if (loginCid) headers['login-customer-id'] = loginCid.replace(/-/g, '');
+
+  const url = `${GOOGLE_ADS_BASE}/customers/${cleanId}/googleAds:searchStream`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ query }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Google Ads API error ${response.status}: ${body}`);
+  }
+
+  const data = await response.json();
+  const results = [];
+
+  for (const batch of data) {
+    if (batch.results) {
+      for (const row of batch.results) {
+        const metric = normalizeGoogleRow(customerId, row);
+        if (metric) results.push(metric);
+      }
+    }
+  }
+
+  console.log(`[Google Ads API] Fetched ${results.length} daily metrics for ${customerId}`);
+  return results;
+}
+
+// ==========================================
+// DB Upsert helper
+// ==========================================
+
+async function upsertMetrics(pool, metrics, tenantId) {
+  let count = 0;
+  for (const m of metrics) {
+    const accountId = m.accountId || m.customerId || '';
+    const reach = m.reach ?? null;
+
+    await pool.query(
+      `INSERT INTO ads_daily_performance
+        (platform, tenant_id, account_id, campaign_id, campaign_name, date,
+         impressions, reach, clicks, spend, conversions, revenue, cpc, cpm, ctr, roas)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       ON CONFLICT (platform, tenant_id, campaign_id, date)
+       DO UPDATE SET
+         campaign_name = EXCLUDED.campaign_name,
+         impressions = EXCLUDED.impressions,
+         reach = EXCLUDED.reach,
+         clicks = EXCLUDED.clicks,
+         spend = EXCLUDED.spend,
+         conversions = EXCLUDED.conversions,
+         revenue = EXCLUDED.revenue,
+         cpc = EXCLUDED.cpc,
+         cpm = EXCLUDED.cpm,
+         ctr = EXCLUDED.ctr,
+         roas = EXCLUDED.roas,
+         updated_at = now()`,
+      [
+        m.platform, tenantId, accountId, m.campaignId, m.campaignName, m.date,
+        m.impressions, reach, m.clicks, m.spend, m.conversions, m.revenue,
+        m.cpc, m.cpm, m.ctr, m.roas,
+      ]
+    );
+    count++;
+  }
+  return count;
 }
 
 // ==========================================
@@ -368,26 +634,85 @@ router.get('/tenants', async (req, res) => {
 
 // ==========================================
 // POST /api/ads/sync
-// Trigger a manual sync for a tenant
+// Trigger a live sync from Meta and/or Google Ads
 // ==========================================
 router.post('/sync', async (req, res) => {
   try {
+    if (!db || !db.pool) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
     const tenantId = req.body.tenant_id || '5ml-internal';
     const since = req.body.since;
     const until = req.body.until;
+    const platforms = req.body.platforms || ['meta', 'google']; // default both
 
     if (!since || !until) {
       return res.status(400).json({ error: 'since and until are required (YYYY-MM-DD)' });
     }
 
-    // For now, return instructions on how to run the sync
-    // In production, this would trigger the workflow
+    const results = { meta: null, google: null, errors: [] };
+
+    // --- Meta sync ---
+    if (platforms.includes('meta')) {
+      const metaAccountId = req.body.meta_account_id || process.env.META_AD_ACCOUNT_ID;
+      const metaToken = req.body.meta_access_token || process.env.META_ACCESS_TOKEN;
+
+      if (metaAccountId && metaToken) {
+        try {
+          console.log(`[Sync] Fetching Meta Ads for ${metaAccountId} (${since} to ${until})...`);
+          const metaMetrics = await fetchMetaInsights(metaAccountId, since, until, metaToken);
+          const metaCount = await upsertMetrics(db.pool, metaMetrics, tenantId);
+          results.meta = { fetched: metaMetrics.length, upserted: metaCount };
+          console.log(`[Sync] Meta: ${metaCount} rows upserted`);
+        } catch (err) {
+          console.error('[Sync] Meta error:', err.message);
+          results.errors.push({ platform: 'meta', error: err.message });
+        }
+      } else {
+        results.errors.push({
+          platform: 'meta',
+          error: 'Missing META_AD_ACCOUNT_ID or META_ACCESS_TOKEN',
+        });
+      }
+    }
+
+    // --- Google sync ---
+    if (platforms.includes('google')) {
+      const googleCustomerId = req.body.google_customer_id || process.env.GOOGLE_ADS_CUSTOMER_ID;
+      const googleCreds = {
+        developerToken: req.body.google_developer_token,
+        clientId: req.body.google_client_id,
+        clientSecret: req.body.google_client_secret,
+        refreshToken: req.body.google_refresh_token,
+        loginCustomerId: req.body.google_login_customer_id,
+      };
+
+      if (googleCustomerId) {
+        try {
+          console.log(`[Sync] Fetching Google Ads for ${googleCustomerId} (${since} to ${until})...`);
+          const googleMetrics = await fetchGoogleAdsMetrics(googleCustomerId, since, until, googleCreds);
+          const googleCount = await upsertMetrics(db.pool, googleMetrics, tenantId);
+          results.google = { fetched: googleMetrics.length, upserted: googleCount };
+          console.log(`[Sync] Google: ${googleCount} rows upserted`);
+        } catch (err) {
+          console.error('[Sync] Google error:', err.message);
+          results.errors.push({ platform: 'google', error: err.message });
+        }
+      } else {
+        results.errors.push({
+          platform: 'google',
+          error: 'Missing GOOGLE_ADS_CUSTOMER_ID',
+        });
+      }
+    }
+
+    const hasData = results.meta || results.google;
+
     res.json({
-      success: true,
-      message: `Sync requested for tenant ${tenantId} from ${since} to ${until}`,
-      workflow: 'daily-sync',
-      params: { tenantId, since, until },
-      note: 'Workflow execution requires the orchestrator to be running. Use the daily-sync workflow with these parameters.',
+      success: hasData ? true : false,
+      data: results,
+      meta: { tenantId, since, until, platforms },
     });
   } catch (error) {
     console.error('[Ads API] Sync error:', error);
