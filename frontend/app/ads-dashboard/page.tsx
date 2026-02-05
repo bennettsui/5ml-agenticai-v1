@@ -47,11 +47,23 @@ interface KpiData {
   total_impressions: string | null;
   total_clicks: string | null;
   avg_ctr: string | null;
-  top_campaigns_by_roas: Array<{
+  avg_cpc: string | null;
+  avg_cpm: string | null;
+  previous_period: {
+    total_spend: string | null;
+    total_impressions: string | null;
+    total_clicks: string | null;
+    avg_ctr: string | null;
+    avg_cpc: string | null;
+    avg_cpm: string | null;
+  } | null;
+  previous_period_range: { from: string; to: string } | null;
+  top_campaigns_by_spend: Array<{
     platform: string;
     campaign_name: string;
-    roas: string;
     spend: string;
+    cpc: string;
+    cpm: string;
   }>;
 }
 
@@ -100,6 +112,27 @@ interface MetaAdAccount {
   account_status: number;
   currency: string;
   business_name?: string;
+}
+
+interface GoogleAdsAccount {
+  id: string;
+  raw_id: string;
+  name: string;
+  currency: string;
+  status: number;
+  manager: boolean;
+}
+
+interface MonthlyRow {
+  month: string;
+  impressions: string;
+  clicks: string;
+  spend: string;
+  conversions: string;
+  revenue: string;
+  cpc: string;
+  cpm: string;
+  ctr: string;
 }
 
 interface SyncResult {
@@ -267,6 +300,14 @@ export default function AdsDashboardPage() {
   const [syncDateFrom, setSyncDateFrom] = useState(defaults.from);
   const [syncDateTo, setSyncDateTo] = useState(defaults.to);
 
+  // Google Ads Account Discovery state
+  const [googleAccounts, setGoogleAccounts] = useState<GoogleAdsAccount[]>([]);
+  const [googleAccountsLoading, setGoogleAccountsLoading] = useState(false);
+  const [googleAccountsError, setGoogleAccountsError] = useState<string | null>(null);
+
+  // Monthly data for chart
+  const [monthlyData, setMonthlyData] = useState<MonthlyRow[]>([]);
+
   // Campaign detail expansion
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
   const [adSets, setAdSets] = useState<AdSetRow[]>([]);
@@ -302,10 +343,11 @@ export default function AdsDashboardPage() {
     });
 
     try {
-      const [kpiRes, aggRes, campRes] = await Promise.all([
+      const [kpiRes, aggRes, campRes, monthlyRes] = await Promise.all([
         fetch(`${API_BASE}/api/ads/performance/kpis?${params}`),
         fetch(`${API_BASE}/api/ads/performance/aggregated?${params}`),
         fetch(`${API_BASE}/api/ads/performance/campaigns?${params}`),
+        fetch(`${API_BASE}/api/ads/performance/monthly?${params}`),
       ]);
 
       if (kpiRes.ok) {
@@ -319,6 +361,10 @@ export default function AdsDashboardPage() {
       if (campRes.ok) {
         const campJson = await campRes.json();
         setCampaigns(campJson.data || []);
+      }
+      if (monthlyRes.ok) {
+        const monthlyJson = await monthlyRes.json();
+        setMonthlyData(monthlyJson.data || []);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
@@ -419,11 +465,97 @@ export default function AdsDashboardPage() {
     }
   }, [adAccounts, syncAccount]);
 
+  // Google Ads Account Discovery functions
+  const fetchGoogleAccounts = useCallback(async () => {
+    setGoogleAccountsLoading(true);
+    setGoogleAccountsError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/ads/google/accounts`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(body.error || `Failed to fetch Google accounts (${res.status})`);
+      }
+      const json = await res.json();
+      setGoogleAccounts(json.data || []);
+    } catch (err) {
+      setGoogleAccountsError(err instanceof Error ? err.message : 'Failed to fetch Google accounts');
+    } finally {
+      setGoogleAccountsLoading(false);
+    }
+  }, []);
+
+  const syncGoogleAccount = useCallback(async (account: GoogleAdsAccount) => {
+    const accountKey = `google_${account.id}`;
+    setSyncResults((prev) => ({
+      ...prev,
+      [accountKey]: { accountId: account.id, status: 'syncing' },
+    }));
+
+    try {
+      const res = await fetch(`${API_BASE}/api/ads/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: account.id,
+          since: syncDateFrom,
+          until: syncDateTo,
+          platforms: ['google'],
+          google_customer_id: account.id,
+          sync_details: true,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (json.success && json.data?.google) {
+        const details = json.data.google.details;
+        const detailMsg = details ? ` + ${details.campaigns} campaigns` : '';
+        setSyncResults((prev) => ({
+          ...prev,
+          [accountKey]: {
+            accountId: account.id,
+            status: 'success',
+            fetched: json.data.google.fetched,
+            upserted: json.data.google.upserted,
+            message: `Synced ${json.data.google.upserted} perf rows${detailMsg}`,
+          },
+        }));
+        fetchData();
+        fetchTenants();
+      } else {
+        const errMsg = json.data?.errors?.[0]?.error || json.error || 'Sync returned no data';
+        setSyncResults((prev) => ({
+          ...prev,
+          [accountKey]: { accountId: account.id, status: 'error', message: errMsg },
+        }));
+      }
+    } catch (err) {
+      setSyncResults((prev) => ({
+        ...prev,
+        [accountKey]: {
+          accountId: account.id,
+          status: 'error',
+          message: err instanceof Error ? err.message : 'Sync failed',
+        },
+      }));
+    }
+  }, [syncDateFrom, syncDateTo, fetchData, fetchTenants]);
+
+  const syncAllGoogleAccounts = useCallback(async () => {
+    const enabledAccounts = googleAccounts.filter((a) => a.status === 1);
+    for (const account of enabledAccounts) {
+      await syncGoogleAccount(account);
+    }
+  }, [googleAccounts, syncGoogleAccount]);
+
   useEffect(() => {
     if (accountsPanelOpen && adAccounts.length === 0 && !accountsLoading) {
       fetchAdAccounts();
     }
-  }, [accountsPanelOpen, adAccounts.length, accountsLoading, fetchAdAccounts]);
+    if (accountsPanelOpen && googleAccounts.length === 0 && !googleAccountsLoading) {
+      fetchGoogleAccounts();
+    }
+  }, [accountsPanelOpen, adAccounts.length, accountsLoading, fetchAdAccounts, googleAccounts.length, googleAccountsLoading, fetchGoogleAccounts]);
 
   // Campaign detail expansion
   const toggleCampaignDetails = useCallback(async (campaignId: string) => {
@@ -460,18 +592,97 @@ export default function AdsDashboardPage() {
     }
   }, [expandedCampaign]);
 
+  // Date preset handler
+  const setDatePreset = (preset: string) => {
+    const now = new Date();
+    const toStr = now.toISOString().split('T')[0];
+    let fromDate: Date;
+
+    switch (preset) {
+      case '7d':
+        fromDate = new Date(now.getTime() - 7 * 86400000);
+        break;
+      case '30d':
+        fromDate = new Date(now.getTime() - 30 * 86400000);
+        break;
+      case '90d':
+        fromDate = new Date(now.getTime() - 90 * 86400000);
+        break;
+      case '180d':
+        fromDate = new Date(now.getTime() - 180 * 86400000);
+        break;
+      case 'ytd':
+        fromDate = new Date(now.getFullYear(), 0, 1);
+        break;
+      case '1y':
+        fromDate = new Date(now.getTime() - 365 * 86400000);
+        break;
+      default:
+        fromDate = new Date(now.getTime() - 30 * 86400000);
+    }
+
+    setFrom(fromDate.toISOString().split('T')[0]);
+    setTo(toStr);
+  };
+
+  // Campaign type helper
+  const getCampaignType = (camp: CampaignRow): { label: string; color: string } => {
+    if (camp.platform === 'meta') {
+      return { label: 'Meta Ad', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' };
+    }
+    // Google: derive from objective (advertising_channel_type stored in objective field)
+    const obj = (camp.objective || '').toUpperCase();
+    if (obj === 'SEARCH' || obj.includes('SEARCH')) {
+      return { label: 'SEM', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' };
+    }
+    if (obj === 'DISPLAY' || obj.includes('DISPLAY')) {
+      return { label: 'GDN', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' };
+    }
+    if (obj === 'VIDEO' || obj.includes('VIDEO')) {
+      return { label: 'Video', color: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300' };
+    }
+    if (obj === 'SHOPPING' || obj.includes('SHOPPING')) {
+      return { label: 'Shopping', color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' };
+    }
+    if (obj === 'PERFORMANCE_MAX') {
+      return { label: 'PMax', color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' };
+    }
+    return { label: 'Google Ad', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' };
+  };
+
+  // Period comparison helper
+  const getPctChange = (current: string | null | undefined, previous: string | null | undefined): { pct: number; label: string; color: string } | null => {
+    if (!current || !previous) return null;
+    const curr = parseFloat(current) || 0;
+    const prev = parseFloat(previous) || 0;
+    if (prev === 0) return curr > 0 ? { pct: 100, label: '+100%', color: 'text-green-600 dark:text-green-400' } : null;
+    const pct = ((curr - prev) / prev) * 100;
+    const label = `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+    // For CPC/CPM, lower is better, so invert color
+    return { pct, label, color: pct >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' };
+  };
+
+  const getCostPctChange = (current: string | null | undefined, previous: string | null | undefined): { pct: number; label: string; color: string } | null => {
+    const change = getPctChange(current, previous);
+    if (!change) return null;
+    // For cost metrics, lower is better
+    return { ...change, color: change.pct <= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' };
+  };
+
   // Chart data transforms
   const lineChartData = chartData.map((row) => ({
     date: row.date,
     spend: parseFloat(row.spend) || 0,
-    conversions: parseFloat(row.conversions) || 0,
-    revenue: parseFloat(row.revenue) || 0,
+    impressions: parseFloat(row.impressions) || 0,
+    clicks: parseFloat(row.clicks) || 0,
   }));
 
-  const barChartData = campaigns.slice(0, 15).map((c) => ({
-    name: c.campaign_name.length > 25 ? c.campaign_name.slice(0, 22) + '...' : c.campaign_name,
-    roas: parseFloat(c.roas) || 0,
-    platform: c.platform,
+  const monthlyChartData = monthlyData.map((row) => ({
+    month: row.month,
+    cpc: parseFloat(row.cpc) || 0,
+    cpm: parseFloat(row.cpm) || 0,
+    ctr: parseFloat(row.ctr) || 0,
+    spend: parseFloat(row.spend) || 0,
   }));
 
   // Sorted campaigns
@@ -572,7 +783,7 @@ export default function AdsDashboardPage() {
                   Connect Ad Accounts
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Discover and sync your Meta ad accounts (each synced as a separate client)
+                  Discover and sync your Meta & Google ad accounts (each synced as a separate client)
                 </p>
               </div>
             </div>
@@ -631,17 +842,19 @@ export default function AdsDashboardPage() {
                 </div>
               )}
 
+              {/* Meta Ads Section */}
+              <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Meta Ads</h4>
               {accountsLoading && adAccounts.length === 0 ? (
-                <div className="flex items-center justify-center py-8 text-slate-400 text-sm gap-2">
+                <div className="flex items-center justify-center py-4 text-slate-400 text-sm gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Loading ad accounts...
+                  Loading Meta ad accounts...
                 </div>
               ) : adAccounts.length === 0 && !accountsLoading ? (
-                <div className="text-center py-8 text-slate-400 text-sm">
-                  No ad accounts found. Make sure META_ACCESS_TOKEN is set in your environment.
+                <div className="text-center py-4 text-slate-400 text-sm">
+                  No Meta ad accounts found. Make sure META_ACCESS_TOKEN is set.
                 </div>
               ) : (
-                <div className="grid gap-3">
+                <div className="grid gap-3 mb-6">
                   {adAccounts.map((account) => {
                     const status = ACCOUNT_STATUS_MAP[account.account_status] || {
                       label: `Status ${account.account_status}`,
@@ -657,6 +870,7 @@ export default function AdsDashboardPage() {
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Meta</span>
                             <span className="text-sm font-medium text-slate-900 dark:text-white truncate">
                               {account.name || 'Unnamed Account'}
                             </span>
@@ -688,6 +902,101 @@ export default function AdsDashboardPage() {
                           onClick={() => syncAccount(account)}
                           disabled={isSyncing}
                           className="ml-3 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-medium hover:bg-orange-600 transition-colors flex items-center gap-1.5 disabled:opacity-50 flex-shrink-0"
+                        >
+                          {isSyncing ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Syncing...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-3 h-3" />
+                              Sync Data
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Google Ads Section */}
+              <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 mt-4 flex items-center gap-2">
+                Google Ads
+                {googleAccounts.filter((a) => a.status === 1).length > 0 && (
+                  <button
+                    onClick={syncAllGoogleAccounts}
+                    className="px-2 py-0.5 bg-red-500 text-white rounded text-[10px] font-medium hover:bg-red-600 transition-colors flex items-center gap-1 normal-case tracking-normal"
+                  >
+                    <RefreshCw className="w-2.5 h-2.5" />
+                    Sync All
+                  </button>
+                )}
+              </h4>
+              {googleAccountsError && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 mb-3 text-red-700 dark:text-red-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {googleAccountsError}
+                </div>
+              )}
+              {googleAccountsLoading && googleAccounts.length === 0 ? (
+                <div className="flex items-center justify-center py-4 text-slate-400 text-sm gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading Google Ads accounts...
+                </div>
+              ) : googleAccounts.length === 0 && !googleAccountsLoading ? (
+                <div className="text-center py-4 text-slate-400 text-sm">
+                  No Google Ads accounts found. Make sure GOOGLE_ADS_* env vars are set.
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {googleAccounts.map((account) => {
+                    const accountKey = `google_${account.id}`;
+                    const statusInfo = account.status === 1
+                      ? { label: 'Enabled', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' }
+                      : { label: 'Disabled', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' };
+                    const sync = syncResults[accountKey];
+                    const isSyncing = sync?.status === 'syncing';
+
+                    return (
+                      <div
+                        key={account.id}
+                        className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-200 dark:border-slate-600"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">Google</span>
+                            <span className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                              {account.name || 'Unnamed Account'}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusInfo.color}`}>
+                              {statusInfo.label}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                            <span className="font-mono">{account.id}</span>
+                            {account.currency && <span>{account.currency}</span>}
+                          </div>
+                          {sync && sync.status !== 'syncing' && (
+                            <div className={`flex items-center gap-1.5 mt-1.5 text-xs ${
+                              sync.status === 'success'
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-red-600 dark:text-red-400'
+                            }`}>
+                              {sync.status === 'success' ? (
+                                <CheckCircle2 className="w-3 h-3" />
+                              ) : (
+                                <XCircle className="w-3 h-3" />
+                              )}
+                              {sync.message}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => syncGoogleAccount(account)}
+                          disabled={isSyncing}
+                          className="ml-3 px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-medium hover:bg-red-600 transition-colors flex items-center gap-1.5 disabled:opacity-50 flex-shrink-0"
                         >
                           {isSyncing ? (
                             <>
@@ -760,6 +1069,26 @@ export default function AdsDashboardPage() {
               </select>
             </div>
           </div>
+          {/* Date Range Presets */}
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+            <span className="text-xs text-slate-500 dark:text-slate-400">Quick:</span>
+            {[
+              { label: '7D', value: '7d' },
+              { label: '30D', value: '30d' },
+              { label: '90D', value: '90d' },
+              { label: '180D', value: '180d' },
+              { label: 'YTD', value: 'ytd' },
+              { label: '1Y', value: '1y' },
+            ].map((preset) => (
+              <button
+                key={preset.value}
+                onClick={() => setDatePreset(preset.value)}
+                className="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-orange-100 hover:text-orange-700 dark:hover:bg-orange-900/30 dark:hover:text-orange-300 transition-colors"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {error && (
@@ -780,6 +1109,14 @@ export default function AdsDashboardPage() {
             <div className="text-2xl font-bold text-slate-900 dark:text-white">
               {kpis ? formatCurrency(kpis.total_spend) : '--'}
             </div>
+            {(() => {
+              const change = getPctChange(kpis?.total_spend, kpis?.previous_period?.total_spend);
+              return change ? (
+                <div className={`text-xs mt-1 font-medium ${change.color}`}>
+                  {change.label} vs prev period
+                </div>
+              ) : null;
+            })()}
           </div>
 
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
@@ -787,11 +1124,19 @@ export default function AdsDashboardPage() {
               <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                 <MousePointerClick className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <span className="text-sm text-slate-600 dark:text-slate-400">Total Conversions</span>
+              <span className="text-sm text-slate-600 dark:text-slate-400">Avg CPC</span>
             </div>
             <div className="text-2xl font-bold text-slate-900 dark:text-white">
-              {kpis ? formatNumber(kpis.total_conversions) : '--'}
+              {kpis ? formatCurrency(kpis.avg_cpc) : '--'}
             </div>
+            {(() => {
+              const change = getCostPctChange(kpis?.avg_cpc, kpis?.previous_period?.avg_cpc);
+              return change ? (
+                <div className={`text-xs mt-1 font-medium ${change.color}`}>
+                  {change.label} vs prev period
+                </div>
+              ) : null;
+            })()}
           </div>
 
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
@@ -799,11 +1144,19 @@ export default function AdsDashboardPage() {
               <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
                 <TrendingUp className="w-5 h-5 text-purple-600 dark:text-purple-400" />
               </div>
-              <span className="text-sm text-slate-600 dark:text-slate-400">Blended ROAS</span>
+              <span className="text-sm text-slate-600 dark:text-slate-400">Avg CPM</span>
             </div>
             <div className="text-2xl font-bold text-slate-900 dark:text-white">
-              {kpis ? `${parseFloat(kpis.blended_roas || '0').toFixed(2)}x` : '--'}
+              {kpis ? formatCurrency(kpis.avg_cpm) : '--'}
             </div>
+            {(() => {
+              const change = getCostPctChange(kpis?.avg_cpm, kpis?.previous_period?.avg_cpm);
+              return change ? (
+                <div className={`text-xs mt-1 font-medium ${change.color}`}>
+                  {change.label} vs prev period
+                </div>
+              ) : null;
+            })()}
           </div>
 
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
@@ -811,29 +1164,59 @@ export default function AdsDashboardPage() {
               <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
                 <BarChart3 className="w-5 h-5 text-orange-600 dark:text-orange-400" />
               </div>
-              <span className="text-sm text-slate-600 dark:text-slate-400">Top Campaign ROAS</span>
+              <span className="text-sm text-slate-600 dark:text-slate-400">Avg CTR</span>
             </div>
-            {kpis?.top_campaigns_by_roas?.[0] ? (
+            <div className="text-2xl font-bold text-slate-900 dark:text-white">
+              {kpis ? `${parseFloat(kpis.avg_ctr || '0').toFixed(2)}%` : '--'}
+            </div>
+            {(() => {
+              const change = getPctChange(kpis?.avg_ctr, kpis?.previous_period?.avg_ctr);
+              return change ? (
+                <div className={`text-xs mt-1 font-medium ${change.color}`}>
+                  {change.label} vs prev period
+                </div>
+              ) : null;
+            })()}
+          </div>
+        </div>
+
+        {/* Secondary KPI row */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Impressions</div>
+            <div className="text-lg font-bold text-slate-900 dark:text-white">{kpis ? formatNumber(kpis.total_impressions) : '--'}</div>
+            {(() => {
+              const change = getPctChange(kpis?.total_impressions, kpis?.previous_period?.total_impressions);
+              return change ? <span className={`text-xs font-medium ${change.color}`}>{change.label}</span> : null;
+            })()}
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Clicks</div>
+            <div className="text-lg font-bold text-slate-900 dark:text-white">{kpis ? formatNumber(kpis.total_clicks) : '--'}</div>
+            {(() => {
+              const change = getPctChange(kpis?.total_clicks, kpis?.previous_period?.total_clicks);
+              return change ? <span className={`text-xs font-medium ${change.color}`}>{change.label}</span> : null;
+            })()}
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Top Campaign by Spend</div>
+            {kpis?.top_campaigns_by_spend?.[0] ? (
               <div>
-                <div className="text-lg font-bold text-slate-900 dark:text-white">
-                  {parseFloat(kpis.top_campaigns_by_roas[0].roas).toFixed(2)}x
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 truncate mt-1">
-                  {kpis.top_campaigns_by_roas[0].campaign_name}
-                </div>
+                <div className="text-lg font-bold text-slate-900 dark:text-white">{formatCurrency(kpis.top_campaigns_by_spend[0].spend)}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{kpis.top_campaigns_by_spend[0].campaign_name}</div>
               </div>
             ) : (
-              <div className="text-2xl font-bold text-slate-900 dark:text-white">--</div>
+              <div className="text-lg font-bold text-slate-900 dark:text-white">--</div>
             )}
           </div>
         </div>
 
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Spend vs Conversions Line Chart */}
+          {/* Spend & Clicks by Day Line Chart */}
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-              Spend vs Conversions by Day
+              Daily Spend & Clicks
             </h3>
             {lineChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
@@ -863,8 +1246,8 @@ export default function AdsDashboardPage() {
                   <Line
                     yAxisId="right"
                     type="monotone"
-                    dataKey="conversions"
-                    name="Conversions"
+                    dataKey="clicks"
+                    name="Clicks"
                     stroke="#3b82f6"
                     strokeWidth={2}
                     dot={{ r: 3 }}
@@ -878,23 +1261,18 @@ export default function AdsDashboardPage() {
             )}
           </div>
 
-          {/* ROAS by Campaign Bar Chart */}
+          {/* Monthly CPC / CPM / CTR Comparison */}
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-              ROAS by Campaign
+              Monthly CPC & CPM Trend
             </h3>
-            {barChartData.length > 0 ? (
+            {monthlyChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={barChartData} layout="vertical">
+                <BarChart data={monthlyChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis type="number" tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                  <YAxis
-                    dataKey="name"
-                    type="category"
-                    width={150}
-                    tick={{ fontSize: 11 }}
-                    stroke="#94a3b8"
-                  />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                  <YAxis yAxisId="left" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} stroke="#94a3b8" />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: '#1e293b',
@@ -902,14 +1280,20 @@ export default function AdsDashboardPage() {
                       borderRadius: '8px',
                       color: '#f8fafc',
                     }}
-                    formatter={(value: number) => [`${value.toFixed(2)}x`, 'ROAS']}
+                    formatter={(value: number, name: string) => {
+                      if (name === 'CTR') return [`${value.toFixed(2)}%`, name];
+                      return [`$${value.toFixed(2)}`, name];
+                    }}
                   />
-                  <Bar dataKey="roas" name="ROAS" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                  <Legend />
+                  <Bar yAxisId="left" dataKey="cpc" name="CPC" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="left" dataKey="cpm" name="CPM" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  <Line yAxisId="right" type="monotone" dataKey="ctr" name="CTR" stroke="#f97316" strokeWidth={2} dot={{ r: 4 }} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-[300px] flex items-center justify-center text-slate-400">
-                {loading ? 'Loading...' : 'No campaign data available'}
+                {loading ? 'Loading...' : 'No monthly data available'}
               </div>
             )}
           </div>
@@ -931,6 +1315,9 @@ export default function AdsDashboardPage() {
                     </th>
                     <th className="text-left py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('platform')}>
                       <span className="flex items-center">Platform<SortIndicator col="platform" /></span>
+                    </th>
+                    <th className="text-left py-3 px-2 font-medium text-slate-600 dark:text-slate-400">
+                      <span className="flex items-center">Type</span>
                     </th>
                     <th className="text-left py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('campaign_effective_status')}>
                       <span className="flex items-center">Status<SortIndicator col="campaign_effective_status" /></span>
@@ -996,6 +1383,16 @@ export default function AdsDashboardPage() {
                             </span>
                           </td>
                           <td className="py-2.5 px-2">
+                            {(() => {
+                              const campType = getCampaignType(camp);
+                              return (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${campType.color}`}>
+                                  {campType.label}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td className="py-2.5 px-2">
                             {camp.campaign_effective_status ? (
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                                 camp.campaign_effective_status === 'ACTIVE'
@@ -1042,7 +1439,7 @@ export default function AdsDashboardPage() {
                         {/* Expanded Detail Row */}
                         {isExpanded && (
                           <tr>
-                            <td colSpan={12} className="p-0">
+                            <td colSpan={13} className="p-0">
                               <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 p-4">
                                 {detailsLoading ? (
                                   <div className="flex items-center justify-center py-6 text-slate-400 text-sm gap-2">
