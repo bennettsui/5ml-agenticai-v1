@@ -809,4 +809,41 @@ router.get('/overview', async (req, res) => {
   }
 });
 
+// ==========================================
+// GET /api/ads/meta/adaccounts
+// Discover ad accounts accessible by the current Meta token
+// ==========================================
+router.get('/meta/adaccounts', async (req, res) => {
+  try {
+    const token = req.query.access_token || process.env.META_ACCESS_TOKEN;
+    if (!token) {
+      return res.status(400).json({ error: 'META_ACCESS_TOKEN is required (set as env var or pass as ?access_token=)' });
+    }
+
+    const url = `${META_API_BASE}/me/adaccounts?` +
+      new URLSearchParams({
+        fields: 'id,name,account_id,account_status,currency,business_name',
+        limit: '100',
+        access_token: token,
+      }).toString();
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      const body = await response.text();
+      return res.status(response.status).json({ error: `Meta API error: ${body}` });
+    }
+
+    const json = await response.json();
+
+    res.json({
+      success: true,
+      data: json.data,
+      hint: 'Use the "id" field (e.g. act_123456789) as META_AD_ACCOUNT_ID',
+    });
+  } catch (error) {
+    console.error('[Ads API] Ad accounts lookup error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
