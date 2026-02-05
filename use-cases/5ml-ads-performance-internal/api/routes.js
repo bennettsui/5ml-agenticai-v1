@@ -502,6 +502,84 @@ async function fetchGoogleAdsMetrics(customerId, since, until, credentials) {
 }
 
 // ==========================================
+// Google Ads API - Fetch Campaign Details
+// ==========================================
+
+async function fetchGoogleAdsCampaigns(customerId, credentials) {
+  const devToken = credentials.developerToken || process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
+  const cId = credentials.clientId || process.env.GOOGLE_ADS_CLIENT_ID;
+  const cSecret = credentials.clientSecret || process.env.GOOGLE_ADS_CLIENT_SECRET;
+  const rToken = credentials.refreshToken || process.env.GOOGLE_ADS_REFRESH_TOKEN;
+  const loginCid = credentials.loginCustomerId || process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
+
+  if (!cId || !cSecret || !rToken) throw new Error('Google OAuth credentials required');
+
+  const accessToken = await getGoogleAccessToken(cId, cSecret, rToken);
+  const cleanId = customerId.replace(/-/g, '');
+
+  const query = `
+    SELECT
+      campaign.id, campaign.name,
+      campaign.advertising_channel_type,
+      campaign.status,
+      campaign.bidding_strategy_type,
+      campaign.start_date, campaign.end_date
+    FROM campaign
+  `.trim();
+
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+    'developer-token': devToken,
+    'Content-Type': 'application/json',
+  };
+  if (loginCid) headers['login-customer-id'] = loginCid.replace(/-/g, '');
+
+  const url = `${GOOGLE_ADS_BASE}/customers/${cleanId}/googleAds:searchStream`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ query }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Google Ads campaign details error ${response.status}: ${body}`);
+  }
+
+  const data = await response.json();
+  const campaigns = [];
+
+  for (const batch of data) {
+    if (batch.results) {
+      for (const row of batch.results) {
+        if (row.campaign) {
+          campaigns.push({
+            id: String(row.campaign.id),
+            name: row.campaign.name || '',
+            objective: row.campaign.advertisingChannelType || null,
+            status: row.campaign.status || null,
+            effective_status: row.campaign.status || null,
+            buying_type: null,
+            bid_strategy: row.campaign.biddingStrategyType || null,
+            daily_budget: null,
+            lifetime_budget: null,
+            budget_remaining: null,
+            start_time: row.campaign.startDate || null,
+            stop_time: row.campaign.endDate || null,
+            created_time: null,
+            updated_time: null,
+          });
+        }
+      }
+    }
+  }
+
+  console.log(`[Google Ads API] Fetched ${campaigns.length} campaign details for ${customerId}`);
+  return campaigns;
+}
+
+// ==========================================
 // DB Upsert helpers
 // ==========================================
 
@@ -982,6 +1060,15 @@ router.get('/performance/kpis', async (req, res) => {
     const platform = req.query.platform || 'all';
     const tenantId = req.query.tenant_id || 'all';
 
+    // Calculate previous period (same duration, immediately before)
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    const durationMs = toDate.getTime() - fromDate.getTime() + 86400000;
+    const prevTo = new Date(fromDate.getTime() - 86400000);
+    const prevFrom = new Date(prevTo.getTime() - durationMs + 86400000);
+    const prevFromStr = prevFrom.toISOString().split('T')[0];
+    const prevToStr = prevTo.toISOString().split('T')[0];
+
     const conditions = ['date >= $1', 'date <= $2'];
     const params = [from, to];
 
@@ -1017,25 +1104,76 @@ router.get('/performance/kpis', async (req, res) => {
         SUM(clicks)::bigint as total_clicks,
         CASE WHEN SUM(impressions) > 0
           THEN (SUM(clicks)::numeric / SUM(impressions) * 100)::numeric(10,2)
-          ELSE 0 END as avg_ctr
+          ELSE 0 END as avg_ctr,
+        CASE WHEN SUM(clicks) > 0
+          THEN (SUM(spend) / NULLIF(SUM(clicks), 0))::numeric(18,4)
+          ELSE 0 END as avg_cpc,
+        CASE WHEN SUM(impressions) > 0
+          THEN (SUM(spend) / NULLIF(SUM(impressions), 0) * 1000)::numeric(18,4)
+          ELSE 0 END as avg_cpm
       FROM ${source}
     `;
 
     const kpiResult = await db.pool.query(kpiSql, params);
 
-    // Top 3 campaigns by ROAS (also deduped)
+    // Previous period query
+    const prevConditions = ['date >= $1', 'date <= $2'];
+    const prevParams = [prevFromStr, prevToStr];
+
+    if (tenantId !== 'all') {
+      prevParams.push(tenantId);
+      prevConditions.push(`tenant_id = $${prevParams.length}`);
+    }
+
+    if (platform !== 'all') {
+      prevParams.push(platform);
+      prevConditions.push(`platform = $${prevParams.length}`);
+    }
+
+    const prevSource = tenantId === 'all'
+      ? `(SELECT DISTINCT ON (platform, campaign_id, date)
+            platform, campaign_id, campaign_name, date,
+            impressions, clicks, spend, conversions, revenue
+          FROM ads_daily_performance
+          WHERE ${prevConditions.join(' AND ')}
+          ORDER BY platform, campaign_id, date, updated_at DESC) src`
+      : `ads_daily_performance src WHERE ${prevConditions.join(' AND ')}`;
+
+    const prevKpiSql = `
+      SELECT
+        SUM(spend)::numeric(18,2) as total_spend,
+        SUM(impressions)::bigint as total_impressions,
+        SUM(clicks)::bigint as total_clicks,
+        CASE WHEN SUM(impressions) > 0
+          THEN (SUM(clicks)::numeric / SUM(impressions) * 100)::numeric(10,2)
+          ELSE 0 END as avg_ctr,
+        CASE WHEN SUM(clicks) > 0
+          THEN (SUM(spend) / NULLIF(SUM(clicks), 0))::numeric(18,4)
+          ELSE 0 END as avg_cpc,
+        CASE WHEN SUM(impressions) > 0
+          THEN (SUM(spend) / NULLIF(SUM(impressions), 0) * 1000)::numeric(18,4)
+          ELSE 0 END as avg_cpm
+      FROM ${prevSource}
+    `;
+
+    const prevResult = await db.pool.query(prevKpiSql, prevParams);
+
+    // Top 3 campaigns by spend (more useful than ROAS for most campaigns)
     const topCampaignsSql = `
       SELECT
         platform,
         campaign_name,
-        CASE WHEN SUM(spend) > 0
-          THEN (SUM(revenue) / NULLIF(SUM(spend), 0))::numeric(10,2)
-          ELSE 0 END as roas,
-        SUM(spend)::numeric(18,2) as spend
+        SUM(spend)::numeric(18,2) as spend,
+        CASE WHEN SUM(clicks) > 0
+          THEN (SUM(spend) / NULLIF(SUM(clicks), 0))::numeric(18,4)
+          ELSE 0 END as cpc,
+        CASE WHEN SUM(impressions) > 0
+          THEN (SUM(spend) / NULLIF(SUM(impressions), 0) * 1000)::numeric(18,4)
+          ELSE 0 END as cpm
       FROM ${source}
       GROUP BY platform, campaign_id, campaign_name
       HAVING SUM(spend) > 0
-      ORDER BY roas DESC
+      ORDER BY spend DESC
       LIMIT 3
     `;
 
@@ -1045,7 +1183,9 @@ router.get('/performance/kpis', async (req, res) => {
       success: true,
       data: {
         ...kpiResult.rows[0],
-        top_campaigns_by_roas: topResult.rows,
+        previous_period: prevResult.rows[0] || null,
+        previous_period_range: { from: prevFromStr, to: prevToStr },
+        top_campaigns_by_spend: topResult.rows,
       },
       meta: { from, to, platform, tenantId },
     });
@@ -1330,6 +1470,19 @@ router.post('/sync', async (req, res) => {
           const googleCount = await upsertMetrics(db.pool, googleMetrics, tenantId);
           results.google = { fetched: googleMetrics.length, upserted: googleCount, tenant_id: tenantId };
           console.log(`[Sync] Google: ${googleCount} rows upserted for tenant ${tenantId}`);
+
+          // Also fetch Google campaign details
+          if (syncDetails) {
+            try {
+              const googleCampaigns = await fetchGoogleAdsCampaigns(googleCustomerId, googleCreds);
+              const campCount = await upsertCampaigns(db.pool, googleCampaigns, tenantId, googleCustomerId, 'google');
+              results.google.details = { campaigns: campCount };
+              console.log(`[Sync] Google details: ${campCount} campaigns`);
+            } catch (detailErr) {
+              console.error('[Sync] Google details error:', detailErr.message);
+              results.errors.push({ platform: 'google_details', error: detailErr.message });
+            }
+          }
         } catch (err) {
           console.error('[Sync] Google error:', err.message);
           results.errors.push({ platform: 'google', error: err.message });
@@ -1478,6 +1631,186 @@ router.get('/meta/adaccounts', async (req, res) => {
     });
   } catch (error) {
     console.error('[Ads API] Ad accounts lookup error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// GET /api/ads/google/accounts
+// Discover Google Ads accounts accessible via MCC
+// ==========================================
+router.get('/google/accounts', async (req, res) => {
+  try {
+    const clientId = process.env.GOOGLE_ADS_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_ADS_CLIENT_SECRET;
+    const refreshToken = process.env.GOOGLE_ADS_REFRESH_TOKEN;
+    const devToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
+    const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
+
+    if (!clientId || !clientSecret || !refreshToken || !devToken) {
+      return res.status(400).json({ error: 'Google Ads credentials not configured (set GOOGLE_ADS_* env vars)' });
+    }
+
+    const accessToken = await getGoogleAccessToken(clientId, clientSecret, refreshToken);
+
+    if (loginCustomerId) {
+      const cleanMcc = loginCustomerId.replace(/-/g, '');
+      const query = `
+        SELECT
+          customer_client.id,
+          customer_client.descriptive_name,
+          customer_client.currency_code,
+          customer_client.status,
+          customer_client.manager
+        FROM customer_client
+        WHERE customer_client.manager = FALSE
+      `.trim();
+
+      const headers = {
+        'Authorization': `Bearer ${accessToken}`,
+        'developer-token': devToken,
+        'login-customer-id': cleanMcc,
+        'Content-Type': 'application/json',
+      };
+
+      const url = `${GOOGLE_ADS_BASE}/customers/${cleanMcc}/googleAds:searchStream`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ query }),
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        return res.status(response.status).json({ error: `Google Ads API error: ${body}` });
+      }
+
+      const data = await response.json();
+      const accounts = [];
+
+      for (const batch of data) {
+        if (batch.results) {
+          for (const row of batch.results) {
+            if (row.customerClient) {
+              const rawId = String(row.customerClient.id);
+              const formattedId = rawId.length === 10
+                ? `${rawId.slice(0,3)}-${rawId.slice(3,6)}-${rawId.slice(6)}`
+                : rawId;
+              accounts.push({
+                id: formattedId,
+                raw_id: rawId,
+                name: row.customerClient.descriptiveName || '',
+                currency: row.customerClient.currencyCode || '',
+                status: row.customerClient.status === 'ENABLED' ? 1 : 2,
+                manager: row.customerClient.manager || false,
+              });
+            }
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        data: accounts,
+        hint: 'Use the "id" field as google_customer_id when syncing',
+      });
+    } else {
+      const response = await fetch(
+        `${GOOGLE_ADS_BASE}/customers:listAccessibleCustomers`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'developer-token': devToken,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const body = await response.text();
+        return res.status(response.status).json({ error: `Google Ads API error: ${body}` });
+      }
+
+      const data = await response.json();
+      const resourceNames = data.resourceNames || [];
+      const accounts = resourceNames.map((rn) => {
+        const id = rn.replace('customers/', '');
+        return { id, raw_id: id, name: '', currency: '', status: 'UNKNOWN' };
+      });
+
+      res.json({ success: true, data: accounts });
+    }
+  } catch (error) {
+    console.error('[Ads API] Google accounts lookup error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// GET /api/ads/performance/monthly
+// Monthly aggregated metrics for comparison charts
+// ==========================================
+router.get('/performance/monthly', async (req, res) => {
+  try {
+    if (!db || !db.pool) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const { from, to } = getDateRange(req.query.from, req.query.to);
+    const platform = req.query.platform || 'all';
+    const tenantId = req.query.tenant_id || 'all';
+
+    const conditions = ['date >= $1', 'date <= $2'];
+    const params = [from, to];
+
+    if (tenantId !== 'all') {
+      params.push(tenantId);
+      conditions.push(`tenant_id = $${params.length}`);
+    }
+
+    if (platform !== 'all') {
+      params.push(platform);
+      conditions.push(`platform = $${params.length}`);
+    }
+
+    const source = tenantId === 'all'
+      ? `(SELECT DISTINCT ON (platform, campaign_id, date)
+            date, impressions, clicks, spend, conversions, revenue
+          FROM ads_daily_performance
+          WHERE ${conditions.join(' AND ')}
+          ORDER BY platform, campaign_id, date, updated_at DESC) src`
+      : `ads_daily_performance src WHERE ${conditions.join(' AND ')}`;
+
+    const sql = `
+      SELECT
+        TO_CHAR(date, 'YYYY-MM') as month,
+        SUM(impressions)::bigint as impressions,
+        SUM(clicks)::bigint as clicks,
+        SUM(spend)::numeric(18,2) as spend,
+        SUM(conversions)::numeric(18,2) as conversions,
+        SUM(revenue)::numeric(18,2) as revenue,
+        CASE WHEN SUM(clicks) > 0
+          THEN (SUM(spend) / NULLIF(SUM(clicks), 0))::numeric(18,4)
+          ELSE 0 END as cpc,
+        CASE WHEN SUM(impressions) > 0
+          THEN (SUM(spend) / NULLIF(SUM(impressions), 0) * 1000)::numeric(18,4)
+          ELSE 0 END as cpm,
+        CASE WHEN SUM(impressions) > 0
+          THEN (SUM(clicks)::numeric / SUM(impressions) * 100)::numeric(10,2)
+          ELSE 0 END as ctr
+      FROM ${source}
+      GROUP BY TO_CHAR(date, 'YYYY-MM')
+      ORDER BY month ASC
+    `;
+
+    const result = await db.pool.query(sql, params);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      meta: { from, to, platform, tenantId },
+    });
+  } catch (error) {
+    console.error('[Ads API] Monthly query error:', error);
     res.status(500).json({ error: error.message });
   }
 });
