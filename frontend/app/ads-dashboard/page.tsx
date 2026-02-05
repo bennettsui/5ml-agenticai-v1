@@ -772,6 +772,10 @@ export default function AdsDashboardPage() {
     });
   }, [ads, sortColumn, sortDirection]);
 
+  // Separate Meta and Google ads for cleaner display
+  const metaAds = useMemo(() => sortedAds.filter((ad) => ad.platform === 'meta'), [sortedAds]);
+  const googleAds = useMemo(() => sortedAds.filter((ad) => ad.platform === 'google'), [sortedAds]);
+
   // Expanded ad for detail view
   const [expandedAd, setExpandedAd] = useState<string | null>(null);
 
@@ -1359,12 +1363,13 @@ export default function AdsDashboardPage() {
           </div>
         </div>
 
-        {/* Ads Table - sortable columns with expandable rows showing creative details */}
-        {ads.length > 0 && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-              All Ads ({ads.length})
-              <span className="text-sm font-normal text-slate-500 ml-2">Click headers to sort, rows to expand creative details</span>
+        {/* Meta Ads Table */}
+        {(platform === 'all' || platform === 'meta') && metaAds.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Meta</span>
+              Meta Ads ({metaAds.length})
+              <span className="text-sm font-normal text-slate-500 ml-2">Click headers to sort, rows to expand</span>
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1375,9 +1380,6 @@ export default function AdsDashboardPage() {
                     </th>
                     <th className="text-left py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('campaign_name')}>
                       <span className="flex items-center">Campaign<SortIndicator col="campaign_name" /></span>
-                    </th>
-                    <th className="text-left py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('platform')}>
-                      <span className="flex items-center">Type<SortIndicator col="platform" /></span>
                     </th>
                     <th className="text-left py-3 px-2 font-medium text-slate-600 dark:text-slate-400">
                       <span className="flex items-center">Status</span>
@@ -1406,9 +1408,8 @@ export default function AdsDashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedAds.map((ad) => {
+                  {metaAds.map((ad) => {
                     const isExpanded = expandedAd === ad.ad_id;
-                    const campType = getCampaignType(ad);
                     const adStatus = ad.ad_effective_status || ad.ad_status;
                     const imageUrl = ad.creative_image_url || ad.creative_thumbnail_url;
 
@@ -1441,11 +1442,6 @@ export default function AdsDashboardPage() {
                           </td>
                           <td className="py-2.5 px-2 text-xs text-slate-500 dark:text-slate-400 max-w-[150px]">
                             <span className="truncate block">{ad.campaign_name}</span>
-                          </td>
-                          <td className="py-2.5 px-2">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${campType.color}`}>
-                              {campType.label}
-                            </span>
                           </td>
                           <td className="py-2.5 px-2">
                             {adStatus ? (
@@ -1488,7 +1484,7 @@ export default function AdsDashboardPage() {
                         {/* Expanded Creative Detail Row */}
                         {isExpanded && (
                           <tr>
-                            <td colSpan={11} className="p-0">
+                            <td colSpan={10} className="p-0">
                               <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 p-4">
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                                   {/* Creative Preview */}
@@ -1584,6 +1580,189 @@ export default function AdsDashboardPage() {
                                       <div className="flex justify-between">
                                         <span className="text-slate-500">Reach</span>
                                         <span className="text-slate-900 dark:text-white">{formatNumber(ad.reach)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-500">Clicks</span>
+                                        <span className="text-slate-900 dark:text-white">{formatNumber(ad.clicks)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-500">CTR</span>
+                                        <span className="text-slate-900 dark:text-white">{parseFloat(ad.avg_ctr || '0').toFixed(2)}%</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-500">CPC</span>
+                                        <span className="text-slate-900 dark:text-white">{formatCurrency(ad.avg_cpc)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-500">CPM</span>
+                                        <span className="text-slate-900 dark:text-white">{formatCurrency(ad.avg_cpm)}</span>
+                                      </div>
+                                      {parseFloat(ad.conversions || '0') > 0 && (
+                                        <div className="flex justify-between">
+                                          <span className="text-slate-500">Conversions</span>
+                                          <span className="text-slate-900 dark:text-white">{formatNumber(ad.conversions)}</span>
+                                        </div>
+                                      )}
+                                      {parseFloat(ad.roas || '0') > 0 && (
+                                        <div className="flex justify-between">
+                                          <span className="text-slate-500">ROAS</span>
+                                          <span className="text-slate-900 dark:text-white font-medium">{parseFloat(ad.roas || '0').toFixed(2)}x</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Google Ads Table */}
+        {(platform === 'all' || platform === 'google') && googleAds.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">Google</span>
+              Google Ads ({googleAds.length})
+              <span className="text-sm font-normal text-slate-500 ml-2">Click headers to sort, rows to expand</span>
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-700">
+                    <th className="text-left py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('ad_name')}>
+                      <span className="flex items-center">Ad<SortIndicator col="ad_name" /></span>
+                    </th>
+                    <th className="text-left py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('campaign_name')}>
+                      <span className="flex items-center">Campaign<SortIndicator col="campaign_name" /></span>
+                    </th>
+                    <th className="text-left py-3 px-2 font-medium text-slate-600 dark:text-slate-400">
+                      <span className="flex items-center">Type</span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('impressions')}>
+                      <span className="flex items-center justify-end">Impr.<SortIndicator col="impressions" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('clicks')}>
+                      <span className="flex items-center justify-end">Clicks<SortIndicator col="clicks" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('avg_ctr')}>
+                      <span className="flex items-center justify-end">CTR%<SortIndicator col="avg_ctr" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('avg_cpc')}>
+                      <span className="flex items-center justify-end">CPC<SortIndicator col="avg_cpc" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('avg_cpm')}>
+                      <span className="flex items-center justify-end">CPM<SortIndicator col="avg_cpm" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('spend')}>
+                      <span className="flex items-center justify-end">Spend<SortIndicator col="spend" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('conversions')}>
+                      <span className="flex items-center justify-end">Conv.<SortIndicator col="conversions" /></span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {googleAds.map((ad) => {
+                    const isExpanded = expandedAd === ad.ad_id;
+                    const campType = getCampaignType(ad);
+
+                    return (
+                      <Fragment key={ad.ad_id}>
+                        <tr
+                          className={`border-b border-slate-100 dark:border-slate-700/50 cursor-pointer transition-colors ${
+                            isExpanded
+                              ? 'bg-red-50 dark:bg-red-900/10'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-700/30'
+                          }`}
+                          onClick={() => setExpandedAd(isExpanded ? null : ad.ad_id)}
+                        >
+                          <td className="py-2.5 px-2 text-slate-900 dark:text-white max-w-[220px]">
+                            <div className="flex items-center gap-2">
+                              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} />
+                              <span className="truncate text-xs font-medium">{ad.ad_name || 'Unnamed Ad'}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-2 text-xs text-slate-500 dark:text-slate-400 max-w-[150px]">
+                            <span className="truncate block">{ad.campaign_name}</span>
+                          </td>
+                          <td className="py-2.5 px-2">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${campType.color}`}>
+                              {campType.label}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {formatNumber(ad.impressions)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {formatNumber(ad.clicks)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {parseFloat(ad.avg_ctr || '0').toFixed(2)}%
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {formatCurrency(ad.avg_cpc)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {formatCurrency(ad.avg_cpm)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-slate-700 dark:text-slate-300">
+                            {formatCurrency(ad.spend)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-slate-700 dark:text-slate-300">
+                            {formatNumber(ad.conversions)}
+                          </td>
+                        </tr>
+
+                        {/* Expanded Detail Row */}
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={10} className="p-0">
+                              <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 p-4">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                  {/* Ad Details */}
+                                  <div>
+                                    <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                                      Ad Details
+                                    </h4>
+                                    <div className="bg-white dark:bg-slate-700 rounded-lg p-3 text-xs space-y-2">
+                                      <div>
+                                        <span className="text-slate-500">Ad Name:</span>{' '}
+                                        <span className="text-slate-900 dark:text-white font-medium">{ad.ad_name || '--'}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-slate-500">Campaign:</span>{' '}
+                                        <span className="text-slate-900 dark:text-white font-medium">{ad.campaign_name}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-slate-500">Campaign Type:</span>{' '}
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${campType.color}`}>
+                                          {campType.label}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Performance Metrics */}
+                                  <div>
+                                    <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                                      Performance
+                                    </h4>
+                                    <div className="bg-white dark:bg-slate-700 rounded-lg p-3 text-xs space-y-2">
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-500">Spend</span>
+                                        <span className="text-slate-900 dark:text-white font-medium">{formatCurrency(ad.spend)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-500">Impressions</span>
+                                        <span className="text-slate-900 dark:text-white">{formatNumber(ad.impressions)}</span>
                                       </div>
                                       <div className="flex justify-between">
                                         <span className="text-slate-500">Clicks</span>
