@@ -1,0 +1,65 @@
+{
+  "id": "ads-weekly-report-tenant",
+  "name": "Weekly Ads Report (Per Tenant)",
+  "description": "Read last 7 days for a specific tenant, aggregate metrics, and call the multi-tenant analyzer agent to produce a client-facing report.",
+  "input": {
+    "tenantId": "${input.tenant_id}"
+  },
+  "steps": [
+    {
+      "id": "query-current-week",
+      "name": "Query Current 7-Day Performance",
+      "type": "tool",
+      "tool": "db-ops/queryAdsPerformance",
+      "params": {
+        "tenantId": "${input.tenantId}",
+        "from": "${date.daysAgo(7)}",
+        "to": "${date.yesterday}"
+      },
+      "output": "currentWeekData"
+    },
+    {
+      "id": "query-previous-week",
+      "name": "Query Previous 7-Day Performance",
+      "type": "tool",
+      "tool": "db-ops/queryAdsPerformance",
+      "params": {
+        "tenantId": "${input.tenantId}",
+        "from": "${date.daysAgo(14)}",
+        "to": "${date.daysAgo(8)}"
+      },
+      "output": "previousWeekData"
+    },
+    {
+      "id": "aggregate-metrics",
+      "name": "Aggregate and Compare",
+      "type": "transform",
+      "function": "aggregateWeeklyComparison",
+      "params": {
+        "current": "${currentWeekData}",
+        "previous": "${previousWeekData}"
+      },
+      "dependsOn": ["query-current-week", "query-previous-week"],
+      "output": "aggregatedStats"
+    },
+    {
+      "id": "run-analyzer-agent",
+      "name": "Run Tenant Analyzer Agent",
+      "type": "agent",
+      "agent": "analyzer",
+      "params": {
+        "tenant_id": "${input.tenantId}",
+        "period": "${date.daysAgo(7)} to ${date.yesterday}",
+        "previous_period": "${date.daysAgo(14)} to ${date.daysAgo(8)}",
+        "metrics": "${aggregatedStats}"
+      },
+      "dependsOn": ["aggregate-metrics"],
+      "output": "analysisReport"
+    }
+  ],
+  "output": {
+    "tenantId": "${input.tenantId}",
+    "report": "${analysisReport}",
+    "stats": "${aggregatedStats}"
+  }
+}
