@@ -179,7 +179,7 @@ export default function AdsOverviewPage() {
               return (
                 <Link
                   key={tenant.tenant_id}
-                  href={`/clients/${tenant.tenant_id}/ads-dashboard`}
+                  href={`/ads-dashboard/client?tenant_id=${tenant.tenant_id}`}
                   className="group block"
                 >
                   <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all">

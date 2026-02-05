@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { Suspense, useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -84,9 +84,9 @@ function getDefaultDateRange(): { from: string; to: string } {
   return { from, to };
 }
 
-export default function TenantAdsDashboardPage() {
-  const params = useParams();
-  const tenantId = params.tenantId as string;
+function ClientAdsDashboardContent() {
+  const searchParams = useSearchParams();
+  const tenantId = searchParams.get('tenant_id') || '5ml-internal';
 
   const defaults = getDefaultDateRange();
   const [from, setFrom] = useState(defaults.from);
@@ -448,5 +448,13 @@ export default function TenantAdsDashboardPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function ClientAdsDashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate-400">Loading...</div>}>
+      <ClientAdsDashboardContent />
+    </Suspense>
   );
 }
