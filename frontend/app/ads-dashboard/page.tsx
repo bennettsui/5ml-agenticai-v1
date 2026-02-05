@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -71,12 +71,15 @@ interface CampaignRow {
   campaign_name: string;
   tenant_id: string;
   impressions: string;
+  reach: string;
   clicks: string;
   spend: string;
   conversions: string;
   revenue: string;
   roas: string;
   avg_cpc: string;
+  avg_cpm: string;
+  avg_ctr: string;
   // Campaign detail fields (from JOIN)
   objective?: string;
   campaign_status?: string;
@@ -270,6 +273,10 @@ export default function AdsDashboardPage() {
   const [creatives, setCreatives] = useState<CreativeRow[]>([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
 
+  // Column sorting
+  const [sortColumn, setSortColumn] = useState<string>('spend');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
   // Data fetchers
   const fetchTenants = useCallback(async () => {
     try {
@@ -419,7 +426,7 @@ export default function AdsDashboardPage() {
   }, [accountsPanelOpen, adAccounts.length, accountsLoading, fetchAdAccounts]);
 
   // Campaign detail expansion
-  const toggleCampaignDetails = useCallback(async (campaignId: string, tenantId: string) => {
+  const toggleCampaignDetails = useCallback(async (campaignId: string) => {
     if (expandedCampaign === campaignId) {
       setExpandedCampaign(null);
       setAdSets([]);
@@ -431,10 +438,7 @@ export default function AdsDashboardPage() {
     setDetailsLoading(true);
 
     try {
-      const params = new URLSearchParams({
-        tenant_id: tenantId,
-        campaign_id: campaignId,
-      });
+      const params = new URLSearchParams({ campaign_id: campaignId });
 
       const [adsetRes, creativeRes] = await Promise.all([
         fetch(`${API_BASE}/api/ads/adsets/details?${params}`),
@@ -469,6 +473,44 @@ export default function AdsDashboardPage() {
     roas: parseFloat(c.roas) || 0,
     platform: c.platform,
   }));
+
+  // Sorted campaigns
+  const handleSort = (col: string) => {
+    if (sortColumn === col) {
+      setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(col);
+      setSortDirection('desc');
+    }
+  };
+
+  const sortedCampaigns = useMemo(() => {
+    return [...campaigns].sort((a, b) => {
+      const col = sortColumn as keyof CampaignRow;
+      const aRaw = a[col];
+      const bRaw = b[col];
+
+      // String columns
+      if (col === 'campaign_name' || col === 'platform') {
+        const aStr = (aRaw || '').toString().toLowerCase();
+        const bStr = (bRaw || '').toString().toLowerCase();
+        return sortDirection === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+      }
+
+      // Numeric columns
+      const aNum = parseFloat(aRaw as string) || 0;
+      const bNum = parseFloat(bRaw as string) || 0;
+      return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+    });
+  }, [campaigns, sortColumn, sortDirection]);
+
+  const SortIndicator = ({ col }: { col: string }) => (
+    sortColumn === col ? (
+      <span className="ml-1 text-orange-400">{sortDirection === 'asc' ? '\u2191' : '\u2193'}</span>
+    ) : (
+      <span className="ml-1 text-slate-500 opacity-0 group-hover:opacity-100">\u2195</span>
+    )
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -873,54 +915,76 @@ export default function AdsDashboardPage() {
           </div>
         </div>
 
-        {/* Campaign Details Table - now with expandable rows */}
+        {/* Campaign Details Table - sortable columns with expandable rows */}
         {campaigns.length > 0 && (
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
               All Campaigns ({campaigns.length})
-              <span className="text-sm font-normal text-slate-500 ml-2">Click a row to see targeting, budget, and creatives</span>
+              <span className="text-sm font-normal text-slate-500 ml-2">Click headers to sort, rows to expand details</span>
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-700">
-                    <th className="text-left py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Campaign</th>
-                    <th className="text-left py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Platform</th>
-                    <th className="text-left py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Objective</th>
-                    <th className="text-left py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Status</th>
-                    <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Budget</th>
-                    <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Spend</th>
-                    <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Clicks</th>
-                    <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">Conv.</th>
-                    <th className="text-right py-3 px-3 font-medium text-slate-600 dark:text-slate-400">ROAS</th>
+                    <th className="text-left py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('campaign_name')}>
+                      <span className="flex items-center">Campaign<SortIndicator col="campaign_name" /></span>
+                    </th>
+                    <th className="text-left py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('platform')}>
+                      <span className="flex items-center">Platform<SortIndicator col="platform" /></span>
+                    </th>
+                    <th className="text-left py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('campaign_effective_status')}>
+                      <span className="flex items-center">Status<SortIndicator col="campaign_effective_status" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('impressions')}>
+                      <span className="flex items-center justify-end">Impr.<SortIndicator col="impressions" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('reach')}>
+                      <span className="flex items-center justify-end">Reach<SortIndicator col="reach" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('clicks')}>
+                      <span className="flex items-center justify-end">Clicks<SortIndicator col="clicks" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('avg_ctr')}>
+                      <span className="flex items-center justify-end">CTR%<SortIndicator col="avg_ctr" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('avg_cpc')}>
+                      <span className="flex items-center justify-end">CPC<SortIndicator col="avg_cpc" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('avg_cpm')}>
+                      <span className="flex items-center justify-end">CPM<SortIndicator col="avg_cpm" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('spend')}>
+                      <span className="flex items-center justify-end">Spend<SortIndicator col="spend" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('conversions')}>
+                      <span className="flex items-center justify-end">Conv.<SortIndicator col="conversions" /></span>
+                    </th>
+                    <th className="text-right py-3 px-2 font-medium text-slate-600 dark:text-slate-400 cursor-pointer group select-none" onClick={() => handleSort('roas')}>
+                      <span className="flex items-center justify-end">ROAS<SortIndicator col="roas" /></span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {campaigns.map((camp) => {
+                  {sortedCampaigns.map((camp) => {
                     const isExpanded = expandedCampaign === camp.campaign_id;
-                    const budget = camp.daily_budget
-                      ? `${formatCurrency(camp.daily_budget)}/day`
-                      : camp.lifetime_budget
-                        ? `${formatCurrency(camp.lifetime_budget)} lifetime`
-                        : '--';
 
                     return (
-                      <Fragment key={`${camp.campaign_id}-${camp.tenant_id}`}>
+                      <Fragment key={camp.campaign_id}>
                         <tr
                           className={`border-b border-slate-100 dark:border-slate-700/50 cursor-pointer transition-colors ${
                             isExpanded
                               ? 'bg-blue-50 dark:bg-blue-900/10'
                               : 'hover:bg-slate-50 dark:hover:bg-slate-700/30'
                           }`}
-                          onClick={() => toggleCampaignDetails(camp.campaign_id, camp.tenant_id)}
+                          onClick={() => toggleCampaignDetails(camp.campaign_id)}
                         >
-                          <td className="py-2.5 px-3 text-slate-900 dark:text-white max-w-[200px]">
+                          <td className="py-2.5 px-2 text-slate-900 dark:text-white max-w-[200px]">
                             <div className="flex items-center gap-1.5">
                               <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} />
                               <span className="truncate">{camp.campaign_name}</span>
                             </div>
                           </td>
-                          <td className="py-2.5 px-3">
+                          <td className="py-2.5 px-2">
                             <span
                               className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                                 camp.platform === 'meta'
@@ -931,10 +995,7 @@ export default function AdsDashboardPage() {
                               {camp.platform === 'meta' ? 'Meta' : 'Google'}
                             </span>
                           </td>
-                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400 text-xs">
-                            {camp.objective?.replace(/_/g, ' ') || '--'}
-                          </td>
-                          <td className="py-2.5 px-3">
+                          <td className="py-2.5 px-2">
                             {camp.campaign_effective_status ? (
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                                 camp.campaign_effective_status === 'ACTIVE'
@@ -949,19 +1010,31 @@ export default function AdsDashboardPage() {
                               <span className="text-slate-400 text-xs">--</span>
                             )}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-xs text-slate-600 dark:text-slate-400">
-                            {budget}
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {formatNumber(camp.impressions)}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
-                            {formatCurrency(camp.spend)}
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {formatNumber(camp.reach)}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
+                          <td className="py-2.5 px-2 text-right font-mono text-slate-700 dark:text-slate-300">
                             {formatNumber(camp.clicks)}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {parseFloat(camp.avg_ctr || '0').toFixed(2)}%
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {formatCurrency(camp.avg_cpc)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {formatCurrency(camp.avg_cpm)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-slate-700 dark:text-slate-300">
+                            {formatCurrency(camp.spend)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-mono text-slate-700 dark:text-slate-300">
                             {formatNumber(camp.conversions)}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-medium text-slate-900 dark:text-white">
+                          <td className="py-2.5 px-2 text-right font-mono font-medium text-slate-900 dark:text-white">
                             {parseFloat(camp.roas || '0').toFixed(2)}x
                           </td>
                         </tr>
@@ -969,7 +1042,7 @@ export default function AdsDashboardPage() {
                         {/* Expanded Detail Row */}
                         {isExpanded && (
                           <tr>
-                            <td colSpan={9} className="p-0">
+                            <td colSpan={12} className="p-0">
                               <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 p-4">
                                 {detailsLoading ? (
                                   <div className="flex items-center justify-center py-6 text-slate-400 text-sm gap-2">
@@ -984,6 +1057,15 @@ export default function AdsDashboardPage() {
                                         Campaign Details
                                       </h4>
                                       <div className="bg-white dark:bg-slate-700 rounded-lg p-3 text-xs space-y-1.5">
+                                        {camp.objective && (
+                                          <div><span className="text-slate-500">Objective:</span> <span className="text-slate-900 dark:text-white font-medium">{camp.objective.replace(/_/g, ' ')}</span></div>
+                                        )}
+                                        {camp.daily_budget && (
+                                          <div><span className="text-slate-500">Daily Budget:</span> <span className="text-slate-900 dark:text-white font-medium">{formatCurrency(camp.daily_budget)}</span></div>
+                                        )}
+                                        {camp.lifetime_budget && (
+                                          <div><span className="text-slate-500">Lifetime Budget:</span> <span className="text-slate-900 dark:text-white font-medium">{formatCurrency(camp.lifetime_budget)}</span></div>
+                                        )}
                                         {camp.bid_strategy && (
                                           <div><span className="text-slate-500">Bid Strategy:</span> <span className="text-slate-900 dark:text-white font-medium">{camp.bid_strategy.replace(/_/g, ' ')}</span></div>
                                         )}

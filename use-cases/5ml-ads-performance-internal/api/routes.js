@@ -782,6 +782,15 @@ router.get('/performance/aggregated', async (req, res) => {
       conditions.push(`platform = $${params.length}`);
     }
 
+    // Deduplicate when viewing all tenants
+    const source = tenantId === 'all'
+      ? `(SELECT DISTINCT ON (platform, campaign_id, date)
+            date, impressions, clicks, spend, conversions, revenue
+          FROM ads_daily_performance
+          WHERE ${conditions.join(' AND ')}
+          ORDER BY platform, campaign_id, date, updated_at DESC) src`
+      : `ads_daily_performance src WHERE ${conditions.join(' AND ')}`;
+
     const sql = `
       SELECT
         date::text,
@@ -793,8 +802,7 @@ router.get('/performance/aggregated', async (req, res) => {
         CASE WHEN SUM(spend) > 0
           THEN (SUM(revenue) / NULLIF(SUM(spend), 0))::numeric(10,2)
           ELSE 0 END as roas
-      FROM ads_daily_performance
-      WHERE ${conditions.join(' AND ')}
+      FROM ${source}
       GROUP BY date
       ORDER BY date ASC
     `;
@@ -814,7 +822,7 @@ router.get('/performance/aggregated', async (req, res) => {
 
 // ==========================================
 // GET /api/ads/performance/campaigns
-// Campaign-level aggregation for ROAS bar chart
+// Campaign-level aggregation with dedup and extended metrics
 // ==========================================
 router.get('/performance/campaigns', async (req, res) => {
   try {
@@ -826,57 +834,126 @@ router.get('/performance/campaigns', async (req, res) => {
     const platform = req.query.platform || 'all';
     const tenantId = req.query.tenant_id || 'all';
 
-    const conditions = ['p.date >= $1', 'p.date <= $2'];
+    const dateConditions = ['date >= $1', 'date <= $2'];
     const params = [from, to];
-
-    if (tenantId !== 'all') {
-      params.push(tenantId);
-      conditions.push(`p.tenant_id = $${params.length}`);
-    }
 
     if (platform !== 'all') {
       params.push(platform);
-      conditions.push(`p.platform = $${params.length}`);
+      dateConditions.push(`platform = $${params.length}`);
     }
 
-    // Join with ads_campaigns to include campaign details
-    const sql = `
-      SELECT
-        p.platform,
-        p.campaign_id,
-        p.campaign_name,
-        p.tenant_id,
-        SUM(p.impressions)::bigint as impressions,
-        SUM(p.clicks)::bigint as clicks,
-        SUM(p.spend)::numeric(18,2) as spend,
-        SUM(p.conversions)::numeric(18,2) as conversions,
-        SUM(p.revenue)::numeric(18,2) as revenue,
-        CASE WHEN SUM(p.spend) > 0
-          THEN (SUM(p.revenue) / NULLIF(SUM(p.spend), 0))::numeric(10,2)
-          ELSE 0 END as roas,
-        CASE WHEN SUM(p.clicks) > 0
-          THEN (SUM(p.spend) / NULLIF(SUM(p.clicks), 0))::numeric(18,4)
-          ELSE 0 END as avg_cpc,
-        c.objective,
-        c.status as campaign_status,
-        c.effective_status as campaign_effective_status,
-        c.buying_type,
-        c.bid_strategy,
-        c.daily_budget,
-        c.lifetime_budget,
-        c.budget_remaining,
-        c.start_time,
-        c.stop_time
-      FROM ads_daily_performance p
-      LEFT JOIN ads_campaigns c
-        ON c.platform = p.platform AND c.tenant_id = p.tenant_id AND c.campaign_id = p.campaign_id
-      WHERE ${conditions.join(' AND ')}
-      GROUP BY p.platform, p.campaign_id, p.campaign_name, p.tenant_id,
-               c.objective, c.status, c.effective_status, c.buying_type,
-               c.bid_strategy, c.daily_budget, c.lifetime_budget, c.budget_remaining,
-               c.start_time, c.stop_time
-      ORDER BY roas DESC
-    `;
+    let sql;
+
+    if (tenantId === 'all') {
+      // Deduplicate: same campaign synced under different tenant_ids appears once
+      sql = `
+        WITH deduped AS (
+          SELECT DISTINCT ON (platform, campaign_id, date)
+            platform, tenant_id, account_id, campaign_id, campaign_name, date,
+            impressions, reach, clicks, spend, conversions, revenue, cpc, cpm, ctr, roas
+          FROM ads_daily_performance
+          WHERE ${dateConditions.join(' AND ')}
+          ORDER BY platform, campaign_id, date, updated_at DESC
+        ),
+        campaign_info AS (
+          SELECT DISTINCT ON (platform, campaign_id)
+            platform, campaign_id,
+            objective, status as campaign_status, effective_status as campaign_effective_status,
+            buying_type, bid_strategy, daily_budget, lifetime_budget, budget_remaining,
+            start_time, stop_time
+          FROM ads_campaigns
+          ORDER BY platform, campaign_id, synced_at DESC
+        )
+        SELECT
+          p.platform,
+          p.campaign_id,
+          MAX(p.campaign_name) as campaign_name,
+          MAX(p.tenant_id) as tenant_id,
+          SUM(p.impressions)::bigint as impressions,
+          COALESCE(SUM(p.reach), 0)::bigint as reach,
+          SUM(p.clicks)::bigint as clicks,
+          SUM(p.spend)::numeric(18,2) as spend,
+          SUM(p.conversions)::numeric(18,2) as conversions,
+          SUM(p.revenue)::numeric(18,2) as revenue,
+          CASE WHEN SUM(p.spend) > 0
+            THEN (SUM(p.revenue) / NULLIF(SUM(p.spend), 0))::numeric(10,2)
+            ELSE 0 END as roas,
+          CASE WHEN SUM(p.clicks) > 0
+            THEN (SUM(p.spend) / NULLIF(SUM(p.clicks), 0))::numeric(18,4)
+            ELSE 0 END as avg_cpc,
+          CASE WHEN SUM(p.impressions) > 0
+            THEN (SUM(p.spend) / NULLIF(SUM(p.impressions), 0) * 1000)::numeric(18,4)
+            ELSE 0 END as avg_cpm,
+          CASE WHEN SUM(p.impressions) > 0
+            THEN (SUM(p.clicks)::numeric / SUM(p.impressions) * 100)::numeric(10,2)
+            ELSE 0 END as avg_ctr,
+          c.objective,
+          c.campaign_status,
+          c.campaign_effective_status,
+          c.buying_type,
+          c.bid_strategy,
+          c.daily_budget,
+          c.lifetime_budget,
+          c.budget_remaining,
+          c.start_time,
+          c.stop_time
+        FROM deduped p
+        LEFT JOIN campaign_info c ON c.platform = p.platform AND c.campaign_id = p.campaign_id
+        GROUP BY p.platform, p.campaign_id,
+                 c.objective, c.campaign_status, c.campaign_effective_status, c.buying_type,
+                 c.bid_strategy, c.daily_budget, c.lifetime_budget, c.budget_remaining,
+                 c.start_time, c.stop_time
+        ORDER BY spend DESC
+      `;
+    } else {
+      params.push(tenantId);
+      const conditions = [...dateConditions, `p.tenant_id = $${params.length}`];
+
+      sql = `
+        SELECT
+          p.platform,
+          p.campaign_id,
+          p.campaign_name,
+          p.tenant_id,
+          SUM(p.impressions)::bigint as impressions,
+          COALESCE(SUM(p.reach), 0)::bigint as reach,
+          SUM(p.clicks)::bigint as clicks,
+          SUM(p.spend)::numeric(18,2) as spend,
+          SUM(p.conversions)::numeric(18,2) as conversions,
+          SUM(p.revenue)::numeric(18,2) as revenue,
+          CASE WHEN SUM(p.spend) > 0
+            THEN (SUM(p.revenue) / NULLIF(SUM(p.spend), 0))::numeric(10,2)
+            ELSE 0 END as roas,
+          CASE WHEN SUM(p.clicks) > 0
+            THEN (SUM(p.spend) / NULLIF(SUM(p.clicks), 0))::numeric(18,4)
+            ELSE 0 END as avg_cpc,
+          CASE WHEN SUM(p.impressions) > 0
+            THEN (SUM(p.spend) / NULLIF(SUM(p.impressions), 0) * 1000)::numeric(18,4)
+            ELSE 0 END as avg_cpm,
+          CASE WHEN SUM(p.impressions) > 0
+            THEN (SUM(p.clicks)::numeric / SUM(p.impressions) * 100)::numeric(10,2)
+            ELSE 0 END as avg_ctr,
+          c.objective,
+          c.status as campaign_status,
+          c.effective_status as campaign_effective_status,
+          c.buying_type,
+          c.bid_strategy,
+          c.daily_budget,
+          c.lifetime_budget,
+          c.budget_remaining,
+          c.start_time,
+          c.stop_time
+        FROM ads_daily_performance p
+        LEFT JOIN ads_campaigns c
+          ON c.platform = p.platform AND c.tenant_id = p.tenant_id AND c.campaign_id = p.campaign_id
+        WHERE ${conditions.join(' AND ')}
+        GROUP BY p.platform, p.campaign_id, p.campaign_name, p.tenant_id,
+                 c.objective, c.status, c.effective_status, c.buying_type,
+                 c.bid_strategy, c.daily_budget, c.lifetime_budget, c.budget_remaining,
+                 c.start_time, c.stop_time
+        ORDER BY spend DESC
+      `;
+    }
 
     const result = await db.pool.query(sql, params);
 
@@ -918,6 +995,16 @@ router.get('/performance/kpis', async (req, res) => {
       conditions.push(`platform = $${params.length}`);
     }
 
+    // Deduplicate when viewing all tenants to avoid double-counting
+    const source = tenantId === 'all'
+      ? `(SELECT DISTINCT ON (platform, campaign_id, date)
+            platform, campaign_id, campaign_name, date,
+            impressions, clicks, spend, conversions, revenue
+          FROM ads_daily_performance
+          WHERE ${conditions.join(' AND ')}
+          ORDER BY platform, campaign_id, date, updated_at DESC) src`
+      : `ads_daily_performance src WHERE ${conditions.join(' AND ')}`;
+
     const kpiSql = `
       SELECT
         SUM(spend)::numeric(18,2) as total_spend,
@@ -931,13 +1018,12 @@ router.get('/performance/kpis', async (req, res) => {
         CASE WHEN SUM(impressions) > 0
           THEN (SUM(clicks)::numeric / SUM(impressions) * 100)::numeric(10,2)
           ELSE 0 END as avg_ctr
-      FROM ads_daily_performance
-      WHERE ${conditions.join(' AND ')}
+      FROM ${source}
     `;
 
     const kpiResult = await db.pool.query(kpiSql, params);
 
-    // Top 3 campaigns by ROAS
+    // Top 3 campaigns by ROAS (also deduped)
     const topCampaignsSql = `
       SELECT
         platform,
@@ -946,8 +1032,7 @@ router.get('/performance/kpis', async (req, res) => {
           THEN (SUM(revenue) / NULLIF(SUM(spend), 0))::numeric(10,2)
           ELSE 0 END as roas,
         SUM(spend)::numeric(18,2) as spend
-      FROM ads_daily_performance
-      WHERE ${conditions.join(' AND ')}
+      FROM ${source}
       GROUP BY platform, campaign_id, campaign_name
       HAVING SUM(spend) > 0
       ORDER BY roas DESC
@@ -981,14 +1066,14 @@ router.get('/tenants', async (req, res) => {
     }
 
     const sql = `
-      SELECT DISTINCT tenant_id,
-        account_id,
+      SELECT tenant_id,
+        MAX(account_id) as account_id,
         COUNT(DISTINCT campaign_id)::int as campaign_count,
         MIN(date)::text as earliest_date,
         MAX(date)::text as latest_date,
         SUM(spend)::numeric(18,2) as total_spend
       FROM ads_daily_performance
-      GROUP BY tenant_id, account_id
+      GROUP BY tenant_id
       ORDER BY total_spend DESC
     `;
 
@@ -1058,6 +1143,7 @@ router.get('/campaigns/details', async (req, res) => {
 // ==========================================
 // GET /api/ads/adsets/details
 // Ad set details with targeting, budget, bidding
+// Query by campaign_id (ignores tenant_id to avoid mismatch)
 // ==========================================
 router.get('/adsets/details', async (req, res) => {
   try {
@@ -1065,16 +1151,10 @@ router.get('/adsets/details', async (req, res) => {
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const tenantId = req.query.tenant_id || 'all';
     const campaignId = req.query.campaign_id;
 
     const conditions = [];
     const params = [];
-
-    if (tenantId !== 'all') {
-      params.push(tenantId);
-      conditions.push(`tenant_id = $${params.length}`);
-    }
 
     if (campaignId) {
       params.push(campaignId);
@@ -1084,7 +1164,7 @@ router.get('/adsets/details', async (req, res) => {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const sql = `
-      SELECT
+      SELECT DISTINCT ON (adset_id)
         platform, tenant_id, account_id, campaign_id,
         adset_id, adset_name, status, effective_status,
         optimization_goal, billing_event, bid_strategy, bid_amount,
@@ -1093,7 +1173,7 @@ router.get('/adsets/details', async (req, res) => {
         start_time, end_time, created_time, updated_time, synced_at
       FROM ads_adsets
       ${whereClause}
-      ORDER BY adset_name ASC
+      ORDER BY adset_id, synced_at DESC
     `;
 
     const result = await db.pool.query(sql, params);
@@ -1111,6 +1191,7 @@ router.get('/adsets/details', async (req, res) => {
 // ==========================================
 // GET /api/ads/creatives/details
 // Ad creative details with images, copy, CTAs
+// Query by campaign_id (ignores tenant_id to avoid mismatch)
 // ==========================================
 router.get('/creatives/details', async (req, res) => {
   try {
@@ -1118,16 +1199,10 @@ router.get('/creatives/details', async (req, res) => {
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const tenantId = req.query.tenant_id || 'all';
     const campaignId = req.query.campaign_id;
 
     const conditions = [];
     const params = [];
-
-    if (tenantId !== 'all') {
-      params.push(tenantId);
-      conditions.push(`tenant_id = $${params.length}`);
-    }
 
     if (campaignId) {
       params.push(campaignId);
@@ -1137,7 +1212,7 @@ router.get('/creatives/details', async (req, res) => {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const sql = `
-      SELECT
+      SELECT DISTINCT ON (ad_id)
         platform, tenant_id, account_id,
         ad_id, ad_name, adset_id, campaign_id,
         creative_id, creative_name,
@@ -1147,7 +1222,7 @@ router.get('/creatives/details', async (req, res) => {
         status, effective_status, synced_at
       FROM ads_creatives
       ${whereClause}
-      ORDER BY ad_name ASC
+      ORDER BY ad_id, synced_at DESC
     `;
 
     const result = await db.pool.query(sql, params);
