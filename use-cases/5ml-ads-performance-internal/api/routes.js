@@ -75,6 +75,101 @@ async function initAdsDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_client_credentials_tenant_service
         ON client_credentials (tenant_id, service);
+
+      -- Campaign details table
+      CREATE TABLE IF NOT EXISTS ads_campaigns (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        platform TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        campaign_id TEXT NOT NULL,
+        campaign_name TEXT NOT NULL,
+        objective TEXT,
+        status TEXT,
+        effective_status TEXT,
+        buying_type TEXT,
+        bid_strategy TEXT,
+        daily_budget NUMERIC(18, 4),
+        lifetime_budget NUMERIC(18, 4),
+        budget_remaining NUMERIC(18, 4),
+        start_time TIMESTAMPTZ,
+        stop_time TIMESTAMPTZ,
+        created_time TIMESTAMPTZ,
+        updated_time TIMESTAMPTZ,
+        raw_data JSONB,
+        synced_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (platform, tenant_id, campaign_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ads_campaigns_tenant
+        ON ads_campaigns (tenant_id);
+
+      -- Ad set details table (targeting, budget, bidding at ad-set level)
+      CREATE TABLE IF NOT EXISTS ads_adsets (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        platform TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        campaign_id TEXT NOT NULL,
+        adset_id TEXT NOT NULL,
+        adset_name TEXT NOT NULL,
+        status TEXT,
+        effective_status TEXT,
+        optimization_goal TEXT,
+        billing_event TEXT,
+        bid_strategy TEXT,
+        bid_amount NUMERIC(18, 4),
+        daily_budget NUMERIC(18, 4),
+        lifetime_budget NUMERIC(18, 4),
+        targeting JSONB,
+        start_time TIMESTAMPTZ,
+        end_time TIMESTAMPTZ,
+        created_time TIMESTAMPTZ,
+        updated_time TIMESTAMPTZ,
+        raw_data JSONB,
+        synced_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (platform, tenant_id, adset_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ads_adsets_tenant
+        ON ads_adsets (tenant_id);
+
+      CREATE INDEX IF NOT EXISTS idx_ads_adsets_campaign
+        ON ads_adsets (tenant_id, campaign_id);
+
+      -- Ad + creative details table
+      CREATE TABLE IF NOT EXISTS ads_creatives (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        platform TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        ad_id TEXT NOT NULL,
+        ad_name TEXT,
+        adset_id TEXT,
+        campaign_id TEXT,
+        creative_id TEXT,
+        creative_name TEXT,
+        title TEXT,
+        body TEXT,
+        description TEXT,
+        image_url TEXT,
+        thumbnail_url TEXT,
+        video_id TEXT,
+        link_url TEXT,
+        call_to_action_type TEXT,
+        status TEXT,
+        effective_status TEXT,
+        raw_creative JSONB,
+        raw_ad JSONB,
+        synced_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (platform, tenant_id, ad_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ads_creatives_tenant
+        ON ads_creatives (tenant_id);
+
+      CREATE INDEX IF NOT EXISTS idx_ads_creatives_campaign
+        ON ads_creatives (tenant_id, campaign_id);
     `);
     console.log('✅ Ads performance tables initialized');
   } catch (error) {
@@ -101,6 +196,11 @@ function getDateRange(from, to) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Normalize Meta account ID to act_ format
+function normalizeAccountId(accountId) {
+  return accountId.startsWith('act_') ? accountId : `act_${accountId}`;
 }
 
 // ==========================================
@@ -157,27 +257,14 @@ function normalizeMetaRow(accountId, row) {
   };
 }
 
-async function fetchMetaInsights(accountId, since, until, accessToken) {
-  const token = accessToken || process.env.META_ACCESS_TOKEN;
-  if (!token) throw new Error('META_ACCESS_TOKEN is required');
-
-  const acctId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
+// Generic paginated Meta API fetcher with rate-limit retry
+async function fetchMetaPaginated(url) {
   const results = [];
-
-  let url =
-    `${META_API_BASE}/${acctId}/insights?` +
-    new URLSearchParams({
-      time_range: JSON.stringify({ since, until }),
-      level: 'campaign',
-      time_increment: '1',
-      fields: META_INSIGHT_FIELDS,
-      limit: '500',
-      access_token: token,
-    }).toString();
-
   let retries = 0;
-  while (url) {
-    const response = await fetch(url);
+  let currentUrl = url;
+
+  while (currentUrl) {
+    const response = await fetch(currentUrl);
 
     if (response.status === 429) {
       retries++;
@@ -196,15 +283,105 @@ async function fetchMetaInsights(accountId, since, until, accessToken) {
     const json = await response.json();
     retries = 0;
 
-    for (const row of json.data) {
-      results.push(normalizeMetaRow(accountId, row));
+    if (json.data) {
+      for (const row of json.data) {
+        results.push(row);
+      }
     }
 
-    url = json.paging?.next || null;
+    currentUrl = json.paging?.next || null;
   }
+
+  return results;
+}
+
+async function fetchMetaInsights(accountId, since, until, accessToken) {
+  const token = accessToken || process.env.META_ACCESS_TOKEN;
+  if (!token) throw new Error('META_ACCESS_TOKEN is required');
+
+  const acctId = normalizeAccountId(accountId);
+
+  const url =
+    `${META_API_BASE}/${acctId}/insights?` +
+    new URLSearchParams({
+      time_range: JSON.stringify({ since, until }),
+      level: 'campaign',
+      time_increment: '1',
+      fields: META_INSIGHT_FIELDS,
+      limit: '500',
+      access_token: token,
+    }).toString();
+
+  const rawRows = await fetchMetaPaginated(url);
+  const results = rawRows.map((row) => normalizeMetaRow(accountId, row));
 
   console.log(`[Meta API] Fetched ${results.length} daily metrics for ${acctId}`);
   return results;
+}
+
+// Fetch campaign details from Meta
+async function fetchMetaCampaigns(accountId, accessToken) {
+  const token = accessToken || process.env.META_ACCESS_TOKEN;
+  if (!token) throw new Error('META_ACCESS_TOKEN is required');
+
+  const acctId = normalizeAccountId(accountId);
+  const fields = [
+    'id', 'name', 'objective', 'status', 'effective_status',
+    'buying_type', 'bid_strategy',
+    'daily_budget', 'lifetime_budget', 'budget_remaining',
+    'start_time', 'stop_time', 'created_time', 'updated_time',
+  ].join(',');
+
+  const url = `${META_API_BASE}/${acctId}/campaigns?` +
+    new URLSearchParams({ fields, limit: '500', access_token: token }).toString();
+
+  const data = await fetchMetaPaginated(url);
+  console.log(`[Meta API] Fetched ${data.length} campaigns for ${acctId}`);
+  return data;
+}
+
+// Fetch ad set details (includes targeting) from Meta
+async function fetchMetaAdSets(accountId, accessToken) {
+  const token = accessToken || process.env.META_ACCESS_TOKEN;
+  if (!token) throw new Error('META_ACCESS_TOKEN is required');
+
+  const acctId = normalizeAccountId(accountId);
+  const fields = [
+    'id', 'name', 'campaign_id', 'status', 'effective_status',
+    'optimization_goal', 'billing_event',
+    'bid_strategy', 'bid_amount',
+    'daily_budget', 'lifetime_budget',
+    'targeting',
+    'start_time', 'end_time', 'created_time', 'updated_time',
+  ].join(',');
+
+  const url = `${META_API_BASE}/${acctId}/adsets?` +
+    new URLSearchParams({ fields, limit: '500', access_token: token }).toString();
+
+  const data = await fetchMetaPaginated(url);
+  console.log(`[Meta API] Fetched ${data.length} ad sets for ${acctId}`);
+  return data;
+}
+
+// Fetch ads with creative details from Meta
+async function fetchMetaAds(accountId, accessToken) {
+  const token = accessToken || process.env.META_ACCESS_TOKEN;
+  if (!token) throw new Error('META_ACCESS_TOKEN is required');
+
+  const acctId = normalizeAccountId(accountId);
+  const fields = [
+    'id', 'name', 'adset_id', 'campaign_id',
+    'status', 'effective_status',
+    'creative{id,name,title,body,image_url,image_hash,thumbnail_url,video_id,link_url,call_to_action_type,object_story_spec}',
+    'created_time', 'updated_time',
+  ].join(',');
+
+  const url = `${META_API_BASE}/${acctId}/ads?` +
+    new URLSearchParams({ fields, limit: '500', access_token: token }).toString();
+
+  const data = await fetchMetaPaginated(url);
+  console.log(`[Meta API] Fetched ${data.length} ads for ${acctId}`);
+  return data;
 }
 
 // ==========================================
@@ -325,7 +502,7 @@ async function fetchGoogleAdsMetrics(customerId, since, until, credentials) {
 }
 
 // ==========================================
-// DB Upsert helper
+// DB Upsert helpers
 // ==========================================
 
 async function upsertMetrics(pool, metrics, tenantId) {
@@ -364,6 +541,162 @@ async function upsertMetrics(pool, metrics, tenantId) {
   return count;
 }
 
+async function upsertCampaigns(pool, campaigns, tenantId, accountId, platform) {
+  let count = 0;
+  for (const c of campaigns) {
+    await pool.query(
+      `INSERT INTO ads_campaigns
+        (platform, tenant_id, account_id, campaign_id, campaign_name,
+         objective, status, effective_status, buying_type, bid_strategy,
+         daily_budget, lifetime_budget, budget_remaining,
+         start_time, stop_time, created_time, updated_time, raw_data, synced_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,now())
+       ON CONFLICT (platform, tenant_id, campaign_id)
+       DO UPDATE SET
+         campaign_name = EXCLUDED.campaign_name,
+         objective = EXCLUDED.objective,
+         status = EXCLUDED.status,
+         effective_status = EXCLUDED.effective_status,
+         buying_type = EXCLUDED.buying_type,
+         bid_strategy = EXCLUDED.bid_strategy,
+         daily_budget = EXCLUDED.daily_budget,
+         lifetime_budget = EXCLUDED.lifetime_budget,
+         budget_remaining = EXCLUDED.budget_remaining,
+         start_time = EXCLUDED.start_time,
+         stop_time = EXCLUDED.stop_time,
+         created_time = EXCLUDED.created_time,
+         updated_time = EXCLUDED.updated_time,
+         raw_data = EXCLUDED.raw_data,
+         synced_at = now()`,
+      [
+        platform, tenantId, accountId, c.id, c.name || '',
+        c.objective || null, c.status || null, c.effective_status || null,
+        c.buying_type || null, c.bid_strategy || null,
+        c.daily_budget ? parseFloat(c.daily_budget) / 100 : null, // Meta budgets are in cents
+        c.lifetime_budget ? parseFloat(c.lifetime_budget) / 100 : null,
+        c.budget_remaining ? parseFloat(c.budget_remaining) / 100 : null,
+        c.start_time || null, c.stop_time || null,
+        c.created_time || null, c.updated_time || null,
+        JSON.stringify(c),
+      ]
+    );
+    count++;
+  }
+  return count;
+}
+
+async function upsertAdSets(pool, adsets, tenantId, accountId, platform) {
+  let count = 0;
+  for (const a of adsets) {
+    await pool.query(
+      `INSERT INTO ads_adsets
+        (platform, tenant_id, account_id, campaign_id, adset_id, adset_name,
+         status, effective_status, optimization_goal, billing_event,
+         bid_strategy, bid_amount, daily_budget, lifetime_budget,
+         targeting, start_time, end_time, created_time, updated_time, raw_data, synced_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,now())
+       ON CONFLICT (platform, tenant_id, adset_id)
+       DO UPDATE SET
+         adset_name = EXCLUDED.adset_name,
+         campaign_id = EXCLUDED.campaign_id,
+         status = EXCLUDED.status,
+         effective_status = EXCLUDED.effective_status,
+         optimization_goal = EXCLUDED.optimization_goal,
+         billing_event = EXCLUDED.billing_event,
+         bid_strategy = EXCLUDED.bid_strategy,
+         bid_amount = EXCLUDED.bid_amount,
+         daily_budget = EXCLUDED.daily_budget,
+         lifetime_budget = EXCLUDED.lifetime_budget,
+         targeting = EXCLUDED.targeting,
+         start_time = EXCLUDED.start_time,
+         end_time = EXCLUDED.end_time,
+         created_time = EXCLUDED.created_time,
+         updated_time = EXCLUDED.updated_time,
+         raw_data = EXCLUDED.raw_data,
+         synced_at = now()`,
+      [
+        platform, tenantId, accountId, a.campaign_id || '', a.id, a.name || '',
+        a.status || null, a.effective_status || null,
+        a.optimization_goal || null, a.billing_event || null,
+        a.bid_strategy || null,
+        a.bid_amount ? parseFloat(a.bid_amount) / 100 : null,
+        a.daily_budget ? parseFloat(a.daily_budget) / 100 : null,
+        a.lifetime_budget ? parseFloat(a.lifetime_budget) / 100 : null,
+        a.targeting ? JSON.stringify(a.targeting) : null,
+        a.start_time || null, a.end_time || null,
+        a.created_time || null, a.updated_time || null,
+        JSON.stringify(a),
+      ]
+    );
+    count++;
+  }
+  return count;
+}
+
+async function upsertAdsAndCreatives(pool, ads, tenantId, accountId, platform) {
+  let count = 0;
+  for (const ad of ads) {
+    const creative = ad.creative || {};
+    // Extract link_url from object_story_spec if available
+    let linkUrl = creative.link_url || null;
+    let ctaType = creative.call_to_action_type || null;
+    if (!linkUrl && creative.object_story_spec) {
+      const spec = creative.object_story_spec;
+      if (spec.link_data) {
+        linkUrl = spec.link_data.link || linkUrl;
+        ctaType = ctaType || spec.link_data.call_to_action?.type || null;
+      }
+      if (spec.video_data) {
+        linkUrl = linkUrl || spec.video_data.call_to_action?.value?.link || null;
+        ctaType = ctaType || spec.video_data.call_to_action?.type || null;
+      }
+    }
+
+    await pool.query(
+      `INSERT INTO ads_creatives
+        (platform, tenant_id, account_id, ad_id, ad_name,
+         adset_id, campaign_id, creative_id, creative_name,
+         title, body, description, image_url, thumbnail_url,
+         video_id, link_url, call_to_action_type,
+         status, effective_status, raw_creative, raw_ad, synced_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now())
+       ON CONFLICT (platform, tenant_id, ad_id)
+       DO UPDATE SET
+         ad_name = EXCLUDED.ad_name,
+         adset_id = EXCLUDED.adset_id,
+         campaign_id = EXCLUDED.campaign_id,
+         creative_id = EXCLUDED.creative_id,
+         creative_name = EXCLUDED.creative_name,
+         title = EXCLUDED.title,
+         body = EXCLUDED.body,
+         description = EXCLUDED.description,
+         image_url = EXCLUDED.image_url,
+         thumbnail_url = EXCLUDED.thumbnail_url,
+         video_id = EXCLUDED.video_id,
+         link_url = EXCLUDED.link_url,
+         call_to_action_type = EXCLUDED.call_to_action_type,
+         status = EXCLUDED.status,
+         effective_status = EXCLUDED.effective_status,
+         raw_creative = EXCLUDED.raw_creative,
+         raw_ad = EXCLUDED.raw_ad,
+         synced_at = now()`,
+      [
+        platform, tenantId, accountId, ad.id, ad.name || null,
+        ad.adset_id || null, ad.campaign_id || null,
+        creative.id || null, creative.name || null,
+        creative.title || null, creative.body || null, null, // description
+        creative.image_url || null, creative.thumbnail_url || null,
+        creative.video_id || null, linkUrl, ctaType,
+        ad.status || null, ad.effective_status || null,
+        creative ? JSON.stringify(creative) : null,
+        JSON.stringify(ad),
+      ]
+    );
+    count++;
+  }
+  return count;
+}
+
 // ==========================================
 // GET /api/ads/performance
 // Query ad performance data with filters
@@ -376,14 +709,19 @@ router.get('/performance', async (req, res) => {
 
     const { from, to } = getDateRange(req.query.from, req.query.to);
     const platform = req.query.platform || 'all';
-    const tenantId = req.query.tenant_id || '5ml-internal';
+    const tenantId = req.query.tenant_id || 'all';
 
-    const conditions = ['date >= $1', 'date <= $2', 'tenant_id = $3'];
-    const params = [from, to, tenantId];
+    const conditions = ['date >= $1', 'date <= $2'];
+    const params = [from, to];
+
+    if (tenantId !== 'all') {
+      params.push(tenantId);
+      conditions.push(`tenant_id = $${params.length}`);
+    }
 
     if (platform !== 'all') {
-      conditions.push('platform = $4');
       params.push(platform);
+      conditions.push(`platform = $${params.length}`);
     }
 
     const sql = `
@@ -429,14 +767,19 @@ router.get('/performance/aggregated', async (req, res) => {
 
     const { from, to } = getDateRange(req.query.from, req.query.to);
     const platform = req.query.platform || 'all';
-    const tenantId = req.query.tenant_id || '5ml-internal';
+    const tenantId = req.query.tenant_id || 'all';
 
-    const conditions = ['date >= $1', 'date <= $2', 'tenant_id = $3'];
-    const params = [from, to, tenantId];
+    const conditions = ['date >= $1', 'date <= $2'];
+    const params = [from, to];
+
+    if (tenantId !== 'all') {
+      params.push(tenantId);
+      conditions.push(`tenant_id = $${params.length}`);
+    }
 
     if (platform !== 'all') {
-      conditions.push('platform = $4');
       params.push(platform);
+      conditions.push(`platform = $${params.length}`);
     }
 
     const sql = `
@@ -481,35 +824,57 @@ router.get('/performance/campaigns', async (req, res) => {
 
     const { from, to } = getDateRange(req.query.from, req.query.to);
     const platform = req.query.platform || 'all';
-    const tenantId = req.query.tenant_id || '5ml-internal';
+    const tenantId = req.query.tenant_id || 'all';
 
-    const conditions = ['date >= $1', 'date <= $2', 'tenant_id = $3'];
-    const params = [from, to, tenantId];
+    const conditions = ['p.date >= $1', 'p.date <= $2'];
+    const params = [from, to];
 
-    if (platform !== 'all') {
-      conditions.push('platform = $4');
-      params.push(platform);
+    if (tenantId !== 'all') {
+      params.push(tenantId);
+      conditions.push(`p.tenant_id = $${params.length}`);
     }
 
+    if (platform !== 'all') {
+      params.push(platform);
+      conditions.push(`p.platform = $${params.length}`);
+    }
+
+    // Join with ads_campaigns to include campaign details
     const sql = `
       SELECT
-        platform,
-        campaign_id,
-        campaign_name,
-        SUM(impressions)::bigint as impressions,
-        SUM(clicks)::bigint as clicks,
-        SUM(spend)::numeric(18,2) as spend,
-        SUM(conversions)::numeric(18,2) as conversions,
-        SUM(revenue)::numeric(18,2) as revenue,
-        CASE WHEN SUM(spend) > 0
-          THEN (SUM(revenue) / NULLIF(SUM(spend), 0))::numeric(10,2)
+        p.platform,
+        p.campaign_id,
+        p.campaign_name,
+        p.tenant_id,
+        SUM(p.impressions)::bigint as impressions,
+        SUM(p.clicks)::bigint as clicks,
+        SUM(p.spend)::numeric(18,2) as spend,
+        SUM(p.conversions)::numeric(18,2) as conversions,
+        SUM(p.revenue)::numeric(18,2) as revenue,
+        CASE WHEN SUM(p.spend) > 0
+          THEN (SUM(p.revenue) / NULLIF(SUM(p.spend), 0))::numeric(10,2)
           ELSE 0 END as roas,
-        CASE WHEN SUM(clicks) > 0
-          THEN (SUM(spend) / NULLIF(SUM(clicks), 0))::numeric(18,4)
-          ELSE 0 END as avg_cpc
-      FROM ads_daily_performance
+        CASE WHEN SUM(p.clicks) > 0
+          THEN (SUM(p.spend) / NULLIF(SUM(p.clicks), 0))::numeric(18,4)
+          ELSE 0 END as avg_cpc,
+        c.objective,
+        c.status as campaign_status,
+        c.effective_status as campaign_effective_status,
+        c.buying_type,
+        c.bid_strategy,
+        c.daily_budget,
+        c.lifetime_budget,
+        c.budget_remaining,
+        c.start_time,
+        c.stop_time
+      FROM ads_daily_performance p
+      LEFT JOIN ads_campaigns c
+        ON c.platform = p.platform AND c.tenant_id = p.tenant_id AND c.campaign_id = p.campaign_id
       WHERE ${conditions.join(' AND ')}
-      GROUP BY platform, campaign_id, campaign_name
+      GROUP BY p.platform, p.campaign_id, p.campaign_name, p.tenant_id,
+               c.objective, c.status, c.effective_status, c.buying_type,
+               c.bid_strategy, c.daily_budget, c.lifetime_budget, c.budget_remaining,
+               c.start_time, c.stop_time
       ORDER BY roas DESC
     `;
 
@@ -538,14 +903,19 @@ router.get('/performance/kpis', async (req, res) => {
 
     const { from, to } = getDateRange(req.query.from, req.query.to);
     const platform = req.query.platform || 'all';
-    const tenantId = req.query.tenant_id || '5ml-internal';
+    const tenantId = req.query.tenant_id || 'all';
 
-    const conditions = ['date >= $1', 'date <= $2', 'tenant_id = $3'];
-    const params = [from, to, tenantId];
+    const conditions = ['date >= $1', 'date <= $2'];
+    const params = [from, to];
+
+    if (tenantId !== 'all') {
+      params.push(tenantId);
+      conditions.push(`tenant_id = $${params.length}`);
+    }
 
     if (platform !== 'all') {
-      conditions.push('platform = $4');
       params.push(platform);
+      conditions.push(`platform = $${params.length}`);
     }
 
     const kpiSql = `
@@ -602,7 +972,7 @@ router.get('/performance/kpis', async (req, res) => {
 
 // ==========================================
 // GET /api/ads/tenants
-// List all tenants with ads data
+// List all tenants (ad accounts) with ads data
 // ==========================================
 router.get('/tenants', async (req, res) => {
   try {
@@ -612,12 +982,14 @@ router.get('/tenants', async (req, res) => {
 
     const sql = `
       SELECT DISTINCT tenant_id,
+        account_id,
         COUNT(DISTINCT campaign_id)::int as campaign_count,
         MIN(date)::text as earliest_date,
-        MAX(date)::text as latest_date
+        MAX(date)::text as latest_date,
+        SUM(spend)::numeric(18,2) as total_spend
       FROM ads_daily_performance
-      GROUP BY tenant_id
-      ORDER BY tenant_id
+      GROUP BY tenant_id, account_id
+      ORDER BY total_spend DESC
     `;
 
     const result = await db.pool.query(sql);
@@ -633,8 +1005,167 @@ router.get('/tenants', async (req, res) => {
 });
 
 // ==========================================
+// GET /api/ads/campaigns/details
+// Campaign details with budget, bidding, objective
+// ==========================================
+router.get('/campaigns/details', async (req, res) => {
+  try {
+    if (!db || !db.pool) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const tenantId = req.query.tenant_id || 'all';
+    const campaignId = req.query.campaign_id;
+
+    const conditions = [];
+    const params = [];
+
+    if (tenantId !== 'all') {
+      params.push(tenantId);
+      conditions.push(`tenant_id = $${params.length}`);
+    }
+
+    if (campaignId) {
+      params.push(campaignId);
+      conditions.push(`campaign_id = $${params.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const sql = `
+      SELECT
+        platform, tenant_id, account_id, campaign_id, campaign_name,
+        objective, status, effective_status, buying_type, bid_strategy,
+        daily_budget, lifetime_budget, budget_remaining,
+        start_time, stop_time, created_time, updated_time, synced_at
+      FROM ads_campaigns
+      ${whereClause}
+      ORDER BY campaign_name ASC
+    `;
+
+    const result = await db.pool.query(sql, params);
+
+    res.json({
+      success: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('[Ads API] Campaign details query error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// GET /api/ads/adsets/details
+// Ad set details with targeting, budget, bidding
+// ==========================================
+router.get('/adsets/details', async (req, res) => {
+  try {
+    if (!db || !db.pool) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const tenantId = req.query.tenant_id || 'all';
+    const campaignId = req.query.campaign_id;
+
+    const conditions = [];
+    const params = [];
+
+    if (tenantId !== 'all') {
+      params.push(tenantId);
+      conditions.push(`tenant_id = $${params.length}`);
+    }
+
+    if (campaignId) {
+      params.push(campaignId);
+      conditions.push(`campaign_id = $${params.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const sql = `
+      SELECT
+        platform, tenant_id, account_id, campaign_id,
+        adset_id, adset_name, status, effective_status,
+        optimization_goal, billing_event, bid_strategy, bid_amount,
+        daily_budget, lifetime_budget,
+        targeting,
+        start_time, end_time, created_time, updated_time, synced_at
+      FROM ads_adsets
+      ${whereClause}
+      ORDER BY adset_name ASC
+    `;
+
+    const result = await db.pool.query(sql, params);
+
+    res.json({
+      success: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('[Ads API] Ad set details query error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// GET /api/ads/creatives/details
+// Ad creative details with images, copy, CTAs
+// ==========================================
+router.get('/creatives/details', async (req, res) => {
+  try {
+    if (!db || !db.pool) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const tenantId = req.query.tenant_id || 'all';
+    const campaignId = req.query.campaign_id;
+
+    const conditions = [];
+    const params = [];
+
+    if (tenantId !== 'all') {
+      params.push(tenantId);
+      conditions.push(`tenant_id = $${params.length}`);
+    }
+
+    if (campaignId) {
+      params.push(campaignId);
+      conditions.push(`campaign_id = $${params.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const sql = `
+      SELECT
+        platform, tenant_id, account_id,
+        ad_id, ad_name, adset_id, campaign_id,
+        creative_id, creative_name,
+        title, body, description,
+        image_url, thumbnail_url, video_id,
+        link_url, call_to_action_type,
+        status, effective_status, synced_at
+      FROM ads_creatives
+      ${whereClause}
+      ORDER BY ad_name ASC
+    `;
+
+    const result = await db.pool.query(sql, params);
+
+    res.json({
+      success: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('[Ads API] Creatives query error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
 // POST /api/ads/sync
 // Trigger a live sync from Meta and/or Google Ads
+// Now uses ad account ID as tenant_id for client separation
 // ==========================================
 router.post('/sync', async (req, res) => {
   try {
@@ -642,10 +1173,11 @@ router.post('/sync', async (req, res) => {
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const tenantId = req.body.tenant_id || '5ml-internal';
     const since = req.body.since;
     const until = req.body.until;
-    const platforms = req.body.platforms || ['meta', 'google']; // default both
+    const platforms = req.body.platforms || ['meta', 'google'];
+    // If sync_details is true, also fetch campaigns, ad sets, and creatives
+    const syncDetails = req.body.sync_details !== false; // default true
 
     if (!since || !until) {
       return res.status(400).json({ error: 'since and until are required (YYYY-MM-DD)' });
@@ -657,14 +1189,41 @@ router.post('/sync', async (req, res) => {
     if (platforms.includes('meta')) {
       const metaAccountId = req.body.meta_account_id || process.env.META_AD_ACCOUNT_ID;
       const metaToken = req.body.meta_access_token || process.env.META_ACCESS_TOKEN;
+      // Use the ad account ID as tenant_id for client separation
+      const tenantId = req.body.tenant_id || metaAccountId || '5ml-internal';
 
       if (metaAccountId && metaToken) {
         try {
-          console.log(`[Sync] Fetching Meta Ads for ${metaAccountId} (${since} to ${until})...`);
+          console.log(`[Sync] Fetching Meta Ads for ${metaAccountId} (tenant: ${tenantId}, ${since} to ${until})...`);
           const metaMetrics = await fetchMetaInsights(metaAccountId, since, until, metaToken);
           const metaCount = await upsertMetrics(db.pool, metaMetrics, tenantId);
-          results.meta = { fetched: metaMetrics.length, upserted: metaCount };
-          console.log(`[Sync] Meta: ${metaCount} rows upserted`);
+          results.meta = { fetched: metaMetrics.length, upserted: metaCount, tenant_id: tenantId };
+          console.log(`[Sync] Meta: ${metaCount} rows upserted for tenant ${tenantId}`);
+
+          // Also fetch campaign details, ad sets, and creatives
+          if (syncDetails) {
+            try {
+              const [campaigns, adsets, ads] = await Promise.all([
+                fetchMetaCampaigns(metaAccountId, metaToken),
+                fetchMetaAdSets(metaAccountId, metaToken),
+                fetchMetaAds(metaAccountId, metaToken),
+              ]);
+
+              const campCount = await upsertCampaigns(db.pool, campaigns, tenantId, metaAccountId, 'meta');
+              const adsetCount = await upsertAdSets(db.pool, adsets, tenantId, metaAccountId, 'meta');
+              const adCount = await upsertAdsAndCreatives(db.pool, ads, tenantId, metaAccountId, 'meta');
+
+              results.meta.details = {
+                campaigns: campCount,
+                adsets: adsetCount,
+                ads: adCount,
+              };
+              console.log(`[Sync] Meta details: ${campCount} campaigns, ${adsetCount} ad sets, ${adCount} ads`);
+            } catch (detailErr) {
+              console.error('[Sync] Meta details error:', detailErr.message);
+              results.errors.push({ platform: 'meta_details', error: detailErr.message });
+            }
+          }
         } catch (err) {
           console.error('[Sync] Meta error:', err.message);
           results.errors.push({ platform: 'meta', error: err.message });
@@ -680,6 +1239,7 @@ router.post('/sync', async (req, res) => {
     // --- Google sync ---
     if (platforms.includes('google')) {
       const googleCustomerId = req.body.google_customer_id || process.env.GOOGLE_ADS_CUSTOMER_ID;
+      const tenantId = req.body.tenant_id || googleCustomerId || '5ml-internal';
       const googleCreds = {
         developerToken: req.body.google_developer_token,
         clientId: req.body.google_client_id,
@@ -690,11 +1250,11 @@ router.post('/sync', async (req, res) => {
 
       if (googleCustomerId) {
         try {
-          console.log(`[Sync] Fetching Google Ads for ${googleCustomerId} (${since} to ${until})...`);
+          console.log(`[Sync] Fetching Google Ads for ${googleCustomerId} (tenant: ${tenantId}, ${since} to ${until})...`);
           const googleMetrics = await fetchGoogleAdsMetrics(googleCustomerId, since, until, googleCreds);
           const googleCount = await upsertMetrics(db.pool, googleMetrics, tenantId);
-          results.google = { fetched: googleMetrics.length, upserted: googleCount };
-          console.log(`[Sync] Google: ${googleCount} rows upserted`);
+          results.google = { fetched: googleMetrics.length, upserted: googleCount, tenant_id: tenantId };
+          console.log(`[Sync] Google: ${googleCount} rows upserted for tenant ${tenantId}`);
         } catch (err) {
           console.error('[Sync] Google error:', err.message);
           results.errors.push({ platform: 'google', error: err.message });
@@ -712,7 +1272,7 @@ router.post('/sync', async (req, res) => {
     res.json({
       success: hasData ? true : false,
       data: results,
-      meta: { tenantId, since, until, platforms },
+      meta: { since, until, platforms },
     });
   } catch (error) {
     console.error('[Ads API] Sync error:', error);
@@ -783,6 +1343,7 @@ router.get('/overview', async (req, res) => {
     const sql = `
       SELECT
         tenant_id,
+        account_id,
         SUM(spend)::numeric(18,2) as total_spend,
         SUM(conversions)::numeric(18,2) as total_conversions,
         SUM(revenue)::numeric(18,2) as total_revenue,
@@ -792,7 +1353,7 @@ router.get('/overview', async (req, res) => {
         COUNT(DISTINCT campaign_id)::int as campaign_count
       FROM ads_daily_performance
       WHERE date >= $1 AND date <= $2
-      GROUP BY tenant_id
+      GROUP BY tenant_id, account_id
       ORDER BY total_spend DESC
     `;
 
