@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Camera, CameraOff, Mic, MicOff, Send, Sparkles, User, Volume2, RefreshCw, Settings, AudioWaveform, Radio, StopCircle, Play } from 'lucide-react';
+import { ArrowLeft, Camera, CameraOff, Mic, MicOff, Send, Sparkles, User, Volume2, RefreshCw, Settings, AudioWaveform, Radio, StopCircle, Play, Wifi, WifiOff, Server } from 'lucide-react';
 
 // Character presets
 const CHARACTERS = [
@@ -29,7 +29,7 @@ const CHARACTERS = [
   },
 ];
 
-// Face filter effects
+// CSS filter effects (browser-only fallback)
 const FILTER_EFFECTS: Record<string, string> = {
   none: '',
   cartoon: 'saturate(1.3) contrast(1.1)',
@@ -40,9 +40,21 @@ const FILTER_EFFECTS: Record<string, string> = {
 };
 
 type VoiceMode = 'text' | 'realtime';
+type ServerStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 export default function FictionalCharacterPage() {
-  // Camera state
+  // ─── AI Server state ─────────────────────────────────────────────
+  const [aiServerUrl, setAiServerUrl] = useState('');
+  const [serverStatus, setServerStatus] = useState<ServerStatus>('disconnected');
+  const [serverCapabilities, setServerCapabilities] = useState<{
+    faceSwap: boolean;
+    voiceClone: boolean;
+    characters: string[];
+  }>({ faceSwap: false, voiceClone: false, characters: [] });
+  const wsRef = useRef<WebSocket | null>(null);
+  const [showServerSettings, setShowServerSettings] = useState(false);
+
+  // ─── Camera state ────────────────────────────────────────────────
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -50,17 +62,19 @@ export default function FictionalCharacterPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
+  // Canvas for capturing frames to send to server
+  const captureCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Character & effect state
+  // ─── Character & effect state ────────────────────────────────────
   const [selectedCharacter, setSelectedCharacter] = useState(CHARACTERS[0]);
-  const [activeFilter, setActiveFilter] = useState<string>('cartoon');
+  const [activeFilter, setActiveFilter] = useState<string>('none');
   const [showOverlay, setShowOverlay] = useState(true);
+  const [faceSwapEnabled, setFaceSwapEnabled] = useState(true);
 
-  // Voice conversion state
+  // ─── Voice conversion state ──────────────────────────────────────
   const [voiceMode, setVoiceMode] = useState<VoiceMode>('realtime');
   const [isVoiceConverting, setIsVoiceConverting] = useState(false);
   const [voiceConversionStatus, setVoiceConversionStatus] = useState<string>('Ready');
-  const [pitchShift, setPitchShift] = useState(-4);
 
   // Audio processing refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -68,48 +82,213 @@ export default function FictionalCharacterPage() {
   const micStreamRef = useRef<MediaStream | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const filterNodesRef = useRef<BiquadFilterNode[]>([]);
+  const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
 
-  // Text transformation state
+  // ─── Text transformation state ───────────────────────────────────
   const [inputText, setInputText] = useState('');
   const [transformedText, setTransformedText] = useState('');
   const [isTransforming, setIsTransforming] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
-  // Refs for overlay drawing (to avoid stale closure)
+  // ─── Refs for render loop (avoid stale closures) ─────────────────
   const selectedCharacterRef = useRef(selectedCharacter);
   const showOverlayRef = useRef(showOverlay);
   const activeFilterRef = useRef(activeFilter);
+  const faceSwapEnabledRef = useRef(faceSwapEnabled);
+  const serverStatusRef = useRef(serverStatus);
 
-  // Update refs when state changes
-  useEffect(() => {
-    selectedCharacterRef.current = selectedCharacter;
-  }, [selectedCharacter]);
+  useEffect(() => { selectedCharacterRef.current = selectedCharacter; }, [selectedCharacter]);
+  useEffect(() => { showOverlayRef.current = showOverlay; }, [showOverlay]);
+  useEffect(() => { activeFilterRef.current = activeFilter; }, [activeFilter]);
+  useEffect(() => { faceSwapEnabledRef.current = faceSwapEnabled; }, [faceSwapEnabled]);
+  useEffect(() => { serverStatusRef.current = serverStatus; }, [serverStatus]);
 
-  useEffect(() => {
-    showOverlayRef.current = showOverlay;
-  }, [showOverlay]);
+  // ─── AI Server Connection ────────────────────────────────────────
+  const connectToServer = useCallback(async (url: string) => {
+    if (!url.trim()) return;
 
-  useEffect(() => {
-    activeFilterRef.current = activeFilter;
-  }, [activeFilter]);
+    // Disconnect existing
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
 
-  // Update pitch shift when character changes
-  useEffect(() => {
-    setPitchShift(selectedCharacter.pitchShift);
-  }, [selectedCharacter]);
+    setServerStatus('connecting');
 
-  // Start camera
+    // First check server health via HTTP
+    const httpUrl = url.replace('ws://', 'http://').replace('wss://', 'https://').replace('/ws/stream', '/');
+    try {
+      const res = await fetch(httpUrl);
+      const data = await res.json();
+      setServerCapabilities({
+        faceSwap: data.face_swap === true,
+        voiceClone: (data.voice_models || []).length > 0,
+        characters: data.characters || [],
+      });
+    } catch {
+      // Server might still accept WebSocket even if HTTP check fails
+    }
+
+    // Connect WebSocket
+    const wsUrl = url.includes('/ws/stream') ? url : `${url}/ws/stream`;
+    try {
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        setServerStatus('connected');
+        wsRef.current = ws;
+        // Send ping to verify
+        ws.send(JSON.stringify({ type: 'ping' }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleServerMessage(msg);
+        } catch (e) {
+          console.error('Failed to parse server message:', e);
+        }
+      };
+
+      ws.onerror = () => {
+        setServerStatus('error');
+      };
+
+      ws.onclose = () => {
+        setServerStatus('disconnected');
+        wsRef.current = null;
+      };
+    } catch {
+      setServerStatus('error');
+    }
+  }, []);
+
+  const disconnectFromServer = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    setServerStatus('disconnected');
+    setServerCapabilities({ faceSwap: false, voiceClone: false, characters: [] });
+  }, []);
+
+  // Handle messages from AI server
+  const handleServerMessage = useCallback((msg: { type: string; image?: string; audio?: string }) => {
+    if (msg.type === 'video_frame' && msg.image) {
+      // Draw face-swapped frame to canvas
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        // Draw the face-swapped image
+        ctx.drawImage(img, 0, 0);
+
+        // Draw overlay on top
+        const currentShowOverlay = showOverlayRef.current;
+        const currentCharacter = selectedCharacterRef.current;
+        if (currentShowOverlay) {
+          drawOverlay(ctx, canvas.width, canvas.height, currentCharacter);
+        }
+      };
+      img.src = 'data:image/jpeg;base64,' + msg.image;
+    }
+
+    if (msg.type === 'audio_chunk' && msg.audio) {
+      // Play back voice-converted audio
+      playConvertedAudio(msg.audio);
+    }
+  }, []);
+
+  // Play converted audio from server
+  const playConvertedAudio = useCallback((audioB64: string) => {
+    if (!audioContextRef.current) return;
+    const ctx = audioContextRef.current;
+
+    try {
+      const audioBytes = atob(audioB64);
+      const buffer = new Float32Array(audioBytes.length / 4);
+      const view = new DataView(new ArrayBuffer(audioBytes.length));
+      for (let i = 0; i < audioBytes.length; i++) {
+        view.setUint8(i, audioBytes.charCodeAt(i));
+      }
+      for (let i = 0; i < buffer.length; i++) {
+        buffer[i] = view.getFloat32(i * 4, true);
+      }
+
+      const audioBuffer = ctx.createBuffer(1, buffer.length, ctx.sampleRate);
+      audioBuffer.copyToChannel(buffer, 0);
+
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
+      source.start();
+    } catch (e) {
+      console.error('Audio playback error:', e);
+    }
+  }, []);
+
+  // Draw overlay on canvas
+  const drawOverlay = (ctx: CanvasRenderingContext2D, width: number, height: number, character: typeof CHARACTERS[0]) => {
+    const borderColor = character.id === 'uncle-peanut'
+      ? '#f59e0b'
+      : character.id === 'anime-girl'
+        ? '#ec4899'
+        : '#3b82f6';
+
+    // Bottom bar
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, height - 60, width, 60);
+
+    // Character name
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 20px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`🎭 ${character.name}`, width / 2, height - 30);
+
+    // Border
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(2, 2, width - 4, height - 4);
+
+    // Corners
+    const cs = 30;
+    ctx.fillStyle = borderColor;
+    ctx.fillRect(0, 0, cs, 4);
+    ctx.fillRect(0, 0, 4, cs);
+    ctx.fillRect(width - cs, 0, cs, 4);
+    ctx.fillRect(width - 4, 0, 4, cs);
+    ctx.fillRect(0, height - 4, cs, 4);
+    ctx.fillRect(0, height - cs, 4, cs);
+    ctx.fillRect(width - cs, height - 4, cs, 4);
+    ctx.fillRect(width - 4, height - cs, 4, cs);
+
+    // "AI Face Swap" badge when server is connected
+    if (serverStatusRef.current === 'connected' && faceSwapEnabledRef.current) {
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.9)';
+      const badgeWidth = 120;
+      ctx.fillRect(width - badgeWidth - 10, 10, badgeWidth, 28);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('AI Face Swap', width - badgeWidth / 2 - 10, 24);
+    }
+  };
+
+  // ─── Camera ──────────────────────────────────────────────────────
   const startCamera = useCallback(async () => {
     setIsCameraLoading(true);
     setCameraError(null);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: 'user',
-        },
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
         audio: false,
       });
 
@@ -121,24 +300,20 @@ export default function FictionalCharacterPage() {
       streamRef.current = stream;
       setIsCameraOn(true);
 
-      // Start rendering after a short delay to ensure video is ready
-      setTimeout(() => {
-        startCanvasRendering();
-      }, 100);
+      // Create offscreen canvas for frame capture
+      captureCanvasRef.current = document.createElement('canvas');
 
+      setTimeout(() => { startCanvasRendering(); }, 100);
     } catch (err) {
       console.error('Camera error:', err);
       setCameraError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to access camera. Please allow camera permissions.'
+        err instanceof Error ? err.message : 'Failed to access camera. Please allow camera permissions.'
       );
     } finally {
       setIsCameraLoading(false);
     }
   }, []);
 
-  // Stop camera
   const stopCamera = useCallback(() => {
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
@@ -151,10 +326,13 @@ export default function FictionalCharacterPage() {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    captureCanvasRef.current = null;
     setIsCameraOn(false);
   }, []);
 
-  // Canvas rendering loop - uses refs to avoid stale closures
+  // ─── Canvas rendering loop ───────────────────────────────────────
+  const frameCountRef = useRef(0);
+
   const startCanvasRendering = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -168,62 +346,79 @@ export default function FictionalCharacterPage() {
         const width = video.videoWidth || 640;
         const height = video.videoHeight || 480;
 
-        // Set canvas size
-        if (canvas.width !== width || canvas.height !== height) {
-          canvas.width = width;
-          canvas.height = height;
-        }
-
-        // Get current values from refs
         const currentFilter = activeFilterRef.current;
         const currentShowOverlay = showOverlayRef.current;
         const currentCharacter = selectedCharacterRef.current;
+        const isServerConnected = serverStatusRef.current === 'connected';
+        const isFaceSwapOn = faceSwapEnabledRef.current;
 
-        // Get filter value
-        const filterValue = FILTER_EFFECTS[currentFilter] || '';
+        // If server connected and face swap enabled, send frames to server
+        // Server will respond with face-swapped frames via handleServerMessage
+        if (isServerConnected && isFaceSwapOn && wsRef.current?.readyState === WebSocket.OPEN) {
+          frameCountRef.current++;
 
-        // Mirror and draw video with filter
-        ctx.save();
-        ctx.filter = filterValue || 'none'; // Apply filter inside save block
-        ctx.scale(-1, 1);
-        ctx.drawImage(video, -width, 0, width, height);
-        ctx.restore(); // Restores transform AND filter
+          // Send every 3rd frame to server (~10 FPS) to reduce bandwidth
+          if (frameCountRef.current % 3 === 0) {
+            const captureCanvas = captureCanvasRef.current;
+            if (captureCanvas) {
+              captureCanvas.width = width;
+              captureCanvas.height = height;
+              const captureCtx = captureCanvas.getContext('2d');
+              if (captureCtx) {
+                // Draw mirrored video to capture canvas
+                captureCtx.save();
+                captureCtx.scale(-1, 1);
+                captureCtx.drawImage(video, -width, 0, width, height);
+                captureCtx.restore();
+
+                // Send as JPEG base64
+                const dataUrl = captureCanvas.toDataURL('image/jpeg', 0.7);
+                const b64 = dataUrl.split(',')[1];
+                wsRef.current.send(JSON.stringify({
+                  type: 'video_frame',
+                  character_id: currentCharacter.id,
+                  image: b64,
+                }));
+              }
+            }
+          }
+
+          // Still draw local preview (server response will overwrite)
+          if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+          }
+          ctx.save();
+          ctx.filter = FILTER_EFFECTS[currentFilter] || 'none';
+          ctx.scale(-1, 1);
+          ctx.drawImage(video, -width, 0, width, height);
+          ctx.restore();
+
+          // Show "processing" indicator
+          ctx.fillStyle = 'rgba(0,0,0,0.3)';
+          ctx.fillRect(0, 0, width, 30);
+          ctx.fillStyle = '#10b981';
+          ctx.font = '12px Arial';
+          ctx.textAlign = 'left';
+          ctx.fillText('AI Processing...', 10, 20);
+
+        } else {
+          // Browser-only mode: just apply CSS filters
+          if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+          }
+
+          ctx.save();
+          ctx.filter = FILTER_EFFECTS[currentFilter] || 'none';
+          ctx.scale(-1, 1);
+          ctx.drawImage(video, -width, 0, width, height);
+          ctx.restore();
+        }
 
         // Draw overlay
         if (currentShowOverlay) {
-          const borderColor = currentCharacter.id === 'uncle-peanut'
-            ? '#f59e0b'
-            : currentCharacter.id === 'anime-girl'
-              ? '#ec4899'
-              : '#3b82f6';
-
-          // Bottom bar
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-          ctx.fillRect(0, height - 60, width, 60);
-
-          // Character name
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 20px Arial, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(`🎭 ${currentCharacter.name}`, width / 2, height - 30);
-
-          // Border
-          ctx.strokeStyle = borderColor;
-          ctx.lineWidth = 4;
-          ctx.strokeRect(2, 2, width - 4, height - 4);
-
-          // Corners
-          const cs = 30;
-          ctx.fillStyle = borderColor;
-          ctx.fillRect(0, 0, cs, 4);
-          ctx.fillRect(0, 0, 4, cs);
-          ctx.fillRect(width - cs, 0, cs, 4);
-          ctx.fillRect(width - 4, 0, 4, cs);
-          ctx.fillRect(0, height - 4, cs, 4);
-          ctx.fillRect(0, height - cs, 4, cs);
-          ctx.fillRect(width - cs, height - 4, cs, 4);
-          ctx.fillRect(width - 4, height - cs, 4, cs);
+          drawOverlay(ctx, canvas.width, canvas.height, currentCharacter);
         }
       }
 
@@ -233,120 +428,146 @@ export default function FictionalCharacterPage() {
     render();
   }, []);
 
-  // Cleanup on unmount
+  // ─── Cleanup ─────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       stopCamera();
       stopVoiceConversion();
+      disconnectFromServer();
     };
-  }, [stopCamera]);
+  }, [stopCamera, disconnectFromServer]);
 
-  // Start voice conversion with character-specific audio effects
+  // ─── Voice conversion ────────────────────────────────────────────
   const startVoiceConversion = async () => {
     try {
       setIsVoiceConverting(true);
       setVoiceConversionStatus('Starting microphone...');
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
 
       micStreamRef.current = stream;
 
-      // Create audio context
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       audioContextRef.current = new AudioContextClass();
       const ctx = audioContextRef.current;
 
-      // Resume audio context if suspended (required by browsers)
       if (ctx.state === 'suspended') {
         await ctx.resume();
       }
 
-      // Create source from microphone
       sourceNodeRef.current = ctx.createMediaStreamSource(stream);
 
-      // Create gain node for volume control
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = 1.5;
-      gainNodeRef.current = gainNode;
+      const isServerConnected = serverStatus === 'connected' && wsRef.current?.readyState === WebSocket.OPEN;
 
-      // Create character-specific audio effects
-      const filters: BiquadFilterNode[] = [];
+      if (isServerConnected) {
+        // Send audio chunks to server for AI voice cloning
+        const bufferSize = 4096;
+        const processor = ctx.createScriptProcessor(bufferSize, 1, 1);
+        processorNodeRef.current = processor;
 
-      if (selectedCharacter.id === 'uncle-peanut') {
-        // Deep voice: boost low frequencies, reduce highs
-        const lowBoost = ctx.createBiquadFilter();
-        lowBoost.type = 'lowshelf';
-        lowBoost.frequency.value = 300;
-        lowBoost.gain.value = 8; // Boost bass
-        filters.push(lowBoost);
+        processor.onaudioprocess = (e) => {
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            const inputData = e.inputBuffer.getChannelData(0);
+            // Convert float32 array to base64
+            const bytes = new Uint8Array(inputData.buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            const b64 = btoa(binary);
 
-        const highCut = ctx.createBiquadFilter();
-        highCut.type = 'highshelf';
-        highCut.frequency.value = 3000;
-        highCut.gain.value = -4; // Reduce treble
-        filters.push(highCut);
+            wsRef.current.send(JSON.stringify({
+              type: 'audio_chunk',
+              character_id: selectedCharacter.id,
+              audio: b64,
+              sample_rate: ctx.sampleRate,
+            }));
+          }
 
-        gainNode.gain.value = 2.0;
-      } else if (selectedCharacter.id === 'anime-girl') {
-        // High-pitched voice: boost high frequencies, reduce lows
-        const highBoost = ctx.createBiquadFilter();
-        highBoost.type = 'highshelf';
-        highBoost.frequency.value = 2000;
-        highBoost.gain.value = 10; // Boost treble significantly
-        filters.push(highBoost);
+          // Silence the direct output (server sends converted audio back)
+          const output = e.outputBuffer.getChannelData(0);
+          for (let i = 0; i < output.length; i++) {
+            output[i] = 0;
+          }
+        };
 
-        const lowCut = ctx.createBiquadFilter();
-        lowCut.type = 'lowshelf';
-        lowCut.frequency.value = 400;
-        lowCut.gain.value = -6; // Reduce bass
-        filters.push(lowCut);
+        sourceNodeRef.current.connect(processor);
+        processor.connect(ctx.destination);
 
-        // Add presence boost for clarity
-        const presence = ctx.createBiquadFilter();
-        presence.type = 'peaking';
-        presence.frequency.value = 4000;
-        presence.Q.value = 1;
-        presence.gain.value = 6;
-        filters.push(presence);
+        setVoiceConversionStatus(`🎤 AI Voice Cloning (${selectedCharacter.name})`);
 
-        gainNode.gain.value = 1.8;
       } else {
-        // News anchor: clear, professional voice
-        const clarity = ctx.createBiquadFilter();
-        clarity.type = 'peaking';
-        clarity.frequency.value = 2500;
-        clarity.Q.value = 1;
-        clarity.gain.value = 4;
-        filters.push(clarity);
+        // Browser-only: EQ-based voice effect
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = 1.5;
+        gainNodeRef.current = gainNode;
 
-        // Slight compression via limiting highs
-        const limiter = ctx.createBiquadFilter();
-        limiter.type = 'highshelf';
-        limiter.frequency.value = 6000;
-        limiter.gain.value = -2;
-        filters.push(limiter);
+        const filters: BiquadFilterNode[] = [];
+
+        if (selectedCharacter.id === 'uncle-peanut') {
+          const lowBoost = ctx.createBiquadFilter();
+          lowBoost.type = 'lowshelf';
+          lowBoost.frequency.value = 300;
+          lowBoost.gain.value = 8;
+          filters.push(lowBoost);
+
+          const highCut = ctx.createBiquadFilter();
+          highCut.type = 'highshelf';
+          highCut.frequency.value = 3000;
+          highCut.gain.value = -4;
+          filters.push(highCut);
+
+          gainNode.gain.value = 2.0;
+        } else if (selectedCharacter.id === 'anime-girl') {
+          const highBoost = ctx.createBiquadFilter();
+          highBoost.type = 'highshelf';
+          highBoost.frequency.value = 2000;
+          highBoost.gain.value = 10;
+          filters.push(highBoost);
+
+          const lowCut = ctx.createBiquadFilter();
+          lowCut.type = 'lowshelf';
+          lowCut.frequency.value = 400;
+          lowCut.gain.value = -6;
+          filters.push(lowCut);
+
+          const presence = ctx.createBiquadFilter();
+          presence.type = 'peaking';
+          presence.frequency.value = 4000;
+          presence.Q.value = 1;
+          presence.gain.value = 6;
+          filters.push(presence);
+
+          gainNode.gain.value = 1.8;
+        } else {
+          const clarity = ctx.createBiquadFilter();
+          clarity.type = 'peaking';
+          clarity.frequency.value = 2500;
+          clarity.Q.value = 1;
+          clarity.gain.value = 4;
+          filters.push(clarity);
+
+          const limiter = ctx.createBiquadFilter();
+          limiter.type = 'highshelf';
+          limiter.frequency.value = 6000;
+          limiter.gain.value = -2;
+          filters.push(limiter);
+        }
+
+        filterNodesRef.current = filters;
+
+        let lastNode: AudioNode = sourceNodeRef.current;
+        for (const filter of filters) {
+          lastNode.connect(filter);
+          lastNode = filter;
+        }
+        lastNode.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        setVoiceConversionStatus(`🔊 ${selectedCharacter.name} voice effect (browser)`);
       }
-
-      filterNodesRef.current = filters;
-
-      // Connect audio chain: source -> filters -> gain -> output
-      let lastNode: AudioNode = sourceNodeRef.current;
-      for (const filter of filters) {
-        lastNode.connect(filter);
-        lastNode = filter;
-      }
-      lastNode.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      setVoiceConversionStatus(`🔊 ${selectedCharacter.name} voice active`);
-      console.log('Voice conversion started with', filters.length, 'filters');
-
     } catch (err) {
       console.error('Voice conversion error:', err);
       setVoiceConversionStatus(err instanceof Error ? err.message : 'Failed to start');
@@ -355,7 +576,10 @@ export default function FictionalCharacterPage() {
   };
 
   const stopVoiceConversion = useCallback(() => {
-    // Disconnect all filter nodes
+    if (processorNodeRef.current) {
+      processorNodeRef.current.disconnect();
+      processorNodeRef.current = null;
+    }
     for (const filter of filterNodesRef.current) {
       filter.disconnect();
     }
@@ -381,7 +605,7 @@ export default function FictionalCharacterPage() {
     setVoiceConversionStatus('Ready');
   }, []);
 
-  // Transform text
+  // ─── Text transformation ─────────────────────────────────────────
   const transformText = async () => {
     if (!inputText.trim()) return;
 
@@ -403,22 +627,16 @@ export default function FictionalCharacterPage() {
     setIsTransforming(false);
   };
 
-  // Text-to-speech function
   const speakText = () => {
     if (!transformedText || isSpeaking) return;
-
-    // Check if speech synthesis is available
     if (!('speechSynthesis' in window)) {
       alert('Text-to-speech is not supported in this browser');
       return;
     }
 
-    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
-
     const utterance = new SpeechSynthesisUtterance(transformedText);
 
-    // Set voice parameters based on character
     if (selectedCharacter.id === 'uncle-peanut') {
       utterance.rate = 0.9;
       utterance.pitch = 0.7;
@@ -445,6 +663,9 @@ export default function FictionalCharacterPage() {
     setIsSpeaking(false);
   };
 
+  // ─── Render ──────────────────────────────────────────────────────
+  const isAiMode = serverStatus === 'connected';
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
       {/* Header */}
@@ -462,13 +683,91 @@ export default function FictionalCharacterPage() {
               <Sparkles className="w-5 h-5 text-rose-500" />
               <h1 className="text-lg font-bold text-white">Live Fictional Character</h1>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-xs text-slate-400">Browser Mode</span>
-            </div>
+            <button
+              onClick={() => setShowServerSettings(!showServerSettings)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                isAiMode
+                  ? 'bg-green-900 text-green-400 hover:bg-green-800'
+                  : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+              }`}
+            >
+              {isAiMode ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+              {isAiMode ? 'AI Server' : 'Browser Only'}
+            </button>
           </div>
         </div>
       </header>
+
+      {/* Server Settings Panel */}
+      {showServerSettings && (
+        <div className="bg-slate-800 border-b border-slate-700">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Server className="w-5 h-5 text-blue-400" />
+              <h3 className="text-white font-semibold">AI Server (EC2 GPU)</h3>
+            </div>
+
+            <div className="flex gap-3 items-center">
+              <input
+                type="text"
+                value={aiServerUrl}
+                onChange={(e) => setAiServerUrl(e.target.value)}
+                placeholder="ws://your-ec2-ip:8765"
+                className="flex-1 bg-slate-900 text-white rounded-lg px-4 py-2 border border-slate-700 focus:border-blue-500 focus:outline-none text-sm"
+              />
+              {serverStatus === 'connected' ? (
+                <button
+                  onClick={disconnectFromServer}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium"
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  onClick={() => connectToServer(aiServerUrl)}
+                  disabled={!aiServerUrl.trim() || serverStatus === 'connecting'}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 text-white rounded-lg text-sm font-medium"
+                >
+                  {serverStatus === 'connecting' ? 'Connecting...' : 'Connect'}
+                </button>
+              )}
+            </div>
+
+            {/* Connection status */}
+            <div className="mt-3 flex items-center gap-4 text-sm">
+              <span className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${
+                  serverStatus === 'connected' ? 'bg-green-500' :
+                  serverStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                  serverStatus === 'error' ? 'bg-red-500' : 'bg-slate-500'
+                }`} />
+                <span className="text-slate-400 capitalize">{serverStatus}</span>
+              </span>
+
+              {isAiMode && (
+                <>
+                  <span className={`px-2 py-0.5 rounded text-xs ${
+                    serverCapabilities.faceSwap ? 'bg-green-900 text-green-400' : 'bg-slate-700 text-slate-500'
+                  }`}>
+                    Face Swap: {serverCapabilities.faceSwap ? 'Ready' : 'No Model'}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded text-xs ${
+                    serverCapabilities.voiceClone ? 'bg-green-900 text-green-400' : 'bg-slate-700 text-slate-500'
+                  }`}>
+                    Voice Clone: {serverCapabilities.voiceClone ? 'Ready' : 'No Model'}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {!isAiMode && (
+              <p className="mt-2 text-slate-500 text-xs">
+                Without AI server: CSS filters + EQ voice effects. With AI server: real face swap + voice cloning.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -477,12 +776,7 @@ export default function FictionalCharacterPage() {
             {/* Video Container */}
             <div className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
               <div className="relative aspect-video bg-slate-900 flex items-center justify-center">
-                <video
-                  ref={videoRef}
-                  className="hidden"
-                  playsInline
-                  muted
-                />
+                <video ref={videoRef} className="hidden" playsInline muted />
 
                 <canvas
                   ref={canvasRef}
@@ -506,7 +800,6 @@ export default function FictionalCharacterPage() {
                   </div>
                 )}
 
-                {/* Loading state */}
                 {isCameraLoading && (
                   <div className="text-center">
                     <RefreshCw className="w-12 h-12 text-rose-500 animate-spin mx-auto mb-4" />
@@ -514,14 +807,10 @@ export default function FictionalCharacterPage() {
                   </div>
                 )}
 
-                {/* Error state */}
                 {cameraError && (
                   <div className="text-center p-4">
                     <p className="text-red-400 mb-4">{cameraError}</p>
-                    <button
-                      onClick={startCamera}
-                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm"
-                    >
+                    <button onClick={startCamera} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm">
                       Try Again
                     </button>
                   </div>
@@ -539,7 +828,18 @@ export default function FictionalCharacterPage() {
                 {isVoiceConverting && (
                   <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 bg-purple-600 rounded-full">
                     <AudioWaveform className="w-4 h-4 text-white animate-pulse" />
-                    <span className="text-white text-sm font-medium">Voice Active</span>
+                    <span className="text-white text-sm font-medium">
+                      {isAiMode ? 'AI Voice' : 'Voice FX'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Mode badge */}
+                {isCameraOn && (
+                  <div className={`absolute bottom-16 left-4 px-3 py-1.5 rounded-full text-xs font-medium ${
+                    isAiMode ? 'bg-green-600 text-white' : 'bg-slate-600 text-slate-300'
+                  }`}>
+                    {isAiMode ? 'AI Face Swap' : 'Browser Filters'}
                   </div>
                 )}
               </div>
@@ -548,7 +848,6 @@ export default function FictionalCharacterPage() {
               <div className="p-4 border-t border-slate-700">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-2">
-                    {/* Camera toggle - icon shows current state */}
                     <button
                       onClick={isCameraOn ? stopCamera : startCamera}
                       disabled={isCameraLoading}
@@ -557,12 +856,11 @@ export default function FictionalCharacterPage() {
                           ? 'bg-green-600 hover:bg-green-700 text-white'
                           : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
                       }`}
-                      title={isCameraOn ? 'Camera On - Click to stop' : 'Camera Off - Click to start'}
+                      title={isCameraOn ? 'Camera On' : 'Camera Off'}
                     >
                       {isCameraOn ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
                     </button>
 
-                    {/* Mic toggle - icon shows current state */}
                     <button
                       onClick={isVoiceConverting ? stopVoiceConversion : startVoiceConversion}
                       className={`p-3 rounded-full transition-colors ${
@@ -570,30 +868,41 @@ export default function FictionalCharacterPage() {
                           ? 'bg-purple-600 hover:bg-purple-700 text-white'
                           : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
                       }`}
-                      title={isVoiceConverting ? 'Mic On - Click to stop' : 'Mic Off - Click to start'}
+                      title={isVoiceConverting ? 'Mic On' : 'Mic Off'}
                     >
                       {isVoiceConverting ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
                     </button>
                   </div>
 
-                  {/* Filter selector */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-400 text-sm">Filter:</span>
-                    <select
-                      value={activeFilter}
-                      onChange={(e) => setActiveFilter(e.target.value)}
-                      className="bg-slate-700 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 focus:border-rose-500 focus:outline-none"
-                    >
-                      <option value="none">None</option>
-                      <option value="cartoon">Cartoon</option>
-                      <option value="anime">Anime</option>
-                      <option value="noir">Noir</option>
-                      <option value="vintage">Vintage</option>
-                      <option value="cyberpunk">Cyberpunk</option>
-                    </select>
-                  </div>
+                  {/* Filter selector (browser mode) or Face Swap toggle (AI mode) */}
+                  {isAiMode ? (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={faceSwapEnabled}
+                        onChange={(e) => setFaceSwapEnabled(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500"
+                      />
+                      <span className="text-green-400 text-sm font-medium">AI Face Swap</span>
+                    </label>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 text-sm">Filter:</span>
+                      <select
+                        value={activeFilter}
+                        onChange={(e) => setActiveFilter(e.target.value)}
+                        className="bg-slate-700 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 focus:border-rose-500 focus:outline-none"
+                      >
+                        <option value="none">None</option>
+                        <option value="cartoon">Cartoon</option>
+                        <option value="anime">Anime</option>
+                        <option value="noir">Noir</option>
+                        <option value="vintage">Vintage</option>
+                        <option value="cyberpunk">Cyberpunk</option>
+                      </select>
+                    </div>
+                  )}
 
-                  {/* Overlay toggle */}
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -613,6 +922,9 @@ export default function FictionalCharacterPage() {
                 <h3 className="text-white font-semibold flex items-center gap-2">
                   <Volume2 className="w-5 h-5 text-rose-500" />
                   Voice Transformation
+                  {isAiMode && (
+                    <span className="text-xs bg-green-900 text-green-400 px-2 py-0.5 rounded">AI</span>
+                  )}
                 </h3>
                 <div className="flex bg-slate-900 rounded-lg p-1">
                   <button
@@ -621,7 +933,7 @@ export default function FictionalCharacterPage() {
                       voiceMode === 'text' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    Text → Speech
+                    Text to Speech
                   </button>
                   <button
                     onClick={() => setVoiceMode('realtime')}
@@ -650,15 +962,9 @@ export default function FictionalCharacterPage() {
                     className="w-full py-3 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                   >
                     {isTransforming ? (
-                      <>
-                        <RefreshCw className="w-5 h-5 animate-spin" />
-                        Transforming...
-                      </>
+                      <><RefreshCw className="w-5 h-5 animate-spin" /> Transforming...</>
                     ) : (
-                      <>
-                        <Send className="w-5 h-5" />
-                        Transform to {selectedCharacter.name}
-                      </>
+                      <><Send className="w-5 h-5" /> Transform to {selectedCharacter.name}</>
                     )}
                   </button>
 
@@ -675,15 +981,9 @@ export default function FictionalCharacterPage() {
                           }`}
                         >
                           {isSpeaking ? (
-                            <>
-                              <StopCircle className="w-4 h-4" />
-                              Stop
-                            </>
+                            <><StopCircle className="w-4 h-4" /> Stop</>
                           ) : (
-                            <>
-                              <Play className="w-4 h-4" />
-                              Speak
-                            </>
+                            <><Play className="w-4 h-4" /> Speak</>
                           )}
                         </button>
                       </div>
@@ -693,10 +993,14 @@ export default function FictionalCharacterPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="p-4 bg-purple-900/20 border border-purple-700 rounded-lg">
-                    <p className="text-purple-300 text-sm">
-                      🎤 Live voice monitoring. Click the microphone button above to start/stop.
-                      Your voice will play through your speakers.
+                  <div className={`p-4 border rounded-lg ${
+                    isAiMode ? 'bg-green-900/20 border-green-700' : 'bg-purple-900/20 border-purple-700'
+                  }`}>
+                    <p className={`text-sm ${isAiMode ? 'text-green-300' : 'text-purple-300'}`}>
+                      {isAiMode
+                        ? '🤖 AI Voice Cloning active. Your voice will be converted to the selected character in real-time via the AI server.'
+                        : '🎤 Browser voice effects. Connect to an AI server for real voice cloning. Use headphones to prevent feedback.'
+                      }
                     </p>
                   </div>
 
@@ -716,27 +1020,23 @@ export default function FictionalCharacterPage() {
                     }`}
                   >
                     {isVoiceConverting ? (
-                      <>
-                        <StopCircle className="w-5 h-5" />
-                        Stop Voice
-                      </>
+                      <><StopCircle className="w-5 h-5" /> Stop Voice</>
                     ) : (
-                      <>
-                        <Radio className="w-5 h-5" />
-                        Start Voice
-                      </>
+                      <><Radio className="w-5 h-5" /> Start {isAiMode ? 'AI Voice Clone' : 'Voice Effect'}</>
                     )}
                   </button>
 
-                  <p className="text-amber-400 text-xs text-center">
-                    ⚠️ Use headphones to prevent feedback! Your voice will play through speakers.
-                  </p>
+                  {!isAiMode && (
+                    <p className="text-amber-400 text-xs text-center">
+                      Use headphones to prevent feedback! Your voice will play through speakers.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Right: Character Selection */}
+          {/* Right: Character Selection + Status */}
           <div className="space-y-4">
             <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
               <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
@@ -759,12 +1059,19 @@ export default function FictionalCharacterPage() {
                       <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${char.color} flex items-center justify-center text-white text-xl`}>
                         🎭
                       </div>
-                      <div>
+                      <div className="flex-1">
                         <div className="text-white font-medium">{char.name}</div>
                         <div className="text-slate-400 text-sm">{char.description}</div>
-                        <div className="text-slate-500 text-xs mt-1">
-                          Pitch: {char.pitchShift > 0 ? `+${char.pitchShift}` : char.pitchShift}
-                        </div>
+                        {isAiMode && (
+                          <div className="flex gap-2 mt-1">
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+                              Face {serverCapabilities.faceSwap ? '✓' : '—'}
+                            </span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+                              Voice {serverCapabilities.voiceClone ? '✓' : '—'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </button>
@@ -781,6 +1088,14 @@ export default function FictionalCharacterPage() {
 
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Mode</span>
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    isAiMode ? 'bg-green-900 text-green-400' : 'bg-slate-700 text-slate-400'
+                  }`}>
+                    {isAiMode ? 'AI Server (EC2)' : 'Browser Only'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
                   <span className="text-slate-400">Camera</span>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
                     isCameraOn ? 'bg-green-900 text-green-400' : 'bg-slate-700 text-slate-400'
@@ -789,17 +1104,11 @@ export default function FictionalCharacterPage() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Microphone</span>
+                  <span className="text-slate-400">Voice</span>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
                     isVoiceConverting ? 'bg-purple-900 text-purple-400' : 'bg-slate-700 text-slate-400'
                   }`}>
-                    {isVoiceConverting ? 'Active' : 'Off'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Filter</span>
-                  <span className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs font-medium capitalize">
-                    {activeFilter}
+                    {isVoiceConverting ? (isAiMode ? 'AI Clone' : 'EQ Effect') : 'Off'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -817,21 +1126,30 @@ export default function FictionalCharacterPage() {
               <ol className="text-slate-400 text-sm space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="text-rose-500 font-bold">1.</span>
-                  Start camera (green = on)
+                  Connect AI server (top-right button) for face swap + voice clone
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-rose-500 font-bold">2.</span>
-                  Select a character
+                  Start camera and select a character
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-rose-500 font-bold">3.</span>
-                  For text: Type and click Transform, then Speak
+                  Your face transforms to the character in real-time
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-rose-500 font-bold">4.</span>
-                  For live: Click mic button (use headphones!)
+                  Click mic for live AI voice cloning
                 </li>
               </ol>
+
+              {!isAiMode && (
+                <div className="mt-3 p-3 bg-amber-900/20 border border-amber-800 rounded-lg">
+                  <p className="text-amber-400 text-xs">
+                    Without AI server, only CSS filters and EQ voice effects are available.
+                    Deploy the ai-server/ to EC2 with GPU for real face swap and voice cloning.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
