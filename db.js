@@ -42,7 +42,8 @@ const caBundles = loadCaCertificates();
 function detectDbProvider(url) {
   if (!url) return 'unknown';
   if (url.includes('neon.tech')) return 'neon';
-  if (url.includes('fly.io') || url.includes('flycast')) return 'fly';
+  // Fly internal URLs use .internal suffix (e.g., app-db.internal:5432)
+  if (url.includes('fly.io') || url.includes('flycast') || url.includes('.internal')) return 'fly';
   if (url.includes('render.com')) return 'render';
   if (url.includes('supabase')) return 'supabase';
   if (url.includes('amazonaws.com') || url.includes('rds.')) return 'aws-rds';
