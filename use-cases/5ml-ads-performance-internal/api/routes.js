@@ -276,32 +276,52 @@ async function fetchMetaPaginated(url) {
   let currentUrl = url;
 
   while (currentUrl) {
-    const response = await fetch(currentUrl);
+    try {
+      const response = await fetch(currentUrl);
 
-    if (response.status === 429) {
-      retries++;
-      if (retries > 3) throw new Error('Meta API rate limit exceeded after max retries');
-      const wait = Math.pow(2, retries) * 1000;
-      console.warn(`[Meta API] Rate limited, retrying in ${wait}ms`);
-      await sleep(wait);
-      continue;
-    }
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`Meta API error ${response.status}: ${body}`);
-    }
-
-    const json = await response.json();
-    retries = 0;
-
-    if (json.data) {
-      for (const row of json.data) {
-        results.push(row);
+      if (response.status === 429) {
+        retries++;
+        if (retries > 3) throw new Error('Meta API rate limit exceeded after max retries');
+        const wait = Math.pow(2, retries) * 1000;
+        console.warn(`[Meta API] Rate limited, retrying in ${wait}ms`);
+        await sleep(wait);
+        continue;
       }
-    }
 
-    currentUrl = json.paging?.next || null;
+      if (!response.ok) {
+        const body = await response.text();
+        // Log detailed API error
+        console.error('META_API_RESPONSE_ERROR', JSON.stringify({
+          status: response.status,
+          statusText: response.statusText,
+          body: body.substring(0, 500),
+          url: currentUrl.replace(/access_token=[^&]+/, 'access_token=***'),
+        }));
+        throw new Error(`Meta API error ${response.status}: ${body}`);
+      }
+
+      const json = await response.json();
+      retries = 0;
+
+      if (json.data) {
+        for (const row of json.data) {
+          results.push(row);
+        }
+      }
+
+      currentUrl = json.paging?.next || null;
+    } catch (err) {
+      // Log full error details for debugging
+      console.error('META_FETCH_ERROR', JSON.stringify({
+        message: err.message,
+        code: err.code,
+        cause: err.cause?.message,
+        type: err.name,
+        url: currentUrl?.replace(/access_token=[^&]+/, 'access_token=***'),
+        nodeExtraCaCerts: process.env.NODE_EXTRA_CA_CERTS || 'not set',
+      }));
+      throw err;
+    }
   }
 
   return results;
