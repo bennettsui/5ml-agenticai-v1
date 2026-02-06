@@ -136,8 +136,8 @@ app.get('/health', async (req, res) => {
   res.status(200).json(health);
 });
 
-app.get('/', (req, res) => {
-  res.status(200).send(APP_NAME);
+app.get('/api/app-name', (req, res) => {
+  res.status(200).json({ app: APP_NAME });
 });
 
 // ==========================================
