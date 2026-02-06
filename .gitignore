@@ -1,13 +1,13 @@
 node_modules/
-.env
+.env    
 .DS_Store
 *.log
 dist/
 .env.local
 .env.*.local
+.env.production
 
 # Frontend build output
 frontend/out/
 frontend/.next/
 .next/
-docker-compose.yml

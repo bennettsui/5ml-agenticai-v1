@@ -1,4 +1,27 @@
 const { Pool } = require('pg');
+const fs = require('fs');
+
+const DEFAULT_RDS_CA_BUNDLE_PATH = '/usr/local/share/ca-certificates/rds-ca-bundle.crt';
+const REGION_RDS_CA_BUNDLE_PATH = '/usr/local/share/ca-certificates/rds-ca-ap-southeast-1.crt';
+const SYSTEM_CA_BUNDLE_PATH = '/etc/ssl/certs/ca-certificates.crt';
+const CA_BUNDLE_PATHS = [
+  process.env.PGSSLROOTCERT,
+  process.env.RDS_CA_BUNDLE_PATH,
+  DEFAULT_RDS_CA_BUNDLE_PATH,
+  REGION_RDS_CA_BUNDLE_PATH,
+  SYSTEM_CA_BUNDLE_PATH,
+].filter(Boolean);
+const caBundles = [];
+
+for (const bundlePath of new Set(CA_BUNDLE_PATHS)) {
+  try {
+    if (fs.existsSync(bundlePath)) {
+      caBundles.push(fs.readFileSync(bundlePath, 'utf8'));
+    }
+  } catch (error) {
+    console.warn(`⚠️ Failed to read CA bundle at ${bundlePath}:`, error.message);
+  }
+}
 
 // Configure SSL and connection timeouts based on environment and DATABASE_URL
 const getDatabaseConfig = () => {
@@ -12,9 +35,17 @@ const getDatabaseConfig = () => {
 
   // Only enable SSL for production databases (not localhost)
   if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost')) {
-    config.ssl = {
-      rejectUnauthorized: false,
-    };
+    if (caBundles.length > 0) {
+      config.ssl = {
+        rejectUnauthorized: true,
+        ca: caBundles,
+      };
+    } else {
+      console.warn('⚠️ CA bundle not found; falling back to insecure SSL.');
+      config.ssl = {
+        rejectUnauthorized: false,
+      };
+    }
   }
 
   return config;

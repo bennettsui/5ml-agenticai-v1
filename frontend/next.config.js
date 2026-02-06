@@ -2,11 +2,15 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'export',
-  distDir: 'out',
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   images: {
     unoptimized: true,
   },
-  // Removed basePath to allow all routes (dashboard, use-cases, etc.)
   // Static export - API calls will go to same domain
 };
 

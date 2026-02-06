@@ -16,6 +16,8 @@ jobs:
 
       - name: SSH to EC2 and deploy
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
@@ -30,19 +32,10 @@ jobs:
             cd 5ml-agenticai-v1
             git pull origin main
 
-            # Write environment file
             printf '%s' "$ENV_FILE" > .env
             chmod 600 .env
 
-            # Clean up Docker to free disk space
-            echo "Cleaning up Docker to free disk space..."
-            docker system prune -af --volumes || true
-            docker builder prune -af || true
-
-            # Remove any existing container to avoid name conflicts
+            # Remove any existing container to avoid name conflicts (legacy docker run)
             docker rm -f 5ml-agenticai-app || true
 
-            # Build and deploy
             docker compose up -d --build app
-        env:
-          ENV_FILE: ${{ secrets.ENV_FILE }}
