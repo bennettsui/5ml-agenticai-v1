@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bot, Zap, Database, Layers, CheckCircle2, TrendingUp, Table2, Newspaper, Users, FileSpreadsheet, Camera, BarChart3, Megaphone, Briefcase } from 'lucide-react';
+import { Bot, Zap, Database, Layers, CheckCircle2, TrendingUp, Table2, Newspaper, Users, FileSpreadsheet, Camera, BarChart3, Megaphone, Briefcase, DollarSign, Coins } from 'lucide-react';
 
 interface Agent {
   id: string;
@@ -24,12 +24,42 @@ interface DatabaseTable {
   category: string;
 }
 
+interface CostEstimate {
+  perRun: {
+    description: string;
+    modelCalls: Array<{
+      model: string;
+      calls: number;
+      avgTokensIn: number;
+      avgTokensOut: number;
+      costPerMillion: { input: number; output: number };
+      fixedCost?: number;
+    }>;
+    totalTokens: { input: number; output: number };
+    estimatedCost: number;
+    notes?: string;
+  };
+  daily: { runsPerDay: number; estimatedCost: number; notes?: string };
+  monthly: { runsPerMonth: number; estimatedCost: number; notes?: string; tenantsMultiplier?: string; weeklyDigestCost?: number; totalMonthly?: number };
+}
+
 interface UseCase {
   id: string;
   name: string;
   description: string;
   agentCount: number;
   status: string;
+  costEstimate?: CostEstimate;
+}
+
+interface MonthlyCostSummary {
+  marketing: number;
+  ads: number;
+  photobooth: number;
+  intelligence: number;
+  accounting: number;
+  totalBase: number;
+  notes: string;
 }
 
 interface PlatformStats {
@@ -43,6 +73,8 @@ interface PlatformStats {
     details?: LayerDetail[];
   };
   useCases?: UseCase[];
+  monthlyCostSummary?: MonthlyCostSummary;
+  tokenPricing?: Record<string, { input?: number; output?: number; note?: string }>;
   database?: {
     projects?: number;
     analyses?: number;
@@ -161,11 +193,11 @@ export default function PlatformOverview() {
         </div>
       </div>
 
-      {/* Use Cases Overview */}
+      {/* Use Cases Overview with Cost Estimates */}
       {stats?.useCases && stats.useCases.length > 0 && (
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Production Use Cases</h2>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Production Use Cases & Cost Estimates</h2>
             <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium">
               {stats.useCases.length} Active
             </span>
@@ -183,17 +215,86 @@ export default function PlatformOverview() {
                     <Icon size={20} className={`text-${color}-600 dark:text-${color}-400`} />
                     <h3 className="font-semibold text-slate-900 dark:text-white text-sm">{useCase.name}</h3>
                   </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">{useCase.description}</p>
-                  <div className="flex items-center justify-between">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">{useCase.description}</p>
+                  <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{useCase.agentCount} agents</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300`}>
                       {useCase.status}
                     </span>
                   </div>
+                  {useCase.costEstimate && (
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
+                        <DollarSign size={12} />
+                        <span>${useCase.costEstimate.perRun.estimatedCost.toFixed(2)}/run</span>
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-500 mt-1">
+                        ~${useCase.costEstimate.monthly.estimatedCost.toFixed(2)}/mo
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Monthly Cost Summary */}
+      {stats?.monthlyCostSummary && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Monthly Cost Estimates</h2>
+            <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 rounded-full text-xs font-medium">
+              ${stats.monthlyCostSummary.totalBase.toFixed(2)} base/mo
+            </span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4">
+            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <Megaphone size={14} className="text-purple-600 dark:text-purple-400" />
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Marketing</span>
+              </div>
+              <div className="text-lg font-bold text-slate-900 dark:text-white">${stats.monthlyCostSummary.marketing.toFixed(2)}</div>
+            </div>
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <BarChart3 size={14} className="text-blue-600 dark:text-blue-400" />
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Ads</span>
+              </div>
+              <div className="text-lg font-bold text-slate-900 dark:text-white">${stats.monthlyCostSummary.ads.toFixed(2)}</div>
+              <div className="text-[10px] text-slate-500">per tenant</div>
+            </div>
+            <div className="p-3 bg-pink-50 dark:bg-pink-900/20 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <Camera size={14} className="text-pink-600 dark:text-pink-400" />
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Photo Booth</span>
+              </div>
+              <div className="text-lg font-bold text-slate-900 dark:text-white">${stats.monthlyCostSummary.photobooth.toFixed(2)}</div>
+            </div>
+            <div className="p-3 bg-teal-50 dark:bg-teal-900/20 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <Newspaper size={14} className="text-teal-600 dark:text-teal-400" />
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Intelligence</span>
+              </div>
+              <div className="text-lg font-bold text-slate-900 dark:text-white">${stats.monthlyCostSummary.intelligence.toFixed(2)}</div>
+            </div>
+            <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <FileSpreadsheet size={14} className="text-orange-600 dark:text-orange-400" />
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Receipts</span>
+              </div>
+              <div className="text-lg font-bold text-slate-900 dark:text-white">${stats.monthlyCostSummary.accounting.toFixed(2)}</div>
+            </div>
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <Coins size={14} className="text-emerald-600 dark:text-emerald-400" />
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Total Base</span>
+              </div>
+              <div className="text-lg font-bold text-emerald-700 dark:text-emerald-400">${stats.monthlyCostSummary.totalBase.toFixed(2)}</div>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{stats.monthlyCostSummary.notes}</p>
         </div>
       )}
 

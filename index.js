@@ -1380,12 +1380,131 @@ app.get('/stats', async (req, res) => {
         ],
       },
       useCases: [
-        { id: 'marketing', name: 'Marketing Strategy', description: 'Multi-agent strategy generation', agentCount: 9, status: 'production' },
-        { id: 'ads', name: 'Ads Performance', description: 'Multi-tenant Meta/Google ads analytics', agentCount: 8, status: 'production' },
-        { id: 'photobooth', name: 'Photo Booth', description: '18th-century portrait generation', agentCount: 9, status: 'production' },
-        { id: 'intelligence', name: 'Topic Intelligence', description: 'News monitoring & newsletter generation', agentCount: 3, status: 'production' },
-        { id: 'accounting', name: 'Receipt Tracking', description: 'OCR-based P&L automation', agentCount: 1, status: 'production' },
+        {
+          id: 'marketing',
+          name: 'Marketing Strategy',
+          description: 'Multi-agent strategy generation',
+          agentCount: 9,
+          status: 'production',
+          costEstimate: {
+            perRun: {
+              description: '1 project analysis with all 9 agents',
+              modelCalls: [
+                { model: 'DeepSeek', calls: 9, avgTokensIn: 3000, avgTokensOut: 2000, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku (fallback)', calls: 2, avgTokensIn: 2000, avgTokensOut: 1500, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'Perplexity Sonar (research)', calls: 2, avgTokensIn: 1000, avgTokensOut: 3000, costPerMillion: { input: 3.00, output: 15.00 } },
+              ],
+              totalTokens: { input: 35000, output: 27000 },
+              estimatedCost: 0.12, // USD per run
+            },
+            daily: { runsPerDay: 5, estimatedCost: 0.60 },
+            monthly: { runsPerMonth: 150, estimatedCost: 18.00 },
+          },
+        },
+        {
+          id: 'ads',
+          name: 'Ads Performance',
+          description: 'Multi-tenant Meta/Google ads analytics',
+          agentCount: 8,
+          status: 'production',
+          costEstimate: {
+            perRun: {
+              description: '1 weekly analysis report per tenant',
+              modelCalls: [
+                { model: 'Claude Sonnet', calls: 3, avgTokensIn: 4000, avgTokensOut: 2500, costPerMillion: { input: 3.00, output: 15.00 } },
+                { model: 'DeepSeek', calls: 2, avgTokensIn: 2000, avgTokensOut: 1500, costPerMillion: { input: 0.14, output: 0.28 } },
+              ],
+              totalTokens: { input: 16000, output: 10500 },
+              estimatedCost: 0.21, // USD per run
+              notes: 'Daily sync is API-only (no LLM cost). Weekly analysis triggers AI agents.',
+            },
+            daily: { runsPerDay: 1, estimatedCost: 0.03 }, // Minimal daily (API sync only)
+            monthly: { runsPerMonth: 4, estimatedCost: 0.84, tenantsMultiplier: 'Cost × number of tenants' },
+          },
+        },
+        {
+          id: 'photobooth',
+          name: 'Photo Booth',
+          description: '18th-century portrait generation',
+          agentCount: 9,
+          status: 'production',
+          costEstimate: {
+            perRun: {
+              description: '1 portrait generation session',
+              modelCalls: [
+                { model: 'Claude Sonnet Vision', calls: 2, avgTokensIn: 2500, avgTokensOut: 800, costPerMillion: { input: 3.00, output: 15.00 } },
+                { model: 'ComfyUI (Flux)', calls: 1, avgTokensIn: 0, avgTokensOut: 0, costPerMillion: { input: 0, output: 0 }, fixedCost: 0.03 },
+              ],
+              totalTokens: { input: 5000, output: 1600 },
+              estimatedCost: 0.07, // USD per portrait
+              notes: 'ComfyUI runs on self-hosted GPU. Cost is electricity + maintenance.',
+            },
+            daily: { runsPerDay: 50, estimatedCost: 3.50, notes: 'Event day estimate' },
+            monthly: { runsPerMonth: 200, estimatedCost: 14.00, notes: '~4 events/month' },
+          },
+        },
+        {
+          id: 'intelligence',
+          name: 'Topic Intelligence',
+          description: 'News monitoring & newsletter generation',
+          agentCount: 3,
+          status: 'production',
+          costEstimate: {
+            perRun: {
+              description: '1 daily news scan (20 sources, ~50 articles)',
+              modelCalls: [
+                { model: 'Perplexity Sonar Pro', calls: 1, avgTokensIn: 500, avgTokensOut: 2000, costPerMillion: { input: 3.00, output: 15.00 } },
+                { model: 'Claude Haiku', calls: 50, avgTokensIn: 800, avgTokensOut: 400, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'DeepSeek', calls: 1, avgTokensIn: 5000, avgTokensOut: 3000, costPerMillion: { input: 0.14, output: 0.28 } },
+              ],
+              totalTokens: { input: 45500, output: 25000 },
+              estimatedCost: 0.07, // USD per daily scan
+              notes: 'Source curator runs weekly. News analyst per article. News writer for digest.',
+            },
+            daily: { runsPerDay: 1, estimatedCost: 0.07 },
+            monthly: { runsPerMonth: 30, estimatedCost: 2.10, weeklyDigestCost: 0.15, totalMonthly: 2.70 },
+          },
+        },
+        {
+          id: 'accounting',
+          name: 'Receipt Tracking',
+          description: 'OCR-based P&L automation',
+          agentCount: 1,
+          status: 'production',
+          costEstimate: {
+            perRun: {
+              description: '1 receipt OCR extraction',
+              modelCalls: [
+                { model: 'Claude Sonnet Vision', calls: 1, avgTokensIn: 1500, avgTokensOut: 500, costPerMillion: { input: 3.00, output: 15.00 } },
+              ],
+              totalTokens: { input: 1500, output: 500 },
+              estimatedCost: 0.012, // USD per receipt
+            },
+            daily: { runsPerDay: 10, estimatedCost: 0.12 },
+            monthly: { runsPerMonth: 300, estimatedCost: 3.60 },
+          },
+        },
       ],
+      // Token pricing reference (per million tokens)
+      tokenPricing: {
+        'claude-3-haiku': { input: 0.25, output: 1.25 },
+        'claude-3.5-haiku': { input: 0.80, output: 4.00 },
+        'claude-3.5-sonnet': { input: 3.00, output: 15.00 },
+        'claude-opus-4.5': { input: 15.00, output: 75.00 },
+        'deepseek-reasoner': { input: 0.14, output: 0.28 },
+        'perplexity-sonar-pro': { input: 3.00, output: 15.00 },
+        'comfyui-flux': { note: 'Self-hosted GPU, ~$0.03/image electricity' },
+      },
+      // Monthly cost summary
+      monthlyCostSummary: {
+        marketing: 18.00,
+        ads: 0.84, // Per tenant
+        photobooth: 14.00,
+        intelligence: 2.70,
+        accounting: 3.60,
+        totalBase: 39.14,
+        notes: 'Ads cost scales with tenants. Photo booth scales with events. All estimates assume typical usage patterns.',
+      },
       databaseTables: [
         // Social/Marketing tables
         { name: 'projects', description: 'Social media projects', category: 'marketing' },
