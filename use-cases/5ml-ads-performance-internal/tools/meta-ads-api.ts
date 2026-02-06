@@ -194,6 +194,22 @@ export async function fetchMetaInsights({
       if (error instanceof Error && error.message.includes('rate limit')) {
         throw error;
       }
+
+      // Provide detailed error message for SSL/certificate issues
+      if (error instanceof Error) {
+        const errorMsg = error.message.toLowerCase();
+        if (errorMsg.includes('certificate') || errorMsg.includes('ssl') || errorMsg.includes('tls')) {
+          const detailedError = new Error(
+            `SSL certificate error connecting to Meta API: ${error.message}. ` +
+            `This usually means NODE_EXTRA_CA_CERTS is not set correctly. ` +
+            `Current value: ${process.env.NODE_EXTRA_CA_CERTS || 'not set'}. ` +
+            `Expected: /etc/ssl/certs/ca-certificates.crt`
+          );
+          console.error('[Meta API] SSL/Certificate error:', detailedError.message);
+          throw detailedError;
+        }
+      }
+
       console.error('[Meta API] Request failed:', error);
       throw error;
     }
