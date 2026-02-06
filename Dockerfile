@@ -8,7 +8,12 @@ RUN apk add --no-cache python3 make g++ curl ca-certificates
 # Install AWS RDS CA bundle for TLS verification
 RUN curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
   -o /usr/local/share/ca-certificates/rds-ca-bundle.crt \
+  && curl -fsSL https://truststore.pki.rds.amazonaws.com/ap-southeast-1/ap-southeast-1-bundle.pem \
+  -o /usr/local/share/ca-certificates/rds-ca-ap-southeast-1.crt \
   && update-ca-certificates
+
+# Ensure Node trusts the RDS CA bundle by default
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/rds-ca-ap-southeast-1.crt
 
 # Install backend dependencies
 COPY package*.json ./

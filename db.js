@@ -2,11 +2,13 @@ const { Pool } = require('pg');
 const fs = require('fs');
 
 const DEFAULT_RDS_CA_BUNDLE_PATH = '/usr/local/share/ca-certificates/rds-ca-bundle.crt';
+const REGION_RDS_CA_BUNDLE_PATH = '/usr/local/share/ca-certificates/rds-ca-ap-southeast-1.crt';
 const SYSTEM_CA_BUNDLE_PATH = '/etc/ssl/certs/ca-certificates.crt';
 const CA_BUNDLE_PATHS = [
   process.env.PGSSLROOTCERT,
   process.env.RDS_CA_BUNDLE_PATH,
   DEFAULT_RDS_CA_BUNDLE_PATH,
+  REGION_RDS_CA_BUNDLE_PATH,
   SYSTEM_CA_BUNDLE_PATH,
 ].filter(Boolean);
 const caBundles = [];
