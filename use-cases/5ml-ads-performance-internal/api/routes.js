@@ -1896,6 +1896,97 @@ router.get('/meta/adaccounts', async (req, res) => {
 });
 
 // ==========================================
+// GET /api/ads/meta/health
+// Health check for Meta API connection (TLS + token)
+// ==========================================
+router.get('/meta/health', async (req, res) => {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) {
+    return res.status(503).json({
+      success: false,
+      status: 'error',
+      type: 'config',
+      message: 'META_ACCESS_TOKEN is not configured',
+    });
+  }
+
+  try {
+    // Minimal request to test TLS + token validity
+    const url = `${META_API_BASE}/me?` +
+      new URLSearchParams({
+        fields: 'id,name',
+        access_token: token,
+      }).toString();
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const body = await response.text();
+      let metaError;
+      try {
+        metaError = JSON.parse(body).error;
+      } catch {
+        metaError = null;
+      }
+
+      console.error('META_HEALTH_ERROR', JSON.stringify({
+        status: response.status,
+        metaError,
+        body: body.substring(0, 300),
+      }));
+
+      return res.status(502).json({
+        success: false,
+        status: 'error',
+        type: 'meta-api',
+        message: metaError?.message || `Meta API HTTP ${response.status}`,
+        statusCode: response.status,
+        metaError,
+      });
+    }
+
+    const data = await response.json();
+    res.json({
+      success: true,
+      status: 'ok',
+      user: { id: data.id, name: data.name },
+    });
+  } catch (error) {
+    // Classify error type
+    const errMsg = error.message?.toLowerCase() || '';
+    let errorType = 'unknown';
+
+    if (error.name === 'AbortError') {
+      errorType = 'timeout';
+    } else if (
+      error.code === 'SELF_SIGNED_CERT_IN_CHAIN' ||
+      error.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
+      errMsg.includes('certificate')
+    ) {
+      errorType = 'tls';
+    } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+      errorType = 'network';
+    }
+
+    console.error('META_HEALTH_ERROR', JSON.stringify({
+      message: error.message,
+      code: error.code,
+      type: errorType,
+      nodeExtraCaCerts: process.env.NODE_EXTRA_CA_CERTS || 'not set',
+    }));
+
+    res.status(503).json({
+      success: false,
+      status: 'error',
+      type: errorType,
+      message: error.message,
+      code: error.code,
+      nodeExtraCaCerts: process.env.NODE_EXTRA_CA_CERTS || 'not set',
+    });
+  }
+});
+
+// ==========================================
 // GET /api/ads/google/accounts
 // Discover Google Ads accounts accessible via MCC
 // ==========================================
