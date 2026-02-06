@@ -1656,7 +1656,20 @@ router.post('/sync', async (req, res) => {
         loginCustomerId: req.body.google_login_customer_id,
       };
 
-      if (googleCustomerId) {
+      // Check if required Google Ads env vars are set (when not provided in request)
+      const missingEnvVars = [];
+      if (!googleCreds.developerToken && !process.env.GOOGLE_ADS_DEVELOPER_TOKEN) missingEnvVars.push('GOOGLE_ADS_DEVELOPER_TOKEN');
+      if (!googleCreds.clientId && !process.env.GOOGLE_ADS_CLIENT_ID) missingEnvVars.push('GOOGLE_ADS_CLIENT_ID');
+      if (!googleCreds.clientSecret && !process.env.GOOGLE_ADS_CLIENT_SECRET) missingEnvVars.push('GOOGLE_ADS_CLIENT_SECRET');
+      if (!googleCreds.refreshToken && !process.env.GOOGLE_ADS_REFRESH_TOKEN) missingEnvVars.push('GOOGLE_ADS_REFRESH_TOKEN');
+
+      if (missingEnvVars.length > 0) {
+        results.errors.push({
+          platform: 'google',
+          error: `Missing Google Ads credentials: ${missingEnvVars.join(', ')}`,
+          hint: 'Use GET /api/ads/google/health to diagnose credential issues',
+        });
+      } else if (googleCustomerId) {
         try {
           console.log(`[Sync] Fetching Google Ads for ${googleCustomerId} (tenant: ${tenantId}, ${since} to ${until})...`);
           const googleMetrics = await fetchGoogleAdsMetrics(googleCustomerId, since, until, googleCreds);
@@ -1847,8 +1860,26 @@ router.get('/google/accounts', async (req, res) => {
     const devToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
     const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
 
-    if (!clientId || !clientSecret || !refreshToken || !devToken) {
-      return res.status(400).json({ error: 'Google Ads credentials not configured (set GOOGLE_ADS_* env vars)' });
+    // Check each required var individually for better diagnostics
+    const missingVars = [];
+    if (!clientId) missingVars.push('GOOGLE_ADS_CLIENT_ID');
+    if (!clientSecret) missingVars.push('GOOGLE_ADS_CLIENT_SECRET');
+    if (!refreshToken) missingVars.push('GOOGLE_ADS_REFRESH_TOKEN');
+    if (!devToken) missingVars.push('GOOGLE_ADS_DEVELOPER_TOKEN');
+
+    if (missingVars.length > 0) {
+      return res.status(400).json({
+        error: `Google Ads credentials not configured`,
+        details: `Missing environment variables: ${missingVars.join(', ')}`,
+        hint: 'Set these env vars on Fly.io using: fly secrets set GOOGLE_ADS_CLIENT_ID=xxx ...',
+        envVarsStatus: {
+          GOOGLE_ADS_CLIENT_ID: !!clientId,
+          GOOGLE_ADS_CLIENT_SECRET: !!clientSecret,
+          GOOGLE_ADS_REFRESH_TOKEN: !!refreshToken,
+          GOOGLE_ADS_DEVELOPER_TOKEN: !!devToken,
+          GOOGLE_ADS_LOGIN_CUSTOMER_ID: !!loginCustomerId,
+        },
+      });
     }
 
     const accessToken = await getGoogleAccessToken(clientId, clientSecret, refreshToken);
@@ -1940,6 +1971,166 @@ router.get('/google/accounts', async (req, res) => {
     }
   } catch (error) {
     console.error('[Ads API] Google accounts lookup error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// GET /api/ads/google/health
+// Health check for Google Ads API connectivity
+// ==========================================
+router.get('/google/health', async (req, res) => {
+  try {
+    const clientId = process.env.GOOGLE_ADS_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_ADS_CLIENT_SECRET;
+    const refreshToken = process.env.GOOGLE_ADS_REFRESH_TOKEN;
+    const devToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
+    const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
+    const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID;
+
+    const checkedAt = new Date().toISOString();
+
+    // Check which env vars are set
+    const envVarsSet = {
+      GOOGLE_ADS_DEVELOPER_TOKEN: !!devToken,
+      GOOGLE_ADS_CLIENT_ID: !!clientId,
+      GOOGLE_ADS_CLIENT_SECRET: !!clientSecret,
+      GOOGLE_ADS_REFRESH_TOKEN: !!refreshToken,
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: !!loginCustomerId,
+      GOOGLE_ADS_CUSTOMER_ID: !!customerId,
+    };
+
+    // Required vars for API calls
+    const requiredVars = [
+      'GOOGLE_ADS_DEVELOPER_TOKEN',
+      'GOOGLE_ADS_CLIENT_ID',
+      'GOOGLE_ADS_CLIENT_SECRET',
+      'GOOGLE_ADS_REFRESH_TOKEN',
+    ];
+
+    const missingVars = requiredVars.filter((varName) => !envVarsSet[varName]);
+    const allRequiredVarsSet = missingVars.length === 0;
+
+    // If required vars are missing, return early
+    if (!allRequiredVarsSet) {
+      return res.json({
+        success: false,
+        data: {
+          status: 'error',
+          envVarsSet,
+          allRequiredVarsSet: false,
+          oauthStatus: 'not_tested',
+          oauthError: `Missing required environment variables: ${missingVars.join(', ')}`,
+          accessibleCustomers: [],
+          apiVersion: GOOGLE_ADS_API_VERSION,
+          checkedAt,
+        },
+      });
+    }
+
+    // Try OAuth token exchange
+    let accessToken;
+    let tokenExchangeMs;
+
+    try {
+      const tokenStart = Date.now();
+      accessToken = await getGoogleAccessToken(clientId, clientSecret, refreshToken);
+      tokenExchangeMs = Date.now() - tokenStart;
+    } catch (error) {
+      return res.json({
+        success: false,
+        data: {
+          status: 'error',
+          envVarsSet,
+          allRequiredVarsSet: true,
+          oauthStatus: 'error',
+          oauthError: error.message,
+          accessibleCustomers: [],
+          apiVersion: GOOGLE_ADS_API_VERSION,
+          checkedAt,
+        },
+      });
+    }
+
+    // Try listing accessible customers
+    try {
+      const apiStart = Date.now();
+      const response = await fetch(
+        `${GOOGLE_ADS_BASE}/customers:listAccessibleCustomers`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'developer-token': devToken,
+          },
+        }
+      );
+
+      const apiCallMs = Date.now() - apiStart;
+
+      if (!response.ok) {
+        const body = await response.text();
+        return res.json({
+          success: false,
+          data: {
+            status: 'error',
+            envVarsSet,
+            allRequiredVarsSet: true,
+            oauthStatus: 'success',
+            oauthError: `Google Ads API error ${response.status}: ${body}`,
+            accessibleCustomers: [],
+            apiVersion: GOOGLE_ADS_API_VERSION,
+            checkedAt,
+            diagnostics: { tokenExchangeMs },
+          },
+        });
+      }
+
+      const data = await response.json();
+      const resourceNames = data.resourceNames || [];
+
+      // Format customer IDs
+      const customers = resourceNames.map((rn) => {
+        const id = rn.replace('customers/', '');
+        if (id.length === 10) {
+          return `${id.slice(0, 3)}-${id.slice(3, 6)}-${id.slice(6)}`;
+        }
+        return id;
+      });
+
+      res.json({
+        success: true,
+        data: {
+          status: 'connected',
+          envVarsSet,
+          allRequiredVarsSet: true,
+          oauthStatus: 'success',
+          accessibleCustomers: customers,
+          apiVersion: GOOGLE_ADS_API_VERSION,
+          checkedAt,
+          diagnostics: {
+            tokenExchangeMs,
+            apiCallMs,
+          },
+        },
+      });
+    } catch (error) {
+      res.json({
+        success: false,
+        data: {
+          status: 'error',
+          envVarsSet,
+          allRequiredVarsSet: true,
+          oauthStatus: 'success',
+          oauthError: error.message,
+          accessibleCustomers: [],
+          apiVersion: GOOGLE_ADS_API_VERSION,
+          checkedAt,
+          diagnostics: { tokenExchangeMs },
+        },
+      });
+    }
+  } catch (error) {
+    console.error('[Ads API] Google health check error:', error);
     res.status(500).json({ error: error.message });
   }
 });
