@@ -51,11 +51,35 @@ function detectDbProvider(url) {
 }
 
 // Configure SSL based on environment and database provider
+// Force sslmode=disable in connection string (overrides any existing sslmode param)
+function forceDisableSsl(connString) {
+  if (!connString) return connString;
+
+  // Remove any existing sslmode param
+  let modified = connString.replace(/[?&]sslmode=[^&]*/gi, '');
+
+  // Add sslmode=disable
+  const separator = modified.includes('?') ? '&' : '?';
+  modified = modified + separator + 'sslmode=disable';
+
+  // Clean up double ? or &
+  modified = modified.replace(/[?&]+/g, (match, offset) => offset === modified.indexOf('?') ? '?' : '&');
+
+  return modified;
+}
+
 const getDatabaseConfig = () => {
-  const connectionString = process.env.DATABASE_URL;
+  let connectionString = process.env.DATABASE_URL;
   const provider = detectDbProvider(connectionString);
 
   console.log(`🔌 Database provider detected: ${provider}`);
+
+  // For Fly: force sslmode=disable in connection string
+  // This is critical because URL params override config.ssl settings
+  if (provider === 'fly') {
+    connectionString = forceDisableSsl(connectionString);
+    console.log('🔒 Fly Postgres: Forcing sslmode=disable in connection string');
+  }
 
   const config = {
     connectionString,
@@ -96,7 +120,7 @@ const getDatabaseConfig = () => {
     case 'fly':
       // Fly Postgres does NOT support native TLS/SSL on internal connections
       // Fly's WireGuard-based private networking already encrypts traffic
-      // Using ssl: false is the correct and secure approach for Fly internal connections
+      // ssl: false + sslmode=disable in connection string ensures no TLS negotiation
       config.ssl = false;
       console.log('🔒 Fly Postgres: SSL disabled (WireGuard network encryption)');
       break;
