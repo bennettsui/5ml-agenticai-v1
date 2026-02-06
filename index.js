@@ -140,6 +140,30 @@ app.get('/health', async (req, res) => {
   res.status(200).json(health);
 });
 
+// Debug endpoint to test Meta TLS connection from within Fly container
+app.get('/debug/meta-tls', (req, res) => {
+  const https = require('https');
+  const startTime = Date.now();
+
+  https
+    .get('https://graph.facebook.com', (r) => {
+      res.json({
+        ok: true,
+        status: r.statusCode,
+        latencyMs: Date.now() - startTime,
+        nodeExtraCaCerts: process.env.NODE_EXTRA_CA_CERTS || 'not set'
+      });
+    })
+    .on('error', (err) => {
+      res.status(500).json({
+        ok: false,
+        error: err.message,
+        latencyMs: Date.now() - startTime,
+        nodeExtraCaCerts: process.env.NODE_EXTRA_CA_CERTS || 'not set'
+      });
+    });
+});
+
 app.get('/api/app-name', (req, res) => {
   res.status(200).json({ app: APP_NAME });
 });
