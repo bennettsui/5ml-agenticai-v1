@@ -1297,46 +1297,102 @@ app.get('/stats', async (req, res) => {
   try {
     const stats = {
       agents: [
-        // Social Media & SEO Agents
-        { id: 'creative', name: 'Creative Agent', description: 'Brand concepts & visual direction', status: 'active', category: 'social' },
-        { id: 'seo', name: 'SEO Agent', description: 'Search optimization with web research', status: 'active', category: 'social' },
-        { id: 'social', name: 'Social Media Agent', description: 'Social strategy & trending formats', status: 'active', category: 'social' },
-        { id: 'research', name: 'Research Agent', description: 'Market intelligence & insights', status: 'active', category: 'social' },
-        // Topic Intelligence Agents
+        // ========================================
+        // Root Marketing Agents (9)
+        // ========================================
+        { id: 'creative', name: 'Creative Agent', description: 'Brand concepts & visual direction', status: 'active', category: 'marketing' },
+        { id: 'seo', name: 'SEO Agent', description: 'Search optimization with web research', status: 'active', category: 'marketing' },
+        { id: 'social', name: 'Social Media Agent', description: 'Social strategy & trending formats', status: 'active', category: 'marketing' },
+        { id: 'research', name: 'Research Agent', description: 'Market intelligence & insights', status: 'active', category: 'marketing' },
+        { id: 'competitor', name: 'Competitor Agent', description: 'Competitive landscape analysis', status: 'active', category: 'marketing' },
+        { id: 'brand-strategy', name: 'Brand Strategy Agent', description: 'Brand positioning & strategy', status: 'active', category: 'marketing' },
+        { id: 'customer-insight', name: 'Customer Insight Agent', description: 'Customer behavior & insights', status: 'active', category: 'marketing' },
+        { id: 'market-sentinel', name: 'Market Sentinel Agent', description: 'Market monitoring & trends', status: 'active', category: 'marketing' },
+        { id: 'cso-orchestrator', name: 'CSO Orchestrator', description: 'Chief Strategy Officer role - orchestrates agents', status: 'active', category: 'marketing' },
+
+        // ========================================
+        // Ads Performance Agents (8)
+        // ========================================
+        { id: 'meta-data-fetcher', name: 'Meta Data Fetcher', description: 'Fetches ad-level metrics from Meta Marketing API', status: 'active', category: 'ads' },
+        { id: 'google-data-fetcher', name: 'Google Ads Data Fetcher', description: 'Fetches metrics from Google Ads API using GAQL', status: 'active', category: 'ads' },
+        { id: 'normalizer', name: 'Normalizer Agent', description: 'Unifies Meta/Google data into common schema', status: 'active', category: 'ads' },
+        { id: 'anomaly-detector', name: 'Anomaly Detector', description: 'Identifies significant metric changes', status: 'active', category: 'ads' },
+        { id: 'funnel-analyzer', name: 'Funnel Analyzer', description: 'Analyzes conversion funnel bottlenecks', status: 'active', category: 'ads' },
+        { id: 'budget-planner', name: 'Budget Planner', description: 'Analyzes spend pacing & budget allocation', status: 'active', category: 'ads' },
+        { id: 'recommendation-writer', name: 'Recommendation Writer', description: 'Generates polished performance reports', status: 'active', category: 'ads' },
+        { id: 'internal-strategy', name: 'Internal Strategy Agent', description: 'Cross-tenant insights for agency leadership', status: 'active', category: 'ads' },
+
+        // ========================================
+        // Photo Booth Agents (9)
+        // ========================================
+        { id: 'pb-orchestrator', name: 'Photo Booth Orchestrator', description: 'Main coordinator for portrait pipeline', status: 'active', category: 'photobooth' },
+        { id: 'session-manager', name: 'Session Manager', description: 'Create/read/update session state', status: 'active', category: 'photobooth' },
+        { id: 'face-quality', name: 'Face Quality Check', description: 'Validate faces, lighting, composition', status: 'active', category: 'photobooth' },
+        { id: 'environment-analysis', name: 'Environment Analysis', description: 'Analyze scene and suggest theme', status: 'active', category: 'photobooth' },
+        { id: 'style-generator', name: 'Style Generator', description: 'Compose detailed prompts for ComfyUI', status: 'active', category: 'photobooth' },
+        { id: 'image-generation', name: 'Image Generation', description: 'Call ComfyUI API with streaming progress', status: 'active', category: 'photobooth' },
+        { id: 'branding', name: 'Branding Agent', description: 'Overlay 5ML logo and hashtag', status: 'active', category: 'photobooth' },
+        { id: 'qr-delivery', name: 'QR & Delivery', description: 'Generate QR codes and short links', status: 'active', category: 'photobooth' },
+        { id: 'analytics-logger', name: 'Analytics Logger', description: 'Log sessions, errors, theme usage', status: 'active', category: 'photobooth' },
+
+        // ========================================
+        // Topic Intelligence Agents (3)
+        // ========================================
         { id: 'source-curator', name: 'Source Curator', description: 'Discovers & qualifies news sources using Perplexity', status: 'active', category: 'intelligence' },
-        { id: 'news-analyst', name: 'News Analyst', description: 'Analyzes articles with Claude for relevance & insights', status: 'active', category: 'intelligence' },
+        { id: 'news-analyst', name: 'News Analyst', description: 'Analyzes articles with Claude for relevance', status: 'active', category: 'intelligence' },
         { id: 'news-writer', name: 'News Writer', description: 'Generates digests & newsletters with DeepSeek', status: 'active', category: 'intelligence' },
-        // OCR Agent
-        { id: 'ocr', name: 'OCR Agent', description: 'Receipt processing with Claude Vision', status: 'active', category: 'accounting' },
+
+        // ========================================
+        // Infrastructure Agents (1)
+        // ========================================
+        { id: 'receipt-ocr', name: 'Receipt OCR Agent', description: 'Receipt processing with Claude Vision (92-98% accuracy)', status: 'active', category: 'accounting' },
       ],
       models: [
         { id: 'deepseek', name: 'DeepSeek Reasoner', type: 'primary', status: 'available' },
         { id: 'haiku', name: 'Claude Haiku', type: 'fallback', status: 'available' },
-        { id: 'sonnet', name: 'Claude Sonnet', type: 'advanced', status: 'available' },
+        { id: 'sonnet', name: 'Claude Sonnet 4', type: 'advanced', status: 'available' },
+        { id: 'opus', name: 'Claude Opus 4.5', type: 'flagship', status: 'available' },
         { id: 'perplexity', name: 'Perplexity Sonar Pro', type: 'research', status: 'available' },
+        { id: 'comfyui', name: 'ComfyUI (Flux)', type: 'image-gen', status: 'available' },
       ],
       layers: {
         total: 7,
-        active: 6,
-        planned: 1,
-        completion: 86,
+        active: 7,
+        planned: 0,
+        completion: 100,
         details: [
-          { id: 'L1', name: 'Core Infrastructure', status: 'active' },
-          { id: 'L2', name: 'Tools & Utilities', status: 'active' },
-          { id: 'L3', name: 'Specialized Agents', status: 'active' },
-          { id: 'L4', name: 'Knowledge Management', status: 'partial' },
-          { id: 'L5', name: 'Workflows', status: 'active' },
-          { id: 'L6', name: 'Orchestration', status: 'active' },
-          { id: 'L7', name: 'Governance', status: 'planned' },
+          { id: 'L1', name: 'Infrastructure & Storage', status: 'active', description: 'PostgreSQL, Express API, Docker, Fly.io, Redis' },
+          { id: 'L2', name: 'Execution Engine', status: 'active', description: 'DeepSeek, Perplexity, Claude, Model fallback chains' },
+          { id: 'L3', name: 'Roles & Agents', status: 'active', description: '30+ specialized agents across 5 use-cases' },
+          { id: 'L4', name: 'Knowledge Management', status: 'active', description: 'Vector embeddings, Notion connector, pgvector' },
+          { id: 'L5', name: 'Task Definitions', status: 'active', description: 'Reusable templates, workflow schemas (JSON-based)' },
+          { id: 'L6', name: 'Orchestration & Workflow', status: 'active', description: 'Task scheduling, retry logic, workflow automation' },
+          { id: 'L7', name: 'Governance & Compliance', status: 'active', description: 'Access control, audit logging, compliance rules' },
         ],
       },
+      useCases: [
+        { id: 'marketing', name: 'Marketing Strategy', description: 'Multi-agent strategy generation', agentCount: 9, status: 'production' },
+        { id: 'ads', name: 'Ads Performance', description: 'Multi-tenant Meta/Google ads analytics', agentCount: 8, status: 'production' },
+        { id: 'photobooth', name: 'Photo Booth', description: '18th-century portrait generation', agentCount: 9, status: 'production' },
+        { id: 'intelligence', name: 'Topic Intelligence', description: 'News monitoring & newsletter generation', agentCount: 3, status: 'production' },
+        { id: 'accounting', name: 'Receipt Tracking', description: 'OCR-based P&L automation', agentCount: 1, status: 'production' },
+      ],
       databaseTables: [
-        { name: 'projects', description: 'Social media projects', category: 'social' },
-        { name: 'analyses', description: 'Agent analysis results', category: 'social' },
-        { name: 'receipts', description: 'Receipt records from OCR', category: 'accounting' },
+        // Social/Marketing tables
+        { name: 'projects', description: 'Social media projects', category: 'marketing' },
+        { name: 'analyses', description: 'Agent analysis results', category: 'marketing' },
+        // Ads Performance tables
+        { name: 'ads_daily_performance', description: 'Daily ad metrics (Meta & Google)', category: 'ads' },
+        { name: 'ads_campaigns', description: 'Campaign details & budgets', category: 'ads' },
+        { name: 'ads_adsets', description: 'Ad set targeting & bidding', category: 'ads' },
+        { name: 'ads_creatives', description: 'Ad creative assets', category: 'ads' },
+        { name: 'client_credentials', description: 'Multi-tenant OAuth tokens', category: 'ads' },
+        // Topic Intelligence tables
         { name: 'intelligence_topics', description: 'Monitored news topics', category: 'intelligence' },
         { name: 'intelligence_sources', description: 'Curated news sources', category: 'intelligence' },
         { name: 'intelligence_news', description: 'Collected news articles', category: 'intelligence' },
+        // Accounting tables
+        { name: 'receipts', description: 'Receipt records from OCR', category: 'accounting' },
       ],
     };
 

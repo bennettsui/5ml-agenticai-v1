@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bot, Zap, Database, Layers, CheckCircle2, TrendingUp, Table2, Newspaper, Users, FileSpreadsheet } from 'lucide-react';
+import { Bot, Zap, Database, Layers, CheckCircle2, TrendingUp, Table2, Newspaper, Users, FileSpreadsheet, Camera, BarChart3, Megaphone, Briefcase } from 'lucide-react';
 
 interface Agent {
   id: string;
@@ -15,12 +15,21 @@ interface LayerDetail {
   id: string;
   name: string;
   status: string;
+  description?: string;
 }
 
 interface DatabaseTable {
   name: string;
   description: string;
   category: string;
+}
+
+interface UseCase {
+  id: string;
+  name: string;
+  description: string;
+  agentCount: number;
+  status: string;
 }
 
 interface PlatformStats {
@@ -33,6 +42,7 @@ interface PlatformStats {
     completion: number;
     details?: LayerDetail[];
   };
+  useCases?: UseCase[];
   database?: {
     projects?: number;
     analyses?: number;
@@ -44,21 +54,30 @@ interface PlatformStats {
 }
 
 const categoryIcons: Record<string, React.ElementType> = {
-  social: Users,
+  marketing: Megaphone,
+  ads: BarChart3,
+  photobooth: Camera,
   intelligence: Newspaper,
   accounting: FileSpreadsheet,
+  social: Users,
 };
 
 const categoryColors: Record<string, string> = {
-  social: 'purple',
+  marketing: 'purple',
+  ads: 'blue',
+  photobooth: 'pink',
   intelligence: 'teal',
-  accounting: 'blue',
+  accounting: 'orange',
+  social: 'purple',
 };
 
 const categoryLabels: Record<string, string> = {
-  social: 'Social & SEO',
+  marketing: 'Marketing Strategy',
+  ads: 'Ads Performance',
+  photobooth: 'Photo Booth',
   intelligence: 'Topic Intelligence',
-  accounting: 'Accounting',
+  accounting: 'Receipt Tracking',
+  social: 'Social & SEO',
 };
 
 export default function PlatformOverview() {
@@ -110,31 +129,73 @@ export default function PlatformOverview() {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
           <Bot size={32} className="mb-3 opacity-90" />
-          <div className="text-4xl font-bold mb-1">{stats?.agents.length || 8}</div>
+          <div className="text-4xl font-bold mb-1">{stats?.agents.length || 30}</div>
           <div className="text-sm opacity-90">Specialized Agents</div>
         </div>
 
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+          <Briefcase size={32} className="mb-3 opacity-90" />
+          <div className="text-4xl font-bold mb-1">{stats?.useCases?.length || 5}</div>
+          <div className="text-sm opacity-90">Use Cases</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg shadow-lg p-6 text-white">
           <Zap size={32} className="mb-3 opacity-90" />
-          <div className="text-4xl font-bold mb-1">{stats?.models.length || 4}</div>
+          <div className="text-4xl font-bold mb-1">{stats?.models.length || 6}</div>
           <div className="text-sm opacity-90">AI Models</div>
         </div>
 
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
           <Layers size={32} className="mb-3 opacity-90" />
-          <div className="text-4xl font-bold mb-1">{stats?.layers.active || 6}/{stats?.layers.total || 7}</div>
+          <div className="text-4xl font-bold mb-1">{stats?.layers.active || 7}/{stats?.layers.total || 7}</div>
           <div className="text-sm opacity-90">Architecture Layers</div>
         </div>
 
         <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-lg p-6 text-white">
           <Database size={32} className="mb-3 opacity-90" />
-          <div className="text-4xl font-bold mb-1">{stats?.databaseTables?.length || 6}</div>
+          <div className="text-4xl font-bold mb-1">{stats?.databaseTables?.length || 11}</div>
           <div className="text-sm opacity-90">Database Tables</div>
         </div>
       </div>
+
+      {/* Use Cases Overview */}
+      {stats?.useCases && stats.useCases.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Production Use Cases</h2>
+            <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium">
+              {stats.useCases.length} Active
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {stats.useCases.map((useCase) => {
+              const Icon = categoryIcons[useCase.id] || Briefcase;
+              const color = categoryColors[useCase.id] || 'slate';
+              return (
+                <div
+                  key={useCase.id}
+                  className={`p-4 rounded-lg border-2 border-${color}-200 dark:border-${color}-800 bg-${color}-50 dark:bg-${color}-900/20 hover:shadow-md transition-shadow`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icon size={20} className={`text-${color}-600 dark:text-${color}-400`} />
+                    <h3 className="font-semibold text-slate-900 dark:text-white text-sm">{useCase.name}</h3>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">{useCase.description}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{useCase.agentCount} agents</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300`}>
+                      {useCase.status}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Agents by Category */}
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
@@ -186,7 +247,7 @@ export default function PlatformOverview() {
             Multi-Provider
           </span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {stats?.models.map((model) => (
             <div
               key={model.id}
@@ -198,6 +259,9 @@ export default function PlatformOverview() {
                   model.type === 'primary' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
                   model.type === 'fallback' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
                   model.type === 'advanced' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                  model.type === 'flagship' ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-800 dark:text-pink-300' :
+                  model.type === 'research' ? 'bg-teal-100 dark:bg-teal-900/30 text-teal-800 dark:text-teal-300' :
+                  model.type === 'image-gen' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300' :
                   'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
                 }`}>
                   {model.type}
@@ -213,8 +277,8 @@ export default function PlatformOverview() {
       {stats?.layers.details && (
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">7-Layer Architecture</h2>
-            <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">7-Layer Agentic Architecture</h2>
+            <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium">
               {stats.layers.completion}% Complete
             </span>
           </div>
@@ -222,7 +286,7 @@ export default function PlatformOverview() {
             {stats.layers.details.map((layer) => (
               <div
                 key={layer.id}
-                className={`p-4 rounded-lg border-2 flex items-center justify-between ${
+                className={`p-4 rounded-lg border-2 ${
                   layer.status === 'active'
                     ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
                     : layer.status === 'partial'
@@ -230,27 +294,32 @@ export default function PlatformOverview() {
                     : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <span className={`px-2 py-1 rounded text-xs font-mono font-bold ${
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-1 rounded text-xs font-mono font-bold ${
+                      layer.status === 'active'
+                        ? 'bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200'
+                        : layer.status === 'partial'
+                        ? 'bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200'
+                        : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300'
+                    }`}>
+                      {layer.id}
+                    </span>
+                    <span className="font-medium text-slate-900 dark:text-white">{layer.name}</span>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded ${
                     layer.status === 'active'
-                      ? 'bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200'
+                      ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
                       : layer.status === 'partial'
-                      ? 'bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200'
-                      : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300'
+                      ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                      : 'bg-slate-100 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
                   }`}>
-                    {layer.id}
+                    {layer.status}
                   </span>
-                  <span className="font-medium text-slate-900 dark:text-white">{layer.name}</span>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded ${
-                  layer.status === 'active'
-                    ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                    : layer.status === 'partial'
-                    ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                    : 'bg-slate-100 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
-                }`}>
-                  {layer.status}
-                </span>
+                {layer.description && (
+                  <p className="text-xs text-slate-600 dark:text-slate-400 ml-10">{layer.description}</p>
+                )}
               </div>
             ))}
           </div>
