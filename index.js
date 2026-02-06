@@ -26,6 +26,10 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
 app.use(express.static(nextJsPath));
+// Ensure root serves the Next.js export index
+app.get('/', (req, res) => {
+  res.sendFile(path.join(nextJsPath, 'index.html'));
+});
 
 // Serve legacy dashboard at /sandbox
 app.use('/sandbox', express.static('public'));
