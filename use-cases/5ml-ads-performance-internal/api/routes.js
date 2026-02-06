@@ -489,7 +489,7 @@ async function fetchGoogleAdsMetrics(customerId, since, until, credentials) {
   };
   if (loginCid) headers['login-customer-id'] = loginCid.replace(/-/g, '');
 
-  const url = `${GOOGLE_ADS_BASE}/customers/${cleanId}/googleAds:searchStream`;
+  const url = `${GOOGLE_ADS_BASE}/customers/${cleanId}/googleAds:search`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -505,12 +505,11 @@ async function fetchGoogleAdsMetrics(customerId, since, until, credentials) {
   const data = await response.json();
   const results = [];
 
-  for (const batch of data) {
-    if (batch.results) {
-      for (const row of batch.results) {
-        const metric = normalizeGoogleRow(customerId, row);
-        if (metric) results.push(metric);
-      }
+  // Handle search endpoint response (single object with results array)
+  if (data.results) {
+    for (const row of data.results) {
+      const metric = normalizeGoogleRow(customerId, row);
+      if (metric) results.push(metric);
     }
   }
 
@@ -551,7 +550,7 @@ async function fetchGoogleAdsCampaigns(customerId, credentials) {
   };
   if (loginCid) headers['login-customer-id'] = loginCid.replace(/-/g, '');
 
-  const url = `${GOOGLE_ADS_BASE}/customers/${cleanId}/googleAds:searchStream`;
+  const url = `${GOOGLE_ADS_BASE}/customers/${cleanId}/googleAds:search`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -567,27 +566,26 @@ async function fetchGoogleAdsCampaigns(customerId, credentials) {
   const data = await response.json();
   const campaigns = [];
 
-  for (const batch of data) {
-    if (batch.results) {
-      for (const row of batch.results) {
-        if (row.campaign) {
-          campaigns.push({
-            id: String(row.campaign.id),
-            name: row.campaign.name || '',
-            objective: row.campaign.advertisingChannelType || null,
-            status: row.campaign.status || null,
-            effective_status: row.campaign.status || null,
-            buying_type: null,
-            bid_strategy: row.campaign.biddingStrategyType || null,
-            daily_budget: null,
-            lifetime_budget: null,
-            budget_remaining: null,
-            start_time: row.campaign.startDate || null,
-            stop_time: row.campaign.endDate || null,
-            created_time: null,
-            updated_time: null,
-          });
-        }
+  // Handle search endpoint response (single object with results array)
+  if (data.results) {
+    for (const row of data.results) {
+      if (row.campaign) {
+        campaigns.push({
+          id: String(row.campaign.id),
+          name: row.campaign.name || '',
+          objective: row.campaign.advertisingChannelType || null,
+          status: row.campaign.status || null,
+          effective_status: row.campaign.status || null,
+          buying_type: null,
+          bid_strategy: row.campaign.biddingStrategyType || null,
+          daily_budget: null,
+          lifetime_budget: null,
+          budget_remaining: null,
+          start_time: row.campaign.startDate || null,
+          stop_time: row.campaign.endDate || null,
+          created_time: null,
+          updated_time: null,
+        });
       }
     }
   }
@@ -1875,7 +1873,7 @@ router.get('/google/accounts', async (req, res) => {
         'Content-Type': 'application/json',
       };
 
-      const url = `${GOOGLE_ADS_BASE}/customers/${cleanMcc}/googleAds:searchStream`;
+      const url = `${GOOGLE_ADS_BASE}/customers/${cleanMcc}/googleAds:search`;
       const response = await fetch(url, {
         method: 'POST',
         headers,
@@ -1890,23 +1888,22 @@ router.get('/google/accounts', async (req, res) => {
       const data = await response.json();
       const accounts = [];
 
-      for (const batch of data) {
-        if (batch.results) {
-          for (const row of batch.results) {
-            if (row.customerClient) {
-              const rawId = String(row.customerClient.id);
-              const formattedId = rawId.length === 10
-                ? `${rawId.slice(0,3)}-${rawId.slice(3,6)}-${rawId.slice(6)}`
-                : rawId;
-              accounts.push({
-                id: formattedId,
-                raw_id: rawId,
-                name: row.customerClient.descriptiveName || '',
-                currency: row.customerClient.currencyCode || '',
-                status: row.customerClient.status === 'ENABLED' ? 1 : 2,
-                manager: row.customerClient.manager || false,
-              });
-            }
+      // Handle search endpoint response (single object with results array)
+      if (data.results) {
+        for (const row of data.results) {
+          if (row.customerClient) {
+            const rawId = String(row.customerClient.id);
+            const formattedId = rawId.length === 10
+              ? `${rawId.slice(0,3)}-${rawId.slice(3,6)}-${rawId.slice(6)}`
+              : rawId;
+            accounts.push({
+              id: formattedId,
+              raw_id: rawId,
+              name: row.customerClient.descriptiveName || '',
+              currency: row.customerClient.currencyCode || '',
+              status: row.customerClient.status === 'ENABLED' ? 1 : 2,
+              manager: row.customerClient.manager || false,
+            });
           }
         }
       }
