@@ -12,8 +12,8 @@ RUN curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
   -o /usr/local/share/ca-certificates/rds-ca-ap-southeast-1.crt \
   && update-ca-certificates
 
-# Ensure Node trusts the RDS CA bundle by default
-ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/rds-ca-ap-southeast-1.crt
+# Ensure Node trusts the full system CA bundle (includes RDS CAs after update-ca-certificates)
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 
 # Install backend dependencies
 COPY package*.json ./
