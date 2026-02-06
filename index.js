@@ -91,53 +91,15 @@ app.get('/sandbox.html', (req, res) => {
  *                   type: string
  *                   example: iad
  */
-app.get('/health', async (req, res) => {
-  const health = {
+app.get('/health', (req, res) => {
+  // Simple health check - no external calls
+  // For integration health, use /api/ads/google/health or /debug/meta-tls
+  res.status(200).json({
     status: 'ok',
     service: APP_NAME,
     timestamp: new Date().toISOString(),
-    region: 'iad',
-    checks: {
-      database: 'unknown',
-      schema: 'unknown'
-    }
-  };
-
-  // Check database connection and schema
-  if (process.env.DATABASE_URL) {
-    try {
-      const db = require('./db');
-
-      // Test basic connection
-      await db.query('SELECT 1');
-      health.checks.database = 'ok';
-
-      // Check if receipt_batches table exists (schema validation)
-      await db.query('SELECT 1 FROM receipt_batches LIMIT 1');
-      health.checks.schema = 'ok';
-
-    } catch (error) {
-      health.checks.database = 'connected';
-
-      // If table doesn't exist, set status to degraded
-      if (error.code === '42P01') {
-        health.status = 'degraded';
-        health.checks.schema = 'missing_tables';
-        health.message = 'Database connected but schema not initialized. Visit /api/receipts/init-database';
-      } else {
-        health.status = 'degraded';
-        health.checks.schema = 'error';
-        health.error = error.message;
-      }
-    }
-  } else {
-    health.checks.database = 'not_configured';
-    health.checks.schema = 'not_configured';
-  }
-
-  // Always return 200 to pass Fly.io health checks during initial deployment
-  // (even when schema is missing - status information is in the response body)
-  res.status(200).json(health);
+    region: process.env.FLY_REGION || 'iad',
+  });
 });
 
 // Debug endpoint to test Meta TLS connection from within Fly container
