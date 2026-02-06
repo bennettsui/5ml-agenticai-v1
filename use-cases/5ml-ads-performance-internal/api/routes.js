@@ -2017,4 +2017,121 @@ router.get('/performance/monthly', async (req, res) => {
   }
 });
 
+// ===========================================
+// Report Generation Routes
+// ===========================================
+
+/**
+ * POST /api/ads/reports/generate
+ * Generate monthly report in PPTX and/or PDF format
+ */
+router.post('/reports/generate', async (req, res) => {
+  try {
+    const {
+      tenant_id,
+      month_year,
+      format = 'both', // 'pptx', 'pdf', or 'both'
+      client_name,
+      brand_name,
+      primary_color,
+    } = req.body;
+
+    if (!tenant_id || !month_year) {
+      return res.status(400).json({ error: 'tenant_id and month_year are required' });
+    }
+
+    // Dynamic import for the report generator (ES module)
+    const reportModule = await import('../reports/report-generator.js');
+    const { generateMonthlyReport, getSampleReportData } = reportModule;
+
+    // For now, use sample data - in production, fetch from database
+    const reportData = getSampleReportData();
+
+    // Override with request config
+    reportData.config.clientName = client_name || tenant_id;
+    reportData.config.brandName = brand_name || client_name || tenant_id;
+    reportData.config.monthYear = month_year;
+    reportData.config.reportDate = new Date().toISOString().split('T')[0];
+    if (primary_color) {
+      reportData.config.primaryColor = primary_color;
+    }
+
+    // Generate report
+    const outputDir = '/tmp/reports';
+    const fs = await import('fs');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const result = await generateMonthlyReport(reportData, {
+      format,
+      outputDir,
+      filename: `${tenant_id}_Report_${month_year.replace(/\s+/g, '_')}`,
+    });
+
+    if (result.success) {
+      res.json({
+        success: true,
+        data: {
+          pptxPath: result.pptxPath,
+          pdfPath: result.pdfPath,
+          message: 'Report generated successfully',
+        },
+      });
+    } else {
+      res.status(500).json({ error: result.error || 'Failed to generate report' });
+    }
+  } catch (error) {
+    console.error('[Ads API] Report generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/ads/reports/download/:filename
+ * Download generated report file
+ */
+router.get('/reports/download/:filename', async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const filePath = `/tmp/reports/${filename}`;
+
+    const fs = await import('fs');
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Report file not found' });
+    }
+
+    const ext = filename.split('.').pop().toLowerCase();
+    const contentType = ext === 'pptx'
+      ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      : ext === 'pdf'
+        ? 'application/pdf'
+        : ext === 'html'
+          ? 'text/html'
+          : 'application/octet-stream';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    fs.createReadStream(filePath).pipe(res);
+  } catch (error) {
+    console.error('[Ads API] Report download error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/ads/reports/sample
+ * Get sample report data structure for reference
+ */
+router.get('/reports/sample', async (req, res) => {
+  try {
+    const reportModule = await import('../reports/report-generator.js');
+    const { getSampleReportData } = reportModule;
+    res.json({ success: true, data: getSampleReportData() });
+  } catch (error) {
+    console.error('[Ads API] Sample data error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
