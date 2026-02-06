@@ -1,51 +1,146 @@
 const { Pool } = require('pg');
 const fs = require('fs');
 
-const DEFAULT_RDS_CA_BUNDLE_PATH = '/usr/local/share/ca-certificates/rds-ca-bundle.crt';
-const REGION_RDS_CA_BUNDLE_PATH = '/usr/local/share/ca-certificates/rds-ca-ap-southeast-1.crt';
-const SYSTEM_CA_BUNDLE_PATH = '/etc/ssl/certs/ca-certificates.crt';
-const CA_BUNDLE_PATHS = [
-  process.env.PGSSLROOTCERT,
-  process.env.RDS_CA_BUNDLE_PATH,
-  DEFAULT_RDS_CA_BUNDLE_PATH,
-  REGION_RDS_CA_BUNDLE_PATH,
-  SYSTEM_CA_BUNDLE_PATH,
-].filter(Boolean);
-const caBundles = [];
+// CA certificate paths (in order of preference)
+const CA_PATHS = {
+  // Custom CA from environment
+  custom: process.env.PGSSLROOTCERT || process.env.DB_CA_CERT_PATH,
+  // AWS RDS CA bundles (downloaded in Dockerfile)
+  rdsGlobal: '/usr/local/share/ca-certificates/rds-ca-bundle.crt',
+  rdsRegion: '/usr/local/share/ca-certificates/rds-ca-ap-southeast-1.crt',
+  // System CA bundle (includes all trusted CAs after update-ca-certificates)
+  system: '/etc/ssl/certs/ca-certificates.crt',
+};
 
-for (const bundlePath of new Set(CA_BUNDLE_PATHS)) {
-  try {
-    if (fs.existsSync(bundlePath)) {
-      caBundles.push(fs.readFileSync(bundlePath, 'utf8'));
+// Load CA certificates
+function loadCaCertificates() {
+  const certs = [];
+  const loadedPaths = [];
+
+  for (const [name, path] of Object.entries(CA_PATHS)) {
+    if (!path) continue;
+    try {
+      if (fs.existsSync(path)) {
+        certs.push(fs.readFileSync(path, 'utf8'));
+        loadedPaths.push(`${name}: ${path}`);
+      }
+    } catch (error) {
+      console.warn(`⚠️ Failed to read CA cert at ${path}:`, error.message);
     }
-  } catch (error) {
-    console.warn(`⚠️ Failed to read CA bundle at ${bundlePath}:`, error.message);
   }
+
+  if (loadedPaths.length > 0) {
+    console.log(`✅ Loaded CA certificates from: ${loadedPaths.join(', ')}`);
+  }
+
+  return certs;
 }
 
-// Configure SSL and connection timeouts based on environment and DATABASE_URL
+const caBundles = loadCaCertificates();
+
+// Detect database provider from URL
+function detectDbProvider(url) {
+  if (!url) return 'unknown';
+  if (url.includes('neon.tech')) return 'neon';
+  if (url.includes('fly.io') || url.includes('flycast')) return 'fly';
+  if (url.includes('render.com')) return 'render';
+  if (url.includes('supabase')) return 'supabase';
+  if (url.includes('amazonaws.com') || url.includes('rds.')) return 'aws-rds';
+  if (url.includes('localhost') || url.includes('127.0.0.1')) return 'local';
+  return 'unknown';
+}
+
+// Configure SSL based on environment and database provider
 const getDatabaseConfig = () => {
+  const connectionString = process.env.DATABASE_URL;
+  const provider = detectDbProvider(connectionString);
+
+  console.log(`🔌 Database provider detected: ${provider}`);
+
   const config = {
-    connectionString: process.env.DATABASE_URL,
-    // Connection timeout settings for TLS stability on Fly.io
-    connectionTimeoutMillis: 10000, // 10 seconds to establish connection
-    idleTimeoutMillis: 30000, // 30 seconds before idle clients are closed
-    max: 10, // Maximum number of clients in the pool
+    connectionString,
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+    max: 10,
   };
 
-  // Only enable SSL for production databases (not localhost)
-  if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost')) {
-    if (caBundles.length > 0) {
-      config.ssl = {
-        rejectUnauthorized: true,
-        ca: caBundles,
-      };
-    } else {
-      console.warn('⚠️ CA bundle not found; falling back to insecure SSL.');
-      config.ssl = {
-        rejectUnauthorized: false,
-      };
-    }
+  // No SSL for local development
+  if (provider === 'local' || !connectionString) {
+    console.log('🔓 SSL disabled for local database');
+    config.ssl = false;
+    return config;
+  }
+
+  // Configure SSL based on provider
+  switch (provider) {
+    case 'neon':
+    case 'supabase':
+    case 'render':
+      // These providers use publicly trusted certificates
+      // Use system CA bundle or just enable SSL
+      if (caBundles.length > 0) {
+        config.ssl = {
+          rejectUnauthorized: true,
+          ca: caBundles,
+        };
+        console.log('🔒 SSL enabled with CA verification');
+      } else {
+        // Neon/Supabase/Render use Let's Encrypt certs, should work without custom CA
+        config.ssl = {
+          rejectUnauthorized: true,
+        };
+        console.log('🔒 SSL enabled (using system CA store)');
+      }
+      break;
+
+    case 'fly':
+      // Fly Postgres uses internal certificates
+      // For internal connections, may need to skip verification or use Fly CA
+      if (caBundles.length > 0) {
+        config.ssl = {
+          rejectUnauthorized: true,
+          ca: caBundles,
+        };
+        console.log('🔒 SSL enabled with CA verification for Fly');
+      } else {
+        // Fallback: Fly internal connections often work without strict verification
+        config.ssl = {
+          rejectUnauthorized: false,
+        };
+        console.log('⚠️ SSL enabled but verification disabled for Fly (no CA found)');
+      }
+      break;
+
+    case 'aws-rds':
+      // AWS RDS requires their CA bundle
+      if (caBundles.length > 0) {
+        config.ssl = {
+          rejectUnauthorized: true,
+          ca: caBundles,
+        };
+        console.log('🔒 SSL enabled with RDS CA verification');
+      } else {
+        console.error('❌ AWS RDS requires CA bundle but none found!');
+        config.ssl = {
+          rejectUnauthorized: false,
+        };
+      }
+      break;
+
+    default:
+      // Unknown provider - try with CA if available, otherwise allow insecure
+      if (caBundles.length > 0) {
+        config.ssl = {
+          rejectUnauthorized: true,
+          ca: caBundles,
+        };
+        console.log('🔒 SSL enabled with CA verification');
+      } else {
+        console.warn('⚠️ No CA bundle found; falling back to insecure SSL');
+        config.ssl = {
+          rejectUnauthorized: false,
+        };
+      }
   }
 
   return config;
