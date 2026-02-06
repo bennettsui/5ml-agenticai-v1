@@ -28,7 +28,7 @@ jobs:
             if [ ! -d "5ml-agenticai-v1" ]; then
               git clone https://github.com/bennettsui/5ml-agenticai-v1.git
             fi
-          
+
             cd 5ml-agenticai-v1
             git pull origin main
 
