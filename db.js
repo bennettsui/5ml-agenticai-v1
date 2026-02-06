@@ -94,21 +94,11 @@ const getDatabaseConfig = () => {
       break;
 
     case 'fly':
-      // Fly Postgres uses internal certificates
-      // For internal connections, may need to skip verification or use Fly CA
-      if (caBundles.length > 0) {
-        config.ssl = {
-          rejectUnauthorized: true,
-          ca: caBundles,
-        };
-        console.log('🔒 SSL enabled with CA verification for Fly');
-      } else {
-        // Fallback: Fly internal connections often work without strict verification
-        config.ssl = {
-          rejectUnauthorized: false,
-        };
-        console.log('⚠️ SSL enabled but verification disabled for Fly (no CA found)');
-      }
+      // Fly Postgres does NOT support native TLS/SSL on internal connections
+      // Fly's WireGuard-based private networking already encrypts traffic
+      // Using ssl: false is the correct and secure approach for Fly internal connections
+      config.ssl = false;
+      console.log('🔒 Fly Postgres: SSL disabled (WireGuard network encryption)');
       break;
 
     case 'aws-rds':
