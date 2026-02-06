@@ -5,7 +5,6 @@ node_modules/
 dist/
 .env.local
 .env.*.local
-runtime/upstream.conf
 
 # Frontend build output
 frontend/out/

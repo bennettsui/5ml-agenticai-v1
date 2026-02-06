@@ -1,3 +1,0 @@
-upstream app_upstream {
-  server app_blue:8080;
-}
