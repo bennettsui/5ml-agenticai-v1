@@ -136,16 +136,8 @@ app.get('/health', async (req, res) => {
   res.status(200).json(health);
 });
 
-app.get('/', (req, res, next) => {
-  const acceptHeader = req.headers.accept || '';
-  const wantsJson = acceptHeader.includes('application/json');
-  const wantsEcho = req.query.echo === '1' || req.query.echo === 'true';
-
-  if (!wantsJson && !wantsEcho) {
-    return next();
-  }
-
-  res.status(200).json({ app: APP_NAME });
+app.get('/', (req, res) => {
+  res.status(200).send(APP_NAME);
 });
 
 // ==========================================
