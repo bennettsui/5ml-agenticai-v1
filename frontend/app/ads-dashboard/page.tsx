@@ -21,6 +21,8 @@ import {
   Target,
   Image as ImageIcon,
   ExternalLink,
+  FileText,
+  Download,
 } from 'lucide-react';
 import {
   LineChart,
@@ -364,6 +366,23 @@ export default function AdsDashboardPage() {
   // Column sorting
   const [sortColumn, setSortColumn] = useState<string>('spend');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  // Report generation state
+  const [reportPanelOpen, setReportPanelOpen] = useState(false);
+  const [reportTenantId, setReportTenantId] = useState<string>('');
+  const [reportMonthYear, setReportMonthYear] = useState<string>(() => {
+    const now = new Date();
+    return `${now.toLocaleString('default', { month: 'long' })} ${now.getFullYear()}`;
+  });
+  const [reportFormat, setReportFormat] = useState<'pptx' | 'pdf' | 'both'>('both');
+  const [reportClientName, setReportClientName] = useState<string>('');
+  const [reportGenerating, setReportGenerating] = useState(false);
+  const [reportResult, setReportResult] = useState<{
+    success: boolean;
+    message: string;
+    pptxPath?: string;
+    pdfPath?: string;
+  } | null>(null);
 
   // Data fetchers
   const fetchTenants = useCallback(async () => {
@@ -796,6 +815,61 @@ export default function AdsDashboardPage() {
   // Expanded ad for detail view
   const [expandedAd, setExpandedAd] = useState<string | null>(null);
 
+  // Report generation function
+  const generateReport = useCallback(async () => {
+    if (!reportTenantId || !reportMonthYear) {
+      setReportResult({
+        success: false,
+        message: 'Please select an account and enter the month/year',
+      });
+      return;
+    }
+
+    setReportGenerating(true);
+    setReportResult(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/ads/reports/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: reportTenantId,
+          month_year: reportMonthYear,
+          format: reportFormat,
+          client_name: reportClientName || reportTenantId,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        setReportResult({
+          success: true,
+          message: 'Report generated successfully!',
+          pptxPath: json.data?.pptxPath,
+          pdfPath: json.data?.pdfPath,
+        });
+      } else {
+        setReportResult({
+          success: false,
+          message: json.error || 'Failed to generate report',
+        });
+      }
+    } catch (err) {
+      setReportResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Failed to generate report',
+      });
+    } finally {
+      setReportGenerating(false);
+    }
+  }, [reportTenantId, reportMonthYear, reportFormat, reportClientName]);
+
+  const downloadReport = (filename: string) => {
+    const downloadUrl = `${API_BASE}/api/ads/reports/download/${filename}`;
+    window.open(downloadUrl, '_blank');
+  };
+
   const SortIndicator = ({ col }: { col: string }) => (
     sortColumn === col ? (
       <span className="ml-1 text-orange-400">{sortDirection === 'asc' ? '\u2191' : '\u2193'}</span>
@@ -1094,6 +1168,170 @@ export default function AdsDashboardPage() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Generate Monthly Report Panel */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
+          <button
+            onClick={() => setReportPanelOpen(!reportPanelOpen)}
+            className="w-full flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                  Generate Monthly Report
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Export performance data as PPTX or PDF report
+                </p>
+              </div>
+            </div>
+            {reportPanelOpen ? (
+              <ChevronUp className="w-5 h-5 text-slate-400" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-slate-400" />
+            )}
+          </button>
+
+          {reportPanelOpen && (
+            <div className="border-t border-slate-200 dark:border-slate-700 p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                {/* Account Selection */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    Account *
+                  </label>
+                  <select
+                    value={reportTenantId}
+                    onChange={(e) => setReportTenantId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  >
+                    <option value="">Select account...</option>
+                    {tenants.map((t) => (
+                      <option key={t.tenant_id} value={t.tenant_id}>
+                        {getAccountDisplayName(t.tenant_id)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Month/Year */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    Month/Year *
+                  </label>
+                  <input
+                    type="text"
+                    value={reportMonthYear}
+                    onChange={(e) => setReportMonthYear(e.target.value)}
+                    placeholder="e.g., January 2026"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Client Name (optional) */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    Client Name (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={reportClientName}
+                    onChange={(e) => setReportClientName(e.target.value)}
+                    placeholder="Display name for report"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Format Selection */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    Format
+                  </label>
+                  <select
+                    value={reportFormat}
+                    onChange={(e) => setReportFormat(e.target.value as 'pptx' | 'pdf' | 'both')}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  >
+                    <option value="both">Both (PPTX + PDF)</option>
+                    <option value="pptx">PowerPoint (PPTX)</option>
+                    <option value="pdf">PDF</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Generate Button */}
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={generateReport}
+                  disabled={reportGenerating || !reportTenantId || !reportMonthYear}
+                  className="px-4 py-2 bg-purple-500 text-white rounded-lg text-sm font-medium hover:bg-purple-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {reportGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-4 h-4" />
+                      Generate Report
+                    </>
+                  )}
+                </button>
+
+                {/* Result Message */}
+                {reportResult && (
+                  <div
+                    className={`flex items-center gap-2 text-sm ${
+                      reportResult.success
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {reportResult.success ? (
+                      <CheckCircle2 className="w-4 h-4" />
+                    ) : (
+                      <XCircle className="w-4 h-4" />
+                    )}
+                    {reportResult.message}
+                  </div>
+                )}
+              </div>
+
+              {/* Download Links */}
+              {reportResult?.success && (reportResult.pptxPath || reportResult.pdfPath) && (
+                <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                  <p className="text-xs font-medium text-green-700 dark:text-green-300 mb-2">
+                    Download your report:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {reportResult.pptxPath && (
+                      <button
+                        onClick={() => downloadReport(reportResult.pptxPath!.split('/').pop()!)}
+                        className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-medium hover:bg-orange-600 transition-colors flex items-center gap-1.5"
+                      >
+                        <Download className="w-3 h-3" />
+                        Download PPTX
+                      </button>
+                    )}
+                    {reportResult.pdfPath && (
+                      <button
+                        onClick={() => downloadReport(reportResult.pdfPath!.split('/').pop()!)}
+                        className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-medium hover:bg-red-600 transition-colors flex items-center gap-1.5"
+                      >
+                        <Download className="w-3 h-3" />
+                        Download PDF
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
