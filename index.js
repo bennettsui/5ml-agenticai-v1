@@ -8,6 +8,7 @@ require('dotenv').config();
 const app = express();
 const path = require('path');
 app.use(express.json({ limit: '25mb' }));
+const APP_NAME = process.env.APP_NAME || '5ML Agentic AI Platform v1';
 // const cors = require('cors');
 
 // app.use(cors({
@@ -89,7 +90,7 @@ app.get('/sandbox.html', (req, res) => {
 app.get('/health', async (req, res) => {
   const health = {
     status: 'ok',
-    service: '5ML Agentic AI Platform v1',
+    service: APP_NAME,
     timestamp: new Date().toISOString(),
     region: 'iad',
     checks: {
@@ -133,6 +134,18 @@ app.get('/health', async (req, res) => {
   // Always return 200 to pass Fly.io health checks during initial deployment
   // (even when schema is missing - status information is in the response body)
   res.status(200).json(health);
+});
+
+app.get('/', (req, res, next) => {
+  const acceptHeader = req.headers.accept || '';
+  const wantsJson = acceptHeader.includes('application/json');
+  const wantsEcho = req.query.echo === '1' || req.query.echo === 'true';
+
+  if (!wantsJson && !wantsEcho) {
+    return next();
+  }
+
+  res.status(200).json({ app: APP_NAME });
 });
 
 // ==========================================
