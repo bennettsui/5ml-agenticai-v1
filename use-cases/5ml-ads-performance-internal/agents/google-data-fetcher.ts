@@ -106,7 +106,7 @@ Always ensure data integrity and handle the SearchStream response correctly.`,
       headers['login-customer-id'] = creds.loginCustomerId.replace(/-/g, '');
     }
 
-    const url = `${GOOGLE_ADS_BASE}/customers/${cleanId}/googleAds:searchStream`;
+    const url = `${GOOGLE_ADS_BASE}/customers/${cleanId}:searchStream`;
 
     const response = await fetch(url, {
       method: 'POST',
