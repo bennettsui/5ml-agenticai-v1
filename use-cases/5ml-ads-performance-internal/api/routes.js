@@ -1634,7 +1634,22 @@ router.post('/sync', async (req, res) => {
           }
         } catch (err) {
           console.error('[Sync] Meta error:', err.message);
-          results.errors.push({ platform: 'meta', error: err.message });
+
+          // Distinguish TLS errors from API errors
+          const errorMsg = err.message?.toLowerCase() || '';
+          if (errorMsg.includes('certificate') || errorMsg.includes('ssl') || errorMsg.includes('tls') || err.code === 'SELF_SIGNED_CERT_IN_CHAIN') {
+            results.errors.push({
+              platform: 'meta',
+              error: 'TLS connection error to Meta API',
+              details: 'Unable to establish secure connection. Server configuration issue.',
+              debug: {
+                nodeExtraCaCerts: process.env.NODE_EXTRA_CA_CERTS || 'not set',
+                originalError: err.message,
+              },
+            });
+          } else {
+            results.errors.push({ platform: 'meta', error: err.message });
+          }
         }
       } else {
         results.errors.push({
@@ -1844,6 +1859,21 @@ router.get('/meta/adaccounts', async (req, res) => {
     });
   } catch (error) {
     console.error('[Ads API] Ad accounts lookup error:', error);
+
+    // Distinguish between TLS errors and Meta API errors
+    const errorMsg = error.message?.toLowerCase() || '';
+    if (errorMsg.includes('certificate') || errorMsg.includes('ssl') || errorMsg.includes('tls') || error.code === 'SELF_SIGNED_CERT_IN_CHAIN') {
+      return res.status(500).json({
+        error: 'TLS connection error to Meta API',
+        details: 'Unable to establish secure connection. This is a server configuration issue.',
+        hint: 'Check NODE_EXTRA_CA_CERTS environment variable',
+        debug: {
+          nodeExtraCaCerts: process.env.NODE_EXTRA_CA_CERTS || 'not set',
+          originalError: error.message,
+        },
+      });
+    }
+
     res.status(500).json({ error: error.message });
   }
 });
