@@ -56,8 +56,10 @@ interface GoogleAdsSearchStreamRow {
   };
 }
 
-interface GoogleAdsSearchStreamResponse {
+interface GoogleAdsSearchResponse {
   results?: GoogleAdsSearchStreamRow[];
+  nextPageToken?: string;
+  totalResultsCount?: string;
 }
 
 const GOOGLE_ADS_API_VERSION = 'v17';
@@ -185,7 +187,7 @@ export async function fetchGoogleAdsMetrics({
     headers['login-customer-id'] = loginCid.replace(/-/g, '');
   }
 
-  const url = `${GOOGLE_ADS_BASE}/customers/${cleanCustomerId}/googleAds:searchStream`;
+  const url = `${GOOGLE_ADS_BASE}/customers/${cleanCustomerId}/googleAds:search`;
 
   let retries = 0;
   const maxRetries = 3;
@@ -215,15 +217,14 @@ export async function fetchGoogleAdsMetrics({
         throw new Error(`Google Ads API error ${response.status}: ${errorBody}`);
       }
 
-      const data: GoogleAdsSearchStreamResponse[] = await response.json();
+      const data: GoogleAdsSearchResponse = await response.json();
 
-      for (const batch of data) {
-        if (batch.results) {
-          for (const row of batch.results) {
-            const metric = normalizeRow(customerId, row);
-            if (metric) {
-              results.push(metric);
-            }
+      // Handle search endpoint response (single object with results array)
+      if (data.results) {
+        for (const row of data.results) {
+          const metric = normalizeRow(customerId, row);
+          if (metric) {
+            results.push(metric);
           }
         }
       }
