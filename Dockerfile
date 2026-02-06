@@ -1,26 +1,25 @@
 FROM node:18-alpine
 
-WORKDIR /app
+WORKDIR /usr/src/app
 
 # Install system dependencies
 RUN apk add --no-cache python3 make g++
 
-# Copy backend package files
+# Install backend dependencies
 COPY package*.json ./
 COPY tsconfig.json ./
-
-# Install backend dependencies (includes TypeScript)
 RUN npm ci
 
-# Copy frontend and build it
+# Build frontend static export
 COPY frontend/package*.json ./frontend/
-WORKDIR /app/frontend
+WORKDIR /usr/src/app/frontend
 RUN npm ci
 COPY frontend/ ./
 RUN npm run build
+RUN test -f /usr/src/app/frontend/out/index.html
 
-# Go back to app root
-WORKDIR /app
+# Back to app root
+WORKDIR /usr/src/app
 
 # Copy application code
 COPY index.js .
@@ -40,15 +39,15 @@ COPY use-cases/ ./use-cases/
 RUN npx tsc --project tsconfig.json || echo "TypeScript compilation warnings (non-critical)"
 
 # Create necessary directories
-RUN mkdir -p /tmp/dropbox-downloads
-RUN mkdir -p /tmp/excel-exports
+RUN mkdir -p /tmp/dropbox-downloads /tmp/excel-exports
 
-# Expose port
+ENV NODE_ENV=production
+ENV PORT=8080
+
 EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8080/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); })"
 
-# Start application
 CMD ["node", "index.js"]
