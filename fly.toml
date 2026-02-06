@@ -7,6 +7,7 @@ dockerfile = "./Dockerfile"
 [env]
 PORT = "8080"
 PUBLIC_BASE_URL = "https://5ml-agenticai-v1.fly.dev"
+NODE_EXTRA_CA_CERTS = "/etc/ssl/certs/ca-certificates.crt"
 
 [http_service]
 internal_port = 8080
