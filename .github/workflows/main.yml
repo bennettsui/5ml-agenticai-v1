@@ -38,4 +38,9 @@ jobs:
             # Remove any existing container to avoid name conflicts (legacy docker run)
             docker rm -f 5ml-agenticai-app || true
 
+            # Clean up Docker to free disk space before building
+            echo "Cleaning up Docker to free disk space..."
+            docker system prune -af || true
+            docker builder prune -af || true
+
             docker compose up -d --build app
