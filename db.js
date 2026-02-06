@@ -71,12 +71,13 @@ function forceDisableSsl(connString) {
 const getDatabaseConfig = () => {
   let connectionString = process.env.DATABASE_URL;
   const provider = detectDbProvider(connectionString);
+  const usesPgBouncer = connectionString?.includes('pgbouncer') || connectionString?.includes(':6543');
 
-  console.log(`🔌 Database provider detected: ${provider}`);
+  console.log(`🔌 Database provider detected: ${provider}${usesPgBouncer ? ' (via pgbouncer)' : ''}`);
 
-  // For Fly: force sslmode=disable in connection string
+  // For Fly internal connections (not pgbouncer): force sslmode=disable
   // This is critical because URL params override config.ssl settings
-  if (provider === 'fly') {
+  if (provider === 'fly' && !usesPgBouncer) {
     connectionString = forceDisableSsl(connectionString);
     console.log('🔒 Fly Postgres: Forcing sslmode=disable in connection string');
   }
@@ -118,11 +119,17 @@ const getDatabaseConfig = () => {
       break;
 
     case 'fly':
-      // Fly Postgres does NOT support native TLS/SSL on internal connections
-      // Fly's WireGuard-based private networking already encrypts traffic
-      // ssl: false + sslmode=disable in connection string ensures no TLS negotiation
-      config.ssl = false;
-      console.log('🔒 Fly Postgres: SSL disabled (WireGuard network encryption)');
+      if (usesPgBouncer) {
+        // pgbouncer/proxy may use SSL but with unverifiable certs
+        config.ssl = {
+          rejectUnauthorized: false,
+        };
+        console.log('🔒 Fly pgbouncer: SSL enabled, verification disabled');
+      } else {
+        // Direct internal connection - no TLS (WireGuard encrypts)
+        config.ssl = false;
+        console.log('🔒 Fly Postgres internal: SSL disabled (WireGuard encryption)');
+      }
       break;
 
     case 'aws-rds':
