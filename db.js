@@ -1,4 +1,17 @@
 const { Pool } = require('pg');
+const fs = require('fs');
+
+const DEFAULT_RDS_CA_BUNDLE_PATH = '/usr/local/share/ca-certificates/rds-ca-bundle.crt';
+const RDS_CA_BUNDLE_PATH = process.env.PGSSLROOTCERT || process.env.RDS_CA_BUNDLE_PATH || DEFAULT_RDS_CA_BUNDLE_PATH;
+let rdsCaBundle = null;
+
+try {
+  if (fs.existsSync(RDS_CA_BUNDLE_PATH)) {
+    rdsCaBundle = fs.readFileSync(RDS_CA_BUNDLE_PATH, 'utf8');
+  }
+} catch (error) {
+  console.warn(`⚠️ Failed to read RDS CA bundle at ${RDS_CA_BUNDLE_PATH}:`, error.message);
+}
 
 // Configure SSL and connection timeouts based on environment and DATABASE_URL
 const getDatabaseConfig = () => {
@@ -12,9 +25,17 @@ const getDatabaseConfig = () => {
 
   // Only enable SSL for production databases (not localhost)
   if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost')) {
-    config.ssl = {
-      rejectUnauthorized: false,
-    };
+    if (rdsCaBundle) {
+      config.ssl = {
+        rejectUnauthorized: true,
+        ca: rdsCaBundle,
+      };
+    } else {
+      console.warn('⚠️ RDS CA bundle not found; falling back to insecure SSL.');
+      config.ssl = {
+        rejectUnauthorized: false,
+      };
+    }
   }
 
   return config;
