@@ -1,87 +1,38 @@
 const { Pool } = require('pg');
 const fs = require('fs');
 
-// CA certificate paths (in order of preference)
-const CA_PATHS = {
-  // Custom CA from environment
-  custom: process.env.PGSSLROOTCERT || process.env.DB_CA_CERT_PATH,
-  // AWS RDS CA bundles (downloaded in Dockerfile)
-  rdsGlobal: '/usr/local/share/ca-certificates/rds-ca-bundle.crt',
-  rdsRegion: '/usr/local/share/ca-certificates/rds-ca-ap-southeast-1.crt',
-  // System CA bundle (includes all trusted CAs after update-ca-certificates)
-  system: '/etc/ssl/certs/ca-certificates.crt',
-};
+// ===========================================
+// SIMPLIFIED SSL CONFIG (reverted to PR #185 pattern that worked)
+// ===========================================
 
-// Load CA certificates
-function loadCaCertificates() {
-  const certs = [];
-  const loadedPaths = [];
+// Load AWS RDS CA certificate if available (for EC2 deployments)
+function loadRdsCaCert() {
+  const rdsCaPaths = [
+    process.env.PGSSLROOTCERT,
+    process.env.DB_CA_CERT_PATH,
+    '/usr/local/share/ca-certificates/rds-ca-bundle.crt',
+  ];
 
-  for (const [name, path] of Object.entries(CA_PATHS)) {
-    if (!path) continue;
-    try {
-      if (fs.existsSync(path)) {
-        certs.push(fs.readFileSync(path, 'utf8'));
-        loadedPaths.push(`${name}: ${path}`);
+  for (const path of rdsCaPaths) {
+    if (path) {
+      try {
+        if (fs.existsSync(path)) {
+          console.log(`✅ Loaded RDS CA certificate from: ${path}`);
+          return fs.readFileSync(path, 'utf8');
+        }
+      } catch (error) {
+        console.warn(`⚠️ Failed to read CA cert at ${path}:`, error.message);
       }
-    } catch (error) {
-      console.warn(`⚠️ Failed to read CA cert at ${path}:`, error.message);
     }
   }
-
-  if (loadedPaths.length > 0) {
-    console.log(`✅ Loaded CA certificates from: ${loadedPaths.join(', ')}`);
-  }
-
-  return certs;
+  return null;
 }
 
-const caBundles = loadCaCertificates();
+const rdsCaCert = loadRdsCaCert();
 
-// Detect database provider from URL
-function detectDbProvider(url) {
-  if (!url) return 'unknown';
-  if (url.includes('neon.tech')) return 'neon';
-  // Fly Postgres URLs: .internal (direct), flycast, flympg.net (managed), fly.io
-  if (url.includes('fly.io') || url.includes('flycast') || url.includes('.internal') || url.includes('flympg.net')) return 'fly';
-  if (url.includes('render.com')) return 'render';
-  if (url.includes('supabase')) return 'supabase';
-  if (url.includes('amazonaws.com') || url.includes('rds.')) return 'aws-rds';
-  if (url.includes('localhost') || url.includes('127.0.0.1')) return 'local';
-  return 'unknown';
-}
-
-// Configure SSL based on environment and database provider
-// Force sslmode=disable in connection string (overrides any existing sslmode param)
-function forceDisableSsl(connString) {
-  if (!connString) return connString;
-
-  // Remove any existing sslmode param
-  let modified = connString.replace(/[?&]sslmode=[^&]*/gi, '');
-
-  // Add sslmode=disable
-  const separator = modified.includes('?') ? '&' : '?';
-  modified = modified + separator + 'sslmode=disable';
-
-  // Clean up double ? or &
-  modified = modified.replace(/[?&]+/g, (match, offset) => offset === modified.indexOf('?') ? '?' : '&');
-
-  return modified;
-}
-
+// Simple database config - matches PR #185 working pattern
 const getDatabaseConfig = () => {
-  let connectionString = process.env.DATABASE_URL;
-  const provider = detectDbProvider(connectionString);
-  const usesPgBouncer = connectionString?.includes('pgbouncer') || connectionString?.includes(':6543');
-
-  console.log(`🔌 Database provider detected: ${provider}${usesPgBouncer ? ' (via pgbouncer)' : ''}`);
-
-  // For Fly internal connections (not pgbouncer): force sslmode=disable
-  // This is critical because URL params override config.ssl settings
-  if (provider === 'fly' && !usesPgBouncer) {
-    connectionString = forceDisableSsl(connectionString);
-    console.log('🔒 Fly Postgres: Forcing sslmode=disable in connection string');
-  }
+  const connectionString = process.env.DATABASE_URL;
 
   const config = {
     connectionString,
@@ -90,80 +41,36 @@ const getDatabaseConfig = () => {
     max: 10,
   };
 
-  // No SSL for local development
-  if (provider === 'local' || !connectionString) {
-    console.log('🔓 SSL disabled for local database');
+  // No SSL for localhost
+  if (!connectionString || connectionString.includes('localhost') || connectionString.includes('127.0.0.1')) {
+    console.log('🔓 Local database: SSL disabled');
     config.ssl = false;
     return config;
   }
 
-  // Configure SSL based on provider
-  switch (provider) {
-    case 'neon':
-    case 'supabase':
-    case 'render':
-      // These providers use publicly trusted certificates
-      // Use system CA bundle or just enable SSL
-      if (caBundles.length > 0) {
-        config.ssl = {
-          rejectUnauthorized: true,
-          ca: caBundles,
-        };
-        console.log('🔒 SSL enabled with CA verification');
-      } else {
-        // Neon/Supabase/Render use Let's Encrypt certs, should work without custom CA
-        config.ssl = {
-          rejectUnauthorized: true,
-        };
-        console.log('🔒 SSL enabled (using system CA store)');
-      }
-      break;
-
-    case 'fly':
-      if (usesPgBouncer) {
-        // pgbouncer/proxy may use SSL but with unverifiable certs
-        config.ssl = {
-          rejectUnauthorized: false,
-        };
-        console.log('🔒 Fly pgbouncer: SSL enabled, verification disabled');
-      } else {
-        // Direct internal connection - no TLS (WireGuard encrypts)
-        config.ssl = false;
-        console.log('🔒 Fly Postgres internal: SSL disabled (WireGuard encryption)');
-      }
-      break;
-
-    case 'aws-rds':
-      // AWS RDS requires their CA bundle
-      if (caBundles.length > 0) {
-        config.ssl = {
-          rejectUnauthorized: true,
-          ca: caBundles,
-        };
-        console.log('🔒 SSL enabled with RDS CA verification');
-      } else {
-        console.error('❌ AWS RDS requires CA bundle but none found!');
-        config.ssl = {
-          rejectUnauthorized: false,
-        };
-      }
-      break;
-
-    default:
-      // Unknown provider - try with CA if available, otherwise allow insecure
-      if (caBundles.length > 0) {
-        config.ssl = {
-          rejectUnauthorized: true,
-          ca: caBundles,
-        };
-        console.log('🔒 SSL enabled with CA verification');
-      } else {
-        console.warn('⚠️ No CA bundle found; falling back to insecure SSL');
-        config.ssl = {
-          rejectUnauthorized: false,
-        };
-      }
+  // AWS RDS: use CA certificate if available
+  if (connectionString.includes('amazonaws.com') || connectionString.includes('rds.')) {
+    if (rdsCaCert) {
+      config.ssl = {
+        rejectUnauthorized: true,
+        ca: rdsCaCert,
+      };
+      console.log('🔒 AWS RDS: SSL enabled with CA verification');
+    } else {
+      config.ssl = {
+        rejectUnauthorized: false,
+      };
+      console.log('⚠️ AWS RDS: SSL enabled but no CA cert (verification disabled)');
+    }
+    return config;
   }
+
+  // Everything else (Fly, Neon, Supabase, Render, etc.):
+  // Simple SSL with verification disabled - THIS IS WHAT WORKED IN PR #185
+  config.ssl = {
+    rejectUnauthorized: false,
+  };
+  console.log('🔒 Database SSL: enabled (verification disabled for compatibility)');
 
   return config;
 };
@@ -360,7 +267,6 @@ async function initDatabase() {
   } catch (error) {
     console.error('❌ Database initialization error:', error.message);
     console.error('Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
-    console.error('SSL enabled:', getDatabaseConfig().ssl ? 'Yes' : 'No');
     // Don't throw - allow app to start even if DB init fails
   }
 }
