@@ -1619,7 +1619,7 @@ Create a project directly:
 {"type": "create_project", "data": {"name": "Website Redesign", "type": "website", "client_id": "uuid-here"}, "label": "Create Project"}
 \`\`\`
 
-Available pages: /use-cases/crm (Dashboard), /use-cases/crm/clients (Clients list), /use-cases/crm/clients/new (New Client form), /use-cases/crm/projects (Projects list), /use-cases/crm/projects/new (New Project form), /use-cases/crm/feedback (Feedback), /use-cases/crm/integrations (Integrations)
+Available pages: /use-cases/crm (Dashboard), /use-cases/crm/clients (Clients list), /use-cases/crm/clients/new (New Client form), /use-cases/crm/clients/detail?id=CLIENT_ID (Client detail with projects and feedback), /use-cases/crm/projects (Projects list), /use-cases/crm/projects/new (New Project form), /use-cases/crm/feedback (Feedback), /use-cases/crm/integrations (Integrations)
 
 When the user asks you to do something actionable (create, navigate, fill in, etc.), include the appropriate action block so it can be executed in the UI.
 

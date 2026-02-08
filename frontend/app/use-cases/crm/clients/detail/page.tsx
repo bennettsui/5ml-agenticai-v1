@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Loader2,
@@ -23,7 +23,6 @@ import {
   type Client,
   type Project,
   type FeedbackEvent,
-  type PaginatedResponse,
 } from '@/lib/crm-kb-api';
 import { useCrmAi } from '../../context';
 
@@ -61,13 +60,13 @@ function formatDate(iso: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// Inner component (needs Suspense boundary for useSearchParams)
 // ---------------------------------------------------------------------------
 
-export default function ClientDetailPage() {
-  const params = useParams();
+function ClientDetailInner() {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const clientId = params.id as string;
+  const clientId = searchParams.get('id');
   const { setPageState } = useCrmAi();
 
   const [client, setClient] = useState<Client | null>(null);
@@ -80,6 +79,7 @@ export default function ClientDetailPage() {
   const [activeTab, setActiveTab] = useState<'projects' | 'feedback'>('projects');
 
   const fetchData = useCallback(async () => {
+    if (!clientId) return;
     setLoading(true);
     setError(null);
     try {
@@ -108,6 +108,7 @@ export default function ClientDetailPage() {
   }, [fetchData]);
 
   const handleSyncEmails = async () => {
+    if (!clientId) return;
     setSyncing(true);
     setSyncResult(null);
     try {
@@ -115,7 +116,6 @@ export default function ClientDetailPage() {
       setSyncResult(
         `Synced ${result.synced_count} emails, ${result.new_feedback_count} new feedback items created.`
       );
-      // Refresh feedback after sync
       const feedbackData = await crmApi.clients.feedback(clientId);
       setFeedback(feedbackData.items);
     } catch (err) {
@@ -126,6 +126,21 @@ export default function ClientDetailPage() {
       setSyncing(false);
     }
   };
+
+  if (!clientId) {
+    return (
+      <div className="py-12 text-center">
+        <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+        <p className="text-red-300 mb-4">No client ID provided</p>
+        <Link
+          href="/use-cases/crm/clients"
+          className="text-emerald-400 hover:text-emerald-300 text-sm"
+        >
+          Back to Clients
+        </Link>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -186,7 +201,6 @@ export default function ClientDetailPage() {
 
       {/* Client Info Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Health Score */}
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="w-4 h-4 text-emerald-400" />
@@ -209,7 +223,6 @@ export default function ClientDetailPage() {
           </div>
         </div>
 
-        {/* Value Tier */}
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <Building2 className="w-4 h-4 text-purple-400" />
@@ -220,7 +233,6 @@ export default function ClientDetailPage() {
           </span>
         </div>
 
-        {/* Projects */}
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <FolderKanban className="w-4 h-4 text-blue-400" />
@@ -229,7 +241,6 @@ export default function ClientDetailPage() {
           <span className="text-2xl font-bold text-white">{projects.length}</span>
         </div>
 
-        {/* Feedback */}
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <MessageSquare className="w-4 h-4 text-amber-400" />
@@ -316,7 +327,6 @@ export default function ClientDetailPage() {
             </div>
           </button>
 
-          {/* Actions on the right */}
           <div className="ml-auto flex items-center gap-2">
             {activeTab === 'projects' && (
               <Link
@@ -351,7 +361,6 @@ export default function ClientDetailPage() {
           </div>
         </div>
 
-        {/* Sync result */}
         {syncResult && (
           <div className="mb-4 px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-xs text-slate-300">
             {syncResult}
@@ -474,5 +483,24 @@ export default function ClientDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page (wraps inner component in Suspense for useSearchParams)
+// ---------------------------------------------------------------------------
+
+export default function ClientDetailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+          <span className="ml-3 text-slate-400 text-sm">Loading...</span>
+        </div>
+      }
+    >
+      <ClientDetailInner />
+    </Suspense>
   );
 }

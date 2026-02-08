@@ -174,7 +174,7 @@ export default function ClientsPage() {
                     <tr
                       key={client.id}
                       onClick={() => {
-                        router.push(`/use-cases/crm/clients/${client.id}`);
+                        router.push(`/use-cases/crm/clients/detail?id=${client.id}`);
                       }}
                       className={`border-b border-slate-700/50 cursor-pointer transition-colors ${
                         selectedId === client.id

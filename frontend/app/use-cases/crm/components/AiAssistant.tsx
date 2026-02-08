@@ -129,6 +129,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/use-cases/crm': 'Dashboard',
   '/use-cases/crm/clients': 'Clients',
   '/use-cases/crm/clients/new': 'New Client',
+  '/use-cases/crm/clients/detail': 'Client Detail',
   '/use-cases/crm/projects': 'Projects',
   '/use-cases/crm/projects/new': 'New Project',
   '/use-cases/crm/feedback': 'Feedback',
