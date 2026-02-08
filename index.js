@@ -1557,6 +1557,63 @@ app.get('/stats', async (req, res) => {
 });
 
 // ==========================================
+// LLM Library & CRM Chat Endpoint
+// ==========================================
+const llm = require('./lib/llm');
+
+// List available LLM models
+app.get('/api/llm/models', (req, res) => {
+  res.json({ success: true, models: llm.listModels(), default: llm.DEFAULT_MODEL });
+});
+
+// CRM AI Assistant chat endpoint
+app.post('/api/crm/chat', async (req, res) => {
+  try {
+    const { messages, model: modelKey, page_context } = req.body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+
+    const system = `You are an AI assistant embedded in a Client CRM + Knowledge Base system.
+You help users manage clients, projects, feedback, and brand knowledge.
+
+When the user asks you to research a company, provide structured information including:
+- industry (as an array of strings)
+- region (as an array of strings)
+- website_url
+- company_size (e.g. "1000-5000", "50000+")
+- client_value_tier ("A" for enterprise, "B" for mid-market, "C" for SMB, "D" for startup)
+- legal_name (official registered name)
+
+Always wrap structured data in \`\`\`json code blocks so it can be parsed.
+
+${page_context ? `Current page context: ${JSON.stringify(page_context)}` : ''}
+
+Respond concisely. Use English or the language the user writes in.`;
+
+    const result = await llm.chat(modelKey || 'sonnet', messages, {
+      system,
+      maxTokens: 4096,
+    });
+
+    res.json({
+      message: result.text,
+      model: result.modelName,
+      model_id: result.model,
+      session_id: req.body.session_id || `crm-${Date.now()}`,
+      tool_calls: null,
+      usage: result.usage,
+    });
+  } catch (error) {
+    console.error('CRM chat error:', error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// ==========================================
 // Use Case Routes
 // ==========================================
 

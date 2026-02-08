@@ -252,10 +252,49 @@ export const crmApi = {
     },
   },
 
-  chat(messages: Array<{ role: "user" | "assistant"; content: string }>) {
-    return request<ChatResponse>("/chat", {
+  chat(
+    messages: Array<{ role: "user" | "assistant"; content: string }>,
+    opts?: { model?: string; page_context?: Record<string, unknown> }
+  ) {
+    // Chat goes to the main Express backend, not the CRM KB FastAPI
+    return fetch("/api/crm/chat", {
       method: "POST",
-      body: JSON.stringify({ messages }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages,
+        model: opts?.model,
+        page_context: opts?.page_context,
+      }),
+    }).then(async (res) => {
+      const text = await res.text();
+      if (!res.ok) {
+        let detail: string;
+        try {
+          const j = JSON.parse(text);
+          detail = j.error || j.detail || text;
+        } catch {
+          detail = text;
+        }
+        throw new Error(`API Error ${res.status}: ${detail}`);
+      }
+      return JSON.parse(text) as ChatResponse;
+    });
+  },
+
+  /** List available LLM models */
+  listModels() {
+    return fetch("/api/llm/models").then(async (res) => {
+      const text = await res.text();
+      if (!res.ok) throw new Error(`API Error ${res.status}`);
+      return JSON.parse(text) as {
+        models: Array<{
+          key: string;
+          name: string;
+          description: string;
+          costPer1M: { input: number; output: number };
+        }>;
+        default: string;
+      };
     });
   },
 };
