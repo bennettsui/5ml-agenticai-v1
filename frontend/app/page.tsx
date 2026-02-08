@@ -96,11 +96,11 @@ export default function Home() {
       status: 'New'
     },
     {
-      id: 'client-crm-kb',
+      id: 'crm',
       title: 'Client CRM + Knowledge Base',
       description: 'Integrated CRM with AI-powered knowledge base that learns from client feedback, extracts brand rules, and detects cross-client patterns',
       icon: Users,
-      href: '/use-cases/client-crm-kb',
+      href: '/use-cases/crm',
       color: 'from-emerald-500 to-teal-600',
       features: ['Client & Brand CRM', 'AI Feedback Analysis', 'Knowledge Rules Engine', 'Health Score Tracking'],
       status: 'New'
