@@ -25,6 +25,7 @@ from app.feedback.router import router as feedback_router
 from app.rules.router import router as rules_router
 from app.patterns.router import router as patterns_router
 from app.utils.kb_router import router as kb_router
+from app.chatbot.router import router as chatbot_router
 
 # ---------------------------------------------------------------------------
 # Application
@@ -71,6 +72,7 @@ app.include_router(feedback_router)
 app.include_router(rules_router)
 app.include_router(patterns_router)
 app.include_router(kb_router)
+app.include_router(chatbot_router)
 
 
 # ---------------------------------------------------------------------------

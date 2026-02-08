@@ -553,6 +553,32 @@ export interface TokenResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Chat / Chatbot
+// ---------------------------------------------------------------------------
+
+export interface ChatMessageInput {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatRequest {
+  messages: ChatMessageInput[];
+  session_id?: string;
+}
+
+export interface ChatToolCall {
+  tool: string;
+  input: Record<string, unknown>;
+  result_preview: string;
+}
+
+export interface ChatResponse {
+  message: string;
+  session_id: string;
+  tool_calls: ChatToolCall[] | null;
+}
+
+// ---------------------------------------------------------------------------
 // Paginated Response
 // ---------------------------------------------------------------------------
 

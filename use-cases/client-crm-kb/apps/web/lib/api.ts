@@ -30,6 +30,8 @@ import type {
   LoginRequest,
   TokenResponse,
   PaginatedResponse,
+  ChatRequest,
+  ChatResponse,
 } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -594,3 +596,14 @@ export const kb = {
     return request(`/kb/context/${clientId}`);
   },
 };
+
+// ---------------------------------------------------------------------------
+// Chatbot
+// ---------------------------------------------------------------------------
+
+export function chat(data: ChatRequest): Promise<ChatResponse> {
+  return request<ChatResponse>("/chat", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
