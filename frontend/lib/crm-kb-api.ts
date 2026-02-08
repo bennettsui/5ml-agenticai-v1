@@ -119,6 +119,7 @@ export interface PaginatedResponse<T> {
 }
 
 export interface GmailStatus {
+  configured: boolean;
   connected: boolean;
   email: string | null;
   last_sync_at: string | null;
@@ -196,6 +197,24 @@ export const crmApi = {
         method: "POST",
         body: JSON.stringify(data),
       });
+    },
+    projects(clientId: string, params?: { page?: number; size?: number }) {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set("page", String(params.page));
+      if (params?.size) qs.set("size", String(params.size));
+      const q = qs.toString();
+      return request<PaginatedResponse<Project>>(
+        `/clients/${clientId}/projects${q ? `?${q}` : ""}`
+      );
+    },
+    feedback(clientId: string, params?: { page?: number; size?: number }) {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set("page", String(params.page));
+      if (params?.size) qs.set("size", String(params.size));
+      const q = qs.toString();
+      return request<PaginatedResponse<FeedbackEvent>>(
+        `/clients/${clientId}/feedback${q ? `?${q}` : ""}`
+      );
     },
   },
 

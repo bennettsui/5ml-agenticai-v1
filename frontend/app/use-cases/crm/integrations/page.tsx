@@ -175,7 +175,7 @@ export default function IntegrationsPage() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
+    <div className="bg-gradient-to-br from-slate-900 to-slate-800">
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -219,63 +219,116 @@ export default function IntegrationsPage() {
               </div>
             )}
 
-            {/* Error */}
+            {/* Error / Not configured */}
             {!gmailLoading && gmailError && (
-              <div className="text-center py-8">
-                <AlertTriangle className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
-                <p className="text-slate-400 text-sm mb-1">
-                  Not configured
-                </p>
-                <p className="text-slate-500 text-xs mb-4">{gmailError}</p>
-                <button
-                  onClick={fetchGmail}
-                  className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-xs hover:bg-slate-600 transition-colors"
-                >
-                  Retry
-                </button>
+              <div className="space-y-4">
+                <div className="text-center py-3">
+                  <AlertTriangle className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
+                  <p className="text-slate-300 text-sm font-medium mb-1">
+                    Gmail Integration Not Configured
+                  </p>
+                  <p className="text-slate-500 text-xs">{gmailError}</p>
+                </div>
+
+                <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
+                  <h3 className="text-xs font-semibold text-slate-300 mb-2">Setup Instructions:</h3>
+                  <ol className="text-xs text-slate-400 space-y-1.5 list-decimal list-inside">
+                    <li>Go to Google Cloud Console &rarr; APIs &amp; Services</li>
+                    <li>Enable the Gmail API</li>
+                    <li>Create OAuth 2.0 Client ID (Web application)</li>
+                    <li>Set redirect URI to your callback endpoint</li>
+                    <li>Set these env vars on Fly.io:
+                      <div className="mt-1 bg-slate-800 rounded p-2 font-mono text-[10px] text-slate-300 space-y-0.5">
+                        <div>GOOGLE_CLIENT_ID=...</div>
+                        <div>GOOGLE_CLIENT_SECRET=...</div>
+                        <div>GOOGLE_REDIRECT_URI=https://&lt;domain&gt;/api/gmail/callback</div>
+                      </div>
+                    </li>
+                    <li>Redeploy the application</li>
+                  </ol>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    onClick={fetchGmail}
+                    className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-xs hover:bg-slate-600 transition-colors"
+                  >
+                    Retry Connection
+                  </button>
+                </div>
               </div>
             )}
 
             {/* Content */}
             {!gmailLoading && !gmailError && gmail && (
               <div className="space-y-4">
-                {/* Connection status */}
-                <div className="flex items-center gap-2">
-                  {gmail.connected ? (
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-red-400" />
-                  )}
-                  <span
-                    className={`text-sm font-medium ${
-                      gmail.connected ? "text-green-400" : "text-red-400"
-                    }`}
-                  >
-                    {gmail.connected ? "Connected" : "Disconnected"}
-                  </span>
-                </div>
+                {/* Not configured — show setup instructions */}
+                {!gmail.configured && !gmail.connected && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                      <span className="text-sm font-medium text-yellow-400">Not Configured</span>
+                    </div>
+                    <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
+                      <h3 className="text-xs font-semibold text-slate-300 mb-2">Setup Instructions:</h3>
+                      <ol className="text-xs text-slate-400 space-y-1.5 list-decimal list-inside">
+                        <li>Go to Google Cloud Console &rarr; APIs &amp; Services</li>
+                        <li>Enable the Gmail API</li>
+                        <li>Create OAuth 2.0 Client ID (Web application)</li>
+                        <li>Set redirect URI to your callback endpoint</li>
+                        <li>Set these env vars on Fly.io:
+                          <div className="mt-1 bg-slate-800 rounded p-2 font-mono text-[10px] text-slate-300 space-y-0.5">
+                            <div>GOOGLE_CLIENT_ID=...</div>
+                            <div>GOOGLE_CLIENT_SECRET=...</div>
+                            <div>GOOGLE_REDIRECT_URI=https://&lt;domain&gt;/api/gmail/callback</div>
+                          </div>
+                        </li>
+                        <li>Redeploy the application</li>
+                      </ol>
+                    </div>
+                  </div>
+                )}
 
-                {/* Details */}
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Email</span>
-                    <span className="text-slate-200">
-                      {gmail.email || "---"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Last Sync</span>
-                    <span className="text-slate-200">
-                      {formatDateTime(gmail.last_sync_at)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Total Synced</span>
-                    <span className="text-slate-200">
-                      {gmail.total_synced.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
+                {/* Configured — show connection status */}
+                {(gmail.configured || gmail.connected) && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      {gmail.connected ? (
+                        <CheckCircle className="w-5 h-5 text-green-400" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-red-400" />
+                      )}
+                      <span
+                        className={`text-sm font-medium ${
+                          gmail.connected ? "text-green-400" : "text-red-400"
+                        }`}
+                      >
+                        {gmail.connected ? "Connected" : "Disconnected"}
+                      </span>
+                    </div>
+
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Email</span>
+                        <span className="text-slate-200">
+                          {gmail.email || "---"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Last Sync</span>
+                        <span className="text-slate-200">
+                          {formatDateTime(gmail.last_sync_at)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Total Synced</span>
+                        <span className="text-slate-200">
+                          {gmail.total_synced.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Sync result banner */}
                 {syncResult && (
@@ -286,7 +339,7 @@ export default function IntegrationsPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-3 pt-2">
-                  {!gmail.connected && (
+                  {gmail.configured && !gmail.connected && (
                     <button
                       onClick={handleConnect}
                       disabled={connecting}

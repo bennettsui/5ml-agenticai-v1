@@ -35,7 +35,7 @@ export default function CrmKbLayout({ children }: { children: React.ReactNode })
 
   return (
     <CrmAiProvider>
-      <div className="flex min-h-screen bg-slate-950">
+      <div className="flex h-screen overflow-hidden bg-slate-950">
         {/* Sidebar */}
         <aside className="w-[250px] flex-shrink-0 bg-slate-900 border-r border-slate-700/50 flex flex-col">
           {/* Sidebar header */}
@@ -53,7 +53,7 @@ export default function CrmKbLayout({ children }: { children: React.ReactNode })
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-1">
+          <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
