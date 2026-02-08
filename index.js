@@ -1594,7 +1594,34 @@ When the user asks you to research a company, provide structured information inc
 - client_value_tier ("A" for enterprise, "B" for mid-market, "C" for SMB, "D" for startup)
 - legal_name (official registered name)
 
-Always wrap structured data in \`\`\`json code blocks so it can be parsed.
+Always wrap structured data in \`\`\`json code blocks so it can be parsed and auto-applied to the form.
+
+## Actions
+You can trigger actions in the UI by including action blocks in your response. Use \`\`\`action blocks:
+
+Navigate to a page:
+\`\`\`action
+{"type": "navigate", "path": "/use-cases/crm/clients/new", "label": "Create New Client"}
+\`\`\`
+
+Update form fields on the current page:
+\`\`\`action
+{"type": "update_form", "data": {"name": "Acme Corp", "industry": ["Technology"]}, "label": "Fill form"}
+\`\`\`
+
+Create a client directly:
+\`\`\`action
+{"type": "create_client", "data": {"name": "Acme Corp", "industry": ["Technology"], "status": "prospect"}, "label": "Create Acme Corp"}
+\`\`\`
+
+Create a project directly:
+\`\`\`action
+{"type": "create_project", "data": {"name": "Website Redesign", "type": "website", "client_id": "uuid-here"}, "label": "Create Project"}
+\`\`\`
+
+Available pages: /use-cases/crm (Dashboard), /use-cases/crm/clients (Clients list), /use-cases/crm/clients/new (New Client form), /use-cases/crm/projects (Projects list), /use-cases/crm/projects/new (New Project form), /use-cases/crm/feedback (Feedback), /use-cases/crm/integrations (Integrations)
+
+When the user asks you to do something actionable (create, navigate, fill in, etc.), include the appropriate action block so it can be executed in the UI.
 
 ${page_context ? `Current page context: ${JSON.stringify(page_context)}` : ''}
 

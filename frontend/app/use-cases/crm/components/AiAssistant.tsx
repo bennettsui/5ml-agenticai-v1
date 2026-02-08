@@ -18,6 +18,9 @@ import {
   ChevronUp,
   Wrench,
   MinusCircle,
+  ArrowRight,
+  RefreshCw,
+  FileEdit,
 } from 'lucide-react';
 import { useCrmAi } from '../context';
 import { crmApi, type ChatResponse } from '@/lib/crm-kb-api';
@@ -32,11 +35,19 @@ interface ToolCall {
   result_preview: string;
 }
 
+interface AiAction {
+  type: 'navigate' | 'update_form' | 'create_client' | 'create_project' | 'refresh';
+  path?: string;
+  data?: Record<string, unknown>;
+  label?: string;
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   toolCalls?: ToolCall[] | null;
+  actions?: AiAction[];
   isThinking?: boolean;
 }
 
@@ -76,34 +87,54 @@ function getWelcomeMessage(pageType: string): string {
   }
 }
 
-/**
- * Try to extract a JSON object from a markdown-style ```json ... ``` block
- * inside a string. Falls back to finding the first { ... } pair.
- */
+/** Extract JSON from ```json ... ``` blocks or bare { ... } */
 function extractJson(text: string): Record<string, unknown> | null {
-  // Try fenced code block first
   const fencedMatch = text.match(/```json\s*([\s\S]*?)```/);
   if (fencedMatch) {
     try {
       return JSON.parse(fencedMatch[1].trim());
-    } catch {
-      // fall through
-    }
+    } catch { /* fall through */ }
   }
-
-  // Try bare JSON object
   const braceStart = text.indexOf('{');
   const braceEnd = text.lastIndexOf('}');
   if (braceStart !== -1 && braceEnd > braceStart) {
     try {
       return JSON.parse(text.slice(braceStart, braceEnd + 1));
-    } catch {
-      // fall through
-    }
+    } catch { /* fall through */ }
   }
-
   return null;
 }
+
+/** Extract action blocks from ```action ... ``` in AI response */
+function extractActions(text: string): AiAction[] {
+  const actions: AiAction[] = [];
+  const regex = /```action\s*([\s\S]*?)```/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    try {
+      const action = JSON.parse(match[1].trim());
+      if (action.type) actions.push(action);
+    } catch { /* skip invalid */ }
+  }
+  return actions;
+}
+
+/** Remove action blocks from display text */
+function stripActionBlocks(text: string): string {
+  return text.replace(/```action[\s\S]*?```/g, '').trim();
+}
+
+// Page name map for user-friendly labels
+const PAGE_LABELS: Record<string, string> = {
+  '/use-cases/crm': 'Dashboard',
+  '/use-cases/crm/clients': 'Clients',
+  '/use-cases/crm/clients/new': 'New Client',
+  '/use-cases/crm/projects': 'Projects',
+  '/use-cases/crm/projects/new': 'New Project',
+  '/use-cases/crm/feedback': 'Feedback',
+  '/use-cases/crm/integrations': 'Integrations',
+  '/use-cases/crm/agentic-dashboard': 'Agentic Dashboard',
+};
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -111,7 +142,6 @@ function extractJson(text: string): Record<string, unknown> | null {
 
 function ToolCallBadge({ tc }: { tc: ToolCall }) {
   const [open, setOpen] = useState(false);
-
   return (
     <div className="mt-1">
       <button
@@ -132,7 +162,43 @@ function ToolCallBadge({ tc }: { tc: ToolCall }) {
   );
 }
 
-function MessageBubble({ msg }: { msg: Message }) {
+function ActionButton({ action, onExecute }: { action: AiAction; onExecute: (a: AiAction) => void }) {
+  const iconMap = {
+    navigate: ArrowRight,
+    update_form: FileEdit,
+    create_client: Sparkles,
+    create_project: Sparkles,
+    refresh: RefreshCw,
+  };
+  const Icon = iconMap[action.type] || ArrowRight;
+  const label = action.label || (
+    action.type === 'navigate' ? `Go to ${PAGE_LABELS[action.path || ''] || action.path}`
+    : action.type === 'update_form' ? 'Apply to form'
+    : action.type === 'create_client' ? 'Create client'
+    : action.type === 'create_project' ? 'Create project'
+    : action.type === 'refresh' ? 'Refresh data'
+    : action.type
+  );
+
+  return (
+    <button
+      type="button"
+      onClick={() => onExecute(action)}
+      className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600/80 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 transition-colors"
+    >
+      <Icon size={12} />
+      {label}
+    </button>
+  );
+}
+
+function MessageBubble({
+  msg,
+  onExecuteAction,
+}: {
+  msg: Message;
+  onExecuteAction: (a: AiAction) => void;
+}) {
   if (msg.isThinking) {
     return (
       <div className="flex items-start gap-2 mb-3">
@@ -156,6 +222,17 @@ function MessageBubble({ msg }: { msg: Message }) {
     );
   }
 
+  // system page-change notification
+  if (msg.role === 'system' && msg.content.startsWith('[')) {
+    return (
+      <div className="flex justify-center mb-3">
+        <span className="text-[11px] text-slate-500 bg-slate-800/50 px-3 py-1 rounded-full">
+          {msg.content}
+        </span>
+      </div>
+    );
+  }
+
   // assistant or system
   return (
     <div className="flex items-start gap-2 mb-3">
@@ -164,21 +241,25 @@ function MessageBubble({ msg }: { msg: Message }) {
       </div>
       <div className="max-w-[85%]">
         <div className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-300 whitespace-pre-wrap break-words">
-          {renderContent(msg.content)}
+          {renderContent(stripActionBlocks(msg.content))}
         </div>
         {msg.toolCalls?.map((tc, i) => (
           <ToolCallBadge key={i} tc={tc} />
         ))}
+        {msg.actions && msg.actions.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {msg.actions.map((action, i) => (
+              <ActionButton key={i} action={action} onExecute={onExecuteAction} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/** Render content with basic bold markdown and code block formatting */
 function renderContent(text: string) {
-  // Split on ```...``` code blocks first
   const parts = text.split(/(```[\s\S]*?```)/g);
-
   return parts.map((part, i) => {
     if (part.startsWith('```')) {
       const inner = part.replace(/^```\w*\n?/, '').replace(/\n?```$/, '');
@@ -191,8 +272,6 @@ function renderContent(text: string) {
         </pre>
       );
     }
-
-    // Handle **bold** within normal text
     const boldParts = part.split(/(\*\*.*?\*\*)/g);
     return (
       <span key={i}>
@@ -249,11 +328,13 @@ function SuggestionCard({ suggestion }: { suggestion: Suggestion }) {
 // ---------------------------------------------------------------------------
 
 export function AiAssistant() {
-  const { pageState, formUpdateRef } = useCrmAi();
+  const { pageState, formUpdateRef, navigate, refreshRef } = useCrmAi();
 
   // Panel state
   const [collapsed, setCollapsed] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    { id: nextId(), role: 'system', content: 'How can I help you today?' },
+  ]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -273,7 +354,7 @@ export function AiAssistant() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Track previous pageType for welcome messages
+  // Track previous pageType for context-change messages
   const prevPageTypeRef = useRef<string>('');
 
   // Whether the first user message has been sent (to prepend context)
@@ -291,60 +372,180 @@ export function AiAssistant() {
   }, [messages, suggestions, scrollToBottom]);
 
   // -----------------------------------------------------------------------
-  // Welcome message on pageType change
+  // Page change notification (persist chat, just add a note)
   // -----------------------------------------------------------------------
   useEffect(() => {
     if (pageState.pageType && pageState.pageType !== prevPageTypeRef.current) {
+      const isFirst = !prevPageTypeRef.current;
       prevPageTypeRef.current = pageState.pageType;
       contextSentRef.current = false;
-      chatHistoryRef.current = [];
 
-      const welcome: Message = {
-        id: nextId(),
-        role: 'system',
-        content: getWelcomeMessage(pageState.pageType),
-      };
+      if (isFirst) {
+        // First load - set welcome message
+        setMessages([{
+          id: nextId(),
+          role: 'system',
+          content: getWelcomeMessage(pageState.pageType),
+        }]);
+      } else {
+        // Page changed - add a small notification, keep history
+        const note: Message = {
+          id: nextId(),
+          role: 'system',
+          content: `[Navigated to ${pageState.pageTitle || pageState.pageType}]`,
+        };
+        setMessages((prev) => [...prev, note]);
+      }
 
-      setMessages([welcome]);
-      setSuggestions([]);
+      // Reset proactive suggestion tracking for the new page
       shownClientNamesRef.current = new Set();
       shownProjectKeysRef.current = new Set();
+      setSuggestions([]);
     }
-  }, [pageState.pageType]);
+  }, [pageState.pageType, pageState.pageTitle]);
+
+  // -----------------------------------------------------------------------
+  // Execute an AI action
+  // -----------------------------------------------------------------------
+  const executeAction = useCallback(
+    async (action: AiAction) => {
+      switch (action.type) {
+        case 'navigate':
+          if (action.path) {
+            navigate(action.path);
+            setMessages((prev) => [...prev, {
+              id: nextId(), role: 'system',
+              content: `[Navigating to ${PAGE_LABELS[action.path!] || action.path}...]`,
+            }]);
+          }
+          break;
+
+        case 'update_form':
+          if (action.data && formUpdateRef.current) {
+            formUpdateRef.current(action.data);
+            setMessages((prev) => [...prev, {
+              id: nextId(), role: 'system',
+              content: `[Updated form fields: ${Object.keys(action.data).join(', ')}]`,
+            }]);
+          }
+          break;
+
+        case 'create_client':
+          if (action.data) {
+            try {
+              const client = await crmApi.clients.create(action.data as any);
+              setMessages((prev) => [...prev, {
+                id: nextId(), role: 'assistant',
+                content: `Client **${client.name}** created successfully!`,
+                actions: [{ type: 'navigate', path: '/use-cases/crm/clients', label: 'View Clients' }],
+              }]);
+            } catch (err) {
+              setMessages((prev) => [...prev, {
+                id: nextId(), role: 'assistant',
+                content: `Failed to create client: ${err instanceof Error ? err.message : 'Unknown error'}`,
+              }]);
+            }
+          }
+          break;
+
+        case 'create_project':
+          if (action.data) {
+            try {
+              const project = await crmApi.projects.create(action.data as any);
+              setMessages((prev) => [...prev, {
+                id: nextId(), role: 'assistant',
+                content: `Project **${project.name}** created successfully!`,
+                actions: [{ type: 'navigate', path: '/use-cases/crm/projects', label: 'View Projects' }],
+              }]);
+            } catch (err) {
+              setMessages((prev) => [...prev, {
+                id: nextId(), role: 'assistant',
+                content: `Failed to create project: ${err instanceof Error ? err.message : 'Unknown error'}`,
+              }]);
+            }
+          }
+          break;
+
+        case 'refresh':
+          if (refreshRef.current) {
+            refreshRef.current();
+            setMessages((prev) => [...prev, {
+              id: nextId(), role: 'system', content: '[Refreshing page data...]',
+            }]);
+          }
+          break;
+      }
+    },
+    [navigate, formUpdateRef, refreshRef]
+  );
+
+  // -----------------------------------------------------------------------
+  // Process AI response - extract actions, form data, auto-execute
+  // -----------------------------------------------------------------------
+  const processAiResponse = useCallback(
+    (responseText: string, toolCalls?: ToolCall[] | null) => {
+      const actions = extractActions(responseText);
+
+      // Try to extract form JSON and push updates
+      const parsed = extractJson(responseText);
+      if (parsed && formUpdateRef.current) {
+        const formFields = ['name', 'legal_name', 'legalName', 'industry', 'region', 'website_url',
+          'websiteUrl', 'company_size', 'companySize', 'client_value_tier', 'valueTier',
+          'brief', 'type', 'status', 'start_date', 'end_date'];
+        const isFormData = Object.keys(parsed).some(k => formFields.includes(k));
+        if (isFormData) {
+          formUpdateRef.current(parsed);
+          if (!actions.some(a => a.type === 'update_form')) {
+            actions.push({ type: 'update_form', data: parsed, label: 'Re-apply to form' });
+          }
+        }
+      }
+
+      // Auto-execute refresh actions
+      for (const action of actions) {
+        if (action.type === 'refresh') executeAction(action);
+      }
+
+      return {
+        id: nextId(),
+        role: 'assistant' as const,
+        content: responseText,
+        toolCalls,
+        actions: actions.length > 0 ? actions : undefined,
+      };
+    },
+    [formUpdateRef, executeAction]
+  );
 
   // -----------------------------------------------------------------------
   // Proactive suggestion logic (debounced formData watcher)
   // -----------------------------------------------------------------------
   useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
 
     debounceRef.current = setTimeout(() => {
       const { pageType, formData } = pageState;
       if (!formData) return;
 
-      // --- clients-new: research company ---
       if (pageType === 'clients-new') {
         const name = typeof formData.name === 'string' ? formData.name.trim() : '';
         if (name.length >= 2 && !shownClientNamesRef.current.has(name)) {
           shownClientNamesRef.current.add(name);
-
           const suggestionId = nextId();
-          const suggestion: Suggestion = {
-            id: suggestionId,
-            description: `I notice you're adding **${name}** as a client. Would you like me to research this company and help fill in the remaining details (industry, region, website, etc.)?`,
-            acceptLabel: 'Yes, research',
-            onAccept: () => handleClientResearch(name, suggestionId),
-            onDismiss: () => dismissSuggestion(suggestionId),
-          };
-
-          setSuggestions((prev) => [...prev, suggestion]);
+          setSuggestions((prev) => [
+            ...prev,
+            {
+              id: suggestionId,
+              description: `I notice you're adding **${name}** as a client. Would you like me to research this company and help fill in the remaining details?`,
+              acceptLabel: 'Yes, research',
+              onAccept: () => handleClientResearch(name, suggestionId),
+              onDismiss: () => setSuggestions((p) => p.filter((s) => s.id !== suggestionId)),
+            },
+          ]);
           if (collapsed) setHasUnread(true);
         }
       }
 
-      // --- projects-new: check existing projects ---
       if (pageType === 'projects-new') {
         const name = typeof formData.name === 'string' ? formData.name.trim() : '';
         const clientId = formData.client_id;
@@ -352,189 +553,90 @@ export function AiAssistant() {
           const key = `${clientId}-${name}`;
           if (!shownProjectKeysRef.current.has(key)) {
             shownProjectKeysRef.current.add(key);
-
             const suggestionId = nextId();
-            const suggestion: Suggestion = {
-              id: suggestionId,
-              description:
-                'Want me to check existing projects for this client and suggest a brief?',
-              acceptLabel: 'Yes, check',
-              onAccept: () => handleProjectCheck(name, String(clientId), suggestionId),
-              onDismiss: () => dismissSuggestion(suggestionId),
-            };
-
-            setSuggestions((prev) => [...prev, suggestion]);
+            setSuggestions((prev) => [
+              ...prev,
+              {
+                id: suggestionId,
+                description: 'Want me to check existing projects and suggest a brief?',
+                acceptLabel: 'Yes, check',
+                onAccept: () => handleProjectCheck(name, String(clientId), suggestionId),
+                onDismiss: () => setSuggestions((p) => p.filter((s) => s.id !== suggestionId)),
+              },
+            ]);
             if (collapsed) setHasUnread(true);
           }
         }
       }
     }, 2000);
 
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [pageState, collapsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // -----------------------------------------------------------------------
-  // Dismiss a suggestion
-  // -----------------------------------------------------------------------
-  const dismissSuggestion = useCallback((id: string) => {
-    setSuggestions((prev) => prev.filter((s) => s.id !== id));
-  }, []);
-
-  // -----------------------------------------------------------------------
-  // Handle client research (user accepted suggestion)
+  // Handle client research
   // -----------------------------------------------------------------------
   const handleClientResearch = useCallback(
     async (name: string, suggestionId: string) => {
-      // Remove the suggestion card
       setSuggestions((prev) => prev.filter((s) => s.id !== suggestionId));
-
-      // Add user intent message
-      const userMsg: Message = {
-        id: nextId(),
-        role: 'user',
-        content: `Yes, please research "${name}" for me.`,
-      };
-
-      // Add thinking message
+      const userMsg: Message = { id: nextId(), role: 'user', content: `Yes, please research "${name}" for me.` };
       const thinkingId = nextId();
-      const thinkingMsg: Message = {
-        id: thinkingId,
-        role: 'assistant',
-        content: '',
-        isThinking: true,
-      };
+      setMessages((prev) => [...prev, userMsg, { id: thinkingId, role: 'assistant', content: '', isThinking: true }]);
 
-      setMessages((prev) => [...prev, userMsg, thinkingMsg]);
-
-      // Build the API call
-      const prompt = `I'm on the ${pageState.pageTitle} page. Current form data: ${JSON.stringify(pageState.formData)}. Please research ${name} and provide the following fields as JSON in your response: industry (array), region (array), website_url, company_size, client_value_tier (A/B/C/D). Wrap the JSON in \`\`\`json blocks.`;
-
-      const apiMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [
-        { role: 'user', content: prompt },
-      ];
+      const prompt = `Research the company "${name}" and provide: industry (array), region (array), website_url, company_size, client_value_tier (A/B/C/D), legal_name. Return the data as JSON in \`\`\`json blocks. Current form: ${JSON.stringify(pageState.formData)}`;
+      const apiMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [{ role: 'user', content: prompt }];
 
       try {
         const response = await crmApi.chat(apiMessages, {
-          page_context: {
-            pageType: pageState.pageType,
-            pageTitle: pageState.pageTitle,
-            formData: pageState.formData,
-          },
+          page_context: { pageType: pageState.pageType, pageTitle: pageState.pageTitle, formData: pageState.formData },
         });
-
-        // Remove thinking message
         setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
-
-        // Try to extract JSON and push form updates
-        const parsed = extractJson(response.message);
-        if (parsed && formUpdateRef.current) {
-          formUpdateRef.current(parsed);
-        }
-
-        const assistantMsg: Message = {
-          id: nextId(),
-          role: 'assistant',
-          content: response.message,
-          toolCalls: response.tool_calls,
-        };
-
-        chatHistoryRef.current = [
-          ...apiMessages,
-          { role: 'assistant', content: response.message },
-        ];
+        const assistantMsg = processAiResponse(response.message, response.tool_calls);
+        chatHistoryRef.current = [...apiMessages, { role: 'assistant', content: response.message }];
         contextSentRef.current = true;
-
         setMessages((prev) => [...prev, assistantMsg]);
       } catch (err) {
-        // Remove thinking message
         setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
-
-        const errorMsg: Message = {
-          id: nextId(),
-          role: 'assistant',
-          content: `Sorry, I ran into an error while researching "${name}". ${err instanceof Error ? err.message : 'Please try again.'}`,
-        };
-        setMessages((prev) => [...prev, errorMsg]);
+        setMessages((prev) => [...prev, {
+          id: nextId(), role: 'assistant',
+          content: `Sorry, error researching "${name}". ${err instanceof Error ? err.message : 'Please try again.'}`,
+        }]);
       }
     },
-    [pageState, formUpdateRef],
+    [pageState, processAiResponse],
   );
 
   // -----------------------------------------------------------------------
-  // Handle project check (user accepted suggestion)
+  // Handle project check
   // -----------------------------------------------------------------------
   const handleProjectCheck = useCallback(
     async (name: string, clientId: string, suggestionId: string) => {
       setSuggestions((prev) => prev.filter((s) => s.id !== suggestionId));
-
-      const userMsg: Message = {
-        id: nextId(),
-        role: 'user',
-        content: `Yes, please check existing projects for this client and suggest a brief.`,
-      };
-
+      const userMsg: Message = { id: nextId(), role: 'user', content: `Check existing projects for this client and suggest a brief.` };
       const thinkingId = nextId();
-      const thinkingMsg: Message = {
-        id: thinkingId,
-        role: 'assistant',
-        content: '',
-        isThinking: true,
-      };
+      setMessages((prev) => [...prev, userMsg, { id: thinkingId, role: 'assistant', content: '', isThinking: true }]);
 
-      setMessages((prev) => [...prev, userMsg, thinkingMsg]);
-
-      const prompt = `I'm on the ${pageState.pageTitle} page. Current form data: ${JSON.stringify(pageState.formData)}. The client_id is ${clientId} and the project name is "${name}". Please check what existing projects this client has and suggest a brief for this new project. If you have suggestions for the brief, include them as JSON with a "brief" field wrapped in \`\`\`json blocks.`;
-
-      const apiMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [
-        { role: 'user', content: prompt },
-      ];
+      const prompt = `Client ID: ${clientId}, project name: "${name}". Check existing projects and suggest a brief. Include as JSON with "brief" field in \`\`\`json blocks. Form: ${JSON.stringify(pageState.formData)}`;
+      const apiMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [{ role: 'user', content: prompt }];
 
       try {
         const response = await crmApi.chat(apiMessages, {
-          page_context: {
-            pageType: pageState.pageType,
-            pageTitle: pageState.pageTitle,
-            formData: pageState.formData,
-          },
+          page_context: { pageType: pageState.pageType, pageTitle: pageState.pageTitle, formData: pageState.formData },
         });
-
         setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
-
-        const parsed = extractJson(response.message);
-        if (parsed && formUpdateRef.current) {
-          formUpdateRef.current(parsed);
-        }
-
-        const assistantMsg: Message = {
-          id: nextId(),
-          role: 'assistant',
-          content: response.message,
-          toolCalls: response.tool_calls,
-        };
-
-        chatHistoryRef.current = [
-          ...apiMessages,
-          { role: 'assistant', content: response.message },
-        ];
+        const assistantMsg = processAiResponse(response.message, response.tool_calls);
+        chatHistoryRef.current = [...apiMessages, { role: 'assistant', content: response.message }];
         contextSentRef.current = true;
-
         setMessages((prev) => [...prev, assistantMsg]);
       } catch (err) {
         setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
-
-        const errorMsg: Message = {
-          id: nextId(),
-          role: 'assistant',
-          content: `Sorry, I ran into an error checking projects. ${err instanceof Error ? err.message : 'Please try again.'}`,
-        };
-        setMessages((prev) => [...prev, errorMsg]);
+        setMessages((prev) => [...prev, {
+          id: nextId(), role: 'assistant',
+          content: `Sorry, error checking projects. ${err instanceof Error ? err.message : 'Please try again.'}`,
+        }]);
       }
     },
-    [pageState, formUpdateRef],
+    [pageState, processAiResponse],
   );
 
   // -----------------------------------------------------------------------
@@ -549,73 +651,38 @@ export function AiAssistant() {
       setInput('');
       setSending(true);
 
-      // Show the user message
-      const userMsg: Message = {
-        id: nextId(),
-        role: 'user',
-        content: text,
-      };
+      const userMsg: Message = { id: nextId(), role: 'user', content: text };
       setMessages((prev) => [...prev, userMsg]);
 
-      // Build the message to send to API with context
       let apiContent = text;
       if (!contextSentRef.current) {
-        const ctx = `Context: I'm on the ${pageState.pageTitle || 'CRM'} page. Form data: ${JSON.stringify(pageState.formData ?? {})}.\n\n`;
-        apiContent = ctx + text;
+        apiContent = `Context: I'm on the "${pageState.pageTitle || 'CRM'}" page (${pageState.pageType}). Form data: ${JSON.stringify(pageState.formData ?? {})}.\n\n${text}`;
         contextSentRef.current = true;
       }
 
-      const newApiMessages = [
-        ...chatHistoryRef.current,
-        { role: 'user' as const, content: apiContent },
-      ];
-
-      // Add thinking indicator
+      const newApiMessages = [...chatHistoryRef.current, { role: 'user' as const, content: apiContent }];
       const thinkingId = nextId();
-      setMessages((prev) => [
-        ...prev,
-        { id: thinkingId, role: 'assistant', content: '', isThinking: true },
-      ]);
+      setMessages((prev) => [...prev, { id: thinkingId, role: 'assistant', content: '', isThinking: true }]);
 
       try {
         const response = await crmApi.chat(newApiMessages, {
-          page_context: {
-            pageType: pageState.pageType,
-            pageTitle: pageState.pageTitle,
-            formData: pageState.formData,
-          },
+          page_context: { pageType: pageState.pageType, pageTitle: pageState.pageTitle, formData: pageState.formData },
         });
-
-        // Remove thinking
         setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
-
-        const assistantMsg: Message = {
-          id: nextId(),
-          role: 'assistant',
-          content: response.message,
-          toolCalls: response.tool_calls,
-        };
+        const assistantMsg = processAiResponse(response.message, response.tool_calls);
         setMessages((prev) => [...prev, assistantMsg]);
-
-        // Update chat history
-        chatHistoryRef.current = [
-          ...newApiMessages,
-          { role: 'assistant', content: response.message },
-        ];
+        chatHistoryRef.current = [...newApiMessages, { role: 'assistant', content: response.message }];
       } catch (err) {
         setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
-
-        const errorMsg: Message = {
-          id: nextId(),
-          role: 'assistant',
+        setMessages((prev) => [...prev, {
+          id: nextId(), role: 'assistant',
           content: `Sorry, something went wrong. ${err instanceof Error ? err.message : 'Please try again.'}`,
-        };
-        setMessages((prev) => [...prev, errorMsg]);
+        }]);
       } finally {
         setSending(false);
       }
     },
-    [input, sending, pageState],
+    [input, sending, pageState, processAiResponse],
   );
 
   // -----------------------------------------------------------------------
@@ -625,10 +692,7 @@ export function AiAssistant() {
     return (
       <button
         type="button"
-        onClick={() => {
-          setCollapsed(false);
-          setHasUnread(false);
-        }}
+        onClick={() => { setCollapsed(false); setHasUnread(false); }}
         className="fixed right-4 top-4 z-50 flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 border border-slate-700 shadow-lg hover:bg-slate-700 transition-colors"
         aria-label="Open AI Assistant"
       >
@@ -652,6 +716,11 @@ export function AiAssistant() {
             <Bot size={16} className="text-emerald-400" />
           </div>
           <h2 className="text-sm font-semibold text-slate-100">AI Assistant</h2>
+          {pageState.pageTitle && (
+            <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
+              {pageState.pageTitle}
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -664,27 +733,18 @@ export function AiAssistant() {
       </div>
 
       {/* Messages area */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-3 py-3 scroll-smooth"
-      >
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 scroll-smooth">
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} msg={msg} />
+          <MessageBubble key={msg.id} msg={msg} onExecuteAction={executeAction} />
         ))}
-
-        {/* Suggestion cards */}
         {suggestions.map((s) => (
           <SuggestionCard key={s.id} suggestion={s} />
         ))}
-
         <div ref={bottomRef} />
       </div>
 
       {/* Input area */}
-      <form
-        onSubmit={handleSend}
-        className="border-t border-slate-700 px-3 py-3"
-      >
+      <form onSubmit={handleSend} className="border-t border-slate-700 px-3 py-3">
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -700,11 +760,7 @@ export function AiAssistant() {
             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white transition-colors hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
             aria-label="Send message"
           >
-            {sending ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <Send size={16} />
-            )}
+            {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>
         </div>
       </form>
