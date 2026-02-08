@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import {
   crmApi,
-  type Client,
+  type Brand,
   type Project,
   type FeedbackEvent,
 } from '@/lib/crm-kb-api';
@@ -63,13 +63,13 @@ function formatDate(iso: string): string {
 // Inner component (needs Suspense boundary for useSearchParams)
 // ---------------------------------------------------------------------------
 
-function ClientDetailInner() {
+function BrandDetailInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const clientId = searchParams.get('id');
+  const brandId = searchParams.get('id');
   const { setPageState } = useCrmAi();
 
-  const [client, setClient] = useState<Client | null>(null);
+  const [brand, setBrand] = useState<Brand | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [feedback, setFeedback] = useState<FeedbackEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,36 +79,36 @@ function ClientDetailInner() {
   const [activeTab, setActiveTab] = useState<'projects' | 'feedback'>('projects');
 
   const fetchData = useCallback(async () => {
-    if (!clientId) return;
+    if (!brandId) return;
     setLoading(true);
     setError(null);
     try {
-      const [clientData, projectsData, feedbackData] = await Promise.all([
-        crmApi.clients.get(clientId),
-        crmApi.clients.projects(clientId),
-        crmApi.clients.feedback(clientId),
+      const [brandData, projectsData, feedbackData] = await Promise.all([
+        crmApi.brands.get(brandId),
+        crmApi.brands.projects(brandId),
+        crmApi.brands.feedback(brandId),
       ]);
-      setClient(clientData);
+      setBrand(brandData);
       setProjects(projectsData.items);
       setFeedback(feedbackData.items);
       setPageState({
-        pageType: 'client-detail',
-        pageTitle: clientData.name,
-        hints: { clientId: clientData.id, clientName: clientData.name },
+        pageType: 'brand-detail',
+        pageTitle: brandData.name,
+        hints: { brandId: brandData.id, brandName: brandData.name },
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load client');
+      setError(err instanceof Error ? err.message : 'Failed to load brand');
     } finally {
       setLoading(false);
     }
-  }, [clientId]);
+  }, [brandId]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
   const handleSyncEmails = async () => {
-    if (!clientId) return;
+    if (!brandId) return;
     setSyncing(true);
     setSyncResult(null);
     try {
@@ -116,7 +116,7 @@ function ClientDetailInner() {
       setSyncResult(
         `Synced ${result.synced_count} emails, ${result.new_feedback_count} new feedback items created.`
       );
-      const feedbackData = await crmApi.clients.feedback(clientId);
+      const feedbackData = await crmApi.brands.feedback(brandId);
       setFeedback(feedbackData.items);
     } catch (err) {
       setSyncResult(
@@ -127,16 +127,16 @@ function ClientDetailInner() {
     }
   };
 
-  if (!clientId) {
+  if (!brandId) {
     return (
       <div className="py-12 text-center">
         <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
-        <p className="text-red-300 mb-4">No client ID provided</p>
+        <p className="text-red-300 mb-4">No brand ID provided</p>
         <Link
-          href="/use-cases/crm/clients"
+          href="/use-cases/crm/brands"
           className="text-emerald-400 hover:text-emerald-300 text-sm"
         >
-          Back to Clients
+          Back to Brands
         </Link>
       </div>
     );
@@ -146,16 +146,16 @@ function ClientDetailInner() {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
-        <span className="ml-3 text-slate-400 text-sm">Loading client...</span>
+        <span className="ml-3 text-slate-400 text-sm">Loading brand...</span>
       </div>
     );
   }
 
-  if (error || !client) {
+  if (error || !brand) {
     return (
       <div className="py-12 text-center">
         <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
-        <p className="text-red-300 mb-4">{error || 'Client not found'}</p>
+        <p className="text-red-300 mb-4">{error || 'Brand not found'}</p>
         <button
           onClick={fetchData}
           className="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg text-sm hover:bg-slate-600 transition-colors"
@@ -172,34 +172,34 @@ function ClientDetailInner() {
       <div>
         <nav className="flex items-center gap-2 text-sm text-slate-400 mb-4">
           <Link
-            href="/use-cases/crm/clients"
+            href="/use-cases/crm/brands"
             className="hover:text-white transition-colors inline-flex items-center gap-1"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            Clients
+            Brands
           </Link>
           <span className="text-slate-600">/</span>
-          <span className="text-slate-300">{client.name}</span>
+          <span className="text-slate-300">{brand.name}</span>
         </nav>
 
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">{client.name}</h1>
-            {client.legal_name && (
-              <p className="text-sm text-slate-400 mt-0.5">{client.legal_name}</p>
+            <h1 className="text-2xl font-bold text-white">{brand.name}</h1>
+            {brand.legal_name && (
+              <p className="text-sm text-slate-400 mt-0.5">{brand.legal_name}</p>
             )}
           </div>
           <span
             className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${
-              STATUS_COLORS[client.status] ?? 'bg-slate-700 text-slate-300 border-slate-600'
+              STATUS_COLORS[brand.status] ?? 'bg-slate-700 text-slate-300 border-slate-600'
             }`}
           >
-            {client.status}
+            {brand.status}
           </span>
         </div>
       </div>
 
-      {/* Client Info Cards */}
+      {/* Brand Info Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -207,17 +207,17 @@ function ClientDetailInner() {
             <span className="text-xs text-slate-400">Health Score</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-2xl font-bold text-white">{client.health_score}%</span>
+            <span className="text-2xl font-bold text-white">{brand.health_score}%</span>
             <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full ${
-                  client.health_score >= 70
+                  brand.health_score >= 70
                     ? 'bg-green-500'
-                    : client.health_score >= 40
+                    : brand.health_score >= 40
                       ? 'bg-yellow-500'
                       : 'bg-red-500'
                 }`}
-                style={{ width: `${client.health_score}%` }}
+                style={{ width: `${brand.health_score}%` }}
               />
             </div>
           </div>
@@ -229,7 +229,7 @@ function ClientDetailInner() {
             <span className="text-xs text-slate-400">Value Tier</span>
           </div>
           <span className="text-2xl font-bold text-white">
-            {client.client_value_tier ? `Tier ${client.client_value_tier}` : '--'}
+            {brand.client_value_tier ? `Tier ${brand.client_value_tier}` : '--'}
           </span>
         </div>
 
@@ -250,42 +250,42 @@ function ClientDetailInner() {
         </div>
       </div>
 
-      {/* Client Details */}
+      {/* Brand Details */}
       <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-white mb-3">Client Information</h2>
+        <h2 className="text-sm font-semibold text-white mb-3">Brand Information</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div className="flex items-center gap-2">
             <Building2 className="w-4 h-4 text-slate-500" />
             <span className="text-slate-400">Industry:</span>
             <span className="text-slate-200">
-              {client.industry?.join(', ') || '--'}
+              {brand.industry?.join(', ') || '--'}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <Globe className="w-4 h-4 text-slate-500" />
             <span className="text-slate-400">Region:</span>
             <span className="text-slate-200">
-              {client.region?.join(', ') || '--'}
+              {brand.region?.join(', ') || '--'}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <Building2 className="w-4 h-4 text-slate-500" />
             <span className="text-slate-400">Company Size:</span>
             <span className="text-slate-200">
-              {client.company_size || '--'}
+              {brand.company_size || '--'}
             </span>
           </div>
-          {client.website_url && (
+          {brand.website_url && (
             <div className="flex items-center gap-2">
               <ExternalLink className="w-4 h-4 text-slate-500" />
               <span className="text-slate-400">Website:</span>
               <a
-                href={client.website_url}
+                href={brand.website_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-emerald-400 hover:text-emerald-300 truncate"
               >
-                {client.website_url}
+                {brand.website_url}
               </a>
             </div>
           )}
@@ -330,7 +330,7 @@ function ClientDetailInner() {
           <div className="ml-auto flex items-center gap-2">
             {activeTab === 'projects' && (
               <Link
-                href={`/use-cases/crm/projects/new?client_id=${clientId}`}
+                href={`/use-cases/crm/projects/new?client_id=${brandId}`}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-500 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -375,7 +375,7 @@ function ClientDetailInner() {
                 <FolderKanban className="w-10 h-10 text-slate-600 mx-auto mb-3" />
                 <p className="text-slate-400 mb-2">No projects yet</p>
                 <Link
-                  href={`/use-cases/crm/projects/new?client_id=${clientId}`}
+                  href={`/use-cases/crm/projects/new?client_id=${brandId}`}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-500 transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -490,7 +490,7 @@ function ClientDetailInner() {
 // Page (wraps inner component in Suspense for useSearchParams)
 // ---------------------------------------------------------------------------
 
-export default function ClientDetailPage() {
+export default function BrandDetailPage() {
   return (
     <Suspense
       fallback={
@@ -500,7 +500,7 @@ export default function ClientDetailPage() {
         </div>
       }
     >
-      <ClientDetailInner />
+      <BrandDetailInner />
     </Suspense>
   );
 }

@@ -17,7 +17,7 @@ import { crmApi } from '@/lib/crm-kb-api';
 import { useCrmAi } from './context';
 
 interface DashboardStats {
-  totalClients: number;
+  totalBrands: number;
   activeProjects: number;
   feedbackItems: number;
   healthScore: number;
@@ -25,9 +25,9 @@ interface DashboardStats {
 
 const quickLinks = [
   {
-    title: 'Client Management',
-    description: 'Manage client profiles, contacts, and contracts',
-    href: '/use-cases/crm/clients',
+    title: 'Brand Management',
+    description: 'Manage brand profiles, contacts, and contracts',
+    href: '/use-cases/crm/brands',
     icon: Users,
     color: 'text-blue-400',
     bg: 'bg-blue-500/10',
@@ -35,14 +35,14 @@ const quickLinks = [
   {
     title: 'Brand Profile',
     description: 'Brand tone, guidelines, and visual rules',
-    href: '/use-cases/crm/clients',
+    href: '/use-cases/crm/brands',
     icon: Image,
     color: 'text-purple-400',
     bg: 'bg-purple-500/10',
   },
   {
     title: 'Feedback',
-    description: 'Log and analyze client feedback',
+    description: 'Log and analyze brand feedback',
     href: '/use-cases/crm/feedback',
     icon: MessageSquare,
     color: 'text-amber-400',
@@ -50,7 +50,7 @@ const quickLinks = [
   },
   {
     title: 'Knowledge Base',
-    description: 'Client rules and cross-client patterns',
+    description: 'Brand rules and cross-brand patterns',
     href: '/use-cases/crm/knowledge',
     icon: Brain,
     color: 'text-emerald-400',
@@ -58,7 +58,7 @@ const quickLinks = [
   },
   {
     title: 'Health Scores',
-    description: 'Track client health and engagement',
+    description: 'Track brand health and engagement',
     href: '/use-cases/crm/health',
     icon: TrendingUp,
     color: 'text-rose-400',
@@ -66,7 +66,7 @@ const quickLinks = [
   },
   {
     title: 'Taste Gallery',
-    description: 'Visual library of client preferences',
+    description: 'Visual library of brand preferences',
     href: '/use-cases/crm/gallery',
     icon: Image,
     color: 'text-cyan-400',
@@ -82,7 +82,7 @@ export default function DashboardPage() {
   }, []);
 
   const [stats, setStats] = useState<DashboardStats>({
-    totalClients: 0,
+    totalBrands: 0,
     activeProjects: 0,
     feedbackItems: 0,
     healthScore: 0,
@@ -103,14 +103,14 @@ export default function DashboardPage() {
         setLoading(true);
         setError(null);
 
-        const [clientsRes, projectsRes, feedbackRes] = await Promise.allSettled([
-          crmApi.clients.list({ page: 1, size: 1 }),
+        const [brandsRes, projectsRes, feedbackRes] = await Promise.allSettled([
+          crmApi.brands.list({ page: 1, size: 1 }),
           crmApi.projects.list({ page: 1, size: 1, status: 'in_progress' }),
           crmApi.feedback.list({ page: 1, size: 1 }),
         ]);
 
-        const totalClients =
-          clientsRes.status === 'fulfilled' ? clientsRes.value.total : 0;
+        const totalBrands =
+          brandsRes.status === 'fulfilled' ? brandsRes.value.total : 0;
         const activeProjects =
           projectsRes.status === 'fulfilled' ? projectsRes.value.total : 0;
         const feedbackItems =
@@ -118,23 +118,23 @@ export default function DashboardPage() {
 
         // Health score: average from clients or fallback placeholder
         let healthScore = 85;
-        if (clientsRes.status === 'fulfilled' && clientsRes.value.items.length > 0) {
+        if (brandsRes.status === 'fulfilled' && brandsRes.value.items.length > 0) {
           // Fetch more clients to compute average health
           try {
-            const allClients = await crmApi.clients.list({ page: 1, size: 50 });
-            if (allClients.items.length > 0) {
-              const sum = allClients.items.reduce(
+            const allBrands = await crmApi.brands.list({ page: 1, size: 50 });
+            if (allBrands.items.length > 0) {
+              const sum = allBrands.items.reduce(
                 (acc, c) => acc + (c.health_score ?? 0),
                 0
               );
-              healthScore = Math.round(sum / allClients.items.length);
+              healthScore = Math.round(sum / allBrands.items.length);
             }
           } catch {
             // keep default
           }
         }
 
-        setStats({ totalClients, activeProjects, feedbackItems, healthScore });
+        setStats({ totalBrands, activeProjects, feedbackItems, healthScore });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
       } finally {
@@ -175,7 +175,7 @@ export default function DashboardPage() {
   }
 
   const statCards = [
-    { label: 'Total Clients', value: stats.totalClients, color: 'text-blue-400' },
+    { label: 'Total Brands', value: stats.totalBrands, color: 'text-blue-400' },
     { label: 'Active Projects', value: stats.activeProjects, color: 'text-emerald-400' },
     { label: 'Feedback Items', value: stats.feedbackItems, color: 'text-amber-400' },
     { label: 'Health Score', value: stats.healthScore + '%', color: 'text-rose-400' },
@@ -188,11 +188,11 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
         <div className="flex items-center gap-3">
           <Link
-            href="/use-cases/crm/clients/new"
+            href="/use-cases/crm/brands/new"
             className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-500 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            New Client
+            New Brand
           </Link>
           <Link
             href="/use-cases/crm/projects/new"
@@ -301,7 +301,7 @@ export default function DashboardPage() {
               type="text"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Ask about clients, projects, or knowledge base..."
+              placeholder="Ask about brands, projects, or knowledge base..."
               className="flex-1 bg-transparent text-white text-sm px-4 py-3.5 placeholder-slate-500 focus:outline-none"
               disabled={chatLoading}
             />

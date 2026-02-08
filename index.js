@@ -1583,8 +1583,8 @@ app.post('/api/crm/chat', async (req, res) => {
       return res.status(400).json({ error: 'messages array is required' });
     }
 
-    const system = `You are an AI assistant embedded in a Client CRM + Knowledge Base system.
-You help users manage clients, projects, feedback, and brand knowledge.
+    const system = `You are an AI assistant embedded in a Brand CRM + Knowledge Base system.
+You help users manage brands, projects, feedback, and brand knowledge.
 
 When the user asks you to research a company, provide structured information including:
 - industry (as an array of strings)
@@ -1601,7 +1601,7 @@ You can trigger actions in the UI by including action blocks in your response. U
 
 Navigate to a page:
 \`\`\`action
-{"type": "navigate", "path": "/use-cases/crm/clients/new", "label": "Create New Client"}
+{"type": "navigate", "path": "/use-cases/crm/brands/new", "label": "Create New Brand"}
 \`\`\`
 
 Update form fields on the current page:
@@ -1609,9 +1609,9 @@ Update form fields on the current page:
 {"type": "update_form", "data": {"name": "Acme Corp", "industry": ["Technology"]}, "label": "Fill form"}
 \`\`\`
 
-Create a client directly:
+Create a brand directly:
 \`\`\`action
-{"type": "create_client", "data": {"name": "Acme Corp", "industry": ["Technology"], "status": "prospect"}, "label": "Create Acme Corp"}
+{"type": "create_brand", "data": {"name": "Acme Corp", "industry": ["Technology"], "status": "prospect"}, "label": "Create Acme Corp"}
 \`\`\`
 
 Create a project directly:
@@ -1619,7 +1619,7 @@ Create a project directly:
 {"type": "create_project", "data": {"name": "Website Redesign", "type": "website", "client_id": "uuid-here"}, "label": "Create Project"}
 \`\`\`
 
-Available pages: /use-cases/crm (Dashboard), /use-cases/crm/clients (Clients list), /use-cases/crm/clients/new (New Client form), /use-cases/crm/clients/detail?id=CLIENT_ID (Client detail with projects and feedback), /use-cases/crm/projects (Projects list), /use-cases/crm/projects/new (New Project form), /use-cases/crm/feedback (Feedback), /use-cases/crm/integrations (Integrations)
+Available pages: /use-cases/crm (Dashboard), /use-cases/crm/brands (Brands list), /use-cases/crm/brands/new (New Brand form), /use-cases/crm/brands/detail?id=BRAND_ID (Brand detail with projects and feedback), /use-cases/crm/projects (Projects list), /use-cases/crm/projects/new (New Project form), /use-cases/crm/projects/detail?id=PROJECT_ID (Project detail), /use-cases/crm/feedback (Feedback), /use-cases/crm/integrations (Integrations)
 
 When the user asks you to do something actionable (create, navigate, fill in, etc.), include the appropriate action block so it can be executed in the UI.
 

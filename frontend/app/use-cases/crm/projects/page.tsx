@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   FolderKanban,
   Plus,
@@ -58,6 +59,7 @@ function formatStatus(status: ProjectStatus): string {
 }
 
 export default function ProjectsPage() {
+  const router = useRouter();
   const { setPageState } = useCrmAi();
 
   useEffect(() => {
@@ -218,7 +220,7 @@ export default function ProjectsPage() {
                     {data.items.map((project) => (
                       <tr
                         key={project.id}
-                        onClick={() => alert(`Project: ${project.name}\nID: ${project.id}`)}
+                        onClick={() => router.push(`/use-cases/crm/projects/detail?id=${project.id}`)}
                         className="hover:bg-slate-700/40 cursor-pointer transition-colors"
                       >
                         <td className="px-6 py-4 font-medium text-white whitespace-nowrap">

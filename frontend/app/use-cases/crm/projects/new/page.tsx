@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import {
   crmApi,
-  type Client,
+  type Brand,
   type ProjectCreate,
   type ProjectType,
   type ProjectStatus,
@@ -55,7 +55,7 @@ export default function NewProjectPage() {
   }, []);
 
   // Client list for dropdown
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<Brand[]>([]);
   const [clientsLoading, setClientsLoading] = useState(true);
 
   // Form fields
@@ -76,14 +76,14 @@ export default function NewProjectPage() {
 
   const nameError = touched.name && !name.trim() ? "Name is required" : null;
   const clientError =
-    touched.clientId && !clientId ? "Client is required" : null;
+    touched.clientId && !clientId ? "Brand is required" : null;
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadClients() {
       try {
-        const result = await crmApi.clients.list({ size: 200 });
+        const result = await crmApi.brands.list({ size: 200 });
         if (!cancelled) {
           setClients(result.items);
         }
@@ -203,12 +203,12 @@ export default function NewProjectPage() {
             {/* Client */}
             <div>
               <label htmlFor="client" className={labelClasses}>
-                Client <span className="text-red-400">*</span>
+                Brand <span className="text-red-400">*</span>
               </label>
               {clientsLoading ? (
                 <div className="flex items-center gap-2 py-2.5 text-sm text-slate-400">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Loading clients...
+                  Loading brands...
                 </div>
               ) : (
                 <select
@@ -222,7 +222,7 @@ export default function NewProjectPage() {
                   onBlur={() => setTouched((t) => ({ ...t, clientId: true }))}
                   className={`${inputClasses} cursor-pointer ${clientError ? "border-red-500 focus:ring-red-500" : ""}`}
                 >
-                  <option value="">Select a client...</option>
+                  <option value="">Select a brand...</option>
                   {clients.map((client) => (
                     <option key={client.id} value={client.id}>
                       {client.name}
