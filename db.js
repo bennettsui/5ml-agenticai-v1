@@ -66,9 +66,10 @@ const getDatabaseConfig = () => {
   }
 
   // Everything else (Fly, Neon, Supabase, Render, etc.):
-  // Simple SSL with verification disabled - THIS IS WHAT WORKED IN PR #185
+  // Simple SSL with verification fully disabled - handles self-signed certs
   config.ssl = {
     rejectUnauthorized: false,
+    checkServerIdentity: () => undefined,
   };
   console.log('🔒 Database SSL: enabled (verification disabled for compatibility)');
 

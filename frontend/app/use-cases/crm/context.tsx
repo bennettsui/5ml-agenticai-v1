@@ -1,43 +1,38 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export interface PageState {
-  /** Identifier for the current page (e.g. "clients-new", "projects-list") */
   pageType: string;
-  /** Human-readable page title */
   pageTitle: string;
-  /** Current form data (for form pages like new-client, new-project) */
   formData?: Record<string, unknown>;
-  /** Extra context hints for the AI (e.g. selected filters, active item) */
   hints?: Record<string, unknown>;
 }
 
 export interface CrmAiContextValue {
-  /** Current page state – set by each page component */
   pageState: PageState;
   setPageState: (state: PageState) => void;
-
-  /** Update individual form fields (merges into existing formData) */
   updateFormData: (updates: Record<string, unknown>) => void;
 
-  /**
-   * Ref holding a callback that the AI assistant can invoke to push form
-   * updates back into the active page's form. Each form page registers
-   * its own callback on mount.
-   */
+  /** Ref holding a callback to push form updates into the active page */
   formUpdateRef: React.MutableRefObject<
     ((updates: Record<string, unknown>) => void) | null
   >;
-
-  /** Register a form-update callback (convenience wrapper) */
   registerFormCallback: (
     cb: ((updates: Record<string, unknown>) => void) | null
   ) => void;
+
+  /** Navigate to a CRM page from the AI assistant */
+  navigate: (path: string) => void;
+
+  /** Ref holding a callback the current page registers for data refresh */
+  refreshRef: React.MutableRefObject<(() => void) | null>;
+  registerRefreshCallback: (cb: (() => void) | null) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,6 +52,8 @@ export function useCrmAi() {
 // ---------------------------------------------------------------------------
 
 export function CrmAiProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+
   const [pageState, setPageStateRaw] = useState<PageState>({
     pageType: '',
     pageTitle: '',
@@ -65,6 +62,8 @@ export function CrmAiProvider({ children }: { children: React.ReactNode }) {
   const formUpdateRef = useRef<
     ((updates: Record<string, unknown>) => void) | null
   >(null);
+
+  const refreshRef = useRef<(() => void) | null>(null);
 
   const setPageState = useCallback((state: PageState) => {
     setPageStateRaw(state);
@@ -87,6 +86,20 @@ export function CrmAiProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const registerRefreshCallback = useCallback(
+    (cb: (() => void) | null) => {
+      refreshRef.current = cb;
+    },
+    []
+  );
+
+  const navigate = useCallback(
+    (path: string) => {
+      router.push(path);
+    },
+    [router]
+  );
+
   return (
     <CrmAiContext.Provider
       value={{
@@ -95,6 +108,9 @@ export function CrmAiProvider({ children }: { children: React.ReactNode }) {
         updateFormData,
         formUpdateRef,
         registerFormCallback,
+        navigate,
+        refreshRef,
+        registerRefreshCallback,
       }}
     >
       {children}
