@@ -36,7 +36,7 @@ interface ToolCall {
 }
 
 interface AiAction {
-  type: 'navigate' | 'update_form' | 'create_client' | 'create_project' | 'refresh';
+  type: 'navigate' | 'update_form' | 'create_brand' | 'create_project' | 'refresh';
   path?: string;
   data?: Record<string, unknown>;
   label?: string;
@@ -70,12 +70,12 @@ function nextId() {
 
 function getWelcomeMessage(pageType: string): string {
   switch (pageType) {
-    case 'clients-new':
-      return "I'm here to help you set up a new client. Start typing the client name and I can research their details.";
+    case 'brands-new':
+      return "I'm here to help you set up a new brand. Start typing the brand name and I can research their details.";
     case 'projects-new':
       return "I'll help you create a new project. I can suggest briefs and check existing work.";
-    case 'clients-list':
-      return 'Ask me anything about your clients, or search for specific information.';
+    case 'brands-list':
+      return 'Ask me anything about your brands, or search for specific information.';
     case 'projects-list':
       return 'Need help finding a project or analyzing project status? Just ask.';
     case 'feedback':
@@ -127,11 +127,12 @@ function stripActionBlocks(text: string): string {
 // Page name map for user-friendly labels
 const PAGE_LABELS: Record<string, string> = {
   '/use-cases/crm': 'Dashboard',
-  '/use-cases/crm/clients': 'Clients',
-  '/use-cases/crm/clients/new': 'New Client',
-  '/use-cases/crm/clients/detail': 'Client Detail',
+  '/use-cases/crm/brands': 'Brands',
+  '/use-cases/crm/brands/new': 'New Brand',
+  '/use-cases/crm/brands/detail': 'Brand Detail',
   '/use-cases/crm/projects': 'Projects',
   '/use-cases/crm/projects/new': 'New Project',
+  '/use-cases/crm/projects/detail': 'Project Detail',
   '/use-cases/crm/feedback': 'Feedback',
   '/use-cases/crm/integrations': 'Integrations',
   '/use-cases/crm/agentic-dashboard': 'Agentic Dashboard',
@@ -167,7 +168,7 @@ function ActionButton({ action, onExecute }: { action: AiAction; onExecute: (a: 
   const iconMap = {
     navigate: ArrowRight,
     update_form: FileEdit,
-    create_client: Sparkles,
+    create_brand: Sparkles,
     create_project: Sparkles,
     refresh: RefreshCw,
   };
@@ -175,7 +176,7 @@ function ActionButton({ action, onExecute }: { action: AiAction; onExecute: (a: 
   const label = action.label || (
     action.type === 'navigate' ? `Go to ${PAGE_LABELS[action.path || ''] || action.path}`
     : action.type === 'update_form' ? 'Apply to form'
-    : action.type === 'create_client' ? 'Create client'
+    : action.type === 'create_brand' ? 'Create brand'
     : action.type === 'create_project' ? 'Create project'
     : action.type === 'refresh' ? 'Refresh data'
     : action.type
@@ -431,19 +432,19 @@ export function AiAssistant() {
           }
           break;
 
-        case 'create_client':
+        case 'create_brand':
           if (action.data) {
             try {
-              const client = await crmApi.clients.create(action.data as any);
+              const brand = await crmApi.brands.create(action.data as any);
               setMessages((prev) => [...prev, {
                 id: nextId(), role: 'assistant',
-                content: `Client **${client.name}** created successfully!`,
-                actions: [{ type: 'navigate', path: '/use-cases/crm/clients', label: 'View Clients' }],
+                content: `Brand **${brand.name}** created successfully!`,
+                actions: [{ type: 'navigate', path: '/use-cases/crm/brands', label: 'View Brands' }],
               }]);
             } catch (err) {
               setMessages((prev) => [...prev, {
                 id: nextId(), role: 'assistant',
-                content: `Failed to create client: ${err instanceof Error ? err.message : 'Unknown error'}`,
+                content: `Failed to create brand: ${err instanceof Error ? err.message : 'Unknown error'}`,
               }]);
             }
           }
@@ -528,7 +529,7 @@ export function AiAssistant() {
       const { pageType, formData } = pageState;
       if (!formData) return;
 
-      if (pageType === 'clients-new') {
+      if (pageType === 'brands-new') {
         const name = typeof formData.name === 'string' ? formData.name.trim() : '';
         if (name.length >= 2 && !shownClientNamesRef.current.has(name)) {
           shownClientNamesRef.current.add(name);
@@ -537,7 +538,7 @@ export function AiAssistant() {
             ...prev,
             {
               id: suggestionId,
-              description: `I notice you're adding **${name}** as a client. Would you like me to research this company and help fill in the remaining details?`,
+              description: `I notice you're adding **${name}** as a brand. Would you like me to research this company and help fill in the remaining details?`,
               acceptLabel: 'Yes, research',
               onAccept: () => handleClientResearch(name, suggestionId),
               onDismiss: () => setSuggestions((p) => p.filter((s) => s.id !== suggestionId)),
@@ -613,11 +614,11 @@ export function AiAssistant() {
   const handleProjectCheck = useCallback(
     async (name: string, clientId: string, suggestionId: string) => {
       setSuggestions((prev) => prev.filter((s) => s.id !== suggestionId));
-      const userMsg: Message = { id: nextId(), role: 'user', content: `Check existing projects for this client and suggest a brief.` };
+      const userMsg: Message = { id: nextId(), role: 'user', content: `Check existing projects for this brand and suggest a brief.` };
       const thinkingId = nextId();
       setMessages((prev) => [...prev, userMsg, { id: thinkingId, role: 'assistant', content: '', isThinking: true }]);
 
-      const prompt = `Client ID: ${clientId}, project name: "${name}". Check existing projects and suggest a brief. Include as JSON with "brief" field in \`\`\`json blocks. Form: ${JSON.stringify(pageState.formData)}`;
+      const prompt = `Brand ID: ${clientId}, project name: "${name}". Check existing projects and suggest a brief. Include as JSON with "brief" field in \`\`\`json blocks. Form: ${JSON.stringify(pageState.formData)}`;
       const apiMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [{ role: 'user', content: prompt }];
 
       try {

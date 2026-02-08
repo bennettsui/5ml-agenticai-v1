@@ -15,8 +15,8 @@ const API_BASE =
 // Types (subset of CRM KB types needed for embedded pages)
 // ---------------------------------------------------------------------------
 
-export type ClientStatus = "active" | "dormant" | "prospect" | "lost";
-export type ClientValueTier = "A" | "B" | "C" | "D";
+export type BrandStatus = "active" | "dormant" | "prospect" | "lost";
+export type BrandValueTier = "A" | "B" | "C" | "D";
 export type ProjectType =
   | "website"
   | "social_campaign"
@@ -46,30 +46,30 @@ export type FeedbackStatus =
   | "converted_to_pattern"
   | "ignored";
 
-export interface Client {
+export interface Brand {
   id: string;
   name: string;
   legal_name: string | null;
   industry: string[] | null;
   region: string[] | null;
-  status: ClientStatus;
+  status: BrandStatus;
   website_url: string | null;
   company_size: string | null;
-  client_value_tier: ClientValueTier | null;
+  client_value_tier: BrandValueTier | null;
   health_score: number;
   created_at: string;
   updated_at: string;
 }
 
-export interface ClientCreate {
+export interface BrandCreate {
   name: string;
   legal_name?: string | null;
   industry?: string[] | null;
   region?: string[] | null;
-  status?: ClientStatus;
+  status?: BrandStatus;
   website_url?: string | null;
   company_size?: string | null;
-  client_value_tier?: ClientValueTier | null;
+  client_value_tier?: BrandValueTier | null;
 }
 
 export interface Project {
@@ -180,20 +180,20 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 // ---------------------------------------------------------------------------
 
 export const crmApi = {
-  clients: {
+  brands: {
     list(params?: { page?: number; size?: number; search?: string }) {
       const qs = new URLSearchParams();
       if (params?.page) qs.set("page", String(params.page));
       if (params?.size) qs.set("size", String(params.size));
       if (params?.search) qs.set("search", params.search);
       const q = qs.toString();
-      return request<PaginatedResponse<Client>>(`/clients${q ? `?${q}` : ""}`);
+      return request<PaginatedResponse<Brand>>(`/brands${q ? `?${q}` : ""}`);
     },
     get(id: string) {
-      return request<Client>(`/clients/${id}`);
+      return request<Brand>(`/brands/${id}`);
     },
-    create(data: ClientCreate) {
-      return request<Client>("/clients", {
+    create(data: BrandCreate) {
+      return request<Brand>("/brands", {
         method: "POST",
         body: JSON.stringify(data),
       });
@@ -204,7 +204,7 @@ export const crmApi = {
       if (params?.size) qs.set("size", String(params.size));
       const q = qs.toString();
       return request<PaginatedResponse<Project>>(
-        `/clients/${clientId}/projects${q ? `?${q}` : ""}`
+        `/brands/${clientId}/projects${q ? `?${q}` : ""}`
       );
     },
     feedback(clientId: string, params?: { page?: number; size?: number }) {
@@ -213,7 +213,7 @@ export const crmApi = {
       if (params?.size) qs.set("size", String(params.size));
       const q = qs.toString();
       return request<PaginatedResponse<FeedbackEvent>>(
-        `/clients/${clientId}/feedback${q ? `?${q}` : ""}`
+        `/brands/${clientId}/feedback${q ? `?${q}` : ""}`
       );
     },
   },

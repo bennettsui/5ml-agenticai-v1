@@ -16,7 +16,7 @@ import { AiAssistant } from './components/AiAssistant';
 
 const navItems = [
   { label: 'Dashboard', href: '/use-cases/crm', icon: LayoutDashboard },
-  { label: 'Clients', href: '/use-cases/crm/clients', icon: Users },
+  { label: 'Brands', href: '/use-cases/crm/brands', icon: Users },
   { label: 'Projects', href: '/use-cases/crm/projects', icon: FolderKanban },
   { label: 'Feedback', href: '/use-cases/crm/feedback', icon: MessageSquare },
   { label: 'Integrations', href: '/use-cases/crm/integrations', icon: Plug },
@@ -78,7 +78,7 @@ export default function CrmKbLayout({ children }: { children: React.ReactNode })
 
           {/* Sidebar footer */}
           <div className="px-5 py-4 border-t border-slate-700/50">
-            <p className="text-xs text-slate-500">Client CRM + Knowledge Base</p>
+            <p className="text-xs text-slate-500">Brand CRM + Knowledge Base</p>
           </div>
         </aside>
 

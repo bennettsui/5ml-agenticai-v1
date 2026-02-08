@@ -9,11 +9,11 @@ module.exports = function createCrmRoutes(db) {
   const { pool } = db;
 
   // ==========================================
-  // CLIENTS
+  // BRANDS
   // ==========================================
 
   // List clients (paginated, searchable)
-  router.get('/clients', async (req, res) => {
+  router.get('/brands', async (req, res) => {
     try {
       const page = Math.max(1, parseInt(req.query.page) || 1);
       const size = Math.min(200, Math.max(1, parseInt(req.query.size) || 20));
@@ -56,7 +56,7 @@ module.exports = function createCrmRoutes(db) {
   });
 
   // Get single client
-  router.get('/clients/:id', async (req, res) => {
+  router.get('/brands/:id', async (req, res) => {
     try {
       const result = await pool.query('SELECT * FROM crm_clients WHERE id = $1', [req.params.id]);
       if (result.rows.length === 0) {
@@ -70,7 +70,7 @@ module.exports = function createCrmRoutes(db) {
   });
 
   // Create client
-  router.post('/clients', async (req, res) => {
+  router.post('/brands', async (req, res) => {
     try {
       const { name, legal_name, industry, region, status, website_url, company_size, client_value_tier } = req.body;
 
@@ -102,7 +102,7 @@ module.exports = function createCrmRoutes(db) {
   });
 
   // Update client
-  router.put('/clients/:id', async (req, res) => {
+  router.put('/brands/:id', async (req, res) => {
     try {
       const { name, legal_name, industry, region, status, website_url, company_size, client_value_tier } = req.body;
       const result = await pool.query(
@@ -141,7 +141,7 @@ module.exports = function createCrmRoutes(db) {
   });
 
   // Get projects for a specific client
-  router.get('/clients/:id/projects', async (req, res) => {
+  router.get('/brands/:id/projects', async (req, res) => {
     try {
       const page = Math.max(1, parseInt(req.query.page) || 1);
       const size = Math.min(200, Math.max(1, parseInt(req.query.size) || 50));
@@ -173,7 +173,7 @@ module.exports = function createCrmRoutes(db) {
   });
 
   // Get feedback for a specific client
-  router.get('/clients/:id/feedback', async (req, res) => {
+  router.get('/brands/:id/feedback', async (req, res) => {
     try {
       const page = Math.max(1, parseInt(req.query.page) || 1);
       const size = Math.min(200, Math.max(1, parseInt(req.query.size) || 50));
@@ -254,6 +254,23 @@ module.exports = function createCrmRoutes(db) {
     }
   });
 
+  // Get single project
+  router.get('/projects/:id', async (req, res) => {
+    try {
+      const result = await pool.query(
+        'SELECT * FROM crm_projects WHERE id = $1',
+        [req.params.id]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ detail: 'Project not found' });
+      }
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error('Error getting project:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
   // Create project
   router.post('/projects', async (req, res) => {
     try {
@@ -295,15 +312,22 @@ module.exports = function createCrmRoutes(db) {
       const page = Math.max(1, parseInt(req.query.page) || 1);
       const size = Math.min(200, Math.max(1, parseInt(req.query.size) || 20));
       const sentimentFilter = req.query.sentiment || '';
+      const projectIdFilter = req.query.project_id || '';
       const offset = (page - 1) * size;
 
-      let whereClause = '';
+      const conditions = [];
       const params = [];
 
       if (sentimentFilter) {
         params.push(sentimentFilter);
-        whereClause = `WHERE f.sentiment = $${params.length}`;
+        conditions.push(`f.sentiment = $${params.length}`);
       }
+      if (projectIdFilter) {
+        params.push(projectIdFilter);
+        conditions.push(`f.project_id = $${params.length}`);
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
       const countResult = await pool.query(
         `SELECT COUNT(*) as total FROM crm_feedback f ${whereClause}`,

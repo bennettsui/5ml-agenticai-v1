@@ -167,7 +167,7 @@ export default function FeedbackPage() {
             Feedback
           </h1>
           <p className="text-slate-400 mt-2">
-            Browse and filter client feedback events with AI-detected sentiment
+            Browse and filter brand feedback events with AI-detected sentiment
             and topics.
           </p>
         </div>

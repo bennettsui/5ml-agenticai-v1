@@ -4,27 +4,27 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Save, X, Loader2, ArrowLeft } from 'lucide-react';
-import { crmApi, type ClientCreate, type ClientStatus, type ClientValueTier } from '@/lib/crm-kb-api';
+import { crmApi, type BrandCreate, type BrandStatus, type BrandValueTier } from '@/lib/crm-kb-api';
 import { useCrmAi } from '../../context';
 
-const STATUS_OPTIONS: ClientStatus[] = ['prospect', 'active', 'dormant', 'lost'];
-const VALUE_TIER_OPTIONS: ClientValueTier[] = ['A', 'B', 'C', 'D'];
+const STATUS_OPTIONS: BrandStatus[] = ['prospect', 'active', 'dormant', 'lost'];
+const VALUE_TIER_OPTIONS: BrandValueTier[] = ['A', 'B', 'C', 'D'];
 
-export default function NewClientPage() {
+export default function NewBrandPage() {
   const router = useRouter();
   const { setPageState, updateFormData, registerFormCallback } = useCrmAi();
 
   useEffect(() => {
-    setPageState({ pageType: 'clients-new', pageTitle: 'New Client' });
+    setPageState({ pageType: 'brands-new', pageTitle: 'New Brand' });
     registerFormCallback((updates: Record<string, string>) => {
       if ('name' in updates) setName(updates.name);
       if ('legalName' in updates) setLegalName(updates.legalName);
       if ('industry' in updates) setIndustry(updates.industry);
       if ('region' in updates) setRegion(updates.region);
-      if ('status' in updates) setStatus(updates.status as ClientStatus);
+      if ('status' in updates) setStatus(updates.status as BrandStatus);
       if ('websiteUrl' in updates) setWebsiteUrl(updates.websiteUrl);
       if ('companySize' in updates) setCompanySize(updates.companySize);
-      if ('valueTier' in updates) setValueTier(updates.valueTier as ClientValueTier | '');
+      if ('valueTier' in updates) setValueTier(updates.valueTier as BrandValueTier | '');
     });
     return () => registerFormCallback(null);
   }, []);
@@ -33,10 +33,10 @@ export default function NewClientPage() {
   const [legalName, setLegalName] = useState('');
   const [industry, setIndustry] = useState('');
   const [region, setRegion] = useState('');
-  const [status, setStatus] = useState<ClientStatus>('prospect');
+  const [status, setStatus] = useState<BrandStatus>('prospect');
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [companySize, setCompanySize] = useState('');
-  const [valueTier, setValueTier] = useState<ClientValueTier | ''>('');
+  const [valueTier, setValueTier] = useState<BrandValueTier | ''>('');
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,11 +58,11 @@ export default function NewClientPage() {
 
     // Validate
     if (!name.trim()) {
-      setNameError('Client name is required.');
+      setNameError('Brand name is required.');
       return;
     }
 
-    const data: ClientCreate = {
+    const data: BrandCreate = {
       name: name.trim(),
       legal_name: legalName.trim() || null,
       industry: parseCommaSeparated(industry) ?? null,
@@ -75,10 +75,10 @@ export default function NewClientPage() {
 
     setSubmitting(true);
     try {
-      await crmApi.clients.create(data);
-      router.push('/use-cases/crm/clients');
+      await crmApi.brands.create(data);
+      router.push('/use-cases/crm/brands');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create client');
+      setError(err instanceof Error ? err.message : 'Failed to create brand');
     } finally {
       setSubmitting(false);
     }
@@ -96,19 +96,19 @@ export default function NewClientPage() {
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-sm text-slate-400 mb-4">
             <Link
-              href="/use-cases/crm/clients"
+              href="/use-cases/crm/brands"
               className="hover:text-white transition-colors inline-flex items-center gap-1"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              Clients
+              Brands
             </Link>
             <span className="text-slate-600">/</span>
-            <span className="text-slate-300">New Client</span>
+            <span className="text-slate-300">New Brand</span>
           </nav>
 
-          <h1 className="text-2xl font-bold text-white">Create New Client</h1>
+          <h1 className="text-2xl font-bold text-white">Create New Brand</h1>
           <p className="text-slate-400 text-sm mt-1">
-            Fill in the details below to add a new client to the CRM.
+            Fill in the details below to add a new brand to the CRM.
           </p>
         </div>
       </header>
@@ -215,7 +215,7 @@ export default function NewClientPage() {
                   id="status"
                   value={status}
                   onChange={(e) => {
-                    const val = e.target.value as ClientStatus;
+                    const val = e.target.value as BrandStatus;
                     setStatus(val);
                     updateFormData({ status: val });
                   }}
@@ -236,7 +236,7 @@ export default function NewClientPage() {
                   id="valueTier"
                   value={valueTier}
                   onChange={(e) => {
-                    const val = e.target.value as ClientValueTier | '';
+                    const val = e.target.value as BrandValueTier | '';
                     setValueTier(val);
                     updateFormData({ valueTier: val });
                   }}
@@ -294,7 +294,7 @@ export default function NewClientPage() {
           {/* Form Actions */}
           <div className="flex items-center justify-end gap-3 mt-6">
             <Link
-              href="/use-cases/crm/clients"
+              href="/use-cases/crm/brands"
               className="inline-flex items-center gap-2 px-4 py-2.5 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium"
             >
               <X className="w-4 h-4" />
@@ -313,7 +313,7 @@ export default function NewClientPage() {
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  Create Client
+                  Create Brand
                 </>
               )}
             </button>
