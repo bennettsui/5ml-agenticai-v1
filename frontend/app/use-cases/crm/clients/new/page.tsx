@@ -1,16 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Save, X, Loader2, ArrowLeft } from 'lucide-react';
 import { crmApi, type ClientCreate, type ClientStatus, type ClientValueTier } from '@/lib/crm-kb-api';
+import { useCrmAi } from '../../context';
 
 const STATUS_OPTIONS: ClientStatus[] = ['prospect', 'active', 'dormant', 'lost'];
 const VALUE_TIER_OPTIONS: ClientValueTier[] = ['A', 'B', 'C', 'D'];
 
 export default function NewClientPage() {
   const router = useRouter();
+  const { setPageState, updateFormData, registerFormCallback } = useCrmAi();
+
+  useEffect(() => {
+    setPageState({ pageType: 'clients-new', pageTitle: 'New Client' });
+    registerFormCallback((updates: Record<string, string>) => {
+      if ('name' in updates) setName(updates.name);
+      if ('legalName' in updates) setLegalName(updates.legalName);
+      if ('industry' in updates) setIndustry(updates.industry);
+      if ('region' in updates) setRegion(updates.region);
+      if ('status' in updates) setStatus(updates.status as ClientStatus);
+      if ('websiteUrl' in updates) setWebsiteUrl(updates.websiteUrl);
+      if ('companySize' in updates) setCompanySize(updates.companySize);
+      if ('valueTier' in updates) setValueTier(updates.valueTier as ClientValueTier | '');
+    });
+    return () => registerFormCallback(null);
+  }, []);
 
   const [name, setName] = useState('');
   const [legalName, setLegalName] = useState('');
@@ -116,7 +133,9 @@ export default function NewClientPage() {
                 type="text"
                 value={name}
                 onChange={(e) => {
-                  setName(e.target.value);
+                  const val = e.target.value;
+                  setName(val);
+                  updateFormData({ name: val });
                   if (nameError) setNameError(null);
                 }}
                 placeholder="e.g. Acme Corp"
@@ -136,7 +155,11 @@ export default function NewClientPage() {
                 id="legalName"
                 type="text"
                 value={legalName}
-                onChange={(e) => setLegalName(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setLegalName(val);
+                  updateFormData({ legalName: val });
+                }}
                 placeholder="Official registered name (optional)"
                 className={inputClasses}
               />
@@ -152,7 +175,11 @@ export default function NewClientPage() {
                   id="industry"
                   type="text"
                   value={industry}
-                  onChange={(e) => setIndustry(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setIndustry(val);
+                    updateFormData({ industry: val });
+                  }}
                   placeholder="e.g. Tech, SaaS, Healthcare"
                   className={inputClasses}
                 />
@@ -166,7 +193,11 @@ export default function NewClientPage() {
                   id="region"
                   type="text"
                   value={region}
-                  onChange={(e) => setRegion(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setRegion(val);
+                    updateFormData({ region: val });
+                  }}
                   placeholder="e.g. North America, EMEA"
                   className={inputClasses}
                 />
@@ -183,7 +214,11 @@ export default function NewClientPage() {
                 <select
                   id="status"
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as ClientStatus)}
+                  onChange={(e) => {
+                    const val = e.target.value as ClientStatus;
+                    setStatus(val);
+                    updateFormData({ status: val });
+                  }}
                   className={inputClasses}
                 >
                   {STATUS_OPTIONS.map((s) => (
@@ -200,7 +235,11 @@ export default function NewClientPage() {
                 <select
                   id="valueTier"
                   value={valueTier}
-                  onChange={(e) => setValueTier(e.target.value as ClientValueTier | '')}
+                  onChange={(e) => {
+                    const val = e.target.value as ClientValueTier | '';
+                    setValueTier(val);
+                    updateFormData({ valueTier: val });
+                  }}
                   className={inputClasses}
                 >
                   <option value="">-- None --</option>
@@ -223,7 +262,11 @@ export default function NewClientPage() {
                   id="websiteUrl"
                   type="url"
                   value={websiteUrl}
-                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setWebsiteUrl(val);
+                    updateFormData({ websiteUrl: val });
+                  }}
                   placeholder="https://example.com"
                   className={inputClasses}
                 />
@@ -236,7 +279,11 @@ export default function NewClientPage() {
                   id="companySize"
                   type="text"
                   value={companySize}
-                  onChange={(e) => setCompanySize(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCompanySize(val);
+                    updateFormData({ companySize: val });
+                  }}
                   placeholder="e.g. 50-100, 500+"
                   className={inputClasses}
                 />

@@ -1,9 +1,17 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { Users, Brain, MessageSquare, Shield, TrendingUp, Database } from 'lucide-react';
+import { useCrmAi } from '../context';
 
 export default function AgenticDashboardPage() {
+  const { setPageState } = useCrmAi();
+
+  useEffect(() => {
+    setPageState({ pageType: 'agentic-dashboard', pageTitle: 'Agentic Dashboard' });
+  }, []);
+
   const features = [
     {
       icon: Users,

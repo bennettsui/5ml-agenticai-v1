@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Users, Plus, Search, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { crmApi, type Client, type PaginatedResponse } from '@/lib/crm-kb-api';
+import { useCrmAi } from '../context';
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-green-900/40 text-green-300 border-green-700',
@@ -21,6 +22,12 @@ function formatDate(iso: string): string {
 }
 
 export default function ClientsPage() {
+  const { setPageState } = useCrmAi();
+
+  useEffect(() => {
+    setPageState({ pageType: 'clients-list', pageTitle: 'Clients' });
+  }, []);
+
   const [clients, setClients] = useState<Client[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);

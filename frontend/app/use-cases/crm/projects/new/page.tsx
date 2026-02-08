@@ -17,6 +17,7 @@ import {
   type ProjectType,
   type ProjectStatus,
 } from "@/lib/crm-kb-api";
+import { useCrmAi } from '../../context';
 
 const PROJECT_TYPES: { value: ProjectType; label: string }[] = [
   { value: "website", label: "Website" },
@@ -37,6 +38,21 @@ const PROJECT_STATUSES: { value: ProjectStatus; label: string }[] = [
 
 export default function NewProjectPage() {
   const router = useRouter();
+  const { setPageState, updateFormData, registerFormCallback } = useCrmAi();
+
+  useEffect(() => {
+    setPageState({ pageType: 'projects-new', pageTitle: 'New Project' });
+    registerFormCallback((updates: Record<string, string>) => {
+      if ('name' in updates) setName(updates.name);
+      if ('clientId' in updates) setClientId(updates.clientId);
+      if ('type' in updates) setType(updates.type as ProjectType);
+      if ('status' in updates) setStatus(updates.status as ProjectStatus);
+      if ('startDate' in updates) setStartDate(updates.startDate);
+      if ('endDate' in updates) setEndDate(updates.endDate);
+      if ('brief' in updates) setBrief(updates.brief);
+    });
+    return () => registerFormCallback(null);
+  }, []);
 
   // Client list for dropdown
   const [clients, setClients] = useState<Client[]>([]);
@@ -172,7 +188,11 @@ export default function NewProjectPage() {
                 id="name"
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setName(val);
+                  updateFormData({ name: val });
+                }}
                 onBlur={() => setTouched((t) => ({ ...t, name: true }))}
                 placeholder="e.g. Q1 Social Campaign"
                 className={`${inputClasses} ${nameError ? "border-red-500 focus:ring-red-500" : ""}`}
@@ -194,7 +214,11 @@ export default function NewProjectPage() {
                 <select
                   id="client"
                   value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setClientId(val);
+                    updateFormData({ clientId: val });
+                  }}
                   onBlur={() => setTouched((t) => ({ ...t, clientId: true }))}
                   className={`${inputClasses} cursor-pointer ${clientError ? "border-red-500 focus:ring-red-500" : ""}`}
                 >
@@ -218,7 +242,11 @@ export default function NewProjectPage() {
                 <select
                   id="type"
                   value={type}
-                  onChange={(e) => setType(e.target.value as ProjectType)}
+                  onChange={(e) => {
+                    const val = e.target.value as ProjectType;
+                    setType(val);
+                    updateFormData({ type: val });
+                  }}
                   className={`${inputClasses} cursor-pointer`}
                 >
                   {PROJECT_TYPES.map((opt) => (
@@ -236,7 +264,11 @@ export default function NewProjectPage() {
                 <select
                   id="status"
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as ProjectStatus)}
+                  onChange={(e) => {
+                    const val = e.target.value as ProjectStatus;
+                    setStatus(val);
+                    updateFormData({ status: val });
+                  }}
                   className={`${inputClasses} cursor-pointer`}
                 >
                   {PROJECT_STATUSES.map((opt) => (
@@ -258,7 +290,11 @@ export default function NewProjectPage() {
                   id="startDate"
                   type="date"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setStartDate(val);
+                    updateFormData({ startDate: val });
+                  }}
                   className={inputClasses}
                 />
               </div>
@@ -271,7 +307,11 @@ export default function NewProjectPage() {
                   id="endDate"
                   type="date"
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEndDate(val);
+                    updateFormData({ endDate: val });
+                  }}
                   className={inputClasses}
                 />
               </div>
@@ -285,7 +325,11 @@ export default function NewProjectPage() {
               <textarea
                 id="brief"
                 value={brief}
-                onChange={(e) => setBrief(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setBrief(val);
+                  updateFormData({ brief: val });
+                }}
                 placeholder="Project brief, goals, and key deliverables..."
                 rows={4}
                 className={`${inputClasses} resize-y`}
