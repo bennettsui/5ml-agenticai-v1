@@ -579,6 +579,113 @@ export interface ChatResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Gmail Integration
+// ---------------------------------------------------------------------------
+
+export interface GmailAuthResponse {
+  auth_url: string;
+}
+
+export interface GmailSyncRequest {
+  client_id?: string;
+  max_results?: number;
+}
+
+export interface GmailSyncResponse {
+  synced_count: number;
+  new_feedback_count: number;
+  matched_clients: string[];
+  errors: string[];
+}
+
+export interface GmailStatus {
+  connected: boolean;
+  email: string | null;
+  last_sync_at: string | null;
+  total_synced: number;
+}
+
+export interface SyncedEmail {
+  id: string;
+  subject: string | null;
+  from_email: string | null;
+  date: string | null;
+  client_name: string | null;
+  sentiment: string | null;
+  topics: string[];
+  created_feedback_id: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// AI Orchestration
+// ---------------------------------------------------------------------------
+
+export type CircuitBreakerState = "CLOSED" | "OPEN" | "HALF_OPEN";
+export type AIPriority = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+
+export interface OrchestrationStatus {
+  circuit_breaker_state: CircuitBreakerState;
+  daily_tokens_used: number;
+  daily_token_limit: number;
+  daily_cost_used_usd: number;
+  daily_cost_limit_usd: number;
+  tokens_per_minute: number;
+  tokens_per_hour: number;
+  active_model: string;
+  budget_warning: boolean;
+  budget_exceeded: boolean;
+}
+
+export interface UsageEntry {
+  hour: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  call_count: number;
+}
+
+export interface UsageByEndpoint {
+  endpoint: string;
+  total_tokens: number;
+  call_count: number;
+  cost_usd: number;
+}
+
+export interface OrchestrationUsage {
+  hourly: UsageEntry[];
+  by_endpoint: UsageByEndpoint[];
+  total_tokens_today: number;
+  total_cost_today_usd: number;
+}
+
+export interface CronSchedule {
+  job_name: string;
+  frequency: string;
+  cron_expression: string;
+  description: string;
+  priority: AIPriority;
+  estimated_tokens_per_run: number;
+}
+
+export interface OrchestrationAlert {
+  id: string;
+  timestamp: string;
+  level: "info" | "warning" | "error";
+  type: string;
+  message: string;
+  details: Record<string, unknown> | null;
+}
+
+export interface OrchestrationConfig {
+  daily_token_limit?: number;
+  daily_cost_limit_usd?: number;
+  loop_detection_threshold?: number;
+  loop_detection_window_seconds?: number;
+  budget_warning_threshold?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Paginated Response
 // ---------------------------------------------------------------------------
 

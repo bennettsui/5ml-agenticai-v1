@@ -32,6 +32,16 @@ import type {
   PaginatedResponse,
   ChatRequest,
   ChatResponse,
+  GmailAuthResponse,
+  GmailSyncRequest,
+  GmailSyncResponse,
+  GmailStatus,
+  SyncedEmail,
+  OrchestrationStatus,
+  OrchestrationUsage,
+  OrchestrationAlert,
+  OrchestrationConfig,
+  CronSchedule,
 } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -607,3 +617,61 @@ export function chat(data: ChatRequest): Promise<ChatResponse> {
     body: JSON.stringify(data),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Gmail Integration
+// ---------------------------------------------------------------------------
+
+export const gmail = {
+  status(): Promise<GmailStatus> {
+    return request("/gmail/status");
+  },
+
+  authUrl(): Promise<GmailAuthResponse> {
+    return request("/gmail/auth");
+  },
+
+  sync(data?: GmailSyncRequest): Promise<GmailSyncResponse> {
+    return request("/gmail/sync", {
+      method: "POST",
+      body: JSON.stringify(data ?? {}),
+    });
+  },
+
+  emails(): Promise<SyncedEmail[]> {
+    return request("/gmail/emails");
+  },
+};
+
+// ---------------------------------------------------------------------------
+// AI Orchestration
+// ---------------------------------------------------------------------------
+
+export const orchestration = {
+  status(): Promise<OrchestrationStatus> {
+    return request("/orchestration/status");
+  },
+
+  usage(): Promise<OrchestrationUsage> {
+    return request("/orchestration/usage");
+  },
+
+  schedule(): Promise<CronSchedule[]> {
+    return request("/orchestration/schedule");
+  },
+
+  alerts(): Promise<OrchestrationAlert[]> {
+    return request("/orchestration/alerts");
+  },
+
+  updateConfig(data: OrchestrationConfig): Promise<{ success: boolean }> {
+    return request("/orchestration/config", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  reset(): Promise<{ success: boolean }> {
+    return request("/orchestration/reset", { method: "POST" });
+  },
+};

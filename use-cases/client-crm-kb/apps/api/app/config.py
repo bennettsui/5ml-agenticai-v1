@@ -16,6 +16,21 @@ class Settings(BaseSettings):
     API_BASE_URL: str = "http://localhost:8000"
     WEB_BASE_URL: str = "http://localhost:3000"
 
+    # Gmail integration (Google OAuth2)
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/gmail/callback"
+
+    # AI orchestration engine
+    AI_DAILY_TOKEN_LIMIT: int = 1_000_000
+    AI_DAILY_COST_LIMIT_USD: float = 50.0
+    AI_MAX_TOKENS_PER_CALL: int = 16384
+    AI_LOOP_DETECTION_THRESHOLD: int = 5
+    AI_LOOP_DETECTION_WINDOW_SECONDS: int = 60
+    AI_BUDGET_WARNING_THRESHOLD: float = 0.8  # 80% of budget triggers warning
+    AI_MODEL_DEFAULT: str = "claude-sonnet-4-20250514"
+    AI_MODEL_FALLBACK: str = "claude-haiku-4-5-20251001"
+
     class Config:
         env_file = ".env"
 

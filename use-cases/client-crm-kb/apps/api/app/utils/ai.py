@@ -32,7 +32,7 @@ async def chat(
     user_message: str,
     *,
     model: str = "claude-sonnet-4-20250514",
-    max_tokens: int = 4096,
+    max_tokens: int = 16384,
     temperature: float = 0.3,
 ) -> str:
     """Simple text-in / text-out Claude call."""
@@ -53,7 +53,7 @@ async def chat_with_tools(
     tools: list[dict[str, Any]],
     *,
     model: str = "claude-sonnet-4-20250514",
-    max_tokens: int = 4096,
+    max_tokens: int = 16384,
     temperature: float = 0.0,
 ) -> dict[str, Any]:
     """Call Claude with tool_use and return the first tool call result as a dict.
@@ -94,7 +94,7 @@ async def extract_json(
     json_schema: dict[str, Any],
     *,
     model: str = "claude-sonnet-4-20250514",
-    max_tokens: int = 4096,
+    max_tokens: int = 16384,
 ) -> dict[str, Any]:
     """Use tool_use to force Claude to return structured JSON matching a schema."""
     tool = {
