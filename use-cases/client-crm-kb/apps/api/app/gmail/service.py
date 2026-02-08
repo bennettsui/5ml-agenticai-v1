@@ -85,19 +85,29 @@ def _load_credentials() -> Optional[Credentials]:
         return None
 
 
+def _get_redirect_uri() -> str:
+    """Resolve the Google OAuth redirect URI from settings."""
+    if settings.GOOGLE_REDIRECT_URI:
+        return settings.GOOGLE_REDIRECT_URI
+    # Fallback: construct from API_BASE_URL
+    base = settings.API_BASE_URL.rstrip("/") if settings.API_BASE_URL else ""
+    return f"{base}/api/gmail/callback"
+
+
 def _get_oauth_flow() -> Flow:
     """Build a Google OAuth2 flow from application settings."""
+    redirect_uri = _get_redirect_uri()
     client_config = {
         "web": {
             "client_id": settings.GOOGLE_CLIENT_ID,
             "client_secret": settings.GOOGLE_CLIENT_SECRET,
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [settings.GOOGLE_REDIRECT_URI],
+            "redirect_uris": [redirect_uri],
         }
     }
     flow = Flow.from_client_config(client_config, scopes=SCOPES)
-    flow.redirect_uri = settings.GOOGLE_REDIRECT_URI
+    flow.redirect_uri = redirect_uri
     return flow
 
 

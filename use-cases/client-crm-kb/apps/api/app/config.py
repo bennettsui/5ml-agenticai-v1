@@ -2,8 +2,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql+asyncpg://dev:dev@localhost:5432/client_crm_kb"
-    REDIS_URL: str = "redis://localhost:6379"
+    DATABASE_URL: str = "postgresql+asyncpg://dev:dev@postgres:5432/client_crm_kb"
+    REDIS_URL: str = "redis://redis:6379"
     R2_ENDPOINT: str = ""
     R2_ACCESS_KEY: str = ""
     R2_SECRET_KEY: str = ""
@@ -13,13 +13,13 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_HOURS: int = 8
     ANTHROPIC_API_KEY: str = ""
-    API_BASE_URL: str = "http://localhost:8000"
-    WEB_BASE_URL: str = "http://localhost:3000"
+    API_BASE_URL: str = ""
+    WEB_BASE_URL: str = ""
 
     # Gmail integration (Google OAuth2)
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
-    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/gmail/callback"
+    GOOGLE_REDIRECT_URI: str = ""
 
     # AI orchestration engine
     AI_DAILY_TOKEN_LIMIT: int = 1_000_000
