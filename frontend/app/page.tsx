@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone, Users } from 'lucide-react';
 
 export default function Home() {
   const useCases = [
@@ -93,6 +93,16 @@ export default function Home() {
       href: '/ads-dashboard',
       color: 'from-orange-500 to-red-600',
       features: ['Meta Ads Analytics', 'Google Ads Analytics', 'AI Weekly Reports', 'Multi-Tenant Clients'],
+      status: 'New'
+    },
+    {
+      id: 'client-crm-kb',
+      title: 'Client CRM + Knowledge Base',
+      description: 'Integrated CRM with AI-powered knowledge base that learns from client feedback, extracts brand rules, and detects cross-client patterns',
+      icon: Users,
+      href: '/use-cases/client-crm-kb',
+      color: 'from-emerald-500 to-teal-600',
+      features: ['Client & Brand CRM', 'AI Feedback Analysis', 'Knowledge Rules Engine', 'Health Score Tracking'],
       status: 'New'
     },
   ];
