@@ -2,7 +2,7 @@ const { Pool } = require('pg');
 const fs = require('fs');
 
 // ===========================================
-// SIMPLIFIED SSL CONFIG (reverted to PR #185 pattern that worked)
+// SSL CONFIG
 // ===========================================
 
 // Load AWS RDS CA certificate if available (for EC2 deployments)
@@ -30,12 +30,11 @@ function loadRdsCaCert() {
 
 const rdsCaCert = loadRdsCaCert();
 
-// Simple database config - matches PR #185 working pattern
+// Simple database config
 const getDatabaseConfig = () => {
-  const connectionString = process.env.DATABASE_URL;
+  let connectionString = process.env.DATABASE_URL;
 
   const config = {
-    connectionString,
     connectionTimeoutMillis: 10000,
     idleTimeoutMillis: 30000,
     max: 10,
@@ -44,12 +43,14 @@ const getDatabaseConfig = () => {
   // No SSL for localhost
   if (!connectionString || connectionString.includes('localhost') || connectionString.includes('127.0.0.1')) {
     console.log('🔓 Local database: SSL disabled');
+    config.connectionString = connectionString;
     config.ssl = false;
     return config;
   }
 
   // AWS RDS: use CA certificate if available
   if (connectionString.includes('amazonaws.com') || connectionString.includes('rds.')) {
+    config.connectionString = connectionString;
     if (rdsCaCert) {
       config.ssl = {
         rejectUnauthorized: true,
@@ -66,12 +67,25 @@ const getDatabaseConfig = () => {
   }
 
   // Everything else (Fly, Neon, Supabase, Render, etc.):
-  // Simple SSL with verification fully disabled - handles self-signed certs
+  // Strip sslmode from connection string to prevent it from overriding our SSL config
+  if (connectionString.includes('sslmode=')) {
+    connectionString = connectionString
+      .replace(/[?&]sslmode=[^&]*/g, '')
+      .replace(/\?&/, '?')
+      .replace(/\?$/, '');
+    console.log('🔧 Stripped sslmode from DATABASE_URL to apply custom SSL config');
+  }
+  config.connectionString = connectionString;
+
+  // Disable Node.js TLS certificate verification for self-signed certs
+  // This is required for Fly.io Postgres and similar providers
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
   config.ssl = {
     rejectUnauthorized: false,
     checkServerIdentity: () => undefined,
   };
-  console.log('🔒 Database SSL: enabled (verification disabled for compatibility)');
+  console.log('🔒 Database SSL: enabled (certificate verification disabled for Fly.io/cloud compatibility)');
 
   return config;
 };
