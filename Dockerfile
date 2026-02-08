@@ -37,6 +37,7 @@ COPY webhook.js .
 COPY db.js .
 COPY swagger.js .
 COPY agents/ ./agents/
+COPY lib/ ./lib/
 COPY services/ ./services/
 COPY utils/ ./utils/
 COPY tools/ ./tools/
