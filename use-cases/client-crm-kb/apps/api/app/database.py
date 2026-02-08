@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import (
 
 DATABASE_URL: str = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/crm_kb",
+    "postgresql+asyncpg://dev:dev@postgres:5432/client_crm_kb",
 )
 
 # Convert any "postgresql://" prefix to "postgresql+asyncpg://" so that

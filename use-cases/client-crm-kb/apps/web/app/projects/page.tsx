@@ -30,6 +30,7 @@ import {
   LayoutList,
   Columns3,
   Calendar,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -154,6 +155,10 @@ export default function ProjectsPage() {
             All projects across clients
           </p>
         </div>
+        <Button onClick={() => router.push("/projects/new")}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Project
+        </Button>
       </div>
 
       {/* Filters */}
