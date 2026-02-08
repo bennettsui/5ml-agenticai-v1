@@ -14,6 +14,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { crmApi } from '@/lib/crm-kb-api';
+import { useCrmAi } from './context';
 
 interface DashboardStats {
   totalClients: number;
@@ -74,6 +75,12 @@ const quickLinks = [
 ];
 
 export default function DashboardPage() {
+  const { setPageState } = useCrmAi();
+
+  useEffect(() => {
+    setPageState({ pageType: 'dashboard', pageTitle: 'CRM Dashboard' });
+  }, []);
+
   const [stats, setStats] = useState<DashboardStats>({
     totalClients: 0,
     activeProjects: 0,

@@ -17,6 +17,7 @@ import {
   type PaginatedResponse,
   type ProjectStatus,
 } from "@/lib/crm-kb-api";
+import { useCrmAi } from '../context';
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "All" },
@@ -57,6 +58,12 @@ function formatStatus(status: ProjectStatus): string {
 }
 
 export default function ProjectsPage() {
+  const { setPageState } = useCrmAi();
+
+  useEffect(() => {
+    setPageState({ pageType: 'projects-list', pageTitle: 'Projects' });
+  }, []);
+
   const [data, setData] = useState<PaginatedResponse<Project> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

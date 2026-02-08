@@ -24,6 +24,7 @@ import {
   type FeedbackStatus,
   type FeedbackSource,
 } from "@/lib/crm-kb-api";
+import { useCrmAi } from '../context';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -107,6 +108,12 @@ const SENTIMENT_OPTIONS: Array<{ label: string; value: string }> = [
 // ---------------------------------------------------------------------------
 
 export default function FeedbackPage() {
+  const { setPageState } = useCrmAi();
+
+  useEffect(() => {
+    setPageState({ pageType: 'feedback', pageTitle: 'Feedback' });
+  }, []);
+
   const [sentiment, setSentiment] = useState("");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<PaginatedResponse<FeedbackEvent> | null>(

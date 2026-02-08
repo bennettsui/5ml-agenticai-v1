@@ -19,6 +19,7 @@ import {
   type GmailStatus,
   type OrchestrationStatus,
 } from "@/lib/crm-kb-api";
+import { useCrmAi } from '../context';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -74,6 +75,12 @@ function pct(used: number, limit: number): number {
 // ---------------------------------------------------------------------------
 
 export default function IntegrationsPage() {
+  const { setPageState } = useCrmAi();
+
+  useEffect(() => {
+    setPageState({ pageType: 'integrations', pageTitle: 'Integrations' });
+  }, []);
+
   // Gmail state
   const [gmail, setGmail] = useState<GmailStatus | null>(null);
   const [gmailLoading, setGmailLoading] = useState(true);
