@@ -1557,6 +1557,14 @@ app.get('/stats', async (req, res) => {
 });
 
 // ==========================================
+// CRM CRUD Routes (clients, projects, feedback, gmail, orchestration)
+// ==========================================
+const db = require('./db');
+const createCrmRoutes = require('./routes/crm');
+app.use('/api', createCrmRoutes(db));
+console.log('✅ CRM routes loaded: /api/clients, /api/projects, /api/feedback, /api/gmail');
+
+// ==========================================
 // LLM Library & CRM Chat Endpoint
 // ==========================================
 const llm = require('./lib/llm');

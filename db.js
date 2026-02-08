@@ -262,8 +262,78 @@ async function initDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_edm_topic ON intelligence_edm_history(topic_id);
       CREATE INDEX IF NOT EXISTS idx_edm_sent ON intelligence_edm_history(sent_at DESC);
+
+      -- ==========================================
+      -- CRM Tables
+      -- ==========================================
+      CREATE TABLE IF NOT EXISTS crm_clients (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(300) NOT NULL,
+        legal_name VARCHAR(300),
+        industry JSONB DEFAULT '[]',
+        region JSONB DEFAULT '[]',
+        status VARCHAR(50) DEFAULT 'prospect',
+        website_url VARCHAR(500),
+        company_size VARCHAR(50),
+        client_value_tier VARCHAR(1),
+        health_score INTEGER DEFAULT 50,
+        internal_notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_clients_status ON crm_clients(status);
+      CREATE INDEX IF NOT EXISTS idx_crm_clients_name ON crm_clients(name);
+
+      CREATE TABLE IF NOT EXISTS crm_projects (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID REFERENCES crm_clients(id) ON DELETE CASCADE,
+        name VARCHAR(300) NOT NULL,
+        type VARCHAR(50) DEFAULT 'other',
+        brief TEXT,
+        start_date DATE,
+        end_date DATE,
+        status VARCHAR(50) DEFAULT 'planning',
+        success_flag VARCHAR(50),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_projects_client ON crm_projects(client_id);
+      CREATE INDEX IF NOT EXISTS idx_crm_projects_status ON crm_projects(status);
+
+      CREATE TABLE IF NOT EXISTS crm_feedback (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID REFERENCES crm_clients(id) ON DELETE CASCADE,
+        project_id UUID REFERENCES crm_projects(id) ON DELETE SET NULL,
+        source VARCHAR(50) DEFAULT 'other',
+        date DATE DEFAULT CURRENT_DATE,
+        raw_text TEXT NOT NULL,
+        sentiment VARCHAR(20),
+        sentiment_score INTEGER,
+        topics JSONB DEFAULT '[]',
+        severity VARCHAR(20),
+        status VARCHAR(50) DEFAULT 'new',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_feedback_client ON crm_feedback(client_id);
+      CREATE INDEX IF NOT EXISTS idx_crm_feedback_sentiment ON crm_feedback(sentiment);
+
+      CREATE TABLE IF NOT EXISTS crm_gmail_tokens (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255),
+        access_token TEXT,
+        refresh_token TEXT,
+        token_expiry TIMESTAMP,
+        last_sync_at TIMESTAMP,
+        total_synced INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
     `);
-    console.log('✅ Database schema initialized');
+    console.log('✅ Database schema initialized (including CRM tables)');
   } catch (error) {
     console.error('❌ Database initialization error:', error.message);
     console.error('Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');

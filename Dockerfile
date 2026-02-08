@@ -25,7 +25,9 @@ COPY frontend/package*.json ./frontend/
 WORKDIR /usr/src/app/frontend
 RUN npm ci
 COPY frontend/ ./
+ENV NODE_OPTIONS=--max_old_space_size=512
 RUN npm run build
+ENV NODE_OPTIONS=
 RUN test -f /usr/src/app/frontend/out/index.html
 
 # Back to app root
@@ -38,6 +40,7 @@ COPY db.js .
 COPY swagger.js .
 COPY agents/ ./agents/
 COPY lib/ ./lib/
+COPY routes/ ./routes/
 COPY services/ ./services/
 COPY utils/ ./utils/
 COPY tools/ ./tools/
