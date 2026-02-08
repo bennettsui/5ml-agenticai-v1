@@ -89,7 +89,7 @@ export default function NewClientPage() {
   const labelClasses = 'block text-sm font-medium text-slate-300 mb-1.5';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
+    <div className="bg-gradient-to-br from-slate-900 to-slate-800">
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

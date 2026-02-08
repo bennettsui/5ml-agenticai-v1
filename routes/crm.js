@@ -101,6 +101,109 @@ module.exports = function createCrmRoutes(db) {
     }
   });
 
+  // Update client
+  router.put('/clients/:id', async (req, res) => {
+    try {
+      const { name, legal_name, industry, region, status, website_url, company_size, client_value_tier } = req.body;
+      const result = await pool.query(
+        `UPDATE crm_clients SET
+          name = COALESCE($2, name),
+          legal_name = COALESCE($3, legal_name),
+          industry = COALESCE($4, industry),
+          region = COALESCE($5, region),
+          status = COALESCE($6, status),
+          website_url = COALESCE($7, website_url),
+          company_size = COALESCE($8, company_size),
+          client_value_tier = COALESCE($9, client_value_tier),
+          updated_at = NOW()
+        WHERE id = $1
+        RETURNING *`,
+        [
+          req.params.id,
+          name || null,
+          legal_name || null,
+          industry ? JSON.stringify(industry) : null,
+          region ? JSON.stringify(region) : null,
+          status || null,
+          website_url || null,
+          company_size || null,
+          client_value_tier || null,
+        ]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ detail: 'Client not found' });
+      }
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error('Error updating client:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
+  // Get projects for a specific client
+  router.get('/clients/:id/projects', async (req, res) => {
+    try {
+      const page = Math.max(1, parseInt(req.query.page) || 1);
+      const size = Math.min(200, Math.max(1, parseInt(req.query.size) || 50));
+      const offset = (page - 1) * size;
+
+      const countResult = await pool.query(
+        'SELECT COUNT(*) as total FROM crm_projects WHERE client_id = $1',
+        [req.params.id]
+      );
+      const total = parseInt(countResult.rows[0].total);
+
+      const result = await pool.query(
+        `SELECT * FROM crm_projects WHERE client_id = $1
+         ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+        [req.params.id, size, offset]
+      );
+
+      res.json({
+        items: result.rows,
+        total,
+        page,
+        size,
+        pages: Math.ceil(total / size),
+      });
+    } catch (error) {
+      console.error('Error listing client projects:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
+  // Get feedback for a specific client
+  router.get('/clients/:id/feedback', async (req, res) => {
+    try {
+      const page = Math.max(1, parseInt(req.query.page) || 1);
+      const size = Math.min(200, Math.max(1, parseInt(req.query.size) || 50));
+      const offset = (page - 1) * size;
+
+      const countResult = await pool.query(
+        'SELECT COUNT(*) as total FROM crm_feedback WHERE client_id = $1',
+        [req.params.id]
+      );
+      const total = parseInt(countResult.rows[0].total);
+
+      const result = await pool.query(
+        `SELECT * FROM crm_feedback WHERE client_id = $1
+         ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+        [req.params.id, size, offset]
+      );
+
+      res.json({
+        items: result.rows,
+        total,
+        page,
+        size,
+        pages: Math.ceil(total / size),
+      });
+    } catch (error) {
+      console.error('Error listing client feedback:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
   // ==========================================
   // PROJECTS
   // ==========================================
@@ -246,6 +349,8 @@ module.exports = function createCrmRoutes(db) {
 
   // Gmail status
   router.get('/gmail/status', async (req, res) => {
+    const configured = !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI);
+
     try {
       const result = await pool.query(
         'SELECT email, last_sync_at, total_synced FROM crm_gmail_tokens ORDER BY updated_at DESC LIMIT 1'
@@ -253,6 +358,7 @@ module.exports = function createCrmRoutes(db) {
 
       if (result.rows.length === 0) {
         return res.json({
+          configured,
           connected: false,
           email: null,
           last_sync_at: null,
@@ -262,6 +368,7 @@ module.exports = function createCrmRoutes(db) {
 
       const row = result.rows[0];
       res.json({
+        configured,
         connected: true,
         email: row.email,
         last_sync_at: row.last_sync_at,
@@ -270,6 +377,7 @@ module.exports = function createCrmRoutes(db) {
     } catch (error) {
       console.error('Error getting Gmail status:', error);
       res.json({
+        configured,
         connected: false,
         email: null,
         last_sync_at: null,
@@ -335,8 +443,8 @@ module.exports = function createCrmRoutes(db) {
       await pool.query(
         `INSERT INTO crm_gmail_tokens (email, access_token, refresh_token, token_expiry)
          VALUES ($1, $2, $3, $4)
-         ON CONFLICT (id) DO UPDATE SET
-           email = $1, access_token = $2, refresh_token = COALESCE($3, crm_gmail_tokens.refresh_token),
+         ON CONFLICT (email) DO UPDATE SET
+           access_token = $2, refresh_token = COALESCE($3, crm_gmail_tokens.refresh_token),
            token_expiry = $4, updated_at = NOW()`,
         [userInfo.email, tokens.access_token, tokens.refresh_token, expiryDate]
       );

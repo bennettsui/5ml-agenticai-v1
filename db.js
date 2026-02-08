@@ -338,7 +338,7 @@ async function initDatabase() {
 
       CREATE TABLE IF NOT EXISTS crm_gmail_tokens (
         id SERIAL PRIMARY KEY,
-        email VARCHAR(255),
+        email VARCHAR(255) UNIQUE,
         access_token TEXT,
         refresh_token TEXT,
         token_expiry TIMESTAMP,

@@ -151,7 +151,7 @@ export default function FeedbackPage() {
   }, [sentiment]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
+    <div className="bg-gradient-to-br from-slate-900 to-slate-800">
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

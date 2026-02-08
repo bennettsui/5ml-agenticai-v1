@@ -108,7 +108,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 to-slate-900 text-slate-100">
+    <div className="bg-gradient-to-br from-slate-950 to-slate-900 text-slate-100">
       {/* Header */}
       <header className="bg-slate-900 border-b border-slate-700/60 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

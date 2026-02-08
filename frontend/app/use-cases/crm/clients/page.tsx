@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Users, Plus, Search, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { crmApi, type Client, type PaginatedResponse } from '@/lib/crm-kb-api';
 import { useCrmAi } from '../context';
@@ -22,6 +23,7 @@ function formatDate(iso: string): string {
 }
 
 export default function ClientsPage() {
+  const router = useRouter();
   const { setPageState } = useCrmAi();
 
   useEffect(() => {
@@ -71,7 +73,7 @@ export default function ClientsPage() {
   }, [fetchClients]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
+    <div className="bg-gradient-to-br from-slate-900 to-slate-800">
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -172,8 +174,7 @@ export default function ClientsPage() {
                     <tr
                       key={client.id}
                       onClick={() => {
-                        setSelectedId(selectedId === client.id ? null : client.id);
-                        alert(`Selected client: ${client.name}`);
+                        router.push(`/use-cases/crm/clients/${client.id}`);
                       }}
                       className={`border-b border-slate-700/50 cursor-pointer transition-colors ${
                         selectedId === client.id
