@@ -118,11 +118,11 @@ export default function DashboardPage() {
 
         // Health score: average from clients or fallback placeholder
         let healthScore = 85;
-        if (brandsRes.status === 'fulfilled' && brandsRes.value.items.length > 0) {
-          // Fetch more clients to compute average health
+        if (brandsRes.status === 'fulfilled' && brandsRes.value.items?.length > 0) {
+          // Fetch more brands to compute average health
           try {
             const allBrands = await crmApi.brands.list({ page: 1, size: 50 });
-            if (allBrands.items.length > 0) {
+            if (allBrands.items?.length > 0) {
               const sum = allBrands.items.reduce(
                 (acc, c) => acc + (c.health_score ?? 0),
                 0
