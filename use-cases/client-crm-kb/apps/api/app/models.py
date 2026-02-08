@@ -1120,3 +1120,33 @@ class AuditLog(Base):
 
     def __repr__(self) -> str:
         return f"<AuditLog {self.action} by {self.user_id}>"
+
+
+class ChatMessage(Base):
+    """Persisted chatbot conversation message."""
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+    )
+    session_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    tool_calls: Mapped[Optional[dict]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    user: Mapped[Optional["User"]] = relationship()
+
+    def __repr__(self) -> str:
+        return f"<ChatMessage {self.role} ({self.session_id})>"
