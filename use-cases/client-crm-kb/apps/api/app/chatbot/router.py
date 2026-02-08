@@ -104,7 +104,7 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
         try:
             response = await client.messages.create(
                 model="claude-sonnet-4-20250514",
-                max_tokens=2048,
+                max_tokens=16384,
                 system=SYSTEM_PROMPT,
                 messages=messages,
                 tools=TOOLS,

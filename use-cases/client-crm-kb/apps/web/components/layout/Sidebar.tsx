@@ -11,6 +11,7 @@ import {
   FileText,
   Lightbulb,
   ShieldCheck,
+  Plug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +59,16 @@ const navigation: NavSection[] = [
         label: "Feedback",
         href: "/feedback",
         icon: MessageSquare,
+      },
+    ],
+  },
+  {
+    title: "Integrations",
+    items: [
+      {
+        label: "Integrations",
+        href: "/integrations",
+        icon: Plug,
       },
     ],
   },

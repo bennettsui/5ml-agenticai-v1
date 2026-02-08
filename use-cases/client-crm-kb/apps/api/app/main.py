@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.orchestration.middleware import OrchestrationMiddleware
 
 # ---------------------------------------------------------------------------
 # Router imports
@@ -26,6 +27,8 @@ from app.rules.router import router as rules_router
 from app.patterns.router import router as patterns_router
 from app.utils.kb_router import router as kb_router
 from app.chatbot.router import router as chatbot_router
+from app.gmail.router import router as gmail_router
+from app.orchestration.router import router as orchestration_router
 
 # ---------------------------------------------------------------------------
 # Application
@@ -57,6 +60,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# AI orchestration middleware (token monitoring, circuit breaker, model downgrade)
+app.add_middleware(OrchestrationMiddleware)
+
 # ---------------------------------------------------------------------------
 # Include routers
 # ---------------------------------------------------------------------------
@@ -73,6 +79,8 @@ app.include_router(rules_router)
 app.include_router(patterns_router)
 app.include_router(kb_router)
 app.include_router(chatbot_router)
+app.include_router(gmail_router)
+app.include_router(orchestration_router)
 
 
 # ---------------------------------------------------------------------------
