@@ -92,7 +92,7 @@ export default function BrandsPage() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
             >
               <Plus className="w-4 h-4" />
-              New Client
+              New Brand
             </Link>
           </div>
 
@@ -148,7 +148,7 @@ export default function BrandsPage() {
                 className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
               >
                 <Plus className="w-4 h-4" />
-                Add Client
+                Add Brand
               </Link>
             )}
           </div>

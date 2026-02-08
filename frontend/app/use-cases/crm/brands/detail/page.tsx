@@ -292,7 +292,7 @@ function BrandDetailInner() {
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-slate-500" />
             <span className="text-slate-400">Created:</span>
-            <span className="text-slate-200">{formatDate(client.created_at)}</span>
+            <span className="text-slate-200">{formatDate(brand.created_at)}</span>
           </div>
         </div>
       </div>
