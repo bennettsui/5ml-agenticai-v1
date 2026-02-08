@@ -159,13 +159,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     let body: unknown;
+    const text = await res.text();
     try {
-      body = await res.json();
+      body = JSON.parse(text);
     } catch {
-      body = await res.text();
+      body = text;
     }
     throw new Error(
-      `API Error ${res.status}: ${typeof body === "object" && body && "detail" in body ? (body as { detail: string }).detail : res.statusText}`
+      `API Error ${res.status}: ${typeof body === "object" && body && "detail" in body ? (body as { detail: string }).detail : text || res.statusText}`
     );
   }
 
