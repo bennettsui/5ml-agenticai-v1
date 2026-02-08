@@ -1,211 +1,619 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft, Calendar, Users, CheckCircle, Clock, FileText } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { projects as projectsApi, clients as clientsApi } from "@/lib/api";
+import type {
+  Project,
+  DeliverableStatus,
+  MilestoneStatus,
+} from "@/types";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Loader2,
+  Pencil,
+  Calendar,
+  Users,
+  Package,
+  Milestone,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Save,
+  X,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
-const statusColors: Record<string, string> = {
-  planning: 'bg-blue-100 text-blue-800',
-  in_progress: 'bg-yellow-100 text-yellow-800',
-  on_hold: 'bg-orange-100 text-orange-800',
-  completed: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
-};
+function getProjectStatusClasses(status: string): string {
+  switch (status) {
+    case "in_progress":
+      return "bg-blue-100 text-blue-800 border-blue-200";
+    case "completed":
+      return "bg-green-100 text-green-800 border-green-200";
+    case "planning":
+      return "bg-purple-100 text-purple-800 border-purple-200";
+    case "on_hold":
+      return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    case "cancelled":
+      return "bg-red-100 text-red-800 border-red-200";
+    default:
+      return "bg-gray-100 text-gray-800 border-gray-200";
+  }
+}
 
-const deliverableStatusColors: Record<string, string> = {
-  not_started: 'bg-gray-100 text-gray-800',
-  in_progress: 'bg-blue-100 text-blue-800',
-  review: 'bg-purple-100 text-purple-800',
-  completed: 'bg-green-100 text-green-800',
-};
+function getDeliverableStatusClasses(status: DeliverableStatus): string {
+  switch (status) {
+    case "completed":
+      return "bg-green-100 text-green-800";
+    case "in_progress":
+      return "bg-blue-100 text-blue-800";
+    case "review":
+      return "bg-yellow-100 text-yellow-800";
+    case "not_started":
+      return "bg-gray-100 text-gray-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+}
+
+function getMilestoneIcon(status: MilestoneStatus) {
+  switch (status) {
+    case "completed":
+      return <CheckCircle2 className="h-5 w-5 text-green-600" />;
+    case "delayed":
+      return <AlertCircle className="h-5 w-5 text-red-600" />;
+    default:
+      return <Clock className="h-5 w-5 text-muted-foreground" />;
+  }
+}
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const projectId = params.id as string;
 
-  const [project, setProject] = useState<any>(null);
-  const [deliverables, setDeliverables] = useState<any[]>([]);
-  const [milestones, setMilestones] = useState<any[]>([]);
-  const [team, setTeam] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    brief: "",
+    status: "" as string,
+    start_date: "",
+    end_date: "",
+  });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const token = localStorage.getItem('auth_token');
-        const headers = { Authorization: `Bearer ${token}` };
+  const {
+    data: project,
+    isLoading: loadingProject,
+    error: projectError,
+  } = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: () => projectsApi.get(projectId),
+  });
 
-        const [projectRes, delivRes, mileRes, teamRes] = await Promise.all([
-          fetch(`/api/projects/${projectId}`, { headers }),
-          fetch(`/api/projects/${projectId}/deliverables`, { headers }),
-          fetch(`/api/projects/${projectId}/milestones`, { headers }),
-          fetch(`/api/projects/${projectId}/team`, { headers }),
-        ]);
+  const { data: deliverables, isLoading: loadingDeliverables } = useQuery({
+    queryKey: ["project-deliverables", projectId],
+    queryFn: () => projectsApi.listDeliverables(projectId),
+  });
 
-        if (projectRes.ok) setProject(await projectRes.json());
-        if (delivRes.ok) setDeliverables(await delivRes.json());
-        if (mileRes.ok) setMilestones(await mileRes.json());
-        if (teamRes.ok) setTeam(await teamRes.json());
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [projectId]);
+  const { data: milestones, isLoading: loadingMilestones } = useQuery({
+    queryKey: ["project-milestones", projectId],
+    queryFn: () => projectsApi.listMilestones(projectId),
+  });
 
-  if (loading) return <div className="p-6 text-center text-muted-foreground">Loading...</div>;
-  if (!project) return <div className="p-6 text-center text-muted-foreground">Project not found</div>;
+  const { data: team, isLoading: loadingTeam } = useQuery({
+    queryKey: ["project-team", projectId],
+    queryFn: () => projectsApi.listTeam(projectId),
+  });
+
+  const { data: client } = useQuery({
+    queryKey: ["client", project?.client_id],
+    queryFn: () => clientsApi.get(project!.client_id),
+    enabled: !!project?.client_id,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: Partial<Project>) =>
+      projectsApi.update(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      setEditing(false);
+    },
+  });
+
+  function startEdit() {
+    if (!project) return;
+    setEditForm({
+      name: project.name,
+      brief: project.brief ?? "",
+      status: project.status,
+      start_date: project.start_date ?? "",
+      end_date: project.end_date ?? "",
+    });
+    setEditing(true);
+  }
+
+  function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    updateMutation.mutate({
+      name: editForm.name,
+      brief: editForm.brief || null,
+      status: editForm.status as Project["status"],
+      start_date: editForm.start_date || null,
+      end_date: editForm.end_date || null,
+    });
+  }
+
+  if (loadingProject) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (projectError || !project) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center space-y-4">
+          <p className="text-destructive font-medium">
+            Failed to load project
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {projectError instanceof Error
+              ? projectError.message
+              : "Project not found"}
+          </p>
+          <Button variant="outline" onClick={() => router.push("/projects")}>
+            Back to Projects
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const deliverablesList = deliverables ?? [];
+  const milestonesList = milestones ?? [];
+  const teamList = team ?? [];
+
+  const completedDeliverables = deliverablesList.filter(
+    (d) => d.status === "completed"
+  ).length;
+  const completedMilestones = milestonesList.filter(
+    (m) => m.status === "completed"
+  ).length;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <Button variant="ghost" size="sm" className="mb-4" onClick={() => router.back()}>
-        <ArrowLeft className="w-4 h-4 mr-1" /> Back
-      </Button>
-
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{project.name}</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {project.type?.replace('_', ' ')} &middot; Client ID: {project.client_id}
-            </p>
-          </div>
-          <Badge className={statusColors[project.status] || ''}>
-            {project.status?.replace('_', ' ')}
-          </Badge>
-        </div>
+    <div className="space-y-6">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link
+          href="/projects"
+          className="hover:text-foreground transition-colors"
+        >
+          Projects
+        </Link>
+        {client && (
+          <>
+            <span>/</span>
+            <Link
+              href={`/clients/${project.client_id}`}
+              className="hover:text-foreground transition-colors"
+            >
+              {client.name}
+            </Link>
+          </>
+        )}
+        <span>/</span>
+        <span className="text-foreground">{project.name}</span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main content */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Brief */}
-          {project.brief && (
+      {/* Project Header */}
+      {editing ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Edit Project</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name">Project Name</Label>
+                  <Input
+                    id="edit-name"
+                    value={editForm.name}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, name: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-status">Status</Label>
+                  <Select
+                    value={editForm.status}
+                    onValueChange={(val) =>
+                      setEditForm({ ...editForm, status: val })
+                    }
+                  >
+                    <SelectTrigger id="edit-status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="planning">Planning</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="on_hold">On Hold</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-brief">Brief</Label>
+                <Textarea
+                  id="edit-brief"
+                  value={editForm.brief}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, brief: e.target.value })
+                  }
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-start">Start Date</Label>
+                  <Input
+                    id="edit-start"
+                    type="date"
+                    value={editForm.start_date}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        start_date: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-end">End Date</Label>
+                  <Input
+                    id="edit-end"
+                    type="date"
+                    value={editForm.end_date}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        end_date: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditing(false)}
+                  disabled={updateMutation.isPending}
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={updateMutation.isPending}>
+                  {updateMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  Save
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-3xl font-bold tracking-tight">
+                {project.name}
+              </h1>
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize",
+                  getProjectStatusClasses(project.status)
+                )}
+              >
+                {project.status.replace("_", " ")}
+              </span>
+              <Badge variant="outline" className="capitalize">
+                {project.type.replace("_", " ")}
+              </Badge>
+            </div>
+            {project.brief && (
+              <p className="text-muted-foreground max-w-2xl">
+                {project.brief}
+              </p>
+            )}
+            <div className="flex items-center gap-4 flex-wrap text-sm text-muted-foreground">
+              {client && (
+                <Link
+                  href={`/clients/${project.client_id}`}
+                  className="hover:text-foreground transition-colors flex items-center gap-1.5"
+                >
+                  Client: {client.name}
+                </Link>
+              )}
+              {project.start_date && (
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4" />
+                  {new Date(project.start_date).toLocaleDateString()} -{" "}
+                  {project.end_date
+                    ? new Date(project.end_date).toLocaleDateString()
+                    : "Ongoing"}
+                </span>
+              )}
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={startEdit}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit Project
+          </Button>
+        </div>
+      )}
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <Package className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+            <p className="text-2xl font-bold">
+              {completedDeliverables}/{deliverablesList.length}
+            </p>
+            <p className="text-xs text-muted-foreground">Deliverables</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <Milestone className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+            <p className="text-2xl font-bold">
+              {completedMilestones}/{milestonesList.length}
+            </p>
+            <p className="text-xs text-muted-foreground">Milestones</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <Users className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+            <p className="text-2xl font-bold">{teamList.length}</p>
+            <p className="text-xs text-muted-foreground">Team Members</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            {project.success_flag === "success" ? (
+              <CheckCircle2 className="h-5 w-5 mx-auto mb-1 text-green-600" />
+            ) : project.success_flag === "failure" ? (
+              <AlertCircle className="h-5 w-5 mx-auto mb-1 text-red-600" />
+            ) : (
+              <Clock className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+            )}
+            <p className="text-2xl font-bold capitalize">
+              {project.success_flag ?? "-"}
+            </p>
+            <p className="text-xs text-muted-foreground">Success Flag</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tabs */}
+      <Tabs defaultValue="deliverables" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="deliverables">Deliverables</TabsTrigger>
+          <TabsTrigger value="milestones">Milestones</TabsTrigger>
+          <TabsTrigger value="team">Team</TabsTrigger>
+        </TabsList>
+
+        {/* Deliverables Tab */}
+        <TabsContent value="deliverables">
+          {loadingDeliverables ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : deliverablesList.length === 0 ? (
             <Card>
-              <CardHeader><CardTitle className="text-base">Brief</CardTitle></CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{project.brief}</p>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                No deliverables defined for this project yet.
               </CardContent>
             </Card>
+          ) : (
+            <div className="rounded-lg border bg-card">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Due Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deliverablesList.map((d) => (
+                    <TableRow key={d.id}>
+                      <TableCell className="capitalize font-medium">
+                        {d.type.replace("_", " ")}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {d.description ?? "-"}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold capitalize",
+                            getDeliverableStatusClasses(d.status)
+                          )}
+                        >
+                          {d.status.replace("_", " ")}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {d.due_date
+                          ? new Date(d.due_date).toLocaleDateString()
+                          : "-"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
+        </TabsContent>
 
-          {/* Deliverables */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Deliverables ({deliverables.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {deliverables.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No deliverables yet</p>
-              ) : (
-                <div className="space-y-3">
-                  {deliverables.map((d: any) => (
-                    <div key={d.id} className="flex items-center justify-between border-b pb-2 last:border-0">
-                      <div>
-                        <p className="text-sm font-medium">{d.description || d.type}</p>
-                        {d.due_date && (
-                          <p className="text-xs text-muted-foreground">Due: {d.due_date}</p>
-                        )}
+        {/* Milestones Tab */}
+        <TabsContent value="milestones">
+          {loadingMilestones ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : milestonesList.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                No milestones defined for this project yet.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-0">
+              {milestonesList
+                .sort((a, b) => {
+                  if (!a.due_date) return 1;
+                  if (!b.due_date) return -1;
+                  return (
+                    new Date(a.due_date).getTime() -
+                    new Date(b.due_date).getTime()
+                  );
+                })
+                .map((milestone, idx) => (
+                  <div key={milestone.id} className="flex gap-4">
+                    {/* Timeline line */}
+                    <div className="flex flex-col items-center">
+                      {getMilestoneIcon(milestone.status)}
+                      {idx < milestonesList.length - 1 && (
+                        <div className="w-0.5 flex-1 bg-border mt-1" />
+                      )}
+                    </div>
+                    {/* Content */}
+                    <div className="pb-6 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium">{milestone.name}</p>
+                        <Badge
+                          variant={
+                            milestone.status === "completed"
+                              ? "success"
+                              : milestone.status === "delayed"
+                              ? "destructive"
+                              : "secondary"
+                          }
+                          className="text-xs"
+                        >
+                          {milestone.status}
+                        </Badge>
                       </div>
-                      <Badge className={deliverableStatusColors[d.status] || ''}>
-                        {d.status?.replace('_', ' ')}
-                      </Badge>
+                      {milestone.due_date && (
+                        <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(
+                            milestone.due_date
+                          ).toLocaleDateString()}
+                        </p>
+                      )}
+                      {milestone.notes && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {milestone.notes}
+                        </p>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  </div>
+                ))}
+            </div>
+          )}
+        </TabsContent>
 
-          {/* Milestones */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <CheckCircle className="w-4 h-4" />
-                Milestones ({milestones.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {milestones.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No milestones yet</p>
-              ) : (
-                <div className="space-y-3">
-                  {milestones.map((m: any) => (
-                    <div key={m.id} className="flex items-center justify-between border-b pb-2 last:border-0">
-                      <div>
-                        <p className="text-sm font-medium">{m.name}</p>
-                        <p className="text-xs text-muted-foreground">Due: {m.due_date}</p>
+        {/* Team Tab */}
+        <TabsContent value="team">
+          {loadingTeam ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : teamList.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                No team members assigned to this project yet.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {teamList.map((member) => (
+                <Card key={member.id}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                        <Users className="h-5 w-5 text-muted-foreground" />
                       </div>
-                      <Badge variant={m.status === 'completed' ? 'default' : m.status === 'delayed' ? 'destructive' : 'secondary'}>
-                        {m.status}
-                      </Badge>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {member.user_id}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <Badge
+                            variant="outline"
+                            className="text-xs capitalize"
+                          >
+                            {member.role}
+                          </Badge>
+                          {member.allocation != null && (
+                            <span className="text-xs text-muted-foreground">
+                              {member.allocation}% allocated
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader><CardTitle className="text-base">Details</CardTitle></CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-muted-foreground" />
-                <span>Start: {project.start_date}</span>
-              </div>
-              {project.end_date && (
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <span>End: {project.end_date}</span>
-                </div>
-              )}
-              {project.success_flag && (
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  <span>Outcome: {project.success_flag}</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                Team ({team.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {team.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No team members</p>
-              ) : (
-                <div className="space-y-2">
-                  {team.map((t: any) => (
-                    <div key={t.id} className="flex items-center justify-between text-sm">
-                      <span>{t.user_id}</span>
-                      <Badge variant="outline">{t.role}</Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
