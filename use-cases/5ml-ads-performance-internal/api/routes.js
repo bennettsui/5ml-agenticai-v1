@@ -509,7 +509,7 @@ async function fetchGoogleAdsMetrics(customerId, since, until, credentials) {
   };
   if (loginCid) headers['login-customer-id'] = loginCid.replace(/-/g, '');
 
-  const url = `${GOOGLE_ADS_BASE}/customers/${cleanId}:search`;
+  const url = `${GOOGLE_ADS_BASE}/customers/${cleanId}/googleAds:search`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -570,7 +570,7 @@ async function fetchGoogleAdsCampaigns(customerId, credentials) {
   };
   if (loginCid) headers['login-customer-id'] = loginCid.replace(/-/g, '');
 
-  const url = `${GOOGLE_ADS_BASE}/customers/${cleanId}:search`;
+  const url = `${GOOGLE_ADS_BASE}/customers/${cleanId}/googleAds:search`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -2042,7 +2042,7 @@ router.get('/google/accounts', async (req, res) => {
         'Content-Type': 'application/json',
       };
 
-      const url = `${GOOGLE_ADS_BASE}/customers/${cleanMcc}:search`;
+      const url = `${GOOGLE_ADS_BASE}/customers/${cleanMcc}/googleAds:search`;
       const response = await fetch(url, {
         method: 'POST',
         headers,

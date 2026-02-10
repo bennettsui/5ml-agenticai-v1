@@ -187,7 +187,7 @@ export async function fetchGoogleAdsMetrics({
     headers['login-customer-id'] = loginCid.replace(/-/g, '');
   }
 
-  const url = `${GOOGLE_ADS_BASE}/customers/${cleanCustomerId}:search`;
+  const url = `${GOOGLE_ADS_BASE}/customers/${cleanCustomerId}/googleAds:search`;
 
   let retries = 0;
   const maxRetries = 3;
