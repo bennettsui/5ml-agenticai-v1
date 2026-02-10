@@ -6,7 +6,7 @@
 import { BaseAgent, AgentInput, AgentOutput } from './base-agent';
 import { getTenantContextResolver, GoogleCredentials } from '../execution/tenant-context';
 
-const GOOGLE_ADS_BASE = 'https://googleads.googleapis.com/v17';
+const GOOGLE_ADS_BASE = `https://googleads.googleapis.com/${process.env.GOOGLE_ADS_API_VERSION || 'v19'}`;
 
 export interface GoogleFetcherInput extends AgentInput {
   since: string;

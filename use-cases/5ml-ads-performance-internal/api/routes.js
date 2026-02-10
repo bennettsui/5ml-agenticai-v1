@@ -420,7 +420,7 @@ async function fetchMetaAds(accountId, accessToken) {
 // Google Ads API - Fetch + Normalize
 // ==========================================
 
-const GOOGLE_ADS_API_VERSION = 'v17';
+const GOOGLE_ADS_API_VERSION = process.env.GOOGLE_ADS_API_VERSION || 'v19';
 const GOOGLE_ADS_BASE = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
 
 async function getGoogleAccessToken(clientId, clientSecret, refreshToken) {
