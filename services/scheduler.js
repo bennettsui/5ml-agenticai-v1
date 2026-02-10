@@ -1,6 +1,9 @@
 /**
  * Scheduler Service
- * Handles scheduled daily scans and weekly digests for intelligence topics
+ * Handles scheduled daily scans and weekly digests for intelligence topics.
+ *
+ * Scans are queued and processed sequentially to avoid saturating the
+ * event loop (which causes node-cron "missed execution" warnings).
  */
 
 const cron = require('node-cron');
@@ -12,24 +15,82 @@ const scheduledJobs = new Map();
 let db = null;
 let scanFunction = null;
 
+// --- Scan queue: serialises heavy scan work so cron callbacks stay fast ---
+const scanQueue = [];
+let isProcessingQueue = false;
+const runningScans = new Set(); // topic IDs currently being scanned
+
+function enqueueScan(topicId, topicName, type = 'daily') {
+  if (runningScans.has(topicId)) {
+    console.log(`[Scheduler] Skipping ${type} scan for "${topicName}" - already running`);
+    return;
+  }
+  // Avoid duplicate queue entries
+  if (scanQueue.some(item => item.topicId === topicId)) {
+    console.log(`[Scheduler] Skipping ${type} scan for "${topicName}" - already queued`);
+    return;
+  }
+
+  scanQueue.push({ topicId, topicName, type });
+  console.log(`[Scheduler] Queued ${type} scan for "${topicName}" (queue depth: ${scanQueue.length})`);
+  processQueue();
+}
+
+async function processQueue() {
+  if (isProcessingQueue) return;
+  isProcessingQueue = true;
+
+  while (scanQueue.length > 0) {
+    const { topicId, topicName, type } = scanQueue.shift();
+
+    if (runningScans.has(topicId)) {
+      console.log(`[Scheduler] Skipping dequeued scan for "${topicName}" - already running`);
+      continue;
+    }
+
+    runningScans.add(topicId);
+    const startTime = Date.now();
+    console.log(`[Scheduler] 🔄 Starting ${type} scan for: ${topicName}`);
+
+    try {
+      if (scanFunction) {
+        await scanFunction(topicId, topicName);
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`[Scheduler] ✅ Completed ${type} scan for: ${topicName} (${elapsed}s)`);
+      } else {
+        console.error('[Scheduler] ❌ Scan function not configured');
+      }
+    } catch (error) {
+      console.error(`[Scheduler] ❌ ${type} scan failed for ${topicName}:`, error.message);
+    } finally {
+      runningScans.delete(topicId);
+    }
+
+    // Yield to the event loop between scans so cron ticks aren't delayed
+    await new Promise(resolve => setImmediate(resolve));
+  }
+
+  isProcessingQueue = false;
+}
+
 /**
  * Initialize the scheduler with dependencies
  */
 function initialize(database, scanFn) {
   db = database;
   scanFunction = scanFn;
-  console.log('[Scheduler] 🕐 Scheduler initialized');
+  console.log('[Scheduler] Scheduler initialized');
 }
 
 /**
- * Convert time string (HH:MM) and timezone to cron expression
- * Note: node-cron uses server timezone, so we convert to UTC offset
+ * Convert time string (HH:MM) and timezone to cron expression.
+ * Accepts an optional seconds offset so multiple jobs scheduled at the
+ * same minute don't all fire on the exact same tick.
  */
-function timeToCron(time, timezone = 'Asia/Hong_Kong') {
+function timeToCron(time, timezone = 'Asia/Hong_Kong', secondsOffset = 0) {
   const [hours, minutes] = time.split(':').map(Number);
-  // For now, we'll use the time directly (assumes server is in correct timezone)
-  // In production, you'd want to use a timezone-aware cron library
-  return `${minutes} ${hours} * * *`;
+  // 6-field cron: second minute hour dayOfMonth month dayOfWeek
+  return `${secondsOffset} ${minutes} ${hours} * * *`;
 }
 
 /**
@@ -51,7 +112,7 @@ function dayToCronDay(day) {
 /**
  * Schedule daily scan for a topic
  */
-function scheduleDailyScan(topicId, topicName, config) {
+function scheduleDailyScan(topicId, topicName, config, staggerIndex = 0) {
   const jobId = `daily-${topicId}`;
 
   // Cancel existing job if any
@@ -71,21 +132,14 @@ function scheduleDailyScan(topicId, topicName, config) {
     return;
   }
 
-  const cronExpression = timeToCron(config.time, config.timezone);
+  // Stagger by 10 seconds per topic so cron callbacks don't all fire on the same tick
+  const secondsOffset = (staggerIndex * 10) % 60;
+  const cronExpression = timeToCron(config.time, config.timezone, secondsOffset);
   console.log(`[Scheduler] Scheduling daily scan for "${topicName}" at ${config.time} (${config.timezone}) - cron: ${cronExpression}`);
 
-  const job = cron.schedule(cronExpression, async () => {
-    console.log(`[Scheduler] 🔄 Starting scheduled daily scan for: ${topicName}`);
-    try {
-      if (scanFunction) {
-        await scanFunction(topicId, topicName);
-        console.log(`[Scheduler] ✅ Completed daily scan for: ${topicName}`);
-      } else {
-        console.error('[Scheduler] ❌ Scan function not configured');
-      }
-    } catch (error) {
-      console.error(`[Scheduler] ❌ Daily scan failed for ${topicName}:`, error.message);
-    }
+  const job = cron.schedule(cronExpression, () => {
+    // Lightweight callback: just enqueue, don't await the scan itself
+    enqueueScan(topicId, topicName, 'daily');
   }, {
     scheduled: true,
     timezone: config.timezone || 'Asia/Hong_Kong',
@@ -130,7 +184,8 @@ function scheduleWeeklyDigest(topicId, topicName, config, digestFunction) {
 
   const dayNum = dayToCronDay(config.day);
   const [hours, minutes] = (config.time || '08:00').split(':').map(Number);
-  const cronExpression = `${minutes} ${hours} * * ${dayNum}`;
+  // 6-field cron with seconds
+  const cronExpression = `0 ${minutes} ${hours} * * ${dayNum}`;
 
   console.log(`[Scheduler] Scheduling weekly digest for "${topicName}" on ${config.day} at ${config.time} - cron: ${cronExpression}`);
 
@@ -175,7 +230,7 @@ async function loadAllSchedules() {
   }
 
   try {
-    console.log('[Scheduler] 📥 Loading schedules from database...');
+    console.log('[Scheduler] Loading schedules from database...');
     const topics = await db.getIntelligenceTopics();
 
     let scheduledCount = 0;
@@ -192,7 +247,7 @@ async function loadAllSchedules() {
         : topic.weekly_digest_config;
 
       if (dailyConfig?.enabled) {
-        scheduleDailyScan(topic.topic_id, topic.name, dailyConfig);
+        scheduleDailyScan(topic.topic_id, topic.name, dailyConfig, scheduledCount);
         scheduledCount++;
       }
 
@@ -253,12 +308,17 @@ function getScheduleStatus() {
   for (const [jobId, jobInfo] of scheduledJobs) {
     status.push({
       id: jobId,
-      running: true,
+      running: runningScans.has(jobInfo.config?.topicId),
+      queued: scanQueue.some(item => item.topicId === jobInfo.config?.topicId),
       config: jobInfo.config || null,
       nextRun: jobInfo.nextRun || 'unknown',
     });
   }
-  return status;
+  return {
+    jobs: status,
+    queueDepth: scanQueue.length,
+    activeScans: runningScans.size,
+  };
 }
 
 /**
@@ -273,7 +333,8 @@ function stopAll() {
     }
   }
   scheduledJobs.clear();
-  console.log('[Scheduler] ⏹️ All scheduled jobs stopped');
+  scanQueue.length = 0;
+  console.log('[Scheduler] All scheduled jobs stopped');
 }
 
 module.exports = {
