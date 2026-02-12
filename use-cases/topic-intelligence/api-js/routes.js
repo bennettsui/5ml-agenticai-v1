@@ -4524,6 +4524,11 @@ async function runScheduledDigest(topicId, topicName, recipientsOverride) {
       }
     }
 
+    if (emailsFailed > 0) {
+      const sampleErrors = errors.slice(0, 3).map(err => `${err.email}: ${err.error}`).join(' | ');
+      throw new Error(`Failed to send ${emailsFailed} of ${recipients.length} emails. ${sampleErrors}`);
+    }
+
     return {
       success: true,
       topicId,
@@ -4531,7 +4536,6 @@ async function runScheduledDigest(topicId, topicName, recipientsOverride) {
       emailsSent,
       emailsFailed,
       totalRecipients: recipients.length,
-      errors: errors.length > 0 ? errors : undefined,
     };
   } catch (error) {
     console.error(`[ScheduledDigest] Error sending weekly digest for ${topicName}:`, error.message);
