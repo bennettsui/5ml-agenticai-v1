@@ -79,6 +79,17 @@ function getWeeklyDigestRecipients(topic, recipientsOverride) {
   return mergeRecipients(baseList, FORCE_DIGEST_RECIPIENTS);
 }
 
+function getResendSenderConfig() {
+  const fromRaw = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || '';
+  const from = fromRaw.trim() || 'onboarding@resend.dev';
+  const replyToRaw = process.env.RESEND_REPLY_TO_EMAIL || process.env.RESEND_REPLY_TO || '';
+  const replyTo = replyToRaw.trim();
+  return {
+    from,
+    replyTo: replyTo || undefined,
+  };
+}
+
 // ==========================================
 // EDM Cache (Key-Value Store)
 // ==========================================
@@ -2893,6 +2904,7 @@ router.post('/orchestration/trigger-digest', async (req, res) => {
     let emailsSent = 0;
     let emailsFailed = 0;
     const errors = [];
+    const { from } = getResendSenderConfig();
 
     for (const subscriberEmail of subscribers) {
       try {
@@ -2903,7 +2915,7 @@ router.post('/orchestration/trigger-digest', async (req, res) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'Topic Intelligence <news@5ml.io>',
+            from,
             to: subscriberEmail,
             subject: `📰 ${topic.name} - Intelligence Digest`,
             html: emailHtml,
@@ -3070,6 +3082,7 @@ router.post('/email/test', async (req, res) => {
     `;
 
     console.log(`📧 Sending test email to: ${email}`);
+    const { from, replyTo } = getResendSenderConfig();
 
     // Send email via Resend API
     const response = await fetch('https://api.resend.com/emails', {
@@ -3079,11 +3092,11 @@ router.post('/email/test', async (req, res) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'news@5ml.io',
+        from,
         to: email,
         subject: `[測試] ${topicName} 每週情報`,
         html: testHtml,
-        reply_to: 'support@5ml.io',
+        reply_to: replyTo,
         tags: [
           { name: 'type', value: 'test' },
           ...(topicId ? [{ name: 'topic_id', value: topicId }] : []),
@@ -3298,6 +3311,7 @@ router.post('/edm/send/:topicId', async (req, res) => {
     const previewText = `本週 ${topic.name} 共發現 ${formattedArticles.length} 條新聞，其中 ${highImportanceCount} 條高重要性`;
 
     console.log(`📧 Sending EDM to ${recipientList.length} recipients for topic: ${topic.name}`);
+    const { from, replyTo } = getResendSenderConfig();
 
     // Send email via Resend API
     const response = await fetch('https://api.resend.com/emails', {
@@ -3307,11 +3321,11 @@ router.post('/edm/send/:topicId', async (req, res) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'news@5ml.io',
+        from,
         to: recipientList,
         subject: subject,
         html: edmHtml,
-        reply_to: 'support@5ml.io',
+        reply_to: replyTo,
         tags: [
           { name: 'type', value: 'weekly_digest' },
           { name: 'topic_id', value: topicId },
@@ -4489,6 +4503,7 @@ async function runScheduledDigest(topicId, topicName, recipientsOverride) {
     let emailsSent = 0;
     let emailsFailed = 0;
     const errors = [];
+    const { from } = getResendSenderConfig();
 
     for (const recipientEmail of recipients) {
       try {
@@ -4499,7 +4514,7 @@ async function runScheduledDigest(topicId, topicName, recipientsOverride) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'Topic Intelligence <news@5ml.io>',
+            from,
             to: recipientEmail,
             subject: `📰 ${topic.name} - Intelligence Digest`,
             html: emailHtml,

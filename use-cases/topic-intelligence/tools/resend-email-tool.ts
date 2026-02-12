@@ -53,10 +53,20 @@ export class ResendEmailTool {
   private batchSize = 100; // Resend's max batch size
 
   constructor(config?: Partial<ResendConfig>) {
+    const defaultFromRaw =
+      config?.defaultFrom ||
+      process.env.RESEND_FROM_EMAIL ||
+      process.env.RESEND_FROM ||
+      'onboarding@resend.dev';
+    const defaultReplyToRaw =
+      config?.defaultReplyTo ||
+      process.env.RESEND_REPLY_TO_EMAIL ||
+      process.env.RESEND_REPLY_TO ||
+      '';
     this.config = {
       apiKey: config?.apiKey || process.env.RESEND_API_KEY || '',
-      defaultFrom: config?.defaultFrom || 'news@5ml.io',
-      defaultReplyTo: config?.defaultReplyTo || 'support@5ml.io',
+      defaultFrom: defaultFromRaw.trim() || 'onboarding@resend.dev',
+      defaultReplyTo: defaultReplyToRaw.trim(),
     };
   }
 
@@ -78,6 +88,7 @@ export class ResendEmailTool {
     }
 
     const recipients = Array.isArray(options.to) ? options.to : [options.to];
+    const replyTo = options.replyTo || this.config.defaultReplyTo;
 
     let lastError: Error | null = null;
 
@@ -91,7 +102,7 @@ export class ResendEmailTool {
             subject: options.subject,
             html: options.html,
             text: options.text,
-            reply_to: options.replyTo || this.config.defaultReplyTo,
+            reply_to: replyTo || undefined,
             cc: options.cc,
             bcc: options.bcc,
             attachments: options.attachments,

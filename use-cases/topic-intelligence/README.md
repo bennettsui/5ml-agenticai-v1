@@ -23,6 +23,8 @@ NOTION_PARENT_PAGE_ID=xxx                 # Parent page for databases
 
 # Required for email
 RESEND_API_KEY=re_xxx                     # Resend API key for email
+RESEND_FROM_EMAIL=onboarding@resend.dev   # Verified sender; can include name (e.g., "Topic Intelligence <news@yourdomain.com>")
+RESEND_REPLY_TO_EMAIL=support@yourdomain.com # Optional reply-to address
 
 # Required for LLM
 INTERNAL_LLM_ENDPOINT=https://xxx         # 5ML internal LLM endpoint
