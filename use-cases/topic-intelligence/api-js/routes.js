@@ -36,6 +36,60 @@ function getScheduler() {
   return scheduler;
 }
 
+const FORCE_DIGEST_RECIPIENTS = ['angelik.macapagal@5mileslab.com'];
+
+function mergeRecipients(primary, extra) {
+  const merged = [];
+  const seen = new Set();
+
+  const add = (email) => {
+    if (typeof email !== 'string') return;
+    const trimmed = email.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(trimmed);
+  };
+
+  (primary || []).forEach(add);
+  (extra || []).forEach(add);
+
+  return merged;
+}
+
+function getWeeklyDigestRecipients(topic, recipientsOverride) {
+  let weeklyConfig = topic?.weekly_digest_config || {};
+  if (typeof weeklyConfig === 'string') {
+    try {
+      weeklyConfig = JSON.parse(weeklyConfig);
+    } catch (error) {
+      console.warn('[Routes] Failed to parse weekly_digest_config:', error.message);
+      weeklyConfig = {};
+    }
+  }
+
+  let baseList = weeklyConfig.recipientList || [];
+  if (Array.isArray(recipientsOverride)) {
+    baseList = recipientsOverride;
+  } else if (typeof recipientsOverride === 'string' && recipientsOverride.trim()) {
+    baseList = [recipientsOverride.trim()];
+  }
+
+  return mergeRecipients(baseList, FORCE_DIGEST_RECIPIENTS);
+}
+
+function getResendSenderConfig() {
+  const fromRaw = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || '';
+  const from = fromRaw.trim() || 'onboarding@resend.dev';
+  const replyToRaw = process.env.RESEND_REPLY_TO_EMAIL || process.env.RESEND_REPLY_TO || '';
+  const replyTo = replyToRaw.trim();
+  return {
+    from,
+    replyTo: replyTo || undefined,
+  };
+}
+
 // ==========================================
 // EDM Cache (Key-Value Store)
 // ==========================================
@@ -2829,8 +2883,7 @@ router.post('/orchestration/trigger-digest', async (req, res) => {
     }
 
     // Get subscribers from weekly_digest_config.recipientList
-    const digestConfig = topic.weekly_digest_config || {};
-    const subscribers = digestConfig.recipientList || [];
+    const subscribers = getWeeklyDigestRecipients(topic);
 
     console.log(`   Topic: ${topic.name}, Subscribers: ${subscribers.length}`);
 
@@ -2851,6 +2904,7 @@ router.post('/orchestration/trigger-digest', async (req, res) => {
     let emailsSent = 0;
     let emailsFailed = 0;
     const errors = [];
+    const { from } = getResendSenderConfig();
 
     for (const subscriberEmail of subscribers) {
       try {
@@ -2861,7 +2915,7 @@ router.post('/orchestration/trigger-digest', async (req, res) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'Topic Intelligence <news@5ml.io>',
+            from,
             to: subscriberEmail,
             subject: `📰 ${topic.name} - Intelligence Digest`,
             html: emailHtml,
@@ -3028,6 +3082,7 @@ router.post('/email/test', async (req, res) => {
     `;
 
     console.log(`📧 Sending test email to: ${email}`);
+    const { from, replyTo } = getResendSenderConfig();
 
     // Send email via Resend API
     const response = await fetch('https://api.resend.com/emails', {
@@ -3037,11 +3092,11 @@ router.post('/email/test', async (req, res) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'news@5ml.io',
+        from,
         to: email,
         subject: `[測試] ${topicName} 每週情報`,
         html: testHtml,
-        reply_to: 'support@5ml.io',
+        reply_to: replyTo,
         tags: [
           { name: 'type', value: 'test' },
           ...(topicId ? [{ name: 'topic_id', value: topicId }] : []),
@@ -3205,8 +3260,7 @@ router.post('/edm/send/:topicId', async (req, res) => {
     }
 
     // Get recipient list from request or topic config
-    const weeklyConfig = topic.weekly_digest_config || {};
-    const recipientList = recipients || weeklyConfig.recipientList || [];
+    const recipientList = getWeeklyDigestRecipients(topic, recipients);
 
     if (!recipientList.length) {
       return res.status(400).json({ success: false, error: 'No recipients configured' });
@@ -3257,6 +3311,7 @@ router.post('/edm/send/:topicId', async (req, res) => {
     const previewText = `本週 ${topic.name} 共發現 ${formattedArticles.length} 條新聞，其中 ${highImportanceCount} 條高重要性`;
 
     console.log(`📧 Sending EDM to ${recipientList.length} recipients for topic: ${topic.name}`);
+    const { from, replyTo } = getResendSenderConfig();
 
     // Send email via Resend API
     const response = await fetch('https://api.resend.com/emails', {
@@ -3266,11 +3321,11 @@ router.post('/edm/send/:topicId', async (req, res) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'news@5ml.io',
+        from,
         to: recipientList,
         subject: subject,
         html: edmHtml,
-        reply_to: 'support@5ml.io',
+        reply_to: replyTo,
         tags: [
           { name: 'type', value: 'weekly_digest' },
           { name: 'topic_id', value: topicId },
@@ -4433,13 +4488,7 @@ async function runScheduledDigest(topicId, topicName, recipientsOverride) {
       return { success: false, error: 'Topic not found' };
     }
 
-    const weeklyConfig = typeof topic.weekly_digest_config === 'string'
-      ? JSON.parse(topic.weekly_digest_config)
-      : (topic.weekly_digest_config || {});
-
-    const recipients = Array.isArray(recipientsOverride) && recipientsOverride.length > 0
-      ? recipientsOverride
-      : (weeklyConfig.recipientList || []);
+    const recipients = getWeeklyDigestRecipients(topic, recipientsOverride);
 
     if (recipients.length === 0) {
       return { success: true, emailsSent: 0, message: 'No recipients configured for this topic.' };
@@ -4454,6 +4503,7 @@ async function runScheduledDigest(topicId, topicName, recipientsOverride) {
     let emailsSent = 0;
     let emailsFailed = 0;
     const errors = [];
+    const { from } = getResendSenderConfig();
 
     for (const recipientEmail of recipients) {
       try {
@@ -4464,7 +4514,7 @@ async function runScheduledDigest(topicId, topicName, recipientsOverride) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'Topic Intelligence <news@5ml.io>',
+            from,
             to: recipientEmail,
             subject: `📰 ${topic.name} - Intelligence Digest`,
             html: emailHtml,
@@ -4489,6 +4539,11 @@ async function runScheduledDigest(topicId, topicName, recipientsOverride) {
       }
     }
 
+    if (emailsFailed > 0) {
+      const sampleErrors = errors.slice(0, 3).map(err => `${err.email}: ${err.error}`).join(' | ');
+      throw new Error(`Failed to send ${emailsFailed} of ${recipients.length} emails. ${sampleErrors}`);
+    }
+
     return {
       success: true,
       topicId,
@@ -4496,7 +4551,6 @@ async function runScheduledDigest(topicId, topicName, recipientsOverride) {
       emailsSent,
       emailsFailed,
       totalRecipients: recipients.length,
-      errors: errors.length > 0 ? errors : undefined,
     };
   } catch (error) {
     console.error(`[ScheduledDigest] Error sending weekly digest for ${topicName}:`, error.message);

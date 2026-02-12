@@ -19,6 +19,17 @@ function getDb() {
   return db;
 }
 
+function getResendSenderConfig() {
+  const fromRaw = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || '';
+  const from = fromRaw.trim() || 'onboarding@resend.dev';
+  const replyToRaw = process.env.RESEND_REPLY_TO_EMAIL || process.env.RESEND_REPLY_TO || '';
+  const replyTo = replyToRaw.trim();
+  return {
+    from,
+    replyTo: replyTo || undefined,
+  };
+}
+
 /**
  * GET /edm/preview/:topicId - Generate EDM preview
  */
@@ -181,6 +192,7 @@ async function sendEdm(req, res) {
     const subject = `${topic.name} Weekly Brief - ${formattedArticles.length} must-read insights`;
 
     console.log(`📧 Sending EDM to ${recipientList.length} recipients for topic: ${topic.name}`);
+    const { from, replyTo } = getResendSenderConfig();
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -189,11 +201,11 @@ async function sendEdm(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'news@5ml.io',
+        from,
         to: recipientList,
         subject: subject,
         html: edmHtml,
-        reply_to: 'support@5ml.io',
+        reply_to: replyTo,
       }),
     });
 
