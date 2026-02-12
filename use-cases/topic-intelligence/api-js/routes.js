@@ -4401,6 +4401,103 @@ async function runScheduledScan(topicId, topicName) {
   }
 }
 
+/**
+ * Standalone weekly digest function for scheduled digests
+ * Can be called by the scheduler without requiring HTTP request/response
+ * @param {string} topicId - The topic ID
+ * @param {string} topicName - The topic name (for logging)
+ * @param {string[]} recipientsOverride - Optional override recipients
+ */
+async function runScheduledDigest(topicId, topicName, recipientsOverride) {
+  console.log(`[ScheduledDigest] Starting weekly digest for: ${topicName}`);
+
+  try {
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      return { success: false, error: 'RESEND_API_KEY not configured' };
+    }
+
+    if (!db || !process.env.DATABASE_URL) {
+      return { success: false, error: 'Database not available' };
+    }
+
+    const topic = await db.getIntelligenceTopic(topicId);
+    if (!topic) {
+      return { success: false, error: 'Topic not found' };
+    }
+
+    const weeklyConfig = typeof topic.weekly_digest_config === 'string'
+      ? JSON.parse(topic.weekly_digest_config)
+      : (topic.weekly_digest_config || {});
+
+    const recipients = Array.isArray(recipientsOverride) && recipientsOverride.length > 0
+      ? recipientsOverride
+      : (weeklyConfig.recipientList || []);
+
+    if (recipients.length === 0) {
+      return { success: true, emailsSent: 0, message: 'No recipients configured for this topic.' };
+    }
+
+    const articles = await db.getIntelligenceNews(topicId, 10);
+    const summaries = await db.getIntelligenceSummaries(topicId, 1);
+    const summary = summaries?.[0] || null;
+
+    const emailHtml = generateDigestEmailHtml(topic, articles, summary);
+
+    let emailsSent = 0;
+    let emailsFailed = 0;
+    const errors = [];
+
+    for (const recipientEmail of recipients) {
+      try {
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'Topic Intelligence <news@5ml.io>',
+            to: recipientEmail,
+            subject: `📰 ${topic.name} - Intelligence Digest`,
+            html: emailHtml,
+            tags: [
+              { name: 'topic_id', value: topicId },
+              { name: 'type', value: 'digest' },
+            ],
+          }),
+        });
+
+        if (response.ok) {
+          emailsSent++;
+          continue;
+        }
+
+        const errorData = await response.json();
+        emailsFailed++;
+        errors.push({ email: recipientEmail, error: errorData.message || response.statusText });
+      } catch (emailError) {
+        emailsFailed++;
+        errors.push({ email: recipientEmail, error: emailError.message });
+      }
+    }
+
+    return {
+      success: true,
+      topicId,
+      topicName: topic.name,
+      emailsSent,
+      emailsFailed,
+      totalRecipients: recipients.length,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+  } catch (error) {
+    console.error(`[ScheduledDigest] Error sending weekly digest for ${topicName}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 // Export both the router and the scheduled scan function
 module.exports = router;
 module.exports.runScheduledScan = runScheduledScan;
+module.exports.runScheduledDigest = runScheduledDigest;

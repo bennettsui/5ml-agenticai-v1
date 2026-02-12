@@ -1398,7 +1398,7 @@ console.log('✅ Receipt tracking routes loaded: /api/receipts');
 
 // Topic Intelligence Routes
 const topicIntelligenceRoutes = require('./use-cases/topic-intelligence/api-js/routes');
-const { runScheduledScan } = require('./use-cases/topic-intelligence/api-js/routes');
+const { runScheduledScan, runScheduledDigest } = require('./use-cases/topic-intelligence/api-js/routes');
 app.use('/api/intelligence', topicIntelligenceRoutes);
 
 console.log('✅ Topic Intelligence routes loaded: /api/intelligence');
@@ -1496,7 +1496,7 @@ server.listen(port, '0.0.0.0', async () => {
   if (process.env.DATABASE_URL) {
     try {
       const db = require('./db');
-      scheduler.initialize(db, runScheduledScan);
+      scheduler.initialize(db, runScheduledScan, runScheduledDigest);
       await scheduler.loadAllSchedules();
       console.log('✅ Scheduler service initialized');
     } catch (error) {

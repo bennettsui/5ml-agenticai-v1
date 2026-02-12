@@ -11,14 +11,14 @@ const scheduledJobs = new Map();
 // Dependencies will be injected
 let db = null;
 let scanFunction = null;
+let digestFunction = null;
 
 /**
  * Initialize the scheduler with dependencies
  */
-function initialize(database, scanFn) {
   db = database;
   scanFunction = scanFn;
-  console.log('[Scheduler] 🕐 Scheduler initialized');
+  digestFunction = digestFn || null;
 }
 
 /**
@@ -128,6 +128,20 @@ function scheduleWeeklyDigest(topicId, topicName, config, digestFunction) {
     return;
   }
 
+  if (!digestFunction) {
+    console.error(`[Scheduler] Weekly digest function not configured for: ${topicName}`);
+    registry.register({
+      id: registryId,
+      group: GROUP,
+      name: `Weekly Digest: ${topicName}`,
+      description: `Send weekly digest email for "${topicName}"`,
+      schedule: 'disabled',
+      timezone: config.timezone || 'Asia/Hong_Kong',
+      status: 'disabled',
+    });
+    return;
+  }
+
   const dayNum = dayToCronDay(config.day);
   const [hours, minutes] = (config.time || '08:00').split(':').map(Number);
   const cronExpression = `${minutes} ${hours} * * ${dayNum}`;
@@ -179,6 +193,7 @@ async function loadAllSchedules() {
     const topics = await db.getIntelligenceTopics();
 
     let scheduledCount = 0;
+    let weeklyCount = 0;
     for (const topic of topics) {
       if (topic.status !== 'active') continue;
 
@@ -196,10 +211,13 @@ async function loadAllSchedules() {
         scheduledCount++;
       }
 
-      // Weekly digest scheduling would go here if we had a digest function
+      if (weeklyConfig?.enabled) {
+        scheduleWeeklyDigest(topic.topic_id, topic.name, weeklyConfig, digestFunction);
+        weeklyCount++;
+      }
     }
 
-    console.log(`[Scheduler] ✅ Loaded ${scheduledCount} scheduled scans`);
+    console.log(`[Scheduler] ✅ Loaded ${scheduledCount} scheduled scans, ${weeklyCount} weekly digests`);
   } catch (error) {
     console.error('[Scheduler] ❌ Failed to load schedules:', error.message);
   }
@@ -212,7 +230,9 @@ function updateTopicSchedule(topicId, topicName, dailyConfig, weeklyConfig) {
   if (dailyConfig) {
     scheduleDailyScan(topicId, topicName, dailyConfig);
   }
-  // Weekly digest would be updated here
+  if (weeklyConfig) {
+    scheduleWeeklyDigest(topicId, topicName, weeklyConfig, digestFunction);
+  }
 }
 
 /**
