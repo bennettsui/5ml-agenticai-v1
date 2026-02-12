@@ -16,9 +16,11 @@ let digestFunction = null;
 /**
  * Initialize the scheduler with dependencies
  */
+function initialize(database, scanFn, digestFn) {
   db = database;
   scanFunction = scanFn;
   digestFunction = digestFn || null;
+  console.log('[Scheduler] Scheduler initialized');
 }
 
 /**
