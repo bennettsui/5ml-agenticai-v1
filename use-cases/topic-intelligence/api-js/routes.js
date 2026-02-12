@@ -607,11 +607,18 @@ async function fetchPageContent(url) {
       return { title: '', content: '', success: false, error: `HTTP ${response.status}` };
     }
 
-    const html = await response.text();
+    let html = await response.text();
 
-    // Extract title
+    // Extract title before truncation
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
     const title = titleMatch ? titleMatch[1].trim().replace(/\s+/g, ' ') : '';
+
+    // Truncate HTML before running regex to avoid blocking the event loop.
+    // Large pages (>200KB) cause expensive backtracking in the patterns below.
+    // We only need ~16KB of text at the end, so 200KB of HTML is plenty.
+    if (html.length > 200000) {
+      html = html.substring(0, 200000);
+    }
 
     // Extract main content - remove scripts, styles, nav, footer, etc.
     let content = html

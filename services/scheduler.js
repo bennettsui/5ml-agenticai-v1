@@ -1,9 +1,15 @@
 /**
  * Scheduler Service
- * Handles scheduled daily scans and weekly digests for intelligence topics
+ * Handles scheduled daily scans and weekly digests for intelligence topics.
+ *
+ * Scans are queued and processed sequentially to avoid saturating the
+ * event loop (which causes node-cron "missed execution" warnings).
  */
 
 const cron = require('node-cron');
+const registry = require('./schedule-registry');
+
+const GROUP = 'Topic Intelligence';
 
 // Store scheduled jobs
 const scheduledJobs = new Map();
@@ -12,6 +18,69 @@ const scheduledJobs = new Map();
 let db = null;
 let scanFunction = null;
 let digestFunction = null;
+
+// --- Scan queue: serialises heavy scan work so cron callbacks stay fast ---
+const scanQueue = [];
+let isProcessingQueue = false;
+const runningScans = new Set(); // topic IDs currently being scanned
+
+function enqueueScan(topicId, topicName, type = 'daily') {
+  if (runningScans.has(topicId)) {
+    console.log(`[Scheduler] Skipping ${type} scan for "${topicName}" - already running`);
+    return;
+  }
+  // Avoid duplicate queue entries
+  if (scanQueue.some(item => item.topicId === topicId)) {
+    console.log(`[Scheduler] Skipping ${type} scan for "${topicName}" - already queued`);
+    return;
+  }
+
+  scanQueue.push({ topicId, topicName, type });
+  console.log(`[Scheduler] Queued ${type} scan for "${topicName}" (queue depth: ${scanQueue.length})`);
+  processQueue();
+}
+
+async function processQueue() {
+  if (isProcessingQueue) return;
+  isProcessingQueue = true;
+
+  while (scanQueue.length > 0) {
+    const { topicId, topicName, type } = scanQueue.shift();
+
+    if (runningScans.has(topicId)) {
+      console.log(`[Scheduler] Skipping dequeued scan for "${topicName}" - already running`);
+      continue;
+    }
+
+    const jobId = `intelligence:${type}-${topicId}`;
+    runningScans.add(topicId);
+    const startTime = Date.now();
+    console.log(`[Scheduler] 🔄 Starting ${type} scan for: ${topicName}`);
+    registry.markRunning(jobId);
+
+    try {
+      if (scanFunction) {
+        await scanFunction(topicId, topicName);
+        const elapsed = Date.now() - startTime;
+        console.log(`[Scheduler] ✅ Completed ${type} scan for: ${topicName} (${(elapsed / 1000).toFixed(1)}s)`);
+        registry.markCompleted(jobId, { result: 'success', durationMs: elapsed });
+      } else {
+        console.error('[Scheduler] ❌ Scan function not configured');
+        registry.markFailed(jobId, 'Scan function not configured');
+      }
+    } catch (error) {
+      console.error(`[Scheduler] ❌ ${type} scan failed for ${topicName}:`, error.message);
+      registry.markFailed(jobId, error.message);
+    } finally {
+      runningScans.delete(topicId);
+    }
+
+    // Yield to the event loop between scans so cron ticks aren't delayed
+    await new Promise(resolve => setImmediate(resolve));
+  }
+
+  isProcessingQueue = false;
+}
 
 /**
  * Initialize the scheduler with dependencies
@@ -24,14 +93,14 @@ function initialize(database, scanFn, digestFn) {
 }
 
 /**
- * Convert time string (HH:MM) and timezone to cron expression
- * Note: node-cron uses server timezone, so we convert to UTC offset
+ * Convert time string (HH:MM) and timezone to cron expression.
+ * Accepts an optional seconds offset so multiple jobs scheduled at the
+ * same minute don't all fire on the exact same tick.
  */
-function timeToCron(time, timezone = 'Asia/Hong_Kong') {
+function timeToCron(time, timezone = 'Asia/Hong_Kong', secondsOffset = 0) {
   const [hours, minutes] = time.split(':').map(Number);
-  // For now, we'll use the time directly (assumes server is in correct timezone)
-  // In production, you'd want to use a timezone-aware cron library
-  return `${minutes} ${hours} * * *`;
+  // 6-field cron: second minute hour dayOfMonth month dayOfWeek
+  return `${secondsOffset} ${minutes} ${hours} * * *`;
 }
 
 /**
@@ -53,8 +122,9 @@ function dayToCronDay(day) {
 /**
  * Schedule daily scan for a topic
  */
-function scheduleDailyScan(topicId, topicName, config) {
+function scheduleDailyScan(topicId, topicName, config, staggerIndex = 0) {
   const jobId = `daily-${topicId}`;
+  const registryId = `intelligence:daily-${topicId}`;
 
   // Cancel existing job if any
   if (scheduledJobs.has(jobId)) {
@@ -70,27 +140,30 @@ function scheduleDailyScan(topicId, topicName, config) {
 
   if (!config.enabled) {
     console.log(`[Scheduler] Daily scan disabled for: ${topicName}`);
+    registry.register({
+      id: registryId,
+      group: GROUP,
+      name: `Daily Scan: ${topicName}`,
+      description: `Scrape sources and analyse articles for "${topicName}"`,
+      schedule: 'disabled',
+      timezone: config.timezone || 'Asia/Hong_Kong',
+      status: 'disabled',
+    });
     return;
   }
 
-  const cronExpression = timeToCron(config.time, config.timezone);
-  console.log(`[Scheduler] Scheduling daily scan for "${topicName}" at ${config.time} (${config.timezone}) - cron: ${cronExpression}`);
+  // Stagger by 10 seconds per topic so cron callbacks don't all fire on the same tick
+  const secondsOffset = (staggerIndex * 10) % 60;
+  const cronExpression = timeToCron(config.time, config.timezone, secondsOffset);
+  const tz = config.timezone || 'Asia/Hong_Kong';
+  console.log(`[Scheduler] Scheduling daily scan for "${topicName}" at ${config.time} (${tz}) - cron: ${cronExpression}`);
 
-  const job = cron.schedule(cronExpression, async () => {
-    console.log(`[Scheduler] 🔄 Starting scheduled daily scan for: ${topicName}`);
-    try {
-      if (scanFunction) {
-        await scanFunction(topicId, topicName);
-        console.log(`[Scheduler] ✅ Completed daily scan for: ${topicName}`);
-      } else {
-        console.error('[Scheduler] ❌ Scan function not configured');
-      }
-    } catch (error) {
-      console.error(`[Scheduler] ❌ Daily scan failed for ${topicName}:`, error.message);
-    }
+  const job = cron.schedule(cronExpression, () => {
+    // Lightweight callback: just enqueue, don't await the scan itself
+    enqueueScan(topicId, topicName, 'daily');
   }, {
     scheduled: true,
-    timezone: config.timezone || 'Asia/Hong_Kong',
+    timezone: tz,
   });
 
   // Store job with config info for debugging
@@ -100,11 +173,25 @@ function scheduleDailyScan(topicId, topicName, config) {
       topicId,
       topicName,
       time: config.time,
-      timezone: config.timezone || 'Asia/Hong_Kong',
+      timezone: tz,
       cronExpression,
     },
-    nextRun: `Daily at ${config.time} (${config.timezone || 'Asia/Hong_Kong'})`,
+    nextRun: `Daily at ${config.time} (${tz})`,
   });
+
+  // Register with central registry
+  registry.register({
+    id: registryId,
+    group: GROUP,
+    name: `Daily Scan: ${topicName}`,
+    description: `Scrape sources and analyse articles for "${topicName}"`,
+    schedule: cronExpression,
+    timezone: tz,
+    status: 'scheduled',
+    nextRunAt: `Daily at ${config.time}`,
+    meta: { topicId, staggerIndex, cronExpression },
+  });
+
   console.log(`[Scheduler] ✅ Daily scan scheduled for: ${topicName}`);
 }
 
@@ -113,6 +200,7 @@ function scheduleDailyScan(topicId, topicName, config) {
  */
 function scheduleWeeklyDigest(topicId, topicName, config, digestFunction) {
   const jobId = `weekly-${topicId}`;
+  const registryId = `intelligence:weekly-${topicId}`;
 
   // Cancel existing job if any
   if (scheduledJobs.has(jobId)) {
@@ -127,6 +215,15 @@ function scheduleWeeklyDigest(topicId, topicName, config, digestFunction) {
 
   if (!config.enabled) {
     console.log(`[Scheduler] Weekly digest disabled for: ${topicName}`);
+    registry.register({
+      id: registryId,
+      group: GROUP,
+      name: `Weekly Digest: ${topicName}`,
+      description: `Send weekly digest email for "${topicName}"`,
+      schedule: 'disabled',
+      timezone: config.timezone || 'Asia/Hong_Kong',
+      status: 'disabled',
+    });
     return;
   }
 
@@ -146,23 +243,29 @@ function scheduleWeeklyDigest(topicId, topicName, config, digestFunction) {
 
   const dayNum = dayToCronDay(config.day);
   const [hours, minutes] = (config.time || '08:00').split(':').map(Number);
-  const cronExpression = `${minutes} ${hours} * * ${dayNum}`;
+  // 6-field cron with seconds
+  const cronExpression = `0 ${minutes} ${hours} * * ${dayNum}`;
+  const tz = config.timezone || 'Asia/Hong_Kong';
 
   console.log(`[Scheduler] Scheduling weekly digest for "${topicName}" on ${config.day} at ${config.time} - cron: ${cronExpression}`);
 
   const job = cron.schedule(cronExpression, async () => {
     console.log(`[Scheduler] 📧 Starting weekly digest for: ${topicName}`);
+    registry.markRunning(registryId);
+    const startTime = Date.now();
     try {
       if (digestFunction) {
         await digestFunction(topicId, topicName, config.recipientList);
         console.log(`[Scheduler] ✅ Weekly digest sent for: ${topicName}`);
+        registry.markCompleted(registryId, { result: 'success', durationMs: Date.now() - startTime });
       }
     } catch (error) {
       console.error(`[Scheduler] ❌ Weekly digest failed for ${topicName}:`, error.message);
+      registry.markFailed(registryId, error.message);
     }
   }, {
     scheduled: true,
-    timezone: config.timezone || 'Asia/Hong_Kong',
+    timezone: tz,
   });
 
   // Store job with config info for debugging
@@ -173,11 +276,25 @@ function scheduleWeeklyDigest(topicId, topicName, config, digestFunction) {
       topicName,
       day: config.day,
       time: config.time || '08:00',
-      timezone: config.timezone || 'Asia/Hong_Kong',
+      timezone: tz,
       cronExpression,
     },
-    nextRun: `Weekly on ${config.day} at ${config.time || '08:00'} (${config.timezone || 'Asia/Hong_Kong'})`,
+    nextRun: `Weekly on ${config.day} at ${config.time || '08:00'} (${tz})`,
   });
+
+  // Register with central registry
+  registry.register({
+    id: registryId,
+    group: GROUP,
+    name: `Weekly Digest: ${topicName}`,
+    description: `Send weekly digest email for "${topicName}"`,
+    schedule: cronExpression,
+    timezone: tz,
+    status: 'scheduled',
+    nextRunAt: `${config.day} at ${config.time || '08:00'}`,
+    meta: { topicId, day: config.day, cronExpression },
+  });
+
   console.log(`[Scheduler] ✅ Weekly digest scheduled for: ${topicName}`);
 }
 
@@ -191,7 +308,7 @@ async function loadAllSchedules() {
   }
 
   try {
-    console.log('[Scheduler] 📥 Loading schedules from database...');
+    console.log('[Scheduler] Loading schedules from database...');
     const topics = await db.getIntelligenceTopics();
 
     let scheduledCount = 0;
@@ -209,7 +326,7 @@ async function loadAllSchedules() {
         : topic.weekly_digest_config;
 
       if (dailyConfig?.enabled) {
-        scheduleDailyScan(topic.topic_id, topic.name, dailyConfig);
+        scheduleDailyScan(topic.topic_id, topic.name, dailyConfig, scheduledCount);
         scheduledCount++;
       }
 
@@ -252,6 +369,7 @@ function removeTopicSchedules(topicId) {
       existing.stop();
     }
     scheduledJobs.delete(dailyId);
+    registry.unregister(`intelligence:daily-${topicId}`);
     console.log(`[Scheduler] Removed daily scan for topic: ${topicId}`);
   }
 
@@ -263,6 +381,7 @@ function removeTopicSchedules(topicId) {
       existing.stop();
     }
     scheduledJobs.delete(weeklyId);
+    registry.unregister(`intelligence:weekly-${topicId}`);
     console.log(`[Scheduler] Removed weekly digest for topic: ${topicId}`);
   }
 }
@@ -275,12 +394,17 @@ function getScheduleStatus() {
   for (const [jobId, jobInfo] of scheduledJobs) {
     status.push({
       id: jobId,
-      running: true,
+      running: runningScans.has(jobInfo.config?.topicId),
+      queued: scanQueue.some(item => item.topicId === jobInfo.config?.topicId),
       config: jobInfo.config || null,
       nextRun: jobInfo.nextRun || 'unknown',
     });
   }
-  return status;
+  return {
+    jobs: status,
+    queueDepth: scanQueue.length,
+    activeScans: runningScans.size,
+  };
 }
 
 /**
@@ -295,7 +419,8 @@ function stopAll() {
     }
   }
   scheduledJobs.clear();
-  console.log('[Scheduler] ⏹️ All scheduled jobs stopped');
+  scanQueue.length = 0;
+  console.log('[Scheduler] All scheduled jobs stopped');
 }
 
 module.exports = {

@@ -1,0 +1,88 @@
+{
+  "id": "ads-performance-analyzer",
+  "name": "Ads Performance Analyzer Agent",
+  "version": "1.0",
+  "description": "Analyzes aggregated ads performance data (last 7 days vs previous 7 days) and produces an executive summary, platform comparison, top winners, and top losers.",
+  "model": "claude-sonnet-4-20250514",
+  "temperature": 0.3,
+  "maxTokens": 4096,
+  "systemPrompt": "You are a digital advertising performance analyst for 5 Miles Lab. You receive structured JSON containing aggregated ad campaign metrics comparing the current 7-day period against the previous 7-day period.\n\nYour job is to:\n1. Write an executive summary (1–2 paragraphs) highlighting overall performance trends, significant changes, and action items.\n2. Compare Meta vs Google ad platforms in terms of spend efficiency, ROAS, and conversion performance.\n3. Identify the top-performing campaigns (winners) that showed the best improvement.\n4. Identify underperforming campaigns (losers) that dropped the most.\n\nBe specific with numbers and percentages. Use concise, professional language suitable for a marketing team review. Highlight actionable insights.",
+  "inputSchema": {
+    "type": "object",
+    "required": ["tenantId", "period", "previousPeriod", "metrics"],
+    "properties": {
+      "tenantId": {
+        "type": "string",
+        "description": "Tenant identifier"
+      },
+      "period": {
+        "type": "string",
+        "description": "Current period date range (e.g., '2026-01-27 to 2026-02-02')"
+      },
+      "previousPeriod": {
+        "type": "string",
+        "description": "Previous period date range for comparison"
+      },
+      "metrics": {
+        "type": "object",
+        "properties": {
+          "current": {
+            "type": "object",
+            "description": "Aggregated stats for the current period"
+          },
+          "previous": {
+            "type": "object",
+            "description": "Aggregated stats for the previous period"
+          },
+          "campaigns": {
+            "type": "array",
+            "description": "Per-campaign stats with deltas"
+          }
+        }
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "summary": {
+        "type": "string",
+        "description": "1–2 paragraph executive summary"
+      },
+      "platformComparison": {
+        "type": "object",
+        "properties": {
+          "meta": { "type": "object" },
+          "google": { "type": "object" },
+          "recommendation": { "type": "string" }
+        }
+      },
+      "topWinners": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "campaignId": { "type": "string" },
+            "campaignName": { "type": "string" },
+            "platform": { "type": "string" },
+            "improvement": { "type": "string" },
+            "detail": { "type": "string" }
+          }
+        }
+      },
+      "topLosers": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "campaignId": { "type": "string" },
+            "campaignName": { "type": "string" },
+            "platform": { "type": "string" },
+            "decline": { "type": "string" },
+            "detail": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}
