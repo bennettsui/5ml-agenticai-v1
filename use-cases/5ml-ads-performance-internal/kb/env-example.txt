@@ -1,0 +1,14 @@
+# Ads Performance Dashboard - Environment Variables
+# Copy these to your .env file and fill in the actual values
+
+# Meta Marketing API
+META_AD_ACCOUNT_ID=act_XXXXXXXXX
+META_ACCESS_TOKEN=EAAI...your_long_lived_token
+
+# Google Ads API
+GOOGLE_ADS_CUSTOMER_ID=123-456-7890
+GOOGLE_ADS_DEVELOPER_TOKEN=your_developer_token
+GOOGLE_ADS_CLIENT_ID=your_client_id.apps.googleusercontent.com
+GOOGLE_ADS_CLIENT_SECRET=GOCSPX-your_client_secret
+GOOGLE_ADS_REFRESH_TOKEN=your_refresh_token
+GOOGLE_ADS_LOGIN_CUSTOMER_ID=optional_login_customer_id

@@ -1,0 +1,59 @@
+{
+  "id": "ads-daily-sync-internal",
+  "name": "Daily Ads Sync (5ML Internal)",
+  "description": "Fetch yesterday's campaign metrics for 5ML internal accounts from Meta and Google Ads, then upsert into the database.",
+  "trigger": {
+    "type": "scheduled",
+    "cron": "0 7 * * *",
+    "timezone": "Asia/Hong_Kong",
+    "description": "Runs daily at 07:00 HKT to fetch yesterday's data"
+  },
+  "input": {
+    "tenantId": "5ml-internal"
+  },
+  "steps": [
+    {
+      "id": "fetch-meta-yesterday",
+      "name": "Fetch Meta Ads Insights",
+      "type": "tool",
+      "tool": "meta-ads-api/fetchMetaInsights",
+      "params": {
+        "accountId": "${env.META_AD_ACCOUNT_ID}",
+        "since": "${date.yesterday}",
+        "until": "${date.yesterday}"
+      },
+      "output": "metaMetrics",
+      "onError": "log-and-continue"
+    },
+    {
+      "id": "fetch-google-yesterday",
+      "name": "Fetch Google Ads Metrics",
+      "type": "tool",
+      "tool": "google-ads-api/fetchGoogleAdsMetrics",
+      "params": {
+        "customerId": "${env.GOOGLE_ADS_CUSTOMER_ID}",
+        "since": "${date.yesterday}",
+        "until": "${date.yesterday}"
+      },
+      "output": "googleMetrics",
+      "onError": "log-and-continue"
+    },
+    {
+      "id": "upsert-ads-metrics-batch",
+      "name": "Upsert Metrics to Database",
+      "type": "tool",
+      "tool": "db-ops/upsertAdsDailyPerformance",
+      "params": {
+        "metrics": "${merge(metaMetrics, googleMetrics)}",
+        "tenantId": "5ml-internal"
+      },
+      "dependsOn": ["fetch-meta-yesterday", "fetch-google-yesterday"],
+      "output": "upsertResult"
+    }
+  ],
+  "output": {
+    "metaCount": "${metaMetrics.length}",
+    "googleCount": "${googleMetrics.length}",
+    "totalUpserted": "${upsertResult}"
+  }
+}

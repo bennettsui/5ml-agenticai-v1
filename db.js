@@ -1,21 +1,91 @@
 const { Pool } = require('pg');
+const fs = require('fs');
 
-// Configure SSL and connection timeouts based on environment and DATABASE_URL
+// ===========================================
+// SSL CONFIG
+// ===========================================
+
+// Load AWS RDS CA certificate if available (for EC2 deployments)
+function loadRdsCaCert() {
+  const rdsCaPaths = [
+    process.env.PGSSLROOTCERT,
+    process.env.DB_CA_CERT_PATH,
+    '/usr/local/share/ca-certificates/rds-ca-bundle.crt',
+  ];
+
+  for (const path of rdsCaPaths) {
+    if (path) {
+      try {
+        if (fs.existsSync(path)) {
+          console.log(`✅ Loaded RDS CA certificate from: ${path}`);
+          return fs.readFileSync(path, 'utf8');
+        }
+      } catch (error) {
+        console.warn(`⚠️ Failed to read CA cert at ${path}:`, error.message);
+      }
+    }
+  }
+  return null;
+}
+
+const rdsCaCert = loadRdsCaCert();
+
+// Simple database config
 const getDatabaseConfig = () => {
+  let connectionString = process.env.DATABASE_URL;
+
   const config = {
-    connectionString: process.env.DATABASE_URL,
-    // Connection timeout settings for TLS stability on Fly.io
-    connectionTimeoutMillis: 10000, // 10 seconds to establish connection
-    idleTimeoutMillis: 30000, // 30 seconds before idle clients are closed
-    max: 10, // Maximum number of clients in the pool
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+    max: 10,
   };
 
-  // Only enable SSL for production databases (not localhost)
-  if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost')) {
-    config.ssl = {
-      rejectUnauthorized: false,
-    };
+  // No SSL for localhost
+  if (!connectionString || connectionString.includes('localhost') || connectionString.includes('127.0.0.1')) {
+    console.log('🔓 Local database: SSL disabled');
+    config.connectionString = connectionString;
+    config.ssl = false;
+    return config;
   }
+
+  // AWS RDS: use CA certificate if available
+  if (connectionString.includes('amazonaws.com') || connectionString.includes('rds.')) {
+    config.connectionString = connectionString;
+    if (rdsCaCert) {
+      config.ssl = {
+        rejectUnauthorized: true,
+        ca: rdsCaCert,
+      };
+      console.log('🔒 AWS RDS: SSL enabled with CA verification');
+    } else {
+      config.ssl = {
+        rejectUnauthorized: false,
+      };
+      console.log('⚠️ AWS RDS: SSL enabled but no CA cert (verification disabled)');
+    }
+    return config;
+  }
+
+  // Everything else (Fly, Neon, Supabase, Render, etc.):
+  // Strip sslmode from connection string to prevent it from overriding our SSL config
+  if (connectionString.includes('sslmode=')) {
+    connectionString = connectionString
+      .replace(/[?&]sslmode=[^&]*/g, '')
+      .replace(/\?&/, '?')
+      .replace(/\?$/, '');
+    console.log('🔧 Stripped sslmode from DATABASE_URL to apply custom SSL config');
+  }
+  config.connectionString = connectionString;
+
+  // Disable Node.js TLS certificate verification for self-signed certs
+  // This is required for Fly.io Postgres and similar providers
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+  config.ssl = {
+    rejectUnauthorized: false,
+    checkServerIdentity: () => undefined,
+  };
+  console.log('🔒 Database SSL: enabled (certificate verification disabled for Fly.io/cloud compatibility)');
 
   return config;
 };
@@ -207,12 +277,81 @@ async function initDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_edm_topic ON intelligence_edm_history(topic_id);
       CREATE INDEX IF NOT EXISTS idx_edm_sent ON intelligence_edm_history(sent_at DESC);
+
+      -- ==========================================
+      -- CRM Tables
+      -- ==========================================
+      CREATE TABLE IF NOT EXISTS crm_clients (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(300) NOT NULL,
+        legal_name VARCHAR(300),
+        industry JSONB DEFAULT '[]',
+        region JSONB DEFAULT '[]',
+        status VARCHAR(50) DEFAULT 'prospect',
+        website_url VARCHAR(500),
+        company_size VARCHAR(50),
+        client_value_tier VARCHAR(1),
+        health_score INTEGER DEFAULT 50,
+        internal_notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_clients_status ON crm_clients(status);
+      CREATE INDEX IF NOT EXISTS idx_crm_clients_name ON crm_clients(name);
+
+      CREATE TABLE IF NOT EXISTS crm_projects (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID REFERENCES crm_clients(id) ON DELETE CASCADE,
+        name VARCHAR(300) NOT NULL,
+        type VARCHAR(50) DEFAULT 'other',
+        brief TEXT,
+        start_date DATE,
+        end_date DATE,
+        status VARCHAR(50) DEFAULT 'planning',
+        success_flag VARCHAR(50),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_projects_client ON crm_projects(client_id);
+      CREATE INDEX IF NOT EXISTS idx_crm_projects_status ON crm_projects(status);
+
+      CREATE TABLE IF NOT EXISTS crm_feedback (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID REFERENCES crm_clients(id) ON DELETE CASCADE,
+        project_id UUID REFERENCES crm_projects(id) ON DELETE SET NULL,
+        source VARCHAR(50) DEFAULT 'other',
+        date DATE DEFAULT CURRENT_DATE,
+        raw_text TEXT NOT NULL,
+        sentiment VARCHAR(20),
+        sentiment_score INTEGER,
+        topics JSONB DEFAULT '[]',
+        severity VARCHAR(20),
+        status VARCHAR(50) DEFAULT 'new',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_feedback_client ON crm_feedback(client_id);
+      CREATE INDEX IF NOT EXISTS idx_crm_feedback_sentiment ON crm_feedback(sentiment);
+
+      CREATE TABLE IF NOT EXISTS crm_gmail_tokens (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE,
+        access_token TEXT,
+        refresh_token TEXT,
+        token_expiry TIMESTAMP,
+        last_sync_at TIMESTAMP,
+        total_synced INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
     `);
-    console.log('✅ Database schema initialized');
+    console.log('✅ Database schema initialized (including CRM tables)');
   } catch (error) {
     console.error('❌ Database initialization error:', error.message);
     console.error('Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
-    console.error('SSL enabled:', getDatabaseConfig().ssl ? 'Yes' : 'No');
     // Don't throw - allow app to start even if DB init fails
   }
 }

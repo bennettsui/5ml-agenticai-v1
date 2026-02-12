@@ -9,7 +9,9 @@ jobs:
   deploy:
     name: Deploy app to Fly.io
     runs-on: ubuntu-latest
-    concurrency: fly-deploy-group
+    concurrency:
+      group: fly-deploy-group
+      cancel-in-progress: true
 
     steps:
       - name: Checkout code
@@ -19,6 +21,20 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly.io (IAD Region)
-        run: flyctl deploy --remote-only
+        run: |
+          # Retry deployment up to 3 times with backoff for lease conflicts
+          for i in 1 2 3; do
+            echo "Deployment attempt $i..."
+            if flyctl deploy --remote-only --lease-timeout=5m --wait-timeout=5m; then
+              echo "Deployment successful!"
+              exit 0
+            fi
+            if [ $i -lt 3 ]; then
+              echo "Deployment failed, waiting before retry..."
+              sleep $((30 * i))
+            fi
+          done
+          echo "All deployment attempts failed"
+          exit 1
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

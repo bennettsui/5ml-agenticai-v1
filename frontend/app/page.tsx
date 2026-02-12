@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone, Users, Calendar } from 'lucide-react';
 
 export default function Home() {
   const useCases = [
@@ -56,6 +56,16 @@ export default function Home() {
       status: 'Active'
     },
     {
+      id: 'scheduled-jobs',
+      title: 'Scheduled Jobs',
+      description: 'View all cron jobs and scheduled tasks across the platform with live status and run history',
+      icon: Calendar,
+      href: '/scheduled-jobs',
+      color: 'from-violet-500 to-indigo-600',
+      features: ['Cron Job Registry', 'Live Status', 'Run History', 'Multi-System View'],
+      status: 'Active'
+    },
+    {
       id: 'api-documentation',
       title: 'API Documentation',
       description: 'Complete API reference, endpoints, request/response schemas, and examples',
@@ -64,6 +74,46 @@ export default function Home() {
       color: 'from-slate-500 to-slate-700',
       features: ['REST API', 'Agent Endpoints', 'Authentication', 'Code Examples'],
       status: 'Documentation'
+    },
+    {
+      id: 'vibe-demo',
+      title: 'Vibe Code Demo',
+      description: 'Interactive showcase of modern web effects including parallax scrolling and dynamic animations',
+      icon: Sparkles,
+      href: '/vibe-demo',
+      color: 'from-indigo-500 to-purple-600',
+      features: ['Parallax Effects', 'Mouse Tracking', 'Click Animations', 'Dynamic Gradients'],
+      status: 'Demo'
+    },
+    {
+      id: 'fictional-character',
+      title: 'Live Fictional Character',
+      description: 'AI persona engine that transforms your speech into character-voiced content for VTubers and avatars',
+      icon: User,
+      href: '/use-cases/fictional-character',
+      color: 'from-rose-500 to-pink-600',
+      features: ['Persona Engine', 'TTS-Ready Output', 'Multi-Character', 'Avatar Integration'],
+      status: 'New'
+    },
+    {
+      id: 'ads-performance',
+      title: 'Social Ad Performance',
+      description: 'Meta & Google Ads performance dashboard with AI-powered analysis, multi-tenant client support, and automated reporting',
+      icon: Megaphone,
+      href: '/ads-dashboard',
+      color: 'from-orange-500 to-red-600',
+      features: ['Meta Ads Analytics', 'Google Ads Analytics', 'AI Weekly Reports', 'Multi-Tenant Clients'],
+      status: 'New'
+    },
+    {
+      id: 'crm',
+      title: 'Client CRM + Knowledge Base',
+      description: 'Integrated CRM with AI-powered knowledge base that learns from client feedback, extracts brand rules, and detects cross-client patterns',
+      icon: Users,
+      href: '/use-cases/crm',
+      color: 'from-emerald-500 to-teal-600',
+      features: ['Client & Brand CRM', 'AI Feedback Analysis', 'Knowledge Rules Engine', 'Health Score Tracking'],
+      status: 'New'
     },
   ];
 
