@@ -36,6 +36,49 @@ function getScheduler() {
   return scheduler;
 }
 
+const FORCE_DIGEST_RECIPIENTS = ['angelik.macapagal@5mileslab.com'];
+
+function mergeRecipients(primary, extra) {
+  const merged = [];
+  const seen = new Set();
+
+  const add = (email) => {
+    if (typeof email !== 'string') return;
+    const trimmed = email.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(trimmed);
+  };
+
+  (primary || []).forEach(add);
+  (extra || []).forEach(add);
+
+  return merged;
+}
+
+function getWeeklyDigestRecipients(topic, recipientsOverride) {
+  let weeklyConfig = topic?.weekly_digest_config || {};
+  if (typeof weeklyConfig === 'string') {
+    try {
+      weeklyConfig = JSON.parse(weeklyConfig);
+    } catch (error) {
+      console.warn('[Routes] Failed to parse weekly_digest_config:', error.message);
+      weeklyConfig = {};
+    }
+  }
+
+  let baseList = weeklyConfig.recipientList || [];
+  if (Array.isArray(recipientsOverride)) {
+    baseList = recipientsOverride;
+  } else if (typeof recipientsOverride === 'string' && recipientsOverride.trim()) {
+    baseList = [recipientsOverride.trim()];
+  }
+
+  return mergeRecipients(baseList, FORCE_DIGEST_RECIPIENTS);
+}
+
 // ==========================================
 // EDM Cache (Key-Value Store)
 // ==========================================
@@ -2822,8 +2865,7 @@ router.post('/orchestration/trigger-digest', async (req, res) => {
     }
 
     // Get subscribers from weekly_digest_config.recipientList
-    const digestConfig = topic.weekly_digest_config || {};
-    const subscribers = digestConfig.recipientList || [];
+    const subscribers = getWeeklyDigestRecipients(topic);
 
     console.log(`   Topic: ${topic.name}, Subscribers: ${subscribers.length}`);
 
@@ -3198,8 +3240,7 @@ router.post('/edm/send/:topicId', async (req, res) => {
     }
 
     // Get recipient list from request or topic config
-    const weeklyConfig = topic.weekly_digest_config || {};
-    const recipientList = recipients || weeklyConfig.recipientList || [];
+    const recipientList = getWeeklyDigestRecipients(topic, recipients);
 
     if (!recipientList.length) {
       return res.status(400).json({ success: false, error: 'No recipients configured' });
@@ -4426,13 +4467,7 @@ async function runScheduledDigest(topicId, topicName, recipientsOverride) {
       return { success: false, error: 'Topic not found' };
     }
 
-    const weeklyConfig = typeof topic.weekly_digest_config === 'string'
-      ? JSON.parse(topic.weekly_digest_config)
-      : (topic.weekly_digest_config || {});
-
-    const recipients = Array.isArray(recipientsOverride) && recipientsOverride.length > 0
-      ? recipientsOverride
-      : (weeklyConfig.recipientList || []);
+    const recipients = getWeeklyDigestRecipients(topic, recipientsOverride);
 
     if (recipients.length === 0) {
       return { success: true, emailsSent: 0, message: 'No recipients configured for this topic.' };
