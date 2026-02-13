@@ -132,6 +132,57 @@ export default function TopicSettingsPage() {
     }
   }, [selectedTopicId]);
 
+  const parseRecipients = (value: string) => {
+    const emails = value
+      .split(/[,\n]/)
+      .map(e => e.trim())
+      .filter(e => e && e.includes('@'));
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    for (const email of emails) {
+      const key = email.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(email);
+    }
+    return unique;
+  };
+
+  const formatRecipients = (list: string[]) => list.join(', ');
+
+  const saveRecipientList = async (recipientList: string[]) => {
+    const topicId = topic?.id || selectedTopicId;
+    if (!topicId) return;
+    setIsSaving(true);
+    try {
+      const response = await fetch(`/api/intelligence/topics/${topicId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          weeklyDigestConfig: {
+            enabled: weeklyDigestEnabled,
+            day: weeklyDigestDay,
+            time: weeklyDigestTime,
+            timezone: 'Asia/Hong_Kong',
+            recipientList,
+          },
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        if (data.topic) {
+          setTopic(data.topic);
+        }
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to save subscribers' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to save subscribers' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const loadTopicsList = async () => {
     setIsLoadingTopics(true);
     try {
@@ -198,7 +249,7 @@ export default function TopicSettingsPage() {
         } else if (Array.isArray(weeklyConfig.recipient_list)) {
           recipientArray = weeklyConfig.recipient_list;
         }
-        setRecipients(recipientArray.join('\n'));
+        setRecipients(formatRecipients(recipientArray));
       } else {
         console.error('API returned error:', data);
         setMessage({ type: 'error', text: data.error || 'Topic not found or failed to load' });
@@ -218,10 +269,7 @@ export default function TopicSettingsPage() {
 
     try {
       // Parse recipients from text (comma or newline separated)
-      const recipientList = recipients
-        .split(/[,\n]/)
-        .map(e => e.trim())
-        .filter(e => e && e.includes('@'));
+      const recipientList = parseRecipients(recipients);
 
       const response = await fetch(`/api/intelligence/topics/${topic.id}`, {
         method: 'PUT',
@@ -417,10 +465,7 @@ export default function TopicSettingsPage() {
     if (!selectedTopicId) return;
 
     // Get recipient count
-    const recipientList = recipients
-      .split(/[,\n]/)
-      .map(e => e.trim())
-      .filter(e => e && e.includes('@'));
+    const recipientList = parseRecipients(recipients);
     const recipientCount = recipientList.length;
 
     if (recipientCount === 0) {
@@ -797,7 +842,7 @@ export default function TopicSettingsPage() {
                   Subscription Management
                 </h2>
                 <span className="px-3 py-1 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-full text-sm font-medium">
-                  {recipients.split(/[,\n]/).filter(e => e.trim() && e.includes('@')).length} subscriber{recipients.split(/[,\n]/).filter(e => e.trim() && e.includes('@')).length !== 1 ? 's' : ''}
+                  {parseRecipients(recipients).length} subscriber{parseRecipients(recipients).length !== 1 ? 's' : ''}
                 </span>
               </div>
 
@@ -815,7 +860,7 @@ export default function TopicSettingsPage() {
                     onChange={e => setRecipients(e.target.value)}
                     rows={4}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 font-mono text-sm"
-                    placeholder="email1@example.com&#10;email2@example.com&#10;email3@example.com"
+                    placeholder="email1@example.com, email2@example.com, email3@example.com"
                   />
                 </div>
 
@@ -826,11 +871,7 @@ export default function TopicSettingsPage() {
                       Current Subscribers:
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {recipients
-                        .split(/[,\n]/)
-                        .map(e => e.trim())
-                        .filter(e => e && e.includes('@'))
-                        .map((email, idx) => (
+                      {parseRecipients(recipients).map((email, idx) => (
                           <span
                             key={idx}
                             className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-slate-600 border border-slate-200 dark:border-slate-500 rounded text-xs text-slate-700 dark:text-slate-200"
@@ -840,11 +881,9 @@ export default function TopicSettingsPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                const emails = recipients
-                                  .split(/[,\n]/)
-                                  .map(e => e.trim())
-                                  .filter(e => e && e.includes('@') && e !== email);
-                                setRecipients(emails.join('\n'));
+                                const emails = parseRecipients(recipients)
+                                  .filter(e => e.toLowerCase() !== email.toLowerCase());
+                                setRecipients(formatRecipients(emails));
                               }}
                               className="ml-1 text-slate-400 hover:text-red-500"
                             >
@@ -871,12 +910,11 @@ export default function TopicSettingsPage() {
                           const input = e.currentTarget;
                           const email = input.value.trim();
                           if (email && email.includes('@')) {
-                            const currentEmails = recipients
-                              .split(/[,\n]/)
-                              .map(e => e.trim())
-                              .filter(e => e && e.includes('@'));
-                            if (!currentEmails.includes(email)) {
-                              setRecipients([...currentEmails, email].join('\n'));
+                            const currentEmails = parseRecipients(recipients);
+                            if (!currentEmails.some(e => e.toLowerCase() === email.toLowerCase())) {
+                              const nextRecipients = [...currentEmails, email];
+                              setRecipients(formatRecipients(nextRecipients));
+                              void saveRecipientList(nextRecipients);
                             }
                             input.value = '';
                           }
@@ -889,12 +927,11 @@ export default function TopicSettingsPage() {
                         const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
                         const email = input.value.trim();
                         if (email && email.includes('@')) {
-                          const currentEmails = recipients
-                            .split(/[,\n]/)
-                            .map(e => e.trim())
-                            .filter(e => e && e.includes('@'));
-                          if (!currentEmails.includes(email)) {
-                            setRecipients([...currentEmails, email].join('\n'));
+                          const currentEmails = parseRecipients(recipients);
+                          if (!currentEmails.some(e => e.toLowerCase() === email.toLowerCase())) {
+                            const nextRecipients = [...currentEmails, email];
+                            setRecipients(formatRecipients(nextRecipients));
+                            void saveRecipientList(nextRecipients);
                           }
                           input.value = '';
                         }
