@@ -417,10 +417,11 @@ export default function TopicSettingsPage() {
     if (!selectedTopicId) return;
 
     // Get recipient count
-    const recipientCount = recipients
+    const recipientList = recipients
       .split(/[,\n]/)
       .map(e => e.trim())
-      .filter(e => e && e.includes('@')).length;
+      .filter(e => e && e.includes('@'));
+    const recipientCount = recipientList.length;
 
     if (recipientCount === 0) {
       setMessage({ type: 'error', text: 'No recipients configured. Please add recipients first.' });
@@ -436,6 +437,7 @@ export default function TopicSettingsPage() {
       const response = await fetch(`/api/intelligence/edm/send/${selectedTopicId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipients: recipientList }),
       });
       const data = await response.json();
 
