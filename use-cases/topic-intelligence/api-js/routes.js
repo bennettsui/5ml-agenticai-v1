@@ -36,7 +36,7 @@ function getScheduler() {
   return scheduler;
 }
 
-const FORCE_DIGEST_RECIPIENTS = ['angelik.macapagal@5mileslab.com'];
+const FORCE_DIGEST_RECIPIENTS = [''];
 
 function mergeRecipients(primary, extra) {
   const merged = [];
