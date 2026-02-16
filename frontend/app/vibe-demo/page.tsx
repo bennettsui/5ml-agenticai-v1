@@ -112,13 +112,13 @@ export default function VibeDemoPage() {
       tags: ['Visual Design', 'AI Visuals', 'Scroll Animation', 'Typography'],
     },
     {
-      id: 'tedx-boundary-street-v2',
+      id: 'tedx-boundary-street-partners',
       title: 'TEDxBoundaryStreet',
-      titleZh: '界限街 TEDx — Marketing Site',
-      description: 'WCAG 2.1 AA accessible marketing page — mobile-first, semantic HTML, bilingual form, SEO-optimized with Open Graph and structured data',
-      href: '/vibe-demo/tedx-boundary-street/v2',
+      titleZh: '界限街 TEDx — Partners Page',
+      description: 'Partners page with enquiry form — WCAG 2.1 AA, mobile-first, bilingual, 4 partnership types, multi-select form, TEDx compliance',
+      href: '/vibe-demo/tedx-boundary-street/partners',
       color: 'from-red-700 to-neutral-900',
-      tags: ['WCAG 2.1 AA', 'SEO', 'Mobile-first', 'Bilingual Form'],
+      tags: ['WCAG 2.1 AA', 'Partners', 'Bilingual Form', 'Mobile-first'],
     },
     {
       id: 'rotary-hkie',
