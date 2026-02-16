@@ -7,9 +7,10 @@ class GeminiImageClient {
   constructor(apiKey) {
     this.apiKey = apiKey;
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-    // Use gemini-2.0-flash-exp for native image generation (aka "nanobanana")
+    // Use gemini-2.5-flash for native image generation (aka "nanobanana")
     // This model supports both image input and image output
-    this.model = 'gemini-2.0-flash-exp';
+    // Note: gemini-2.0-flash-exp retired; 2.0 family sunset March 31 2026
+    this.model = 'gemini-2.5-flash-preview-image-generation';
     console.log('[GeminiImageClient] Initialized with model:', this.model, '(nanobanana)');
   }
 

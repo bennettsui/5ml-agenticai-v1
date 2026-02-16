@@ -237,9 +237,10 @@ router.get('/visuals/:id', (req, res) => {
 // ==================== HELPER ====================
 
 async function generateVisual(client, prompt) {
-  // Use the Gemini REST API directly (same as GeminiImageClient.generateStyledPortrait but text-only prompt)
+  // Use the Gemini REST API directly with the current image generation model
   const fetch = (await import('node-fetch')).default;
-  const url = `${client.baseUrl}/models/${client.model}:generateContent?key=${client.apiKey}`;
+  const IMAGE_MODEL = 'gemini-2.5-flash-preview-image-generation';
+  const url = `${client.baseUrl}/models/${IMAGE_MODEL}:generateContent?key=${client.apiKey}`;
 
   const body = {
     contents: [
