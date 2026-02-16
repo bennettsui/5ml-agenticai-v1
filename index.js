@@ -1856,6 +1856,141 @@ app.get('/api/scheduled-jobs', (req, res) => {
 });
 
 // ==========================================
+// Workflow Chat API  (DeepSeek + RAG powered)
+// ==========================================
+const ragService = require('./services/rag-service');
+
+const WORKFLOW_SYSTEM_PROMPTS = {
+  assistant: `You are an AI Workflow Architect assistant helping the user understand and modify agent orchestration workflows.
+
+Your capabilities:
+1. Explain how agents work together in the current workflow
+2. Suggest improvements to agent roles, connections, and orchestration patterns
+3. Modify the workflow when the user requests changes (update agent names/roles, add/remove edges)
+4. Discuss trade-offs between different orchestration approaches
+
+When the user asks to MODIFY the workflow, include a JSON block at the end of your response in this exact format:
+[WORKFLOW_UPDATE]
+[{"action":"update_node","node_id":"agent-id","name":"New Name","role":"New Role"}]
+[/WORKFLOW_UPDATE]
+
+Available actions:
+- update_node: Update a node's name and/or role. Fields: node_id, name (optional), role (optional)
+- remove_node: Remove a node and its edges. Fields: node_id
+- add_edge: Add a connection. Fields: from, to, label (optional), edge_type (solid|conditional|feedback)
+- remove_edge: Remove a connection. Fields: from, to
+- update_meta: Update workflow metadata. Fields: pattern (optional), patternDesc (optional), trigger (optional)
+
+Always reference nodes by their id. Only include the JSON block when making actual changes, not when just explaining.
+Be concise but thorough. Focus on practical, actionable advice.`,
+
+  business_analyst: `You are a critical Business Analyst reviewing AI agent orchestration workflows. Your role is to challenge, question, and improve.
+
+Your approach:
+1. QUESTION assumptions — why does this agent exist? Is it justified?
+2. IDENTIFY bottlenecks — where are single points of failure?
+3. CHALLENGE the user — if they propose something, play devil's advocate
+4. ASSESS ROI — what is the cost vs value of each agent?
+5. FIND edge cases — what happens when things go wrong?
+6. CRITIQUE both the workflow design AND the user's understanding
+
+Be direct and analytical. Don't just agree — push back constructively. Use specific metrics and frameworks when possible.
+
+When you believe modifications would improve the workflow, include a JSON block:
+[WORKFLOW_UPDATE]
+[{"action":"update_node","node_id":"agent-id","role":"Improved role description"}]
+[/WORKFLOW_UPDATE]
+
+Your goal is to make both the human and the AI agents better through rigorous analysis.`
+};
+
+function parseWorkflowUpdates(text) {
+  const updateRegex = /\[WORKFLOW_UPDATE\]\s*([\s\S]*?)\s*\[\/WORKFLOW_UPDATE\]/;
+  const match = text.match(updateRegex);
+  let updates = [];
+  let message = text;
+
+  if (match) {
+    try {
+      updates = JSON.parse(match[1]);
+      message = text.replace(updateRegex, '').trim();
+    } catch (e) {
+      console.error('[workflow-chat] Failed to parse workflow updates:', e.message);
+    }
+  }
+
+  return { message, updates };
+}
+
+app.post('/api/workflow-chat', async (req, res) => {
+  try {
+    const { messages, workflow, mode = 'assistant' } = req.body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+
+    // Build workflow context
+    const workflowContext = JSON.stringify({
+      id: workflow?.id,
+      title: workflow?.title,
+      pattern: workflow?.pattern,
+      trigger: workflow?.trigger,
+      nodes: workflow?.nodes || [],
+      edges: workflow?.edges || [],
+    }, null, 2);
+
+    // RAG: retrieve relevant context for the latest user message
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'workflows', 3) : '';
+
+    const systemPrompt = [
+      WORKFLOW_SYSTEM_PROMPTS[mode] || WORKFLOW_SYSTEM_PROMPTS.assistant,
+      `\nCurrent Workflow:\n${workflowContext}`,
+      ragContext ? `\n${ragContext}` : '',
+    ].join('\n');
+
+    // Try DeepSeek first, fall back to Claude
+    const deepseek = require('./services/deepseekService');
+    let result;
+
+    if (deepseek.isAvailable()) {
+      result = await deepseek.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+      );
+      const parsed = parseWorkflowUpdates(result.content);
+      return res.json({
+        message: parsed.message,
+        workflow_updates: parsed.updates,
+        model: result.model || 'deepseek-chat',
+        rag_used: !!ragContext,
+      });
+    }
+
+    // Fallback to Claude
+    const llm = require('./lib/llm');
+    result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+    const parsed = parseWorkflowUpdates(result.text);
+    return res.json({
+      message: parsed.message,
+      workflow_updates: parsed.updates,
+      model: result.modelName || 'claude-haiku',
+      rag_used: !!ragContext,
+    });
+
+  } catch (err) {
+    console.error('[workflow-chat] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// RAG stats endpoint
+app.get('/api/rag/stats', (req, res) => {
+  res.json(ragService.getStats());
+});
+
+// ==========================================
 // Next.js Client-Side Routing Fallback
 // ==========================================
 // Handle client-side routing - serve index.html for Next.js routes
