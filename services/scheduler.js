@@ -250,7 +250,8 @@ function scheduleWeeklyDigest(topicId, topicName, config, digestFunction) {
   console.log(`[Scheduler] Scheduling weekly digest for "${topicName}" on ${config.day} at ${config.time} - cron: ${cronExpression}`);
 
   const job = cron.schedule(cronExpression, async () => {
-    console.log(`[Scheduler] 📧 Starting weekly digest for: ${topicName}`);
+    const recipientCount = Array.isArray(config.recipientList) ? config.recipientList.length : 0;
+    console.log(`[Scheduler] 📧 Starting weekly digest for: ${topicName} (${recipientCount} recipient(s))`);
     registry.markRunning(registryId);
     const startTime = Date.now();
     try {
