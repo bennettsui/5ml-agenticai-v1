@@ -104,7 +104,7 @@ router.get('/status', (req, res) => {
   res.json({
     status: 'ok',
     geminiAvailable: hasKey,
-    model: 'gemini-2.0-flash-exp (nanobanana)',
+    model: 'gemini-2.5-flash-image (nanobanana)',
     totalVisuals: VISUALS.length,
     generatedCount: generated.filter((v) => v.exists).length,
     visuals: generated,
@@ -234,12 +234,43 @@ router.get('/visuals/:id', (req, res) => {
   res.sendFile(filePath);
 });
 
+/**
+ * GET /api/tedx/list-models — List available Gemini models (diagnostic)
+ */
+router.get('/list-models', async (req, res) => {
+  if (!GEMINI_API_KEY) {
+    return res.status(503).json({ error: 'GEMINI_API_KEY not configured' });
+  }
+
+  try {
+    const fetch = (await import('node-fetch')).default;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(response.status).json({ error: errText });
+    }
+    const data = await response.json();
+    // Filter to image-related models
+    const imageModels = (data.models || [])
+      .filter((m) => m.name.includes('image') || m.name.includes('imagen'))
+      .map((m) => ({
+        name: m.name,
+        displayName: m.displayName,
+        supportedMethods: m.supportedGenerationMethods,
+      }));
+    res.json({ imageModels, totalModels: (data.models || []).length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== HELPER ====================
 
 async function generateVisual(client, prompt) {
   // Use the Gemini REST API directly with the current image generation model
   const fetch = (await import('node-fetch')).default;
-  const IMAGE_MODEL = 'gemini-2.5-flash-preview-image-generation';
+  const IMAGE_MODEL = 'gemini-2.5-flash-image';
   const url = `${client.baseUrl}/models/${IMAGE_MODEL}:generateContent?key=${client.apiKey}`;
 
   const body = {
