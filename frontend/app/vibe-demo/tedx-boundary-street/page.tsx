@@ -21,22 +21,22 @@ const teamMembers = [
     nameEn: 'Bennet Tsui',
     roleEn: 'Curator',
     roleZh: '策展人',
-    bioZh: '廣告人、創業者、社區建造者。在界限街附近長大，現在經營跨越創意與科技的工作室。2016 年在 TEDxKowloon 做義工時，第一次見到一場好的演講如何在幾分鐘內連結陌生人。那次之後，就一直想為香港建立一個屬於「穿越者」的 TEDx。',
-    bioEn: 'Ad guy, entrepreneur, community builder. Grew up around Boundary Street, now runs a studio at the intersection of creativity and technology. Volunteered at TEDxKowloon in 2016 and saw first-hand how one well-crafted talk could connect strangers within minutes. He has been wanting to build a TEDx for Hong Kong\'s boundary-crossers ever since.',
+    bioZh: '廣告人、創業者、社區設計實踐者，成長於界限街一帶。多年來在九龍與港島之間工作，連結創作人、技術人和公共機構，專注於把抽象概念變成具體體驗——由品牌、活動到 AI 系統。他希望 TEDxBoundaryStreet 成為一個，讓「站在界線上思考的人」可以相遇的年度節點。',
+    bioEn: 'An ad guy, entrepreneur, and community design practitioner who grew up around Boundary Street. He has spent years working between Kowloon and Hong Kong Island, connecting creatives, technologists, and public institutions, turning abstract ideas into concrete experiences — from brands and events to AI systems. He hopes TEDxBoundaryStreet becomes an annual waypoint for people who think while standing on the line.',
   },
   {
     nameEn: 'Steven Tsoi',
     roleEn: 'Producer',
     roleZh: '監製',
-    bioZh: 'TEDxKowloon 前監製，擁有豐富的 TEDx 製作與營運經驗。',
-    bioEn: 'Former producer of TEDxKowloon, with deep TEDx production and operations expertise.',
+    bioZh: '資深活動製作人，曾擔任 TEDxKowloon 監製，負責從舞台設計、流程編排到後台運作的整體協調。他擅長在限制之內打造高質感體驗，確保每個細節——從燈光、聲音到觀眾動線——都支援講者和觀眾之間真正的連結。',
+    bioEn: 'A seasoned event producer and former producer of TEDxKowloon, responsible for everything from stage design and run-of-show to backstage operations. He specialises in creating high-quality experiences within constraints, making sure details — lights, sound, audience flow — all support genuine connection between speakers and the audience.',
   },
   {
     nameEn: 'Stephen Ng',
     roleEn: 'Co-organizer',
     roleZh: '聯合策劃人',
-    bioZh: 'TEDxKowloon 前聯合策劃人，熟悉 TEDx 社群網絡與活動統籌。',
-    bioEn: 'Former co-organizer of TEDxKowloon, with established TEDx community networks and event coordination experience.',
+    bioZh: '多年參與 TEDxKowloon 團隊，歷任聯合策劃與社群統籌。對 TEDx 規則、內容審查和社群經營有豐富經驗，熟悉如何在創意與合規之間取得平衡。他專注於建立志工與合作夥伴網絡，讓一場活動之後，連結仍然可以延續。',
+    bioEn: 'A long-time member of the TEDxKowloon team, serving as co-organizer and community lead. He brings deep experience in TEDx rules, content review, and community-building, and knows how to balance creativity with compliance. He focuses on building volunteer and partner networks so that connections continue long after the event ends.',
   },
 ];
 
@@ -415,6 +415,39 @@ export default function TEDxBoundaryStreetPage() {
           </div>
         </section>
 
+        {/* ==================== SECTION 3.5: BEYOND THE 18 MINUTES ==================== */}
+        <section className="relative bg-white py-20 md:py-24">
+          <div className="max-w-3xl mx-auto px-6">
+            <FadeIn>
+              <h2 className="text-2xl md:text-3xl font-semibold text-neutral-900 mb-6">
+                超越台上的 18 分鐘
+              </h2>
+            </FadeIn>
+
+            <FadeIn delay={100}>
+              <p className="text-neutral-700 text-base md:text-lg leading-relaxed mb-4">
+                我們正在設計一些小小的現場體驗，讓你不只「坐著聽」，而是想一想你自己會怎樣選、與旁邊的人聊一聊你們看見的未來。
+              </p>
+            </FadeIn>
+
+            <FadeIn delay={200}>
+              <div className="w-8 h-px bg-neutral-300 my-8" />
+            </FadeIn>
+
+            <FadeIn delay={300}>
+              <h2 className="text-xl md:text-2xl font-semibold text-neutral-700 mb-6">
+                Beyond the 18 minutes on stage
+              </h2>
+            </FadeIn>
+
+            <FadeIn delay={400}>
+              <p className="text-neutral-500 text-base md:text-lg leading-relaxed">
+                We are designing small on-site experiences so you are not just &ldquo;sitting and listening&rdquo; — but thinking through your own choices, and talking to the people next to you about the future you each see.
+              </p>
+            </FadeIn>
+          </div>
+        </section>
+
         {/* ==================== SECTION 4: WHY BOUNDARY STREET ==================== */}
         <section className="relative bg-neutral-900 text-white py-24 md:py-32">
           {/* Subtle background texture - faded */}
@@ -431,16 +464,13 @@ export default function TEDxBoundaryStreetPage() {
             <FadeIn delay={100}>
               <div className="text-white/80 leading-relaxed md:leading-loose text-base md:text-lg mb-12">
                 <p className="mb-6">
-                  Bennet 在界限街附近長大——從幼稚園到中學，課室旁邊就是那條曾經劃開歷史的街道，頭頂是啟德機場起飛的飛機，四周是不斷適應與重新發明自己的香港。
+                  對好多人來說，界限街是一條很日常的街：放學等巴士的車站、排隊買魚蛋的小攤、抬頭見到啟德機場起飛的航班，樓宇高度差不多、行人路永遠有腳步聲。遠望是格仔山，近處是公屋、球場和補習社，一切都好像「理所當然」，又好像隨時會變。
                 </p>
                 <p className="mb-6">
-                  界限街對他來說，不只是一個地方，而是一段關於成長、移動和轉變的活記憶。
-                </p>
-                <p className="mb-6">
-                  今天，他跟創作人、技術人和社區推動者一起工作，在九龍和港島之間穿梭。他看到這個社區裡的人，正在靜靜地挑戰「正常」的定義。
+                  這條街曾經劃開九龍與新界，劃開兩個系統、兩種想像。今天，界線淡了，但問題依然存在：在歷史與發展之間，在 AI 革命與人性底線之間，我們究竟憑什麼去決定——什麼值得守住，什麼需要讓路，什麼才是真正重要？
                 </p>
                 <p>
-                  TEDxBoundaryStreet，就是想把這些穿越邊界的故事，放上一個屬於整個社區——而不只是機構或品牌——的舞台。
+                  TEDxBoundaryStreet 想做的，是把這一代香港人的「界線記憶」拉上舞台：那種一邊抬頭望住飛機、一邊向前走的心情，那種在同一條街度長大，但選擇了完全不同路的勇氣。這是一個屬於整個社區——而不只是機構或品牌——的地方，讓每個曾經站在界線前的人，一起問：下一步，怎樣跨過去？
                 </p>
               </div>
             </FadeIn>
@@ -460,16 +490,13 @@ export default function TEDxBoundaryStreetPage() {
             <FadeIn delay={400}>
               <div className="text-white/60 leading-relaxed md:leading-loose text-base md:text-lg">
                 <p className="mb-6">
-                  Bennet grew up around Boundary Street — from kindergarten through secondary school, with classrooms sitting beside a line that once divided histories, planes taking off from old Kai Tak overhead, and a city constantly learning to reinvent itself.
+                  For many of us, Boundary Street is an ordinary street. The bus stop after school, the fishball stall with a familiar queue, planes from Kai Tak once roaring overhead, buildings standing shoulder to shoulder, footsteps echoing along the same narrow pavements. In the distance, the checkered hill; up close, estates, courts, cram schools — everything feels &ldquo;normal&rdquo;, and yet always on the verge of change.
                 </p>
                 <p className="mb-6">
-                  Boundary Street is not just a location to him. It is a living memory of growth, movement, and transitions.
-                </p>
-                <p className="mb-6">
-                  Today, he works across Kowloon and Hong Kong Island with creatives, technologists, and community builders. He sees people in this neighbourhood quietly challenging what &ldquo;normal&rdquo; looks like in Hong Kong.
+                  This street once marked the edge between Kowloon and the New Territories, between two systems, two imaginations. Today, the line has faded, but the question remains: Between history and development, between an AI revolution and the baseline of our humanity, what do we use to decide — what is worth keeping, what must give way, and what truly matters?
                 </p>
                 <p>
-                  TEDxBoundaryStreet is an attempt to give those boundary-crossing stories a stage that belongs to the whole community — not just to institutions or brands.
+                  TEDxBoundaryStreet wants to bring this generation&apos;s &ldquo;boundary memories&rdquo; onto the stage: the feeling of looking up at planes while still walking forward, the courage of growing up on the same street but choosing completely different paths. It is a place for the whole community — not just institutions or brands — for everyone who has ever stood at a boundary and asked: what does it mean to cross, now?
                 </p>
               </div>
             </FadeIn>
