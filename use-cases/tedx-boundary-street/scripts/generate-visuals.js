@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 
 const API_KEY = process.env.GEMINI_API_KEY;
-const MODEL = 'gemini-2.5-flash-preview-image-generation';
+const MODEL = 'gemini-2.5-flash-image';
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const OUTPUT_DIR = path.join(__dirname, '../../../frontend/public/tedx');
 
