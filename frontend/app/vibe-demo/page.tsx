@@ -105,11 +105,20 @@ export default function VibeDemoPage() {
     {
       id: 'tedx-boundary-street',
       title: 'TEDxBoundaryStreet',
-      titleZh: '界限街 TEDx',
-      description: 'Ideas of Crossing — bilingual single-page website with scroll-triggered animations, TEDx brand compliance, and poetic storytelling',
+      titleZh: '界限街 TEDx — Visual Edition',
+      description: 'Ideas of Crossing — visual-first design with "The Line as Canvas" concept, nanobanana AI-generated visuals, scroll animations, and poetic storytelling',
       href: '/vibe-demo/tedx-boundary-street',
       color: 'from-red-600 to-red-800',
-      tags: ['Bilingual', 'TEDx', 'Scroll Animation', 'Typography'],
+      tags: ['Visual Design', 'AI Visuals', 'Scroll Animation', 'Typography'],
+    },
+    {
+      id: 'tedx-boundary-street-v2',
+      title: 'TEDxBoundaryStreet',
+      titleZh: '界限街 TEDx — Marketing Site',
+      description: 'WCAG 2.1 AA accessible marketing page — mobile-first, semantic HTML, bilingual form, SEO-optimized with Open Graph and structured data',
+      href: '/vibe-demo/tedx-boundary-street/v2',
+      color: 'from-red-700 to-neutral-900',
+      tags: ['WCAG 2.1 AA', 'SEO', 'Mobile-first', 'Bilingual Form'],
     },
     {
       id: 'rotary-hkie',

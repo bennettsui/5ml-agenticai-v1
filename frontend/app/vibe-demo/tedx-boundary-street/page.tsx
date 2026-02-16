@@ -471,8 +471,14 @@ export default function TEDxBoundaryStreetPage() {
           )}
         </nav>
 
-        {/* Back to demos link */}
-        <div className="fixed top-4 right-4 z-[60]">
+        {/* Back to demos link + cross-link */}
+        <div className="fixed top-4 right-4 z-[60] flex items-center gap-2">
+          <Link
+            href="/vibe-demo/tedx-boundary-street/v2"
+            className="text-xs text-white/50 hover:text-white/80 transition-colors bg-black/30 backdrop-blur-sm rounded-full px-3 py-1.5"
+          >
+            Marketing Site
+          </Link>
           <Link
             href="/vibe-demo"
             className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80 transition-colors bg-black/30 backdrop-blur-sm rounded-full px-3 py-1.5"
