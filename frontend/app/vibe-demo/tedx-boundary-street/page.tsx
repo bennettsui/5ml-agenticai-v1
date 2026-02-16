@@ -474,10 +474,10 @@ export default function TEDxBoundaryStreetPage() {
         {/* Back to demos link + cross-link */}
         <div className="fixed top-4 right-4 z-[60] flex items-center gap-2">
           <Link
-            href="/vibe-demo/tedx-boundary-street/v2"
+            href="/vibe-demo/tedx-boundary-street/partners"
             className="text-xs text-white/50 hover:text-white/80 transition-colors bg-black/30 backdrop-blur-sm rounded-full px-3 py-1.5"
           >
-            Marketing Site
+            Partners
           </Link>
           <Link
             href="/vibe-demo"
@@ -938,13 +938,13 @@ export default function TEDxBoundaryStreetPage() {
               <p className="text-neutral-500 text-base mb-6">
                 如果你有興趣，和我們聊聊。If that sounds like you, let&apos;s talk.
               </p>
-              <a
-                href="mailto:hello@tedxboundarystreet.com"
+              <Link
+                href="/vibe-demo/tedx-boundary-street/partners"
                 className="inline-block px-8 py-3.5 text-white text-sm font-semibold tracking-wide uppercase rounded-sm transition-all duration-300 hover:brightness-110 hover:scale-105"
                 style={{ backgroundColor: TED_RED }}
               >
                 聯絡我們 Get in Touch
-              </a>
+              </Link>
             </FadeIn>
           </div>
         </section>
