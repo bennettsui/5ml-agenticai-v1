@@ -131,6 +131,115 @@ app.get('/api/app-name', (req, res) => {
 });
 
 // ==========================================
+// API Health & Connection Test
+// ==========================================
+app.get('/api/health/services', async (req, res) => {
+  const results = [];
+
+  // Helper: test an external API endpoint
+  async function probe(id, name, testFn) {
+    const start = Date.now();
+    try {
+      const detail = await testFn();
+      results.push({ id, name, status: 'connected', latencyMs: Date.now() - start, detail });
+    } catch (err) {
+      results.push({ id, name, status: 'error', latencyMs: Date.now() - start, error: err.message });
+    }
+  }
+
+  // Helper: just check if env var is set
+  function envCheck(id, name, envVar, extra) {
+    const set = !!process.env[envVar];
+    results.push({ id, name, status: set ? 'configured' : 'not_configured', detail: set ? `${envVar} is set` : `${envVar} not set`, ...(extra || {}) });
+  }
+
+  // --- LLM Providers ---
+  await probe('anthropic', 'Anthropic (Claude)', async () => {
+    if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-3-haiku-20240307', max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
+    return 'API key valid';
+  });
+
+  await probe('deepseek', 'DeepSeek', async () => {
+    if (!process.env.DEEPSEEK_API_KEY) throw new Error('DEEPSEEK_API_KEY not set');
+    const resp = await fetch('https://api.deepseek.com/v1/models', {
+      headers: { 'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return 'API key valid';
+  });
+
+  await probe('perplexity', 'Perplexity (Sonar Pro)', async () => {
+    if (!process.env.PERPLEXITY_API_KEY) throw new Error('PERPLEXITY_API_KEY not set');
+    const resp = await fetch('https://api.perplexity.ai/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.PERPLEXITY_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'sonar', messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
+    return 'API key valid';
+  });
+
+  envCheck('openai', 'OpenAI', 'OPENAI_API_KEY');
+
+  // --- Database ---
+  await probe('database', 'PostgreSQL', async () => {
+    if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL not set');
+    const db = require('./db');
+    await db.query('SELECT 1');
+    return 'Connected';
+  });
+
+  // --- External Services ---
+  await probe('notion', 'Notion API', async () => {
+    if (!process.env.NOTION_API_KEY) throw new Error('NOTION_API_KEY not set');
+    const resp = await fetch('https://api.notion.com/v1/users/me', {
+      headers: { 'Authorization': `Bearer ${process.env.NOTION_API_KEY}`, 'Notion-Version': '2022-06-28' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    return `Connected as ${data.name || data.type || 'bot'}`;
+  });
+
+  envCheck('resend', 'Resend (Email)', 'RESEND_API_KEY');
+  envCheck('dropbox', 'Dropbox', 'DROPBOX_ACCESS_TOKEN');
+  envCheck('comfyui', 'ComfyUI (Image Gen)', 'COMFYUI_URL');
+
+  // --- Ads Integrations ---
+  await probe('meta-ads', 'Meta Ads API', async () => {
+    if (!process.env.META_ACCESS_TOKEN) throw new Error('META_ACCESS_TOKEN not set');
+    const resp = await fetch(`https://graph.facebook.com/v20.0/me?access_token=${process.env.META_ACCESS_TOKEN}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
+    return 'Token valid';
+  });
+
+  envCheck('google-ads', 'Google Ads API', 'GOOGLE_ADS_DEVELOPER_TOKEN');
+  envCheck('gmail', 'Gmail OAuth', 'GOOGLE_CLIENT_ID');
+
+  const connected = results.filter(r => r.status === 'connected').length;
+  const configured = results.filter(r => r.status === 'configured').length;
+  const errors = results.filter(r => r.status === 'error').length;
+  const notConfigured = results.filter(r => r.status === 'not_configured').length;
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    summary: { total: results.length, connected, configured, errors, notConfigured },
+    services: results,
+  });
+});
+
+// ==========================================
 // Main Analysis Endpoint
 // ==========================================
 
@@ -1344,11 +1453,12 @@ app.get('/stats', async (req, res) => {
       ],
       models: [
         { id: 'deepseek', name: 'DeepSeek Reasoner', type: 'primary', status: 'available' },
-        { id: 'haiku', name: 'Claude Haiku', type: 'fallback', status: 'available' },
-        { id: 'sonnet', name: 'Claude Sonnet 4', type: 'advanced', status: 'available' },
-        { id: 'opus', name: 'Claude Opus 4.5', type: 'flagship', status: 'available' },
+        { id: 'haiku', name: 'Claude 3.5 Haiku', type: 'fallback', status: 'available' },
+        { id: 'sonnet', name: 'Claude Sonnet 4.5', type: 'advanced', status: 'available' },
+        { id: 'opus', name: 'Claude Opus 4.6', type: 'flagship', status: 'available' },
         { id: 'perplexity', name: 'Perplexity Sonar Pro', type: 'research', status: 'available' },
-        { id: 'comfyui', name: 'ComfyUI (Flux)', type: 'image-gen', status: 'available' },
+        { id: 'comfyui', name: 'ComfyUI (Stable Diffusion)', type: 'image-gen', status: 'available' },
+        { id: 'tesseract', name: 'Tesseract.js OCR', type: 'ocr', status: 'available' },
       ],
       layers: {
         total: 7,
@@ -1358,7 +1468,7 @@ app.get('/stats', async (req, res) => {
         details: [
           { id: 'L1', name: 'Infrastructure & Storage', status: 'active', description: 'PostgreSQL, Express API, Docker, Fly.io, Redis' },
           { id: 'L2', name: 'Execution Engine', status: 'active', description: 'DeepSeek, Perplexity, Claude, Model fallback chains' },
-          { id: 'L3', name: 'Roles & Agents', status: 'active', description: '30+ specialized agents across 5 use-cases' },
+          { id: 'L3', name: 'Roles & Agents', status: 'active', description: '30+ specialized agents across 6 use-cases' },
           { id: 'L4', name: 'Knowledge Management', status: 'active', description: 'Vector embeddings, Notion connector, pgvector' },
           { id: 'L5', name: 'Task Definitions', status: 'active', description: 'Reusable templates, workflow schemas (JSON-based)' },
           { id: 'L6', name: 'Orchestration & Workflow', status: 'active', description: 'Task scheduling, retry logic, workflow automation' },
@@ -1470,6 +1580,25 @@ app.get('/stats', async (req, res) => {
             monthly: { runsPerMonth: 300, estimatedCost: 3.60 },
           },
         },
+        {
+          id: 'crm',
+          name: 'Client CRM + KB',
+          description: 'AI-powered client CRM with knowledge base',
+          agentCount: 0,
+          status: 'production',
+          costEstimate: {
+            perRun: {
+              description: 'Feedback analysis or knowledge extraction',
+              modelCalls: [
+                { model: 'Claude Haiku', calls: 1, avgTokensIn: 2000, avgTokensOut: 1000, costPerMillion: { input: 0.25, output: 1.25 } },
+              ],
+              totalTokens: { input: 2000, output: 1000 },
+              estimatedCost: 0.002,
+            },
+            daily: { runsPerDay: 5, estimatedCost: 0.01 },
+            monthly: { runsPerMonth: 150, estimatedCost: 0.30 },
+          },
+        },
       ],
       // Token pricing reference (per million tokens)
       tokenPricing: {
@@ -1488,7 +1617,8 @@ app.get('/stats', async (req, res) => {
         photobooth: 14.00,
         intelligence: 2.70,
         accounting: 3.60,
-        totalBase: 39.14,
+        crm: 0.30,
+        totalBase: 39.44,
         notes: 'Ads cost scales with tenants. Photo booth scales with events. All estimates assume typical usage patterns.',
       },
       databaseTables: [
