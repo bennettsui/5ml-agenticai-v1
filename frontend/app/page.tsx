@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone, Users, Calendar } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone, Users, Calendar, GitBranch } from 'lucide-react';
 
 export default function Home() {
   const useCases = [
@@ -64,6 +64,16 @@ export default function Home() {
       color: 'from-violet-500 to-indigo-600',
       features: ['Cron Job Registry', 'Live Status', 'Run History', 'Multi-System View'],
       status: 'Active'
+    },
+    {
+      id: 'agentic-workflows',
+      title: 'Agentic Team Workflows',
+      description: 'Visual n8n-style workflow diagrams showing agent relationships, data flows, and orchestration patterns across all use cases',
+      icon: GitBranch,
+      href: '/agentic-workflows',
+      color: 'from-purple-500 to-violet-600',
+      features: ['Node Graph Visualization', 'Agent Relationships', 'Data Flow Patterns', '6 Workflow Pipelines'],
+      status: 'New'
     },
     {
       id: 'api-documentation',
@@ -215,8 +225,8 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Active Agents</div>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white">16</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Creative, SEO, Social, Research, OCR, Source Curator, News Analyst, News Writer, Photo Booth (8 agents)</div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">30+</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Marketing (9), Ads (8), Photo Booth (9), Intelligence (3), Receipt OCR (1), CRM (5)</div>
             </div>
             <div>
               <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Use Cases</div>
