@@ -310,10 +310,10 @@ export default function TEDxPartnersClient() {
           <div className="relative text-center px-5 max-w-3xl mx-auto py-24">
             <FadeIn>
               <h1 className="mb-8">
-                <span className="block text-white text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight" lang="zh-HK">
+                <span className="block text-white text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight whitespace-nowrap" lang="zh-HK">
                   成為 TEDxBoundaryStreet 的合作夥伴
                 </span>
-                <span className="block text-white/70 text-xl sm:text-2xl md:text-3xl font-light mt-3" lang="en">
+                <span className="block text-white/70 text-lg sm:text-xl md:text-2xl font-light mt-3" lang="en">
                   Partner with TEDxBoundaryStreet
                 </span>
               </h1>
@@ -331,7 +331,16 @@ export default function TEDxPartnersClient() {
               </p>
             </FadeIn>
 
-            <FadeIn delay={500}>
+            <FadeIn delay={400}>
+              <p className="text-white/50 text-sm sm:text-base leading-relaxed mb-3 max-w-xl mx-auto italic" lang="zh-HK">
+                如果你幫忙建造城市空間、打造科技工具、培養新一代，或支持社群參與，這一頁就是寫給你的。
+              </p>
+              <p className="text-white/35 text-sm leading-relaxed mb-8 max-w-xl mx-auto italic" lang="en">
+                If you help shape city spaces, build technology, grow the next generation, or support communities, this page is written for you.
+              </p>
+            </FadeIn>
+
+            <FadeIn delay={600}>
               <p className="text-sm font-medium mb-10">
                 <span className="text-white/50" lang="zh-HK">我們不賣廣告。我們一起搭建舞台。</span>
                 <span className="text-white/35 mx-2">|</span>
@@ -339,7 +348,7 @@ export default function TEDxPartnersClient() {
               </p>
             </FadeIn>
 
-            <FadeIn delay={700}>
+            <FadeIn delay={800}>
               <button
                 onClick={() => scrollTo('contact')}
                 className="inline-flex items-center justify-center min-h-[44px] px-8 py-3 text-white text-sm font-semibold tracking-wide rounded transition-all duration-200 hover:brightness-110 hover:scale-[1.03]"
@@ -426,10 +435,10 @@ export default function TEDxPartnersClient() {
                   </h3>
                   <p className="text-sm text-neutral-500 mb-3" lang="en">Experience design</p>
                   <p className="text-sm text-neutral-700 leading-relaxed mb-2" lang="zh-HK">
-                    由現場設計、指示系統到小型互動裝置，讓觀眾不只聽，還能思考與連結。
+                    由現場設計、指示系統到小型互動裝置，讓觀眾不只聽，還能思考與連結。特別是當你本身就在思考城市如何在科技與人性之間找到新平衡時。
                   </p>
                   <p className="text-sm text-neutral-500 leading-relaxed" lang="en">
-                    From on-site design and wayfinding to small interactive touchpoints, making sure people don&apos;t just listen, but think and connect.
+                    From on-site design and wayfinding to small interactive touchpoints, making sure people don&apos;t just listen, but think and connect. Especially if you are already thinking about how cities can find a new balance between technology and humanity.
                   </p>
                 </div>
 
@@ -480,6 +489,43 @@ export default function TEDxPartnersClient() {
               <p className="text-neutral-600 text-base leading-relaxed mb-10" lang="en">
                 You don&apos;t have to be the biggest brand in town, but you probably resonate with at least some of these:
               </p>
+            </FadeIn>
+
+            <FadeIn delay={250}>
+              <div className="mb-8 space-y-3">
+                <div className="flex items-start gap-2">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-neutral-400 shrink-0" aria-hidden="true" />
+                  <p className="text-sm text-neutral-500">
+                    <span lang="zh-HK">為塑造香港空間與社區的地產、建築與城市設計團隊。</span>
+                    <br />
+                    <span lang="en" className="text-neutral-400">For property, architecture and urban design teams shaping Hong Kong&apos;s spaces and communities.</span>
+                  </p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-neutral-400 shrink-0" aria-hidden="true" />
+                  <p className="text-sm text-neutral-500">
+                    <span lang="zh-HK">為打造 AI、數碼產品與協作工具的科技公司與初創。</span>
+                    <br />
+                    <span lang="en" className="text-neutral-400">For technology companies and startups building AI, digital products and collaboration tools.</span>
+                  </p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-neutral-400 shrink-0" aria-hidden="true" />
+                  <p className="text-sm text-neutral-500">
+                    <span lang="zh-HK">為大學、教育機構、人才與青年項目。</span>
+                    <br />
+                    <span lang="en" className="text-neutral-400">For universities, education providers, talent programmes and youth initiatives.</span>
+                  </p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-neutral-400 shrink-0" aria-hidden="true" />
+                  <p className="text-sm text-neutral-500">
+                    <span lang="zh-HK">為關心平等參與的基金會、NGO 與企業 CSR 團隊。</span>
+                    <br />
+                    <span lang="en" className="text-neutral-400">For foundations, NGOs and CSR teams focused on equitable participation.</span>
+                  </p>
+                </div>
+              </div>
             </FadeIn>
 
             <FadeIn delay={300}>
@@ -565,10 +611,10 @@ export default function TEDxPartnersClient() {
                   </h3>
                   <p className="text-sm font-medium mb-3" style={{ color: TED_RED }} lang="en">Experience Partner</p>
                   <p className="text-sm text-neutral-700 leading-relaxed mb-2" lang="zh-HK">
-                    為現場帶來空間、設計或互動體驗——例如場地佈置、裝置、體驗站或數據可視化等。我們會與你共同策劃，確保重點在「想法與對話」，而不是產品展示。
+                    為現場帶來空間、設計或互動體驗——例如場地佈置、裝置、體驗站或數據可視化等。我們會與你共同策劃，確保重點在「想法與對話」，而不是產品展示。這特別適合打造溝通、決策或數據可視化工具的團隊，讓你的技術以低調但關鍵的方式，成為體驗的一部分。
                   </p>
                   <p className="text-sm text-neutral-500 leading-relaxed" lang="en">
-                    Brings space, design or interactive experiences into the room — for example staging, installations, experience booths or data visualisations. We co-design these with you so the focus stays on ideas and conversations, not product demos.
+                    Brings space, design or interactive experiences into the room — for example staging, installations, experience booths or data visualisations. We co-design these with you so the focus stays on ideas and conversations, not product demos. This is especially relevant if you build tools for communication, decision-making or data visualisation, and want your technology to quietly support the experience.
                   </p>
                 </div>
 
@@ -593,10 +639,10 @@ export default function TEDxPartnersClient() {
                   </h3>
                   <p className="text-sm font-medium mb-3" style={{ color: TED_RED }} lang="en">Community &amp; Access Partner</p>
                   <p className="text-sm text-neutral-700 leading-relaxed mb-2" lang="zh-HK">
-                    支持學生、社區工作者、非牟利組織或行動不便人士參與活動——無論是資助門票、安排接駁，或共同策劃社群 outreach。
+                    支持學生、社區工作者、非牟利組織或行動不便人士參與活動——無論是資助門票、安排接駁，或共同策劃社群 outreach。這可以是基金會、NGO，或企業的 CSR 團隊，以資助或 co-funding 方式支持更多人走進現場。
                   </p>
                   <p className="text-sm text-neutral-500 leading-relaxed" lang="en">
-                    Supports participation from students, community workers, non-profits or people with accessibility needs — whether through ticket support, transport, or co-designing community outreach.
+                    Supports participation from students, community workers, non-profits or people with accessibility needs — whether through ticket support, transport, or co-designing community outreach. This could be a foundation, NGO or CSR team providing funding or co-funding so more people can be in the room.
                   </p>
                 </div>
               </div>
@@ -608,6 +654,12 @@ export default function TEDxPartnersClient() {
               </p>
               <p className="text-neutral-500 text-sm leading-relaxed mt-1" lang="en">
                 These are starting points, not limits. We are happy to shape a partnership that fits who you are and the role you want to play.
+              </p>
+              <p className="text-neutral-700 text-sm leading-relaxed mt-3" lang="zh-HK">
+                我們同樣歡迎以實物或服務形式支持的本地品牌——咖啡、點心、設計物料、書籍、聲音與影像等。
+              </p>
+              <p className="text-neutral-500 text-sm leading-relaxed mt-1" lang="en">
+                We also welcome in-kind support from local brands — coffee, snacks, design materials, books, sound and visuals, and more.
               </p>
             </FadeIn>
           </div>
@@ -674,6 +726,16 @@ export default function TEDxPartnersClient() {
                 <li className="relative pl-6">
                   <span className="absolute left-0 top-2 w-2 h-2 rounded-full" style={{ backgroundColor: TED_RED }} aria-hidden="true" />
                   <p className="text-neutral-800 text-base leading-relaxed" lang="zh-HK">
+                    對於長期合作夥伴，我們樂於在未來數屆 TEDxBoundaryStreet 中，一起規劃圍繞「科技 × 人性 × 城市」的持續對話節點。
+                  </p>
+                  <p className="text-neutral-500 text-sm leading-relaxed mt-1" lang="en">
+                    For long-term partners, we are open to co-planning recurring touchpoints across future editions of TEDxBoundaryStreet around technology, humanity and the city.
+                  </p>
+                </li>
+
+                <li className="relative pl-6">
+                  <span className="absolute left-0 top-2 w-2 h-2 rounded-full" style={{ backgroundColor: TED_RED }} aria-hidden="true" />
+                  <p className="text-neutral-800 text-base leading-relaxed" lang="zh-HK">
                     優先與你討論如何在未來數屆 TEDxBoundaryStreet 中，建立長期合作關係。
                   </p>
                   <p className="text-neutral-500 text-sm leading-relaxed mt-1" lang="en">
@@ -706,8 +768,17 @@ export default function TEDxPartnersClient() {
             </FadeIn>
 
             <FadeIn delay={200}>
-              <p className="text-neutral-600 text-base leading-relaxed mb-12" lang="en">
+              <p className="text-neutral-600 text-base leading-relaxed mb-3" lang="en">
                 If reading this has already sparked one or two images — a corner of the room, an experience, a community you want to support — start by writing to us. During our preparation phase, we&apos;ll follow up by email or a short call to shape the idea together.
+              </p>
+            </FadeIn>
+
+            <FadeIn delay={250}>
+              <p className="text-neutral-700 text-sm leading-relaxed mb-2" lang="zh-HK">
+                你不需要一個完整的提案，只要有一個想支持的方向或人群，就足夠開始對話。
+              </p>
+              <p className="text-neutral-500 text-sm leading-relaxed mb-12" lang="en">
+                You don&apos;t need a full proposal — having a direction or a community you want to support is enough to start the conversation.
               </p>
             </FadeIn>
 
