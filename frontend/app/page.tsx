@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone, Users, Calendar, GitBranch } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone, Users, GitBranch } from 'lucide-react';
 
 export default function Home() {
   const useCases = [
@@ -48,21 +48,11 @@ export default function Home() {
     {
       id: 'platform-dashboard',
       title: 'Platform Dashboard',
-      description: 'System overview, analytics, architecture visualization, and agent testing',
+      description: 'System overview, analytics, architecture visualization, API health, and cron job scheduling',
       icon: BarChart3,
       href: '/dashboard',
       color: 'from-green-500 to-emerald-600',
-      features: ['Analytics', 'Architecture', 'Agent Testing', 'Projects'],
-      status: 'Active'
-    },
-    {
-      id: 'scheduled-jobs',
-      title: 'Scheduled Jobs',
-      description: 'View all cron jobs and scheduled tasks across the platform with live status and run history',
-      icon: Calendar,
-      href: '/scheduled-jobs',
-      color: 'from-violet-500 to-indigo-600',
-      features: ['Cron Job Registry', 'Live Status', 'Run History', 'Multi-System View'],
+      features: ['Analytics', 'Architecture', 'API Health', 'Scheduling'],
       status: 'Active'
     },
     {

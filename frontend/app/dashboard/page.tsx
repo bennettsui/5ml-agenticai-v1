@@ -3,14 +3,13 @@
 import { useState } from 'react';
 import ArchitectureViz from '@/components/ArchitectureViz';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
-import AgentTesting from '@/components/AgentTesting';
-import ProjectManagement from '@/components/ProjectManagement';
 import PlatformOverview from '@/components/PlatformOverview';
 import ApiHealthCheck from '@/components/ApiHealthCheck';
-import { LayoutDashboard, Layers, Activity, FlaskConical, FolderKanban, Home, Wifi } from 'lucide-react';
+import ScheduledJobs from '@/components/ScheduledJobs';
+import { LayoutDashboard, Layers, Activity, Home, Wifi, Calendar } from 'lucide-react';
 import Link from 'next/link';
 
-type Tab = 'overview' | 'architecture' | 'analytics' | 'api' | 'agents' | 'projects';
+type Tab = 'overview' | 'architecture' | 'analytics' | 'api' | 'scheduling';
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -20,8 +19,7 @@ export default function Dashboard() {
     { id: 'architecture' as Tab, label: 'Architecture', icon: Layers },
     { id: 'analytics' as Tab, label: 'Analytics', icon: Activity },
     { id: 'api' as Tab, label: 'API', icon: Wifi },
-    { id: 'agents' as Tab, label: 'Agent Testing', icon: FlaskConical },
-    { id: 'projects' as Tab, label: 'Projects', icon: FolderKanban },
+    { id: 'scheduling' as Tab, label: 'Scheduling', icon: Calendar },
   ];
 
   return (
@@ -85,8 +83,7 @@ export default function Dashboard() {
         {activeTab === 'architecture' && <ArchitectureViz />}
         {activeTab === 'analytics' && <AnalyticsDashboard />}
         {activeTab === 'api' && <ApiHealthCheck />}
-        {activeTab === 'agents' && <AgentTesting />}
-        {activeTab === 'projects' && <ProjectManagement />}
+        {activeTab === 'scheduling' && <ScheduledJobs />}
       </main>
     </div>
   );
