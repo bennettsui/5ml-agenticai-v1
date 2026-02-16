@@ -87,10 +87,8 @@ export default function Dashboard() {
         {activeTab === 'api' && <ApiHealthCheck />}
         {activeTab === 'scheduling' && <ScheduledJobs />}
         {activeTab === 'workflows' && (
-          <div className="bg-[#1a1b2e] min-h-[80vh] px-4 sm:px-6 lg:px-8 py-8">
-            <div className="max-w-[1400px] mx-auto">
-              <AgenticWorkflows />
-            </div>
+          <div className="bg-[#1a1b2e]">
+            <AgenticWorkflows />
           </div>
         )}
       </main>
