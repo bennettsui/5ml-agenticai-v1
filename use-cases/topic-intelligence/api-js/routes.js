@@ -1488,9 +1488,9 @@ router.put('/topics/:id', async (req, res) => {
       try {
         const topic = await db.updateIntelligenceTopic(id, updates);
         if (topic) {
-          // Update scheduler if daily scan config changed
+          // Update scheduler if daily scan or weekly digest config changed
           const sched = getScheduler();
-          if (sched && updates.daily_scan_config) {
+          if (sched && (updates.daily_scan_config || updates.weekly_digest_config)) {
             sched.updateTopicSchedule(id, topic.name, updates.daily_scan_config, updates.weekly_digest_config);
             console.log(`[Routes] Updated scheduler for topic: ${topic.name}`);
           }
@@ -4493,6 +4493,8 @@ async function runScheduledDigest(topicId, topicName, recipientsOverride) {
     if (recipients.length === 0) {
       return { success: true, emailsSent: 0, message: 'No recipients configured for this topic.' };
     }
+
+    console.log(`[ScheduledDigest] Recipients for "${topicName}": ${recipients.length}`);
 
     const articles = await db.getIntelligenceNews(topicId, 10);
     const summaries = await db.getIntelligenceSummaries(topicId, 1);
