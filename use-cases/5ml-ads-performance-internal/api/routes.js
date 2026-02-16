@@ -1403,7 +1403,7 @@ router.get('/performance/kpis', async (req, res) => {
 
 // ==========================================
 // GET /api/ads/tenants
-// List all tenants (ad accounts) with ads data
+// List all tenants (ad accounts) — merges performance data + stored credentials
 // ==========================================
 router.get('/tenants', async (req, res) => {
   try {
@@ -1411,7 +1411,8 @@ router.get('/tenants', async (req, res) => {
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const sql = `
+    // 1) Accounts with actual synced performance data
+    const perfSql = `
       SELECT tenant_id,
         MAX(account_id) as account_id,
         COUNT(DISTINCT campaign_id)::int as campaign_count,
@@ -1420,14 +1421,63 @@ router.get('/tenants', async (req, res) => {
         SUM(spend)::numeric(18,2) as total_spend
       FROM ads_daily_performance
       GROUP BY tenant_id
-      ORDER BY total_spend DESC
     `;
+    const perfResult = await db.pool.query(perfSql);
+    const perfMap = new Map(perfResult.rows.map(r => [r.tenant_id, r]));
 
-    const result = await db.pool.query(sql);
+    // 2) All stored credentials (may include accounts not yet synced)
+    const credSql = `
+      SELECT tenant_id, service, account_id, created_at, updated_at
+      FROM client_credentials
+      ORDER BY tenant_id, service
+    `;
+    const credResult = await db.pool.query(credSql);
+
+    // 3) Merge: start with performance data, then add credential-only accounts
+    const merged = new Map();
+
+    for (const row of perfResult.rows) {
+      merged.set(row.tenant_id, {
+        tenant_id: row.tenant_id,
+        account_id: row.account_id,
+        campaign_count: row.campaign_count,
+        earliest_date: row.earliest_date,
+        latest_date: row.latest_date,
+        total_spend: row.total_spend,
+        source: 'synced',
+        credentials: [],
+      });
+    }
+
+    for (const cred of credResult.rows) {
+      const entry = merged.get(cred.tenant_id);
+      const credInfo = { service: cred.service, account_id: cred.account_id, updated_at: cred.updated_at };
+      if (entry) {
+        entry.credentials.push(credInfo);
+      } else {
+        merged.set(cred.tenant_id, {
+          tenant_id: cred.tenant_id,
+          account_id: cred.account_id,
+          campaign_count: 0,
+          earliest_date: null,
+          latest_date: null,
+          total_spend: '0.00',
+          source: 'credentials_only',
+          credentials: [credInfo],
+        });
+      }
+    }
+
+    // Sort: synced accounts first (by spend), then credentials-only
+    const data = Array.from(merged.values()).sort((a, b) => {
+      if (a.source === 'synced' && b.source !== 'synced') return -1;
+      if (a.source !== 'synced' && b.source === 'synced') return 1;
+      return parseFloat(b.total_spend) - parseFloat(a.total_spend);
+    });
 
     res.json({
       success: true,
-      data: result.rows,
+      data,
     });
   } catch (error) {
     console.error('[Ads API] Tenants query error:', error);
