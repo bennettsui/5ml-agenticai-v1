@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bot, Zap, Database, Layers, CheckCircle2, TrendingUp, Table2, Newspaper, Users, FileSpreadsheet, Camera, BarChart3, Megaphone, Briefcase, DollarSign, Coins } from 'lucide-react';
+import { Bot, Zap, Database, Layers, CheckCircle2, TrendingUp, Table2, Newspaper, Users, FileSpreadsheet, Camera, BarChart3, Megaphone, Briefcase, DollarSign, Coins, BookOpen } from 'lucide-react';
 
 interface Agent {
   id: string;
@@ -92,6 +92,7 @@ const categoryIcons: Record<string, React.ElementType> = {
   intelligence: Newspaper,
   accounting: FileSpreadsheet,
   social: Users,
+  crm: BookOpen,
 };
 
 const categoryColors: Record<string, string> = {
@@ -101,6 +102,7 @@ const categoryColors: Record<string, string> = {
   intelligence: 'teal',
   accounting: 'orange',
   social: 'purple',
+  crm: 'emerald',
 };
 
 const categoryLabels: Record<string, string> = {
@@ -110,6 +112,7 @@ const categoryLabels: Record<string, string> = {
   intelligence: 'Topic Intelligence',
   accounting: 'Receipt Tracking',
   social: 'Social & SEO',
+  crm: 'Client CRM + KB',
 };
 
 export default function PlatformOverview() {
@@ -286,6 +289,15 @@ export default function PlatformOverview() {
               </div>
               <div className="text-lg font-bold text-slate-900 dark:text-white">${stats.monthlyCostSummary.accounting.toFixed(2)}</div>
             </div>
+            {(stats.monthlyCostSummary as Record<string, number>).crm != null && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                <div className="flex items-center gap-2 mb-1">
+                  <BookOpen size={14} className="text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300">CRM + KB</span>
+                </div>
+                <div className="text-lg font-bold text-slate-900 dark:text-white">${(stats.monthlyCostSummary as Record<string, number>).crm.toFixed(2)}</div>
+              </div>
+            )}
             <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
                 <Coins size={14} className="text-emerald-600 dark:text-emerald-400" />

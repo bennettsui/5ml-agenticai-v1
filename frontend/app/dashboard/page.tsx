@@ -6,10 +6,11 @@ import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import AgentTesting from '@/components/AgentTesting';
 import ProjectManagement from '@/components/ProjectManagement';
 import PlatformOverview from '@/components/PlatformOverview';
-import { LayoutDashboard, Layers, Activity, FlaskConical, FolderKanban, Home } from 'lucide-react';
+import ApiHealthCheck from '@/components/ApiHealthCheck';
+import { LayoutDashboard, Layers, Activity, FlaskConical, FolderKanban, Home, Wifi } from 'lucide-react';
 import Link from 'next/link';
 
-type Tab = 'overview' | 'architecture' | 'analytics' | 'agents' | 'projects';
+type Tab = 'overview' | 'architecture' | 'analytics' | 'api' | 'agents' | 'projects';
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -18,6 +19,7 @@ export default function Dashboard() {
     { id: 'overview' as Tab, label: 'Overview', icon: LayoutDashboard },
     { id: 'architecture' as Tab, label: 'Architecture', icon: Layers },
     { id: 'analytics' as Tab, label: 'Analytics', icon: Activity },
+    { id: 'api' as Tab, label: 'API', icon: Wifi },
     { id: 'agents' as Tab, label: 'Agent Testing', icon: FlaskConical },
     { id: 'projects' as Tab, label: 'Projects', icon: FolderKanban },
   ];
@@ -53,7 +55,7 @@ export default function Dashboard() {
       {/* Navigation */}
       <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
+          <div className="flex space-x-8 overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -61,7 +63,7 @@ export default function Dashboard() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`
-                    flex items-center gap-2 px-3 py-4 border-b-2 font-medium text-sm transition-colors
+                    flex items-center gap-2 px-3 py-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap
                     ${activeTab === tab.id
                       ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                       : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300'
@@ -82,6 +84,7 @@ export default function Dashboard() {
         {activeTab === 'overview' && <PlatformOverview />}
         {activeTab === 'architecture' && <ArchitectureViz />}
         {activeTab === 'analytics' && <AnalyticsDashboard />}
+        {activeTab === 'api' && <ApiHealthCheck />}
         {activeTab === 'agents' && <AgentTesting />}
         {activeTab === 'projects' && <ProjectManagement />}
       </main>
