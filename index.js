@@ -1675,6 +1675,15 @@ try {
   console.warn('   Install missing dependencies (e.g. `multer`) to enable /api/photo-booth');
 }
 
+// TEDxBoundaryStreet Visual Generation Routes
+try {
+  const tedxRoutes = require('./use-cases/tedx-boundary-street/api/routes');
+  app.use('/api/tedx', tedxRoutes);
+  console.log('✅ TEDxBoundaryStreet routes loaded: /api/tedx');
+} catch (error) {
+  console.warn('⚠️ TEDx routes not loaded:', error.message);
+}
+
 // Ads Performance Dashboard Routes
 try {
   const adsPerformanceRoutes = require('./use-cases/5ml-ads-performance-internal/api/routes');
