@@ -23,6 +23,9 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
   customSiteTitle: '5ML Agentic AI API Documentation',
 }));
 
+// Serve TEDx generated visuals (runtime-generated via nanobanana API)
+app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx')));
+
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
 app.use(express.static(nextJsPath));
