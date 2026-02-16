@@ -6,10 +6,11 @@ import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import PlatformOverview from '@/components/PlatformOverview';
 import ApiHealthCheck from '@/components/ApiHealthCheck';
 import ScheduledJobs from '@/components/ScheduledJobs';
-import { LayoutDashboard, Layers, Activity, Home, Wifi, Calendar } from 'lucide-react';
+import AgenticWorkflows from '@/components/AgenticWorkflows';
+import { LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch } from 'lucide-react';
 import Link from 'next/link';
 
-type Tab = 'overview' | 'architecture' | 'analytics' | 'api' | 'scheduling';
+type Tab = 'overview' | 'architecture' | 'analytics' | 'api' | 'scheduling' | 'workflows';
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -20,6 +21,7 @@ export default function Dashboard() {
     { id: 'analytics' as Tab, label: 'Analytics', icon: Activity },
     { id: 'api' as Tab, label: 'API', icon: Wifi },
     { id: 'scheduling' as Tab, label: 'Scheduling', icon: Calendar },
+    { id: 'workflows' as Tab, label: 'Workflows', icon: GitBranch },
   ];
 
   return (
@@ -78,12 +80,19 @@ export default function Dashboard() {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className={activeTab === 'workflows' ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'}>
         {activeTab === 'overview' && <PlatformOverview />}
         {activeTab === 'architecture' && <ArchitectureViz />}
         {activeTab === 'analytics' && <AnalyticsDashboard />}
         {activeTab === 'api' && <ApiHealthCheck />}
         {activeTab === 'scheduling' && <ScheduledJobs />}
+        {activeTab === 'workflows' && (
+          <div className="bg-[#1a1b2e] min-h-[80vh] px-4 sm:px-6 lg:px-8 py-8">
+            <div className="max-w-[1400px] mx-auto">
+              <AgenticWorkflows />
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

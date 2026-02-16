@@ -1834,7 +1834,7 @@ const scheduleRegistry = require('./services/schedule-registry');
 // These are defined in the orchestrator but not auto-started — register
 // them as informational entries so the frontend can list them.
 const adsSchedules = [
-  { id: 'ads:daily-sync', name: 'Daily Ads Sync', description: 'Fetch daily ad metrics from Meta & Google for all tenants', schedule: '0 8 * * *', nextRunAt: 'Daily at 08:00' },
+  { id: 'ads:daily-sync', name: 'Daily Ads Sync', description: 'Fetch daily ad metrics from Meta & Google for all tenants', schedule: '0 7 * * *', nextRunAt: 'Daily at 07:00' },
   { id: 'ads:weekly-reports', name: 'Weekly Ads Reports', description: 'AI-powered weekly analysis for all tenants', schedule: '0 9 * * 1', nextRunAt: 'Monday at 09:00' },
   { id: 'ads:monthly-reports', name: 'Monthly Executive Summary', description: 'Monthly executive summary for all tenants', schedule: '0 10 1 * *', nextRunAt: '1st of month at 10:00' },
   { id: 'ads:cross-tenant-overview', name: 'Cross-Tenant Overview', description: '7-day rolling multi-tenant aggregated insights', schedule: '30 9 * * 1', nextRunAt: 'Monday at 09:30' },
