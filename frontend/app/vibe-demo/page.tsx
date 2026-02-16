@@ -103,6 +103,15 @@ export default function VibeDemoPage() {
 
   const demoSites = [
     {
+      id: 'tedx-boundary-street',
+      title: 'TEDxBoundaryStreet',
+      titleZh: '界限街 TEDx',
+      description: 'Ideas of Crossing — bilingual single-page website with scroll-triggered animations, TEDx brand compliance, and poetic storytelling',
+      href: '/vibe-demo/tedx-boundary-street',
+      color: 'from-red-600 to-red-800',
+      tags: ['Bilingual', 'TEDx', 'Scroll Animation', 'Typography'],
+    },
+    {
       id: 'rotary-hkie',
       title: 'Rotary Club HK Island East',
       titleZh: '香港島東扶輪社',
