@@ -1979,6 +1979,110 @@ app.get('/api/rag/stats', (req, res) => {
 });
 
 // ==========================================
+// Knowledge Base Stats API
+// ==========================================
+app.get('/api/knowledge-base/stats', async (req, res) => {
+  try {
+    const db = require('./db');
+    const { pool } = db;
+
+    // RAG service stats
+    const ragStats = ragService.getStats();
+
+    // Query CRM KB tables (safe — returns 0 if table doesn't exist)
+    const safeCount = async (table) => {
+      try {
+        const r = await pool.query(`SELECT COUNT(*) as count FROM ${table}`);
+        return parseInt(r.rows[0].count, 10);
+      } catch { return 0; }
+    };
+
+    const safeRecent = async (table, dateCol = 'created_at', limit = 5) => {
+      try {
+        const r = await pool.query(`SELECT * FROM ${table} ORDER BY ${dateCol} DESC LIMIT $1`, [limit]);
+        return r.rows;
+      } catch { return []; }
+    };
+
+    // CRM KB counts
+    const [clients, projects, feedback, intelligenceTopics, intelligenceNews, intelligenceSources] = await Promise.all([
+      safeCount('crm_clients'),
+      safeCount('crm_projects'),
+      safeCount('crm_feedback'),
+      safeCount('intelligence_topics'),
+      safeCount('intelligence_news'),
+      safeCount('intelligence_sources'),
+    ]);
+
+    // Check if knowledge_documents table exists (pgvector)
+    let vectorDocuments = 0;
+    let vectorStoreAvailable = false;
+    try {
+      const r = await pool.query('SELECT COUNT(*) as count FROM knowledge_documents');
+      vectorDocuments = parseInt(r.rows[0].count, 10);
+      vectorStoreAvailable = true;
+    } catch { /* table may not exist */ }
+
+    // Recent entries
+    const [recentClients, recentFeedback, recentNews] = await Promise.all([
+      safeRecent('crm_clients', 'created_at', 5),
+      safeRecent('crm_feedback', 'created_at', 5),
+      safeRecent('intelligence_news', 'created_at', 5),
+    ]);
+
+    // Intelligence topics detail
+    let topics = [];
+    try {
+      const r = await pool.query('SELECT id, name, status, schedule, last_run_at, created_at FROM intelligence_topics ORDER BY created_at DESC');
+      topics = r.rows;
+    } catch { /* table may not exist */ }
+
+    // Connectors status
+    const connectors = [
+      { id: 'notion', name: 'Notion', status: process.env.NOTION_API_KEY ? 'configured' : 'not_configured', type: 'document' },
+      { id: 'web', name: 'Web Crawler', status: 'available', type: 'web' },
+      { id: 'pdf', name: 'PDF Parser', status: 'available', type: 'document' },
+      { id: 'email', name: 'Email (Gmail)', status: process.env.GOOGLE_CLIENT_ID ? 'configured' : 'not_configured', type: 'email' },
+      { id: 'dropbox', name: 'Dropbox', status: process.env.DROPBOX_ACCESS_TOKEN ? 'configured' : 'not_configured', type: 'storage' },
+    ];
+
+    // Embedding provider
+    const embeddingProvider = process.env.OPENAI_API_KEY ? 'OpenAI (text-embedding-3-small)' : 'Local (TF-IDF)';
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      overview: {
+        totalKnowledgeItems: clients + projects + feedback + intelligenceTopics + intelligenceNews + ragStats.totalDocuments + vectorDocuments,
+        ragDocuments: ragStats.totalDocuments,
+        ragTerms: ragStats.uniqueTerms,
+        vectorDocuments,
+        vectorStoreAvailable,
+        embeddingProvider,
+      },
+      crm: {
+        clients,
+        projects,
+        feedback,
+        recentClients: recentClients.map(c => ({ id: c.id, name: c.name, status: c.status, created_at: c.created_at })),
+        recentFeedback: recentFeedback.map(f => ({ id: f.id, sentiment: f.sentiment, topics: f.topics, source: f.source, created_at: f.created_at })),
+      },
+      intelligence: {
+        topics: topics.length,
+        news: intelligenceNews,
+        sources: intelligenceSources,
+        topicDetails: topics,
+        recentNews: recentNews.map(n => ({ id: n.id, title: n.title, source: n.source_name, created_at: n.created_at })),
+      },
+      rag: ragStats,
+      connectors,
+    });
+  } catch (err) {
+    console.error('[knowledge-base] Stats error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // Next.js Client-Side Routing Fallback
 // ==========================================
 // Handle client-side routing - serve index.html for Next.js routes
