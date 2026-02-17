@@ -21,12 +21,12 @@ const APPROACH_BLOCKS = [
 ];
 
 const PARTNER_STORIES = [
-  { name: '1MORE', text: '和 1MORE 一起，在活動中示範更長久、可維修的音樂與聆聽體驗。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/1MORE-e1627275745256.png' },
-  { name: 'cofit', text: '透過再利用容器與在地供應鏈，讓一杯飲料背後的碳足跡減少一點。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/cofit-e1626948574733.png' },
+  { name: '1MORE 萬魔耳機', text: '38 座國際設計大獎、CES 創新獎得主。和我們一起，在活動中示範更長久、可維修的音樂與聆聽體驗。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/1MORE-e1627275745256.png' },
+  { name: 'Cofit', text: '以行為科學為基礎的數位健康品牌。透過再利用容器與在地供應鏈，讓一杯飲料背後的碳足跡減少一點。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/cofit-e1626948574733.png' },
   { name: 'tissue', text: '從最日常的紙張使用開始，思考一次性消耗品還有沒有第二生命。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/tissue-150x150.png' },
-  { name: '春日', text: '把城市中的一個角落變成聚會與對話的空間。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E6%98%A5%E6%97%A5-e1627632894454.jpg' },
-  { name: '魚', text: null, logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E9%AD%9A.png' },
-  { name: '東吳', text: null, logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E6%9D%B1%E5%90%B3.png' },
+  { name: 'One Ten 食分之一', text: '未來永續生活合作夥伴。以食物為出發點，減少浪費、讓每一餐都更有意義。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/one-ten%E5%9C%93%E5%BD%A2logo-150x150.jpg' },
+  { name: '全興資源再生', text: '綠色合作夥伴。從回收到再製的完整循環，讓舞台材料真正走入第二生命。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E9%AD%9A.png' },
+  { name: '實在影像', text: '影像製作夥伴，2018 年共同創辦。用鏡頭記錄每一場談話，讓想法不只留在現場。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E6%9D%B1%E5%90%B3.png' },
 ];
 
 export default function SustainabilityPage() {
@@ -36,16 +36,19 @@ export default function SustainabilityPage() {
       <SiteNav currentPath="/vibe-demo/tedx-xinyi/sustainability" heroMode />
 
       {/* ==================== HERO ==================== */}
-      <section className="relative min-h-[60vh] flex items-end overflow-hidden">
+      <section className="relative min-h-[60vh] flex items-end overflow-hidden bg-neutral-900">
         <div className="absolute inset-0">
           <img
-            src="https://tedxxinyi.com/wp-content/uploads/2021/08/%E8%9E%A2%E5%B9%95%E5%BF%AB%E7%85%A7-2021-08-24-%E4%B8%8B%E5%8D%882.36.02.png"
+            src="/tedx-xinyi/hero-sustainability.png"
             alt=""
-            className="w-full h-full object-cover"
-            style={{ filter: 'brightness(0.3) contrast(1.1)' }}
+            className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
+            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.5'; }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-black/30" />
+          <div className="absolute inset-0 bg-gradient-to-t from-white via-neutral-900/30 to-neutral-900/60" />
         </div>
+
+        <div className="absolute inset-0 bg-gradient-to-t from-white via-neutral-800/30 to-neutral-900" style={{ zIndex: 0 }} />
 
         <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-32">
           <FadeIn>
@@ -103,7 +106,6 @@ export default function SustainabilityPage() {
           {APPROACH_BLOCKS.map((block, i) => (
             <FadeIn key={block.title} delay={i * 80}>
               <div className={`flex flex-col ${i % 2 === 1 ? 'md:flex-row-reverse' : 'md:flex-row'} gap-8 md:gap-10 items-center bg-white rounded-2xl overflow-hidden shadow-sm border border-neutral-100`}>
-                {/* Image */}
                 <div className="w-full md:w-1/2">
                   <div className="aspect-[16/10] overflow-hidden">
                     <img
@@ -113,7 +115,6 @@ export default function SustainabilityPage() {
                     />
                   </div>
                 </div>
-                {/* Text */}
                 <div className="w-full md:w-1/2 p-6 md:p-8">
                   <span
                     className="inline-block text-xs font-black px-3 py-1 rounded-full mb-4"
@@ -155,9 +156,7 @@ export default function SustainabilityPage() {
                   />
                 </div>
                 <h4 className="font-black text-sm mb-2">{partner.name}</h4>
-                {partner.text && (
-                  <p className="text-neutral-500 text-sm leading-relaxed" lang="zh-TW">{partner.text}</p>
-                )}
+                <p className="text-neutral-500 text-sm leading-relaxed" lang="zh-TW">{partner.text}</p>
               </div>
             </FadeIn>
           ))}

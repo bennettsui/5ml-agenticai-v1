@@ -3,11 +3,11 @@
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY } from '../components';
 
 const MERCH_ITEMS = [
-  { name: '品牌／產品名稱', description: '與 TEDxXinyi 合作內容一句話', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/1MORE-e1627275745256.png' },
-  { name: '品牌／產品名稱', description: '與 TEDxXinyi 合作內容一句話', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/cofit-e1626948574733.png' },
-  { name: '品牌／產品名稱', description: '與 TEDxXinyi 合作內容一句話', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/tissue-150x150.png' },
-  { name: '品牌／產品名稱', description: '與 TEDxXinyi 合作內容一句話', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/logo_210719_0003-150x150.jpg' },
-  { name: '品牌／產品名稱', description: '與 TEDxXinyi 合作內容一句話', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/logo_210719_0004-e1626948663927.jpg' },
+  { name: '1MORE 萬魔耳機', description: '國際設計獎得主，可維修聆聽體驗', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/1MORE-e1627275745256.png' },
+  { name: 'Cofit', description: '以行為科學為基礎的數位健康品牌', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/cofit-e1626948574733.png' },
+  { name: 'tissue', description: '重新思考紙張的第二生命', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/tissue-150x150.png' },
+  { name: 'PLAYPLUS', description: '網站製作夥伴，數位體驗設計', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/logo_210719_0003-150x150.jpg' },
+  { name: '格蘭山麥', description: '未來永續生活合作夥伴', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/logo_210719_0004-e1626948663927.jpg' },
 ];
 
 export default function CommunityPage() {
@@ -17,16 +17,19 @@ export default function CommunityPage() {
       <SiteNav currentPath="/vibe-demo/tedx-xinyi/community" heroMode />
 
       {/* ==================== HERO ==================== */}
-      <section className="relative min-h-[55vh] flex items-end overflow-hidden">
+      <section className="relative min-h-[55vh] flex items-end overflow-hidden bg-neutral-900">
         <div className="absolute inset-0">
           <img
-            src="https://tedxxinyi.com/wp-content/uploads/2021/07/S__45727765.jpg"
+            src="/tedx-xinyi/hero-community.png"
             alt=""
-            className="w-full h-full object-cover"
-            style={{ filter: 'brightness(0.3) contrast(1.1)' }}
+            className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
+            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.5'; }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-black/20" />
+          <div className="absolute inset-0 bg-gradient-to-t from-white via-neutral-900/30 to-neutral-900/60" />
         </div>
+
+        <div className="absolute inset-0 bg-gradient-to-t from-white via-neutral-800/30 to-neutral-900" style={{ zIndex: 0 }} />
 
         <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-32">
           <FadeIn>
@@ -75,7 +78,6 @@ export default function CommunityPage() {
               </a>
             </FadeIn>
           </div>
-          {/* Decorative circle cluster */}
           <FadeIn delay={200}>
             <div className="flex items-center justify-center gap-4 p-8">
               <div className="w-20 h-20 rounded-full border-4 -mr-3" style={{ borderColor: TED_RED }} />

@@ -25,6 +25,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
 
 // Serve TEDx generated visuals (runtime-generated via nanobanana API)
 app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx')));
+app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi')));
 
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
@@ -1824,6 +1825,15 @@ try {
   console.warn('⚠️ TEDx routes not loaded:', error.message);
 }
 
+// TEDxXinyi Visual Generation Routes
+try {
+  const tedxXinyiRoutes = require('./use-cases/tedx-xinyi/api/routes');
+  app.use('/api/tedx-xinyi', tedxXinyiRoutes);
+  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi');
+} catch (error) {
+  console.warn('⚠️ TEDxXinyi routes not loaded:', error.message);
+}
+
 // Ads Performance Dashboard Routes
 try {
   const adsPerformanceRoutes = require('./use-cases/5ml-ads-performance-internal/api/routes');
@@ -2292,6 +2302,91 @@ server.listen(port, '0.0.0.0', async () => {
       }
     } catch (err) {
       console.warn('⚠️ TEDx auto-generation check failed:', err.message);
+    }
+
+    // TEDxXinyi visual generation (same manifest pattern)
+    try {
+      const xinyiOutputDir = tedxPath.join(__dirname, 'frontend', 'public', 'tedx-xinyi');
+      const xinyiManifestPath = tedxPath.join(xinyiOutputDir, '.manifest.json');
+      const xinyiModule = require('./use-cases/tedx-xinyi/api/routes');
+      const XINYI_VISUALS = xinyiModule.VISUALS || [];
+
+      if (!tedxFs.existsSync(xinyiOutputDir)) {
+        tedxFs.mkdirSync(xinyiOutputDir, { recursive: true });
+      }
+
+      const xinyiDefs = {};
+      for (const v of XINYI_VISUALS) {
+        xinyiDefs[v.id] = crypto.createHash('md5').update(v.prompt).digest('hex');
+      }
+
+      let xinyiPrevDefs = {};
+      try {
+        if (tedxFs.existsSync(xinyiManifestPath)) {
+          xinyiPrevDefs = JSON.parse(tedxFs.readFileSync(xinyiManifestPath, 'utf8'));
+        }
+      } catch { /* no manifest yet */ }
+
+      const xinyiChanged = XINYI_VISUALS.filter(v => xinyiDefs[v.id] !== xinyiPrevDefs[v.id]);
+
+      if (xinyiChanged.length > 0) {
+        const xinyiNewIds = xinyiChanged.filter(v => !xinyiPrevDefs[v.id]).map(v => v.id);
+        const xinyiUpdatedIds = xinyiChanged.filter(v => xinyiPrevDefs[v.id]).map(v => v.id);
+        console.log(`🎨 TEDxXinyi: Visual definitions changed — ${xinyiNewIds.length} new, ${xinyiUpdatedIds.length} updated`);
+
+        setTimeout(async () => {
+          try {
+            const http = require('http');
+            let generated = 0;
+            let failed = 0;
+
+            for (const visual of xinyiChanged) {
+              try {
+                const postData = JSON.stringify({ id: visual.id });
+                await new Promise((resolve, reject) => {
+                  const req = http.request({
+                    hostname: '127.0.0.1',
+                    port: port,
+                    path: '/api/tedx-xinyi/generate',
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+                    timeout: 60000,
+                  }, (res) => {
+                    let body = '';
+                    res.on('data', (chunk) => { body += chunk; });
+                    res.on('end', () => {
+                      if (res.statusCode === 200) {
+                        generated++;
+                        xinyiPrevDefs[visual.id] = xinyiDefs[visual.id];
+                        tedxFs.writeFileSync(xinyiManifestPath, JSON.stringify(xinyiPrevDefs, null, 2));
+                      } else {
+                        failed++;
+                        console.error(`🎨 TEDxXinyi: Failed ${visual.id}: ${body.slice(0, 100)}`);
+                      }
+                      resolve();
+                    });
+                  });
+                  req.on('error', (err) => { failed++; console.error(`🎨 TEDxXinyi: ${visual.id} error: ${err.message}`); resolve(); });
+                  req.write(postData);
+                  req.end();
+                });
+                await new Promise(r => setTimeout(r, 2000));
+              } catch (err) {
+                failed++;
+                console.error(`🎨 TEDxXinyi: ${visual.id} error: ${err.message}`);
+              }
+            }
+
+            console.log(`🎨 TEDxXinyi auto-generation done: ${generated} generated, ${failed} failed`);
+          } catch (err) {
+            console.error('🎨 TEDxXinyi auto-generation error:', err.message);
+          }
+        }, 15000); // Delay after Boundary Street generation
+      } else {
+        console.log(`🎨 TEDxXinyi: All ${XINYI_VISUALS.length} visual definitions unchanged — skipping generation`);
+      }
+    } catch (err) {
+      console.warn('⚠️ TEDxXinyi auto-generation check failed:', err.message);
     }
   } else {
     console.log('⚠️ TEDx visuals: GEMINI_API_KEY not set — skipping auto-generation');

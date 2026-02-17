@@ -7,20 +7,23 @@ const TIMELINE = [
   {
     year: '2020',
     title: '「續美學」活動',
+    date: '2020.10.17',
     link: 'https://tedxxinyi.com/2020%e7%ba%8c%e7%be%8e%e5%ad%b8%e6%b4%bb%e5%8b%95/',
-    text: '從『續』開始想像美學：美不只是結果，而是與生活長期相處的方式。',
+    text: '從『續』開始想像美學：美不只是結果，而是與生活長期相處的方式。TEDxXinyi 於 2020 年 10 月 9 日獲 TED 總部核准。',
   },
   {
     year: '2021',
-    title: '「樂觀」與永續舞台實驗',
+    title: '年度大會「樂觀」— 永續舞台實驗',
+    date: '2021 年度大會',
     link: 'https://tedxxinyi.com/%e5%b9%b4%e5%ba%a6%e5%a4%a7%e6%9c%83%e8%88%9e%e5%8f%b0%e6%b0%b8%e7%ba%8c%e8%a8%ad%e8%a8%88/',
-    text: '我們從『使用完就丟』的習慣出發，重新想像舞台可以被再利用多少次。',
+    text: '以「樂觀」為主題，分為蜇伏、蓄勢、萌芽、光芒放大四個章節。我們從『使用完就丟』的習慣出發，重新想像舞台可以被再利用多少次。',
   },
   {
-    year: '2022',
-    title: '城市與日常的延伸實驗',
+    year: '2024',
+    title: '「Ideas to Legacy 正向傳遞」',
+    date: '2024.06.16',
     link: null,
-    text: null,
+    text: '在 Taipei 101 的 Space 88 舉辦，邀請包含 Bob & Linda Carey、Remo Giuffre 等國際講者，將正向影響力擴大到國際社群。',
   },
 ];
 
@@ -31,7 +34,14 @@ const APPROACH_BULLETS = [
   { text: '社群優先：不只是一天的大會，而是一群人之間持續的對話。', num: '04' },
 ];
 
-const TEAM_ROLES = ['策展', '視覺設計', '空間設計', '內容編輯', '營運', '策展'];
+const TEAM_ROLES = [
+  { name: 'Dawn Chang', role: '策展統籌', title: 'Curation Connector' },
+  { name: '成員姓名', role: '視覺設計', title: 'Visual Design' },
+  { name: '成員姓名', role: '空間設計', title: 'Spatial Design' },
+  { name: '成員姓名', role: '內容編輯', title: 'Content' },
+  { name: '成員姓名', role: '營運', title: 'Operations' },
+  { name: '成員姓名', role: '策展', title: 'Curation' },
+];
 
 export default function AboutPage() {
   return (
@@ -40,16 +50,20 @@ export default function AboutPage() {
       <SiteNav currentPath="/vibe-demo/tedx-xinyi/about" heroMode />
 
       {/* ==================== HERO ==================== */}
-      <section className="relative min-h-[65vh] flex items-end overflow-hidden">
+      <section className="relative min-h-[65vh] flex items-end overflow-hidden bg-neutral-900">
+        {/* nanobanana-generated background */}
         <div className="absolute inset-0">
           <img
-            src="https://tedxxinyi.com/wp-content/uploads/2021/07/%E7%AD%96%E5%B1%95%E7%89%B9%E9%82%801-e1627375985885.jpg"
+            src="/tedx-xinyi/hero-about.png"
             alt=""
-            className="w-full h-full object-cover"
-            style={{ filter: 'brightness(0.35) contrast(1.1)' }}
+            className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
+            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.5'; }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-black/30" />
+          <div className="absolute inset-0 bg-gradient-to-t from-white via-neutral-900/30 to-neutral-900/60" />
         </div>
+
+        <div className="absolute inset-0 bg-gradient-to-t from-white via-neutral-800/30 to-neutral-900" style={{ zIndex: 0 }} />
 
         <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-32">
           <FadeIn>
@@ -59,13 +73,14 @@ export default function AboutPage() {
           </FadeIn>
           <FadeIn delay={200}>
             <p className="text-white/80 text-base sm:text-lg leading-relaxed mb-4 max-w-2xl" lang="zh-TW">
-              一個在台北信義發生的 TEDx 活動，<br />
-              也是一群人在城市裡練習樂觀、討論未來的長期計畫。
+              台北第一個以都會生活圈為核心的在地 TEDx 團隊。<br />
+              一群人在城市裡練習樂觀、討論未來的長期計畫。
             </p>
           </FadeIn>
           <FadeIn delay={350}>
             <p className="text-white/50 text-sm" lang="en">
-              TEDxXinyi is an independently organized TEDx event in Taipei&apos;s Xinyi District, created by a team of optimists, curators and city-lovers.
+              TEDxXinyi is an independently organized TEDx event in Taipei&apos;s Xinyi District.
+              <br />#Community #Relevancy #Evolution
             </p>
           </FadeIn>
         </div>
@@ -87,7 +102,6 @@ export default function AboutPage() {
               </p>
             </FadeIn>
           </div>
-          {/* Decorative block */}
           <FadeIn delay={200}>
             <div className="flex items-center justify-center">
               <div className="text-[120px] md:text-[160px] font-black leading-none select-none" style={{ color: `${TED_RED}15` }}>
@@ -153,7 +167,6 @@ export default function AboutPage() {
           {TIMELINE.map((item, i) => (
             <FadeIn key={item.year} delay={i * 100}>
               <div className="flex gap-6 md:gap-8 pb-10 relative">
-                {/* Timeline line */}
                 <div className="flex flex-col items-center">
                   <div
                     className="w-4 h-4 rounded-full flex-shrink-0 mt-1 border-4 border-white"
@@ -165,7 +178,10 @@ export default function AboutPage() {
                 </div>
 
                 <div className="flex-1 pb-2">
-                  <p className="text-sm font-black mb-1" style={{ color: TED_RED }}>{item.year}</p>
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="text-sm font-black" style={{ color: TED_RED }}>{item.year}</span>
+                    <span className="text-xs text-neutral-400">{item.date}</span>
+                  </div>
                   <h3 className="text-lg font-black mb-2" lang="zh-TW">
                     {item.link ? (
                       <a
@@ -201,14 +217,14 @@ export default function AboutPage() {
         </FadeIn>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
-          {TEAM_ROLES.map((role, i) => (
+          {TEAM_ROLES.map((member, i) => (
             <FadeIn key={i} delay={i * 60}>
               <div className="rounded-xl p-5 text-center border border-neutral-100 hover:border-neutral-200 hover:shadow-sm transition-all" style={{ backgroundColor: WARM_GRAY }}>
                 <div className="w-14 h-14 rounded-full bg-neutral-200 mx-auto mb-3 flex items-center justify-center">
-                  <span className="text-neutral-400 text-xs font-bold">Photo</span>
+                  <span className="text-neutral-400 text-xs font-bold">{member.name === 'Dawn Chang' ? 'DC' : 'Photo'}</span>
                 </div>
-                <p className="font-bold text-sm mb-0.5" lang="zh-TW">姓名</p>
-                <p className="text-neutral-400 text-xs" lang="zh-TW">{role}</p>
+                <p className="font-bold text-sm mb-0.5" lang="zh-TW">{member.name}</p>
+                <p className="text-neutral-400 text-xs" lang="zh-TW">{member.role}</p>
               </div>
             </FadeIn>
           ))}
