@@ -25,6 +25,13 @@ const TIMELINE = [
     link: null,
     text: '在 Taipei 101 的 Space 88 舉辦，邀請包含 Bob & Linda Carey、Remo Giuffre 等國際講者，將正向影響力擴大到國際社群。',
   },
+  {
+    year: '2026',
+    title: '「We are Becoming – AI趨勢沙龍」',
+    date: '2026.03.31',
+    link: null,
+    text: '在北藝藍盒子，把 AI、未來敘事與城市生活放在同一個舞台上，邀請大家一起練習：在變動中持續 becoming。',
+  },
 ];
 
 const APPROACH_BULLETS = [
@@ -52,18 +59,15 @@ export default function AboutPage() {
       {/* ==================== HERO ==================== */}
       <section className="relative min-h-[65vh] flex items-end overflow-hidden bg-neutral-900">
         {/* nanobanana-generated background */}
-        <div className="absolute inset-0">
-          <img
-            src="/tedx-xinyi/hero-about.png"
-            alt=""
-            className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
-            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.5'; }}
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-white via-neutral-900/30 to-neutral-900/60" />
-        </div>
-
-        <div className="absolute inset-0 bg-gradient-to-t from-white via-neutral-800/30 to-neutral-900" style={{ zIndex: 0 }} />
+        <img
+          src="/tedx-xinyi/hero-about.png"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+          onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.45'; }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+        {/* Single clean gradient: dark top for nav → transparent middle → white bottom */}
+        <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/70 via-transparent to-white" />
 
         <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-32">
           <FadeIn>

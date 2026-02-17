@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY } from '../components';
 
 const MERCH_ITEMS = [
@@ -18,18 +19,14 @@ export default function CommunityPage() {
 
       {/* ==================== HERO ==================== */}
       <section className="relative min-h-[55vh] flex items-end overflow-hidden bg-neutral-900">
-        <div className="absolute inset-0">
-          <img
-            src="/tedx-xinyi/hero-community.png"
-            alt=""
-            className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
-            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.5'; }}
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-white via-neutral-900/30 to-neutral-900/60" />
-        </div>
-
-        <div className="absolute inset-0 bg-gradient-to-t from-white via-neutral-800/30 to-neutral-900" style={{ zIndex: 0 }} />
+        <img
+          src="/tedx-xinyi/hero-community.png"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+          onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.45'; }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/70 via-transparent to-white" />
 
         <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-32">
           <FadeIn>
@@ -45,6 +42,58 @@ export default function CommunityPage() {
           </FadeIn>
         </div>
       </section>
+
+      {/* ==================== CURRENT SALON ==================== */}
+      <Section bg="white">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div>
+            <FadeIn>
+              <SectionLabel>CURRENT SALON</SectionLabel>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-6" lang="zh-TW">
+                最新 Salon｜We are Becoming – AI趨勢沙龍
+              </h2>
+            </FadeIn>
+            <FadeIn delay={150}>
+              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-8" lang="zh-TW">
+                Community 對我們來說，不只是社群帳號或一年一次的活動，<br />
+                而是每一場可以真實見面的沙龍。<br />
+                2026Q1，我們邀請你來到北藝藍盒子，一起圍繞 AI 與人性展開一整天的實驗。
+              </p>
+            </FadeIn>
+            <FadeIn delay={250}>
+              <Link
+                href="/vibe-demo/tedx-xinyi/salon"
+                className="inline-flex items-center gap-2 px-6 py-3 text-sm font-black rounded-full text-white transition-all hover:scale-105 hover:shadow-lg"
+                style={{ backgroundColor: TED_RED }}
+                lang="zh-TW"
+              >
+                看完整活動介紹
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </FadeIn>
+          </div>
+          <FadeIn delay={200}>
+            <div className="aspect-video rounded-xl overflow-hidden bg-neutral-100">
+              <img
+                src="/tedx-xinyi/salon-teaser.png"
+                alt=""
+                className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
+                onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                onError={(e) => {
+                  const el = e.target as HTMLImageElement;
+                  el.style.display = 'none';
+                  if (el.parentElement) {
+                    el.parentElement.style.background = 'linear-gradient(135deg, #1a1a1a 0%, #1e3a5f 50%, #1a1a1a 100%)';
+                    el.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%"><span style="color:rgba(255,255,255,0.15);font-size:4rem;font-weight:900">WaB</span></div>';
+                  }
+                }}
+              />
+            </div>
+          </FadeIn>
+        </div>
+      </Section>
 
       {/* ==================== TED CIRCLES ==================== */}
       <Section bg="white">

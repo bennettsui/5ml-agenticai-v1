@@ -149,6 +149,40 @@ export default function TEDxXinyiHome() {
         </div>
       </section>
 
+      {/* ==================== NEXT EVENT STRIP ==================== */}
+      <section className="relative bg-neutral-900 text-white py-6 border-t border-white/10">
+        <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center gap-4 sm:gap-8">
+          <div className="flex-1">
+            <p className="text-xs font-bold tracking-[0.25em] uppercase text-white/50 mb-1">NEXT EVENT</p>
+            <h2 className="text-lg sm:text-xl font-black" lang="zh-TW">
+              TEDxXinyi We are Becoming – AI趨勢沙龍
+            </h2>
+            <p className="text-white/60 text-sm mt-1" lang="zh-TW">
+              2026/3/31｜台北藝術表演中心 藍盒子
+            </p>
+            <p className="text-white/40 text-xs mt-1" lang="zh-TW">
+              探究我們跟 AI 的距離，我們跟自己的距離。
+            </p>
+          </div>
+          <div className="flex gap-3 flex-shrink-0">
+            <Link
+              href="/vibe-demo/tedx-xinyi/salon"
+              className="px-5 py-2.5 text-sm font-black rounded-full text-white transition-all hover:scale-105 hover:shadow-lg"
+              style={{ backgroundColor: TED_RED }}
+              lang="zh-TW"
+            >
+              認識 We are Becoming salon
+            </Link>
+            <button
+              className="px-5 py-2.5 text-sm font-bold rounded-full border border-white/30 text-white/70 hover:text-white hover:border-white/60 transition-all"
+              lang="zh-TW"
+            >
+              取得最新消息
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* ==================== THREE ENTRY CARDS ==================== */}
       <Section bg="warm">
         <FadeIn>
@@ -193,6 +227,64 @@ export default function TEDxXinyiHome() {
               </Link>
             </FadeIn>
           ))}
+        </div>
+      </Section>
+
+      {/* ==================== WE ARE BECOMING TEASER ==================== */}
+      <Section bg="white" id="we-are-becoming-teaser">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+          <div>
+            <FadeIn>
+              <SectionLabel>UPCOMING SALON</SectionLabel>
+              <h2 className="text-3xl md:text-4xl font-black mb-6" lang="zh-TW">
+                We are Becoming – AI趨勢沙龍
+              </h2>
+            </FadeIn>
+            <FadeIn delay={150}>
+              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-6" lang="zh-TW">
+                未來不是某一天突然到來，我們早已沈浸其中。<br />
+                在 AI 世代，我們被迫，也被邀請，不斷更新自我。<br />
+                這場沙龍，從溝通、記憶、學習、願景、想像力到行動力，<br />
+                邀請你一起練習『We are Becoming』。
+              </p>
+            </FadeIn>
+            <FadeIn delay={200}>
+              <p className="text-sm font-bold text-neutral-400 tracking-wide mb-8" lang="en">
+                Communication．Memory．Learning．Vision．Imagination．Action
+              </p>
+            </FadeIn>
+            <FadeIn delay={250}>
+              <Link
+                href="/vibe-demo/tedx-xinyi/salon"
+                className="inline-flex items-center gap-2 px-6 py-3 text-sm font-black rounded-full text-white transition-all hover:scale-105 hover:shadow-lg"
+                style={{ backgroundColor: TED_RED }}
+                lang="zh-TW"
+              >
+                查看活動詳情
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </FadeIn>
+          </div>
+          <FadeIn delay={200}>
+            <div className="aspect-video rounded-xl overflow-hidden bg-neutral-100">
+              <img
+                src="/tedx-xinyi/salon-teaser.png"
+                alt=""
+                className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
+                onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                onError={(e) => {
+                  const el = e.target as HTMLImageElement;
+                  el.style.display = 'none';
+                  if (el.parentElement) {
+                    el.parentElement.style.background = 'linear-gradient(135deg, #1a1a1a 0%, #1e3a5f 50%, #1a1a1a 100%)';
+                    el.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%"><span style="color:rgba(255,255,255,0.15);font-size:6rem;font-weight:900">x</span></div>';
+                  }
+                }}
+              />
+            </div>
+          </FadeIn>
         </div>
       </Section>
 

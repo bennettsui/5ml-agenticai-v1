@@ -13,6 +13,7 @@ export const WARM_GRAY = '#F3F1EC';
 export const NAV_ITEMS = [
   { label: 'Home', href: '/vibe-demo/tedx-xinyi' },
   { label: 'About', href: '/vibe-demo/tedx-xinyi/about' },
+  { label: 'Salon', href: '/vibe-demo/tedx-xinyi/salon' },
   { label: 'Speakers & Talks', href: '/vibe-demo/tedx-xinyi/speakers' },
   { label: 'Sustainability', href: '/vibe-demo/tedx-xinyi/sustainability' },
   { label: 'Community', href: '/vibe-demo/tedx-xinyi/community' },

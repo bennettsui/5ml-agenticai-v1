@@ -58,6 +58,30 @@ const VISUALS = [
     description: 'Community hero — circle gathering warmth',
     prompt: 'Overhead bird-eye view of chairs arranged in a circle in a modern Taipei rooftop terrace, warm evening golden hour light, potted trees and string lights creating cozy atmosphere, Xinyi district buildings visible in soft background, some chairs have warm red and amber cushions, the feeling of community gathering and conversation, warm bright photography style, no text, no watermarks, no people, festival poster mood',
   },
+  {
+    id: 'salon-teaser',
+    filename: 'salon-teaser.png',
+    description: 'Home hero / Salon teaser — Blue Box venue cinematic',
+    prompt: 'Wide 16:9 cinematic still of a theatre space reminiscent of Taipei Performing Arts Center Blue Box, clean modern architecture, high ceiling, deep blue ambient light, subtle hints of tiered seating and a stage, in the foreground silhouettes of diverse people standing or sitting facing towards a glowing central focal point symbolising AI and ideas not a literal screen of code, thin streams of light or flowing lines connecting people to the central glow suggesting shared learning and becoming, colour palette deep blue dark charcoal with accents of TED red and warm skin tones, enough negative space on one side for overlay text, no text no watermarks no logos, optimistic contemplative atmosphere',
+  },
+  {
+    id: 'salon-hero',
+    filename: 'salon-hero.png',
+    description: 'Salon page main visual — We are Becoming stage',
+    prompt: 'Wide 16:9 front view of a minimalistic stage in a dark theatre, semi-transparent fabric panels on both sides representing AI and humanity as two different but intertwining layers, on the fabric subtle abstract patterns data waves on one side organic leaf water textures on the other gently blending in the middle, in the middle of the stage a single red X on the floor lit from above, audience in soft silhouette just enough to feel human presence, atmosphere hopeful contemplative not noisy, deep blue and dark tones with red accent, cinematic, no text no watermarks no logos',
+  },
+  {
+    id: 'salon-galaxy',
+    filename: 'salon-galaxy.png',
+    description: 'Galaxy networking visual — The Quest community',
+    prompt: 'Square abstract galaxy made of floating islands or orbits each representing a different Intelligence domain, Design Intelligence with minimal objects like chairs posters typography, Food Intelligence with stylised table ingredients coffee, Ocean Intelligence with wave lines tiny whale dolphin icons, Music Art Intelligence with musical notes vinyl simple instrument shapes, no realistic logos but iconic shapes suggesting each domain, dark background with colourful but slightly muted orbit colours connected by thin lines with one orbit subtly highlighted in TED red, overall composition usable as a background behind text, no text no watermarks',
+  },
+  {
+    id: 'salon-curiosity',
+    filename: 'salon-curiosity.png',
+    description: 'Curiosity zones visual — multi-zone experience',
+    prompt: 'Vertical portrait 3:4 image composed of multiple stacked zones, bottom a small open-mic corner with a mic stand and a small seated audience, middle a creative market area with small booths plants and people talking, upper a quiet reading journaling corner with books notebooks lamps, style semi-illustrative slightly stylised not hyper-realistic, people appear diverse but not individually recognisable, lighting warm glows in each zone connected with a gentle path or staircase hinting at moving from one version of yourself to the next, palette mix of warm earth tones and deep blues with small red accents, no text no watermarks no logos',
+  },
 ];
 
 // Lazy init Gemini client
