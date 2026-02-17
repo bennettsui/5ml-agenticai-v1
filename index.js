@@ -2122,6 +2122,23 @@ app.get('*', (req, res, next) => {
     return res.sendFile(directHtmlPath);
   }
 
+  // Dynamic route fallback — serve the [param] placeholder page
+  // e.g. /healthcheck/abc123 → frontend/out/healthcheck/placeholder.html
+  //      /use-cases/crm/debug/abc123 → frontend/out/use-cases/crm/debug/placeholder.html
+  const segments = cleanPath.split('/').filter(Boolean);
+  if (segments.length >= 2) {
+    const parentPath = '/' + segments.slice(0, -1).join('/');
+    const placeholderDir = path.join(nextJsPath, parentPath, 'placeholder');
+    const placeholderHtml = path.join(placeholderDir, 'index.html');
+    const placeholderDirect = path.join(nextJsPath, parentPath, 'placeholder.html');
+    if (fs.existsSync(placeholderHtml)) {
+      return res.sendFile(placeholderHtml);
+    }
+    if (fs.existsSync(placeholderDirect)) {
+      return res.sendFile(placeholderDirect);
+    }
+  }
+
   // If original path had trailing slash and we didn't find anything, redirect to without trailing slash
   if (req.path.endsWith('/') && req.path !== '/') {
     return res.redirect(301, cleanPath);
