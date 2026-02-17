@@ -1699,6 +1699,13 @@ app.use('/api', createCrmRoutes(db));
 console.log('✅ CRM routes loaded: /api/clients, /api/projects, /api/feedback, /api/gmail');
 
 // ==========================================
+// Growth Architect Routes (new use case)
+// ==========================================
+const growthArchitectRoutes = require('./use-cases/growth-architect/api/routes');
+app.use('/api/growth', growthArchitectRoutes);
+console.log('✅ Growth Architect routes loaded: /api/growth/plan, /api/growth/experiments, /api/growth/weekly-review, /api/growth/metrics');
+
+// ==========================================
 // Debug / Health-Check Routes
 // ==========================================
 const createDebugRoutes = require('./routes/debug');

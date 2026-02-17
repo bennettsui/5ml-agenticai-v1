@@ -9,10 +9,11 @@ import ScheduledJobs from '@/components/ScheduledJobs';
 import AgenticWorkflows from '@/components/AgenticWorkflows';
 import KnowledgeBase from '@/components/KnowledgeBase';
 import CostAnalysis from '@/components/CostAnalysis';
+import GrowthArchitect from '@/components/GrowthArchitect';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
-  ChevronRight, Map, Zap, Send, Loader2, Sparkles,
+  ChevronRight, Map, Zap, Send, Loader2, Sparkles, TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -20,7 +21,7 @@ import {
   CSUITE_ROLES, SEVEN_LAYERS, type UseCaseConfig, type Status,
 } from '@/lib/platform-config';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'api' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'api' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'growth';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -176,6 +177,7 @@ export default function Dashboard() {
   const tabs = [
     { id: 'control' as Tab, label: 'Control Tower', icon: LayoutDashboard },
     { id: 'chat' as Tab, label: 'Agent Chat', icon: MessageSquare },
+    { id: 'growth' as Tab, label: 'Growth Architect', icon: TrendingUp },
     { id: 'overview' as Tab, label: 'Overview', icon: Activity },
     { id: 'architecture' as Tab, label: 'Architecture', icon: Layers },
     { id: 'analytics' as Tab, label: 'Analytics', icon: Activity },
@@ -392,6 +394,11 @@ export default function Dashboard() {
         {/* AGENT CHAT TAB                                                  */}
         {/* ================================================================ */}
         {activeTab === 'chat' && <AgentChatPanel />}
+
+        {/* ================================================================ */}
+        {/* GROWTH ARCHITECT TAB                                            */}
+        {/* ================================================================ */}
+        {activeTab === 'growth' && <GrowthArchitect />}
 
         {/* Existing tabs */}
         {activeTab === 'overview' && <PlatformOverview />}
