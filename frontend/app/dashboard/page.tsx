@@ -25,7 +25,7 @@ import {
   deleteSession, getSession, type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'api' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'history';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,6 +70,10 @@ function AgentChatPanel() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historySessions, setHistorySessions] = useState<ChatSession[]>([]);
+  const [historyFilter, setHistoryFilter] = useState<ChatType | 'all'>('all');
+  const [viewingSession, setViewingSession] = useState<ChatSession | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Load previous session on mount
@@ -88,11 +92,32 @@ function AgentChatPanel() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
+  // Refresh history list when toggled open
+  useEffect(() => {
+    if (showHistory) {
+      setHistorySessions(listSessions(historyFilter === 'all' ? undefined : historyFilter));
+    }
+  }, [showHistory, historyFilter]);
+
   const startNewSession = useCallback(() => {
     const fresh = createSession('agent');
     setSessionId(fresh.id);
     setMessages([]);
+    setViewingSession(null);
   }, []);
+
+  const loadSession = useCallback((session: ChatSession) => {
+    setMessages(session.messages.map(m => ({ role: m.role, content: m.content })));
+    setSessionId(session.id);
+    setViewingSession(null);
+    setShowHistory(false);
+  }, []);
+
+  const handleDeleteSession = useCallback((id: string) => {
+    deleteSession(id);
+    setHistorySessions(prev => prev.filter(s => s.id !== id));
+    if (viewingSession?.id === id) setViewingSession(null);
+  }, [viewingSession]);
 
   const send = useCallback(async (text?: string) => {
     const content = (text || input).trim();
@@ -104,7 +129,6 @@ function AgentChatPanel() {
     setMessages(allMessages);
     setLoading(true);
 
-    // Persist user message
     if (sessionId) addMessage(sessionId, { role: 'user', content, timestamp: new Date().toISOString() });
 
     try {
@@ -128,139 +152,157 @@ function AgentChatPanel() {
   const onSubmit = (e: FormEvent) => { e.preventDefault(); send(); };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-180px)]">
-      {/* Header bar with new session button */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-700/50 bg-slate-900/40">
-        <span className="text-xs text-slate-500 flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-          RAG-enhanced · history saved
-        </span>
-        <button
-          onClick={startNewSession}
-          className="text-xs px-3 py-1.5 rounded-lg bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors flex items-center gap-1.5 border border-slate-700/50"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          New Chat
-        </button>
-      </div>
-
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
-        {messages.length === 0 && (
-          <div className="text-center py-16">
-            <div className="inline-flex p-4 rounded-2xl bg-purple-500/10 mb-4">
-              <Brain className="w-10 h-10 text-purple-400" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">Agent Team Assistant</h3>
-            <p className="text-sm text-slate-400 mb-6 max-w-md mx-auto">
-              Ask anything about your agents, use cases, architecture, or get suggestions for improvements. Conversations are saved automatically.
-            </p>
-            <div className="flex flex-wrap gap-2 justify-center max-w-lg mx-auto">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => send(s)}
-                  className="text-xs px-3 py-1.5 rounded-full border border-slate-700/50 bg-slate-800/60 text-slate-400 hover:text-white hover:border-purple-500/40 transition-colors"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+    <div className="flex h-[calc(100vh-180px)]">
+      {/* History sidebar (slides in) */}
+      {showHistory && (
+        <div className="w-80 border-r border-slate-700/50 bg-slate-900/80 flex flex-col shrink-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/50">
+            <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
+              <History className="w-4 h-4 text-blue-400" />
+              Chat History
+            </h3>
+            <button onClick={() => { setShowHistory(false); setViewingSession(null); }} className="text-xs text-slate-500 hover:text-white transition-colors">Close</button>
           </div>
-        )}
 
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed ${
-              msg.role === 'user'
-                ? 'bg-blue-600/20 text-blue-100 border border-blue-500/20'
-                : 'bg-slate-800/80 text-slate-300 border border-slate-700/50'
-            }`}>
-              <div className="whitespace-pre-wrap">{msg.content}</div>
-            </div>
+          {/* Type filter */}
+          <div className="flex gap-1 px-3 py-2 border-b border-slate-700/30">
+            {(['all', 'agent', 'workflow', 'crm'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => { setHistoryFilter(t); setViewingSession(null); }}
+                className={`text-[10px] px-2.5 py-1 rounded-lg transition-colors ${
+                  historyFilter === t
+                    ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                    : 'text-slate-500 hover:text-slate-300 bg-slate-800/60 border border-slate-700/50'
+                }`}
+              >
+                {t === 'all' ? 'All' : TYPE_LABELS[t].label}
+              </button>
+            ))}
           </div>
-        ))}
 
-        {loading && (
-          <div className="flex justify-start">
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-800/80 border border-slate-700/50 text-sm text-slate-500">
-              <Loader2 className="w-4 h-4 animate-spin" /> Thinking...
-            </div>
+          {/* Session list or session detail */}
+          <div className="flex-1 overflow-y-auto">
+            {viewingSession ? (
+              <div className="flex flex-col h-full">
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700/30">
+                  <button onClick={() => setViewingSession(null)} className="text-[10px] text-slate-400 hover:text-white">&larr; Back</button>
+                  <span className="text-xs text-white font-medium truncate flex-1">{viewingSession.title}</span>
+                  <button
+                    onClick={() => loadSession(viewingSession)}
+                    className="text-[10px] px-2 py-0.5 rounded bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30"
+                  >
+                    Load
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+                  {viewingSession.messages.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[90%] rounded-lg px-3 py-2 text-xs leading-relaxed ${
+                        msg.role === 'user'
+                          ? 'bg-blue-600/20 text-blue-100 border border-blue-500/20'
+                          : 'bg-slate-800/80 text-slate-300 border border-slate-700/50'
+                      }`}>
+                        <div className="whitespace-pre-wrap">{msg.content}</div>
+                        {msg.timestamp && <div className="text-[9px] text-slate-600 mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : historySessions.length === 0 ? (
+              <div className="text-center py-10">
+                <History className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                <p className="text-xs text-slate-500">No chat history yet</p>
+              </div>
+            ) : (
+              <div className="space-y-1 p-2">
+                {historySessions.map(session => (
+                  <div
+                    key={session.id}
+                    onClick={() => setViewingSession(session)}
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-white truncate">{session.title}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${TYPE_LABELS[session.type].color}`}>
+                          {TYPE_LABELS[session.type].label}
+                        </span>
+                        <span className="text-[9px] text-slate-600">{new Date(session.updatedAt).toLocaleDateString()}</span>
+                        <span className="text-[9px] text-slate-600">{session.messages.length} msgs</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id); }}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-600 hover:text-red-400 transition-all"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
-
-      {/* Input */}
-      <div className="border-t border-slate-700/50 bg-slate-900/60 p-4">
-        <form onSubmit={onSubmit} className="flex gap-3 max-w-3xl mx-auto">
-          <input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            placeholder="Ask about agents, use cases, suggest changes..."
-            className="flex-1 bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50"
-          />
-          <button
-            type="submit"
-            disabled={loading || !input.trim()}
-            className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white rounded-xl text-sm font-medium transition-colors flex items-center gap-1.5"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Chat History Panel
-// ---------------------------------------------------------------------------
-
-const TYPE_LABELS: Record<ChatType, { label: string; color: string }> = {
-  agent: { label: 'Agent', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
-  workflow: { label: 'Workflow', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
-  crm: { label: 'CRM', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
-};
-
-function ChatHistoryPanel() {
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [filterType, setFilterType] = useState<ChatType | 'all'>('all');
-  const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
-
-  useEffect(() => {
-    setSessions(listSessions(filterType === 'all' ? undefined : filterType));
-  }, [filterType]);
-
-  const handleDelete = (id: string) => {
-    deleteSession(id);
-    setSessions(prev => prev.filter(s => s.id !== id));
-    if (selectedSession?.id === id) setSelectedSession(null);
-  };
-
-  if (selectedSession) {
-    return (
-      <div className="flex flex-col h-[calc(100vh-180px)]">
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700/50 bg-slate-900/40">
-          <button
-            onClick={() => setSelectedSession(null)}
-            className="text-xs text-slate-400 hover:text-white transition-colors"
-          >
-            &larr; Back
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{selectedSession.title}</p>
-            <p className="text-[10px] text-slate-500">
-              {new Date(selectedSession.createdAt).toLocaleDateString()} · {selectedSession.messages.length} messages
-            </p>
-          </div>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${TYPE_LABELS[selectedSession.type].color}`}>
-            {TYPE_LABELS[selectedSession.type].label}
-          </span>
         </div>
+      )}
+
+      {/* Main chat area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header bar */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-700/50 bg-slate-900/40">
+          <span className="text-xs text-slate-500 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            RAG-enhanced · history saved
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 border transition-colors ${
+                showHistory
+                  ? 'bg-blue-600/20 text-blue-400 border-blue-500/30'
+                  : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-700 border-slate-700/50'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              History
+            </button>
+            <button
+              onClick={startNewSession}
+              className="text-xs px-3 py-1.5 rounded-lg bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors flex items-center gap-1.5 border border-slate-700/50"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New Chat
+            </button>
+          </div>
+        </div>
+
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-          {selectedSession.messages.map((msg, i) => (
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center py-16">
+              <div className="inline-flex p-4 rounded-2xl bg-purple-500/10 mb-4">
+                <Brain className="w-10 h-10 text-purple-400" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">Agent Team Assistant</h3>
+              <p className="text-sm text-slate-400 mb-6 max-w-md mx-auto">
+                Ask anything about your agents, use cases, architecture, or get suggestions for improvements. Conversations are saved automatically.
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center max-w-lg mx-auto">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => send(s)}
+                    className="text-xs px-3 py-1.5 rounded-full border border-slate-700/50 bg-slate-800/60 text-slate-400 hover:text-white hover:border-purple-500/40 transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed ${
                 msg.role === 'user'
@@ -268,81 +310,48 @@ function ChatHistoryPanel() {
                   : 'bg-slate-800/80 text-slate-300 border border-slate-700/50'
               }`}>
                 <div className="whitespace-pre-wrap">{msg.content}</div>
-                {msg.timestamp && (
-                  <div className="text-[10px] text-slate-600 mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</div>
-                )}
               </div>
             </div>
           ))}
-        </div>
-      </div>
-    );
-  }
 
-  return (
-    <div className="space-y-4 py-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-white flex items-center gap-2">
-          <History className="w-5 h-5 text-blue-400" />
-          Chat History
-        </h2>
-        <div className="flex gap-1">
-          {(['all', 'agent', 'workflow', 'crm'] as const).map(t => (
+          {loading && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-800/80 border border-slate-700/50 text-sm text-slate-500">
+                <Loader2 className="w-4 h-4 animate-spin" /> Thinking...
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Input */}
+        <div className="border-t border-slate-700/50 bg-slate-900/60 p-4">
+          <form onSubmit={onSubmit} className="flex gap-3 max-w-3xl mx-auto">
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder="Ask about agents, use cases, suggest changes..."
+              className="flex-1 bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50"
+            />
             <button
-              key={t}
-              onClick={() => setFilterType(t)}
-              className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
-                filterType === t
-                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                  : 'text-slate-500 hover:text-slate-300 bg-slate-800/60 border border-slate-700/50'
-              }`}
+              type="submit"
+              disabled={loading || !input.trim()}
+              className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white rounded-xl text-sm font-medium transition-colors flex items-center gap-1.5"
             >
-              {t === 'all' ? 'All' : TYPE_LABELS[t].label}
+              <Send className="w-4 h-4" />
             </button>
-          ))}
+          </form>
         </div>
       </div>
-
-      {sessions.length === 0 ? (
-        <div className="text-center py-16">
-          <History className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400">No chat history yet</p>
-          <p className="text-xs text-slate-500 mt-1">Conversations from Agent Chat, Workflow Chat, and CRM will appear here.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {sessions.map(session => (
-            <div
-              key={session.id}
-              onClick={() => setSelectedSession(session)}
-              className="flex items-center gap-3 px-4 py-3 bg-slate-800/60 rounded-xl border border-slate-700/50 hover:border-slate-600 hover:bg-slate-800 transition-colors cursor-pointer group"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{session.title}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${TYPE_LABELS[session.type].color}`}>
-                    {TYPE_LABELS[session.type].label}
-                  </span>
-                  <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {new Date(session.updatedAt).toLocaleDateString()}
-                  </span>
-                  <span className="text-[10px] text-slate-600">{session.messages.length} msgs</span>
-                </div>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDelete(session.id); }}
-                className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-600 hover:text-red-400 transition-all"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
+
+// Chat history type labels (used inside AgentChatPanel history sidebar)
+const TYPE_LABELS: Record<ChatType, { label: string; color: string }> = {
+  agent: { label: 'Agent', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
+  workflow: { label: 'Workflow', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
+  crm: { label: 'CRM', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+};
 
 // ---------------------------------------------------------------------------
 // Dashboard Page
@@ -354,11 +363,9 @@ export default function Dashboard() {
   const tabs = [
     { id: 'control' as Tab, label: 'Control Tower', icon: LayoutDashboard },
     { id: 'chat' as Tab, label: 'Agent Chat', icon: MessageSquare },
-    { id: 'history' as Tab, label: 'Chat History', icon: History },
     { id: 'overview' as Tab, label: 'Overview', icon: Activity },
     { id: 'architecture' as Tab, label: 'Architecture', icon: Layers },
-    { id: 'analytics' as Tab, label: 'Analytics', icon: Activity },
-    { id: 'api' as Tab, label: 'API', icon: Wifi },
+    { id: 'analytics' as Tab, label: 'Analytics & API', icon: Wifi },
     { id: 'scheduling' as Tab, label: 'Scheduling', icon: Calendar },
     { id: 'knowledge' as Tab, label: 'Knowledge Base', icon: BookOpen },
     { id: 'costs' as Tab, label: 'Cost Analysis', icon: DollarSign },
@@ -571,13 +578,18 @@ export default function Dashboard() {
         {/* AGENT CHAT TAB                                                  */}
         {/* ================================================================ */}
         {activeTab === 'chat' && <AgentChatPanel />}
-        {activeTab === 'history' && <ChatHistoryPanel />}
 
         {/* Existing tabs */}
         {activeTab === 'overview' && <PlatformOverview />}
         {activeTab === 'architecture' && <ArchitectureViz />}
-        {activeTab === 'analytics' && <AnalyticsDashboard />}
-        {activeTab === 'api' && <ApiHealthCheck />}
+        {activeTab === 'analytics' && (
+          <div className="space-y-8">
+            <ApiHealthCheck />
+            <div className="border-t border-slate-700/50 pt-8">
+              <AnalyticsDashboard />
+            </div>
+          </div>
+        )}
         {activeTab === 'scheduling' && <ScheduledJobs />}
         {activeTab === 'knowledge' && <KnowledgeBase />}
         {activeTab === 'costs' && <CostAnalysis />}
