@@ -9,6 +9,7 @@ import ScheduledJobs from '@/components/ScheduledJobs';
 import AgenticWorkflows from '@/components/AgenticWorkflows';
 import KnowledgeBase from '@/components/KnowledgeBase';
 import CostAnalysis from '@/components/CostAnalysis';
+import GrowthArchitect from '@/components/GrowthArchitect';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
@@ -572,6 +573,11 @@ export default function Dashboard() {
         {/* ================================================================ */}
         {activeTab === 'chat' && <AgentChatPanel />}
         {activeTab === 'history' && <ChatHistoryPanel />}
+
+        {/* ================================================================ */}
+        {/* GROWTH ARCHITECT TAB                                            */}
+        {/* ================================================================ */}
+        {activeTab === 'growth' && <GrowthArchitect />}
 
         {/* Existing tabs */}
         {activeTab === 'overview' && <PlatformOverview />}
