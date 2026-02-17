@@ -104,39 +104,44 @@ export default function TEDxXinyiHome() {
         <div className="relative z-10 max-w-5xl mx-auto px-6 text-center pt-24 pb-16">
           <FadeIn>
             <p className="text-xs sm:text-sm font-bold tracking-[0.3em] uppercase text-white/50 mb-6">
-              TEDxXinyi 2026
+              TEDxXinyi 2026 · NEXT SALON
             </p>
           </FadeIn>
 
           <FadeIn delay={100}>
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-[1.1] mb-8 text-white" lang="zh-TW">
-              樂觀不是名詞<br />而是動詞
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-[1.1] mb-4 text-white" lang="zh-TW">
+              We are Becoming
             </h1>
           </FadeIn>
 
-          <FadeIn delay={250}>
-            <p className="text-white/70 text-base sm:text-lg md:text-xl leading-relaxed mb-4 max-w-2xl mx-auto" lang="zh-TW">
-              TEDxXinyi 把世界的想法帶進台北信義，<br />
-              也把信義日常的矛盾、壓力與想像搬上舞台。<br />
-              我們用一次又一次的策展，練習一種面向未來的樂觀。
+          <FadeIn delay={200}>
+            <p className="text-xl sm:text-2xl md:text-3xl font-black mb-6" style={{ color: WARM_AMBER }} lang="zh-TW">
+              AI趨勢沙龍
+            </p>
+          </FadeIn>
+
+          <FadeIn delay={300}>
+            <p className="text-white/60 text-sm sm:text-base mb-2 font-medium" lang="zh-TW">
+              2026 / 3 / 31　台北藝術表演中心 藍盒子
             </p>
           </FadeIn>
 
           <FadeIn delay={380}>
-            <p className="text-white/40 text-sm sm:text-base leading-relaxed mb-12 max-w-2xl mx-auto" lang="en">
-              In Xinyi, we rehearse a more optimistic future — one talk, one stage, one community at a time.
+            <p className="text-white/45 text-sm sm:text-base leading-relaxed mb-12 max-w-2xl mx-auto" lang="zh-TW">
+              探究我們跟 AI 的距離，我們跟自己的距離。
             </p>
           </FadeIn>
 
           <FadeIn delay={500}>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button
+              <Link
+                href="/vibe-demo/tedx-xinyi/salon"
                 className="px-8 py-3.5 text-white font-black text-sm tracking-wide rounded-full transition-all hover:scale-105 hover:shadow-lg"
                 style={{ backgroundColor: TED_RED }}
                 lang="zh-TW"
               >
-                關注本年度大會
-              </button>
+                認識 We are Becoming salon
+              </Link>
               <Link
                 href="/vibe-demo/tedx-xinyi/about"
                 className="px-8 py-3.5 text-white/80 hover:text-white font-bold text-sm tracking-wide rounded-full border-2 border-white/30 hover:border-white/70 transition-all"
