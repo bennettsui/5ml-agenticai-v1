@@ -1698,6 +1698,13 @@ app.use('/api', createCrmRoutes(db));
 console.log('✅ CRM routes loaded: /api/clients, /api/projects, /api/feedback, /api/gmail');
 
 // ==========================================
+// Debug / Health-Check Routes
+// ==========================================
+const createDebugRoutes = require('./routes/debug');
+app.use('/api', createDebugRoutes());
+console.log('✅ Debug routes loaded: /api/debug/sessions, /api/debug/modules, /api/debug/issues, /api/debug/stats');
+
+// ==========================================
 // LLM Library & CRM Chat Endpoint
 // ==========================================
 const llm = require('./lib/llm');
