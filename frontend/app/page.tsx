@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone, Users, GitBranch } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone, Users, GitBranch, Activity } from 'lucide-react';
 
 export default function Home() {
   const useCases = [
@@ -106,13 +106,23 @@ export default function Home() {
       status: 'New'
     },
     {
+      id: 'healthcheck',
+      title: 'Website Health Check',
+      description: 'Comprehensive SEO audit, Google PageSpeed analysis, Core Web Vitals, broken link detection, and web quality checks',
+      icon: Activity,
+      href: '/healthcheck',
+      color: 'from-emerald-500 to-teal-600',
+      features: ['SEO / AI SEO Audit', 'Core Web Vitals (LCP, INP, CLS)', 'Broken Link Detection', 'WCAG 2.2 Accessibility'],
+      status: 'New'
+    },
+    {
       id: 'crm',
       title: 'Client CRM + Knowledge Base',
       description: 'Integrated CRM with AI-powered knowledge base that learns from client feedback, extracts brand rules, and detects cross-client patterns',
       icon: Users,
       href: '/use-cases/crm',
       color: 'from-emerald-500 to-teal-600',
-      features: ['Client & Brand CRM', 'AI Feedback Analysis', 'Knowledge Rules Engine', 'Health Score Tracking'],
+      features: ['Client & Brand CRM', 'Debug QA System', 'SEO & Site Health', 'Knowledge Rules Engine'],
       status: 'New'
     },
   ];

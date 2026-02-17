@@ -29,6 +29,7 @@ from app.utils.kb_router import router as kb_router
 from app.chatbot.router import router as chatbot_router
 from app.gmail.router import router as gmail_router
 from app.orchestration.router import router as orchestration_router
+from app.debug.router import router as debug_router
 
 # ---------------------------------------------------------------------------
 # Application
@@ -39,7 +40,7 @@ app = FastAPI(
     description=(
         "Agentic AI-powered CRM and Knowledge Base system for managing "
         "clients, contacts, contracts, opportunities, projects, brand "
-        "profiles, feedback, rules, and patterns."
+        "profiles, feedback, rules, patterns, and debug QA sessions."
     ),
     version="0.1.0",
     docs_url="/docs",
@@ -80,6 +81,7 @@ app.include_router(kb_router)
 app.include_router(chatbot_router)
 app.include_router(gmail_router)
 app.include_router(orchestration_router)
+app.include_router(debug_router)
 
 
 # ---------------------------------------------------------------------------

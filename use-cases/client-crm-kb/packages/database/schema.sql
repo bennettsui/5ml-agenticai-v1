@@ -307,6 +307,113 @@ CREATE TABLE patterns (
 );
 
 -- =============================================================================
+-- DEBUG ENUM TYPES
+-- =============================================================================
+
+CREATE TYPE debug_subject_type AS ENUM ('web_page', 'design', 'video', 'social_post', 'agent_workflow', 'document', 'other');
+CREATE TYPE debug_session_status AS ENUM ('open', 'in_review', 'addressed', 'ignored', 'archived');
+CREATE TYPE debug_overall_status AS ENUM ('pass', 'warning', 'fail');
+CREATE TYPE issue_area AS ENUM ('WebPerf', 'WebQC', 'Design', 'Video', 'Social', 'Brand', 'Logic', 'AgentBehavior');
+CREATE TYPE issue_severity AS ENUM ('critical', 'major', 'minor', 'info');
+CREATE TYPE issue_priority AS ENUM ('P0', 'P1', 'P2', 'P3');
+CREATE TYPE resolution_status AS ENUM ('open', 'in_progress', 'resolved', 'accepted_risk', 'wont_fix', 'duplicate');
+CREATE TYPE business_impact AS ENUM ('high', 'medium', 'low', 'none');
+CREATE TYPE trace_step_type AS ENUM ('llm_call', 'tool_call', 'decision', 'eval', 'api_call', 'other');
+
+-- =============================================================================
+-- DEBUG TABLES
+-- =============================================================================
+
+CREATE TABLE debug_module_definitions (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    applicable_subject_types TEXT[] DEFAULT '{}',
+    version VARCHAR(20) DEFAULT '1.0',
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE debug_sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    subject_type debug_subject_type NOT NULL DEFAULT 'other',
+    subject_ref TEXT,
+    modules_invoked JSONB DEFAULT '[]',
+    overall_score INTEGER CHECK (overall_score >= 0 AND overall_score <= 100),
+    overall_status debug_overall_status,
+    overall_summary TEXT,
+    kb_entries_used JSONB DEFAULT '[]',
+    status debug_session_status NOT NULL DEFAULT 'open',
+    status_notes TEXT,
+    initiated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    report_ref TEXT,
+    trace_enabled BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE debug_issues (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    debug_session_id UUID NOT NULL REFERENCES debug_sessions(id) ON DELETE CASCADE,
+    client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+    module VARCHAR(100) NOT NULL,
+    area issue_area NOT NULL,
+    severity issue_severity NOT NULL DEFAULT 'info',
+    finding TEXT NOT NULL,
+    evidence JSONB DEFAULT '{}',
+    recommendation TEXT,
+    priority issue_priority NOT NULL DEFAULT 'P2',
+    related_rule_ids UUID[] DEFAULT '{}',
+    related_pattern_ids UUID[] DEFAULT '{}',
+    score_impact INTEGER DEFAULT 0,
+    business_impact business_impact DEFAULT 'none',
+    user_impact TEXT,
+    resolution_status resolution_status NOT NULL DEFAULT 'open',
+    assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
+    resolved_at TIMESTAMP WITH TIME ZONE,
+    resolution_notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE debug_trace_steps (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    debug_session_id UUID NOT NULL REFERENCES debug_sessions(id) ON DELETE CASCADE,
+    parent_step_id UUID REFERENCES debug_trace_steps(id) ON DELETE SET NULL,
+    type trace_step_type NOT NULL DEFAULT 'other',
+    name VARCHAR(200) NOT NULL,
+    input_summary TEXT,
+    output_summary TEXT,
+    raw_input_ref TEXT,
+    raw_output_ref TEXT,
+    model VARCHAR(100),
+    temperature DECIMAL(3, 2),
+    token_usage JSONB,
+    cost_estimate DECIMAL(10, 6),
+    tool_name VARCHAR(100),
+    tool_args JSONB,
+    tool_result JSONB,
+    error_flag BOOLEAN DEFAULT FALSE,
+    error_type VARCHAR(100),
+    error_message TEXT,
+    latency_ms INTEGER,
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Seed initial debug module definitions
+INSERT INTO debug_module_definitions (id, name, description, applicable_subject_types, version) VALUES
+('brand_guardian', 'Brand Guardian', 'Checks deliverables against client brand profile (tone, values, do/don''t list, visual rules)', ARRAY['web_page','design','video','social_post','document'], '1.0'),
+('web_qc', 'Web Quality Check', 'Checks web pages for accessibility, SEO basics, broken elements, and responsive design', ARRAY['web_page'], '1.0'),
+('social_best_practice', 'Social Best Practice', 'Checks social posts against platform-specific best practices (engagement, hashtags, formatting)', ARRAY['social_post'], '1.0'),
+('design_accuracy', 'Design Accuracy', 'Checks design files against brand visual rules (colors, typography, logo usage)', ARRAY['design'], '1.0'),
+('content_review', 'Content Review', 'Checks copy/documents for tone consistency, legal sensitivities, and message alignment', ARRAY['document','web_page'], '1.0'),
+('seo_aiseo', 'SEO / AI SEO Audit', 'Comprehensive SEO audit inspired by Ahrefs: meta tags, headings, structured data, keyword density, internal linking, Core Web Vitals SEO signals, and AI-generated content optimization', ARRAY['web_page'], '1.0'),
+('website_health', 'Website Health Check', 'Google PageSpeed-based health check: Core Web Vitals (LCP, FID, CLS), broken link detection, mobile-friendliness, HTTPS compliance, and latest Google standards', ARRAY['web_page'], '1.0');
+
+-- =============================================================================
 -- INDEXES
 -- =============================================================================
 
@@ -337,3 +444,15 @@ CREATE INDEX idx_patterns_client_id ON patterns(client_id);
 CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
 CREATE INDEX idx_audit_logs_resource ON audit_logs(resource_type, resource_id);
+
+-- Debug indexes
+CREATE INDEX idx_debug_sessions_client_id ON debug_sessions(client_id);
+CREATE INDEX idx_debug_sessions_project_id ON debug_sessions(project_id);
+CREATE INDEX idx_debug_sessions_status ON debug_sessions(status);
+CREATE INDEX idx_debug_sessions_created_at ON debug_sessions(created_at DESC);
+CREATE INDEX idx_debug_issues_session_id ON debug_issues(debug_session_id);
+CREATE INDEX idx_debug_issues_client_id ON debug_issues(client_id);
+CREATE INDEX idx_debug_issues_severity ON debug_issues(severity);
+CREATE INDEX idx_debug_issues_resolution ON debug_issues(resolution_status);
+CREATE INDEX idx_debug_trace_session_id ON debug_trace_steps(debug_session_id);
+CREATE INDEX idx_debug_trace_parent ON debug_trace_steps(parent_step_id);
