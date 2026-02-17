@@ -128,9 +128,12 @@ export default function HealthCheckPage() {
         module_ids: ['seo_aiseo', 'website_health', 'web_qc'],
         auto_run: true,
       });
+      // Store result so detail page doesn't need to re-fetch from in-memory API
+      try { sessionStorage.setItem(`healthcheck-${result.id}`, JSON.stringify(result)); } catch {}
       router.push(`/healthcheck/${result.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to run health check');
+    } finally {
       setRunning(false);
     }
   }, [url, router]);

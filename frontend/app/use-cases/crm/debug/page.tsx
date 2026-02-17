@@ -90,9 +90,11 @@ export default function DebugSessionsPage() {
         module_ids: ['seo_aiseo', 'website_health', 'web_qc'],
         auto_run: true,
       });
+      try { sessionStorage.setItem(`debug-session-${result.id}`, JSON.stringify(result)); } catch {}
       router.push(`/use-cases/crm/debug/${result.id}`);
     } catch (err) {
       setQuickError(err instanceof Error ? err.message : 'Failed to run check');
+    } finally {
       setQuickRunning(false);
     }
   }, [quickUrl, router]);

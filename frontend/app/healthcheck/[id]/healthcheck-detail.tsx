@@ -86,6 +86,17 @@ export default function HealthCheckDetail({ sessionId }: { sessionId: string }) 
 
   useEffect(() => {
     async function load() {
+      // Try sessionStorage first (populated by the create+run call)
+      try {
+        const cached = sessionStorage.getItem(`healthcheck-${sessionId}`);
+        if (cached) {
+          setSession(JSON.parse(cached));
+          setLoading(false);
+          return;
+        }
+      } catch {}
+
+      // Fall back to API fetch
       try {
         const data = await crmApi.debug.getSession(sessionId);
         setSession(data);
