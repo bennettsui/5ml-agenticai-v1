@@ -135,7 +135,7 @@ export default function CostAnalysisPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       {/* Header */}
-      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm">
+      <header className="bg-white dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -171,7 +171,7 @@ export default function CostAnalysisPage() {
         </div>
 
         {/* ━━━ Monthly Stacked Bar ━━━ */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <div className="bg-white dark:bg-white/[0.03] rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Monthly Cost Breakdown</h2>
           <div className="space-y-3">
             {useCases.map(uc => {
@@ -234,11 +234,11 @@ export default function CostAnalysisPage() {
             const isExpanded = expanded[uc.id] !== false; // default open
 
             return (
-              <div key={uc.id} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div key={uc.id} className="bg-white dark:bg-white/[0.03] rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                 {/* Header */}
                 <button
                   onClick={() => toggle(uc.id)}
-                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors"
+                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50/50 dark:hover:bg-white/[0.03] transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg bg-gradient-to-br ${meta.gradient}`}>
@@ -262,7 +262,7 @@ export default function CostAnalysisPage() {
                 {isExpanded && (
                   <div className="px-6 pb-6 space-y-5">
                     {/* What triggers a run */}
-                    <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                    <div className="bg-slate-50 dark:bg-white/[0.04] rounded-lg p-4">
                       <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Per-Run Scenario</div>
                       <p className="text-sm text-slate-700 dark:text-slate-300">{ce.perRun.description}</p>
                       {ce.perRun.notes && (
@@ -291,7 +291,7 @@ export default function CostAnalysisPage() {
                             {ce.perRun.modelCalls.map((mc, i) => {
                               const cost = calcModelCost(mc);
                               return (
-                                <tr key={i} className="border-b border-slate-100 dark:border-slate-700">
+                                <tr key={i} className="border-b border-slate-100 dark:border-slate-700/50">
                                   <td className="py-2 px-3 font-medium text-slate-700 dark:text-slate-300">{mc.model}</td>
                                   <td className="py-2 px-3 text-center text-slate-600 dark:text-slate-400">{mc.calls}</td>
                                   <td className="py-2 px-3 text-right font-mono text-slate-600 dark:text-slate-400">{fmtTokens(mc.avgTokensIn * mc.calls)}</td>
@@ -303,7 +303,7 @@ export default function CostAnalysisPage() {
                                 </tr>
                               );
                             })}
-                            <tr className="bg-slate-50 dark:bg-slate-700/50 font-bold">
+                            <tr className="bg-slate-50 dark:bg-white/[0.04] font-bold">
                               <td className="py-2 px-3 text-slate-700 dark:text-slate-300">Total</td>
                               <td className="py-2 px-3 text-center text-slate-600 dark:text-slate-400">
                                 {ce.perRun.modelCalls.reduce((s, mc) => s + mc.calls, 0)}
@@ -347,7 +347,7 @@ export default function CostAnalysisPage() {
         </div>
 
         {/* ━━━ Token Pricing Reference ━━━ */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <div className="bg-white dark:bg-white/[0.03] rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Token Pricing Reference</h2>
           <p className="text-xs text-slate-500 mb-4">All prices are per 1 million tokens. These are the rates used in the cost calculations above.</p>
           <div className="overflow-x-auto">
@@ -362,7 +362,7 @@ export default function CostAnalysisPage() {
               </thead>
               <tbody>
                 {Object.entries(pricing).map(([model, p]) => (
-                  <tr key={model} className="border-b border-slate-100 dark:border-slate-700">
+                  <tr key={model} className="border-b border-slate-100 dark:border-slate-700/50">
                     <td className="py-2 px-3 font-medium font-mono text-slate-700 dark:text-slate-300">{model}</td>
                     <td className="py-2 px-3 text-right text-slate-600 dark:text-slate-400">
                       {p.input != null ? `$${p.input.toFixed(2)}` : '-'}
@@ -379,13 +379,13 @@ export default function CostAnalysisPage() {
         </div>
 
         {/* ━━━ How Costs Are Calculated ━━━ */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <div className="bg-white dark:bg-white/[0.03] rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">How Costs Are Calculated</h2>
           <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+              <div className="bg-slate-50 dark:bg-white/[0.04] rounded-lg p-4">
                 <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-2 text-xs uppercase tracking-wider">Per-Run Formula</h3>
-                <div className="font-mono text-xs bg-white dark:bg-slate-800 rounded p-3 border border-slate-200 dark:border-slate-600">
+                <div className="font-mono text-xs bg-white dark:bg-white/[0.03] rounded p-3 border border-slate-200 dark:border-slate-600">
                   <div>cost = <span className="text-blue-600 dark:text-blue-400">SUM</span> for each model call:</div>
                   <div className="pl-4 mt-1">
                     <div>(calls x avg_tokens_in / 1M) x input_price</div>
@@ -394,9 +394,9 @@ export default function CostAnalysisPage() {
                   </div>
                 </div>
               </div>
-              <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+              <div className="bg-slate-50 dark:bg-white/[0.04] rounded-lg p-4">
                 <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-2 text-xs uppercase tracking-wider">Monthly Projection</h3>
-                <div className="font-mono text-xs bg-white dark:bg-slate-800 rounded p-3 border border-slate-200 dark:border-slate-600">
+                <div className="font-mono text-xs bg-white dark:bg-white/[0.03] rounded p-3 border border-slate-200 dark:border-slate-600">
                   <div>monthly = per_run x runs_per_month</div>
                   <div className="mt-1 text-slate-400">+ weekly_digest_cost x 4 <span>(if applicable)</span></div>
                   <div className="mt-1 text-slate-400">x tenants <span>(for multi-tenant use cases)</span></div>
@@ -447,7 +447,7 @@ function ProjectionCard({ label, value, detail, note, extra }: {
   label: string; value: string; detail: string; note?: string; extra?: string;
 }) {
   return (
-    <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+    <div className="bg-slate-50 dark:bg-white/[0.04] rounded-lg p-4">
       <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{label}</div>
       <div className="text-xl font-bold text-slate-900 dark:text-white">{value}</div>
       <div className="text-xs text-slate-500 mt-0.5">{detail}</div>

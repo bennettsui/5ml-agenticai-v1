@@ -66,8 +66,9 @@ const STATUS_CONFIG = {
 
 export default function ApiHealthCheck() {
   const [data, setData] = useState<HealthResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retesting, setRetesting] = useState<Set<string>>(new Set());
 
   const fetchHealth = useCallback(async () => {
     setLoading(true);
@@ -84,7 +85,26 @@ export default function ApiHealthCheck() {
     }
   }, []);
 
-  useEffect(() => { fetchHealth(); }, [fetchHealth]);
+  const retestService = useCallback(async (serviceId: string) => {
+    setRetesting(prev => new Set(prev).add(serviceId));
+    try {
+      const res = await fetch(`/api/health/services/${serviceId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setData(prev => {
+        if (!prev) return prev;
+        const services = prev.services.map(s => s.id === serviceId ? json.service : s);
+        const connected = services.filter(r => r.status === 'connected').length;
+        const configured = services.filter(r => r.status === 'configured').length;
+        const errors = services.filter(r => r.status === 'error').length;
+        const notConfigured = services.filter(r => r.status === 'not_configured').length;
+        return { ...prev, timestamp: json.timestamp, services, summary: { total: services.length, connected, configured, errors, notConfigured } };
+      });
+    } catch { /* keep existing state */ }
+    setRetesting(prev => { const next = new Set(prev); next.delete(serviceId); return next; });
+  }, []);
+
+  // No auto-fetch on load — user clicks "Test All" to start
 
   const serviceMap = new Map((data?.services || []).map(s => [s.id, s]));
 
@@ -127,6 +147,22 @@ export default function ApiHealthCheck() {
         </div>
       )}
 
+      {/* Initial state — no data yet */}
+      {!loading && !data && !error && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <Wifi className="w-10 h-10 text-slate-400 mx-auto mb-3" />
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">Click &quot;Test All&quot; to check API connections</p>
+            <button
+              onClick={fetchHealth}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <RefreshCw className="w-4 h-4 inline mr-1.5" />Test All Services
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Loading skeleton */}
       {loading && !data && (
         <div className="flex items-center justify-center py-20">
@@ -150,7 +186,7 @@ export default function ApiHealthCheck() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">{groupName}</h3>
             <div className="space-y-3">
               {groupServices.map(service => (
-                <ServiceCard key={service.id} service={service} />
+                <ServiceCard key={service.id} service={service} onRetest={retestService} isRetesting={retesting.has(service.id)} />
               ))}
             </div>
           </div>
@@ -180,7 +216,7 @@ function SummaryCard({ label, value, icon: Icon, color }: { label: string; value
   );
 }
 
-function ServiceCard({ service }: { service: ServiceResult }) {
+function ServiceCard({ service, onRetest, isRetesting }: { service: ServiceResult; onRetest: (id: string) => void; isRetesting: boolean }) {
   const cfg = STATUS_CONFIG[service.status] || STATUS_CONFIG.error;
   const StatusIcon = cfg.Icon;
   const SvcIcon = SERVICE_ICONS[service.id] || Server;
@@ -207,6 +243,14 @@ function ServiceCard({ service }: { service: ServiceResult }) {
           <StatusIcon className="w-3.5 h-3.5" />
           {cfg.label}
         </div>
+        <button
+          onClick={() => onRetest(service.id)}
+          disabled={isRetesting}
+          className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors disabled:opacity-50"
+          title={`Re-test ${service.name}`}
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isRetesting ? 'animate-spin' : ''}`} />
+        </button>
       </div>
     </div>
   );
