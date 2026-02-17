@@ -301,6 +301,16 @@ export default function TEDxPartnersClient() {
           aria-label="Hero"
           className="relative min-h-[70vh] flex items-center justify-center bg-neutral-900 overflow-hidden"
         >
+          {/* Nanobanana partners hero (shows when generated) */}
+          <img
+            src="/tedx/partners-hero.png"
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-1000"
+            style={{ filter: 'brightness(0.25) saturate(0.3)' }}
+            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+
           <div
             className="absolute top-1/2 left-0 right-0 h-[2px] opacity-20"
             style={{ backgroundColor: TED_RED }}
@@ -466,8 +476,17 @@ export default function TEDxPartnersClient() {
         </section>
 
         {/* ===== SECTION 3: WHO SHOULD PARTNER ===== */}
-        <section id="who" aria-labelledby="who-heading" className="py-20 md:py-28 bg-neutral-50">
-          <div className="max-w-3xl mx-auto px-5">
+        <section id="who" aria-labelledby="who-heading" className="relative py-20 md:py-28 bg-neutral-50 overflow-hidden">
+          {/* Nanobanana community visual (shows when generated) */}
+          <img
+            src="/tedx/partners-community.png"
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-1000"
+            style={{ filter: 'brightness(0.97) saturate(0.3) opacity(0.06)' }}
+            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+          <div className="relative max-w-3xl mx-auto px-5">
             <FadeIn>
               <h2 id="who-heading" className="mb-4">
                 <span className="block text-2xl md:text-3xl font-semibold text-neutral-900" lang="zh-HK">
@@ -575,8 +594,17 @@ export default function TEDxPartnersClient() {
         </section>
 
         {/* ===== SECTION 4: WAYS TO WORK TOGETHER ===== */}
-        <section id="ways" aria-labelledby="ways-heading" className="py-20 md:py-28 bg-white">
-          <div className="max-w-3xl mx-auto px-5">
+        <section id="ways" aria-labelledby="ways-heading" className="relative py-20 md:py-28 bg-white overflow-hidden">
+          {/* Nanobanana ways visual (shows when generated) */}
+          <img
+            src="/tedx/partners-ways.png"
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-1000"
+            style={{ filter: 'brightness(0.95) saturate(0.4) opacity(0.08)' }}
+            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+          <div className="relative max-w-3xl mx-auto px-5">
             <FadeIn>
               <h2 id="ways-heading" className="mb-10">
                 <span className="block text-2xl md:text-3xl font-semibold text-neutral-900" lang="zh-HK">
