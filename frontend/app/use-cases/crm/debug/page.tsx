@@ -84,12 +84,12 @@ export default function DebugSessionsPage() {
     setQuickRunning(true);
     setQuickError(null);
     try {
-      const session = await crmApi.debug.createSession({
+      const result = await crmApi.debug.createSession({
         subject_type: 'web_page',
         subject_ref: quickUrl.trim(),
         module_ids: ['seo_aiseo', 'website_health', 'web_qc'],
+        auto_run: true,
       });
-      const result = await crmApi.debug.runSession(session.id);
       router.push(`/use-cases/crm/debug/${result.id}`);
     } catch (err) {
       setQuickError(err instanceof Error ? err.message : 'Failed to run check');

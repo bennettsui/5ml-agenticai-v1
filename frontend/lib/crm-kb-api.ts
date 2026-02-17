@@ -228,6 +228,7 @@ export interface DebugSessionCreate {
   subject_ref?: string;
   module_ids: string[];
   trace_enabled?: boolean;
+  auto_run?: boolean;
 }
 
 export interface GmailStatus {
