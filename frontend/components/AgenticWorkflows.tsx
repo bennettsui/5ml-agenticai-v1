@@ -61,38 +61,62 @@ const INITIAL_WORKFLOWS: WorkflowDef[] = [
   {
     id: 'marketing',
     title: 'CSO Marketing Agents',
-    subtitle: '9 specialized agents with conditional orchestration',
+    subtitle: '14 agents — event-driven parallel pipeline with circuit breakers',
     icon: TrendingUp,
     gradient: 'from-purple-500 to-pink-600',
-    pattern: 'Conditional Orchestration',
-    patternDesc: 'CSO orchestrator conditionally activates specialists based on brief analysis, with quality reflection loop',
+    pattern: 'Event-Driven Parallel Pipeline',
+    patternDesc: 'Budget-gated parallel research → strategy synthesis → multi-channel creative → compliance/quality gate with circuit-breaker feedback (max 2 retries)',
     trigger: 'API Request (POST /social/generate)',
-    canvasWidth: 1100,
-    canvasHeight: 520,
+    canvasWidth: 1500,
+    canvasHeight: 580,
     nodes: [
-      { id: 'cso', name: 'CSO Orchestrator', role: 'Analyzes brief, selects agents', icon: Workflow, color: '#a855f7', x: 80, y: 200 },
-      { id: 'research', name: 'Research Agent', role: 'Market research', icon: Search, color: '#3b82f6', x: 340, y: 40 },
-      { id: 'customer', name: 'Customer Agent', role: 'Persona analysis', icon: Users, color: '#06b6d4', x: 340, y: 140 },
-      { id: 'competitor', name: 'Competitor Agent', role: 'Competitive intel', icon: Target, color: '#f97316', x: 340, y: 240 },
-      { id: 'strategy', name: 'Strategy Agent', role: 'Campaign strategy', icon: Brain, color: '#22c55e', x: 340, y: 340 },
-      { id: 'seo', name: 'SEO Agent', role: 'Search optimization', icon: TrendingUp, color: '#10b981', x: 340, y: 440 },
-      { id: 'creative', name: 'Creative Agent', role: 'Ad copy & content', icon: PenTool, color: '#ec4899', x: 610, y: 140 },
-      { id: 'social', name: 'Social Agent', role: 'Social strategy', icon: Globe, color: '#6366f1', x: 610, y: 290 },
-      { id: 'sentinel', name: 'Sentinel Agent', role: 'Quality review', icon: Shield, color: '#ef4444', x: 880, y: 200 },
+      // Column 1: Entry
+      { id: 'validator', name: 'Input Validator', role: 'Sanitize & validate API requests', icon: Zap, color: '#64748b', x: 60, y: 260 },
+      // Column 2: Control
+      { id: 'cso', name: 'CSO Orchestrator', role: 'Event dispatch, strategy coordination · DeepSeek ($0.14/M)', icon: Workflow, color: '#a855f7', x: 260, y: 150 },
+      { id: 'budget', name: 'Budget Optimizer', role: 'Cost constraints, model routing · DeepSeek ($0.14/M)', icon: Target, color: '#10b981', x: 260, y: 380 },
+      // Column 3: Research Phase (parallel)
+      { id: 'research', name: 'Research Agent', role: 'Brand & market research · Haiku ($0.25/M)', icon: Search, color: '#3b82f6', x: 500, y: 50 },
+      { id: 'customer', name: 'Customer Agent', role: 'Persona & audience analysis · Haiku ($0.25/M)', icon: Users, color: '#06b6d4', x: 500, y: 190 },
+      { id: 'competitor', name: 'Competitor Agent', role: 'Competitive intel · Perplexity ($3/M)', icon: Target, color: '#f97316', x: 500, y: 330 },
+      { id: 'seo', name: 'SEO Agent', role: 'Search & keyword optimization · Haiku ($0.25/M)', icon: TrendingUp, color: '#22c55e', x: 500, y: 470 },
+      // Column 4: Strategy & Creative
+      { id: 'strategy', name: 'Strategy Agent', role: 'Campaign strategy synthesis · DeepSeek ($0.14/M)', icon: Brain, color: '#8b5cf6', x: 740, y: 130 },
+      { id: 'creative', name: 'Creative Agent', role: 'Ad copy, content, visuals · Sonnet ($3/M)', icon: PenTool, color: '#ec4899', x: 740, y: 340 },
+      // Column 5: Channels & Compliance
+      { id: 'social', name: 'Social Agent', role: 'Social strategy & scheduling · DeepSeek ($0.14/M)', icon: Globe, color: '#6366f1', x: 980, y: 70 },
+      { id: 'multichannel', name: 'Multi-Channel', role: 'Social + email + search + display · DeepSeek ($0.14/M)', icon: Mail, color: '#0ea5e9', x: 980, y: 240 },
+      { id: 'compliance', name: 'Compliance Agent', role: 'FTC, GDPR, platform policies · Haiku ($0.25/M)', icon: Eye, color: '#f59e0b', x: 980, y: 420 },
+      // Column 6: Quality & Output
+      { id: 'sentinel', name: 'Sentinel Agent', role: 'Quality gate · circuit breaker (max 2×) · DeepSeek ($0.14/M)', icon: Shield, color: '#ef4444', x: 1220, y: 150 },
+      { id: 'tracker', name: 'Performance Tracker', role: 'KPI monitoring & feedback loop · Haiku ($0.25/M)', icon: BarChart3, color: '#14b8a6', x: 1220, y: 380 },
     ],
     edges: [
-      { from: 'cso', to: 'research', label: 'if needed', type: 'conditional' },
-      { from: 'cso', to: 'customer', label: 'if needed', type: 'conditional' },
-      { from: 'cso', to: 'competitor', label: 'if needed', type: 'conditional' },
-      { from: 'cso', to: 'strategy', type: 'solid' },
-      { from: 'cso', to: 'seo', label: 'if needed', type: 'conditional' },
-      { from: 'research', to: 'creative', type: 'solid' },
-      { from: 'customer', to: 'creative', type: 'solid' },
-      { from: 'competitor', to: 'social', type: 'solid' },
-      { from: 'strategy', to: 'social', type: 'solid' },
-      { from: 'creative', to: 'sentinel', type: 'solid' },
-      { from: 'social', to: 'sentinel', type: 'solid' },
-      { from: 'sentinel', to: 'cso', label: 'reflection loop', type: 'feedback' },
+      // Entry chain
+      { from: 'validator', to: 'cso', label: 'validated', type: 'solid' },
+      { from: 'cso', to: 'budget', label: 'cost constraints', type: 'solid' },
+      // Parallel research phase
+      { from: 'budget', to: 'research', label: 'parallel', type: 'conditional' },
+      { from: 'budget', to: 'customer', label: 'parallel', type: 'conditional' },
+      { from: 'budget', to: 'competitor', label: 'parallel', type: 'conditional' },
+      { from: 'budget', to: 'seo', label: 'parallel', type: 'conditional' },
+      // Research → Strategy merge
+      { from: 'research', to: 'strategy', type: 'solid' },
+      { from: 'customer', to: 'strategy', type: 'solid' },
+      { from: 'competitor', to: 'strategy', type: 'solid' },
+      // Strategy → Creative phase
+      { from: 'strategy', to: 'creative', type: 'solid' },
+      { from: 'seo', to: 'creative', type: 'solid' },
+      // Creative → Channels
+      { from: 'creative', to: 'social', type: 'solid' },
+      { from: 'creative', to: 'multichannel', type: 'solid' },
+      { from: 'social', to: 'multichannel', type: 'solid' },
+      // Channels → Quality gate
+      { from: 'multichannel', to: 'compliance', type: 'solid' },
+      { from: 'compliance', to: 'sentinel', label: 'cleared', type: 'solid' },
+      // Output & feedback
+      { from: 'sentinel', to: 'tracker', label: 'approved', type: 'solid' },
+      { from: 'sentinel', to: 'cso', label: 'reject (max 2×)', type: 'feedback' },
     ],
   },
   {
