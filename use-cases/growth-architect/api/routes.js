@@ -831,4 +831,326 @@ router.get('/edm/:brand_name/:id/preview', async (req, res) => {
   }
 });
 
+// ==========================================
+// Knowledge Base (KB) & RAG
+// ==========================================
+
+/**
+ * POST /api/growth/kb/seed
+ * Seed KB for a brand based on growth plan
+ * Body: { brand_name, plan_id?, content_type? }
+ */
+router.post('/kb/seed', async (req, res) => {
+  try {
+    if (!db || !db.pool) return res.status(503).json({ error: 'Database not available' });
+
+    const { brand_name, plan_id } = req.body;
+    if (!brand_name) return res.status(400).json({ error: 'Missing brand_name' });
+
+    console.log(`🌱 Seeding KB for ${brand_name}`);
+
+    // Fetch growth plan if available
+    let planData = {};
+    if (plan_id) {
+      const planResult = await db.pool.query(
+        `SELECT plan_data FROM growth_plans WHERE id = $1`,
+        [plan_id]
+      );
+      if (planResult.rows.length > 0) {
+        planData = planResult.rows[0].plan_data;
+      }
+    }
+
+    // Seed KB entries from plan
+    const kbEntries = [];
+
+    // Add ICP data
+    if (planData?.block_1?.icp_segments) {
+      planData.block_1.icp_segments.forEach((segment, idx) => {
+        kbEntries.push({
+          category: 'icp',
+          title: `ICP Segment ${idx + 1}: ${segment.name || 'Unnamed'}`,
+          content: JSON.stringify(segment),
+          metadata: { plan_id, segment_index: idx },
+        });
+      });
+    }
+
+    // Add growth loop data
+    if (planData?.block_2?.growth_loops) {
+      planData.block_2.growth_loops.forEach((loop, idx) => {
+        kbEntries.push({
+          category: 'experiment',
+          title: `Growth Loop ${idx + 1}: ${loop.name || 'Unnamed'}`,
+          content: JSON.stringify(loop),
+          metadata: { plan_id, loop_index: idx },
+        });
+      });
+    }
+
+    // Add playbook / strategy
+    if (planData?.block_5) {
+      kbEntries.push({
+        category: 'playbook',
+        title: `Growth Infrastructure & Tooling`,
+        content: JSON.stringify(planData.block_5),
+        metadata: { plan_id },
+      });
+    }
+
+    // Insert KB entries
+    let inserted = 0;
+    for (const entry of kbEntries) {
+      try {
+        await db.pool.query(
+          `INSERT INTO growth_kb (brand_name, category, title, content, metadata)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            brand_name,
+            entry.category,
+            entry.title,
+            entry.content,
+            JSON.stringify(entry.metadata),
+          ]
+        );
+        inserted++;
+      } catch (e) {
+        console.warn(`[KB seed] Failed to insert ${entry.title}:`, e.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Seeded ${inserted} KB entries for ${brand_name}`,
+      entries_count: inserted,
+    });
+  } catch (error) {
+    console.error('[KB seed] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/growth/kb/:brand_name
+ * Search KB for a brand by category or query
+ * Query: ?category=icp&search=senior&limit=20
+ */
+router.get('/kb/:brand_name', async (req, res) => {
+  try {
+    if (!db || !db.pool) return res.status(503).json({ error: 'Database not available' });
+
+    const { brand_name } = req.params;
+    const { category, search, limit = 20, offset = 0 } = req.query;
+
+    let query = `SELECT id, brand_name, category, title, content, metadata, created_at
+                 FROM growth_kb WHERE brand_name = $1`;
+    const params = [brand_name];
+
+    if (category) {
+      query += ` AND category = $${params.length + 1}`;
+      params.push(category);
+    }
+
+    if (search) {
+      query += ` AND (title ILIKE $${params.length + 1} OR content ILIKE $${params.length + 1})`;
+      params.push(`%${search}%`);
+    }
+
+    query += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(limit, offset);
+
+    const result = await db.pool.query(query, params);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length,
+    });
+  } catch (error) {
+    console.error('[KB GET] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/growth/kb/:id
+ * Delete a KB entry
+ */
+router.delete('/kb/:id', async (req, res) => {
+  try {
+    if (!db || !db.pool) return res.status(503).json({ error: 'Database not available' });
+
+    const { id } = req.params;
+    const result = await db.pool.query(
+      `DELETE FROM growth_kb WHERE id = $1 RETURNING id`,
+      [id]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'KB entry not found' });
+
+    res.json({ success: true, message: 'KB entry deleted' });
+  } catch (error) {
+    console.error('[KB DELETE] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// ROAS & Financial Modeling
+// ==========================================
+
+/**
+ * POST /api/growth/roas/analyze
+ * Analyze performance data and build ROAS model
+ * Body: { brand_name, product_brief, plan_id?, days? }
+ */
+router.post('/roas/analyze', async (req, res) => {
+  try {
+    const { brand_name, product_brief, plan_id, days = 90 } = req.body;
+    if (!brand_name || !product_brief) {
+      return res.status(400).json({ error: 'Missing brand_name or product_brief' });
+    }
+
+    console.log(`💰 Analyzing ROAS for ${brand_name}`);
+
+    const analyticsAgent = require('../agents/growthAnalyticsAgent');
+    const analysis = await analyticsAgent.analyzePerformanceAndBuildModel(
+      db,
+      brand_name,
+      product_brief,
+      { days }
+    );
+
+    // Save ROAS model
+    const roasModel =
+      db && db.pool && plan_id
+        ? await analyticsAgent.createRoasModel(db, brand_name, plan_id, analysis)
+        : null;
+
+    // Project scenarios
+    const scenarios = await analyticsAgent.projectRevenueScenarios(analysis);
+
+    res.json({
+      success: true,
+      analysis,
+      roas_model_id: roasModel?.id,
+      scenarios,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[ROAS analyze] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/growth/roas/:brand_name
+ * Get ROAS models for a brand
+ */
+router.get('/roas/:brand_name', async (req, res) => {
+  try {
+    if (!db || !db.pool) return res.status(503).json({ error: 'Database not available' });
+
+    const { brand_name } = req.params;
+    const { limit = 10, offset = 0 } = req.query;
+
+    const result = await db.pool.query(
+      `SELECT id, brand_name, plan_id, base_spend, base_revenue, base_roas,
+              channel_mix, scaling_assumptions, projections, status, created_at
+       FROM growth_roas_models
+       WHERE brand_name = $1
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [brand_name, limit, offset]
+    );
+
+    res.json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length,
+    });
+  } catch (error) {
+    console.error('[ROAS GET] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/growth/roas/:brand_name/:id
+ * Get a specific ROAS model with full details
+ */
+router.get('/roas/:brand_name/:id', async (req, res) => {
+  try {
+    if (!db || !db.pool) return res.status(503).json({ error: 'Database not available' });
+
+    const { id } = req.params;
+
+    const result = await db.pool.query(
+      `SELECT id, brand_name, plan_id, base_spend, base_revenue, base_roas,
+              channel_mix, scaling_assumptions, projections, ltv_assumptions,
+              break_even_spend, status, created_at
+       FROM growth_roas_models
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'ROAS model not found' });
+
+    res.json({
+      success: true,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('[ROAS GET by ID] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/growth/roas/:id
+ * Update ROAS model (status, scaling_assumptions, etc.)
+ */
+router.patch('/roas/:id', async (req, res) => {
+  try {
+    if (!db || !db.pool) return res.status(503).json({ error: 'Database not available' });
+
+    const { id } = req.params;
+    const { status, scaling_assumptions, ltv_assumptions } = req.body;
+
+    const updates = [];
+    const params = [id];
+
+    if (status) {
+      updates.push(`status = $${params.length + 1}`);
+      params.push(status);
+    }
+
+    if (scaling_assumptions) {
+      updates.push(`scaling_assumptions = $${params.length + 1}`);
+      params.push(JSON.stringify(scaling_assumptions));
+    }
+
+    if (ltv_assumptions) {
+      updates.push(`ltv_assumptions = $${params.length + 1}`);
+      params.push(JSON.stringify(ltv_assumptions));
+    }
+
+    if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+    updates.push('updated_at = now()');
+
+    const result = await db.pool.query(
+      `UPDATE growth_roas_models SET ${updates.join(', ')} WHERE id = $1 RETURNING *`,
+      params
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'ROAS model not found' });
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('[ROAS PATCH] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

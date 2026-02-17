@@ -143,6 +143,48 @@ async function initGrowthTables(pool) {
       CREATE INDEX IF NOT EXISTS idx_growth_edm_status ON growth_edm_campaigns(status);
     `);
 
+    // Phase 3 tables: knowledge base + ROAS modeling
+    await pool.query(`
+      -- Knowledge base for RAG (ICPs, experiments, playbooks, performance insights)
+      CREATE TABLE IF NOT EXISTS growth_kb (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        brand_name VARCHAR(255) NOT NULL,
+        category VARCHAR(50) NOT NULL,
+        title VARCHAR(500) NOT NULL,
+        content TEXT NOT NULL,
+        metadata JSONB DEFAULT '{}',
+        embedding vector(1536),
+        created_at TIMESTAMPTZ DEFAULT now(),
+        updated_at TIMESTAMPTZ DEFAULT now()
+      );
+
+      -- ROAS financial projections (scaling models per brand)
+      CREATE TABLE IF NOT EXISTS growth_roas_models (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        brand_name VARCHAR(255) NOT NULL,
+        plan_id UUID REFERENCES growth_plans(id) ON DELETE CASCADE,
+        base_spend NUMERIC(18,4) NOT NULL,
+        base_revenue NUMERIC(18,4) NOT NULL,
+        base_roas NUMERIC(10,6),
+        channel_mix JSONB NOT NULL,
+        scaling_assumptions JSONB DEFAULT '{}',
+        projections JSONB DEFAULT '{}',
+        ltv_assumptions JSONB DEFAULT '{}',
+        break_even_spend NUMERIC(18,4),
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT now(),
+        updated_at TIMESTAMPTZ DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_growth_kb_brand ON growth_kb(brand_name);
+      CREATE INDEX IF NOT EXISTS idx_growth_kb_category ON growth_kb(category);
+      CREATE INDEX IF NOT EXISTS idx_growth_kb_embedding ON growth_kb USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+      CREATE INDEX IF NOT EXISTS idx_growth_roas_brand ON growth_roas_models(brand_name);
+      CREATE INDEX IF NOT EXISTS idx_growth_roas_plan ON growth_roas_models(plan_id);
+      CREATE INDEX IF NOT EXISTS idx_growth_roas_status ON growth_roas_models(status);
+    `);
+
     console.log('✅ Growth Architect tables initialized');
     return true;
   } catch (error) {

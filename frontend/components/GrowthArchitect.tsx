@@ -3,10 +3,10 @@
 import React, { useState } from 'react';
 import {
   TrendingUp, Loader, CheckCircle2, Zap, FileText,
-  Mail, LayoutList, FlaskConical,
+  Mail, LayoutList, FlaskConical, BookOpen, BarChart3,
 } from 'lucide-react';
 
-type SubTab = 'builder' | 'reviews' | 'experiments' | 'assets' | 'crm';
+type SubTab = 'builder' | 'reviews' | 'experiments' | 'assets' | 'crm' | 'kb' | 'roas';
 
 const ASSET_TYPES = ['fb_ad', 'gdn_banner', 'sem_ad', 'landing_hero', 'email_body', 'whatsapp', 'video_script'];
 const CHANNELS    = ['facebook', 'instagram', 'google', 'linkedin', 'email', 'whatsapp', 'xiaohongshu'];
@@ -690,6 +690,198 @@ function Experiments({ brandName, setBrandName }: { brandName: string; setBrandN
 }
 
 // ---------------------------------------------------------------------------
+// Knowledge Base Browser
+// ---------------------------------------------------------------------------
+function KnowledgeBase({ brandName }: { brandName: string }) {
+  const [kb, setKb] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [category, setCategory] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleLoad = async () => {
+    if (!brandName) { setError('Brand name required'); return; }
+    setLoading(true); setError('');
+    try {
+      const params = new URLSearchParams();
+      if (category) params.append('category', category);
+      if (searchQuery) params.append('search', searchQuery);
+      const r = await fetch(`/api/growth/kb/${brandName}?${params}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setKb(data.data || []);
+    } catch (e: any) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <BookOpen className="w-4 h-4 text-blue-400" />
+          <span className="text-xs font-medium text-slate-400">BRAND: {brandName || 'N/A'}</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <select value={category} onChange={(e) => setCategory(e.target.value)}
+            className="bg-white/[0.02] border border-slate-700/50 rounded px-3 py-2 text-white text-xs">
+            <option value="">All categories</option>
+            <option value="icp">ICP Segments</option>
+            <option value="experiment">Growth Loops</option>
+            <option value="playbook">Playbooks</option>
+            <option value="performance">Performance</option>
+          </select>
+          <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search KB…"
+            className="bg-white/[0.02] border border-slate-700/50 rounded px-3 py-2 text-white placeholder-slate-600 text-xs" />
+        </div>
+        <button onClick={handleLoad} disabled={loading}
+          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors">
+          {loading ? 'Searching…' : 'Search KB'}
+        </button>
+        {error && <p className="text-red-400 text-xs">{error}</p>}
+      </div>
+
+      {kb.length === 0
+        ? <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-8 text-center"><p className="text-slate-400 text-sm">No KB entries yet. Generate a growth plan to seed KB!</p></div>
+        : (
+          <div className="space-y-3">
+            {kb.map(entry => (
+              <div key={entry.id} className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <span className="inline-block bg-slate-700/50 text-slate-300 text-xs px-2 py-0.5 rounded mb-2">{entry.category}</span>
+                    <h3 className="text-sm font-medium text-white mb-1">{entry.title}</h3>
+                    <p className="text-xs text-slate-400 line-clamp-2">{typeof entry.content === 'string' ? entry.content.substring(0, 150) : JSON.stringify(entry.content).substring(0, 150)}…</p>
+                  </div>
+                  <button onClick={() => setKb(kb.filter(e => e.id !== entry.id))}
+                    className="ml-3 text-xs text-red-400 hover:text-red-300">Remove</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      }
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ROAS Financial Modeling
+// ---------------------------------------------------------------------------
+function RoasModeling({ brandName }: { brandName: string }) {
+  const [productBrief, setProductBrief] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [scenarios, setScenarios] = useState<any[]>([]);
+  const [spendMultiplier, setSpendMultiplier] = useState(1);
+
+  const handleAnalyze = async () => {
+    if (!brandName || !productBrief) { setError('Brand name and product brief required'); return; }
+    setLoading(true); setError('');
+    try {
+      const r = await fetch('/api/growth/roas/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_name: brandName, product_brief: productBrief }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setAnalysis(data.analysis);
+      setScenarios(data.scenarios || []);
+    } catch (e: any) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  const baseData = analysis?.historical_data?.summary;
+  const customScenario = baseData ? {
+    spend_multiplier: spendMultiplier,
+    projected_spend: (baseData.total_spend || 0) * spendMultiplier,
+    projected_roas: (baseData.overall_roas || 0) * (1 - 0.05 * Math.log(spendMultiplier + 1) / Math.log(2)),
+    projected_revenue: ((baseData.total_spend || 0) * spendMultiplier) * ((baseData.overall_roas || 0) * (1 - 0.05 * Math.log(spendMultiplier + 1) / Math.log(2))),
+  } : null;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <BarChart3 className="w-4 h-4 text-orange-400" />
+          <span className="text-xs font-medium text-slate-400">BRAND: {brandName || 'N/A'}</span>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-400 mb-1.5">Product Brief</label>
+          <textarea value={productBrief} onChange={(e) => setProductBrief(e.target.value)} rows={3}
+            className="w-full bg-white/[0.02] border border-slate-700/50 rounded px-3 py-2 text-white placeholder-slate-500 text-sm"
+            placeholder="Describe your product for ROAS modeling…" />
+        </div>
+        <button onClick={handleAnalyze} disabled={loading}
+          className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-medium transition-colors">
+          {loading ? 'Analyzing…' : 'Analyze & Model'}
+        </button>
+        {error && <p className="text-red-400 text-xs">{error}</p>}
+      </div>
+
+      {analysis && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-4">
+              <p className="text-xs text-slate-400">Base ROAS</p>
+              <p className="text-lg font-bold text-emerald-400">{(baseData?.overall_roas || 0).toFixed(2)}x</p>
+            </div>
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-4">
+              <p className="text-xs text-slate-400">Total Spend (90d)</p>
+              <p className="text-lg font-bold text-blue-400">${(baseData?.total_spend || 0).toFixed(0)}</p>
+            </div>
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-4">
+              <p className="text-xs text-slate-400">Total Revenue</p>
+              <p className="text-lg font-bold text-emerald-400">${(baseData?.total_revenue || 0).toFixed(0)}</p>
+            </div>
+          </div>
+
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-5 space-y-4">
+            <h3 className="text-sm font-medium text-white">Spending Scenarios</h3>
+            {scenarios.map((s, idx) => (
+              <div key={idx} className="p-3 bg-white/[0.02] border border-slate-700/30 rounded">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-medium text-slate-400">{s.spend_multiplier}x Spend</span>
+                  <span className="text-sm font-bold text-emerald-400">${s.projected_revenue.toFixed(0)}</span>
+                </div>
+                <div className="w-full bg-slate-700/50 rounded-full h-1.5">
+                  <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${Math.min((s.profit_margin_pct || 0) / 100 * 100, 100)}%` }}></div>
+                </div>
+                <div className="flex justify-between text-xs text-slate-500 mt-1.5">
+                  <span>ROAS: {s.projected_roas.toFixed(2)}x</span>
+                  <span>Profit: {(s.profit_margin_pct || 0).toFixed(1)}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {customScenario && (
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-5 space-y-4">
+              <h3 className="text-sm font-medium text-white">Custom Spend Slider</h3>
+              <input type="range" min="0.5" max="5" step="0.1" value={spendMultiplier}
+                onChange={(e) => setSpendMultiplier(parseFloat(e.target.value))}
+                className="w-full" />
+              <p className="text-xs text-slate-400">Multiplier: {spendMultiplier.toFixed(1)}x current spend</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-white/[0.02] border border-slate-700/30 rounded">
+                  <p className="text-xs text-slate-400">Projected Spend</p>
+                  <p className="text-lg font-bold text-blue-400">${customScenario.projected_spend.toFixed(0)}</p>
+                </div>
+                <div className="p-3 bg-white/[0.02] border border-slate-700/30 rounded">
+                  <p className="text-xs text-slate-400">Projected Revenue</p>
+                  <p className="text-lg font-bold text-emerald-400">${customScenario.projected_revenue.toFixed(0)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Root
 // ---------------------------------------------------------------------------
 export default function GrowthArchitect() {
@@ -700,6 +892,8 @@ export default function GrowthArchitect() {
     { id: 'builder'     as SubTab, label: 'Plan Builder',   icon: Zap },
     { id: 'assets'      as SubTab, label: 'Asset Library',  icon: FileText },
     { id: 'crm'         as SubTab, label: 'CRM & EDM',      icon: Mail },
+    { id: 'kb'          as SubTab, label: 'KB Browser',     icon: BookOpen },
+    { id: 'roas'        as SubTab, label: 'ROAS Model',     icon: BarChart3 },
     { id: 'reviews'     as SubTab, label: 'Weekly Reviews', icon: LayoutList },
     { id: 'experiments' as SubTab, label: 'Experiments',    icon: FlaskConical },
   ];
@@ -736,6 +930,8 @@ export default function GrowthArchitect() {
       {activeTab === 'builder'     && <PlanBuilder   brandName={brandName} setBrandName={setBrandName} />}
       {activeTab === 'assets'      && <AssetLibrary  brandName={brandName} setBrandName={setBrandName} />}
       {activeTab === 'crm'         && <CrmEdm        brandName={brandName} setBrandName={setBrandName} />}
+      {activeTab === 'kb'          && <KnowledgeBase brandName={brandName} />}
+      {activeTab === 'roas'        && <RoasModeling  brandName={brandName} />}
       {activeTab === 'reviews'     && <WeeklyReviews brandName={brandName} setBrandName={setBrandName} />}
       {activeTab === 'experiments' && <Experiments   brandName={brandName} setBrandName={setBrandName} />}
     </div>
