@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader, CheckCircle2, AlertCircle, Zap } from 'lucide-react';
+import { Loader, CheckCircle2, AlertCircle, Zap, BookOpen, BarChart3 } from 'lucide-react';
 import { useGrowthArchitect } from './context';
 import { BrandSelector } from './components/BrandSelector';
 import { DetailedPlanDisplay } from './components/DetailedPlanDisplay';
+import { GrowthFlowchart } from './components/GrowthFlowchart';
 
 export default function GrowthArchitectPage() {
   const { selectedBrand, currentPlan, setCurrentPlan, isLoadingPlan, setIsLoadingPlan } =
@@ -12,6 +13,7 @@ export default function GrowthArchitectPage() {
   const [productBrief, setProductBrief] = useState('');
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(!currentPlan);
+  const [activeTab, setActiveTab] = useState<'plan' | 'flowchart'>('plan');
 
   useEffect(() => {
     // Auto-set product brief from selected brand
@@ -152,8 +154,38 @@ export default function GrowthArchitectPage() {
             </div>
           </div>
 
-          {/* Detailed Plan Display */}
-          <DetailedPlanDisplay plan={currentPlan.plan_data} />
+          {/* Tab Navigation */}
+          <div className="flex gap-2 border-b border-slate-700/50">
+            <button
+              onClick={() => setActiveTab('plan')}
+              className={`px-4 py-3 text-sm font-medium transition-colors flex items-center gap-2 ${
+                activeTab === 'plan'
+                  ? 'text-emerald-400 border-b-2 border-emerald-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              Detailed Plan
+            </button>
+            <button
+              onClick={() => setActiveTab('flowchart')}
+              className={`px-4 py-3 text-sm font-medium transition-colors flex items-center gap-2 ${
+                activeTab === 'flowchart'
+                  ? 'text-emerald-400 border-b-2 border-emerald-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              Growth Architecture
+            </button>
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 'plan' ? (
+            <DetailedPlanDisplay plan={currentPlan.plan_data} />
+          ) : (
+            <GrowthFlowchart plan={currentPlan.plan_data} />
+          )}
         </div>
       )}
     </div>
