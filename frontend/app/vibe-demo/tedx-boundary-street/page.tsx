@@ -424,11 +424,12 @@ export default function TEDxBoundaryStreetPage() {
               ? 'bg-black/95 backdrop-blur-md shadow-lg'
               : 'bg-transparent'
           }`}
+          aria-label="Primary navigation"
         >
           <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
             <button
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="text-white font-bold text-lg tracking-tight hover:opacity-80 transition-opacity"
+              className="text-white font-bold text-lg tracking-tight hover:opacity-80 transition-opacity min-h-[44px] flex items-center"
             >
               TEDx<span className="font-light">BoundaryStreet</span>
             </button>
@@ -438,7 +439,7 @@ export default function TEDxBoundaryStreetPage() {
                 <button
                   key={item.id}
                   onClick={() => scrollTo(item.id)}
-                  className="gradient-line-hover text-white/80 hover:text-white text-sm font-medium transition-colors pb-1"
+                  className="gradient-line-hover text-white/80 hover:text-white text-sm font-medium transition-colors pb-1 min-h-[44px] flex items-center"
                 >
                   {item.label}
                 </button>
@@ -447,21 +448,23 @@ export default function TEDxBoundaryStreetPage() {
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden text-white"
-              aria-label="Toggle menu"
+              className="md:hidden text-white min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-menu"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
 
           {mobileMenuOpen && (
-            <div className="md:hidden bg-black/95 backdrop-blur-md border-t border-white/10">
+            <div id="mobile-menu" className="md:hidden bg-black/95 backdrop-blur-md border-t border-white/10">
               <div className="px-6 py-4 flex flex-col gap-4">
                 {NAV_ITEMS.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => scrollTo(item.id)}
-                    className="text-white/80 hover:text-white text-left text-base py-2 transition-colors"
+                    className="text-white/80 hover:text-white text-left text-base py-2 min-h-[44px] transition-colors"
                   >
                     {item.label}
                   </button>
@@ -471,7 +474,7 @@ export default function TEDxBoundaryStreetPage() {
           )}
         </nav>
 
-        {/* Back to demos link + cross-link */}
+        {/* Cross-links */}
         <div className="fixed top-4 right-4 z-[60] flex items-center gap-2">
           <Link
             href="/vibe-demo/tedx-boundary-street/partners"
@@ -481,9 +484,8 @@ export default function TEDxBoundaryStreetPage() {
           </Link>
           <Link
             href="/vibe-demo"
-            className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80 transition-colors bg-black/30 backdrop-blur-sm rounded-full px-3 py-1.5"
+            className="text-xs text-white/50 hover:text-white/80 transition-colors bg-black/30 backdrop-blur-sm rounded-full px-3 py-1.5"
           >
-            <ArrowLeft className="w-3 h-3" />
             Demo Hub
           </Link>
         </div>
