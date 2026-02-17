@@ -149,51 +149,9 @@ module.exports = function createDebugRoutes() {
   });
 
   // --------------------------------------------------
-  // POST /debug/sessions  (create)
+  // Shared: execute modules on a session
   // --------------------------------------------------
-  router.post('/debug/sessions', (req, res) => {
-    const { project_id, client_id, subject_type, subject_ref, module_ids, trace_enabled } = req.body;
-
-    if (!subject_type || !module_ids || !Array.isArray(module_ids) || module_ids.length === 0) {
-      return res.status(422).json({ detail: 'subject_type and module_ids (non-empty array) are required' });
-    }
-
-    const now = new Date().toISOString();
-    const session = {
-      id: uuidv4(),
-      project_id: project_id || null,
-      client_id: client_id || null,
-      subject_type,
-      subject_ref: subject_ref || null,
-      modules_invoked: module_ids.map(m => ({ module: m, status: 'pending', execution_time_ms: 0 })),
-      overall_score: null,
-      overall_status: null,
-      overall_summary: null,
-      kb_entries_used: [],
-      status: 'open',
-      status_notes: null,
-      initiated_by: null,
-      trace_enabled: trace_enabled || false,
-      created_at: now,
-      updated_at: now,
-      issue_count: 0,
-      critical_count: 0,
-      major_count: 0,
-    };
-    sessions.set(session.id, session);
-    res.status(201).json(session);
-  });
-
-  // --------------------------------------------------
-  // POST /debug/sessions/:id/run  (execute modules)
-  // --------------------------------------------------
-  router.post('/debug/sessions/:id/run', (req, res) => {
-    const session = sessions.get(req.params.id);
-    if (!session) return res.status(404).json({ detail: 'Session not found' });
-    if (session.overall_score !== null) {
-      return res.status(409).json({ detail: 'Debug session has already been executed' });
-    }
-
+  function executeSession(session) {
     const kbContext = { brand_profile: {}, rules: [], patterns: [] };
     const allIssues = [];
     const updatedModules = [];
@@ -276,6 +234,63 @@ module.exports = function createDebugRoutes() {
     session.critical_count = sevCounts.critical || 0;
     session.major_count = sevCounts.major || 0;
 
+    return sessionIssues;
+  }
+
+  // --------------------------------------------------
+  // POST /debug/sessions  (create, optionally auto-run)
+  // --------------------------------------------------
+  router.post('/debug/sessions', (req, res) => {
+    const { project_id, client_id, subject_type, subject_ref, module_ids, trace_enabled, auto_run } = req.body;
+
+    if (!subject_type || !module_ids || !Array.isArray(module_ids) || module_ids.length === 0) {
+      return res.status(422).json({ detail: 'subject_type and module_ids (non-empty array) are required' });
+    }
+
+    const now = new Date().toISOString();
+    const session = {
+      id: uuidv4(),
+      project_id: project_id || null,
+      client_id: client_id || null,
+      subject_type,
+      subject_ref: subject_ref || null,
+      modules_invoked: module_ids.map(m => ({ module: m, status: 'pending', execution_time_ms: 0 })),
+      overall_score: null,
+      overall_status: null,
+      overall_summary: null,
+      kb_entries_used: [],
+      status: 'open',
+      status_notes: null,
+      initiated_by: null,
+      trace_enabled: trace_enabled || false,
+      created_at: now,
+      updated_at: now,
+      issue_count: 0,
+      critical_count: 0,
+      major_count: 0,
+    };
+    sessions.set(session.id, session);
+
+    // Auto-run modules immediately if requested
+    if (auto_run) {
+      const sessionIssues = executeSession(session);
+      return res.status(201).json({ ...session, issues: sessionIssues });
+    }
+
+    res.status(201).json(session);
+  });
+
+  // --------------------------------------------------
+  // POST /debug/sessions/:id/run  (execute modules)
+  // --------------------------------------------------
+  router.post('/debug/sessions/:id/run', (req, res) => {
+    const session = sessions.get(req.params.id);
+    if (!session) return res.status(404).json({ detail: 'Session not found' });
+    if (session.overall_score !== null) {
+      return res.status(409).json({ detail: 'Debug session has already been executed' });
+    }
+
+    const sessionIssues = executeSession(session);
     res.json({ ...session, issues: sessionIssues });
   });
 

@@ -122,15 +122,18 @@ export default function HealthCheckPage() {
     setRunning(true);
     setError(null);
     try {
-      const session = await crmApi.debug.createSession({
+      const result = await crmApi.debug.createSession({
         subject_type: 'web_page',
         subject_ref: url.trim(),
         module_ids: ['seo_aiseo', 'website_health', 'web_qc'],
+        auto_run: true,
       });
-      const result = await crmApi.debug.runSession(session.id);
+      // Store result so detail page doesn't need to re-fetch from in-memory API
+      try { sessionStorage.setItem(`healthcheck-${result.id}`, JSON.stringify(result)); } catch {}
       router.push(`/healthcheck/${result.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to run health check');
+    } finally {
       setRunning(false);
     }
   }, [url, router]);
