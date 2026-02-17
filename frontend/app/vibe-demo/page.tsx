@@ -121,6 +121,15 @@ export default function VibeDemoPage() {
       tags: ['WCAG 2.1 AA', 'Partners', 'Bilingual Form', 'Mobile-first'],
     },
     {
+      id: 'tedx-xinyi',
+      title: 'TEDxXinyi',
+      titleZh: '信義 TEDx — 城市創意策展',
+      description: 'City creative festival site: 6-page bilingual TEDx event with lineup-style speakers, sustainability stage design, community hub, and blog',
+      href: '/vibe-demo/tedx-xinyi',
+      color: 'from-red-500 to-amber-600',
+      tags: ['Multi-page', 'Festival Design', 'Sustainability', 'Bilingual ZH/EN'],
+    },
+    {
       id: 'rotary-hkie',
       title: 'Rotary Club HK Island East',
       titleZh: '香港島東扶輪社',
