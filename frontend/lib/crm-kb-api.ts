@@ -183,6 +183,14 @@ export interface DebugSession {
   critical_count?: number;
   major_count?: number;
   issues?: DebugIssue[];
+  orchestration?: {
+    total_cost: number;
+    budget: number;
+    fetch_time_ms: number;
+    modules_run: number;
+    modules_skipped: number;
+    layer_scores: Record<string, { total_impact: number; count: number }>;
+  };
 }
 
 export interface DebugIssue {
