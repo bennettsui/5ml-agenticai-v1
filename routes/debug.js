@@ -21,14 +21,22 @@ module.exports = function createDebugRoutes() {
   // --------------------------------------------------
   // Module definitions
   // --------------------------------------------------
+  // 7-Layer Health Check Architecture:
+  //  L1: Infrastructure & Server  → website_health (area: "Health")
+  //  L2: Security & Privacy       → security_scan
+  //  L3: Performance & Speed      → website_health (area: "Performance"/"Mobile")
+  //  L4: SEO Foundation           → seo_aiseo (area: "SEO")
+  //  L5: AI & Content Intelligence→ seo_aiseo (area: "AI SEO")
+  //  L6: Accessibility (WCAG)     → wcag_accessibility
+  //  L7: Quality & Standards      → web_qc
+
   const MODULE_DEFS = [
-    { id: 'brand_guardian', name: 'Brand Guardian', description: 'Checks deliverables against brand profile, tone, do/don\'t lists', applicable_subject_types: ['web_page','design','video','social_post','document'], version: '1.0', status: 'active' },
-    { id: 'web_qc', name: 'Web Quality Check', description: 'Broken links, accessibility, performance auditing', applicable_subject_types: ['web_page'], version: '1.0', status: 'active' },
-    { id: 'social_best_practice', name: 'Social Best Practice', description: 'Platform-specific social post guidelines', applicable_subject_types: ['social_post'], version: '1.0', status: 'active' },
-    { id: 'design_accuracy', name: 'Design Accuracy', description: 'Visual compliance with brand style guide', applicable_subject_types: ['design'], version: '1.0', status: 'active' },
-    { id: 'content_review', name: 'Content Review', description: 'Tone, message alignment, grammar', applicable_subject_types: ['document','web_page'], version: '1.0', status: 'active' },
-    { id: 'seo_aiseo', name: 'SEO / AI SEO Audit', description: 'Ahrefs-style SEO analysis, meta tags, structured data, internal linking, AI content signals, Core Web Vitals SEO impact', applicable_subject_types: ['web_page'], version: '1.0', status: 'active' },
-    { id: 'website_health', name: 'Website Health Check', description: 'Google PageSpeed, Core Web Vitals (LCP, INP, CLS), broken links, mobile-friendliness, HTTPS, WCAG 2.2', applicable_subject_types: ['web_page'], version: '1.0', status: 'active' },
+    { id: 'website_health', name: 'Infrastructure & Performance', description: 'Server health, response time, HTTPS, compression, Core Web Vitals, mobile-friendliness', applicable_subject_types: ['web_page'], version: '2.0', status: 'active', layer: 'L1/L3', cost_weight: 1 },
+    { id: 'security_scan', name: 'Security & Privacy', description: 'Data leakage detection, XSS vectors, header security, cookie safety, API key exposure, code injection risks', applicable_subject_types: ['web_page'], version: '1.0', status: 'active', layer: 'L2', cost_weight: 1 },
+    { id: 'seo_aiseo', name: 'SEO & AI Content Intelligence', description: 'Meta tags, structured data, internal linking, E-E-A-T signals, content quality, AI readability, keyword analysis', applicable_subject_types: ['web_page'], version: '2.0', status: 'active', layer: 'L4/L5', cost_weight: 1 },
+    { id: 'wcag_accessibility', name: 'Accessibility (WCAG 2.2)', description: 'ARIA landmarks, form labels, image alt text, skip navigation, focus management, keyboard accessibility', applicable_subject_types: ['web_page'], version: '1.0', status: 'active', layer: 'L6', cost_weight: 1 },
+    { id: 'web_qc', name: 'Quality & Standards', description: 'HTML standards compliance, deprecated tags, mixed content, favicon, inline styles, code quality', applicable_subject_types: ['web_page'], version: '2.0', status: 'active', layer: 'L7', cost_weight: 1 },
+    { id: 'brand_guardian', name: 'Brand Guardian', description: 'Checks deliverables against brand profile, tone, do/don\'t lists', applicable_subject_types: ['web_page','design','video','social_post','document'], version: '1.0', status: 'active', layer: 'N/A', cost_weight: 2 },
   ];
 
   // ==================================================================
@@ -325,6 +333,132 @@ module.exports = function createDebugRoutes() {
       findings.push({ module: 'seo_aiseo', area: 'SEO', severity: 'major', finding: `Very little text content found (${bodyText.length} chars). This may be a JavaScript-rendered SPA — search engines may not see the full content.`, evidence: { visible_text_length: bodyText.length, html_length: html.length, sample: truncate(bodyText, 200) }, recommendation: 'If using a JavaScript framework (React, Vue, Angular), implement Server-Side Rendering (SSR) or Static Site Generation (SSG) so search engines can index your content.', score_impact: 5, business_impact: 'high' });
     }
 
+    // =====================================================
+    // AI SEO & Content Intelligence Checks (Layer 5)
+    // =====================================================
+
+    // --- Word Count & Reading Level ---
+    const words = bodyText.split(/\s+/).filter(w => w.length > 0);
+    const wordCount = words.length;
+    const readingTime = Math.ceil(wordCount / 200);
+    if (wordCount > 50 && wordCount < 300) {
+      findings.push({ module: 'seo_aiseo', area: 'AI SEO', severity: 'minor', finding: `Thin content: only ${wordCount} words (~${readingTime} min read). Google and AI models prefer in-depth content (1000+ words for informational pages).`, evidence: { word_count: wordCount, reading_time_min: readingTime, threshold: '300-1000+ recommended' }, recommendation: 'Expand content with more comprehensive coverage of the topic. Add sections, examples, data, and expert insights. Aim for 1000+ words for informational pages.', score_impact: 3, business_impact: 'medium' });
+    } else if (wordCount >= 300) {
+      findings.push({ module: 'seo_aiseo', area: 'AI SEO', severity: 'info', finding: `Content length: ${wordCount} words (~${readingTime} min read).`, evidence: { word_count: wordCount, reading_time_min: readingTime, status: 'good' }, recommendation: null, score_impact: 0, business_impact: 'none' });
+    }
+
+    // --- Content-to-HTML Ratio ---
+    const contentRatio = html.length > 0 ? (bodyText.length / html.length * 100) : 0;
+    if (contentRatio > 0 && contentRatio < 10) {
+      findings.push({ module: 'seo_aiseo', area: 'AI SEO', severity: 'minor', finding: `Low content-to-code ratio: ${contentRatio.toFixed(1)}%. The page is mostly code/markup with little visible text — AI crawlers value content-rich pages.`, evidence: { content_ratio_pct: contentRatio.toFixed(1), text_length: bodyText.length, html_length: html.length }, recommendation: 'Increase visible text content. Reduce unnecessary JavaScript/CSS in the HTML. Move scripts to external files.', score_impact: 2, business_impact: 'medium' });
+    }
+
+    // --- E-E-A-T Signals (Experience, Expertise, Authoritativeness, Trustworthiness) ---
+    const eatSignals = {
+      has_author: /<[^>]*class=["'][^"']*author[^"']*["']/i.test(html) || /rel=["']author["']/i.test(html) || extractMetaContent(html, 'author'),
+      has_date: /<time[\s>]/i.test(html) || extractMetaContent(html, 'article:published_time') || extractMetaContent(html, 'date'),
+      has_about_link: /href=["'][^"']*\/about/i.test(html),
+      has_contact_link: /href=["'][^"']*\/contact/i.test(html),
+      has_privacy_link: /href=["'][^"']*\/privacy/i.test(html),
+      has_terms_link: /href=["'][^"']*\/terms/i.test(html),
+    };
+    const eatMissing = [];
+    if (!eatSignals.has_author) eatMissing.push('Author attribution');
+    if (!eatSignals.has_date) eatMissing.push('Publication date');
+    if (!eatSignals.has_about_link) eatMissing.push('About page link');
+    if (!eatSignals.has_contact_link) eatMissing.push('Contact page link');
+    if (!eatSignals.has_privacy_link) eatMissing.push('Privacy policy link');
+
+    if (eatMissing.length >= 3) {
+      findings.push({ module: 'seo_aiseo', area: 'AI SEO', severity: 'minor', finding: `Missing ${eatMissing.length} E-E-A-T signals: ${eatMissing.join(', ')}. Google and AI systems use these to assess content trustworthiness.`, evidence: { missing: eatMissing, signals: eatSignals }, recommendation: 'Add author bios, publication dates, About/Contact page links, and privacy policy links. These build trust signals for both users and AI crawlers.', score_impact: 3, business_impact: 'medium' });
+    } else if (eatMissing.length > 0) {
+      findings.push({ module: 'seo_aiseo', area: 'AI SEO', severity: 'info', finding: `E-E-A-T partially covered. Missing: ${eatMissing.join(', ')}.`, evidence: { missing: eatMissing, signals: eatSignals }, recommendation: `Consider adding: ${eatMissing.join(', ')} to strengthen trust signals.`, score_impact: 0, business_impact: 'low' });
+    } else {
+      findings.push({ module: 'seo_aiseo', area: 'AI SEO', severity: 'info', finding: 'Strong E-E-A-T signals: author, date, about, contact, and privacy links all present.', evidence: { signals: eatSignals, status: 'good' }, recommendation: null, score_impact: 0, business_impact: 'none' });
+    }
+
+    // --- Twitter Card Meta ---
+    const twCard = extractMetaContent(html, 'twitter:card');
+    const twTitle = extractMetaContent(html, 'twitter:title');
+    const twDesc = extractMetaContent(html, 'twitter:description');
+    const twMissing = [];
+    if (!twCard) twMissing.push('twitter:card');
+    if (!twTitle) twMissing.push('twitter:title');
+    if (!twDesc) twMissing.push('twitter:description');
+    if (twMissing.length > 0) {
+      findings.push({ module: 'seo_aiseo', area: 'SEO', severity: twMissing.length >= 2 ? 'minor' : 'info', finding: `Missing Twitter Card tags: ${twMissing.join(', ')}. Shares on X/Twitter will show generic previews.`, evidence: { missing: twMissing, twitter_card: twCard, twitter_title: twTitle ? truncate(twTitle, 60) : null }, recommendation: `Add Twitter Card meta tags: ${twMissing.map(t => `<meta name="${t}" content="...">`).join(', ')}`, score_impact: twMissing.length >= 2 ? 1 : 0, business_impact: 'low' });
+    }
+
+    // --- URL SEO Analysis ---
+    try {
+      const urlObj = new URL(finalUrl);
+      const urlPath = urlObj.pathname;
+      const urlIssues = [];
+      if (urlPath.length > 75) urlIssues.push(`URL path too long (${urlPath.length} chars)`);
+      if (/[A-Z]/.test(urlPath)) urlIssues.push('URL contains uppercase letters');
+      if (/_/.test(urlPath)) urlIssues.push('URL uses underscores (prefer hyphens)');
+      if (/\?.*=/.test(urlObj.search) && urlObj.search.length > 50) urlIssues.push('Long query string may cause duplicate content');
+      if (urlIssues.length > 0) {
+        findings.push({ module: 'seo_aiseo', area: 'SEO', severity: 'minor', finding: `URL structure issues: ${urlIssues.join('; ')}. Clean, short URLs rank better and are more shareable.`, evidence: { url: finalUrl, path_length: urlPath.length, issues: urlIssues }, recommendation: 'Use short, lowercase, hyphen-separated URLs with keywords. Avoid query parameters for main content pages.', score_impact: 1, business_impact: 'low' });
+      }
+    } catch {}
+
+    // --- Image SEO ---
+    const allImgs = extractAllImages(html);
+    const noLazyImages = allImgs.filter(img => {
+      const srcStr = img.src || '';
+      return srcStr && !/loading=["']lazy["']/i.test(html.slice(Math.max(0, html.indexOf(srcStr) - 100), html.indexOf(srcStr) + 10));
+    });
+    const hasSrcset = /<img[^>]*srcset=/i.test(html);
+    const imgIssues = [];
+    if (allImgs.length > 5 && !hasSrcset) imgIssues.push(`No responsive srcset found (${allImgs.length} images)`);
+    if (allImgs.length > 3 && noLazyImages.length > allImgs.length * 0.8) imgIssues.push('Most images lack lazy loading');
+    if (imgIssues.length > 0) {
+      findings.push({ module: 'seo_aiseo', area: 'AI SEO', severity: 'minor', finding: `Image optimization issues: ${imgIssues.join('; ')}. This hurts both page speed and image search rankings.`, evidence: { total_images: allImgs.length, issues: imgIssues, has_srcset: hasSrcset }, recommendation: 'Add loading="lazy" to below-fold images. Use srcset for responsive images. Use WebP/AVIF formats with descriptive file names.', score_impact: 2, business_impact: 'medium' });
+    }
+
+    // --- Hreflang (International SEO) ---
+    const hreflangRegex = /<link[^>]*hreflang=["']([^"']*)["']/gi;
+    const hreflangs = [];
+    let hlm;
+    while ((hlm = hreflangRegex.exec(html))) hreflangs.push(hlm[1]);
+    if (hreflangs.length > 0) {
+      findings.push({ module: 'seo_aiseo', area: 'SEO', severity: 'info', finding: `Hreflang tags found for ${hreflangs.length} language(s): ${hreflangs.join(', ')}. International targeting is configured.`, evidence: { languages: hreflangs, status: 'good' }, recommendation: null, score_impact: 0, business_impact: 'none' });
+    }
+
+    // --- Schema Completeness Check ---
+    if (schemas.length > 0) {
+      const schemaIssues = [];
+      for (const schema of schemas) {
+        const type = schema['@type'];
+        if (type === 'Organization' && !schema.logo) schemaIssues.push('Organization schema missing "logo"');
+        if (type === 'Article' && !schema.datePublished) schemaIssues.push('Article schema missing "datePublished"');
+        if (type === 'Article' && !schema.author) schemaIssues.push('Article schema missing "author"');
+        if (type === 'Product' && !schema.offers) schemaIssues.push('Product schema missing "offers"');
+        if (type === 'LocalBusiness' && !schema.address) schemaIssues.push('LocalBusiness missing "address"');
+      }
+      if (schemaIssues.length > 0) {
+        findings.push({ module: 'seo_aiseo', area: 'AI SEO', severity: 'minor', finding: `JSON-LD schema incomplete: ${schemaIssues.join('; ')}. Incomplete schemas may not qualify for rich snippets.`, evidence: { issues: schemaIssues, schema_count: schemas.length }, recommendation: 'Complete all required fields in your JSON-LD schemas. Use Google Rich Results Test to validate.', score_impact: 2, business_impact: 'medium' });
+      }
+    }
+
+    // --- AI Content Readability ---
+    if (wordCount >= 100) {
+      const sentences = bodyText.split(/[.!?]+/).filter(s => s.trim().length > 10);
+      const avgWordsPerSentence = sentences.length > 0 ? Math.round(words.length / sentences.length) : 0;
+      const longSentences = sentences.filter(s => s.trim().split(/\s+/).length > 30).length;
+      if (avgWordsPerSentence > 25) {
+        findings.push({ module: 'seo_aiseo', area: 'AI SEO', severity: 'minor', finding: `Average sentence length is ${avgWordsPerSentence} words. Long sentences reduce readability for both humans and AI parsers.`, evidence: { avg_words_per_sentence: avgWordsPerSentence, total_sentences: sentences.length, long_sentences: longSentences }, recommendation: 'Break long sentences into shorter ones (15-20 words average). Use bullet points and short paragraphs. This improves AI comprehension and featured snippet chances.', score_impact: 1, business_impact: 'medium' });
+      }
+    }
+
+    // --- Content Freshness Signals ---
+    const datePublished = extractMetaContent(html, 'article:published_time') || extractMetaContent(html, 'datePublished');
+    const dateModified = extractMetaContent(html, 'article:modified_time') || extractMetaContent(html, 'dateModified');
+    if (datePublished && !dateModified) {
+      findings.push({ module: 'seo_aiseo', area: 'AI SEO', severity: 'info', finding: `Content has publication date (${truncate(datePublished, 25)}) but no last-modified date. AI systems favor recently updated content.`, evidence: { published: datePublished, modified: null }, recommendation: 'Add article:modified_time meta tag. Regularly update content and reflect the new date.', score_impact: 0, business_impact: 'low' });
+    }
+
     return findings;
   }
 
@@ -501,7 +635,301 @@ module.exports = function createDebugRoutes() {
   }
 
   // ==================================================================
-  // Other Module Runners (unchanged stubs for non-web checks)
+  // WCAG Accessibility Module (Layer 6)
+  // ==================================================================
+
+  function checkWcagAccessibility(pageData) {
+    const findings = [];
+    const { html, finalUrl, error: fetchError } = pageData;
+
+    if (fetchError) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'critical', finding: `Could not fetch page for accessibility audit: ${fetchError}`, evidence: { url: pageData.url, error: fetchError }, recommendation: 'Ensure the URL is accessible.', score_impact: 15, business_impact: 'high' });
+      return findings;
+    }
+
+    // --- Lang Attribute (WCAG 3.1.1 Level A) ---
+    const lang = getHtmlLang(html);
+    if (!lang) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'major', finding: 'Missing lang attribute on <html> tag (WCAG 3.1.1 Level A). Screen readers cannot determine the page language for correct pronunciation.', evidence: { wcag: '3.1.1', level: 'A', element: '<html>', attribute: 'lang', status: 'missing' }, recommendation: 'Add lang="en" (or appropriate language code) to the <html> tag: <html lang="en">', score_impact: 4, business_impact: 'high' });
+    } else {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'info', finding: `Page language declared: "${lang}" (WCAG 3.1.1)`, evidence: { wcag: '3.1.1', value: lang, status: 'good' }, recommendation: null, score_impact: 0, business_impact: 'none' });
+    }
+
+    // --- Skip Navigation Link (WCAG 2.4.1 Level A) ---
+    const hasSkipLink = /<a[^>]*href=["']#(main|content|skip|maincontent)[^"']*["'][^>]*>/i.test(html) ||
+      /<a[^>]*class=["'][^"']*skip[^"']*["'][^>]*>/i.test(html);
+    if (!hasSkipLink) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'minor', finding: 'No skip navigation link detected (WCAG 2.4.1 Level A). Keyboard users must tab through all navigation on every page load.', evidence: { wcag: '2.4.1', level: 'A', element: 'skip link', status: 'not found' }, recommendation: 'Add a skip link as the first focusable element: <a href="#main" class="sr-only focus:not-sr-only">Skip to main content</a>', score_impact: 2, business_impact: 'medium' });
+    }
+
+    // --- ARIA Landmarks (WCAG 1.3.1 Level A) ---
+    const hasMainRole = /role=["']main["']/i.test(html) || /<main[\s>]/i.test(html);
+    const hasNavRole = /role=["']navigation["']/i.test(html) || /<nav[\s>]/i.test(html);
+    const hasBannerRole = /role=["']banner["']/i.test(html) || /<header[\s>]/i.test(html);
+    const hasContentInfo = /role=["']contentinfo["']/i.test(html) || /<footer[\s>]/i.test(html);
+    const missingLandmarks = [];
+    if (!hasMainRole) missingLandmarks.push('main');
+    if (!hasNavRole) missingLandmarks.push('navigation');
+    if (!hasBannerRole) missingLandmarks.push('banner/header');
+    if (!hasContentInfo) missingLandmarks.push('contentinfo/footer');
+    if (missingLandmarks.length > 0) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: missingLandmarks.includes('main') ? 'major' : 'minor', finding: `Missing ${missingLandmarks.length} ARIA landmark(s): ${missingLandmarks.join(', ')} (WCAG 1.3.1 Level A).`, evidence: { wcag: '1.3.1', level: 'A', missing: missingLandmarks, present: { main: hasMainRole, navigation: hasNavRole, banner: hasBannerRole, contentinfo: hasContentInfo } }, recommendation: 'Add semantic HTML5 elements (<main>, <nav>, <header>, <footer>) or ARIA role attributes to define page regions.', score_impact: missingLandmarks.includes('main') ? 3 : 1, business_impact: 'medium' });
+    } else {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'info', finding: 'All major ARIA landmarks present (main, navigation, banner, contentinfo).', evidence: { wcag: '1.3.1', status: 'good' }, recommendation: null, score_impact: 0, business_impact: 'none' });
+    }
+
+    // --- Form Labels (WCAG 1.3.1 / 4.1.2 Level A) ---
+    const inputRegex = /<input\s([^>]*?)>/gi;
+    let inputMatch;
+    let unlabeledInputs = 0;
+    let totalInputs = 0;
+    while ((inputMatch = inputRegex.exec(html))) {
+      const attrs = inputMatch[1];
+      const type = (attrs.match(/type=["']([^"']*)["']/i) || [])[1] || 'text';
+      if (['hidden', 'submit', 'button', 'image', 'reset'].includes(type)) continue;
+      totalInputs++;
+      const hasAriaLabel = /aria-label=["']/i.test(attrs) || /aria-labelledby=["']/i.test(attrs) || /title=["']/i.test(attrs);
+      const id = (attrs.match(/id=["']([^"']*)["']/i) || [])[1];
+      const hasForLabel = id ? new RegExp(`<label[^>]*for=["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'i').test(html) : false;
+      if (!hasAriaLabel && !hasForLabel) unlabeledInputs++;
+    }
+    if (unlabeledInputs > 0) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: unlabeledInputs >= 3 ? 'major' : 'minor', finding: `${unlabeledInputs} of ${totalInputs} form input(s) have no accessible label (WCAG 1.3.1, 4.1.2 Level A). Screen readers cannot identify these fields.`, evidence: { wcag: '1.3.1 / 4.1.2', level: 'A', unlabeled: unlabeledInputs, total: totalInputs }, recommendation: 'Add <label for="fieldId"> elements or aria-label attributes to all form inputs. Placeholder text is NOT a substitute for labels.', score_impact: unlabeledInputs >= 3 ? 4 : 2, business_impact: 'high' });
+    } else if (totalInputs > 0) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'info', finding: `All ${totalInputs} form inputs have accessible labels.`, evidence: { total: totalInputs, status: 'good' }, recommendation: null, score_impact: 0, business_impact: 'none' });
+    }
+
+    // --- Image Alt Text (WCAG 1.1.1 Level A) ---
+    const images = extractAllImages(html);
+    const noAltImages = images.filter(img => !img.hasAlt);
+    if (noAltImages.length > 0) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: noAltImages.length >= 5 ? 'major' : 'minor', finding: `${noAltImages.length} of ${images.length} image(s) missing alt attribute (WCAG 1.1.1 Level A). Visually impaired users cannot understand these images.`, evidence: { wcag: '1.1.1', level: 'A', missing: noAltImages.length, total: images.length, examples: noAltImages.slice(0, 3).map(i => truncate(i.src, 60)) }, recommendation: 'Add descriptive alt text to all <img> tags. For decorative images, use alt="" (empty string).', score_impact: noAltImages.length >= 5 ? 4 : 2, business_impact: 'high' });
+    } else if (images.length > 0) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'info', finding: `All ${images.length} images have alt attributes (WCAG 1.1.1).`, evidence: { total: images.length, status: 'good' }, recommendation: null, score_impact: 0, business_impact: 'none' });
+    }
+
+    // --- Button Accessibility (WCAG 4.1.2 Level A) ---
+    const buttonRegex = /<button\s*([^>]*)>([\s\S]*?)<\/button>/gi;
+    let btnMatch;
+    let emptyButtons = 0;
+    let totalButtons = 0;
+    while ((btnMatch = buttonRegex.exec(html))) {
+      totalButtons++;
+      const attrs = btnMatch[1];
+      const content = btnMatch[2].replace(/<[^>]+>/g, '').trim();
+      const hasAriaLabel = /aria-label=["']/i.test(attrs) || /title=["']/i.test(attrs);
+      if (!content && !hasAriaLabel) emptyButtons++;
+    }
+    if (emptyButtons > 0) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'minor', finding: `${emptyButtons} button(s) have no accessible name (WCAG 4.1.2 Level A). Screen readers will announce these as "button" with no context.`, evidence: { wcag: '4.1.2', level: 'A', empty: emptyButtons, total: totalButtons }, recommendation: 'Add visible text content or aria-label to all buttons. Icon-only buttons need aria-label="description".', score_impact: 2, business_impact: 'medium' });
+    }
+
+    // --- Heading Structure (WCAG 1.3.1) ---
+    const headings = extractAllHeadings(html);
+    const h1Count = headings.filter(h => h.level === 1).length;
+    if (headings.length > 0 && h1Count === 0) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'minor', finding: 'No H1 heading found (WCAG 1.3.1). Headings provide document structure for screen reader navigation.', evidence: { wcag: '1.3.1', headings: headings.length, h1_count: 0, first: headings[0] ? `H${headings[0].level}: ${truncate(headings[0].text, 40)}` : 'none' }, recommendation: 'Add a single H1 heading that describes the page content. Maintain proper hierarchy (H1 → H2 → H3).', score_impact: 2, business_impact: 'medium' });
+    }
+
+    // --- Focus Visible (WCAG 2.4.7 Level AA) ---
+    const hasOutlineNone = /outline:\s*none/i.test(html) || /outline:\s*0[^0-9]/i.test(html);
+    if (hasOutlineNone) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'minor', finding: 'Detected "outline: none" or "outline: 0" in styles (WCAG 2.4.7 Level AA). This may remove keyboard focus indicators.', evidence: { wcag: '2.4.7', level: 'AA', pattern: 'outline: none/0' }, recommendation: 'Never remove outline without providing an alternative focus indicator. Use :focus-visible to style focus rings.', score_impact: 2, business_impact: 'medium' });
+    }
+
+    // --- Positive TabIndex Misuse (WCAG 2.4.3 Level A) ---
+    const tabIndexRegex = /tabindex=["']([^"']*)["']/gi;
+    let tabMatch;
+    let positiveTabIndex = 0;
+    while ((tabMatch = tabIndexRegex.exec(html))) {
+      if (parseInt(tabMatch[1]) > 0) positiveTabIndex++;
+    }
+    if (positiveTabIndex > 0) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'minor', finding: `${positiveTabIndex} element(s) use positive tabindex values (WCAG 2.4.3 Level A). This creates unpredictable tab order.`, evidence: { wcag: '2.4.3', level: 'A', count: positiveTabIndex }, recommendation: 'Remove positive tabindex values. Use tabindex="0" to add to natural tab order, or tabindex="-1" for programmatic focus only.', score_impact: 1, business_impact: 'low' });
+    }
+
+    // --- Tables Without Headers (WCAG 1.3.1 Level A) ---
+    const tableRegex = /<table[\s\S]*?<\/table>/gi;
+    let tableMatch;
+    let tablesWithoutHeaders = 0;
+    let totalTables = 0;
+    while ((tableMatch = tableRegex.exec(html))) {
+      totalTables++;
+      if (!/<th[\s>]/i.test(tableMatch[0]) && !/<caption[\s>]/i.test(tableMatch[0])) tablesWithoutHeaders++;
+    }
+    if (tablesWithoutHeaders > 0) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'minor', finding: `${tablesWithoutHeaders} of ${totalTables} table(s) lack header cells or captions (WCAG 1.3.1 Level A).`, evidence: { wcag: '1.3.1', level: 'A', without_headers: tablesWithoutHeaders, total: totalTables }, recommendation: 'Add <th> header cells and <caption> to all data tables. Use scope="col" or scope="row" on headers.', score_impact: 1, business_impact: 'medium' });
+    }
+
+    // --- Video Without Captions (WCAG 1.2.2 Level A) ---
+    const videoCount = (html.match(/<video[\s>]/gi) || []).length;
+    if (videoCount > 0) {
+      const trackCount = (html.match(/<track[\s>]/gi) || []).length;
+      if (trackCount === 0) {
+        findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'major', finding: `${videoCount} video element(s) found without captions/subtitles track (WCAG 1.2.2 Level A).`, evidence: { wcag: '1.2.2', level: 'A', videos: videoCount, tracks: 0 }, recommendation: 'Add <track kind="captions"> or <track kind="subtitles"> elements to all video elements.', score_impact: 4, business_impact: 'high' });
+      }
+    }
+
+    // --- Autoplay Media (WCAG 1.4.2 Level A) ---
+    const autoplayCount = (html.match(/<(?:video|audio)[^>]*\bautoplay\b/gi) || []).length;
+    if (autoplayCount > 0) {
+      findings.push({ module: 'wcag_accessibility', area: 'Accessibility', severity: 'minor', finding: `${autoplayCount} media element(s) with autoplay detected (WCAG 1.4.2 Level A). Unexpected audio can be disorienting.`, evidence: { wcag: '1.4.2', level: 'A', count: autoplayCount }, recommendation: 'Remove autoplay or ensure media is muted by default. Provide visible play/pause controls.', score_impact: 2, business_impact: 'medium' });
+    }
+
+    return findings;
+  }
+
+  // ==================================================================
+  // Security & Privacy Module (Layer 2)
+  // ==================================================================
+
+  function checkSecurity(pageData) {
+    const findings = [];
+    const { html, headers, finalUrl, url, error: fetchError } = pageData;
+
+    if (fetchError) {
+      findings.push({ module: 'security_scan', area: 'Security', severity: 'critical', finding: `Could not fetch page for security scan: ${fetchError}`, evidence: { url, error: fetchError }, recommendation: 'Ensure the URL is accessible.', score_impact: 10, business_impact: 'high' });
+      return findings;
+    }
+
+    // --- Server Information Disclosure ---
+    const serverHeader = headers['server'] || '';
+    const poweredBy = headers['x-powered-by'] || '';
+    if (serverHeader && /\d/.test(serverHeader)) {
+      findings.push({ module: 'security_scan', area: 'Security', severity: 'minor', finding: `Server header reveals version info: "${serverHeader}". Attackers can look up known vulnerabilities for this version.`, evidence: { header: 'Server', value: serverHeader }, recommendation: 'Configure your server to return a generic Server header without version numbers. In nginx: server_tokens off;', score_impact: 1, business_impact: 'medium' });
+    }
+    if (poweredBy) {
+      findings.push({ module: 'security_scan', area: 'Security', severity: 'minor', finding: `X-Powered-By header reveals technology: "${poweredBy}". This helps attackers identify your tech stack.`, evidence: { header: 'X-Powered-By', value: poweredBy }, recommendation: 'Remove the X-Powered-By header. In Express: app.disable("x-powered-by"). In PHP: expose_php = Off.', score_impact: 1, business_impact: 'medium' });
+    }
+
+    // --- Exposed Email Addresses ---
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const cleanHtml = html.replace(/<!--[\s\S]*?-->/g, '');
+    const emails = [...new Set((cleanHtml.match(emailRegex) || []).filter(e => !e.includes('example.com') && !e.includes('sentry') && !e.includes('wixpress')))];
+    if (emails.length > 0) {
+      findings.push({ module: 'security_scan', area: 'Privacy', severity: emails.length >= 3 ? 'minor' : 'info', finding: `${emails.length} email address(es) found in page HTML. These can be harvested by spam bots.`, evidence: { count: emails.length, emails: emails.slice(0, 5).map(e => truncate(e, 40)) }, recommendation: 'Use contact forms instead of exposing email addresses. If emails must be shown, obfuscate with JavaScript or use anti-scraping techniques.', score_impact: emails.length >= 3 ? 1 : 0, business_impact: 'medium' });
+    }
+
+    // --- HTML Comments With Sensitive Info ---
+    const sensitiveComments = [];
+    const commentRegex = /<!--([\s\S]*?)-->/g;
+    let cm;
+    while ((cm = commentRegex.exec(html))) {
+      const content = cm[1].toLowerCase();
+      const sensitivePatterns = ['password', 'secret', 'api_key', 'apikey', 'api-key', 'token', 'credentials', 'private', 'todo', 'fixme', 'hack', 'debug'];
+      for (const pattern of sensitivePatterns) {
+        if (content.includes(pattern)) {
+          sensitiveComments.push({ snippet: truncate(cm[1].trim(), 80), keyword: pattern });
+          break;
+        }
+      }
+    }
+    if (sensitiveComments.length > 0) {
+      findings.push({ module: 'security_scan', area: 'Security', severity: 'minor', finding: `${sensitiveComments.length} HTML comment(s) contain potentially sensitive keywords (${[...new Set(sensitiveComments.map(c => c.keyword))].join(', ')}).`, evidence: { count: sensitiveComments.length, samples: sensitiveComments.slice(0, 3) }, recommendation: 'Remove HTML comments from production builds. Use a build process that strips comments (html-minifier, terser).', score_impact: 2, business_impact: 'medium' });
+    }
+
+    // --- Inline Event Handlers (XSS Vectors) ---
+    const eventHandlers = ['onclick', 'onerror', 'onload', 'onmouseover', 'onfocus', 'onblur', 'onsubmit'];
+    const foundHandlers = {};
+    for (const handler of eventHandlers) {
+      const regex = new RegExp(`\\s${handler}\\s*=\\s*["']`, 'gi');
+      const matches = html.match(regex);
+      if (matches) foundHandlers[handler] = matches.length;
+    }
+    const handlerTotal = Object.values(foundHandlers).reduce((sum, c) => sum + c, 0);
+    if (handlerTotal > 0) {
+      findings.push({ module: 'security_scan', area: 'Security', severity: handlerTotal >= 10 ? 'minor' : 'info', finding: `${handlerTotal} inline event handler(s) found (${Object.entries(foundHandlers).map(([k, v]) => `${k}:${v}`).join(', ')}). Inline handlers can be XSS vectors and are blocked by strict CSP.`, evidence: { total: handlerTotal, handlers: foundHandlers }, recommendation: 'Move inline event handlers to external JavaScript. Use addEventListener(). This enables strict Content-Security-Policy without unsafe-inline.', score_impact: handlerTotal >= 10 ? 2 : 0, business_impact: 'medium' });
+    }
+
+    // --- Forms With Insecure Action ---
+    const formRegex = /<form[^>]*action=["'](http:\/\/[^"']*)["']/gi;
+    const insecureForms = [];
+    let fm;
+    while ((fm = formRegex.exec(html))) insecureForms.push(fm[1]);
+    if (insecureForms.length > 0) {
+      findings.push({ module: 'security_scan', area: 'Security', severity: 'major', finding: `${insecureForms.length} form(s) submit data over insecure HTTP. Credentials and personal data are transmitted in plain text.`, evidence: { count: insecureForms.length, urls: insecureForms.slice(0, 3).map(u => truncate(u, 60)) }, recommendation: 'Change all form action URLs to HTTPS. If no action is specified, ensure the page itself is served over HTTPS.', score_impact: 5, business_impact: 'high' });
+    }
+
+    // --- External Scripts Without SRI ---
+    const scriptRegex = /<script[^>]*src=["'](https?:\/\/[^"']*)["'][^>]*>/gi;
+    let scriptMatch;
+    let externalScripts = 0;
+    let scriptsWithoutSRI = 0;
+    while ((scriptMatch = scriptRegex.exec(html))) {
+      try {
+        const scriptHost = new URL(scriptMatch[1]).hostname;
+        const pageHost = new URL(finalUrl).hostname;
+        if (scriptHost !== pageHost) {
+          externalScripts++;
+          if (!/integrity=["']/i.test(scriptMatch[0])) scriptsWithoutSRI++;
+        }
+      } catch {}
+    }
+    if (scriptsWithoutSRI > 0) {
+      findings.push({ module: 'security_scan', area: 'Security', severity: scriptsWithoutSRI >= 3 ? 'minor' : 'info', finding: `${scriptsWithoutSRI} of ${externalScripts} external script(s) lack Subresource Integrity (SRI) hashes. A compromised CDN could inject malicious code.`, evidence: { external: externalScripts, without_sri: scriptsWithoutSRI }, recommendation: 'Add integrity and crossorigin attributes: <script src="..." integrity="sha384-..." crossorigin="anonymous">', score_impact: scriptsWithoutSRI >= 3 ? 2 : 0, business_impact: 'medium' });
+    }
+
+    // --- Cookie Security ---
+    const setCookieHeaders = headers['set-cookie'];
+    if (setCookieHeaders) {
+      const cookies = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
+      const insecureCookies = cookies.filter(c => {
+        const lower = c.toLowerCase();
+        return !lower.includes('secure') || !lower.includes('httponly');
+      });
+      if (insecureCookies.length > 0) {
+        findings.push({ module: 'security_scan', area: 'Security', severity: 'minor', finding: `${insecureCookies.length} cookie(s) missing Secure and/or HttpOnly flags. Cookies without these flags are vulnerable to theft.`, evidence: { total: cookies.length, insecure: insecureCookies.length }, recommendation: 'Add Secure, HttpOnly, and SameSite=Strict flags to all cookies.', score_impact: 2, business_impact: 'high' });
+      }
+    }
+
+    // --- Referrer Policy ---
+    const referrerPolicy = headers['referrer-policy'] || extractMetaContent(html, 'referrer');
+    if (!referrerPolicy) {
+      findings.push({ module: 'security_scan', area: 'Privacy', severity: 'info', finding: 'No Referrer-Policy header or meta tag. Browser uses default referrer behavior, potentially leaking full URLs to third parties.', evidence: { header: 'Referrer-Policy', status: 'not set' }, recommendation: 'Add Referrer-Policy: strict-origin-when-cross-origin (or no-referrer for max privacy).', score_impact: 0, business_impact: 'low' });
+    }
+
+    // --- Permissions Policy ---
+    const permissionsPolicy = headers['permissions-policy'] || headers['feature-policy'];
+    if (!permissionsPolicy) {
+      findings.push({ module: 'security_scan', area: 'Security', severity: 'info', finding: 'No Permissions-Policy header. The page does not restrict access to browser features (camera, microphone, geolocation).', evidence: { header: 'Permissions-Policy', status: 'not set' }, recommendation: 'Add Permissions-Policy header: geolocation=(), camera=(), microphone=()', score_impact: 0, business_impact: 'low' });
+    }
+
+    // --- Source Map Exposure ---
+    const sourceMapRegex = /\/\/[#@]\s*sourceMappingURL\s*=\s*(\S+)/g;
+    const sourceMaps = [];
+    let smMatch;
+    while ((smMatch = sourceMapRegex.exec(html))) sourceMaps.push(smMatch[1]);
+    if (sourceMaps.length > 0) {
+      findings.push({ module: 'security_scan', area: 'Security', severity: 'info', finding: `${sourceMaps.length} source map reference(s) found. Source maps expose your original source code to anyone.`, evidence: { count: sourceMaps.length, files: sourceMaps.slice(0, 3) }, recommendation: 'Remove source map references from production builds. Generate source maps only for development.', score_impact: 0, business_impact: 'low' });
+    }
+
+    // --- API Key Patterns ---
+    const apiKeyPatterns = [
+      { name: 'Google API Key', regex: /AIza[0-9A-Za-z_-]{35}/g },
+      { name: 'AWS Access Key', regex: /AKIA[0-9A-Z]{16}/g },
+      { name: 'Stripe Secret Key', regex: /sk_live_[0-9a-zA-Z]{24,}/g },
+      { name: 'GitHub Token', regex: /ghp_[0-9a-zA-Z]{36}/g },
+    ];
+    const foundKeys = [];
+    for (const { name, regex } of apiKeyPatterns) {
+      const matches = html.match(regex);
+      if (matches) foundKeys.push({ type: name, count: matches.length, sample: truncate(matches[0], 20) + '***' });
+    }
+    if (foundKeys.length > 0) {
+      findings.push({ module: 'security_scan', area: 'Security', severity: 'critical', finding: `Potential API key(s) found in page HTML: ${foundKeys.map(k => k.type).join(', ')}. These should NEVER be in client-side code.`, evidence: { keys: foundKeys }, recommendation: 'Remove API keys from client-side code immediately. Use server-side environment variables. Rotate any exposed keys.', score_impact: 10, business_impact: 'high' });
+    }
+
+    // --- CORS Wildcard ---
+    const corsOrigin = headers['access-control-allow-origin'];
+    if (corsOrigin === '*') {
+      findings.push({ module: 'security_scan', area: 'Security', severity: 'minor', finding: 'CORS allows all origins (Access-Control-Allow-Origin: *). Any website can make requests to this page.', evidence: { header: 'Access-Control-Allow-Origin', value: '*' }, recommendation: 'Restrict CORS to specific trusted origins instead of using wildcard (*).', score_impact: 1, business_impact: 'medium' });
+    }
+
+    return findings;
+  }
+
+  // ==================================================================
+  // Other Module Runners
   // ==================================================================
 
   function checkBrandGuardian(subjectRef, kbContext) {
@@ -521,13 +949,9 @@ module.exports = function createDebugRoutes() {
       case 'seo_aiseo': return checkSeoAiseo(pageData);
       case 'website_health': return checkWebsiteHealth(pageData);
       case 'web_qc': return checkWebQc(pageData);
+      case 'wcag_accessibility': return checkWcagAccessibility(pageData);
+      case 'security_scan': return checkSecurity(pageData);
       case 'brand_guardian': return checkBrandGuardian(pageData.url, kbContext);
-      case 'social_best_practice':
-        return [{ module: 'social_best_practice', area: 'Social', severity: 'info', finding: 'Social best practice check requires a social post URL or content. Not applicable for web pages.', recommendation: 'Use this module when checking social media posts.', priority: 'P2', score_impact: 0, business_impact: 'none' }];
-      case 'design_accuracy':
-        return [{ module: 'design_accuracy', area: 'Design', severity: 'info', finding: 'Design accuracy check requires visual analysis. Not applicable for web page URL checks.', recommendation: 'Use this module when checking design deliverables (images, mockups).', priority: 'P2', score_impact: 0, business_impact: 'none' }];
-      case 'content_review':
-        return [{ module: 'content_review', area: 'Brand', severity: 'info', finding: 'Content review requires AI analysis integration. Basic content checks are included in the SEO module.', recommendation: 'AI-powered tone and message alignment analysis will be available in a future update.', priority: 'P2', score_impact: 0, business_impact: 'none' }];
       default: return [];
     }
   }
@@ -572,28 +996,88 @@ module.exports = function createDebugRoutes() {
   });
 
   // ==================================================================
+  // Orchestrating Agent — Cost-Efficiency Coordinator
+  // ==================================================================
+  // The orchestrating agent optimizes which modules to run and in what
+  // order, tracking estimated cost and prioritizing high-impact modules.
+  // For HTML-parsing-only modules, cost is near-zero (CPU only).
+  // For modules that would call external APIs (future), cost is tracked.
+
+  const ORCHESTRATOR_CONFIG = {
+    // Module execution order (highest impact first)
+    priority_order: ['website_health', 'security_scan', 'seo_aiseo', 'wcag_accessibility', 'web_qc'],
+    // Estimated cost per module (relative units: 1 = base HTML parse, 10 = API call)
+    cost_estimates: {
+      website_health: 1,
+      security_scan: 1,
+      seo_aiseo: 1,
+      wcag_accessibility: 1,
+      web_qc: 1,
+      brand_guardian: 5, // Would involve AI analysis
+    },
+    // Maximum budget (relative units) per session
+    max_budget: 20,
+  };
+
+  function orchestrateModules(requestedModules) {
+    // Sort by priority order
+    const sorted = [...requestedModules].sort((a, b) => {
+      const aIdx = ORCHESTRATOR_CONFIG.priority_order.indexOf(a);
+      const bIdx = ORCHESTRATOR_CONFIG.priority_order.indexOf(b);
+      return (aIdx === -1 ? 99 : aIdx) - (bIdx === -1 ? 99 : bIdx);
+    });
+
+    // Calculate total cost and trim if over budget
+    let totalCost = 0;
+    const approved = [];
+    const skipped = [];
+    for (const moduleId of sorted) {
+      const cost = ORCHESTRATOR_CONFIG.cost_estimates[moduleId] || 1;
+      if (totalCost + cost <= ORCHESTRATOR_CONFIG.max_budget) {
+        approved.push({ module: moduleId, estimated_cost: cost });
+        totalCost += cost;
+      } else {
+        skipped.push({ module: moduleId, reason: 'budget_exceeded', estimated_cost: cost });
+      }
+    }
+
+    return { approved, skipped, total_estimated_cost: totalCost, budget: ORCHESTRATOR_CONFIG.max_budget };
+  }
+
+  // ==================================================================
   // Shared: execute modules on a session (ASYNC — fetches URL)
   // ==================================================================
   async function executeSession(session) {
+    // Orchestrating agent decides module order and budget
+    const requestedModuleIds = (session.modules_invoked || []).map(m => m.module);
+    const orchestration = orchestrateModules(requestedModuleIds);
+
     // Fetch the page once, share data across all modules
+    const fetchStart = Date.now();
     const pageData = await fetchPage(session.subject_ref || '');
+    const fetchTimeMs = Date.now() - fetchStart;
 
     const kbContext = { brand_profile: {}, rules: [], patterns: [] };
     const allIssues = [];
     const updatedModules = [];
 
-    for (const moduleEntry of (session.modules_invoked || [])) {
-      const moduleId = moduleEntry.module;
+    // Execute in orchestrated order
+    for (const { module: moduleId, estimated_cost } of orchestration.approved) {
       const start = Date.now();
       try {
         const moduleIssues = runModule(moduleId, pageData, kbContext);
         const elapsed = Date.now() - start;
-        updatedModules.push({ module: moduleId, status: 'success', execution_time_ms: elapsed, issues_found: moduleIssues.length });
+        updatedModules.push({ module: moduleId, status: 'success', execution_time_ms: elapsed, issues_found: moduleIssues.length, estimated_cost });
         allIssues.push(...moduleIssues);
       } catch (e) {
         const elapsed = Date.now() - start;
-        updatedModules.push({ module: moduleId, status: 'failed', execution_time_ms: elapsed, error_message: e.message });
+        updatedModules.push({ module: moduleId, status: 'failed', execution_time_ms: elapsed, error_message: e.message, estimated_cost });
       }
+    }
+
+    // Add skipped modules to the report
+    for (const { module: moduleId, reason } of orchestration.skipped) {
+      updatedModules.push({ module: moduleId, status: 'skipped', execution_time_ms: 0, reason });
     }
 
     // Create issue records
@@ -641,8 +1125,13 @@ module.exports = function createDebugRoutes() {
 
     // Build summary
     const sevCounts = {};
+    const layerScores = {};
     for (const i of allIssues) {
       sevCounts[i.severity] = (sevCounts[i.severity] || 0) + 1;
+      // Track per-layer (area) scores
+      if (!layerScores[i.area]) layerScores[i.area] = { total_impact: 0, count: 0 };
+      layerScores[i.area].total_impact += (i.score_impact || 0);
+      layerScores[i.area].count += 1;
     }
     const actionableCount = allIssues.filter(i => i.severity !== 'info').length;
     const parts = [`Score: ${score}/100 (${overallStatus.toUpperCase()}).`];
@@ -651,7 +1140,7 @@ module.exports = function createDebugRoutes() {
       if (sevCounts[sev]) parts.push(`${sevCounts[sev]} ${sev}`);
     }
 
-    // Update session
+    // Update session with orchestration metadata
     session.modules_invoked = updatedModules;
     session.overall_score = score;
     session.overall_status = overallStatus;
@@ -661,6 +1150,14 @@ module.exports = function createDebugRoutes() {
     session.issue_count = allIssues.length;
     session.critical_count = sevCounts.critical || 0;
     session.major_count = sevCounts.major || 0;
+    session.orchestration = {
+      total_cost: orchestration.total_estimated_cost,
+      budget: orchestration.max_budget,
+      fetch_time_ms: fetchTimeMs,
+      modules_run: orchestration.approved.length,
+      modules_skipped: orchestration.skipped.length,
+      layer_scores: layerScores,
+    };
 
     return sessionIssues;
   }
