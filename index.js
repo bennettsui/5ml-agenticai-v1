@@ -1738,8 +1738,14 @@ app.post('/api/crm/chat', async (req, res) => {
       return res.status(400).json({ error: 'messages array is required' });
     }
 
-    const system = `You are an AI assistant embedded in a Brand CRM + Knowledge Base system.
+    // RAG: retrieve relevant CRM + company context
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'crm', 3) : '';
+    const companyContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
+
+    const system = `You are an AI assistant embedded in a Brand CRM + Knowledge Base system built by 5 Miles Lab (5ML).
 You help users manage brands, projects, feedback, and brand knowledge.
+${ragContext ? `\n${ragContext}` : ''}${companyContext ? `\n${companyContext}` : ''}
 
 When the user asks you to research a company, provide structured information including:
 - industry (as an array of strings)
@@ -1985,11 +1991,13 @@ app.post('/api/workflow-chat', async (req, res) => {
     // RAG: retrieve relevant context for the latest user message
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'workflows', 3) : '';
+    const companyRag = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
 
     const systemPrompt = [
       WORKFLOW_SYSTEM_PROMPTS[mode] || WORKFLOW_SYSTEM_PROMPTS.assistant,
       `\nCurrent Workflow:\n${workflowContext}`,
       ragContext ? `\n${ragContext}` : '',
+      companyRag ? `\n${companyRag}` : '',
     ].join('\n');
 
     // Try DeepSeek first, fall back to Claude
@@ -2035,10 +2043,16 @@ app.post('/api/agent-chat', async (req, res) => {
       return res.status(400).json({ error: 'messages array is required' });
     }
 
+    // RAG: retrieve relevant context for the latest user message
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, null, 3) : '';
+
     const systemPrompt = `You are the 5ML Platform Agent Assistant — an expert on the 5ML Agentic AI Platform.
 You have deep knowledge of every agent, use case, solution line, C-Suite role, and the 7-layer architecture.
+You know 5ML is a Hong Kong-based agentic AI solutions agency competing with NDN and Fimmick.
 
 ${context || ''}
+${ragContext ? `\n${ragContext}` : ''}
 
 Your capabilities:
 1. Answer questions about any agent, use case, or architectural layer

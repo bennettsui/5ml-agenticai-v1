@@ -89,8 +89,8 @@ function BrandDetailInner() {
         crmApi.brands.feedback(brandId),
       ]);
       setBrand(brandData);
-      setProjects(projectsData.items);
-      setFeedback(feedbackData.items);
+      setProjects(projectsData.items ?? []);
+      setFeedback(feedbackData.items ?? []);
       setPageState({
         pageType: 'brand-detail',
         pageTitle: brandData.name,
@@ -117,7 +117,7 @@ function BrandDetailInner() {
         `Synced ${result.synced_count} emails, ${result.new_feedback_count} new feedback items created.`
       );
       const feedbackData = await crmApi.brands.feedback(brandId);
-      setFeedback(feedbackData.items);
+      setFeedback(feedbackData.items ?? []);
     } catch (err) {
       setSyncResult(
         err instanceof Error ? err.message : 'Sync failed'

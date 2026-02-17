@@ -178,7 +178,7 @@ export default function ProjectsPage() {
               Retry
             </button>
           </div>
-        ) : data && data.items.length === 0 ? (
+        ) : data && (data.items ?? []).length === 0 ? (
           <div className="text-center py-32">
             <FolderKanban className="w-12 h-12 text-slate-600 mx-auto mb-4" />
             <p className="text-slate-400 text-lg">No projects found</p>
@@ -217,7 +217,7 @@ export default function ProjectsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700/50">
-                    {data.items.map((project) => (
+                    {(data.items ?? []).map((project) => (
                       <tr
                         key={project.id}
                         onClick={() => router.push(`/use-cases/crm/projects/detail?id=${project.id}`)}
@@ -253,10 +253,10 @@ export default function ProjectsPage() {
             </div>
 
             {/* Pagination */}
-            {data.pages > 1 && (
+            {(data.pages ?? 1) > 1 && (
               <div className="flex items-center justify-between mt-6 px-2">
                 <p className="text-sm text-slate-400">
-                  Page {data.page} of {data.pages} ({data.total} total projects)
+                  Page {data.page ?? 1} of {data.pages ?? 1} ({data.total ?? 0} total projects)
                 </p>
                 <div className="flex items-center gap-2">
                   <button
@@ -268,8 +268,8 @@ export default function ProjectsPage() {
                     Previous
                   </button>
                   <button
-                    onClick={() => setPage((p) => Math.min(data.pages, p + 1))}
-                    disabled={page >= data.pages}
+                    onClick={() => setPage((p) => Math.min(data.pages ?? 1, p + 1))}
+                    disabled={page >= (data.pages ?? 1)}
                     className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     Next
