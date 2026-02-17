@@ -227,15 +227,15 @@ export const USE_CASES: UseCaseConfig[] = [
   },
   {
     id: 'crm',
-    name: 'CRM Marketing Intelligence',
-    description: '16-agent 8-phase pipeline with brand setup & research, ongoing monitoring, knowledge graph, RAG-powered chat',
+    name: 'CRM Relationship Intelligence',
+    description: '18-agent Relationship Intelligence Platform with orchestrator, relationship graph, scoring, signal analysis & RAG-powered chat',
     solutionLine: 'Platform',
     status: 'in_progress',
-    progress: 0.6,
+    progress: 0.65,
     priority: 'critical',
     path: '/use-cases/crm',
-    agentCount: 16,
-    features: ['Brand Setup & Research', '8-Phase Pipeline', 'Knowledge Graph', 'RAG Chat', 'Debug QA', 'Health Scoring'],
+    agentCount: 18,
+    features: ['Relationship Orchestrator', 'Relationship Graph', 'Signal Analysis', 'Relationship Scoring', 'Connection Suggester', 'RAG Chat'],
   },
   {
     id: 'api-docs',
@@ -258,7 +258,7 @@ export const USE_CASES: UseCaseConfig[] = [
 export const ROADMAP_ITEMS: RoadmapItem[] = [
   // NOW (0-3 months)
   { ...USE_CASES.find(u => u.id === 'ads-performance')!, timeframe: 'now', type: 'product', owner: 'Growth Team', notes: 'v1 live, enhancing report generation and AI assistant' },
-  { ...USE_CASES.find(u => u.id === 'crm')!, timeframe: 'now', type: 'platform', owner: 'Platform Team', notes: 'v1 CRM + KB live, adding debug QA and brand rules' },
+  { ...USE_CASES.find(u => u.id === 'crm')!, timeframe: 'now', type: 'platform', owner: 'Platform Team', notes: 'Relationship Intelligence Platform: orchestrator, relationship graph, scoring, signal feed, action center' },
   { id: 'founder-cockpit', name: 'Founder Cockpit Agent', description: 'CEO-level strategic dashboard with all business KPIs', solutionLine: 'ExecIntel', status: 'in_progress', progress: 0.2, priority: 'critical', path: '#', timeframe: 'now', type: 'csuite', owner: 'CEO / CSO', notes: 'Integrates CSO orchestrator with business metrics' },
   { ...USE_CASES.find(u => u.id === 'photo-booth')!, timeframe: 'now', type: 'product', owner: 'Experience Team', notes: 'v2: additional themes, faster generation, gallery admin' },
   { ...USE_CASES.find(u => u.id === 'healthcheck')!, timeframe: 'now', type: 'product', owner: 'Platform Team', notes: '7-layer architecture, WCAG + security modules, best practices' },
@@ -299,7 +299,7 @@ export const SEVEN_LAYERS = [
   { number: 6, name: 'Orchestration & Workflow', components: ['Schedule Registry', 'CSO Orchestrator', 'Scan Queue', 'WebSocket', 'Health Monitor'] },
   { number: 5, name: 'Task Definitions', components: ['DailySync', 'WeeklyAnalysis', 'MonthlyExecutive', 'NewsDiscovery', 'DigestWorkflow'] },
   { number: 4, name: 'Knowledge Management', components: ['pgvector', 'Notion Connector', 'Vector Embeddings', 'Semantic Search', 'Multi-source'] },
-  { number: 3, name: 'Roles & Agents', components: ['50+ Agents', 'Marketing (14)', 'Ads (8)', 'Photo Booth (9)', 'Intelligence (3)', 'CRM (16)'] },
+  { number: 3, name: 'Roles & Agents', components: ['52+ Agents', 'Marketing (14)', 'Ads (8)', 'Photo Booth (9)', 'Intelligence (3)', 'CRM (18)'] },
   { number: 2, name: 'Execution Engine', components: ['DeepSeek', 'Claude API', 'Perplexity', 'ComfyUI', 'Model Router', 'Tesseract OCR'] },
   { number: 1, name: 'Infrastructure & Storage', components: ['PostgreSQL + pgvector', 'Express API', 'Fly.io', 'WebSocket', 'SSE Streaming'] },
 ];

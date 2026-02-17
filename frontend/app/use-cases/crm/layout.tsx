@@ -50,7 +50,7 @@ export default function CrmKbLayout({ children }: { children: React.ReactNode })
               Back to Platform
             </Link>
             <h2 className="text-lg font-bold text-white tracking-tight">
-              CRM + KB
+              Relationship Intelligence
             </h2>
           </div>
 
@@ -80,7 +80,7 @@ export default function CrmKbLayout({ children }: { children: React.ReactNode })
 
           {/* Sidebar footer */}
           <div className="px-5 py-4 border-t border-slate-700/50">
-            <p className="text-xs text-slate-500">Brand CRM + Knowledge Base</p>
+            <p className="text-xs text-slate-500">Relationship Intelligence Platform</p>
           </div>
         </aside>
 

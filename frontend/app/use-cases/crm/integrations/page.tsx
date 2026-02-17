@@ -184,7 +184,7 @@ export default function IntegrationsPage() {
             className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to CRM KB
+            Back to Relationship Intelligence
           </Link>
           <h1 className="text-3xl font-bold text-white flex items-center gap-3">
             <Zap className="w-8 h-8 text-emerald-400" />

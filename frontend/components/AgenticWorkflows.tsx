@@ -255,61 +255,77 @@ const INITIAL_WORKFLOWS: WorkflowDef[] = [
   },
   {
     id: 'crm',
-    title: 'CRM Marketing Intelligence',
-    subtitle: '16 agents — 8-phase pipeline with brand setup & ongoing research',
+    title: 'CRM Relationship Intelligence',
+    subtitle: '18 agents — Relationship Intelligence Platform with orchestrator, scoring & signal analysis',
     icon: BookOpen,
     gradient: 'from-emerald-500 to-teal-600',
-    pattern: 'Phased Intelligence Pipeline',
-    patternDesc: 'Phase 0 pre-CRM brand research → data ingestion → processing → knowledge synthesis → domain intelligence → action planning → execution → UI. Setup-to-ongoing orchestration with tiered depth (Quick/Comprehensive/Refresh)',
-    trigger: 'New Client Onboarding / API Request / Quarterly Review',
-    canvasWidth: 1500,
-    canvasHeight: 620,
+    pattern: 'Orchestrated Relationship Intelligence',
+    patternDesc: 'Relationship Orchestrator routes triggers → Phase 0 research → data collection & communication analysis → validation → Relationship Graph → pattern/scoring/connection intelligence → strategy & execution → quality gate → RAG-powered chat. Tier-based model routing with cost optimization.',
+    trigger: 'New Client / Relationship Signal / Simple Query / Quarterly Review',
+    canvasWidth: 1700,
+    canvasHeight: 680,
     nodes: [
+      // Entry: Relationship Orchestrator
+      { id: 'orchestrator', name: 'Rel. Orchestrator', role: 'Entry · Trigger classification & routing · Haiku ($0.25/M)', icon: Workflow, color: '#a855f7', x: 60, y: 290 },
       // Phase 0: Pre-CRM Setup & Research
-      { id: 'brand-discover', name: 'Brand Discovery', role: 'Phase 0 · Web search, basic profile · Haiku ($0.25/M)', icon: Search, color: '#3b82f6', x: 60, y: 60 },
-      { id: 'market-research', name: 'Market Research', role: 'Phase 0 · Industry context & trends · Perplexity ($3/M)', icon: Globe, color: '#06b6d4', x: 60, y: 200 },
-      { id: 'competitor-analysis', name: 'Competitor Analysis', role: 'Phase 0 · Market position · Perplexity ($3/M)', icon: Target, color: '#f97316', x: 60, y: 340 },
-      { id: 'linkedin-analyzer', name: 'LinkedIn Analyzer', role: 'Phase 0 · Key contacts, org structure · Haiku ($0.25/M)', icon: Users, color: '#8b5cf6', x: 60, y: 480 },
-      // Phase 1: Data Ingestion & Ongoing
-      { id: 'brand-monitor', name: 'Brand Monitor', role: 'Phase 1 · News, mentions, social · Haiku ($0.25/M)', icon: Eye, color: '#22c55e', x: 320, y: 60 },
-      { id: 'crm-collector', name: 'CRM Data Collector', role: 'Phase 1 · Feedback, emails, forms · DeepSeek ($0.14/M)', icon: Mail, color: '#0ea5e9', x: 320, y: 200 },
-      { id: 'competitor-tracker', name: 'Competitor Tracker', role: 'Phase 1 · Ongoing intel · Haiku ($0.25/M)', icon: RefreshCw, color: '#f59e0b', x: 320, y: 340 },
-      // Phase 2-3: Processing & Knowledge
-      { id: 'normalizer', name: 'Data Normalizer', role: 'Phase 2 · Clean, dedupe, normalize', icon: Database, color: '#64748b', x: 570, y: 130 },
-      { id: 'kg-builder', name: 'Knowledge Graph', role: 'Phase 3 · Relationship mapping, hierarchy · DeepSeek ($0.14/M)', icon: Layers, color: '#a855f7', x: 570, y: 330 },
-      // Phase 4: Domain Intelligence
-      { id: 'pattern-detect', name: 'Pattern Recognizer', role: 'Phase 4 · Cross-brand patterns · DeepSeek ($0.14/M)', icon: Brain, color: '#ec4899', x: 820, y: 130 },
-      { id: 'health-scorer', name: 'Health Scorer', role: 'Phase 4 · Multi-factor scoring · Haiku ($0.25/M)', icon: TrendingUp, color: '#10b981', x: 820, y: 330 },
-      // Phase 5-6: Action & Execution
-      { id: 'strategy-planner', name: 'Strategy Planner', role: 'Phase 5 · Budget, resource allocation · DeepSeek ($0.14/M)', icon: Target, color: '#6366f1', x: 1070, y: 130 },
-      { id: 'crm-updater', name: 'CRM Updater', role: 'Phase 6 · System updates, alerts · Haiku ($0.25/M)', icon: Database, color: '#22c55e', x: 1070, y: 330 },
+      { id: 'brand-discover', name: 'Brand Discovery', role: 'Phase 0 · Web search, basic profile · Haiku ($0.25/M)', icon: Search, color: '#3b82f6', x: 280, y: 40 },
+      { id: 'market-research', name: 'Market Research', role: 'Phase 0 · Industry context & trends · Perplexity ($3/M)', icon: Globe, color: '#06b6d4', x: 280, y: 180 },
+      { id: 'competitor-analysis', name: 'Competitor Analysis', role: 'Phase 0 · Market position · Perplexity ($3/M)', icon: Target, color: '#f97316', x: 280, y: 320 },
+      { id: 'linkedin-analyzer', name: 'LinkedIn Analyzer', role: 'Phase 0 · Key contacts, org structure · Haiku ($0.25/M)', icon: Users, color: '#8b5cf6', x: 280, y: 460 },
+      // Phase 1: Data Ingestion & Communication
+      { id: 'brand-monitor', name: 'Brand Monitor', role: 'Phase 1 · News, mentions, social · Haiku ($0.25/M)', icon: Eye, color: '#22c55e', x: 520, y: 40 },
+      { id: 'crm-collector', name: 'CRM Data Collector', role: 'Phase 1 · Feedback, emails, forms · DeepSeek ($0.14/M)', icon: Mail, color: '#0ea5e9', x: 520, y: 200 },
+      { id: 'comm-analyzer', name: 'Comms Analyzer', role: 'Phase 1 · Tone, responsiveness, patterns · Haiku ($0.25/M)', icon: MessageSquare, color: '#f59e0b', x: 520, y: 380 },
+      // Phase 2: Validation & Normalization
+      { id: 'data-validator', name: 'Data Validator', role: 'Phase 2 · Early validation checkpoint · DeepSeek ($0.14/M)', icon: Shield, color: '#64748b', x: 730, y: 100 },
+      { id: 'normalizer', name: 'Data Normalizer', role: 'Phase 2 · Clean, dedupe, normalize', icon: Database, color: '#64748b', x: 730, y: 310 },
+      // Phase 3: Relationship Graph
+      { id: 'rel-graph', name: 'Relationship Graph', role: 'Phase 3 · Strength metrics, temporal tracking · DeepSeek ($0.14/M)', icon: Layers, color: '#a855f7', x: 940, y: 210 },
+      // Phase 4: Intelligence Layer
+      { id: 'pattern-detect', name: 'Pattern Recognizer', role: 'Phase 4 · Cross-brand patterns · DeepSeek ($0.14/M)', icon: Brain, color: '#ec4899', x: 1140, y: 60 },
+      { id: 'rel-scorer', name: 'Relationship Scorer', role: 'Phase 4 · Multi-factor scoring, at-risk detection · DeepSeek ($0.14/M)', icon: TrendingUp, color: '#10b981', x: 1140, y: 230 },
+      { id: 'connection-suggest', name: 'Connection Suggester', role: 'Phase 4 · Development opportunities · DeepSeek ($0.14/M)', icon: UserCheck, color: '#06b6d4', x: 1140, y: 400 },
+      // Phase 5-6: Strategy & Execution
+      { id: 'strategy-planner', name: 'Strategy Planner', role: 'Phase 5 · Budget, resource allocation · Sonnet ($3/M)', icon: Target, color: '#6366f1', x: 1340, y: 100 },
+      { id: 'crm-updater', name: 'CRM Updater', role: 'Phase 6 · System updates, alerts · Haiku ($0.25/M)', icon: Database, color: '#22c55e', x: 1340, y: 300 },
+      { id: 'quality-gate', name: 'Quality Gate', role: 'Phase 6 · Completeness validator · DeepSeek ($0.14/M)', icon: Shield, color: '#ef4444', x: 1340, y: 490 },
       // Phase 7: UI & Interaction
-      { id: 'quality-gate', name: 'Quality Gate', role: 'Phase 6 · Research completeness validator · DeepSeek ($0.14/M)', icon: Shield, color: '#ef4444', x: 1070, y: 500 },
-      { id: 'context-builder', name: 'Context Builder', role: 'Phase 7 · History + brand rules + RAG', icon: BookOpen, color: '#06b6d4', x: 1320, y: 200 },
-      { id: 'chat-agent', name: 'CRM Chat Agent', role: 'Phase 7 · Client-facing AI · Sonnet ($3/M)', icon: Bot, color: '#10b981', x: 1320, y: 420 },
+      { id: 'context-builder', name: 'Context Builder', role: 'Phase 7 · History + relationship rules + RAG', icon: BookOpen, color: '#06b6d4', x: 1540, y: 170 },
+      { id: 'chat-agent', name: 'CRM Chat Agent', role: 'Phase 7 · Client-facing AI · Sonnet ($3/M)', icon: Bot, color: '#10b981', x: 1540, y: 400 },
     ],
     edges: [
-      // Phase 0 parallel research → Phase 1/2
-      { from: 'brand-discover', to: 'normalizer', label: 'profile', type: 'solid' },
-      { from: 'market-research', to: 'normalizer', label: 'parallel', type: 'conditional' },
-      { from: 'competitor-analysis', to: 'normalizer', label: 'parallel', type: 'conditional' },
-      { from: 'linkedin-analyzer', to: 'kg-builder', label: 'contacts', type: 'solid' },
-      // Phase 1 ongoing feeds
+      // Orchestrator routing (entry point)
+      { from: 'orchestrator', to: 'brand-discover', label: 'new client', type: 'conditional' },
+      { from: 'orchestrator', to: 'comm-analyzer', label: 'rel. signal', type: 'conditional' },
+      { from: 'orchestrator', to: 'chat-agent', label: 'simple query', type: 'conditional' },
+      { from: 'orchestrator', to: 'brand-monitor', label: 'quarterly', type: 'conditional' },
+      // Phase 0 parallel research → Phase 2 validation
+      { from: 'brand-discover', to: 'data-validator', type: 'solid' },
+      { from: 'market-research', to: 'data-validator', label: 'parallel', type: 'solid' },
+      { from: 'competitor-analysis', to: 'data-validator', label: 'parallel', type: 'solid' },
+      { from: 'linkedin-analyzer', to: 'normalizer', label: 'contacts', type: 'solid' },
+      // Phase 1 ongoing feeds → normalizer
       { from: 'brand-monitor', to: 'normalizer', type: 'solid' },
       { from: 'crm-collector', to: 'normalizer', type: 'solid' },
-      { from: 'competitor-tracker', to: 'normalizer', type: 'solid' },
+      { from: 'comm-analyzer', to: 'normalizer', type: 'solid' },
+      // Phase 2 internal
+      { from: 'data-validator', to: 'normalizer', label: 'validated', type: 'solid' },
       // Phase 2 → 3
-      { from: 'normalizer', to: 'kg-builder', type: 'solid' },
+      { from: 'normalizer', to: 'rel-graph', type: 'solid' },
       // Phase 3 → 4
-      { from: 'kg-builder', to: 'pattern-detect', type: 'solid' },
-      { from: 'kg-builder', to: 'health-scorer', type: 'solid' },
+      { from: 'rel-graph', to: 'pattern-detect', type: 'solid' },
+      { from: 'rel-graph', to: 'rel-scorer', type: 'solid' },
+      { from: 'rel-graph', to: 'connection-suggest', type: 'solid' },
       // Phase 4 → 5-6
       { from: 'pattern-detect', to: 'strategy-planner', type: 'solid' },
-      { from: 'health-scorer', to: 'strategy-planner', type: 'solid' },
+      { from: 'rel-scorer', to: 'strategy-planner', type: 'solid' },
+      { from: 'connection-suggest', to: 'strategy-planner', type: 'solid' },
       { from: 'strategy-planner', to: 'crm-updater', type: 'solid' },
       { from: 'strategy-planner', to: 'quality-gate', label: 'validate', type: 'conditional' },
       // Quality gate feedback
       { from: 'quality-gate', to: 'brand-discover', label: 'gaps → re-research', type: 'feedback' },
+      // Relationship scorer feedback loop
+      { from: 'rel-scorer', to: 'orchestrator', label: 'at-risk alert', type: 'feedback' },
       // Phase 6 → 7
       { from: 'crm-updater', to: 'context-builder', type: 'solid' },
       { from: 'pattern-detect', to: 'context-builder', label: 'rules', type: 'conditional' },
