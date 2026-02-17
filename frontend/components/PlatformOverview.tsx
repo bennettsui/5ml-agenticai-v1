@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bot, Zap, Database, Layers, CheckCircle2, TrendingUp, Table2, Newspaper, Users, FileSpreadsheet, Camera, BarChart3, Megaphone, Briefcase, DollarSign, Coins, BookOpen } from 'lucide-react';
+import Link from 'next/link';
+import { Bot, Zap, Database, Layers, CheckCircle2, TrendingUp, Table2, Newspaper, Users, FileSpreadsheet, Camera, BarChart3, Megaphone, Briefcase, DollarSign, Coins, BookOpen, ExternalLink } from 'lucide-react';
 
 interface Agent {
   id: string;
@@ -201,9 +202,18 @@ export default function PlatformOverview() {
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">Production Use Cases & Cost Estimates</h2>
-            <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium">
-              {stats.useCases.length} Active
-            </span>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/dashboard/cost-analysis"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-medium hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors"
+              >
+                <ExternalLink size={12} />
+                Detailed Breakdown
+              </Link>
+              <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium">
+                {stats.useCases.length} Active
+              </span>
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {stats.useCases.map((useCase) => {
@@ -248,9 +258,18 @@ export default function PlatformOverview() {
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">Monthly Cost Estimates</h2>
-            <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 rounded-full text-xs font-medium">
-              ${stats.monthlyCostSummary.totalBase.toFixed(2)} base/mo
-            </span>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/dashboard/cost-analysis"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs transition-colors"
+              >
+                <ExternalLink size={12} />
+                See full analysis
+              </Link>
+              <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 rounded-full text-xs font-medium">
+                ${stats.monthlyCostSummary.totalBase.toFixed(2)} base/mo
+              </span>
+            </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4">
             <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
