@@ -161,6 +161,138 @@ router.get('/plans', async (req, res) => {
   }
 });
 
+/**
+ * PATCH /api/growth/plan/:id
+ * Update a growth plan's data
+ * Body: { plan_data, status?, phase? }
+ */
+router.patch('/plan/:id', async (req, res) => {
+  try {
+    if (!db || !db.pool) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const { id } = req.params;
+    const { plan_data, status, phase } = req.body;
+
+    const updates = [];
+    const params = [id];
+
+    if (plan_data) {
+      updates.push('plan_data = $' + (params.length + 1));
+      params.push(JSON.stringify(plan_data));
+    }
+
+    if (status) {
+      updates.push('status = $' + (params.length + 1));
+      params.push(status);
+    }
+
+    if (phase) {
+      updates.push('phase = $' + (params.length + 1));
+      params.push(phase);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    updates.push('updated_at = now()');
+
+    const result = await db.pool.query(
+      `UPDATE growth_plans
+       SET ${updates.join(', ')}
+       WHERE id = $1
+       RETURNING id, brand_name, plan_data, status, phase, created_at, updated_at`,
+      params
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+
+    const plan = result.rows[0];
+    res.json({
+      success: true,
+      data: {
+        id: plan.id,
+        brand_name: plan.brand_name,
+        plan_data: plan.plan_data,
+        status: plan.status,
+        phase: plan.phase,
+        created_at: plan.created_at,
+        updated_at: plan.updated_at,
+      },
+    });
+  } catch (error) {
+    console.error('Error updating plan:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/growth/chatbot/message
+ * Chat with the AI growth assistant (DeepSeek)
+ * Body: { brand_name, plan_id?, message, conversation_history? }
+ */
+router.post('/chatbot/message', async (req, res) => {
+  try {
+    const { brand_name, plan_id, message, conversation_history = [] } = req.body;
+
+    if (!brand_name || !message) {
+      return res.status(400).json({ error: 'Missing required: brand_name, message' });
+    }
+
+    // Get plan context if available
+    let planContext = '';
+    if (plan_id && db && db.pool) {
+      try {
+        const planResult = await db.pool.query(
+          `SELECT plan_data FROM growth_plans WHERE id = $1`,
+          [plan_id]
+        );
+        if (planResult.rows.length > 0) {
+          planContext = JSON.stringify(planResult.rows[0].plan_data, null, 2);
+        }
+      } catch (e) {
+        console.warn('[chatbot] Could not fetch plan context:', e.message);
+      }
+    }
+
+    // Use DeepSeek for chatbot response
+    const deepseekService = require('../../../services/deepseek');
+
+    const systemPrompt = `You are a Growth Architect assistant helping users develop comprehensive growth strategies.
+Your role is to:
+1. Analyze and critique growth plans
+2. Suggest strategic modifications with reasoning
+3. Identify risks and mitigation strategies
+4. Recommend growth experiments and optimizations
+5. Provide actionable insights for each block (PMF & ICP, Funnel & Loops, Assets, ROAS & Metrics, Infrastructure, Weekly Review)
+
+Current Brand: ${brand_name}
+${planContext ? `Current Plan:\n${planContext}` : ''}
+
+Be concise, strategic, and data-driven. When suggesting modifications, explain the "why" behind each recommendation.`;
+
+    const response = await deepseekService.analyze(
+      [...conversation_history, { role: 'user', content: message }],
+      { systemPrompt, model: 'deepseek-chat' }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        response: response,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('[chatbot] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==========================================
 // Weekly Reviews
 // ==========================================
