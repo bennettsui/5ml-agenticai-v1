@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { SiteNav, SiteFooter, Section, FadeIn, globalStyles, TED_RED } from './components';
+import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_AMBER, WARM_GRAY } from './components';
 
 // ==================== DATA ====================
 
@@ -47,8 +47,6 @@ const PARTNER_LOGOS = [
   'https://tedxxinyi.com/wp-content/uploads/2021/07/%E6%9D%B1%E5%90%B3.png',
 ];
 
-// ==================== ENTRY CARDS DATA ====================
-
 const ENTRY_CARDS = [
   {
     title: '關於 TEDxXinyi',
@@ -56,6 +54,7 @@ const ENTRY_CARDS = [
     button: '走進故事',
     href: '/vibe-demo/tedx-xinyi/about',
     image: 'https://tedxxinyi.com/wp-content/uploads/2021/08/S__45482024.jpg',
+    accent: TED_RED,
   },
   {
     title: '年度大會舞台永續設計',
@@ -63,6 +62,7 @@ const ENTRY_CARDS = [
     button: '看我們怎麼做',
     href: '/vibe-demo/tedx-xinyi/sustainability',
     image: 'https://tedxxinyi.com/wp-content/uploads/2021/08/%E8%9E%A2%E5%B9%95%E5%BF%AB%E7%85%A7-2021-08-24-%E4%B8%8B%E5%8D%882.37.26.png',
+    accent: WARM_AMBER,
   },
   {
     title: '社群與小型聚會',
@@ -70,6 +70,7 @@ const ENTRY_CARDS = [
     button: '加入社群',
     href: '/vibe-demo/tedx-xinyi/community',
     image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/logo_white_%E5%B7%A5%E4%BD%9C%E5%8D%80%E5%9F%9F-1-e1625644086441.png',
+    accent: '#10B981',
   },
 ];
 
@@ -77,47 +78,50 @@ const ENTRY_CARDS = [
 
 export default function TEDxXinyiHome() {
   return (
-    <div className="tedx-xinyi bg-neutral-950 text-white min-h-screen">
+    <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
-      <SiteNav currentPath="/vibe-demo/tedx-xinyi" />
+      <SiteNav currentPath="/vibe-demo/tedx-xinyi" heroMode />
 
       {/* ==================== HERO ==================== */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+      <section className="relative min-h-screen flex items-center overflow-hidden">
         {/* Background image */}
         <div className="absolute inset-0">
           <img
             src="https://tedxxinyi.com/wp-content/uploads/2022/06/web_1350x800.jpg"
             alt=""
             className="w-full h-full object-cover"
-            style={{ filter: 'brightness(0.3) saturate(0.7)' }}
+            style={{ filter: 'brightness(0.35) contrast(1.1)' }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/40 to-neutral-950/60" />
+          {/* Warm amber gradient overlay for festival feel */}
+          <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-transparent to-amber-900/30" />
+          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white to-transparent" />
         </div>
 
-        {/* Red accent line */}
-        <div
-          className="absolute top-1/2 left-0 right-0 h-[2px] opacity-30"
-          style={{ backgroundColor: TED_RED }}
-        />
-
         {/* Content */}
-        <div className="relative z-10 max-w-4xl mx-auto px-6 text-center pt-20">
+        <div className="relative z-10 max-w-5xl mx-auto px-6 text-center pt-24 pb-16">
+          {/* Festival-style label */}
           <FadeIn>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black leading-tight mb-8" lang="zh-TW">
-              「主題暫位：在信義，練習一種樂觀」
+            <p className="text-xs sm:text-sm font-bold tracking-[0.3em] uppercase text-white/60 mb-6">
+              TEDxXinyi 2026
+            </p>
+          </FadeIn>
+
+          <FadeIn delay={100}>
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-[1.1] mb-8 text-white" lang="zh-TW">
+              「主題暫位：<br className="sm:hidden" />在信義，<br />練習一種樂觀」
             </h1>
           </FadeIn>
 
-          <FadeIn delay={200}>
-            <p className="text-white/70 text-base sm:text-lg md:text-xl leading-relaxed mb-4 max-w-2xl mx-auto" lang="zh-TW">
+          <FadeIn delay={250}>
+            <p className="text-white/75 text-base sm:text-lg md:text-xl leading-relaxed mb-4 max-w-2xl mx-auto" lang="zh-TW">
               TEDxXinyi 把世界的想法帶進台北信義，<br />
               也把信義日常的矛盾、壓力與想像搬上舞台。<br />
               我們用一次又一次的策展，練習一種面向未來的樂觀。
             </p>
           </FadeIn>
 
-          <FadeIn delay={350}>
-            <p className="text-white/40 text-sm sm:text-base leading-relaxed mb-10 max-w-2xl mx-auto italic" lang="en">
+          <FadeIn delay={380}>
+            <p className="text-white/45 text-sm sm:text-base leading-relaxed mb-12 max-w-2xl mx-auto" lang="en">
               In Xinyi, we rehearse a more optimistic future — one talk, one stage, one community at a time.
             </p>
           </FadeIn>
@@ -125,7 +129,7 @@ export default function TEDxXinyiHome() {
           <FadeIn delay={500}>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <button
-                className="px-8 py-3 text-white font-bold text-sm tracking-wide rounded-full transition-all hover:scale-105"
+                className="px-8 py-3.5 text-white font-black text-sm tracking-wide rounded-full transition-all hover:scale-105 hover:shadow-lg"
                 style={{ backgroundColor: TED_RED }}
                 lang="zh-TW"
               >
@@ -133,7 +137,7 @@ export default function TEDxXinyiHome() {
               </button>
               <Link
                 href="/vibe-demo/tedx-xinyi/about"
-                className="px-8 py-3 text-white/70 hover:text-white font-medium text-sm tracking-wide rounded-full border border-white/20 hover:border-white/50 transition-all"
+                className="px-8 py-3.5 text-white/80 hover:text-white font-bold text-sm tracking-wide rounded-full border-2 border-white/30 hover:border-white/70 transition-all"
                 lang="zh-TW"
               >
                 認識 TEDxXinyi
@@ -141,50 +145,46 @@ export default function TEDxXinyiHome() {
             </div>
           </FadeIn>
         </div>
-
-        {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/30">
-          <span className="text-xs tracking-widest uppercase">Explore</span>
-          <div className="w-[1px] h-8 bg-white/20" />
-        </div>
       </section>
 
       {/* ==================== THREE ENTRY CARDS ==================== */}
-      <Section dark={false}>
+      <Section bg="warm">
         <FadeIn>
-          <p className="text-xs tracking-[0.3em] uppercase text-white/40 mb-2" lang="en">EXPLORE</p>
-          <p className="text-white/60 text-base mb-12" lang="zh-TW">
+          <SectionLabel>EXPLORE</SectionLabel>
+          <p className="text-neutral-600 text-base sm:text-lg mb-12" lang="zh-TW">
             從三個入口，走進 TEDxXinyi 的宇宙。
           </p>
         </FadeIn>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {ENTRY_CARDS.map((card, i) => (
-            <FadeIn key={card.title} delay={i * 150}>
+            <FadeIn key={card.title} delay={i * 120}>
               <Link
                 href={card.href}
-                className="group block bg-neutral-800/50 rounded-2xl overflow-hidden border border-white/5 hover:border-white/15 transition-all hover:-translate-y-1"
+                className="group block bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all hover:-translate-y-1 border border-neutral-100"
               >
-                <div className="aspect-[16/10] overflow-hidden">
+                <div className="aspect-[16/10] overflow-hidden bg-neutral-100">
                   <img
                     src={card.image}
                     alt=""
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    style={i === 2 ? { objectFit: 'contain', padding: '2rem', filter: 'invert(0)' } : undefined}
+                    style={i === 2 ? { objectFit: 'contain', padding: '1.5rem', background: '#1a1a1a' } : undefined}
                   />
                 </div>
+                {/* Colored accent bar */}
+                <div className="h-1" style={{ backgroundColor: card.accent }} />
                 <div className="p-6">
-                  <h3 className="text-lg font-bold mb-3" lang="zh-TW">{card.title}</h3>
-                  <p className="text-white/50 text-sm leading-relaxed mb-4 whitespace-pre-line" lang="zh-TW">
+                  <h3 className="text-lg font-black mb-2" lang="zh-TW">{card.title}</h3>
+                  <p className="text-neutral-500 text-sm leading-relaxed mb-4 whitespace-pre-line" lang="zh-TW">
                     {card.description}
                   </p>
                   <span
-                    className="inline-flex items-center gap-1 text-sm font-medium transition-colors"
-                    style={{ color: TED_RED }}
+                    className="inline-flex items-center gap-1.5 text-sm font-bold transition-colors"
+                    style={{ color: card.accent }}
                     lang="zh-TW"
                   >
                     {card.button}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M5 12h14M12 5l7 7-7 7" />
                     </svg>
                   </span>
@@ -195,87 +195,94 @@ export default function TEDxXinyiHome() {
         </div>
       </Section>
 
-      {/* ==================== SPEAKERS HIGHLIGHT ==================== */}
-      <Section>
+      {/* ==================== SPEAKERS — LINEUP STYLE ==================== */}
+      <Section bg="white">
         <FadeIn>
-          <h2 className="text-2xl md:text-4xl font-black mb-4" lang="zh-TW">講者陣容</h2>
-          <p className="text-white/50 text-sm sm:text-base leading-relaxed mb-12 max-w-2xl" lang="zh-TW">
-            這些是曾經站上 TEDxXinyi 舞台的一小部分。<br />
-            更多來自不同領域的講者，正在形塑我們對信義、對未來的想像。
-          </p>
-        </FadeIn>
-
-        {/* Speaker grid — lineup style */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6 mb-12">
-          {SPEAKERS.map((speaker, i) => (
-            <FadeIn key={i} delay={i * 80}>
-              <div className="group relative">
-                <div className="aspect-square overflow-hidden rounded-xl bg-neutral-800">
-                  <img
-                    src={speaker.image}
-                    alt={speaker.name}
-                    className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105 group-hover:brightness-110"
-                    style={{ filter: 'saturate(0.8)' }}
-                  />
-                  {/* Overlay gradient */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent rounded-xl" />
-                </div>
-                {/* Name + role */}
-                <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
-                  <p className="text-white font-bold text-sm sm:text-base" lang="zh-TW">{speaker.name}</p>
-                  <p className="text-white/50 text-xs" lang="zh-TW">{speaker.role}</p>
-                </div>
-                {/* Red line on hover */}
-                <div
-                  className="absolute bottom-0 left-0 right-0 h-[3px] rounded-b-xl scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"
-                  style={{ backgroundColor: TED_RED }}
-                />
-              </div>
-            </FadeIn>
-          ))}
-        </div>
-
-        <FadeIn>
-          <div className="text-center">
+          <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
+            <div>
+              <SectionLabel>LINEUP</SectionLabel>
+              <h2 className="text-3xl md:text-5xl font-black" lang="zh-TW">講者陣容</h2>
+            </div>
             <Link
               href="/vibe-demo/tedx-xinyi/speakers"
-              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium border border-white/20 hover:border-white/50 rounded-full text-white/70 hover:text-white transition-all"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-full transition-all hover:shadow-md"
+              style={{ backgroundColor: TED_RED, color: 'white' }}
               lang="zh-TW"
             >
               看所有講者與 Talks
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
             </Link>
           </div>
         </FadeIn>
+
+        <FadeIn delay={100}>
+          <p className="text-neutral-500 text-sm sm:text-base leading-relaxed mb-10 max-w-2xl" lang="zh-TW">
+            這些是曾經站上 TEDxXinyi 舞台的一小部分。<br />
+            更多來自不同領域的講者，正在形塑我們對信義、對未來的想像。
+          </p>
+        </FadeIn>
+
+        {/* Speaker grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
+          {SPEAKERS.map((speaker, i) => (
+            <FadeIn key={i} delay={i * 60}>
+              <div className="group relative cursor-pointer">
+                <div className="aspect-square overflow-hidden rounded-xl bg-neutral-100">
+                  <img
+                    src={speaker.image}
+                    alt={speaker.name}
+                    className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                </div>
+                {/* Name overlay on hover */}
+                <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+                  <p className="text-white font-black text-sm" lang="zh-TW">{speaker.name}</p>
+                  <p className="text-white/60 text-xs" lang="zh-TW">{speaker.role}</p>
+                </div>
+                {/* Static name below */}
+                <div className="mt-2.5">
+                  <p className="font-bold text-sm" lang="zh-TW">{speaker.name}</p>
+                  <p className="text-neutral-400 text-xs" lang="zh-TW">{speaker.role}</p>
+                </div>
+              </div>
+            </FadeIn>
+          ))}
+        </div>
       </Section>
 
       {/* ==================== LATEST BLOG ==================== */}
-      <Section dark={false}>
+      <Section bg="warm">
         <FadeIn>
-          <h2 className="text-2xl md:text-4xl font-black mb-12" lang="zh-TW">最新文章</h2>
+          <SectionLabel>BLOG</SectionLabel>
+          <h2 className="text-3xl md:text-5xl font-black mb-12" lang="zh-TW">最新文章</h2>
         </FadeIn>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           {BLOG_POSTS.map((post, i) => (
-            <FadeIn key={post.title} delay={i * 120}>
-              <div className="group bg-neutral-800/30 rounded-xl overflow-hidden border border-white/5 hover:border-white/15 transition-all h-full flex flex-col">
-                {post.image && (
-                  <div className="aspect-[16/9] overflow-hidden">
+            <FadeIn key={post.title} delay={i * 100}>
+              <div className="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all h-full flex flex-col border border-neutral-100">
+                {post.image ? (
+                  <div className="aspect-[16/9] overflow-hidden bg-neutral-100">
                     <img
                       src={post.image}
                       alt=""
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   </div>
+                ) : (
+                  <div className="aspect-[16/9] flex items-center justify-center" style={{ backgroundColor: WARM_GRAY }}>
+                    <span className="text-neutral-300 text-5xl font-black">T</span>
+                  </div>
                 )}
                 <div className="p-5 flex-1 flex flex-col">
-                  <p className="text-white/30 text-xs mb-2">{post.date}</p>
-                  <h3 className="text-base font-bold mb-3 group-hover:text-white transition-colors" lang="zh-TW">
+                  <p className="text-neutral-400 text-xs mb-2 font-medium">{post.date}</p>
+                  <h3 className="text-base font-black mb-2 group-hover:text-neutral-700 transition-colors" lang="zh-TW">
                     {post.title}
                   </h3>
-                  <p className="text-white/45 text-sm leading-relaxed flex-1 whitespace-pre-line" lang="zh-TW">
+                  <p className="text-neutral-500 text-sm leading-relaxed flex-1 whitespace-pre-line" lang="zh-TW">
                     {post.excerpt}
                   </p>
                 </div>
@@ -288,11 +295,11 @@ export default function TEDxXinyiHome() {
           <div className="text-center">
             <Link
               href="/vibe-demo/tedx-xinyi/blog"
-              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium border border-white/20 hover:border-white/50 rounded-full text-white/70 hover:text-white transition-all"
+              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold border-2 border-neutral-300 hover:border-neutral-900 rounded-full text-neutral-600 hover:text-neutral-900 transition-all"
               lang="zh-TW"
             >
               閱讀所有文章
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
             </Link>
@@ -301,26 +308,26 @@ export default function TEDxXinyiHome() {
       </Section>
 
       {/* ==================== PARTNERS ==================== */}
-      <Section>
+      <Section bg="white">
         <FadeIn>
-          <h2 className="text-2xl md:text-4xl font-black mb-3" lang="zh-TW">合作夥伴</h2>
-          <p className="text-white/50 text-sm sm:text-base leading-relaxed mb-12 max-w-xl" lang="zh-TW">
+          <SectionLabel>PARTNERS</SectionLabel>
+          <h2 className="text-3xl md:text-5xl font-black mb-3" lang="zh-TW">合作夥伴</h2>
+          <p className="text-neutral-500 text-sm sm:text-base leading-relaxed mb-12 max-w-xl" lang="zh-TW">
             這些品牌、組織與空間，和我們一起在信義嘗試新的可能。
           </p>
         </FadeIn>
 
-        <FadeIn delay={150}>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-6 items-center mb-12">
+        <FadeIn delay={100}>
+          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12 mb-12">
             {PARTNER_LOGOS.map((logo, i) => (
               <div
                 key={i}
-                className="flex items-center justify-center p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors aspect-square"
+                className="w-20 h-20 flex items-center justify-center grayscale hover:grayscale-0 opacity-50 hover:opacity-100 transition-all duration-300"
               >
                 <img
                   src={logo}
                   alt="Partner logo"
-                  className="max-w-full max-h-full object-contain opacity-60 hover:opacity-100 transition-opacity"
-                  style={{ filter: 'brightness(1.2)' }}
+                  className="max-w-full max-h-full object-contain"
                 />
               </div>
             ))}
@@ -330,17 +337,34 @@ export default function TEDxXinyiHome() {
         <FadeIn>
           <div className="text-center">
             <button
-              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium border border-white/20 hover:border-white/50 rounded-full text-white/70 hover:text-white transition-all"
+              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold border-2 border-neutral-300 hover:border-neutral-900 rounded-full text-neutral-600 hover:text-neutral-900 transition-all"
               lang="zh-TW"
             >
               看更多合作故事
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
             </button>
           </div>
         </FadeIn>
       </Section>
+
+      {/* ==================== RED CTA BAND ==================== */}
+      <section className="py-16 text-white text-center" style={{ backgroundColor: TED_RED }}>
+        <div className="max-w-3xl mx-auto px-6">
+          <FadeIn>
+            <p className="text-3xl md:text-4xl font-black mb-2" lang="zh-TW">
+              在信義，練習一種樂觀。
+            </p>
+            <p className="text-white/70 text-sm mb-8" lang="en">
+              TEDxXinyi 2026
+            </p>
+            <button className="px-8 py-3.5 bg-white font-black text-sm rounded-full transition-all hover:scale-105 hover:shadow-lg" style={{ color: TED_RED }}>
+              關注本年度大會
+            </button>
+          </FadeIn>
+        </div>
+      </section>
 
       <SiteFooter />
     </div>

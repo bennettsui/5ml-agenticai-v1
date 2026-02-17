@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { SiteNav, SiteFooter, Section, FadeIn, globalStyles, TED_RED } from '../components';
+import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY } from '../components';
 
 type Category = 'all' | 'curatorial' | 'guide';
 
@@ -40,39 +40,32 @@ export default function BlogPage() {
     : POSTS.filter(p => p.category === activeFilter);
 
   return (
-    <div className="tedx-xinyi bg-neutral-950 text-white min-h-screen">
+    <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
       <SiteNav currentPath="/vibe-demo/tedx-xinyi/blog" />
 
-      {/* ==================== HERO ==================== */}
-      <section className="relative min-h-[45vh] flex items-end overflow-hidden">
-        <div className="absolute inset-0 bg-neutral-900">
-          <img
-            src="https://tedxxinyi.com/wp-content/uploads/2021/07/logo_white_%E5%B7%A5%E4%BD%9C%E5%8D%80%E5%9F%9F-1-e1625644086441.png"
-            alt=""
-            className="w-full h-full object-contain opacity-5"
-            style={{ padding: '4rem' }}
-          />
-        </div>
-
-        <div className="relative z-10 max-w-4xl mx-auto px-6 pb-16 pt-32">
+      {/* ==================== HERO — CLEAN / EDITORIAL ==================== */}
+      <section className="pt-28 pb-16 px-6" style={{ backgroundColor: WARM_GRAY }}>
+        <div className="max-w-5xl mx-auto">
           <FadeIn>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black mb-6" lang="en">
+            <SectionLabel>BLOG</SectionLabel>
+            <h1 className="text-4xl sm:text-5xl md:text-7xl font-black" lang="en">
               The Blog
             </h1>
           </FadeIn>
           <FadeIn delay={200}>
-            <p className="text-white/70 text-base sm:text-lg leading-relaxed max-w-2xl" lang="zh-TW">
+            <p className="text-neutral-500 text-base sm:text-lg mt-4 max-w-xl" lang="zh-TW">
               這裡是策展筆記、實用教學與長期思考的集合。
             </p>
           </FadeIn>
         </div>
       </section>
 
-      {/* ==================== CATEGORY FILTER ==================== */}
-      <Section dark={false}>
+      {/* ==================== FILTER + POSTS ==================== */}
+      <Section bg="white">
+        {/* Category filter */}
         <FadeIn>
-          <div className="flex flex-wrap gap-3 mb-12">
+          <div className="flex flex-wrap gap-2 mb-12">
             {([
               { key: 'all' as const, label: '全部' },
               { key: 'curatorial' as const, label: '策展觀點 Curatorial Essays' },
@@ -81,11 +74,12 @@ export default function BlogPage() {
               <button
                 key={cat.key}
                 onClick={() => setActiveFilter(cat.key)}
-                className={`px-4 py-2 text-sm rounded-full border transition-all ${
+                className={`px-4 py-2 text-sm font-bold rounded-full border-2 transition-all ${
                   activeFilter === cat.key
-                    ? 'border-white/40 text-white font-medium bg-white/10'
-                    : 'border-white/10 text-white/50 hover:text-white hover:border-white/30'
+                    ? 'border-neutral-900 text-neutral-900 bg-neutral-900 text-white'
+                    : 'border-neutral-200 text-neutral-500 hover:text-neutral-900 hover:border-neutral-400'
                 }`}
+                style={activeFilter === cat.key ? { backgroundColor: '#1a1a1a', color: 'white', borderColor: '#1a1a1a' } : undefined}
               >
                 {cat.label}
               </button>
@@ -93,14 +87,14 @@ export default function BlogPage() {
           </div>
         </FadeIn>
 
-        {/* ==================== POST GRID ==================== */}
+        {/* Post list */}
         <div className="space-y-6">
           {filteredPosts.map((post, i) => (
-            <FadeIn key={post.title} delay={i * 100}>
-              <article className="group flex flex-col md:flex-row gap-6 bg-neutral-800/30 rounded-xl overflow-hidden border border-white/5 hover:border-white/15 transition-all cursor-pointer">
+            <FadeIn key={post.title} delay={i * 80}>
+              <article className="group flex flex-col sm:flex-row gap-6 rounded-xl overflow-hidden border border-neutral-100 hover:border-neutral-200 hover:shadow-md transition-all cursor-pointer p-5 sm:p-0">
                 {/* Thumbnail */}
                 {post.thumbnail ? (
-                  <div className="w-full md:w-48 h-48 md:h-auto flex-shrink-0 overflow-hidden">
+                  <div className="w-full sm:w-44 h-44 sm:h-auto flex-shrink-0 overflow-hidden rounded-lg sm:rounded-none bg-neutral-100">
                     <img
                       src={post.thumbnail}
                       alt=""
@@ -108,31 +102,31 @@ export default function BlogPage() {
                     />
                   </div>
                 ) : (
-                  <div className="w-full md:w-48 h-48 md:h-auto flex-shrink-0 bg-neutral-800/60 flex items-center justify-center">
-                    <span className="text-white/10 text-4xl font-black">T</span>
+                  <div className="w-full sm:w-44 h-44 sm:h-auto flex-shrink-0 flex items-center justify-center rounded-lg sm:rounded-none" style={{ backgroundColor: WARM_GRAY }}>
+                    <span className="text-neutral-300 text-5xl font-black">T</span>
                   </div>
                 )}
 
                 {/* Content */}
-                <div className="flex-1 p-5 md:py-6 md:pr-6 md:pl-0">
+                <div className="flex-1 sm:py-5 sm:pr-6">
                   <div className="flex items-center gap-3 mb-3">
                     <span
-                      className="text-xs px-2.5 py-0.5 rounded-full font-medium"
+                      className="text-xs font-bold px-2.5 py-1 rounded-full"
                       style={{
-                        backgroundColor: post.category === 'curatorial' ? `${TED_RED}20` : 'rgba(255,255,255,0.08)',
-                        color: post.category === 'curatorial' ? TED_RED : 'rgba(255,255,255,0.5)',
+                        backgroundColor: post.category === 'curatorial' ? `${TED_RED}10` : WARM_GRAY,
+                        color: post.category === 'curatorial' ? TED_RED : '#777',
                       }}
                     >
                       {post.categoryLabel}
                     </span>
-                    <span className="text-white/30 text-xs">{post.date}</span>
+                    <span className="text-neutral-400 text-xs font-medium">{post.date}</span>
                   </div>
 
-                  <h2 className="text-lg font-bold mb-3 group-hover:text-white transition-colors" lang="zh-TW">
+                  <h2 className="text-lg font-black mb-2 group-hover:text-neutral-600 transition-colors" lang="zh-TW">
                     {post.title}
                   </h2>
 
-                  <p className="text-white/45 text-sm leading-relaxed whitespace-pre-line" lang="zh-TW">
+                  <p className="text-neutral-500 text-sm leading-relaxed whitespace-pre-line" lang="zh-TW">
                     {post.excerpt}
                   </p>
                 </div>
@@ -143,7 +137,7 @@ export default function BlogPage() {
 
         {filteredPosts.length === 0 && (
           <div className="text-center py-16">
-            <p className="text-white/30 text-sm">No posts in this category yet.</p>
+            <p className="text-neutral-400 text-sm">No posts in this category yet.</p>
           </div>
         )}
       </Section>

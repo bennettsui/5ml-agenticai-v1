@@ -1,6 +1,6 @@
 'use client';
 
-import { SiteNav, SiteFooter, Section, FadeIn, globalStyles, TED_RED } from '../components';
+import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_AMBER, WARM_GRAY } from '../components';
 
 const APPROACH_BLOCKS = [
   {
@@ -21,43 +21,19 @@ const APPROACH_BLOCKS = [
 ];
 
 const PARTNER_STORIES = [
-  {
-    name: '1MORE',
-    text: '和 1MORE 一起，在活動中示範更長久、可維修的音樂與聆聽體驗。',
-    logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/1MORE-e1627275745256.png',
-  },
-  {
-    name: 'cofit',
-    text: '透過再利用容器與在地供應鏈，讓一杯飲料背後的碳足跡減少一點。',
-    logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/cofit-e1626948574733.png',
-  },
-  {
-    name: 'tissue',
-    text: '從最日常的紙張使用開始，思考一次性消耗品還有沒有第二生命。',
-    logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/tissue-150x150.png',
-  },
-  {
-    name: '春日',
-    text: '把城市中的一個角落變成聚會與對話的空間。',
-    logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E6%98%A5%E6%97%A5-e1627632894454.jpg',
-  },
-  {
-    name: '魚',
-    text: null,
-    logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E9%AD%9A.png',
-  },
-  {
-    name: '東吳',
-    text: null,
-    logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E6%9D%B1%E5%90%B3.png',
-  },
+  { name: '1MORE', text: '和 1MORE 一起，在活動中示範更長久、可維修的音樂與聆聽體驗。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/1MORE-e1627275745256.png' },
+  { name: 'cofit', text: '透過再利用容器與在地供應鏈，讓一杯飲料背後的碳足跡減少一點。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/cofit-e1626948574733.png' },
+  { name: 'tissue', text: '從最日常的紙張使用開始，思考一次性消耗品還有沒有第二生命。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/tissue-150x150.png' },
+  { name: '春日', text: '把城市中的一個角落變成聚會與對話的空間。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E6%98%A5%E6%97%A5-e1627632894454.jpg' },
+  { name: '魚', text: null, logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E9%AD%9A.png' },
+  { name: '東吳', text: null, logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E6%9D%B1%E5%90%B3.png' },
 ];
 
 export default function SustainabilityPage() {
   return (
-    <div className="tedx-xinyi bg-neutral-950 text-white min-h-screen">
+    <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
-      <SiteNav currentPath="/vibe-demo/tedx-xinyi/sustainability" />
+      <SiteNav currentPath="/vibe-demo/tedx-xinyi/sustainability" heroMode />
 
       {/* ==================== HERO ==================== */}
       <section className="relative min-h-[60vh] flex items-end overflow-hidden">
@@ -66,19 +42,20 @@ export default function SustainabilityPage() {
             src="https://tedxxinyi.com/wp-content/uploads/2021/08/%E8%9E%A2%E5%B9%95%E5%BF%AB%E7%85%A7-2021-08-24-%E4%B8%8B%E5%8D%882.36.02.png"
             alt=""
             className="w-full h-full object-cover"
-            style={{ filter: 'brightness(0.25) saturate(0.5)' }}
+            style={{ filter: 'brightness(0.3) contrast(1.1)' }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/50 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-black/30" />
         </div>
 
-        <div className="relative z-10 max-w-4xl mx-auto px-6 pb-16 pt-32">
+        <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-32">
           <FadeIn>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black mb-6" lang="zh-TW">
+            <SectionLabel dark>SUSTAINABILITY</SectionLabel>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black mb-6 text-white" lang="zh-TW">
               年度大會舞台永續設計
             </h1>
           </FadeIn>
           <FadeIn delay={200}>
-            <p className="text-white/70 text-base sm:text-lg leading-relaxed max-w-2xl" lang="zh-TW">
+            <p className="text-white/80 text-base sm:text-lg leading-relaxed max-w-2xl" lang="zh-TW">
               我們想像一個舞台，不只是被搭起、拆掉，然後消失。<br />
               而是每一年都能被重新使用、改造，帶著前一屆的故事繼續長出新的樣子。
             </p>
@@ -87,58 +64,65 @@ export default function SustainabilityPage() {
       </section>
 
       {/* ==================== PROBLEM STATEMENT ==================== */}
-      <Section dark={false}>
-        <div className="max-w-3xl">
-          <FadeIn>
-            <h2 className="text-2xl md:text-3xl font-black mb-6" lang="zh-TW">
-              為什麼要重新思考「用完就丟」？
-            </h2>
-          </FadeIn>
-          <FadeIn delay={150}>
-            <p className="text-white/60 text-base sm:text-lg leading-relaxed" lang="zh-TW">
-              我們曾經習慣：一個活動結束，舞台就被拆掉，材料被丟棄。<br />
-              那是一種很方便、很理所當然的做法，<br />
-              也是對地球最昂貴的一種懶惰。<br />
-              如果我們真的在乎永續，就必須從最顯眼、也最容易被忽略的舞台開始。
-            </p>
+      <Section bg="white">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div>
+            <FadeIn>
+              <SectionLabel>THE PROBLEM</SectionLabel>
+              <h2 className="text-3xl md:text-4xl font-black mb-6" lang="zh-TW">
+                為什麼要重新思考<br />「用完就丟」？
+              </h2>
+            </FadeIn>
+            <FadeIn delay={150}>
+              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9]" lang="zh-TW">
+                我們曾經習慣：一個活動結束，舞台就被拆掉，材料被丟棄。
+                那是一種很方便、很理所當然的做法，
+                也是對地球最昂貴的一種懶惰。
+                如果我們真的在乎永續，就必須從最顯眼、也最容易被忽略的舞台開始。
+              </p>
+            </FadeIn>
+          </div>
+          <FadeIn delay={200}>
+            <div className="flex items-center justify-center p-8">
+              <div className="text-8xl md:text-9xl font-black select-none" style={{ color: `${WARM_AMBER}30` }}>
+                ?
+              </div>
+            </div>
           </FadeIn>
         </div>
       </Section>
 
       {/* ==================== THREE APPROACHES ==================== */}
-      <Section>
+      <Section bg="warm">
         <FadeIn>
-          <h2 className="text-2xl md:text-3xl font-black mb-12" lang="zh-TW">我們怎麼做？</h2>
+          <SectionLabel>OUR APPROACH</SectionLabel>
+          <h2 className="text-3xl md:text-4xl font-black mb-14" lang="zh-TW">我們怎麼做？</h2>
         </FadeIn>
 
-        <div className="space-y-16">
+        <div className="space-y-12">
           {APPROACH_BLOCKS.map((block, i) => (
-            <FadeIn key={block.title} delay={i * 100}>
-              <div className={`flex flex-col ${i % 2 === 1 ? 'md:flex-row-reverse' : 'md:flex-row'} gap-8 md:gap-12 items-center`}>
+            <FadeIn key={block.title} delay={i * 80}>
+              <div className={`flex flex-col ${i % 2 === 1 ? 'md:flex-row-reverse' : 'md:flex-row'} gap-8 md:gap-10 items-center bg-white rounded-2xl overflow-hidden shadow-sm border border-neutral-100`}>
                 {/* Image */}
                 <div className="w-full md:w-1/2">
-                  <div className="aspect-[16/10] rounded-xl overflow-hidden bg-neutral-800">
+                  <div className="aspect-[16/10] overflow-hidden">
                     <img
                       src={block.image}
                       alt=""
                       className="w-full h-full object-cover"
-                      style={{ filter: 'saturate(0.7) brightness(0.9)' }}
                     />
                   </div>
                 </div>
-
                 {/* Text */}
-                <div className="w-full md:w-1/2">
-                  <div className="flex items-center gap-3 mb-4">
-                    <span
-                      className="text-sm font-bold px-3 py-1 rounded-full"
-                      style={{ backgroundColor: `${TED_RED}20`, color: TED_RED }}
-                    >
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <h3 className="text-xl font-bold" lang="zh-TW">{block.title}</h3>
-                  </div>
-                  <p className="text-white/55 text-sm sm:text-base leading-relaxed whitespace-pre-line" lang="zh-TW">
+                <div className="w-full md:w-1/2 p-6 md:p-8">
+                  <span
+                    className="inline-block text-xs font-black px-3 py-1 rounded-full mb-4"
+                    style={{ backgroundColor: `${TED_RED}10`, color: TED_RED }}
+                  >
+                    STEP {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <h3 className="text-xl font-black mb-4" lang="zh-TW">{block.title}</h3>
+                  <p className="text-neutral-500 text-sm leading-relaxed whitespace-pre-line" lang="zh-TW">
                     {block.text}
                   </p>
                 </div>
@@ -149,10 +133,11 @@ export default function SustainabilityPage() {
       </Section>
 
       {/* ==================== PARTNER STORIES ==================== */}
-      <Section dark={false}>
+      <Section bg="white">
         <FadeIn>
-          <h2 className="text-2xl md:text-3xl font-black mb-4" lang="zh-TW">夥伴的環保小故事</h2>
-          <p className="text-white/50 text-base leading-relaxed mb-10 max-w-2xl" lang="zh-TW">
+          <SectionLabel>PARTNER STORIES</SectionLabel>
+          <h2 className="text-3xl md:text-4xl font-black mb-3" lang="zh-TW">夥伴的環保小故事</h2>
+          <p className="text-neutral-500 text-base leading-relaxed mb-10 max-w-2xl" lang="zh-TW">
             我們不是自己一個人在做永續。<br />
             是這些品牌、空間與組織，一起把不同領域的專業帶進來。
           </p>
@@ -160,18 +145,18 @@ export default function SustainabilityPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
           {PARTNER_STORIES.map((partner, i) => (
-            <FadeIn key={partner.name} delay={i * 80}>
-              <div className="bg-neutral-800/40 rounded-xl p-6 border border-white/5 hover:border-white/15 transition-colors h-full">
-                <div className="w-16 h-16 rounded-xl bg-white/5 flex items-center justify-center mb-4 overflow-hidden">
+            <FadeIn key={partner.name} delay={i * 60}>
+              <div className="rounded-xl p-6 border border-neutral-100 hover:border-neutral-200 hover:shadow-sm transition-all h-full" style={{ backgroundColor: WARM_GRAY }}>
+                <div className="w-14 h-14 rounded-lg bg-white flex items-center justify-center mb-4 overflow-hidden shadow-sm">
                   <img
                     src={partner.logo}
                     alt={partner.name}
-                    className="max-w-[48px] max-h-[48px] object-contain"
+                    className="max-w-[40px] max-h-[40px] object-contain"
                   />
                 </div>
-                <h4 className="font-bold text-sm mb-2">{partner.name}</h4>
+                <h4 className="font-black text-sm mb-2">{partner.name}</h4>
                 {partner.text && (
-                  <p className="text-white/45 text-sm leading-relaxed" lang="zh-TW">{partner.text}</p>
+                  <p className="text-neutral-500 text-sm leading-relaxed" lang="zh-TW">{partner.text}</p>
                 )}
               </div>
             </FadeIn>
@@ -179,22 +164,22 @@ export default function SustainabilityPage() {
         </div>
       </Section>
 
-      {/* ==================== WHY IT MATTERS ==================== */}
-      <Section>
-        <div className="max-w-3xl mx-auto text-center">
+      {/* ==================== WHY IT MATTERS — RED BAND ==================== */}
+      <section className="py-20 md:py-28 text-white" style={{ backgroundColor: TED_RED }}>
+        <div className="max-w-3xl mx-auto px-6 text-center">
           <FadeIn>
-            <h2 className="text-2xl md:text-3xl font-black mb-6" lang="zh-TW">這不只是舞台設計</h2>
+            <h2 className="text-3xl md:text-4xl font-black mb-6" lang="zh-TW">這不只是舞台設計</h2>
           </FadeIn>
           <FadeIn delay={150}>
-            <p className="text-white/60 text-base sm:text-lg leading-relaxed" lang="zh-TW">
-              對我們來說，永續不是在 Keynote 上多放幾個綠色圖示，<br />
-              而是從最耗材、最顯眼、也最容易被忽略的地方開始改變。<br />
-              每一屆 TEDxXinyi 的舞台，都是一個對未來的提案。<br />
+            <p className="text-white/85 text-base sm:text-lg leading-[1.9]" lang="zh-TW">
+              對我們來說，永續不是在 Keynote 上多放幾個綠色圖示，
+              而是從最耗材、最顯眼、也最容易被忽略的地方開始改變。
+              每一屆 TEDxXinyi 的舞台，都是一個對未來的提案。
               歡迎你走進來，一起成為這個提案的一部分。
             </p>
           </FadeIn>
         </div>
-      </Section>
+      </section>
 
       <SiteFooter />
     </div>
