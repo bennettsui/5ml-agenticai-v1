@@ -94,14 +94,14 @@ export const USE_CASES: UseCaseConfig[] = [
   {
     id: 'social-agents',
     name: 'Social Media & SEO Agents',
-    description: 'AI agents for creative content, SEO optimization, and social media strategy',
+    description: '14-agent event-driven pipeline with parallel execution, budget optimization, compliance gate & circuit breakers',
     solutionLine: 'GrowthOS',
     status: 'live',
     progress: 0.85,
     priority: 'high',
     path: '/social',
-    agentCount: 9,
-    features: ['Creative Agent', 'SEO Agent', 'Social Agent', 'Research Agent'],
+    agentCount: 14,
+    features: ['Input Validator', 'Budget Optimizer', 'Multi-Channel', 'Compliance Agent', 'Performance Tracker'],
   },
   {
     id: 'ads-performance',

@@ -1858,6 +1858,17 @@ const ragService = require('./services/rag-service');
 const WORKFLOW_SYSTEM_PROMPTS = {
   assistant: `You are an AI Workflow Architect assistant helping the user understand and modify agent orchestration workflows.
 
+Architecture context — The CSO Marketing Agents use an event-driven parallel pipeline:
+- Input Validator → CSO Orchestrator → Budget Optimizer (entry chain)
+- Budget Optimizer fans out to 4 research agents in PARALLEL (Research, Customer, Competitor, SEO)
+- Research phase merges into Strategy Agent → Creative Agent (synthesis)
+- Creative fans out to Social Agent + Multi-Channel Coordinator
+- Multi-Channel → Compliance Agent → Sentinel Agent (quality gate)
+- Sentinel has a CIRCUIT BREAKER: max 2 rejection loops back to CSO
+- Performance Tracker monitors KPIs after approval
+- Model routing: DeepSeek for strategy/coordination, Haiku for research/compliance, Sonnet for creative, Perplexity for competitive intel
+- Target: <$1.50/campaign, >90% first-pass approval, <2min end-to-end
+
 Your capabilities:
 1. Explain how agents work together in the current workflow
 2. Suggest improvements to agent roles, connections, and orchestration patterns
