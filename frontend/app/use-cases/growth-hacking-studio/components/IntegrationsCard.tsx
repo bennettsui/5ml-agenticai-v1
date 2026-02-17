@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Link as LinkIcon, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react';
-import { useLeadGenStudio } from '../context';
+import { useGrowthHackingStudio } from '../context';
 
 interface Integration {
   id: string;
@@ -16,7 +16,7 @@ interface Integration {
 }
 
 export function IntegrationsCard() {
-  const { selectedBrand, currentPlan } = useLeadGenStudio();
+  const { selectedBrand, currentPlan } = useGrowthHackingStudio();
   const [integrations] = useState<Integration[]>([
     // Data Sources (Available)
     {

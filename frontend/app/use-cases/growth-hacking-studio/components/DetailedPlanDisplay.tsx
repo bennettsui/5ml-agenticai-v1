@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Edit2, Save, X, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
-import { useLeadGenStudio } from '../context';
+import { useGrowthHackingStudio } from '../context';
 
 interface PlanBlock {
   title: string;
@@ -18,7 +18,7 @@ interface DetailedPlanProps {
 }
 
 export function DetailedPlanDisplay({ plan }: DetailedPlanProps) {
-  const { currentPlan, setCurrentPlan } = useLeadGenStudio();
+  const { currentPlan, setCurrentPlan } = useGrowthHackingStudio();
   const [expandedBlocks, setExpandedBlocks] = useState<{ [key: number]: boolean }>({
     0: true,
     1: true,

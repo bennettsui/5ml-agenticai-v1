@@ -19,7 +19,7 @@ interface BrandConfig {
   plan?: GrowthPlan;
 }
 
-interface LeadGenStudioContextType {
+interface GrowthHackingStudioContextType {
   selectedBrand: string;
   setSelectedBrand: (brand: string) => void;
   currentPlan: GrowthPlan | null;
@@ -32,9 +32,9 @@ interface LeadGenStudioContextType {
   setChatbotOpen: (open: boolean) => void;
 }
 
-const LeadGenStudioContext = createContext<LeadGenStudioContextType | undefined>(undefined);
+const GrowthHackingStudioContext = createContext<GrowthHackingStudioContextType | undefined>(undefined);
 
-export function LeadGenStudioProvider({ children }: { children: React.ReactNode }) {
+export function GrowthHackingStudioProvider({ children }: { children: React.ReactNode }) {
   const [selectedBrand, setSelectedBrand] = useState('ikigai Design & Research');
   const [currentPlan, setCurrentPlan] = useState<GrowthPlan | null>(null);
   const [isLoadingPlan, setIsLoadingPlan] = useState(false);
@@ -53,7 +53,7 @@ export function LeadGenStudioProvider({ children }: { children: React.ReactNode 
   ]);
 
   return (
-    <LeadGenStudioContext.Provider
+    <GrowthHackingStudioContext.Provider
       value={{
         selectedBrand,
         setSelectedBrand,
@@ -68,14 +68,14 @@ export function LeadGenStudioProvider({ children }: { children: React.ReactNode 
       }}
     >
       {children}
-    </LeadGenStudioContext.Provider>
+    </GrowthHackingStudioContext.Provider>
   );
 }
 
-export function useLeadGenStudio() {
-  const context = useContext(LeadGenStudioContext);
+export function useGrowthHackingStudio() {
+  const context = useContext(GrowthHackingStudioContext);
   if (!context) {
-    throw new Error('useLeadGenStudio must be used within LeadGenStudioProvider');
+    throw new Error('useGrowthHackingStudio must be used within GrowthHackingStudioProvider');
   }
   return context;
 }

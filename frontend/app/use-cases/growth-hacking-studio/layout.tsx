@@ -15,31 +15,31 @@ import {
   BarChart2,
   Lightbulb,
 } from 'lucide-react';
-import { LeadGenStudioProvider } from './context';
+import { GrowthHackingStudioProvider } from './context';
 import { ChatbotAssistant } from './components/ChatbotAssistant';
 
 const navItems = [
-  { label: 'Plan Builder', href: '/use-cases/lead-gen-studio', icon: Zap },
-  { label: 'Asset Library', href: '/use-cases/lead-gen-studio/assets', icon: FileText },
-  { label: 'CRM & EDM', href: '/use-cases/lead-gen-studio/crm', icon: Mail },
-  { label: 'KB Browser', href: '/use-cases/lead-gen-studio/kb', icon: BookOpen },
-  { label: 'ROAS Model', href: '/use-cases/lead-gen-studio/roas', icon: BarChart3 },
-  { label: 'Performance', href: '/use-cases/lead-gen-studio/performance', icon: BarChart2 },
-  { label: 'Recommendations', href: '/use-cases/lead-gen-studio/recommendations', icon: Lightbulb },
+  { label: 'Plan Builder', href: '/use-cases/growth-hacking-studio', icon: Zap },
+  { label: 'Asset Library', href: '/use-cases/growth-hacking-studio/assets', icon: FileText },
+  { label: 'CRM & EDM', href: '/use-cases/growth-hacking-studio/crm', icon: Mail },
+  { label: 'KB Browser', href: '/use-cases/growth-hacking-studio/kb', icon: BookOpen },
+  { label: 'ROAS Model', href: '/use-cases/growth-hacking-studio/roas', icon: BarChart3 },
+  { label: 'Performance', href: '/use-cases/growth-hacking-studio/performance', icon: BarChart2 },
+  { label: 'Recommendations', href: '/use-cases/growth-hacking-studio/recommendations', icon: Lightbulb },
 ];
 
-export default function LeadGenStudioLayout({ children }: { children: React.ReactNode }) {
+export default function GrowthHackingStudioLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   function isActive(href: string) {
-    if (href === '/use-cases/lead-gen-studio') {
+    if (href === '/use-cases/growth-hacking-studio') {
       return pathname === href;
     }
     return pathname.startsWith(href);
   }
 
   return (
-    <LeadGenStudioProvider>
+    <GrowthHackingStudioProvider>
       <div className="flex h-screen overflow-hidden bg-slate-950">
         {/* Sidebar */}
         <aside className="w-[250px] flex-shrink-0 bg-slate-900 border-r border-slate-700/50 flex flex-col">
@@ -54,7 +54,7 @@ export default function LeadGenStudioLayout({ children }: { children: React.Reac
             </Link>
             <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-emerald-500" />
-              Lead Gen Studio
+              Growth Hacking Studio
             </h2>
           </div>
 
@@ -101,6 +101,6 @@ export default function LeadGenStudioLayout({ children }: { children: React.Reac
           <ChatbotAssistant />
         </div>
       </div>
-    </LeadGenStudioProvider>
+    </GrowthHackingStudioProvider>
   );
 }

@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { Loader, CheckCircle2, AlertCircle, Zap, BookOpen, BarChart3, Plug } from 'lucide-react';
-import { useLeadGenStudio } from './context';
+import { useGrowthHackingStudio } from './context';
 import { BrandSelector } from './components/BrandSelector';
 import { DetailedPlanDisplay } from './components/DetailedPlanDisplay';
 import { GrowthFlowchart } from './components/GrowthFlowchart';
 import { IntegrationsCard } from './components/IntegrationsCard';
 
-export default function LeadGenStudioPage() {
+export default function GrowthHackingStudioPage() {
   const { selectedBrand, currentPlan, setCurrentPlan, isLoadingPlan, setIsLoadingPlan } =
-    useLeadGenStudio();
+    useGrowthHackingStudio();
   const [productBrief, setProductBrief] = useState('');
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(!currentPlan);

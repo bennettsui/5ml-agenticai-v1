@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { FileText, Plus, Filter } from 'lucide-react';
-import { useLeadGenStudio } from '../context';
+import { useGrowthHackingStudio } from '../context';
 import { AssetRoadmap } from '../components/AssetRoadmap';
 
 export default function AssetsPage() {
-  const { selectedBrand, currentPlan } = useLeadGenStudio();
+  const { selectedBrand, currentPlan } = useGrowthHackingStudio();
   const [assets, setAssets] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');

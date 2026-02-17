@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { Mail, Plus, Zap } from 'lucide-react';
-import { useLeadGenStudio } from '../context';
+import { useGrowthHackingStudio } from '../context';
 
 export default function CRMPage() {
-  const { selectedBrand, currentPlan } = useLeadGenStudio();
+  const { selectedBrand, currentPlan } = useGrowthHackingStudio();
   const [flows, setFlows] = useState<any[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
 

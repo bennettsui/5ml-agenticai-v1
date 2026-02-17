@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { BookOpen, Search, Plus, Tag } from 'lucide-react';
-import { useLeadGenStudio } from '../context';
+import { useGrowthHackingStudio } from '../context';
 
 export default function KBPage() {
-  const { selectedBrand, currentPlan } = useLeadGenStudio();
+  const { selectedBrand, currentPlan } = useGrowthHackingStudio();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [entries, setEntries] = useState<any[]>([]);

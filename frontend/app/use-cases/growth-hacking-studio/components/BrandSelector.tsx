@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { ChevronDown, Plus } from 'lucide-react';
-import { useLeadGenStudio } from '../context';
+import { useGrowthHackingStudio } from '../context';
 
 export function BrandSelector() {
-  const { selectedBrand, setSelectedBrand, brands, currentPlan } = useLeadGenStudio();
+  const { selectedBrand, setSelectedBrand, brands, currentPlan } = useGrowthHackingStudio();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [customBrand, setCustomBrand] = useState('');
 

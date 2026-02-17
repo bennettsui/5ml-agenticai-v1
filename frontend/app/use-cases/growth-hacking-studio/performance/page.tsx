@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { TrendingUp, BarChart2, AlertCircle } from 'lucide-react';
-import { useLeadGenStudio } from '../context';
+import { useGrowthHackingStudio } from '../context';
 
 export default function PerformancePage() {
-  const { selectedBrand, currentPlan } = useLeadGenStudio();
+  const { selectedBrand, currentPlan } = useGrowthHackingStudio();
   const [timeRange, setTimeRange] = useState('7d');
 
   const channels = [

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Send, X, ChevronDown } from 'lucide-react';
-import { useLeadGenStudio } from '../context';
+import { useGrowthHackingStudio } from '../context';
 
 interface ChatMessage {
   id: string;
@@ -12,14 +12,14 @@ interface ChatMessage {
 }
 
 export function ChatbotAssistant() {
-  const { selectedBrand, currentPlan, chatbotOpen, setChatbotOpen } = useLeadGenStudio();
+  const { selectedBrand, currentPlan, chatbotOpen, setChatbotOpen } = useGrowthHackingStudio();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
       role: 'assistant',
       content: currentPlan
-        ? `Hi! I'm your Lead Gen Studio assistant for ${selectedBrand}. I can help you evaluate your growth plan, suggest modifications, identify risks, and recommend optimizations. What would you like to discuss?`
-        : `Hi! I'm your Lead Gen Studio assistant. Generate a growth plan first to get started. I can help you evaluate strategies, suggest modifications, and answer questions about your growth approach.`,
+        ? `Hi! I'm your Growth Hacking Studio assistant for ${selectedBrand}. I can help you evaluate your growth plan, suggest modifications, identify risks, and recommend optimizations. What would you like to discuss?`
+        : `Hi! I'm your Growth Hacking Studio assistant. Generate a growth plan first to get started. I can help you evaluate strategies, suggest modifications, and answer questions about your growth approach.`,
       timestamp: new Date(),
     },
   ]);

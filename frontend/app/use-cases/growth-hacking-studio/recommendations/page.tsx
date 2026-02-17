@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { Lightbulb, Play, Square, CheckCircle, Clock, AlertCircle } from 'lucide-react';
-import { useLeadGenStudio } from '../context';
+import { useGrowthHackingStudio } from '../context';
 
 export default function RecommendationsPage() {
-  const { selectedBrand, currentPlan } = useLeadGenStudio();
+  const { selectedBrand, currentPlan } = useGrowthHackingStudio();
   const [experiments, setExperiments] = useState<any[]>([
     {
       id: 1,

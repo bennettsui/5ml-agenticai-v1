@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { BarChart3, Plus, TrendingUp, ExternalLink, AlertCircle } from 'lucide-react';
-import { useLeadGenStudio } from '../context';
+import { useGrowthHackingStudio } from '../context';
 
 export default function ROASPage() {
-  const { selectedBrand, currentPlan } = useLeadGenStudio();
+  const { selectedBrand, currentPlan } = useGrowthHackingStudio();
   const [models, setModels] = useState<any[]>([]);
   const [selectedModel, setSelectedModel] = useState<any>(null);
 
@@ -135,7 +135,7 @@ export default function ROASPage() {
                 Connect Shopify, WooCommerce, or lead forms for complete funnel analysis (Phase 5).
               </p>
               <Link
-                href="/use-cases/lead-gen-studio?tab=integrations"
+                href="/use-cases/growth-hacking-studio?tab=integrations"
                 className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs rounded font-medium transition-colors"
               >
                 View Roadmap <ExternalLink className="w-3 h-3" />
