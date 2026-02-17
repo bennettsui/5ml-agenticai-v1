@@ -71,6 +71,24 @@ const VISUALS = [
     description: 'Partner section — line art icons',
     prompt: 'Minimalist line icon set for event partnerships: venue building, production clapperboard, community people circle, media megaphone, four icons in a row, simple geometric line art, red accent color on white background, consistent stroke width, no text labels',
   },
+  {
+    id: 'partners-hero',
+    filename: 'partners-hero.png',
+    description: 'Partners page hero — collaboration visual',
+    prompt: 'Aerial view of Hong Kong harbour at twilight, multiple bridges and crossings connecting different districts, warm amber and cool blue tones meeting at horizon, one bold red thread line weaving through the scene connecting buildings, metaphor for partnership and connection, cinematic wide aspect ratio, no text, no watermarks, no people',
+  },
+  {
+    id: 'partners-ways',
+    filename: 'partners-ways.png',
+    description: 'Partners page — ways to collaborate',
+    prompt: 'Abstract architectural blueprint showing four different building structures connected by red pathways, collaborative design concept, clean line art transitioning to watercolor, Hong Kong skyline elements subtly visible, minimal graphic design style, light warm background, no text, no watermarks',
+  },
+  {
+    id: 'partners-community',
+    filename: 'partners-community.png',
+    description: 'Partners page — community and access',
+    prompt: 'Bird eye view of a diverse group of chairs arranged in a circle in an open courtyard between old Hong Kong tong lau buildings, warm sunlight casting geometric shadows, community gathering metaphor, red cushions on some chairs, documentary photography style, cinematic, no text, no watermarks',
+  },
 ];
 
 // Lazy init Gemini client
