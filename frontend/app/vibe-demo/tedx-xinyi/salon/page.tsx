@@ -3,14 +3,14 @@
 import Link from 'next/link';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY } from '../components';
 
-const SPEAKERS_LIST = [
-  { name: '程世嘉', line: 'AI 趨勢引言人：我們跟 AI 的距離' },
-  { name: '蔡康永', line: '情商專家：我們與人性的距離' },
-  { name: 'Tim Wu', line: '哥倫比亞法學院教授：AI 時代的社會專注力' },
-  { name: '洪蘭', line: '大腦科學家：ChatGPT 之後，人類大腦怎麼思考' },
-  { name: '林東良', line: '黑潮海洋文教基金會執行長：從海洋看碳排與未來世代' },
-  { name: '楊士毅', line: '快樂幸福藝術家：有趣的說故事力量，如何陪我們往前走' },
-  { name: 'Angus Winchester', line: '飲酒文化與社會成本：在 AI 時代，如何讓一杯酒變得更有意識？' },
+const SPEAKER_DOMAINS = [
+  { domain: 'AI 趨勢', sub: '科技與演算法的邊界' },
+  { domain: '情商與人性', sub: '在機器時代，成為更好的人' },
+  { domain: '法律與社會', sub: 'AI 時代的專注力與公共空間' },
+  { domain: '大腦科學', sub: 'ChatGPT 之後，人類怎麼學習' },
+  { domain: '海洋生態', sub: '碳排、環境與未來世代' },
+  { domain: '說故事力量', sub: '創意與敘事如何陪我們往前走' },
+  { domain: '飲食文化', sub: '在 AI 時代，讓一杯酒更有意識' },
 ];
 
 const VALUE_BULLETS = [
@@ -155,20 +155,26 @@ export default function SalonPage() {
 
         <FadeIn delay={150}>
           <p className="text-xs font-bold tracking-[0.2em] uppercase text-neutral-400 mb-6" lang="zh-TW">
-            主舞台講者（部分名單）
+            橫跨領域（講者名單陸續公布）
           </p>
         </FadeIn>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-12">
-          {SPEAKERS_LIST.map((speaker, i) => (
-            <FadeIn key={i} delay={i * 60}>
-              <div className="rounded-xl p-5 border border-neutral-100 hover:border-neutral-200 hover:shadow-sm transition-all h-full" style={{ backgroundColor: WARM_GRAY }}>
-                <p className="font-black text-base mb-1" lang="zh-TW">{speaker.name}</p>
-                <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">{speaker.line}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
+          {SPEAKER_DOMAINS.map((item, i) => (
+            <FadeIn key={i} delay={i * 50}>
+              <div className="rounded-xl p-4 border border-neutral-100 hover:border-neutral-200 hover:shadow-sm transition-all h-full" style={{ backgroundColor: WARM_GRAY }}>
+                <p className="font-black text-sm mb-1" lang="zh-TW">{item.domain}</p>
+                <p className="text-neutral-400 text-xs leading-relaxed" lang="zh-TW">{item.sub}</p>
               </div>
             </FadeIn>
           ))}
         </div>
+
+        <FadeIn delay={200}>
+          <p className="text-xs text-neutral-400 mb-10" lang="zh-TW">
+            完整講者陣容將於活動前透過電子報與社群陸續公布。
+          </p>
+        </FadeIn>
 
         {/* Galaxy section */}
         <FadeIn delay={200}>
