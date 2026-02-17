@@ -2002,6 +2002,49 @@ app.post('/api/workflow-chat', async (req, res) => {
   }
 });
 
+// Agent team chat endpoint
+app.post('/api/agent-chat', async (req, res) => {
+  try {
+    const { messages, context } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+
+    const systemPrompt = `You are the 5ML Platform Agent Assistant — an expert on the 5ML Agentic AI Platform.
+You have deep knowledge of every agent, use case, solution line, C-Suite role, and the 7-layer architecture.
+
+${context || ''}
+
+Your capabilities:
+1. Answer questions about any agent, use case, or architectural layer
+2. Suggest new agents, improvements, or restructuring
+3. Explain how different agents and layers interact
+4. Recommend priority changes and roadmap adjustments
+5. Help plan new use cases and estimate agent requirements
+
+Be concise, specific, and reference actual platform data. Use bullet points for lists.`;
+
+    // Try DeepSeek first, fall back to Claude
+    const deepseek = require('./services/deepseekService');
+    if (deepseek.isAvailable()) {
+      const result = await deepseek.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+      );
+      return res.json({ message: result.content, model: result.model || 'deepseek-chat' });
+    }
+
+    // Fallback to Claude
+    const llm = require('./lib/llm');
+    const result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+    return res.json({ message: result.text, model: result.modelName || 'claude-haiku' });
+
+  } catch (err) {
+    console.error('[agent-chat] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // RAG stats endpoint
 app.get('/api/rag/stats', (req, res) => {
   res.json(ragService.getStats());

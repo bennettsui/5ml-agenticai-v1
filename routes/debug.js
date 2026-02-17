@@ -92,6 +92,64 @@ module.exports = function createDebugRoutes() {
   }
 
   // ==================================================================
+  // Page Discovery — crawl sitemap + internal links
+  // ==================================================================
+
+  async function discoverPages(baseUrl, maxPages = 20) {
+    let origin;
+    try {
+      const parsed = new URL(baseUrl.match(/^https?:\/\//) ? baseUrl : `https://${baseUrl}`);
+      origin = parsed.origin;
+    } catch {
+      return [baseUrl];
+    }
+
+    const pages = new Set();
+    pages.add(origin + '/');  // always include homepage
+
+    // 1) Try /sitemap.xml
+    try {
+      const sitemapRes = await axios.get(`${origin}/sitemap.xml`, {
+        timeout: 10000,
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; 5MLHealthBot/1.0)' },
+        validateStatus: () => true,
+        responseType: 'text',
+      });
+      if (sitemapRes.status === 200 && typeof sitemapRes.data === 'string') {
+        const locMatches = sitemapRes.data.match(/<loc>(.*?)<\/loc>/g) || [];
+        for (const loc of locMatches) {
+          const url = loc.replace(/<\/?loc>/g, '').trim();
+          if (url.startsWith(origin)) pages.add(url);
+          if (pages.size >= maxPages) break;
+        }
+      }
+    } catch { /* sitemap not available */ }
+
+    // 2) If we don't have enough pages, extract internal links from homepage HTML
+    if (pages.size < maxPages) {
+      try {
+        const homepage = await fetchPage(origin + '/');
+        if (homepage.html) {
+          const linkRegex = /href=["'](\/[^"'#?\s]*|https?:\/\/[^"'#?\s]*)/gi;
+          let m;
+          while ((m = linkRegex.exec(homepage.html)) !== null && pages.size < maxPages) {
+            let href = m[1];
+            if (href.startsWith('/')) href = origin + href;
+            try {
+              const parsed = new URL(href);
+              if (parsed.origin === origin && !href.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|pdf|zip|xml)$/i)) {
+                pages.add(parsed.origin + parsed.pathname);
+              }
+            } catch { /* invalid URL */ }
+          }
+        }
+      } catch { /* homepage fetch failed, proceed with what we have */ }
+    }
+
+    return Array.from(pages).slice(0, maxPages);
+  }
+
+  // ==================================================================
   // HTML Parsing Helpers
   // ==================================================================
 
@@ -1163,6 +1221,140 @@ module.exports = function createDebugRoutes() {
   }
 
   // ==================================================================
+  // Multi-page execution — runs all modules on each discovered page
+  // ==================================================================
+  async function executeMultiPageSession(session) {
+    const baseUrl = session.subject_ref || '';
+    const requestedModuleIds = (session.modules_invoked || []).map(m => m.module);
+    const orchestration = orchestrateModules(requestedModuleIds);
+
+    // Discover sub-pages
+    const pageUrls = await discoverPages(baseUrl, 20);
+
+    const allIssues = [];
+    const pageResults = [];
+
+    for (const pageUrl of pageUrls) {
+      const fetchStart = Date.now();
+      const pageData = await fetchPage(pageUrl);
+      const fetchTimeMs = Date.now() - fetchStart;
+
+      const kbContext = { brand_profile: {}, rules: [], patterns: [] };
+      const pageIssues = [];
+      const pageModules = [];
+
+      for (const { module: moduleId, estimated_cost } of orchestration.approved) {
+        const start = Date.now();
+        try {
+          const moduleIssues = runModule(moduleId, pageData, kbContext);
+          // Tag each issue with the page URL
+          for (const issue of moduleIssues) {
+            issue.page_url = pageUrl;
+          }
+          pageModules.push({ module: moduleId, status: 'success', execution_time_ms: Date.now() - start, issues_found: moduleIssues.length, estimated_cost });
+          pageIssues.push(...moduleIssues);
+        } catch (e) {
+          pageModules.push({ module: moduleId, status: 'failed', execution_time_ms: Date.now() - start, error_message: e.message, estimated_cost });
+        }
+      }
+
+      // Per-page score
+      let pageScore = 100;
+      for (const issue of pageIssues) pageScore -= (issue.score_impact || 0);
+      pageScore = Math.max(0, Math.min(100, pageScore));
+
+      pageResults.push({
+        url: pageUrl,
+        title: extractTitle(pageData.html) || pageUrl,
+        status_code: pageData.statusCode,
+        fetch_time_ms: fetchTimeMs,
+        score: pageScore,
+        issue_count: pageIssues.length,
+        critical_count: pageIssues.filter(i => i.severity === 'critical').length,
+        modules: pageModules,
+      });
+
+      allIssues.push(...pageIssues);
+    }
+
+    // Create issue records
+    const sessionIssues = allIssues.map(issueData => ({
+      id: uuidv4(),
+      debug_session_id: session.id,
+      client_id: session.client_id,
+      project_id: session.project_id,
+      module: issueData.module,
+      area: issueData.area,
+      severity: issueData.severity,
+      finding: issueData.finding,
+      evidence: issueData.evidence || null,
+      recommendation: issueData.recommendation || null,
+      priority: issueData.priority || (issueData.score_impact >= 10 ? 'P0' : issueData.score_impact >= 5 ? 'P1' : 'P2'),
+      related_rule_ids: issueData.related_rule_ids || null,
+      related_pattern_ids: issueData.related_pattern_ids || null,
+      score_impact: issueData.score_impact || 0,
+      business_impact: issueData.business_impact || 'none',
+      user_impact: issueData.user_impact || null,
+      page_url: issueData.page_url || null,
+      resolution_status: 'open',
+      assigned_to: null,
+      resolved_at: null,
+      resolution_notes: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }));
+
+    for (const issue of sessionIssues) issues.set(issue.id, issue);
+
+    // Aggregate score (average of all page scores)
+    const avgScore = pageResults.length > 0
+      ? Math.round(pageResults.reduce((s, p) => s + p.score, 0) / pageResults.length)
+      : 0;
+
+    const hasCritical = allIssues.some(i => i.severity === 'critical');
+    const overallStatus = avgScore >= 80 && !hasCritical ? 'pass' : avgScore >= 60 && !hasCritical ? 'warning' : 'fail';
+
+    const sevCounts = {};
+    const layerScores = {};
+    for (const i of allIssues) {
+      sevCounts[i.severity] = (sevCounts[i.severity] || 0) + 1;
+      if (!layerScores[i.area]) layerScores[i.area] = { total_impact: 0, count: 0 };
+      layerScores[i.area].total_impact += (i.score_impact || 0);
+      layerScores[i.area].count += 1;
+    }
+
+    const parts = [`Score: ${avgScore}/100 (${overallStatus.toUpperCase()}).`];
+    parts.push(`${pageResults.length} pages scanned. ${allIssues.length} findings.`);
+    for (const sev of ['critical', 'major', 'minor', 'info']) {
+      if (sevCounts[sev]) parts.push(`${sevCounts[sev]} ${sev}`);
+    }
+
+    session.modules_invoked = orchestration.approved.map(a => ({ module: a.module, status: 'success', execution_time_ms: 0, estimated_cost: a.estimated_cost }));
+    session.overall_score = avgScore;
+    session.overall_status = overallStatus;
+    session.overall_summary = parts.join(' ');
+    session.kb_entries_used = [];
+    session.updated_at = new Date().toISOString();
+    session.issue_count = allIssues.length;
+    session.critical_count = sevCounts.critical || 0;
+    session.major_count = sevCounts.major || 0;
+    session.orchestration = {
+      total_cost: orchestration.total_estimated_cost * pageResults.length,
+      budget: orchestration.max_budget,
+      cost_per_page: orchestration.total_estimated_cost,
+      fetch_time_ms: pageResults.reduce((s, p) => s + p.fetch_time_ms, 0),
+      modules_run: orchestration.approved.length,
+      modules_skipped: orchestration.skipped.length,
+      layer_scores: layerScores,
+      pages_scanned: pageResults.length,
+      api_cost_usd: 0.00, // All modules are pure HTML parsing, no LLM calls
+    };
+    session.page_results = pageResults;
+
+    return sessionIssues;
+  }
+
+  // ==================================================================
   // POST /debug/sessions  (create, optionally auto-run)
   // ==================================================================
   router.post('/debug/sessions', async (req, res) => {
@@ -1199,7 +1391,10 @@ module.exports = function createDebugRoutes() {
 
       // Auto-run modules immediately if requested
       if (auto_run) {
-        const sessionIssues = await executeSession(session);
+        // Multi-page mode: subject_type === 'website' crawls sub-pages
+        const sessionIssues = subject_type === 'website'
+          ? await executeMultiPageSession(session)
+          : await executeSession(session);
         return res.status(201).json({ ...session, issues: sessionIssues });
       }
 

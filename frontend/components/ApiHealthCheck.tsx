@@ -64,11 +64,29 @@ const STATUS_CONFIG = {
   not_configured: { label: 'Not Configured', color: 'text-slate-500',   bg: 'bg-slate-500/10',   border: 'border-slate-600/30',   Icon: MinusCircle },
 };
 
+const CACHE_KEY = 'api-health-last-result';
+
 export default function ApiHealthCheck() {
   const [data, setData] = useState<HealthResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retesting, setRetesting] = useState<Set<string>>(new Set());
+  const [isCached, setIsCached] = useState(false);
+
+  // Load last results from localStorage on mount (no auto-fetch)
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        setData(JSON.parse(cached));
+        setIsCached(true);
+      }
+    } catch { /* ignore parse errors */ }
+  }, []);
+
+  const saveCache = useCallback((json: HealthResponse) => {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(json)); } catch { /* quota */ }
+  }, []);
 
   const fetchHealth = useCallback(async () => {
     setLoading(true);
@@ -78,12 +96,14 @@ export default function ApiHealthCheck() {
       const json: HealthResponse = await res.json();
       setData(json);
       setError(null);
+      setIsCached(false);
+      saveCache(json);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to fetch');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [saveCache]);
 
   const retestService = useCallback(async (serviceId: string) => {
     setRetesting(prev => new Set(prev).add(serviceId));
@@ -98,13 +118,14 @@ export default function ApiHealthCheck() {
         const configured = services.filter(r => r.status === 'configured').length;
         const errors = services.filter(r => r.status === 'error').length;
         const notConfigured = services.filter(r => r.status === 'not_configured').length;
-        return { ...prev, timestamp: json.timestamp, services, summary: { total: services.length, connected, configured, errors, notConfigured } };
+        const updated = { ...prev, timestamp: json.timestamp, services, summary: { total: services.length, connected, configured, errors, notConfigured } };
+        setIsCached(false);
+        saveCache(updated);
+        return updated;
       });
     } catch { /* keep existing state */ }
     setRetesting(prev => { const next = new Set(prev); next.delete(serviceId); return next; });
-  }, []);
-
-  // No auto-fetch on load — user clicks "Test All" to start
+  }, [saveCache]);
 
   const serviceMap = new Map((data?.services || []).map(s => [s.id, s]));
 
@@ -147,7 +168,18 @@ export default function ApiHealthCheck() {
         </div>
       )}
 
-      {/* Initial state — no data yet */}
+      {/* Cached data banner */}
+      {isCached && data && (
+        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm flex items-center gap-2">
+          <Clock className="w-4 h-4 shrink-0" />
+          Showing cached results from {new Date(data.timestamp).toLocaleString()}
+          <button onClick={fetchHealth} className="ml-auto px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors">
+            <RefreshCw className="w-3 h-3 inline mr-1" />Re-test Now
+          </button>
+        </div>
+      )}
+
+      {/* Initial state — no data at all */}
       {!loading && !data && !error && (
         <div className="flex items-center justify-center py-20">
           <div className="text-center">

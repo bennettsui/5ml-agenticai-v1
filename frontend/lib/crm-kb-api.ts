@@ -124,6 +124,7 @@ export interface PaginatedResponse<T> {
 
 export type DebugSubjectType =
   | "web_page"
+  | "website"
   | "design"
   | "video"
   | "social_post"
@@ -183,13 +184,25 @@ export interface DebugSession {
   critical_count?: number;
   major_count?: number;
   issues?: DebugIssue[];
+  page_results?: Array<{
+    url: string;
+    title: string;
+    status_code: number;
+    fetch_time_ms: number;
+    score: number;
+    issue_count: number;
+    critical_count: number;
+  }>;
   orchestration?: {
     total_cost: number;
     budget: number;
+    cost_per_page?: number;
     fetch_time_ms: number;
     modules_run: number;
     modules_skipped: number;
     layer_scores: Record<string, { total_impact: number; count: number }>;
+    pages_scanned?: number;
+    api_cost_usd?: number;
   };
 }
 
@@ -210,6 +223,7 @@ export interface DebugIssue {
   score_impact: number;
   business_impact: string | null;
   user_impact: string | null;
+  page_url?: string | null;
   resolution_status: ResolutionStatus;
   assigned_to: string | null;
   resolved_at: string | null;

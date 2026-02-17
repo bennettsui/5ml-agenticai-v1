@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback, FormEvent } from 'react';
 import ArchitectureViz from '@/components/ArchitectureViz';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import PlatformOverview from '@/components/PlatformOverview';
@@ -11,34 +11,171 @@ import KnowledgeBase from '@/components/KnowledgeBase';
 import CostAnalysis from '@/components/CostAnalysis';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
-  BookOpen, DollarSign, ArrowRight, ExternalLink, Users, Brain,
-  CheckCircle2, Clock, Zap, Map, ChevronRight,
+  BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
+  ChevronRight, Map, Zap, Send, Loader2, Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
   USE_CASES, SOLUTION_LINES, ROADMAP_ITEMS, STATUS_CONFIG,
-  CSUITE_ROLES, type UseCaseConfig, type Status,
+  CSUITE_ROLES, SEVEN_LAYERS, type UseCaseConfig, type Status,
 } from '@/lib/platform-config';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'api' | 'scheduling' | 'knowledge' | 'costs' | 'workflows';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'api' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat';
 
-const statusBadge = (status: Status) => {
-  const c = STATUS_CONFIG[status];
-  return <span className={`text-[10px] px-2 py-0.5 rounded-full border ${c.bg} ${c.color}`}>{c.label}</span>;
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const LINE_BORDER: Record<string, string> = {
+  GrowthOS: 'border-l-purple-500',
+  ExecIntel: 'border-l-teal-500',
+  OpsFinance: 'border-l-blue-500',
+  Experience: 'border-l-amber-500',
+  Platform: 'border-l-slate-500',
 };
 
-const priorityColor: Record<string, string> = {
-  critical: 'text-red-400',
-  high: 'text-orange-400',
-  medium: 'text-amber-400',
-  low: 'text-blue-400',
-};
+const ROLE_COLORS = ['from-purple-600/60 to-purple-500/20', 'from-teal-600/60 to-teal-500/20', 'from-rose-600/60 to-rose-500/20', 'from-blue-600/60 to-blue-500/20', 'from-amber-600/60 to-amber-500/20', 'from-slate-600/60 to-slate-500/20'];
+
+// ---------------------------------------------------------------------------
+// Agent Chat Panel
+// ---------------------------------------------------------------------------
+
+interface ChatMessage { role: 'user' | 'assistant'; content: string }
+
+const SUGGESTIONS = [
+  'What agents do we have?',
+  'Show GrowthOS status',
+  'Suggest a new agent',
+  'How does orchestration work?',
+  'C-Suite agent roadmap',
+  'What improvements should we make?',
+];
+
+function buildPlatformContext(): string {
+  const lines = Object.values(SOLUTION_LINES).map(l => `- ${l.name}: ${l.tagline}`).join('\n');
+  const cases = USE_CASES.map(u => `- ${u.name} [${STATUS_CONFIG[u.status].label}] — ${u.description} (${u.agentCount || 0} agents, ${Math.round(u.progress * 100)}% done)`).join('\n');
+  const roles = CSUITE_ROLES.map(r => `- ${r.shortTitle} / ${r.agentFamily}: ${r.description} [${STATUS_CONFIG[r.status].label}, ${Math.round(r.progress * 100)}%]`).join('\n');
+  const layers = SEVEN_LAYERS.map(l => `L${l.number} ${l.name}: ${l.components.join(', ')}`).join('\n');
+
+  return `## Solution Lines\n${lines}\n\n## Use Cases (${USE_CASES.length} total)\n${cases}\n\n## C-Suite Agent Families\n${roles}\n\n## 7-Layer Architecture\n${layers}`;
+}
+
+function AgentChatPanel() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages]);
+
+  const send = useCallback(async (text?: string) => {
+    const content = (text || input).trim();
+    if (!content || loading) return;
+    setInput('');
+
+    const userMsg: ChatMessage = { role: 'user', content };
+    const allMessages = [...messages, userMsg];
+    setMessages(allMessages);
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/agent-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: allMessages, context: buildPlatformContext() }),
+      });
+      const data = await res.json();
+      setMessages(prev => [...prev, { role: 'assistant', content: data.message || data.error || 'No response' }]);
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Failed to reach the API. Is the backend running?' }]);
+    }
+    setLoading(false);
+  }, [input, messages, loading]);
+
+  const onSubmit = (e: FormEvent) => { e.preventDefault(); send(); };
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-180px)]">
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+        {messages.length === 0 && (
+          <div className="text-center py-16">
+            <div className="inline-flex p-4 rounded-2xl bg-purple-500/10 mb-4">
+              <Brain className="w-10 h-10 text-purple-400" />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">Agent Team Assistant</h3>
+            <p className="text-sm text-slate-400 mb-6 max-w-md mx-auto">
+              Ask anything about your agents, use cases, architecture, or get suggestions for improvements.
+            </p>
+            <div className="flex flex-wrap gap-2 justify-center max-w-lg mx-auto">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => send(s)}
+                  className="text-xs px-3 py-1.5 rounded-full border border-slate-700/50 bg-slate-800/60 text-slate-400 hover:text-white hover:border-purple-500/40 transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed ${
+              msg.role === 'user'
+                ? 'bg-blue-600/20 text-blue-100 border border-blue-500/20'
+                : 'bg-slate-800/80 text-slate-300 border border-slate-700/50'
+            }`}>
+              <div className="whitespace-pre-wrap">{msg.content}</div>
+            </div>
+          </div>
+        ))}
+
+        {loading && (
+          <div className="flex justify-start">
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-800/80 border border-slate-700/50 text-sm text-slate-500">
+              <Loader2 className="w-4 h-4 animate-spin" /> Thinking...
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div className="border-t border-slate-700/50 bg-slate-900/60 p-4">
+        <form onSubmit={onSubmit} className="flex gap-3 max-w-3xl mx-auto">
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Ask about agents, use cases, suggest changes..."
+            className="flex-1 bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50"
+          />
+          <button
+            type="submit"
+            disabled={loading || !input.trim()}
+            className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white rounded-xl text-sm font-medium transition-colors flex items-center gap-1.5"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard Page
+// ---------------------------------------------------------------------------
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('control');
 
   const tabs = [
     { id: 'control' as Tab, label: 'Control Tower', icon: LayoutDashboard },
+    { id: 'chat' as Tab, label: 'Agent Chat', icon: MessageSquare },
     { id: 'overview' as Tab, label: 'Overview', icon: Activity },
     { id: 'architecture' as Tab, label: 'Architecture', icon: Layers },
     { id: 'analytics' as Tab, label: 'Analytics', icon: Activity },
@@ -57,14 +194,10 @@ export default function Dashboard() {
 
   // Group by solution line
   const lineGroups = Object.entries(SOLUTION_LINES).map(([key, line]) => ({
+    key,
     ...line,
     cases: USE_CASES.filter(u => u.solutionLine === key),
   }));
-
-  // Roadmap buckets
-  const nowItems = ROADMAP_ITEMS.filter(r => r.timeframe === 'now').slice(0, 5);
-  const nextItems = ROADMAP_ITEMS.filter(r => r.timeframe === 'next').slice(0, 5);
-  const laterItems = ROADMAP_ITEMS.filter(r => r.timeframe === 'later').slice(0, 5);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
@@ -77,19 +210,11 @@ export default function Dashboard() {
                 <Home className="w-5 h-5" />
               </Link>
               <div>
-                <h1 className="text-xl font-bold text-white">
-                  5ML Agentic Control Tower
-                </h1>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Internal control tower — {totalAgents}+ agents · {USE_CASES.length} use cases · IAD region
-                </p>
+                <h1 className="text-xl font-bold text-white">5ML Agentic Control Tower</h1>
+                <p className="text-xs text-slate-500 mt-0.5">{totalAgents}+ agents · {USE_CASES.length} use cases</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="px-3 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium">
-                ● System Online
-              </div>
-            </div>
+            <div className="px-3 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium">● System Online</div>
           </div>
         </div>
       </header>
@@ -126,105 +251,110 @@ export default function Dashboard() {
         {/* ================================================================ */}
         {activeTab === 'control' && (
           <div className="space-y-6">
-            {/* KPI Metrics Strip */}
+            {/* KPI Metrics Strip — colored top accents */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4 text-center">
-                <div className="text-2xl font-bold text-white">{USE_CASES.length}</div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Total Use Cases</div>
-              </div>
-              <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4 text-center">
-                <div className="text-2xl font-bold text-green-400">{liveCount}</div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Live</div>
-              </div>
-              <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4 text-center">
-                <div className="text-2xl font-bold text-amber-400">{buildCount}</div>
-                <div className="text-[10px] text-slate-500 mt-0.5">In Build</div>
-              </div>
-              <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4 text-center">
-                <div className="text-2xl font-bold text-blue-400">{plannedCount}</div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Planned</div>
-              </div>
-              <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4 text-center">
-                <div className="text-2xl font-bold text-purple-400">{totalAgents}+</div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Active Agents</div>
-              </div>
+              {[
+                { value: USE_CASES.length, label: 'Total Use Cases', color: 'text-white', accent: 'border-t-slate-400' },
+                { value: liveCount, label: 'Live', color: 'text-green-400', accent: 'border-t-green-500' },
+                { value: buildCount, label: 'In Build', color: 'text-amber-400', accent: 'border-t-amber-500' },
+                { value: plannedCount, label: 'Planned', color: 'text-blue-400', accent: 'border-t-blue-500' },
+                { value: `${totalAgents}+`, label: 'Active Agents', color: 'text-purple-400', accent: 'border-t-purple-500' },
+              ].map((kpi) => (
+                <div key={kpi.label} className={`bg-slate-800/60 rounded-xl border border-slate-700/50 border-t-2 ${kpi.accent} p-4 text-center`}>
+                  <div className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">{kpi.label}</div>
+                </div>
+              ))}
             </div>
 
-            {/* Product / Use Case Matrix */}
+            {/* Product / Use Case Matrix — colored group headers */}
             <div className="bg-slate-800/60 rounded-2xl border border-slate-700/50 overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-700/50 flex items-center justify-between">
+              <div className="px-5 py-4 border-b border-slate-700/50">
                 <h2 className="text-base font-bold text-white">Product / Use Case Matrix</h2>
-                <span className="text-[10px] text-slate-500">{USE_CASES.length} entries across {Object.keys(SOLUTION_LINES).length} solution lines</span>
               </div>
 
               {lineGroups.map((group) => {
                 if (group.cases.length === 0) return null;
+                const live = group.cases.filter(c => c.status === 'live').length;
                 return (
                   <div key={group.id}>
-                    <div className={`px-5 py-2.5 bg-white/[0.02] border-b border-slate-700/30`}>
-                      <span className={`text-xs font-semibold ${group.textColor}`}>{group.name}</span>
-                      <span className="text-[10px] text-slate-600 ml-2">{group.cases.length} use cases</span>
+                    {/* Group header with colored left bar */}
+                    <div className={`flex items-center gap-3 px-5 py-2.5 bg-white/[0.02] border-b border-slate-700/30 border-l-4 ${LINE_BORDER[group.key]}`}>
+                      <span className={`text-xs font-bold ${group.textColor}`}>{group.name}</span>
+                      <div className="flex items-center gap-2 ml-auto">
+                        {live > 0 && <span className="flex items-center gap-1 text-[10px] text-green-400"><span className="w-1.5 h-1.5 rounded-full bg-green-400" />{live} live</span>}
+                        <span className="text-[10px] text-slate-600">{group.cases.length} total</span>
+                      </div>
                     </div>
+                    {/* Rows */}
                     <div className="divide-y divide-slate-700/30">
-                      {group.cases.map((uc) => (
-                        <div key={uc.id} className="px-5 py-3 flex items-center gap-4 hover:bg-white/[0.02] transition-colors">
-                          <div className="flex-1 min-w-0">
-                            <span className="text-sm text-white font-medium">{uc.name}</span>
-                            <span className="text-[10px] text-slate-600 ml-2 hidden sm:inline">{uc.description?.slice(0, 60)}...</span>
-                          </div>
-                          <div className="flex items-center gap-3 flex-shrink-0">
-                            {statusBadge(uc.status)}
-                            {/* Progress bar */}
-                            <div className="w-20 h-1.5 rounded-full bg-slate-700/50 overflow-hidden hidden sm:block">
+                      {group.cases.map((uc) => {
+                        const sc = STATUS_CONFIG[uc.status];
+                        return (
+                          <div key={uc.id} className="px-5 py-2.5 flex items-center gap-3 hover:bg-white/[0.02] transition-colors">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0`} style={{ backgroundColor: sc.color.includes('green') ? '#4ade80' : sc.color.includes('amber') ? '#fbbf24' : sc.color.includes('blue') ? '#60a5fa' : '#a78bfa' }} />
+                            <span className="text-sm text-white font-medium flex-1 min-w-0 truncate">{uc.name}</span>
+                            <div className="w-20 h-1.5 rounded-full bg-white/[0.04] overflow-hidden hidden sm:block shrink-0">
                               <div className="h-full rounded-full bg-blue-500/60" style={{ width: `${uc.progress * 100}%` }} />
                             </div>
-                            <span className={`text-[10px] ${priorityColor[uc.priority]} hidden md:block`}>{uc.priority}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${sc.bg} ${sc.color} shrink-0`}>{sc.label}</span>
                             {uc.path !== '#' ? (
-                              <Link href={uc.path} className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5">
-                                Open <ChevronRight className="w-3 h-3" />
-                              </Link>
+                              <Link href={uc.path} className="text-[10px] text-blue-400 hover:text-blue-300 shrink-0">Open</Link>
                             ) : (
-                              <span className="text-[10px] text-slate-600 w-10">—</span>
+                              <span className="text-[10px] text-slate-700 shrink-0 w-6">—</span>
                             )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* C-Suite Assist Panel */}
+            {/* C-Suite Assist Panel — gradient accent cards */}
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Brain className="w-5 h-5 text-purple-400" />
                 <h2 className="text-base font-bold text-white">C-Suite Assist Panel</h2>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                {CSUITE_ROLES.map((role) => (
-                  <div key={role.id} className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-lg font-bold text-white">{role.shortTitle}</span>
-                      {statusBadge(role.status)}
+                {CSUITE_ROLES.map((role, i) => {
+                  const sc = STATUS_CONFIG[role.status];
+                  return (
+                    <div key={role.id} className="rounded-xl border border-slate-700/50 bg-slate-800/60 overflow-hidden">
+                      {/* Gradient accent header */}
+                      <div className={`h-1.5 bg-gradient-to-r ${ROLE_COLORS[i]}`} />
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-lg font-bold text-white">{role.shortTitle}</span>
+                          <span className={`w-2 h-2 rounded-full`} style={{ backgroundColor: sc.color.includes('green') ? '#4ade80' : sc.color.includes('amber') ? '#fbbf24' : '#60a5fa' }} />
+                        </div>
+                        <div className="text-[10px] text-purple-400 font-semibold mb-2">{role.agentFamily}</div>
+                        {/* Progress ring visual */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="relative w-8 h-8">
+                            <svg viewBox="0 0 36 36" className="w-8 h-8 -rotate-90">
+                              <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-700/50" />
+                              <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="3" className="text-purple-400"
+                                strokeDasharray={`${role.progress * 94.2} 94.2`} strokeLinecap="round" />
+                            </svg>
+                            <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-white">{Math.round(role.progress * 100)}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {role.focus.slice(0, 2).map((f, j) => (
+                              <span key={j} className="text-[9px] px-1 py-0.5 bg-white/[0.04] rounded text-slate-500">{f}</span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-xs text-purple-400 font-medium mb-1">{role.agentFamily}</div>
-                    <p className="text-[10px] text-slate-500 mb-3 line-clamp-2">{role.description}</p>
-                    {/* Progress */}
-                    <div className="h-1 rounded-full bg-slate-700/50 overflow-hidden mb-2">
-                      <div className="h-full rounded-full bg-purple-500/60" style={{ width: `${role.progress * 100}%` }} />
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {role.focus.map((f, i) => (
-                        <span key={i} className="text-[9px] px-1 py-0.5 bg-white/[0.03] rounded text-slate-600">{f}</span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            {/* Roadmap Preview */}
+            {/* Roadmap Preview — compact */}
             <div className="bg-slate-800/60 rounded-2xl border border-slate-700/50 p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -232,29 +362,22 @@ export default function Dashboard() {
                   <h2 className="text-base font-bold text-white">Roadmap Preview</h2>
                 </div>
                 <Link href="/dashboard/roadmap" className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors font-medium">
-                  Open Full Roadmap <ArrowRight className="w-3.5 h-3.5" />
+                  Full Roadmap <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
-                  { items: nowItems, label: 'Now', sub: '0-3mo', color: 'border-l-green-500', badge: 'bg-green-500/10 text-green-400' },
-                  { items: nextItems, label: 'Next', sub: '3-9mo', color: 'border-l-amber-500', badge: 'bg-amber-500/10 text-amber-400' },
-                  { items: laterItems, label: 'Later', sub: '9-18mo', color: 'border-l-blue-500', badge: 'bg-blue-500/10 text-blue-400' },
+                  { items: ROADMAP_ITEMS.filter(r => r.timeframe === 'now').slice(0, 4), label: 'Now', color: 'border-l-green-500', dot: 'bg-green-400', badge: 'bg-green-500/10 text-green-400 border-green-500/20' },
+                  { items: ROADMAP_ITEMS.filter(r => r.timeframe === 'next').slice(0, 4), label: 'Next', color: 'border-l-amber-500', dot: 'bg-amber-400', badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+                  { items: ROADMAP_ITEMS.filter(r => r.timeframe === 'later').slice(0, 4), label: 'Later', color: 'border-l-blue-500', dot: 'bg-blue-400', badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
                 ].map((bucket) => (
                   <div key={bucket.label} className={`border-l-4 ${bucket.color} pl-4`}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${bucket.badge} font-medium`}>{bucket.label}</span>
-                      <span className="text-[10px] text-slate-600">{bucket.sub}</span>
-                    </div>
-                    <div className="space-y-2">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${bucket.badge}`}>{bucket.label}</span>
+                    <div className="space-y-2 mt-3">
                       {bucket.items.map((item) => (
-                        <div key={item.id} className="flex items-start gap-1.5">
-                          <Zap className="w-3 h-3 mt-0.5 flex-shrink-0 text-slate-600" />
-                          <div>
-                            <div className="text-xs text-white font-medium">{item.name}</div>
-                            <div className="text-[10px] text-slate-600">{SOLUTION_LINES[item.solutionLine]?.name}</div>
-                          </div>
+                        <div key={item.id} className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full ${bucket.dot} shrink-0`} />
+                          <span className="text-xs text-white font-medium">{item.name}</span>
                         </div>
                       ))}
                     </div>
@@ -264,6 +387,11 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* ================================================================ */}
+        {/* AGENT CHAT TAB                                                  */}
+        {/* ================================================================ */}
+        {activeTab === 'chat' && <AgentChatPanel />}
 
         {/* Existing tabs */}
         {activeTab === 'overview' && <PlatformOverview />}
