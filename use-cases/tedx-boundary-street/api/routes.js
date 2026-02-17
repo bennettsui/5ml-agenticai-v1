@@ -331,3 +331,5 @@ async function generateVisual(client, prompt) {
 }
 
 module.exports = router;
+module.exports.router = router;
+module.exports.VISUALS = VISUALS;

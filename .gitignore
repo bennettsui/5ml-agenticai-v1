@@ -11,3 +11,6 @@ dist/
 frontend/out/
 frontend/.next/
 .next/
+
+# Nanobanana visual generation manifest (server-side state)
+frontend/public/tedx/.manifest.json
