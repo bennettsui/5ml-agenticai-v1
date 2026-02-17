@@ -35,13 +35,21 @@ async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
     existingData = {}
   } = options;
 
-  // Only use DeepSeek R1 for orchestration (50,000 token limit)
-  if (!shouldUseDeepSeek('deepseek')) {
-    throw new Error('CSO Orchestrator requires DeepSeek R1 (deepseek-reasoner) for orchestration tasks');
-  }
-
   const orchestrationLog = [];
   const modelsUsed = [];
+
+  // Prefer DeepSeek R1 for orchestration (50,000 token limit)
+  // But allow Claude Sonnet/Haiku as fallback
+  const useDeepSeek = shouldUseDeepSeek(modelSelection);
+
+  if (modelSelection === 'deepseek' && !useDeepSeek) {
+    orchestrationLog.push({
+      step: 'model_fallback',
+      timestamp: new Date().toISOString(),
+      message: '⚠️ DeepSeek R1 unavailable, using Claude as fallback',
+      warning: 'Claude has smaller context window than DeepSeek R1 (may impact orchestration)'
+    });
+  }
 
   orchestrationLog.push({
     step: 'initialization',
@@ -181,7 +189,8 @@ async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
     brief,
     existingData,
     orchestrationLog,
-    modelsUsed
+    modelsUsed,
+    modelSelection
   );
 
   // Step 4: Reflection - Validate Output Quality
@@ -213,6 +222,7 @@ async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
       existingData,
       orchestrationLog,
       modelsUsed,
+      modelSelection,
       qualityCheck.guidance
     );
 
@@ -299,7 +309,7 @@ async function evaluateDataSufficiency(client_name, brief, existingData, convers
 /**
  * Synthesize holistic diagnosis from all agent data
  */
-async function synthesizeDiagnosis(client_name, brief, existingData, orchestrationLog, modelsUsed, additionalGuidance = '') {
+async function synthesizeDiagnosis(client_name, brief, existingData, orchestrationLog, modelsUsed, modelSelection = 'deepseek', additionalGuidance = '') {
   // Build comprehensive context
   let contextData = `# 品牌全息診斷報告\n\n**品牌名稱**: ${client_name}\n**項目簡報**: ${brief}\n\n`;
 
@@ -369,14 +379,50 @@ async function synthesizeDiagnosis(client_name, brief, existingData, orchestrati
 5. 風險評估`;
 
   try {
-    const result = await deepseekService.analyze(systemPrompt, userPrompt, {
-      maxTokens: 8000,
-      temperature: 0.3,
-    });
+    let result;
+    let modelUsed = '';
+    let modelId = '';
+
+    // Try DeepSeek first if selected and available
+    if (shouldUseDeepSeek(modelSelection)) {
+      result = await deepseekService.analyze(systemPrompt, userPrompt, {
+        maxTokens: 8000,
+        temperature: 0.3,
+      });
+      modelUsed = 'DeepSeek R1';
+      modelId = 'deepseek-reasoner';
+    } else {
+      // Fallback to Claude
+      const Anthropic = require('@anthropic-ai/sdk');
+      const { getClaudeModel } = require('../utils/modelHelper');
+      const client = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+
+      const claudeModel = getClaudeModel(modelSelection);
+      const response = await client.messages.create({
+        model: claudeModel,
+        max_tokens: 8000,
+        temperature: 0.3,
+        messages: [
+          {
+            role: 'user',
+            content: `${systemPrompt}\n\n${userPrompt}`
+          }
+        ]
+      });
+
+      result = {
+        content: response.content[0].text,
+        usage: response.usage
+      };
+      modelUsed = modelSelection === 'sonnet' ? 'Claude 3.5 Sonnet' : 'Claude 3 Haiku';
+      modelId = claudeModel;
+    }
 
     modelsUsed.push({
-      model: 'DeepSeek R1',
-      model_id: 'deepseek-reasoner',
+      model: modelUsed,
+      model_id: modelId,
       usage: result.usage || {},
       role: 'CSO Synthesis'
     });
