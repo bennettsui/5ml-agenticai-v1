@@ -230,23 +230,43 @@ All use cases built on the same 7-layer infra and often re-use agents.`,
   },
   {
     id: 'crm-architecture',
-    content: `CRM Marketing Intelligence 8-Phase Architecture:
-Phase 0 - Pre-CRM Setup & Research: Brand Discovery Agent, Market Research Agent, Competitor Analysis Agent, LinkedIn Network Analyzer, Initial Relationship Mapper, Brand Hierarchy Builder, Initial Knowledge Base Populator. Purpose: Set up brand/client intelligence BEFORE ongoing CRM. Triggered by new client onboarding or brand research request.
-Phase 1 - Data Ingestion & Ongoing Research: Brand Monitor (news, mentions), Market Intelligence Collector, Competitor Tracker, Social Listening Agent, Industry Trend Researcher, CRM Data Collector, Marketing Platform Fetcher.
-Phase 2 - Data Processing & Normalization: Clean, deduplicate, and normalize incoming data streams.
-Phase 3 - Knowledge Synthesis & Graph Building: Knowledge Graph Builder integrates findings, Relationship Mapper connects people/companies, Hierarchy Builder creates organizational structure.
-Phase 4 - Domain Intelligence Application: Client Intelligence Agent creates intelligence profiles, applies domain-specific analysis.
-Phase 5 - Action Planning & Strategy: Campaign strategy synthesis, budget optimization, resource allocation.
-Phase 6 - Execution & System Updates: CRM Updater populates systems, Alert Setup configures monitoring, action execution.
-Phase 7 - User Interface & Interaction: Client-facing AI chat, dashboards, reports, feedback collection.
+    content: `CRM Relationship Intelligence Platform — 18-Agent 8-Phase Architecture:
+This is NOT just CRM marketing intelligence — it is 5ML's proprietary Relationship Intelligence Platform, our competitive moat for client retention and business development.
 
-Orchestration Patterns:
-Pattern A (Quick Setup - Low Priority): Basic web search, key contacts only, minimal CRM fields, basic monitoring.
-Pattern B (Comprehensive Setup - Key Client): Full Layer 0 research, deep competitor analysis, 2nd/3rd degree relationship mapping, custom alert configuration.
-Pattern C (Ongoing Research Refresh): Quarterly review trigger, market updates, competitor changes, knowledge graph refresh.
+Primary Goal: Build a Relationship Graph that tracks brand evolution, team dynamics, personal preferences, project history, and connection potential.
+Secondary Goal: Provide actionable relationship intelligence — proactive relationship management, at-risk detection, strategic connection development, personalized engagement.
 
-Critical: Brand setup is NOT one-time. Research needs periodic refresh. Setup quality affects everything downstream.`,
-    metadata: { useCase: 'crm', title: 'CRM 8-Phase Architecture' },
+Agents & Phases:
+Entry — Relationship Orchestrator (Haiku $0.25/M): Classifies triggers and routes to appropriate agents. New client → full pipeline, relationship signal → Communication Analyzer, simple query → Chat Agent, quarterly review → selective updates.
+Phase 0 — Brand Discovery (Haiku), Market Research (Perplexity $3/M), Competitor Analysis (Perplexity), LinkedIn Analyzer (Haiku). Parallel research for new client onboarding.
+Phase 1 — Brand Monitor (Haiku), CRM Data Collector (DeepSeek $0.14/M), Communication Analyzer (Haiku). Ongoing data ingestion plus tone/responsiveness/pattern analysis.
+Phase 2 — Data Validator (DeepSeek) for early validation checkpoint, Data Normalizer for cleaning/deduplication.
+Phase 3 — Relationship Graph (DeepSeek): Replaced Knowledge Graph. Tracks relationship strength metrics, temporal patterns, connection maps.
+Phase 4 — Pattern Recognizer (DeepSeek) for cross-brand patterns, Relationship Scorer (DeepSeek) for multi-factor scoring & at-risk detection, Connection Suggester (DeepSeek) for relationship development opportunities.
+Phase 5 — Strategy Planner (Sonnet $3/M): Budget, resource allocation, personalized engagement strategies.
+Phase 6 — CRM Updater (Haiku), Quality Gate (DeepSeek) validates completeness with feedback loop to Phase 0.
+Phase 7 — Context Builder (RAG), CRM Chat Agent (Sonnet $3/M) for client-facing AI.
+
+Orchestration: Tier-based routing (Enterprise clients use Perplexity+Sonnet, SME clients use DeepSeek). Complexity-based routing (<500 tokens → Haiku, 500-2000 → DeepSeek, >2000 strategic → Sonnet). Caching: market data 7 days, relationship scores 1 day, team structures 30 days.
+
+Feedback Loops: Quality Gate → Brand Discovery (re-research gaps), Relationship Scorer → Orchestrator (at-risk alerts).`,
+    metadata: { useCase: 'crm', title: 'CRM Relationship Intelligence Architecture' },
+  },
+  {
+    id: 'crm-relationship-intelligence',
+    content: `CRM Relationship Intelligence — Key Concepts:
+Relationship Graph: Visual network map with nodes (People, Brands, Projects) and edge strength (color-coded relationship quality — green strong, yellow moderate, red at-risk). Filter by client, department, project, time period. Drill-down to detailed profiles.
+
+Signal Feed: Real-time relationship signals — at-risk alerts (no communication for 45+ days, project delays), positive signals (promotions, positive feedback), connection alerts (competitor interactions). Each signal has Take Action / Schedule Review buttons.
+
+Relationship Scoring: Multi-factor algorithm combining positive feedback (weight 0.3), timely response (0.2), project success (0.5). Score 0-100 with trend indicators. At-risk threshold triggers automated alert workflows.
+
+Action Center: Pending actions (follow-ups, reviews, report sharing), automated actions (weekly summaries, monthly at-risk alerts, quarterly deep-dive reports), quick actions (new check-in, schedule review, log interaction).
+
+Analytics: Overall relationship health score, at-risk/stable/strong distribution, communication frequency trends, positive feedback trends, response time improvements. Key insight: clients with monthly check-ins have 40% higher satisfaction; email follow-ups within 24 hours increase project renewal by 35%.
+
+Cost Optimization: Orchestration uses Haiku ($0.25/M), data collection uses DeepSeek ($0.14/M), analysis uses DeepSeek, strategy uses Sonnet ($3/M), client-facing uses Sonnet. Enterprise clients get Perplexity for research; SME clients use DeepSeek with web search.`,
+    metadata: { useCase: 'crm', title: 'CRM Relationship Intelligence Concepts' },
   },
 ]);
 

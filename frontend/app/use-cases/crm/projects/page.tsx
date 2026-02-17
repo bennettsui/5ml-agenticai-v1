@@ -119,7 +119,7 @@ export default function ProjectsPage() {
             className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to CRM KB
+            Back to Relationship Intelligence
           </Link>
 
           <div className="flex items-center justify-between flex-wrap gap-4">
