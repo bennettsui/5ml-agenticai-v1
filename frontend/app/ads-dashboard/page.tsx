@@ -23,7 +23,12 @@ import {
   ExternalLink,
   FileText,
   Download,
+  Bot,
+  Database,
+  Image as LucideImage,
+  Filter,
 } from 'lucide-react';
+import AdsAssistant from './ads-assistant';
 import {
   LineChart,
   Line,
@@ -367,6 +372,22 @@ export default function AdsDashboardPage() {
   const [sortColumn, setSortColumn] = useState<string>('spend');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
+  // Account filtering
+  const [showInactiveAccounts, setShowInactiveAccounts] = useState(false);
+
+  // Assistant
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // Data range
+  const [dataRange, setDataRange] = useState<{
+    earliest_date: string | null;
+    latest_date: string | null;
+    total_days: number;
+    total_campaigns: number;
+    total_ads: number;
+    total_rows: number;
+  } | null>(null);
+
   // Report generation state
   const [reportPanelOpen, setReportPanelOpen] = useState(false);
   const [reportTenantId, setReportTenantId] = useState<string>('');
@@ -444,10 +465,24 @@ export default function AdsDashboardPage() {
     }
   }, [from, to, platform, selectedTenant]);
 
+  const fetchDataRange = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ tenant_id: selectedTenant });
+      const res = await fetch(`${API_BASE}/api/ads/data-range?${params}`);
+      if (res.ok) {
+        const json = await res.json();
+        setDataRange(json.data || null);
+      }
+    } catch {
+      // ignore
+    }
+  }, [selectedTenant]);
+
   useEffect(() => {
     fetchData();
     fetchTenants();
-  }, [fetchData, fetchTenants]);
+    fetchDataRange();
+  }, [fetchData, fetchTenants, fetchDataRange]);
 
   // Ad Account Discovery functions
   const fetchAdAccounts = useCallback(async () => {
@@ -920,6 +955,27 @@ export default function AdsDashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Submenu */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex gap-1 -mb-px">
+            <span className="px-4 py-2.5 text-sm font-medium text-orange-600 dark:text-orange-400 border-b-2 border-orange-500">
+              <span className="flex items-center gap-1.5">
+                <BarChart3 className="w-4 h-4" />
+                Dashboard
+              </span>
+            </span>
+            <Link
+              href="/ads-dashboard/visuals"
+              className="px-4 py-2.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 border-b-2 border-transparent hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <LucideImage className="w-4 h-4" />
+                Ad Visuals
+              </span>
+            </Link>
+          </nav>
+        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -998,7 +1054,32 @@ export default function AdsDashboardPage() {
               )}
 
               {/* Meta Ads Section */}
-              <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Meta Ads</h4>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Meta Ads</h4>
+                  {adAccounts.length > 0 && (
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                      {adAccounts.filter(a => a.account_status === 1).length} active
+                      {adAccounts.filter(a => a.account_status !== 1).length > 0 && (
+                        <>, {adAccounts.filter(a => a.account_status !== 1).length} inactive</>
+                      )}
+                      {' '}of {adAccounts.length} total
+                    </span>
+                  )}
+                </div>
+                {adAccounts.filter(a => a.account_status !== 1).length > 0 && (
+                  <label className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showInactiveAccounts}
+                      onChange={(e) => setShowInactiveAccounts(e.target.checked)}
+                      className="rounded border-slate-300 dark:border-slate-600 text-orange-500 focus:ring-orange-500 w-3 h-3"
+                    />
+                    <Filter className="w-3 h-3" />
+                    Show inactive
+                  </label>
+                )}
+              </div>
               {accountsLoading && adAccounts.length === 0 ? (
                 <div className="flex items-center justify-center py-4 text-slate-400 text-sm gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -1010,7 +1091,7 @@ export default function AdsDashboardPage() {
                 </div>
               ) : (
                 <div className="grid gap-3 mb-6">
-                  {adAccounts.map((account) => {
+                  {adAccounts.filter(account => showInactiveAccounts || account.account_status === 1).map((account) => {
                     const status = ACCOUNT_STATUS_MAP[account.account_status] || {
                       label: `Status ${account.account_status}`,
                       color: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
@@ -1409,6 +1490,26 @@ export default function AdsDashboardPage() {
             ))}
           </div>
         </div>
+
+        {/* Data Availability Banner */}
+        {dataRange && dataRange.earliest_date && (
+          <div className="bg-white dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/50 p-3 mb-6 flex items-center gap-3">
+            <Database className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-400">
+              <span>
+                Data available: <span className="font-medium text-slate-900 dark:text-white">{dataRange.earliest_date}</span> to <span className="font-medium text-slate-900 dark:text-white">{dataRange.latest_date}</span>
+              </span>
+              <span className="text-slate-300 dark:text-slate-600">|</span>
+              <span>{dataRange.total_days} days</span>
+              <span className="text-slate-300 dark:text-slate-600">|</span>
+              <span>{dataRange.total_campaigns} campaigns</span>
+              <span className="text-slate-300 dark:text-slate-600">|</span>
+              <span>{dataRange.total_ads} ads</span>
+              <span className="text-slate-300 dark:text-slate-600">|</span>
+              <span>{dataRange.total_rows.toLocaleString()} data points</span>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6 text-red-700 dark:text-red-300 text-sm">
@@ -2154,6 +2255,33 @@ export default function AdsDashboardPage() {
           </div>
         )}
       </main>
+
+      {/* AI Assistant Toggle Button */}
+      <button
+        onClick={() => setChatOpen(!chatOpen)}
+        className={`fixed bottom-6 right-6 z-40 p-4 rounded-full shadow-lg transition-all ${
+          chatOpen
+            ? 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+            : 'bg-indigo-500 text-white hover:bg-indigo-600 hover:scale-105'
+        }`}
+        title="Ad Performance Assistant"
+      >
+        <Bot className="w-6 h-6" />
+      </button>
+
+      {/* AI Assistant Panel */}
+      <AdsAssistant
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+        context={{
+          selectedTenant,
+          dateRange: { from, to },
+          platform,
+          kpis: kpis as Record<string, unknown> | null,
+          campaignCount: campaigns.length,
+          adCount: ads.length,
+        }}
+      />
     </div>
   );
 }

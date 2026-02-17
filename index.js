@@ -135,6 +135,115 @@ app.get('/api/app-name', (req, res) => {
 });
 
 // ==========================================
+// API Health & Connection Test
+// ==========================================
+// Service test definitions (shared between full and individual tests)
+const SERVICE_TESTS = {
+  anthropic: { name: 'Anthropic (Claude)', type: 'probe', test: async () => {
+    if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-3-haiku-20240307', max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
+    return 'API key valid';
+  }},
+  deepseek: { name: 'DeepSeek', type: 'probe', test: async () => {
+    if (!process.env.DEEPSEEK_API_KEY) throw new Error('DEEPSEEK_API_KEY not set');
+    const resp = await fetch('https://api.deepseek.com/v1/models', {
+      headers: { 'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return 'API key valid';
+  }},
+  perplexity: { name: 'Perplexity (Sonar Pro)', type: 'probe', test: async () => {
+    if (!process.env.PERPLEXITY_API_KEY) throw new Error('PERPLEXITY_API_KEY not set');
+    const resp = await fetch('https://api.perplexity.ai/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.PERPLEXITY_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'sonar', messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
+    return 'API key valid';
+  }},
+  openai: { name: 'OpenAI', type: 'env', envVar: 'OPENAI_API_KEY' },
+  database: { name: 'PostgreSQL', type: 'probe', test: async () => {
+    if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL not set');
+    const db = require('./db');
+    await db.query('SELECT 1');
+    return 'Connected';
+  }},
+  notion: { name: 'Notion API', type: 'probe', test: async () => {
+    if (!process.env.NOTION_API_KEY) throw new Error('NOTION_API_KEY not set');
+    const resp = await fetch('https://api.notion.com/v1/users/me', {
+      headers: { 'Authorization': `Bearer ${process.env.NOTION_API_KEY}`, 'Notion-Version': '2022-06-28' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    return `Connected as ${data.name || data.type || 'bot'}`;
+  }},
+  resend: { name: 'Resend (Email)', type: 'env', envVar: 'RESEND_API_KEY' },
+  dropbox: { name: 'Dropbox', type: 'env', envVar: 'DROPBOX_ACCESS_TOKEN' },
+  comfyui: { name: 'ComfyUI (Image Gen)', type: 'env', envVar: 'COMFYUI_URL' },
+  'meta-ads': { name: 'Meta Ads API', type: 'probe', test: async () => {
+    if (!process.env.META_ACCESS_TOKEN) throw new Error('META_ACCESS_TOKEN not set');
+    const resp = await fetch(`https://graph.facebook.com/v20.0/me?access_token=${process.env.META_ACCESS_TOKEN}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
+    return 'Token valid';
+  }},
+  'google-ads': { name: 'Google Ads API', type: 'env', envVar: 'GOOGLE_ADS_DEVELOPER_TOKEN' },
+  gmail: { name: 'Gmail OAuth', type: 'env', envVar: 'GOOGLE_CLIENT_ID' },
+};
+
+async function testService(id) {
+  const svc = SERVICE_TESTS[id];
+  if (!svc) return null;
+  if (svc.type === 'env') {
+    const set = !!process.env[svc.envVar];
+    return { id, name: svc.name, status: set ? 'configured' : 'not_configured', detail: set ? `${svc.envVar} is set` : `${svc.envVar} not set` };
+  }
+  const start = Date.now();
+  try {
+    const detail = await svc.test();
+    return { id, name: svc.name, status: 'connected', latencyMs: Date.now() - start, detail };
+  } catch (err) {
+    return { id, name: svc.name, status: 'error', latencyMs: Date.now() - start, error: err.message };
+  }
+}
+
+app.get('/api/health/services', async (req, res) => {
+  const results = [];
+  for (const id of Object.keys(SERVICE_TESTS)) {
+    results.push(await testService(id));
+  }
+
+  const connected = results.filter(r => r.status === 'connected').length;
+  const configured = results.filter(r => r.status === 'configured').length;
+  const errors = results.filter(r => r.status === 'error').length;
+  const notConfigured = results.filter(r => r.status === 'not_configured').length;
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    summary: { total: results.length, connected, configured, errors, notConfigured },
+    services: results,
+  });
+});
+
+// Individual service retest
+app.get('/api/health/services/:id', async (req, res) => {
+  const result = await testService(req.params.id);
+  if (!result) return res.status(404).json({ error: 'Unknown service' });
+  res.json({ timestamp: new Date().toISOString(), service: result });
+});
+
+// ==========================================
 // Main Analysis Endpoint
 // ==========================================
 
@@ -1348,11 +1457,12 @@ app.get('/stats', async (req, res) => {
       ],
       models: [
         { id: 'deepseek', name: 'DeepSeek Reasoner', type: 'primary', status: 'available' },
-        { id: 'haiku', name: 'Claude Haiku', type: 'fallback', status: 'available' },
-        { id: 'sonnet', name: 'Claude Sonnet 4', type: 'advanced', status: 'available' },
-        { id: 'opus', name: 'Claude Opus 4.5', type: 'flagship', status: 'available' },
+        { id: 'haiku', name: 'Claude 3.5 Haiku', type: 'fallback', status: 'available' },
+        { id: 'sonnet', name: 'Claude Sonnet 4.5', type: 'advanced', status: 'available' },
+        { id: 'opus', name: 'Claude Opus 4.6', type: 'flagship', status: 'available' },
         { id: 'perplexity', name: 'Perplexity Sonar Pro', type: 'research', status: 'available' },
-        { id: 'comfyui', name: 'ComfyUI (Flux)', type: 'image-gen', status: 'available' },
+        { id: 'comfyui', name: 'ComfyUI (Stable Diffusion)', type: 'image-gen', status: 'available' },
+        { id: 'tesseract', name: 'Tesseract.js OCR', type: 'ocr', status: 'available' },
       ],
       layers: {
         total: 7,
@@ -1362,7 +1472,7 @@ app.get('/stats', async (req, res) => {
         details: [
           { id: 'L1', name: 'Infrastructure & Storage', status: 'active', description: 'PostgreSQL, Express API, Docker, Fly.io, Redis' },
           { id: 'L2', name: 'Execution Engine', status: 'active', description: 'DeepSeek, Perplexity, Claude, Model fallback chains' },
-          { id: 'L3', name: 'Roles & Agents', status: 'active', description: '30+ specialized agents across 5 use-cases' },
+          { id: 'L3', name: 'Roles & Agents', status: 'active', description: '30+ specialized agents across 6 use-cases' },
           { id: 'L4', name: 'Knowledge Management', status: 'active', description: 'Vector embeddings, Notion connector, pgvector' },
           { id: 'L5', name: 'Task Definitions', status: 'active', description: 'Reusable templates, workflow schemas (JSON-based)' },
           { id: 'L6', name: 'Orchestration & Workflow', status: 'active', description: 'Task scheduling, retry logic, workflow automation' },
@@ -1387,8 +1497,8 @@ app.get('/stats', async (req, res) => {
               totalTokens: { input: 35000, output: 27000 },
               estimatedCost: 0.12, // USD per run
             },
-            daily: { runsPerDay: 5, estimatedCost: 0.60 },
-            monthly: { runsPerMonth: 150, estimatedCost: 18.00 },
+            daily: { runsPerDay: 1, estimatedCost: 0.12 },
+            monthly: { runsPerMonth: 30, estimatedCost: 3.60 },
           },
         },
         {
@@ -1474,6 +1584,25 @@ app.get('/stats', async (req, res) => {
             monthly: { runsPerMonth: 300, estimatedCost: 3.60 },
           },
         },
+        {
+          id: 'crm',
+          name: 'Client CRM + KB',
+          description: 'AI-powered client CRM with knowledge base',
+          agentCount: 0,
+          status: 'production',
+          costEstimate: {
+            perRun: {
+              description: 'Feedback analysis or knowledge extraction',
+              modelCalls: [
+                { model: 'Claude Haiku', calls: 1, avgTokensIn: 2000, avgTokensOut: 1000, costPerMillion: { input: 0.25, output: 1.25 } },
+              ],
+              totalTokens: { input: 2000, output: 1000 },
+              estimatedCost: 0.002,
+            },
+            daily: { runsPerDay: 5, estimatedCost: 0.01 },
+            monthly: { runsPerMonth: 150, estimatedCost: 0.30 },
+          },
+        },
       ],
       // Token pricing reference (per million tokens)
       tokenPricing: {
@@ -1487,12 +1616,13 @@ app.get('/stats', async (req, res) => {
       },
       // Monthly cost summary
       monthlyCostSummary: {
-        marketing: 18.00,
+        marketing: 3.60,
         ads: 0.84, // Per tenant
         photobooth: 14.00,
         intelligence: 2.70,
         accounting: 3.60,
-        totalBase: 39.14,
+        crm: 0.30,
+        totalBase: 25.04,
         notes: 'Ads cost scales with tenants. Photo booth scales with events. All estimates assume typical usage patterns.',
       },
       databaseTables: [
@@ -1567,6 +1697,13 @@ const db = require('./db');
 const createCrmRoutes = require('./routes/crm');
 app.use('/api', createCrmRoutes(db));
 console.log('✅ CRM routes loaded: /api/clients, /api/projects, /api/feedback, /api/gmail');
+
+// ==========================================
+// Debug / Health-Check Routes
+// ==========================================
+const createDebugRoutes = require('./routes/debug');
+app.use('/api', createDebugRoutes());
+console.log('✅ Debug routes loaded: /api/debug/sessions, /api/debug/modules, /api/debug/issues, /api/debug/stats');
 
 // ==========================================
 // LLM Library & CRM Chat Endpoint
@@ -1714,7 +1851,7 @@ const scheduleRegistry = require('./services/schedule-registry');
 // These are defined in the orchestrator but not auto-started — register
 // them as informational entries so the frontend can list them.
 const adsSchedules = [
-  { id: 'ads:daily-sync', name: 'Daily Ads Sync', description: 'Fetch daily ad metrics from Meta & Google for all tenants', schedule: '0 8 * * *', nextRunAt: 'Daily at 08:00' },
+  { id: 'ads:daily-sync', name: 'Daily Ads Sync', description: 'Fetch daily ad metrics from Meta & Google for all tenants', schedule: '0 7 * * *', nextRunAt: 'Daily at 07:00' },
   { id: 'ads:weekly-reports', name: 'Weekly Ads Reports', description: 'AI-powered weekly analysis for all tenants', schedule: '0 9 * * 1', nextRunAt: 'Monday at 09:00' },
   { id: 'ads:monthly-reports', name: 'Monthly Executive Summary', description: 'Monthly executive summary for all tenants', schedule: '0 10 1 * *', nextRunAt: '1st of month at 10:00' },
   { id: 'ads:cross-tenant-overview', name: 'Cross-Tenant Overview', description: '7-day rolling multi-tenant aggregated insights', schedule: '30 9 * * 1', nextRunAt: 'Monday at 09:30' },
@@ -1733,6 +1870,245 @@ app.get('/api/scheduled-jobs', (req, res) => {
     summary: scheduleRegistry.summary(),
     jobs: scheduleRegistry.list(group || undefined),
   });
+});
+
+// ==========================================
+// Workflow Chat API  (DeepSeek + RAG powered)
+// ==========================================
+const ragService = require('./services/rag-service');
+
+const WORKFLOW_SYSTEM_PROMPTS = {
+  assistant: `You are an AI Workflow Architect assistant helping the user understand and modify agent orchestration workflows.
+
+Your capabilities:
+1. Explain how agents work together in the current workflow
+2. Suggest improvements to agent roles, connections, and orchestration patterns
+3. Modify the workflow when the user requests changes (update agent names/roles, add/remove edges)
+4. Discuss trade-offs between different orchestration approaches
+
+When the user asks to MODIFY the workflow, include a JSON block at the end of your response in this exact format:
+[WORKFLOW_UPDATE]
+[{"action":"update_node","node_id":"agent-id","name":"New Name","role":"New Role"}]
+[/WORKFLOW_UPDATE]
+
+Available actions:
+- update_node: Update a node's name and/or role. Fields: node_id, name (optional), role (optional)
+- remove_node: Remove a node and its edges. Fields: node_id
+- add_edge: Add a connection. Fields: from, to, label (optional), edge_type (solid|conditional|feedback)
+- remove_edge: Remove a connection. Fields: from, to
+- update_meta: Update workflow metadata. Fields: pattern (optional), patternDesc (optional), trigger (optional)
+
+Always reference nodes by their id. Only include the JSON block when making actual changes, not when just explaining.
+Be concise but thorough. Focus on practical, actionable advice.`,
+
+  business_analyst: `You are a critical Business Analyst reviewing AI agent orchestration workflows. Your role is to challenge, question, and improve.
+
+Your approach:
+1. QUESTION assumptions — why does this agent exist? Is it justified?
+2. IDENTIFY bottlenecks — where are single points of failure?
+3. CHALLENGE the user — if they propose something, play devil's advocate
+4. ASSESS ROI — what is the cost vs value of each agent?
+5. FIND edge cases — what happens when things go wrong?
+6. CRITIQUE both the workflow design AND the user's understanding
+
+Be direct and analytical. Don't just agree — push back constructively. Use specific metrics and frameworks when possible.
+
+When you believe modifications would improve the workflow, include a JSON block:
+[WORKFLOW_UPDATE]
+[{"action":"update_node","node_id":"agent-id","role":"Improved role description"}]
+[/WORKFLOW_UPDATE]
+
+Your goal is to make both the human and the AI agents better through rigorous analysis.`
+};
+
+function parseWorkflowUpdates(text) {
+  const updateRegex = /\[WORKFLOW_UPDATE\]\s*([\s\S]*?)\s*\[\/WORKFLOW_UPDATE\]/;
+  const match = text.match(updateRegex);
+  let updates = [];
+  let message = text;
+
+  if (match) {
+    try {
+      updates = JSON.parse(match[1]);
+      message = text.replace(updateRegex, '').trim();
+    } catch (e) {
+      console.error('[workflow-chat] Failed to parse workflow updates:', e.message);
+    }
+  }
+
+  return { message, updates };
+}
+
+app.post('/api/workflow-chat', async (req, res) => {
+  try {
+    const { messages, workflow, mode = 'assistant' } = req.body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+
+    // Build workflow context
+    const workflowContext = JSON.stringify({
+      id: workflow?.id,
+      title: workflow?.title,
+      pattern: workflow?.pattern,
+      trigger: workflow?.trigger,
+      nodes: workflow?.nodes || [],
+      edges: workflow?.edges || [],
+    }, null, 2);
+
+    // RAG: retrieve relevant context for the latest user message
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'workflows', 3) : '';
+
+    const systemPrompt = [
+      WORKFLOW_SYSTEM_PROMPTS[mode] || WORKFLOW_SYSTEM_PROMPTS.assistant,
+      `\nCurrent Workflow:\n${workflowContext}`,
+      ragContext ? `\n${ragContext}` : '',
+    ].join('\n');
+
+    // Try DeepSeek first, fall back to Claude
+    const deepseek = require('./services/deepseekService');
+    let result;
+
+    if (deepseek.isAvailable()) {
+      result = await deepseek.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+      );
+      const parsed = parseWorkflowUpdates(result.content);
+      return res.json({
+        message: parsed.message,
+        workflow_updates: parsed.updates,
+        model: result.model || 'deepseek-chat',
+        rag_used: !!ragContext,
+      });
+    }
+
+    // Fallback to Claude
+    const llm = require('./lib/llm');
+    result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+    const parsed = parseWorkflowUpdates(result.text);
+    return res.json({
+      message: parsed.message,
+      workflow_updates: parsed.updates,
+      model: result.modelName || 'claude-haiku',
+      rag_used: !!ragContext,
+    });
+
+  } catch (err) {
+    console.error('[workflow-chat] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// RAG stats endpoint
+app.get('/api/rag/stats', (req, res) => {
+  res.json(ragService.getStats());
+});
+
+// ==========================================
+// Knowledge Base Stats API
+// ==========================================
+app.get('/api/knowledge-base/stats', async (req, res) => {
+  try {
+    const db = require('./db');
+    const { pool } = db;
+
+    // RAG service stats
+    const ragStats = ragService.getStats();
+
+    // Query CRM KB tables (safe — returns 0 if table doesn't exist)
+    const safeCount = async (table) => {
+      try {
+        const r = await pool.query(`SELECT COUNT(*) as count FROM ${table}`);
+        return parseInt(r.rows[0].count, 10);
+      } catch { return 0; }
+    };
+
+    const safeRecent = async (table, dateCol = 'created_at', limit = 5) => {
+      try {
+        const r = await pool.query(`SELECT * FROM ${table} ORDER BY ${dateCol} DESC LIMIT $1`, [limit]);
+        return r.rows;
+      } catch { return []; }
+    };
+
+    // CRM KB counts
+    const [clients, projects, feedback, intelligenceTopics, intelligenceNews, intelligenceSources] = await Promise.all([
+      safeCount('crm_clients'),
+      safeCount('crm_projects'),
+      safeCount('crm_feedback'),
+      safeCount('intelligence_topics'),
+      safeCount('intelligence_news'),
+      safeCount('intelligence_sources'),
+    ]);
+
+    // Check if knowledge_documents table exists (pgvector)
+    let vectorDocuments = 0;
+    let vectorStoreAvailable = false;
+    try {
+      const r = await pool.query('SELECT COUNT(*) as count FROM knowledge_documents');
+      vectorDocuments = parseInt(r.rows[0].count, 10);
+      vectorStoreAvailable = true;
+    } catch { /* table may not exist */ }
+
+    // Recent entries
+    const [recentClients, recentFeedback, recentNews] = await Promise.all([
+      safeRecent('crm_clients', 'created_at', 5),
+      safeRecent('crm_feedback', 'created_at', 5),
+      safeRecent('intelligence_news', 'created_at', 5),
+    ]);
+
+    // Intelligence topics detail
+    let topics = [];
+    try {
+      const r = await pool.query('SELECT id, name, status, schedule, last_run_at, created_at FROM intelligence_topics ORDER BY created_at DESC');
+      topics = r.rows;
+    } catch { /* table may not exist */ }
+
+    // Connectors status
+    const connectors = [
+      { id: 'notion', name: 'Notion', status: process.env.NOTION_API_KEY ? 'configured' : 'not_configured', type: 'document' },
+      { id: 'web', name: 'Web Crawler', status: 'available', type: 'web' },
+      { id: 'pdf', name: 'PDF Parser', status: 'available', type: 'document' },
+      { id: 'email', name: 'Email (Gmail)', status: process.env.GOOGLE_CLIENT_ID ? 'configured' : 'not_configured', type: 'email' },
+      { id: 'dropbox', name: 'Dropbox', status: process.env.DROPBOX_ACCESS_TOKEN ? 'configured' : 'not_configured', type: 'storage' },
+    ];
+
+    // Embedding provider
+    const embeddingProvider = process.env.OPENAI_API_KEY ? 'OpenAI (text-embedding-3-small)' : 'Local (TF-IDF)';
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      overview: {
+        totalKnowledgeItems: clients + projects + feedback + intelligenceTopics + intelligenceNews + ragStats.totalDocuments + vectorDocuments,
+        ragDocuments: ragStats.totalDocuments,
+        ragTerms: ragStats.uniqueTerms,
+        vectorDocuments,
+        vectorStoreAvailable,
+        embeddingProvider,
+      },
+      crm: {
+        clients,
+        projects,
+        feedback,
+        recentClients: recentClients.map(c => ({ id: c.id, name: c.name, status: c.status, created_at: c.created_at })),
+        recentFeedback: recentFeedback.map(f => ({ id: f.id, sentiment: f.sentiment, topics: f.topics, source: f.source, created_at: f.created_at })),
+      },
+      intelligence: {
+        topics: topics.length,
+        news: intelligenceNews,
+        sources: intelligenceSources,
+        topicDetails: topics,
+        recentNews: recentNews.map(n => ({ id: n.id, title: n.title, source: n.source_name, created_at: n.created_at })),
+      },
+      rag: ragStats,
+      connectors,
+    });
+  } catch (err) {
+    console.error('[knowledge-base] Stats error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ==========================================
@@ -1766,6 +2142,23 @@ app.get('*', (req, res, next) => {
   // Check if path.html exists
   if (fs.existsSync(directHtmlPath)) {
     return res.sendFile(directHtmlPath);
+  }
+
+  // Dynamic route fallback — serve the [param] placeholder page
+  // e.g. /healthcheck/abc123 → frontend/out/healthcheck/placeholder.html
+  //      /use-cases/crm/debug/abc123 → frontend/out/use-cases/crm/debug/placeholder.html
+  const segments = cleanPath.split('/').filter(Boolean);
+  if (segments.length >= 2) {
+    const parentPath = '/' + segments.slice(0, -1).join('/');
+    const placeholderDir = path.join(nextJsPath, parentPath, 'placeholder');
+    const placeholderHtml = path.join(placeholderDir, 'index.html');
+    const placeholderDirect = path.join(nextJsPath, parentPath, 'placeholder.html');
+    if (fs.existsSync(placeholderHtml)) {
+      return res.sendFile(placeholderHtml);
+    }
+    if (fs.existsSync(placeholderDirect)) {
+      return res.sendFile(placeholderDirect);
+    }
   }
 
   // If original path had trailing slash and we didn't find anything, redirect to without trailing slash

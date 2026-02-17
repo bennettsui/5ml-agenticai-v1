@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone, Users, Calendar } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone, Users, GitBranch, Activity } from 'lucide-react';
 
 export default function Home() {
   const useCases = [
@@ -48,22 +48,22 @@ export default function Home() {
     {
       id: 'platform-dashboard',
       title: 'Platform Dashboard',
-      description: 'System overview, analytics, architecture visualization, and agent testing',
+      description: 'System overview, analytics, architecture visualization, API health, and cron job scheduling',
       icon: BarChart3,
       href: '/dashboard',
       color: 'from-green-500 to-emerald-600',
-      features: ['Analytics', 'Architecture', 'Agent Testing', 'Projects'],
+      features: ['Analytics', 'Architecture', 'API Health', 'Scheduling'],
       status: 'Active'
     },
     {
-      id: 'scheduled-jobs',
-      title: 'Scheduled Jobs',
-      description: 'View all cron jobs and scheduled tasks across the platform with live status and run history',
-      icon: Calendar,
-      href: '/scheduled-jobs',
-      color: 'from-violet-500 to-indigo-600',
-      features: ['Cron Job Registry', 'Live Status', 'Run History', 'Multi-System View'],
-      status: 'Active'
+      id: 'agentic-workflows',
+      title: 'Agentic Team Workflows',
+      description: 'Visual n8n-style workflow diagrams showing agent relationships, data flows, and orchestration patterns across all use cases',
+      icon: GitBranch,
+      href: '/agentic-workflows',
+      color: 'from-purple-500 to-violet-600',
+      features: ['Node Graph Visualization', 'Agent Relationships', 'Data Flow Patterns', '6 Workflow Pipelines'],
+      status: 'New'
     },
     {
       id: 'api-documentation',
@@ -106,13 +106,23 @@ export default function Home() {
       status: 'New'
     },
     {
+      id: 'healthcheck',
+      title: 'Website Health Check',
+      description: 'Comprehensive SEO audit, Google PageSpeed analysis, Core Web Vitals, broken link detection, and web quality checks',
+      icon: Activity,
+      href: '/healthcheck',
+      color: 'from-emerald-500 to-teal-600',
+      features: ['SEO / AI SEO Audit', 'Core Web Vitals (LCP, INP, CLS)', 'Broken Link Detection', 'WCAG 2.2 Accessibility'],
+      status: 'New'
+    },
+    {
       id: 'crm',
       title: 'Client CRM + Knowledge Base',
       description: 'Integrated CRM with AI-powered knowledge base that learns from client feedback, extracts brand rules, and detects cross-client patterns',
       icon: Users,
       href: '/use-cases/crm',
       color: 'from-emerald-500 to-teal-600',
-      features: ['Client & Brand CRM', 'AI Feedback Analysis', 'Knowledge Rules Engine', 'Health Score Tracking'],
+      features: ['Client & Brand CRM', 'Debug QA System', 'SEO & Site Health', 'Knowledge Rules Engine'],
       status: 'New'
     },
   ];
@@ -215,8 +225,8 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Active Agents</div>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white">16</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Creative, SEO, Social, Research, OCR, Source Curator, News Analyst, News Writer, Photo Booth (8 agents)</div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">30+</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Marketing (9), Ads (8), Photo Booth (9), Intelligence (3), Receipt OCR (1), CRM (5)</div>
             </div>
             <div>
               <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Use Cases</div>

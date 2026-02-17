@@ -1403,7 +1403,7 @@ router.get('/performance/kpis', async (req, res) => {
 
 // ==========================================
 // GET /api/ads/tenants
-// List all tenants (ad accounts) with ads data
+// List all tenants (ad accounts) — merges performance data + stored credentials
 // ==========================================
 router.get('/tenants', async (req, res) => {
   try {
@@ -1411,7 +1411,8 @@ router.get('/tenants', async (req, res) => {
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const sql = `
+    // 1) Accounts with actual synced performance data
+    const perfSql = `
       SELECT tenant_id,
         MAX(account_id) as account_id,
         COUNT(DISTINCT campaign_id)::int as campaign_count,
@@ -1420,14 +1421,63 @@ router.get('/tenants', async (req, res) => {
         SUM(spend)::numeric(18,2) as total_spend
       FROM ads_daily_performance
       GROUP BY tenant_id
-      ORDER BY total_spend DESC
     `;
+    const perfResult = await db.pool.query(perfSql);
+    const perfMap = new Map(perfResult.rows.map(r => [r.tenant_id, r]));
 
-    const result = await db.pool.query(sql);
+    // 2) All stored credentials (may include accounts not yet synced)
+    const credSql = `
+      SELECT tenant_id, service, account_id, created_at, updated_at
+      FROM client_credentials
+      ORDER BY tenant_id, service
+    `;
+    const credResult = await db.pool.query(credSql);
+
+    // 3) Merge: start with performance data, then add credential-only accounts
+    const merged = new Map();
+
+    for (const row of perfResult.rows) {
+      merged.set(row.tenant_id, {
+        tenant_id: row.tenant_id,
+        account_id: row.account_id,
+        campaign_count: row.campaign_count,
+        earliest_date: row.earliest_date,
+        latest_date: row.latest_date,
+        total_spend: row.total_spend,
+        source: 'synced',
+        credentials: [],
+      });
+    }
+
+    for (const cred of credResult.rows) {
+      const entry = merged.get(cred.tenant_id);
+      const credInfo = { service: cred.service, account_id: cred.account_id, updated_at: cred.updated_at };
+      if (entry) {
+        entry.credentials.push(credInfo);
+      } else {
+        merged.set(cred.tenant_id, {
+          tenant_id: cred.tenant_id,
+          account_id: cred.account_id,
+          campaign_count: 0,
+          earliest_date: null,
+          latest_date: null,
+          total_spend: '0.00',
+          source: 'credentials_only',
+          credentials: [credInfo],
+        });
+      }
+    }
+
+    // Sort: synced accounts first (by spend), then credentials-only
+    const data = Array.from(merged.values()).sort((a, b) => {
+      if (a.source === 'synced' && b.source !== 'synced') return -1;
+      if (a.source !== 'synced' && b.source === 'synced') return 1;
+      return parseFloat(b.total_spend) - parseFloat(a.total_spend);
+    });
 
     res.json({
       success: true,
-      data: result.rows,
+      data,
     });
   } catch (error) {
     console.error('[Ads API] Tenants query error:', error);
@@ -2366,20 +2416,176 @@ router.post('/reports/generate', async (req, res) => {
       return res.status(400).json({ error: 'tenant_id and month_year are required' });
     }
 
+    // Parse month_year (e.g., "January 2026") to date range
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    let reportMonth = null;
+    let reportYear = null;
+    for (let i = 0; i < monthNames.length; i++) {
+      if (month_year.toLowerCase().includes(monthNames[i].toLowerCase())) {
+        reportMonth = i;
+        break;
+      }
+    }
+    const yearMatch = month_year.match(/\d{4}/);
+    if (yearMatch) reportYear = parseInt(yearMatch[0]);
+
+    if (reportMonth === null || reportYear === null) {
+      return res.status(400).json({ error: `Invalid month_year format: "${month_year}". Use "January 2026" format.` });
+    }
+
+    const monthStart = new Date(reportYear, reportMonth, 1).toISOString().split('T')[0];
+    const monthEnd = new Date(reportYear, reportMonth + 1, 0).toISOString().split('T')[0];
+    const prevMonthStart = new Date(reportYear, reportMonth - 1, 1).toISOString().split('T')[0];
+    const prevMonthEnd = new Date(reportYear, reportMonth, 0).toISOString().split('T')[0];
+
+    // Fetch real data from database
+    let kpiData = null;
+    let campaignData = [];
+    let adData = [];
+    let hasRealData = false;
+
+    if (db && db.pool) {
+      try {
+        // Current month KPIs
+        const kpiResult = await db.pool.query(`
+          SELECT
+            COALESCE(SUM(impressions), 0) AS impressions,
+            COALESCE(SUM(clicks), 0) AS clicks,
+            COALESCE(SUM(spend), 0) AS spend,
+            COALESCE(SUM(conversions), 0) AS conversions,
+            COALESCE(SUM(revenue), 0) AS revenue,
+            CASE WHEN SUM(impressions) > 0 THEN ROUND(SUM(clicks)::numeric / SUM(impressions) * 100, 2) ELSE 0 END AS ctr,
+            CASE WHEN SUM(clicks) > 0 THEN ROUND(SUM(spend)::numeric / SUM(clicks), 2) ELSE 0 END AS cpc,
+            CASE WHEN SUM(impressions) > 0 THEN ROUND(SUM(spend)::numeric / SUM(impressions) * 1000, 2) ELSE 0 END AS cpm,
+            CASE WHEN SUM(spend) > 0 THEN ROUND(SUM(revenue)::numeric / SUM(spend), 2) ELSE 0 END AS roas
+          FROM ads_daily_performance
+          WHERE tenant_id = $1 AND date >= $2 AND date <= $3
+        `, [tenant_id, monthStart, monthEnd]);
+
+        // Previous month KPIs for comparison
+        const prevKpiResult = await db.pool.query(`
+          SELECT
+            COALESCE(SUM(impressions), 0) AS impressions,
+            COALESCE(SUM(clicks), 0) AS clicks,
+            COALESCE(SUM(spend), 0) AS spend,
+            COALESCE(SUM(conversions), 0) AS conversions,
+            CASE WHEN SUM(impressions) > 0 THEN ROUND(SUM(clicks)::numeric / SUM(impressions) * 100, 2) ELSE 0 END AS ctr,
+            CASE WHEN SUM(clicks) > 0 THEN ROUND(SUM(spend)::numeric / SUM(clicks), 2) ELSE 0 END AS cpc,
+            CASE WHEN SUM(impressions) > 0 THEN ROUND(SUM(spend)::numeric / SUM(impressions) * 1000, 2) ELSE 0 END AS cpm
+          FROM ads_daily_performance
+          WHERE tenant_id = $1 AND date >= $2 AND date <= $3
+        `, [tenant_id, prevMonthStart, prevMonthEnd]);
+
+        kpiData = kpiResult.rows[0];
+        const prevKpi = prevKpiResult.rows[0];
+
+        // Campaign breakdown
+        const campResult = await db.pool.query(`
+          SELECT campaign_name,
+            SUM(impressions) AS impressions, SUM(clicks) AS clicks, SUM(spend) AS spend,
+            SUM(conversions) AS conversions, SUM(revenue) AS revenue,
+            CASE WHEN SUM(impressions) > 0 THEN ROUND(SUM(clicks)::numeric / SUM(impressions) * 100, 2) ELSE 0 END AS ctr,
+            CASE WHEN SUM(clicks) > 0 THEN ROUND(SUM(spend)::numeric / SUM(clicks), 2) ELSE 0 END AS cpc
+          FROM ads_daily_performance
+          WHERE tenant_id = $1 AND date >= $2 AND date <= $3
+          GROUP BY campaign_name ORDER BY SUM(spend) DESC LIMIT 10
+        `, [tenant_id, monthStart, monthEnd]);
+        campaignData = campResult.rows;
+
+        // Top ads
+        const adResult = await db.pool.query(`
+          SELECT a.ad_name, a.campaign_name, SUM(a.impressions) AS impressions, SUM(a.clicks) AS clicks,
+            SUM(a.spend) AS spend, SUM(a.conversions) AS conversions,
+            CASE WHEN SUM(a.impressions) > 0 THEN ROUND(SUM(a.clicks)::numeric / SUM(a.impressions) * 100, 2) ELSE 0 END AS ctr,
+            c.image_url, c.title AS creative_title, c.body AS creative_body
+          FROM ads_daily_performance a
+          LEFT JOIN ads_creatives c ON a.ad_id = c.ad_id AND a.tenant_id = c.tenant_id
+          WHERE a.tenant_id = $1 AND a.date >= $2 AND a.date <= $3
+          GROUP BY a.ad_name, a.campaign_name, c.image_url, c.title, c.body
+          ORDER BY SUM(a.spend) DESC LIMIT 5
+        `, [tenant_id, monthStart, monthEnd]);
+        adData = adResult.rows;
+
+        hasRealData = parseFloat(kpiData.spend) > 0;
+
+        if (!hasRealData) {
+          return res.status(400).json({
+            error: `No performance data found for tenant "${tenant_id}" in ${month_year}. ` +
+              `Sync the account data first, then try generating the report again.`
+          });
+        }
+
+        // Calculate changes
+        const pctChange = (curr, prev) => prev > 0 ? Math.round(((curr - prev) / prev) * 100) : (curr > 0 ? 100 : 0);
+
+        // Override kpiData with change percentages
+        kpiData.impressions_change = pctChange(parseFloat(kpiData.impressions), parseFloat(prevKpi.impressions));
+        kpiData.clicks_change = pctChange(parseFloat(kpiData.clicks), parseFloat(prevKpi.clicks));
+        kpiData.spend_change = pctChange(parseFloat(kpiData.spend), parseFloat(prevKpi.spend));
+        kpiData.ctr_change = pctChange(parseFloat(kpiData.ctr), parseFloat(prevKpi.ctr));
+        kpiData.cpc_change = pctChange(parseFloat(kpiData.cpc), parseFloat(prevKpi.cpc));
+
+      } catch (dbErr) {
+        console.error('[Ads API] Report DB query error:', dbErr.message);
+        // Fall through to sample data
+      }
+    }
+
     // Dynamic import for the report generator (ES module)
     const reportModule = await import('../reports/report-generator.js');
     const { generateMonthlyReport, getSampleReportData } = reportModule;
 
-    // For now, use sample data - in production, fetch from database
+    // Build report data from real DB data or fall back to sample
     const reportData = getSampleReportData();
 
-    // Override with request config
+    // Override config
     reportData.config.clientName = client_name || tenant_id;
     reportData.config.brandName = brand_name || client_name || tenant_id;
     reportData.config.monthYear = month_year;
     reportData.config.reportDate = new Date().toISOString().split('T')[0];
     if (primary_color) {
       reportData.config.primaryColor = primary_color;
+    }
+
+    // Override with real data if available
+    if (hasRealData && kpiData) {
+      reportData.executiveSummary = {
+        kpis: [
+          { label: 'Total Spend', value: `$${parseFloat(kpiData.spend).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, change: kpiData.spend_change, icon: 'dollar' },
+          { label: 'Impressions', value: parseInt(kpiData.impressions).toLocaleString(), change: kpiData.impressions_change, icon: 'eye' },
+          { label: 'Clicks', value: parseInt(kpiData.clicks).toLocaleString(), change: kpiData.clicks_change, icon: 'click' },
+          { label: 'CTR', value: `${kpiData.ctr}%`, change: kpiData.ctr_change, icon: 'chart' },
+          { label: 'CPC', value: `$${parseFloat(kpiData.cpc).toFixed(2)}`, change: kpiData.cpc_change, icon: 'dollar' },
+          { label: 'Conversions', value: parseInt(kpiData.conversions).toLocaleString(), icon: 'users' },
+        ],
+        performanceTable: campaignData.map(c => ({
+          metric: c.campaign_name.substring(0, 40),
+          lastMonth: `$${parseFloat(c.spend).toFixed(2)}`,
+          thisMonth: parseInt(c.clicks).toLocaleString() + ' clicks',
+          change: parseFloat(c.ctr),
+        })),
+      };
+
+      // Override top ads as social ads if available
+      if (adData.length > 0) {
+        reportData.socialAds = {
+          kpis: [
+            { label: 'Ad Spend', value: `$${parseFloat(kpiData.spend).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, icon: 'dollar' },
+            { label: 'ROAS', value: `${kpiData.roas}x`, icon: 'chart' },
+            { label: 'Conversions', value: parseInt(kpiData.conversions).toLocaleString(), icon: 'users' },
+          ],
+          campaigns: campaignData.slice(0, 5).map(c => ({
+            name: c.campaign_name,
+            spend: parseFloat(c.spend),
+            impressions: parseInt(c.impressions),
+            clicks: parseInt(c.clicks),
+            ctr: parseFloat(c.ctr),
+            conversions: parseInt(c.conversions),
+            roas: parseFloat(c.spend) > 0 ? (parseFloat(c.revenue || '0') / parseFloat(c.spend)) : 0,
+          })),
+        };
+      }
     }
 
     // Generate report
@@ -2456,6 +2662,117 @@ router.get('/reports/sample', async (req, res) => {
     res.json({ success: true, data: getSampleReportData() });
   } catch (error) {
     console.error('[Ads API] Sample data error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===========================================
+// AI Assistant Chat Endpoint
+// ===========================================
+
+/**
+ * POST /api/ads/assistant/chat
+ * Chat with DeepSeek about ad performance data
+ */
+router.post('/assistant/chat', async (req, res) => {
+  try {
+    const { messages } = req.body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+
+    const apiKey = process.env.DEEPSEEK_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ error: 'DEEPSEEK_API_KEY not configured on server' });
+    }
+
+    const axios = require('axios');
+    const response = await axios.post(
+      'https://api.deepseek.com/chat/completions',
+      {
+        model: 'deepseek-chat',
+        messages,
+        max_tokens: 2000,
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 60000,
+      }
+    );
+
+    if (response.data?.choices?.[0]?.message?.content) {
+      res.json({
+        content: response.data.choices[0].message.content,
+        model: response.data.model,
+        usage: response.data.usage,
+      });
+    } else {
+      res.status(500).json({ error: 'No response from DeepSeek' });
+    }
+  } catch (error) {
+    console.error('[Ads API] Assistant chat error:', error.message);
+    if (error.response?.status === 401) {
+      res.status(503).json({ error: 'Invalid DEEPSEEK_API_KEY' });
+    } else {
+      res.status(500).json({ error: error.message || 'Chat request failed' });
+    }
+  }
+});
+
+// ===========================================
+// Data Availability Endpoint
+// ===========================================
+
+/**
+ * GET /api/ads/data-range
+ * Returns the date range of available data in the database
+ */
+router.get('/data-range', async (req, res) => {
+  try {
+    if (!db || !db.pool) {
+      return res.json({ data: null, message: 'Database not available' });
+    }
+
+    const { tenant_id } = req.query;
+    let query = `
+      SELECT
+        MIN(date) AS earliest_date,
+        MAX(date) AS latest_date,
+        COUNT(DISTINCT date) AS total_days,
+        COUNT(DISTINCT campaign_id) AS total_campaigns,
+        COUNT(DISTINCT ad_id) AS total_ads,
+        COUNT(*) AS total_rows,
+        SUM(spend) AS total_spend
+      FROM ads_daily_performance
+    `;
+    const params = [];
+
+    if (tenant_id && tenant_id !== 'all') {
+      query += ' WHERE tenant_id = $1';
+      params.push(tenant_id);
+    }
+
+    const result = await db.pool.query(query, params);
+    const row = result.rows[0];
+
+    res.json({
+      data: {
+        earliest_date: row.earliest_date,
+        latest_date: row.latest_date,
+        total_days: parseInt(row.total_days) || 0,
+        total_campaigns: parseInt(row.total_campaigns) || 0,
+        total_ads: parseInt(row.total_ads) || 0,
+        total_rows: parseInt(row.total_rows) || 0,
+        total_spend: parseFloat(row.total_spend) || 0,
+      },
+    });
+  } catch (error) {
+    console.error('[Ads API] Data range query error:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -44,7 +44,7 @@ export interface OrchestratorConfig {
 const DEFAULT_CONFIG: OrchestratorConfig = {
   timezone: 'Asia/Hong_Kong',
   schedules: {
-    dailySyncTime: '08:00',
+    dailySyncTime: '07:00',        // Before 8 AM HKT — sync yesterday's new data
     weeklyReportDay: 'monday',
     weeklyReportTime: '09:00',
     monthlyReportDay: 1,

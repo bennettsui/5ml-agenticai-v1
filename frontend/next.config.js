@@ -2,14 +2,14 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'export',
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
   images: {
     unoptimized: true,
+  },
+  turbopack: {
+    root: __dirname,
   },
   // Static export - API calls will go to same domain
 };

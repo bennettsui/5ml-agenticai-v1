@@ -1122,6 +1122,328 @@ class AuditLog(Base):
         return f"<AuditLog {self.action} by {self.user_id}>"
 
 
+# ---------------------------------------------------------------------------
+# Debug Enums
+# ---------------------------------------------------------------------------
+
+
+class DebugSubjectType(str, enum.Enum):
+    web_page = "web_page"
+    design = "design"
+    video = "video"
+    social_post = "social_post"
+    agent_workflow = "agent_workflow"
+    document = "document"
+    other = "other"
+
+
+class DebugSessionStatus(str, enum.Enum):
+    open = "open"
+    in_review = "in_review"
+    addressed = "addressed"
+    ignored = "ignored"
+    archived = "archived"
+
+
+class DebugOverallStatus(str, enum.Enum):
+    pass_ = "pass"
+    warning = "warning"
+    fail = "fail"
+
+
+class IssueArea(str, enum.Enum):
+    WebPerf = "WebPerf"
+    WebQC = "WebQC"
+    Design = "Design"
+    Video = "Video"
+    Social = "Social"
+    Brand = "Brand"
+    Logic = "Logic"
+    AgentBehavior = "AgentBehavior"
+
+
+class IssueSeverity(str, enum.Enum):
+    critical = "critical"
+    major = "major"
+    minor = "minor"
+    info = "info"
+
+
+class IssuePriority(str, enum.Enum):
+    P0 = "P0"
+    P1 = "P1"
+    P2 = "P2"
+    P3 = "P3"
+
+
+class ResolutionStatus(str, enum.Enum):
+    open = "open"
+    in_progress = "in_progress"
+    resolved = "resolved"
+    accepted_risk = "accepted_risk"
+    wont_fix = "wont_fix"
+    duplicate = "duplicate"
+
+
+class BusinessImpact(str, enum.Enum):
+    high = "high"
+    medium = "medium"
+    low = "low"
+    none = "none"
+
+
+class TraceStepType(str, enum.Enum):
+    llm_call = "llm_call"
+    tool_call = "tool_call"
+    decision = "decision"
+    eval = "eval"
+    api_call = "api_call"
+    other = "other"
+
+
+# ---------------------------------------------------------------------------
+# Debug Models
+# ---------------------------------------------------------------------------
+
+
+class DebugModuleDefinition(Base):
+    """Registry of available debug modules."""
+
+    __tablename__ = "debug_module_definitions"
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    applicable_subject_types: Mapped[Optional[list]] = mapped_column(ARRAY(Text))
+    version: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="1.0"
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="active"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"<DebugModuleDefinition {self.id}>"
+
+
+class DebugSession(Base):
+    """A single debug task executed against a deliverable."""
+
+    __tablename__ = "debug_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        index=True,
+    )
+    client_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        index=True,
+    )
+    subject_type: Mapped[DebugSubjectType] = mapped_column(
+        String(20), nullable=False, default=DebugSubjectType.other
+    )
+    subject_ref: Mapped[Optional[str]] = mapped_column(Text)
+    modules_invoked: Mapped[Optional[dict]] = mapped_column(JSONB)
+    overall_score: Mapped[Optional[int]] = mapped_column(Integer)
+    overall_status: Mapped[Optional[DebugOverallStatus]] = mapped_column(
+        String(10)
+    )
+    overall_summary: Mapped[Optional[str]] = mapped_column(Text)
+    kb_entries_used: Mapped[Optional[dict]] = mapped_column(JSONB)
+    status: Mapped[DebugSessionStatus] = mapped_column(
+        String(20), nullable=False, default=DebugSessionStatus.open
+    )
+    status_notes: Mapped[Optional[str]] = mapped_column(Text)
+    initiated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    report_ref: Mapped[Optional[str]] = mapped_column(Text)
+    trace_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "overall_score >= 0 AND overall_score <= 100",
+            name="ck_debug_sessions_score_range",
+        ),
+    )
+
+    # Relationships
+    project: Mapped["Project"] = relationship()
+    client: Mapped["Client"] = relationship()
+    initiated_by_user: Mapped[Optional["User"]] = relationship(
+        foreign_keys=[initiated_by]
+    )
+    issues: Mapped[List["DebugIssue"]] = relationship(
+        back_populates="debug_session", cascade="all, delete-orphan"
+    )
+    trace_steps: Mapped[List["DebugTraceStep"]] = relationship(
+        back_populates="debug_session", cascade="all, delete-orphan",
+        foreign_keys="DebugTraceStep.debug_session_id",
+    )
+
+    def __repr__(self) -> str:
+        return f"<DebugSession {self.id} ({self.status})>"
+
+
+class DebugIssue(Base):
+    """A specific issue found during a debug session."""
+
+    __tablename__ = "debug_issues"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    debug_session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("debug_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    client_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        index=True,
+    )
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+    )
+    module: Mapped[str] = mapped_column(String(100), nullable=False)
+    area: Mapped[IssueArea] = mapped_column(String(20), nullable=False)
+    severity: Mapped[IssueSeverity] = mapped_column(
+        String(10), nullable=False, default=IssueSeverity.info
+    )
+    finding: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence: Mapped[Optional[dict]] = mapped_column(JSONB)
+    recommendation: Mapped[Optional[str]] = mapped_column(Text)
+    priority: Mapped[IssuePriority] = mapped_column(
+        String(5), nullable=False, default=IssuePriority.P2
+    )
+    related_rule_ids: Mapped[Optional[list]] = mapped_column(
+        ARRAY(UUID(as_uuid=True))
+    )
+    related_pattern_ids: Mapped[Optional[list]] = mapped_column(
+        ARRAY(UUID(as_uuid=True))
+    )
+    score_impact: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
+    business_impact: Mapped[Optional[BusinessImpact]] = mapped_column(
+        String(10)
+    )
+    user_impact: Mapped[Optional[str]] = mapped_column(Text)
+    resolution_status: Mapped[ResolutionStatus] = mapped_column(
+        String(20), nullable=False, default=ResolutionStatus.open
+    )
+    assigned_to: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    resolution_notes: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    debug_session: Mapped["DebugSession"] = relationship(
+        back_populates="issues"
+    )
+    client: Mapped["Client"] = relationship()
+    project: Mapped["Project"] = relationship()
+    assigned_to_user: Mapped[Optional["User"]] = relationship(
+        foreign_keys=[assigned_to]
+    )
+
+    def __repr__(self) -> str:
+        return f"<DebugIssue {self.id} ({self.severity})>"
+
+
+class DebugTraceStep(Base):
+    """A single step in a debug session trace (optional detailed logging)."""
+
+    __tablename__ = "debug_trace_steps"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    debug_session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("debug_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    parent_step_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("debug_trace_steps.id", ondelete="SET NULL"),
+    )
+    type: Mapped[TraceStepType] = mapped_column(
+        String(20), nullable=False, default=TraceStepType.other
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    input_summary: Mapped[Optional[str]] = mapped_column(Text)
+    output_summary: Mapped[Optional[str]] = mapped_column(Text)
+    raw_input_ref: Mapped[Optional[str]] = mapped_column(Text)
+    raw_output_ref: Mapped[Optional[str]] = mapped_column(Text)
+    model: Mapped[Optional[str]] = mapped_column(String(100))
+    temperature: Mapped[Optional[Decimal]] = mapped_column(Numeric(3, 2))
+    token_usage: Mapped[Optional[dict]] = mapped_column(JSONB)
+    cost_estimate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 6))
+    tool_name: Mapped[Optional[str]] = mapped_column(String(100))
+    tool_args: Mapped[Optional[dict]] = mapped_column(JSONB)
+    tool_result: Mapped[Optional[dict]] = mapped_column(JSONB)
+    error_flag: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    error_type: Mapped[Optional[str]] = mapped_column(String(100))
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
+    latency_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    debug_session: Mapped["DebugSession"] = relationship(
+        back_populates="trace_steps",
+        foreign_keys=[debug_session_id],
+    )
+    parent_step: Mapped[Optional["DebugTraceStep"]] = relationship(
+        remote_side="DebugTraceStep.id",
+        foreign_keys=[parent_step_id],
+    )
+
+    def __repr__(self) -> str:
+        return f"<DebugTraceStep {self.name} ({self.type})>"
+
+
 class ChatMessage(Base):
     """Persisted chatbot conversation message."""
 
