@@ -12,15 +12,20 @@ import CostAnalysis from '@/components/CostAnalysis';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
-  ChevronRight, Map, Zap, Send, Loader2, Sparkles,
+  ChevronRight, Map, Zap, Send, Loader2, Sparkles, History,
+  Plus, Trash2, Clock,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
   USE_CASES, SOLUTION_LINES, ROADMAP_ITEMS, STATUS_CONFIG,
   CSUITE_ROLES, SEVEN_LAYERS, type UseCaseConfig, type Status,
 } from '@/lib/platform-config';
+import {
+  createSession, getLatestSession, addMessage, listSessions,
+  deleteSession, getSession, type ChatSession, type ChatType, type ChatMessage as StoredMessage,
+} from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'api' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'api' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'history';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -64,11 +69,30 @@ function AgentChatPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Load previous session on mount
+  useEffect(() => {
+    const prev = getLatestSession('agent');
+    if (prev && prev.messages.length > 0) {
+      setMessages(prev.messages.map(m => ({ role: m.role, content: m.content })));
+      setSessionId(prev.id);
+    } else {
+      const fresh = createSession('agent');
+      setSessionId(fresh.id);
+    }
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
+
+  const startNewSession = useCallback(() => {
+    const fresh = createSession('agent');
+    setSessionId(fresh.id);
+    setMessages([]);
+  }, []);
 
   const send = useCallback(async (text?: string) => {
     const content = (text || input).trim();
@@ -80,6 +104,9 @@ function AgentChatPanel() {
     setMessages(allMessages);
     setLoading(true);
 
+    // Persist user message
+    if (sessionId) addMessage(sessionId, { role: 'user', content, timestamp: new Date().toISOString() });
+
     try {
       const res = await fetch('/api/agent-chat', {
         method: 'POST',
@@ -87,17 +114,36 @@ function AgentChatPanel() {
         body: JSON.stringify({ messages: allMessages, context: buildPlatformContext() }),
       });
       const data = await res.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.message || data.error || 'No response' }]);
+      const reply = data.message || data.error || 'No response';
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+      if (sessionId) addMessage(sessionId, { role: 'assistant', content: reply, timestamp: new Date().toISOString() });
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Failed to reach the API. Is the backend running?' }]);
+      const err = 'Failed to reach the API. Is the backend running?';
+      setMessages(prev => [...prev, { role: 'assistant', content: err }]);
+      if (sessionId) addMessage(sessionId, { role: 'assistant', content: err, timestamp: new Date().toISOString() });
     }
     setLoading(false);
-  }, [input, messages, loading]);
+  }, [input, messages, loading, sessionId]);
 
   const onSubmit = (e: FormEvent) => { e.preventDefault(); send(); };
 
   return (
     <div className="flex flex-col h-[calc(100vh-180px)]">
+      {/* Header bar with new session button */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-700/50 bg-slate-900/40">
+        <span className="text-xs text-slate-500 flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+          RAG-enhanced · history saved
+        </span>
+        <button
+          onClick={startNewSession}
+          className="text-xs px-3 py-1.5 rounded-lg bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors flex items-center gap-1.5 border border-slate-700/50"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          New Chat
+        </button>
+      </div>
+
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
         {messages.length === 0 && (
@@ -107,7 +153,7 @@ function AgentChatPanel() {
             </div>
             <h3 className="text-lg font-bold text-white mb-2">Agent Team Assistant</h3>
             <p className="text-sm text-slate-400 mb-6 max-w-md mx-auto">
-              Ask anything about your agents, use cases, architecture, or get suggestions for improvements.
+              Ask anything about your agents, use cases, architecture, or get suggestions for improvements. Conversations are saved automatically.
             </p>
             <div className="flex flex-wrap gap-2 justify-center max-w-lg mx-auto">
               {SUGGESTIONS.map((s) => (
@@ -167,6 +213,138 @@ function AgentChatPanel() {
 }
 
 // ---------------------------------------------------------------------------
+// Chat History Panel
+// ---------------------------------------------------------------------------
+
+const TYPE_LABELS: Record<ChatType, { label: string; color: string }> = {
+  agent: { label: 'Agent', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
+  workflow: { label: 'Workflow', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
+  crm: { label: 'CRM', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+};
+
+function ChatHistoryPanel() {
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [filterType, setFilterType] = useState<ChatType | 'all'>('all');
+  const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
+
+  useEffect(() => {
+    setSessions(listSessions(filterType === 'all' ? undefined : filterType));
+  }, [filterType]);
+
+  const handleDelete = (id: string) => {
+    deleteSession(id);
+    setSessions(prev => prev.filter(s => s.id !== id));
+    if (selectedSession?.id === id) setSelectedSession(null);
+  };
+
+  if (selectedSession) {
+    return (
+      <div className="flex flex-col h-[calc(100vh-180px)]">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700/50 bg-slate-900/40">
+          <button
+            onClick={() => setSelectedSession(null)}
+            className="text-xs text-slate-400 hover:text-white transition-colors"
+          >
+            &larr; Back
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white truncate">{selectedSession.title}</p>
+            <p className="text-[10px] text-slate-500">
+              {new Date(selectedSession.createdAt).toLocaleDateString()} · {selectedSession.messages.length} messages
+            </p>
+          </div>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${TYPE_LABELS[selectedSession.type].color}`}>
+            {TYPE_LABELS[selectedSession.type].label}
+          </span>
+        </div>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+          {selectedSession.messages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed ${
+                msg.role === 'user'
+                  ? 'bg-blue-600/20 text-blue-100 border border-blue-500/20'
+                  : 'bg-slate-800/80 text-slate-300 border border-slate-700/50'
+              }`}>
+                <div className="whitespace-pre-wrap">{msg.content}</div>
+                {msg.timestamp && (
+                  <div className="text-[10px] text-slate-600 mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 py-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+          <History className="w-5 h-5 text-blue-400" />
+          Chat History
+        </h2>
+        <div className="flex gap-1">
+          {(['all', 'agent', 'workflow', 'crm'] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setFilterType(t)}
+              className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                filterType === t
+                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                  : 'text-slate-500 hover:text-slate-300 bg-slate-800/60 border border-slate-700/50'
+              }`}
+            >
+              {t === 'all' ? 'All' : TYPE_LABELS[t].label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {sessions.length === 0 ? (
+        <div className="text-center py-16">
+          <History className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+          <p className="text-slate-400">No chat history yet</p>
+          <p className="text-xs text-slate-500 mt-1">Conversations from Agent Chat, Workflow Chat, and CRM will appear here.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sessions.map(session => (
+            <div
+              key={session.id}
+              onClick={() => setSelectedSession(session)}
+              className="flex items-center gap-3 px-4 py-3 bg-slate-800/60 rounded-xl border border-slate-700/50 hover:border-slate-600 hover:bg-slate-800 transition-colors cursor-pointer group"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">{session.title}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${TYPE_LABELS[session.type].color}`}>
+                    {TYPE_LABELS[session.type].label}
+                  </span>
+                  <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {new Date(session.updatedAt).toLocaleDateString()}
+                  </span>
+                  <span className="text-[10px] text-slate-600">{session.messages.length} msgs</span>
+                </div>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(session.id); }}
+                className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-600 hover:text-red-400 transition-all"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard Page
 // ---------------------------------------------------------------------------
 
@@ -176,6 +354,7 @@ export default function Dashboard() {
   const tabs = [
     { id: 'control' as Tab, label: 'Control Tower', icon: LayoutDashboard },
     { id: 'chat' as Tab, label: 'Agent Chat', icon: MessageSquare },
+    { id: 'history' as Tab, label: 'Chat History', icon: History },
     { id: 'overview' as Tab, label: 'Overview', icon: Activity },
     { id: 'architecture' as Tab, label: 'Architecture', icon: Layers },
     { id: 'analytics' as Tab, label: 'Analytics', icon: Activity },
@@ -392,6 +571,7 @@ export default function Dashboard() {
         {/* AGENT CHAT TAB                                                  */}
         {/* ================================================================ */}
         {activeTab === 'chat' && <AgentChatPanel />}
+        {activeTab === 'history' && <ChatHistoryPanel />}
 
         {/* Existing tabs */}
         {activeTab === 'overview' && <PlatformOverview />}

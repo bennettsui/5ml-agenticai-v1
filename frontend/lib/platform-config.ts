@@ -227,15 +227,15 @@ export const USE_CASES: UseCaseConfig[] = [
   },
   {
     id: 'crm',
-    name: 'Client CRM + Knowledge Base',
-    description: 'Integrated CRM with AI-powered KB, client feedback, brand rules, pattern detection',
+    name: 'CRM Marketing Intelligence',
+    description: '16-agent 8-phase pipeline with brand setup & research, ongoing monitoring, knowledge graph, RAG-powered chat',
     solutionLine: 'Platform',
     status: 'in_progress',
     progress: 0.6,
     priority: 'critical',
     path: '/use-cases/crm',
-    agentCount: 5,
-    features: ['Client CRM', 'Debug QA', 'Knowledge Rules', 'Brand Patterns'],
+    agentCount: 16,
+    features: ['Brand Setup & Research', '8-Phase Pipeline', 'Knowledge Graph', 'RAG Chat', 'Debug QA', 'Health Scoring'],
   },
   {
     id: 'api-docs',
@@ -299,7 +299,7 @@ export const SEVEN_LAYERS = [
   { number: 6, name: 'Orchestration & Workflow', components: ['Schedule Registry', 'CSO Orchestrator', 'Scan Queue', 'WebSocket', 'Health Monitor'] },
   { number: 5, name: 'Task Definitions', components: ['DailySync', 'WeeklyAnalysis', 'MonthlyExecutive', 'NewsDiscovery', 'DigestWorkflow'] },
   { number: 4, name: 'Knowledge Management', components: ['pgvector', 'Notion Connector', 'Vector Embeddings', 'Semantic Search', 'Multi-source'] },
-  { number: 3, name: 'Roles & Agents', components: ['30+ Agents', 'Marketing (9)', 'Ads (8)', 'Photo Booth (9)', 'Intelligence (3)', 'CRM (5)'] },
+  { number: 3, name: 'Roles & Agents', components: ['50+ Agents', 'Marketing (14)', 'Ads (8)', 'Photo Booth (9)', 'Intelligence (3)', 'CRM (16)'] },
   { number: 2, name: 'Execution Engine', components: ['DeepSeek', 'Claude API', 'Perplexity', 'ComfyUI', 'Model Router', 'Tesseract OCR'] },
   { number: 1, name: 'Infrastructure & Storage', components: ['PostgreSQL + pgvector', 'Express API', 'Fly.io', 'WebSocket', 'SSE Streaming'] },
 ];

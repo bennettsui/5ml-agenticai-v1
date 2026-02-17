@@ -24,6 +24,9 @@ import {
 } from 'lucide-react';
 import { useCrmAi } from '../context';
 import { crmApi, type ChatResponse } from '@/lib/crm-kb-api';
+import {
+  createSession, getLatestSession, addMessage as persistChatMessage,
+} from '@/lib/chat-history';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -344,6 +347,30 @@ export function AiAssistant() {
 
   // Chat history for API (no system messages)
   const chatHistoryRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [crmSessionId, setCrmSessionId] = useState<string | null>(null);
+
+  // Load previous CRM session on mount
+  useEffect(() => {
+    const prev = getLatestSession('crm');
+    if (prev && prev.messages.length > 0) {
+      // Restore messages into UI
+      const restored: Message[] = [
+        { id: nextId(), role: 'system', content: 'How can I help you today?' },
+        ...prev.messages.map(m => ({
+          id: nextId(),
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })),
+      ];
+      setMessages(restored);
+      // Restore API history
+      chatHistoryRef.current = prev.messages.map(m => ({ role: m.role, content: m.content }));
+      setCrmSessionId(prev.id);
+    } else {
+      const fresh = createSession('crm');
+      setCrmSessionId(fresh.id);
+    }
+  }, []);
 
   // Track which form values have already triggered a suggestion
   const shownClientNamesRef = useRef<Set<string>>(new Set());
@@ -597,6 +624,11 @@ export function AiAssistant() {
         chatHistoryRef.current = [...apiMessages, { role: 'assistant', content: response.message }];
         contextSentRef.current = true;
         setMessages((prev) => [...prev, assistantMsg]);
+        // Persist to chat history
+        if (crmSessionId) {
+          persistChatMessage(crmSessionId, { role: 'user', content: prompt, timestamp: new Date().toISOString() });
+          persistChatMessage(crmSessionId, { role: 'assistant', content: response.message, timestamp: new Date().toISOString() });
+        }
       } catch (err) {
         setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
         setMessages((prev) => [...prev, {
@@ -605,7 +637,7 @@ export function AiAssistant() {
         }]);
       }
     },
-    [pageState, processAiResponse],
+    [pageState, processAiResponse, crmSessionId],
   );
 
   // -----------------------------------------------------------------------
@@ -630,6 +662,11 @@ export function AiAssistant() {
         chatHistoryRef.current = [...apiMessages, { role: 'assistant', content: response.message }];
         contextSentRef.current = true;
         setMessages((prev) => [...prev, assistantMsg]);
+        // Persist to chat history
+        if (crmSessionId) {
+          persistChatMessage(crmSessionId, { role: 'user', content: prompt, timestamp: new Date().toISOString() });
+          persistChatMessage(crmSessionId, { role: 'assistant', content: response.message, timestamp: new Date().toISOString() });
+        }
       } catch (err) {
         setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
         setMessages((prev) => [...prev, {
@@ -638,7 +675,7 @@ export function AiAssistant() {
         }]);
       }
     },
-    [pageState, processAiResponse],
+    [pageState, processAiResponse, crmSessionId],
   );
 
   // -----------------------------------------------------------------------
@@ -674,6 +711,11 @@ export function AiAssistant() {
         const assistantMsg = processAiResponse(response.message, response.tool_calls);
         setMessages((prev) => [...prev, assistantMsg]);
         chatHistoryRef.current = [...newApiMessages, { role: 'assistant', content: response.message }];
+        // Persist to chat history
+        if (crmSessionId) {
+          persistChatMessage(crmSessionId, { role: 'user', content: text, timestamp: new Date().toISOString() });
+          persistChatMessage(crmSessionId, { role: 'assistant', content: response.message, timestamp: new Date().toISOString() });
+        }
       } catch (err) {
         setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
         setMessages((prev) => [...prev, {
