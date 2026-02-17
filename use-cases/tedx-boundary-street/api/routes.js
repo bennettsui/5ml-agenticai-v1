@@ -100,6 +100,9 @@ function getClient() {
   return geminiClient;
 }
 
+// Background generation state
+let batchState = { running: false, startedAt: null, results: [], force: false };
+
 // Ensure output dir exists
 if (!fs.existsSync(OUTPUT_DIR)) {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -177,40 +180,73 @@ router.post('/generate-all', async (req, res) => {
     return res.status(503).json({ error: 'GEMINI_API_KEY not configured' });
   }
 
-  const force = req.body?.force === true;
-  const results = [];
-
-  for (const visual of VISUALS) {
-    const outputPath = path.join(OUTPUT_DIR, visual.filename);
-    const exists = fs.existsSync(outputPath);
-
-    if (exists && !force) {
-      results.push({ id: visual.id, status: 'skipped', reason: 'already exists' });
-      continue;
-    }
-
-    try {
-      console.log(`[TEDx] Generating: ${visual.id}...`);
-      const imageBuffer = await generateVisual(client, visual.prompt);
-      fs.writeFileSync(outputPath, imageBuffer);
-      console.log(`[TEDx] ✅ ${visual.filename} (${(imageBuffer.length / 1024).toFixed(0)} KB)`);
-      results.push({ id: visual.id, status: 'generated', size: imageBuffer.length });
-    } catch (err) {
-      console.error(`[TEDx] ❌ ${visual.id}: ${err.message}`);
-      results.push({ id: visual.id, status: 'failed', error: err.message });
-    }
-
-    // Rate limit
-    await new Promise((r) => setTimeout(r, 2000));
+  if (batchState.running) {
+    return res.status(409).json({
+      error: 'Batch generation already in progress',
+      startedAt: batchState.startedAt,
+      progress: batchState.results.length + '/' + VISUALS.length,
+      statusUrl: '/api/tedx/generate-all/status',
+    });
   }
 
-  const generated = results.filter((r) => r.status === 'generated').length;
-  const failed = results.filter((r) => r.status === 'failed').length;
-  const skipped = results.filter((r) => r.status === 'skipped').length;
+  const force = req.body?.force === true;
+
+  // Return immediately, process in background
+  batchState = { running: true, startedAt: new Date().toISOString(), results: [], force };
+
+  res.status(202).json({
+    accepted: true,
+    message: 'Batch generation started in background',
+    force,
+    totalVisuals: VISUALS.length,
+    statusUrl: '/api/tedx/generate-all/status',
+  });
+
+  // Background processing
+  (async () => {
+    for (const visual of VISUALS) {
+      const outputPath = path.join(OUTPUT_DIR, visual.filename);
+      const exists = fs.existsSync(outputPath);
+
+      if (exists && !force) {
+        batchState.results.push({ id: visual.id, status: 'skipped', reason: 'already exists' });
+        continue;
+      }
+
+      try {
+        console.log(`[TEDx] Generating: ${visual.id}...`);
+        const imageBuffer = await generateVisual(client, visual.prompt);
+        fs.writeFileSync(outputPath, imageBuffer);
+        console.log(`[TEDx] ✅ ${visual.filename} (${(imageBuffer.length / 1024).toFixed(0)} KB)`);
+        batchState.results.push({ id: visual.id, status: 'generated', size: imageBuffer.length });
+      } catch (err) {
+        console.error(`[TEDx] ❌ ${visual.id}: ${err.message}`);
+        batchState.results.push({ id: visual.id, status: 'failed', error: err.message });
+      }
+
+      // Rate limit
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
+    batchState.running = false;
+    const generated = batchState.results.filter((r) => r.status === 'generated').length;
+    const failed = batchState.results.filter((r) => r.status === 'failed').length;
+    console.log(`[TEDx] Batch complete: ${generated} generated, ${failed} failed`);
+  })();
+});
+
+router.get('/generate-all/status', (req, res) => {
+  const generated = batchState.results.filter((r) => r.status === 'generated').length;
+  const failed = batchState.results.filter((r) => r.status === 'failed').length;
+  const skipped = batchState.results.filter((r) => r.status === 'skipped').length;
 
   res.json({
+    running: batchState.running,
+    startedAt: batchState.startedAt,
+    force: batchState.force,
+    progress: batchState.results.length + '/' + VISUALS.length,
     summary: { generated, failed, skipped, total: VISUALS.length },
-    results,
+    results: batchState.results,
   });
 });
 
