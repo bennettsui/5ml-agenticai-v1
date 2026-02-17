@@ -6,19 +6,19 @@ import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_R
 // ==================== DATA ====================
 
 const SPEAKERS = [
-  { name: '講者姓名', role: '領域／專長', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E5%BC%B5%E5%8D%89%E5%90%9B-e1625535281259-500x500.png' },
-  { name: '講者姓名', role: '領域／專長', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E8%94%A1%E5%B9%B4%E7%8E%A8-500x500.jpg' },
-  { name: '講者姓名', role: '領域／專長', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E5%8A%89%E6%AC%A3%E7%91%9C%E2%80%94%E7%94%9F%E6%B4%BB%E7%85%A7-e1625535100576-500x500.png' },
-  { name: '講者姓名', role: '領域／專長', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E8%8C%83%E6%AC%BD%E6%85%A72-e1625812859822-500x500.jpg' },
-  { name: '講者姓名', role: '領域／專長', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E6%AE%B5%E6%99%BA%E6%95%8F%EF%BC%92-500x500.jpg' },
-  { name: '講者姓名', role: '領域／專長', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E6%9E%97%E7%9F%A5%E7%A7%A6-e1625816914518-500x500.jpg' },
-  { name: '講者姓名', role: '領域／專長', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E5%91%A8%E4%B8%96%E9%9B%84-500x500.jpg' },
-  { name: '講者姓名', role: '領域／專長', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E8%95%AD%E9%9D%92%E9%99%BD-scaled-e1625535578597-500x500.jpg' },
+  { name: '張卉君', role: '自然倡議者／黑潮海洋文教基金會', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E5%BC%B5%E5%8D%89%E5%90%9B-e1625535281259-500x500.png' },
+  { name: '蔡年玨', role: '跨域創作者', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E8%94%A1%E5%B9%B4%E7%8E%A8-500x500.jpg' },
+  { name: '劉欣瑜', role: '國際模特兒', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E5%8A%89%E6%AC%A3%E7%91%9C%E2%80%94%E7%94%9F%E6%B4%BB%E7%85%A7-e1625535100576-500x500.png' },
+  { name: '范欽慧', role: '野地錄音師', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E8%8C%83%E6%AC%BD%E6%85%A72-e1625812859822-500x500.jpg' },
+  { name: '段智敏', role: '國際溜溜球表演者／太陽馬戲團', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E6%AE%B5%E6%99%BA%E6%95%8F%EF%BC%92-500x500.jpg' },
+  { name: '林知秦', role: '未來媽媽戲劇監製', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E6%9E%97%E7%9F%A5%E7%A7%A6-e1625816914518-500x500.jpg' },
+  { name: '周世雄', role: '當代藝術家', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E5%91%A8%E4%B8%96%E9%9B%84-500x500.jpg' },
+  { name: '蕭青陽', role: '唱片設計師／葛萊美獎入圍', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E8%95%AD%E9%9D%92%E9%99%BD-scaled-e1625535578597-500x500.jpg' },
 ];
 
 const BLOG_POSTS = [
   {
-    title: '策展與科技整合的未來，還是人的感受與信任',
+    title: '策展筆記｜AI 模組化的未來，真正不能被複製的，是人的感知與信念',
     date: '2025-09-25',
     excerpt: '當 AI 整合變成顯學，我們更在意的是：在演講現場、在觀眾眼裡，人與人之間的信任與感受，會不會被忽略。',
     image: 'https://tedxxinyi.com/wp-content/uploads/2025/09/ChatGPT-Image-2025%E5%B9%B49%E6%9C%8825%E6%97%A5-%E4%B8%8B%E5%8D%8804_22_26-150x150.png',
@@ -30,7 +30,7 @@ const BLOG_POSTS = [
     image: 'https://tedxxinyi.com/wp-content/uploads/2021/08/%E8%9E%A2%E5%B9%95%E5%BF%AB%E7%85%A7-2021-08-24-%E4%B8%8B%E5%8D%882.38.47.png',
   },
   {
-    title: 'Zoom 如何置換個人背景',
+    title: 'Zoom 如何置換個人虛擬背景',
     date: '2021-08-12',
     excerpt: '一個疫情下的小技術指南，\n也是我們思考『螢幕另一端』怎麼保持專業與真實感的小練習。',
     image: null,
@@ -38,19 +38,19 @@ const BLOG_POSTS = [
 ];
 
 const PARTNER_LOGOS = [
-  'https://tedxxinyi.com/wp-content/uploads/2021/07/1MORE-e1627275745256.png',
-  'https://tedxxinyi.com/wp-content/uploads/2021/07/cofit-e1626948574733.png',
-  'https://tedxxinyi.com/wp-content/uploads/2021/07/tissue-150x150.png',
-  'https://tedxxinyi.com/wp-content/uploads/2021/07/%E7%BE%8E%E5%AD%B8-e1626949204652.png',
-  'https://tedxxinyi.com/wp-content/uploads/2021/07/one-ten%E5%9C%93%E5%BD%A2logo-150x150.jpg',
-  'https://tedxxinyi.com/wp-content/uploads/2021/07/%E9%AD%9A.png',
-  'https://tedxxinyi.com/wp-content/uploads/2021/07/%E6%9D%B1%E5%90%B3.png',
+  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/1MORE-e1627275745256.png', name: '1MORE 萬魔耳機' },
+  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/cofit-e1626948574733.png', name: 'Cofit' },
+  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/tissue-150x150.png', name: 'tissue' },
+  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E7%BE%8E%E5%AD%B8-e1626949204652.png', name: '美學' },
+  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/one-ten%E5%9C%93%E5%BD%A2logo-150x150.jpg', name: 'One Ten 食分之一' },
+  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E9%AD%9A.png', name: '全興資源再生' },
+  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E6%9D%B1%E5%90%B3.png', name: '東吳大學' },
 ];
 
 const ENTRY_CARDS = [
   {
     title: '關於 TEDxXinyi',
-    description: '在台北信義，我們用 TEDx 的形式，建立一個讓城市暫時放慢、聽彼此說話的場域。',
+    description: '台北第一個以都會生活圈為核心的在地 TEDx 團隊。\n#Community #Relevancy #Evolution',
     button: '走進故事',
     href: '/vibe-demo/tedx-xinyi/about',
     image: 'https://tedxxinyi.com/wp-content/uploads/2021/08/S__45482024.jpg',
@@ -83,37 +83,39 @@ export default function TEDxXinyiHome() {
       <SiteNav currentPath="/vibe-demo/tedx-xinyi" heroMode />
 
       {/* ==================== HERO ==================== */}
-      <section className="relative min-h-screen flex items-center overflow-hidden">
-        {/* Background image */}
+      <section className="relative min-h-screen flex items-center overflow-hidden bg-neutral-900">
+        {/* nanobanana-generated background with CSS fallback */}
         <div className="absolute inset-0">
           <img
-            src="https://tedxxinyi.com/wp-content/uploads/2022/06/web_1350x800.jpg"
+            src="/tedx-xinyi/hero-home.png"
             alt=""
-            className="w-full h-full object-cover"
-            style={{ filter: 'brightness(0.35) contrast(1.1)' }}
+            className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
+            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.55'; }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
-          {/* Warm amber gradient overlay for festival feel */}
-          <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-transparent to-amber-900/30" />
-          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white to-transparent" />
+          {/* Warm gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/80 via-neutral-900/40 to-neutral-900" />
         </div>
+
+        {/* Fallback: warm amber glow when no image */}
+        <div className="absolute inset-0 bg-gradient-to-br from-neutral-900 via-neutral-800 to-amber-950/30" style={{ zIndex: 0 }} />
 
         {/* Content */}
         <div className="relative z-10 max-w-5xl mx-auto px-6 text-center pt-24 pb-16">
-          {/* Festival-style label */}
           <FadeIn>
-            <p className="text-xs sm:text-sm font-bold tracking-[0.3em] uppercase text-white/60 mb-6">
+            <p className="text-xs sm:text-sm font-bold tracking-[0.3em] uppercase text-white/50 mb-6">
               TEDxXinyi 2026
             </p>
           </FadeIn>
 
           <FadeIn delay={100}>
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-[1.1] mb-8 text-white" lang="zh-TW">
-              「主題暫位：<br className="sm:hidden" />在信義，<br />練習一種樂觀」
+              樂觀不是名詞<br />而是動詞
             </h1>
           </FadeIn>
 
           <FadeIn delay={250}>
-            <p className="text-white/75 text-base sm:text-lg md:text-xl leading-relaxed mb-4 max-w-2xl mx-auto" lang="zh-TW">
+            <p className="text-white/70 text-base sm:text-lg md:text-xl leading-relaxed mb-4 max-w-2xl mx-auto" lang="zh-TW">
               TEDxXinyi 把世界的想法帶進台北信義，<br />
               也把信義日常的矛盾、壓力與想像搬上舞台。<br />
               我們用一次又一次的策展，練習一種面向未來的樂觀。
@@ -121,7 +123,7 @@ export default function TEDxXinyiHome() {
           </FadeIn>
 
           <FadeIn delay={380}>
-            <p className="text-white/45 text-sm sm:text-base leading-relaxed mb-12 max-w-2xl mx-auto" lang="en">
+            <p className="text-white/40 text-sm sm:text-base leading-relaxed mb-12 max-w-2xl mx-auto" lang="en">
               In Xinyi, we rehearse a more optimistic future — one talk, one stage, one community at a time.
             </p>
           </FadeIn>
@@ -171,7 +173,6 @@ export default function TEDxXinyiHome() {
                     style={i === 2 ? { objectFit: 'contain', padding: '1.5rem', background: '#1a1a1a' } : undefined}
                   />
                 </div>
-                {/* Colored accent bar */}
                 <div className="h-1" style={{ backgroundColor: card.accent }} />
                 <div className="p-6">
                   <h3 className="text-lg font-black mb-2" lang="zh-TW">{card.title}</h3>
@@ -224,7 +225,6 @@ export default function TEDxXinyiHome() {
           </p>
         </FadeIn>
 
-        {/* Speaker grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
           {SPEAKERS.map((speaker, i) => (
             <FadeIn key={i} delay={i * 60}>
@@ -237,12 +237,10 @@ export default function TEDxXinyiHome() {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 </div>
-                {/* Name overlay on hover */}
                 <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
                   <p className="text-white font-black text-sm" lang="zh-TW">{speaker.name}</p>
                   <p className="text-white/60 text-xs" lang="zh-TW">{speaker.role}</p>
                 </div>
-                {/* Static name below */}
                 <div className="mt-2.5">
                   <p className="font-bold text-sm" lang="zh-TW">{speaker.name}</p>
                   <p className="text-neutral-400 text-xs" lang="zh-TW">{speaker.role}</p>
@@ -323,10 +321,11 @@ export default function TEDxXinyiHome() {
               <div
                 key={i}
                 className="w-20 h-20 flex items-center justify-center grayscale hover:grayscale-0 opacity-50 hover:opacity-100 transition-all duration-300"
+                title={logo.name}
               >
                 <img
-                  src={logo}
-                  alt="Partner logo"
+                  src={logo.src}
+                  alt={logo.name}
                   className="max-w-full max-h-full object-contain"
                 />
               </div>
@@ -336,7 +335,8 @@ export default function TEDxXinyiHome() {
 
         <FadeIn>
           <div className="text-center">
-            <button
+            <Link
+              href="/vibe-demo/tedx-xinyi/sustainability"
               className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold border-2 border-neutral-300 hover:border-neutral-900 rounded-full text-neutral-600 hover:text-neutral-900 transition-all"
               lang="zh-TW"
             >
@@ -344,7 +344,7 @@ export default function TEDxXinyiHome() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
-            </button>
+            </Link>
           </div>
         </FadeIn>
       </Section>
@@ -354,7 +354,7 @@ export default function TEDxXinyiHome() {
         <div className="max-w-3xl mx-auto px-6">
           <FadeIn>
             <p className="text-3xl md:text-4xl font-black mb-2" lang="zh-TW">
-              在信義，練習一種樂觀。
+              樂觀不是名詞，而是動詞。
             </p>
             <p className="text-white/70 text-sm mb-8" lang="en">
               TEDxXinyi 2026

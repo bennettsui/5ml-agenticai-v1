@@ -7,7 +7,7 @@ type Category = 'all' | 'curatorial' | 'guide';
 
 const POSTS = [
   {
-    title: '策展與科技整合的未來，還是人的感受與信任',
+    title: '策展筆記｜AI 模組化的未來，真正不能被複製的，是人的感知與信念',
     date: '2025-09-25',
     category: 'curatorial' as const,
     categoryLabel: '策展觀點',
@@ -23,7 +23,7 @@ const POSTS = [
     excerpt: '「樂觀」不是天真的同義詞。\n而是在很糟的新聞之後，仍然願意問：那我們可以做什麼？',
   },
   {
-    title: 'Zoom 如何置換個人背景',
+    title: 'Zoom 如何置換個人虛擬背景',
     date: '2021-08-12',
     category: 'guide' as const,
     categoryLabel: '實用指南',
@@ -63,7 +63,6 @@ export default function BlogPage() {
 
       {/* ==================== FILTER + POSTS ==================== */}
       <Section bg="white">
-        {/* Category filter */}
         <FadeIn>
           <div className="flex flex-wrap gap-2 mb-12">
             {([
@@ -76,7 +75,7 @@ export default function BlogPage() {
                 onClick={() => setActiveFilter(cat.key)}
                 className={`px-4 py-2 text-sm font-bold rounded-full border-2 transition-all ${
                   activeFilter === cat.key
-                    ? 'border-neutral-900 text-neutral-900 bg-neutral-900 text-white'
+                    ? 'border-neutral-900 text-white'
                     : 'border-neutral-200 text-neutral-500 hover:text-neutral-900 hover:border-neutral-400'
                 }`}
                 style={activeFilter === cat.key ? { backgroundColor: '#1a1a1a', color: 'white', borderColor: '#1a1a1a' } : undefined}
@@ -87,12 +86,10 @@ export default function BlogPage() {
           </div>
         </FadeIn>
 
-        {/* Post list */}
         <div className="space-y-6">
           {filteredPosts.map((post, i) => (
             <FadeIn key={post.title} delay={i * 80}>
               <article className="group flex flex-col sm:flex-row gap-6 rounded-xl overflow-hidden border border-neutral-100 hover:border-neutral-200 hover:shadow-md transition-all cursor-pointer p-5 sm:p-0">
-                {/* Thumbnail */}
                 {post.thumbnail ? (
                   <div className="w-full sm:w-44 h-44 sm:h-auto flex-shrink-0 overflow-hidden rounded-lg sm:rounded-none bg-neutral-100">
                     <img
@@ -107,7 +104,6 @@ export default function BlogPage() {
                   </div>
                 )}
 
-                {/* Content */}
                 <div className="flex-1 sm:py-5 sm:pr-6">
                   <div className="flex items-center gap-3 mb-3">
                     <span
