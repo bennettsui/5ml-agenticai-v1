@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone, Users, GitBranch } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, BarChart3, Layers, BookOpen, Newspaper, Camera, Sparkles, User, Megaphone, Users, GitBranch, Activity } from 'lucide-react';
 
 export default function Home() {
   const useCases = [
@@ -103,6 +103,16 @@ export default function Home() {
       href: '/ads-dashboard',
       color: 'from-orange-500 to-red-600',
       features: ['Meta Ads Analytics', 'Google Ads Analytics', 'AI Weekly Reports', 'Multi-Tenant Clients'],
+      status: 'New'
+    },
+    {
+      id: 'healthcheck',
+      title: 'Website Health Check',
+      description: 'Comprehensive SEO audit, Google PageSpeed analysis, Core Web Vitals, broken link detection, and web quality checks',
+      icon: Activity,
+      href: '/healthcheck',
+      color: 'from-emerald-500 to-teal-600',
+      features: ['SEO / AI SEO Audit', 'Core Web Vitals (LCP, INP, CLS)', 'Broken Link Detection', 'WCAG 2.2 Accessibility'],
       status: 'New'
     },
     {
