@@ -350,7 +350,14 @@ function ChatHistoryPanel() {
 // ---------------------------------------------------------------------------
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<Tab>('control');
+  // Support /dashboard?tab=growth direct links from homepage
+  const getInitialTab = (): Tab => {
+    if (typeof window === 'undefined') return 'control';
+    const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
+    const valid: Tab[] = ['control','overview','architecture','analytics','api','scheduling','knowledge','costs','workflows','chat','growth'];
+    return p && valid.includes(p) ? p : 'control';
+  };
+  const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
 
   const tabs = [
     { id: 'control' as Tab, label: 'Control Tower', icon: LayoutDashboard },

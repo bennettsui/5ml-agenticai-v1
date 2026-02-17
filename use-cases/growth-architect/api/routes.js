@@ -7,6 +7,9 @@ const express = require('express');
 const router = express.Router();
 const { generateGrowthPlan } = require('../agents/growthArchitectOrchestrator');
 const { generateWeeklyReview } = require('../agents/reportingAgent');
+const { generateCopyAssets } = require('../agents/copyAgent');
+const { generateSocialContent } = require('../agents/socialAgent');
+const { designCrmFlow, generateEdmCampaign } = require('../agents/crmCommunicationAgent');
 
 // Database (lazy-loaded)
 let db;
@@ -484,6 +487,346 @@ router.post('/metrics', async (req, res) => {
     });
   } catch (error) {
     console.error('Error saving metrics:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Phase 2: Asset Generation (nanobanana + social)
+// ==========================================
+
+/**
+ * POST /api/growth/assets/generate
+ * Generate copy or social assets for a brand
+ * Body: { brand_name, agent, asset_type, channel, funnel_stage, icp, product_brief, ... }
+ */
+router.post('/assets/generate', async (req, res) => {
+  try {
+    const {
+      brand_name,
+      agent = 'copy',        // 'copy' | 'social'
+      asset_type,
+      channel,
+      funnel_stage = 'awareness',
+      icp,
+      product_brief,
+      campaign_theme,
+      pillar = 'education',
+      platform,
+      format,
+      experiment_hypothesis,
+      variants = 3,
+      count = 2,
+    } = req.body;
+
+    if (!brand_name || !icp || !product_brief) {
+      return res.status(400).json({ error: 'Missing required: brand_name, icp, product_brief' });
+    }
+
+    let result;
+
+    if (agent === 'copy') {
+      if (!asset_type || !channel) {
+        return res.status(400).json({ error: 'Copy agent requires: asset_type, channel' });
+      }
+      result = await generateCopyAssets(
+        brand_name, icp, product_brief, asset_type, funnel_stage,
+        channel, experiment_hypothesis, { variants }
+      );
+    } else if (agent === 'social') {
+      if (!platform || !format) {
+        return res.status(400).json({ error: 'Social agent requires: platform, format' });
+      }
+      result = await generateSocialContent(
+        brand_name, icp, product_brief, platform, format,
+        campaign_theme || '', pillar, { count }
+      );
+    } else {
+      return res.status(400).json({ error: 'Invalid agent. Use: copy | social' });
+    }
+
+    // Save assets to DB if available
+    const savedIds = [];
+    if (db && db.pool) {
+      const assetsToSave = result.variants || result.assets || [];
+      for (const asset of assetsToSave) {
+        try {
+          const r = await db.pool.query(
+            `INSERT INTO growth_assets (brand_name, asset_type, channel, funnel_stage, tag, content, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+            [
+              asset.brand_name || brand_name,
+              asset.asset_type,
+              asset.channel,
+              asset.funnel_stage,
+              asset.tag,
+              JSON.stringify(asset.content),
+              'draft',
+            ]
+          );
+          savedIds.push(r.rows[0]?.id);
+        } catch (dbErr) {
+          console.warn('[growth/assets] DB save error:', dbErr.message);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      data: { ...result, saved_ids: savedIds },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[growth/assets/generate] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/growth/assets/:brand_name
+ * List assets for a brand with optional filters
+ */
+router.get('/assets/:brand_name', async (req, res) => {
+  try {
+    if (!db || !db.pool) return res.status(503).json({ error: 'Database not available' });
+
+    const { brand_name } = req.params;
+    const { asset_type, channel, funnel_stage, status, limit = 50, offset = 0 } = req.query;
+
+    let query = `SELECT id, brand_name, asset_type, channel, funnel_stage, tag, content, status, performance, created_at
+                 FROM growth_assets WHERE brand_name = $1`;
+    const params = [brand_name];
+
+    if (asset_type) { query += ` AND asset_type = $${params.length + 1}`; params.push(asset_type); }
+    if (channel)    { query += ` AND channel = $${params.length + 1}`;    params.push(channel); }
+    if (funnel_stage) { query += ` AND funnel_stage = $${params.length + 1}`; params.push(funnel_stage); }
+    if (status)     { query += ` AND status = $${params.length + 1}`;     params.push(status); }
+
+    query += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(limit, offset);
+
+    const result = await db.pool.query(query, params);
+    res.json({ success: true, data: result.rows, count: result.rows.length });
+  } catch (error) {
+    console.error('[growth/assets] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/growth/assets/:id
+ * Update asset status or add performance data
+ */
+router.patch('/assets/:id', async (req, res) => {
+  try {
+    if (!db || !db.pool) return res.status(503).json({ error: 'Database not available' });
+
+    const { id } = req.params;
+    const { status, performance } = req.body;
+
+    const updates = ['updated_at = now()'];
+    const params = [id];
+
+    if (status)      { updates.push(`status = $${params.length + 1}`);      params.push(status); }
+    if (performance) { updates.push(`performance = $${params.length + 1}`);  params.push(JSON.stringify(performance)); }
+
+    const result = await db.pool.query(
+      `UPDATE growth_assets SET ${updates.join(', ')} WHERE id = $1 RETURNING *`,
+      params
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Asset not found' });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('[growth/assets PATCH] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Phase 2: CRM Flows
+// ==========================================
+
+/**
+ * POST /api/growth/crm-flows
+ * Design a CRM communication flow for a brand
+ */
+router.post('/crm-flows', async (req, res) => {
+  try {
+    const { brand_name, product_brief, icp, trigger_event, audience_segment, flow_type } = req.body;
+
+    if (!brand_name || !product_brief || !icp || !trigger_event) {
+      return res.status(400).json({ error: 'Missing required: brand_name, product_brief, icp, trigger_event' });
+    }
+
+    const result = await designCrmFlow(
+      brand_name, product_brief, icp, trigger_event,
+      audience_segment || 'all', flow_type || 'lead_nurture'
+    );
+
+    // Save to DB
+    let flowId = null;
+    if (db && db.pool) {
+      try {
+        const r = await db.pool.query(
+          `INSERT INTO growth_crm_flows (brand_name, flow_name, trigger_event, audience_segment, flow_steps, status)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+          [
+            brand_name,
+            result.flow?.flow_name || `${brand_name} ${flow_type}`,
+            trigger_event,
+            audience_segment || 'all',
+            JSON.stringify(result.flow?.steps || []),
+            'draft',
+          ]
+        );
+        flowId = r.rows[0]?.id;
+      } catch (dbErr) {
+        console.warn('[crm-flows] DB save error:', dbErr.message);
+      }
+    }
+
+    res.json({ success: true, data: { flow_id: flowId, ...result }, timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('[growth/crm-flows] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/growth/crm-flows/:brand_name
+ * List CRM flows for a brand
+ */
+router.get('/crm-flows/:brand_name', async (req, res) => {
+  try {
+    if (!db || !db.pool) return res.status(503).json({ error: 'Database not available' });
+
+    const { brand_name } = req.params;
+    const { limit = 20, offset = 0 } = req.query;
+
+    const result = await db.pool.query(
+      `SELECT id, brand_name, flow_name, trigger_event, audience_segment, flow_steps, status, created_at
+       FROM growth_crm_flows WHERE brand_name = $1
+       ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      [brand_name, limit, offset]
+    );
+
+    res.json({ success: true, data: result.rows, count: result.rows.length });
+  } catch (error) {
+    console.error('[growth/crm-flows GET] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Phase 2: EDM Campaigns
+// ==========================================
+
+/**
+ * POST /api/growth/edm/generate
+ * Generate an EDM campaign (HTML email)
+ */
+router.post('/edm/generate', async (req, res) => {
+  try {
+    const { brand_name, product_brief, icp, campaign_type, campaign_theme } = req.body;
+
+    if (!brand_name || !product_brief || !icp || !campaign_type) {
+      return res.status(400).json({ error: 'Missing required: brand_name, product_brief, icp, campaign_type' });
+    }
+
+    const result = await generateEdmCampaign(
+      brand_name, product_brief, icp, campaign_type, campaign_theme || campaign_type
+    );
+
+    // Save to DB
+    let campaignId = null;
+    if (db && db.pool) {
+      try {
+        const r = await db.pool.query(
+          `INSERT INTO growth_edm_campaigns
+             (brand_name, campaign_name, campaign_type, subject, preview_text, html_content, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+          [
+            brand_name,
+            result.campaign_name,
+            result.campaign_type,
+            result.subject,
+            result.preview_text,
+            result.html_content,
+            'draft',
+          ]
+        );
+        campaignId = r.rows[0]?.id;
+      } catch (dbErr) {
+        console.warn('[edm/generate] DB save error:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        campaign_id: campaignId,
+        campaign_name: result.campaign_name,
+        subject: result.subject,
+        preview_text: result.preview_text,
+        html_content: result.html_content,
+        _meta: result._meta,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[growth/edm/generate] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/growth/edm/:brand_name
+ * List EDM campaigns for a brand
+ */
+router.get('/edm/:brand_name', async (req, res) => {
+  try {
+    if (!db || !db.pool) return res.status(503).json({ error: 'Database not available' });
+
+    const { brand_name } = req.params;
+    const { limit = 20, offset = 0 } = req.query;
+
+    const result = await db.pool.query(
+      `SELECT id, brand_name, campaign_name, campaign_type, subject, preview_text,
+              status, sent_at, open_rate, click_rate, created_at
+       FROM growth_edm_campaigns WHERE brand_name = $1
+       ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      [brand_name, limit, offset]
+    );
+
+    res.json({ success: true, data: result.rows, count: result.rows.length });
+  } catch (error) {
+    console.error('[growth/edm GET] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/growth/edm/:brand_name/:id/preview
+ * Get full HTML of a specific EDM
+ */
+router.get('/edm/:brand_name/:id/preview', async (req, res) => {
+  try {
+    if (!db || !db.pool) return res.status(503).json({ error: 'Database not available' });
+
+    const { id } = req.params;
+    const result = await db.pool.query(
+      `SELECT html_content, subject FROM growth_edm_campaigns WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Campaign not found' });
+
+    // Return raw HTML for iframe preview
+    res.setHeader('Content-Type', 'text/html');
+    res.send(result.rows[0].html_content);
+  } catch (error) {
+    console.error('[growth/edm/preview] Error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

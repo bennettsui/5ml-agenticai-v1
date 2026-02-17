@@ -170,9 +170,9 @@ export default function Home() {
           {/* Quick stats */}
           <div className="grid grid-cols-3 gap-3 mb-6">
             {[
-              { icon: LayoutDashboard, label: 'Control Dashboard', stat: 'Live', color: 'text-emerald-400', bg: 'bg-emerald-500/10', href: '/dashboard' },
+              { icon: TrendingUp, label: 'Growth Architect', stat: 'New — Try it', color: 'text-emerald-400', bg: 'bg-emerald-500/10', href: '/dashboard?tab=growth' },
+              { icon: LayoutDashboard, label: 'Control Dashboard', stat: 'Live', color: 'text-slate-300', bg: 'bg-slate-700/40', href: '/dashboard' },
               { icon: GitBranch, label: 'Workflow Engine', stat: '6 Pipelines', color: 'text-purple-400', bg: 'bg-purple-500/10', href: '/agentic-workflows' },
-              { icon: Shield, label: 'Governance', stat: 'Multi-tenant', color: 'text-blue-400', bg: 'bg-blue-500/10', href: '/dashboard' },
             ].map((card) => (
               <Link key={card.label} href={card.href} className="flex items-center gap-3 rounded-xl border border-slate-700/50 bg-slate-800/60 p-4 hover:bg-white/[0.02] transition-colors group">
                 <div className={`p-2 rounded-lg ${card.bg}`}>
