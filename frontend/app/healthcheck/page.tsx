@@ -135,15 +135,19 @@ const ALL_MODULE_IDS = ['website_health', 'security_scan', 'seo_aiseo', 'wcag_ac
 // Page
 // ---------------------------------------------------------------------------
 
+type ScanMode = 'page' | 'website';
+
 export default function HealthCheckPage() {
   const [url, setUrl] = useState('');
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scanMode, setScanMode] = useState<ScanMode>('website');
 
   // Result state
   const [result, setResult] = useState<DebugSession | null>(null);
   const [expandedIssues, setExpandedIssues] = useState<Set<string>>(new Set());
   const [moduleFilter, setModuleFilter] = useState<string | null>(null);
+  const [pageFilter, setPageFilter] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [collapsedLayers, setCollapsedLayers] = useState<Set<string>>(new Set());
 
@@ -154,10 +158,11 @@ export default function HealthCheckPage() {
     setResult(null);
     setExpandedIssues(new Set());
     setModuleFilter(null);
+    setPageFilter(null);
     setCollapsedLayers(new Set());
     try {
       const data = await crmApi.debug.createSession({
-        subject_type: 'web_page',
+        subject_type: scanMode === 'website' ? 'website' : 'web_page',
         subject_ref: url.trim(),
         module_ids: ALL_MODULE_IDS,
         auto_run: true,
@@ -168,7 +173,7 @@ export default function HealthCheckPage() {
     } finally {
       setRunning(false);
     }
-  }, [url]);
+  }, [url, scanMode]);
 
   const clearResults = () => {
     setResult(null);
@@ -189,9 +194,12 @@ export default function HealthCheckPage() {
 
   // Derived data from result
   const issues = result?.issues || [];
-  const filteredIssues = moduleFilter
-    ? issues.filter((i) => i.module === moduleFilter)
-    : issues;
+  const filteredIssues = issues.filter((i) => {
+    if (moduleFilter && i.module !== moduleFilter) return false;
+    if (pageFilter && i.page_url !== pageFilter) return false;
+    return true;
+  });
+  const isMultiPage = (result?.page_results?.length || 0) > 1;
 
   const issuesByModule: Record<string, DebugIssue[]> = {};
   for (const issue of issues) {
@@ -311,9 +319,37 @@ export default function HealthCheckPage() {
         {/* URL Input Hero */}
         <div className="bg-gradient-to-br from-emerald-900/30 to-teal-900/20 rounded-2xl border border-emerald-500/20 p-8">
           <h2 className="text-xl font-bold text-white mb-2">Check Any Website</h2>
-          <p className="text-slate-400 text-sm mb-6">
+          <p className="text-slate-400 text-sm mb-4">
             5 modules across 7 infrastructure layers — orchestrated by an AI agent for cost-efficient analysis.
           </p>
+
+          {/* Scan Mode Toggle */}
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              onClick={() => setScanMode('website')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                scanMode === 'website'
+                  ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
+                  : 'text-slate-500 hover:text-slate-300 bg-slate-800/60 border border-slate-700/50'
+              }`}
+            >
+              <Layers className="w-3 h-3" /> Full Website
+            </button>
+            <button
+              onClick={() => setScanMode('page')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                scanMode === 'page'
+                  ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
+                  : 'text-slate-500 hover:text-slate-300 bg-slate-800/60 border border-slate-700/50'
+              }`}
+            >
+              <Globe className="w-3 h-3" /> Single Page
+            </button>
+            <span className="text-[10px] text-slate-600 ml-2">
+              {scanMode === 'website' ? 'Crawl sitemap + internal links (up to 20 pages)' : 'Check one URL only'}
+            </span>
+          </div>
+
           <div className="flex items-center gap-3">
             <div className="flex-1 relative">
               <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
@@ -322,7 +358,7 @@ export default function HealthCheckPage() {
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && url.trim() && !running) runCheck(); }}
-                placeholder="https://example.com"
+                placeholder={scanMode === 'website' ? 'https://example.com' : 'https://example.com/about'}
                 disabled={running}
                 className="w-full bg-slate-900/80 border border-slate-700 rounded-xl pl-12 pr-4 py-3.5 text-white text-base placeholder:text-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 disabled:opacity-50 transition-colors"
               />
@@ -333,9 +369,9 @@ export default function HealthCheckPage() {
               className="flex items-center gap-2.5 px-7 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-base font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               {running ? (
-                <><Loader2 className="w-5 h-5 animate-spin" /> Analyzing...</>
+                <><Loader2 className="w-5 h-5 animate-spin" /> {scanMode === 'website' ? 'Crawling...' : 'Analyzing...'}</>
               ) : (
-                <><Play className="w-5 h-5" /> Run Check</>
+                <><Play className="w-5 h-5" /> {scanMode === 'website' ? 'Scan Website' : 'Run Check'}</>
               )}
             </button>
           </div>
@@ -416,15 +452,70 @@ export default function HealthCheckPage() {
 
                 {/* Orchestration Stats */}
                 {result.orchestration && (
-                  <div className="bg-slate-900/40 rounded-xl border border-slate-700/30 p-3 text-xs space-y-1.5 min-w-[140px]">
+                  <div className="bg-slate-900/40 rounded-xl border border-slate-700/30 p-3 text-xs space-y-1.5 min-w-[160px]">
                     <div className="flex items-center gap-1.5 text-slate-400 font-medium mb-1"><Cpu className="w-3 h-3" /> Orchestrator</div>
-                    <div className="flex justify-between"><span className="text-slate-500">Modules:</span><span className="text-slate-300">{result.orchestration.modules_run}</span></div>
+                    {result.orchestration.pages_scanned && result.orchestration.pages_scanned > 1 && (
+                      <div className="flex justify-between"><span className="text-slate-500">Pages:</span><span className="text-slate-300">{result.orchestration.pages_scanned}</span></div>
+                    )}
+                    <div className="flex justify-between"><span className="text-slate-500">Modules:</span><span className="text-slate-300">{result.orchestration.modules_run} × {result.orchestration.pages_scanned || 1}</span></div>
                     <div className="flex justify-between"><span className="text-slate-500">Fetch:</span><span className="text-slate-300">{result.orchestration.fetch_time_ms}ms</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Cost:</span><span className="text-emerald-400">{result.orchestration.total_cost}/{result.orchestration.budget}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-500">API Cost:</span><span className="text-emerald-400">$0.00</span></div>
+                    <div className="text-[9px] text-slate-600 pt-1 border-t border-slate-700/30">All regex-based — no LLM calls</div>
                   </div>
                 )}
               </div>
             </div>
+
+            {/* Per-Page Results (multi-page mode) */}
+            {isMultiPage && result.page_results && (
+              <div className="bg-slate-800/60 rounded-2xl border border-slate-700/50 overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-700/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-emerald-400" />
+                    <h2 className="text-base font-bold text-white">Pages Scanned ({result.page_results.length})</h2>
+                  </div>
+                  {pageFilter && (
+                    <button onClick={() => setPageFilter(null)} className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
+                      Show all pages
+                    </button>
+                  )}
+                </div>
+                <div className="divide-y divide-slate-700/30">
+                  {result.page_results.map((page, i) => {
+                    const isActive = pageFilter === page.url;
+                    const pScoreColor = page.score >= 80 ? 'text-green-400' : page.score >= 60 ? 'text-amber-400' : 'text-red-400';
+                    const pBarColor = page.score >= 80 ? 'bg-green-500' : page.score >= 60 ? 'bg-amber-500' : 'bg-red-500';
+                    const path = (() => { try { return new URL(page.url).pathname; } catch { return page.url; } })();
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setPageFilter(isActive ? null : page.url)}
+                        className={`w-full px-5 py-3 flex items-center gap-3 text-left transition-colors ${isActive ? 'bg-emerald-500/5' : 'hover:bg-white/[0.02]'}`}
+                      >
+                        <span className="text-[10px] font-mono text-slate-600 w-5">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-white font-medium truncate">{page.title || path}</div>
+                          <div className="text-[10px] text-slate-500 truncate">{path}</div>
+                        </div>
+                        {/* Mini progress bar */}
+                        <div className="w-16 h-1.5 rounded-full bg-white/[0.04] overflow-hidden hidden sm:block shrink-0">
+                          <div className={`h-full rounded-full ${pBarColor}`} style={{ width: `${page.score}%` }} />
+                        </div>
+                        <span className={`text-sm font-bold ${pScoreColor} w-8 text-right shrink-0`}>{page.score}</span>
+                        <div className="flex items-center gap-1.5 shrink-0 min-w-[60px] justify-end">
+                          <span className="text-[10px] text-slate-500">{page.issue_count} issues</span>
+                          {page.critical_count > 0 && <span className="text-[10px] text-red-400">{page.critical_count}C</span>}
+                        </div>
+                        {page.status_code !== 200 && (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded-full shrink-0">{page.status_code}</span>
+                        )}
+                        {isActive && <span className="text-[10px] text-emerald-400 shrink-0">Filtered</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* 7-Layer Health Infographic */}
             <div className="bg-slate-800/60 rounded-2xl border border-slate-700/50 p-6">
@@ -508,15 +599,20 @@ export default function HealthCheckPage() {
 
             {/* Action Buttons: Expand/Collapse All + Copy Errors */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold text-white">
                   {moduleFilter ? `${moduleConfig[moduleFilter]?.label || moduleFilter}` : 'All Findings'}
                 </h2>
                 <span className="text-xs text-slate-500">({filteredIssues.length} total, {actionableCount} actionable)</span>
-                {moduleFilter && (
-                  <button onClick={() => setModuleFilter(null)} className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors ml-2">
-                    Clear filter
+                {(moduleFilter || pageFilter) && (
+                  <button onClick={() => { setModuleFilter(null); setPageFilter(null); }} className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors ml-2">
+                    Clear filters
                   </button>
+                )}
+                {pageFilter && (
+                  <span className="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20">
+                    Page: {(() => { try { return new URL(pageFilter).pathname; } catch { return pageFilter; } })()}
+                  </span>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -631,7 +727,10 @@ export default function HealthCheckPage() {
                                         <p className="text-sm text-slate-300 whitespace-pre-wrap">{issue.recommendation}</p>
                                       </div>
                                     )}
-                                    <div className="flex items-center gap-4 text-xs text-slate-500">
+                                    <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
+                                      {issue.page_url && isMultiPage && (
+                                        <span className="truncate max-w-xs">Page: <span className="text-slate-400 font-mono">{(() => { try { return new URL(issue.page_url).pathname; } catch { return issue.page_url; } })()}</span></span>
+                                      )}
                                       {issue.score_impact > 0 && (
                                         <span>Score impact: <span className="text-red-400">-{issue.score_impact}</span></span>
                                       )}
@@ -715,7 +814,7 @@ export default function HealthCheckPage() {
             {/* Key Metrics Highlight */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { icon: Cpu, label: 'AI Orchestration', detail: 'Cost-efficient routing', color: 'text-emerald-400' },
+                { icon: Layers, label: 'Full Website', detail: 'Crawl all sub-pages', color: 'text-emerald-400' },
                 { icon: Shield, label: 'Security Scan', detail: 'XSS, leaks, headers', color: 'text-red-400' },
                 { icon: Eye, label: 'WCAG 2.2', detail: 'Accessibility audit', color: 'text-cyan-400' },
                 { icon: Brain, label: 'AI SEO', detail: 'E-E-A-T & content', color: 'text-purple-400' },
