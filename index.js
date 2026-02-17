@@ -133,28 +133,9 @@ app.get('/api/app-name', (req, res) => {
 // ==========================================
 // API Health & Connection Test
 // ==========================================
-app.get('/api/health/services', async (req, res) => {
-  const results = [];
-
-  // Helper: test an external API endpoint
-  async function probe(id, name, testFn) {
-    const start = Date.now();
-    try {
-      const detail = await testFn();
-      results.push({ id, name, status: 'connected', latencyMs: Date.now() - start, detail });
-    } catch (err) {
-      results.push({ id, name, status: 'error', latencyMs: Date.now() - start, error: err.message });
-    }
-  }
-
-  // Helper: just check if env var is set
-  function envCheck(id, name, envVar, extra) {
-    const set = !!process.env[envVar];
-    results.push({ id, name, status: set ? 'configured' : 'not_configured', detail: set ? `${envVar} is set` : `${envVar} not set`, ...(extra || {}) });
-  }
-
-  // --- LLM Providers ---
-  await probe('anthropic', 'Anthropic (Claude)', async () => {
+// Service test definitions (shared between full and individual tests)
+const SERVICE_TESTS = {
+  anthropic: { name: 'Anthropic (Claude)', type: 'probe', test: async () => {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -164,9 +145,8 @@ app.get('/api/health/services', async (req, res) => {
     });
     if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
     return 'API key valid';
-  });
-
-  await probe('deepseek', 'DeepSeek', async () => {
+  }},
+  deepseek: { name: 'DeepSeek', type: 'probe', test: async () => {
     if (!process.env.DEEPSEEK_API_KEY) throw new Error('DEEPSEEK_API_KEY not set');
     const resp = await fetch('https://api.deepseek.com/v1/models', {
       headers: { 'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}` },
@@ -174,9 +154,8 @@ app.get('/api/health/services', async (req, res) => {
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return 'API key valid';
-  });
-
-  await probe('perplexity', 'Perplexity (Sonar Pro)', async () => {
+  }},
+  perplexity: { name: 'Perplexity (Sonar Pro)', type: 'probe', test: async () => {
     if (!process.env.PERPLEXITY_API_KEY) throw new Error('PERPLEXITY_API_KEY not set');
     const resp = await fetch('https://api.perplexity.ai/chat/completions', {
       method: 'POST',
@@ -186,20 +165,15 @@ app.get('/api/health/services', async (req, res) => {
     });
     if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
     return 'API key valid';
-  });
-
-  envCheck('openai', 'OpenAI', 'OPENAI_API_KEY');
-
-  // --- Database ---
-  await probe('database', 'PostgreSQL', async () => {
+  }},
+  openai: { name: 'OpenAI', type: 'env', envVar: 'OPENAI_API_KEY' },
+  database: { name: 'PostgreSQL', type: 'probe', test: async () => {
     if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL not set');
     const db = require('./db');
     await db.query('SELECT 1');
     return 'Connected';
-  });
-
-  // --- External Services ---
-  await probe('notion', 'Notion API', async () => {
+  }},
+  notion: { name: 'Notion API', type: 'probe', test: async () => {
     if (!process.env.NOTION_API_KEY) throw new Error('NOTION_API_KEY not set');
     const resp = await fetch('https://api.notion.com/v1/users/me', {
       headers: { 'Authorization': `Bearer ${process.env.NOTION_API_KEY}`, 'Notion-Version': '2022-06-28' },
@@ -208,24 +182,43 @@ app.get('/api/health/services', async (req, res) => {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     return `Connected as ${data.name || data.type || 'bot'}`;
-  });
-
-  envCheck('resend', 'Resend (Email)', 'RESEND_API_KEY');
-  envCheck('dropbox', 'Dropbox', 'DROPBOX_ACCESS_TOKEN');
-  envCheck('comfyui', 'ComfyUI (Image Gen)', 'COMFYUI_URL');
-
-  // --- Ads Integrations ---
-  await probe('meta-ads', 'Meta Ads API', async () => {
+  }},
+  resend: { name: 'Resend (Email)', type: 'env', envVar: 'RESEND_API_KEY' },
+  dropbox: { name: 'Dropbox', type: 'env', envVar: 'DROPBOX_ACCESS_TOKEN' },
+  comfyui: { name: 'ComfyUI (Image Gen)', type: 'env', envVar: 'COMFYUI_URL' },
+  'meta-ads': { name: 'Meta Ads API', type: 'probe', test: async () => {
     if (!process.env.META_ACCESS_TOKEN) throw new Error('META_ACCESS_TOKEN not set');
     const resp = await fetch(`https://graph.facebook.com/v20.0/me?access_token=${process.env.META_ACCESS_TOKEN}`, {
       signal: AbortSignal.timeout(10000),
     });
     if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
     return 'Token valid';
-  });
+  }},
+  'google-ads': { name: 'Google Ads API', type: 'env', envVar: 'GOOGLE_ADS_DEVELOPER_TOKEN' },
+  gmail: { name: 'Gmail OAuth', type: 'env', envVar: 'GOOGLE_CLIENT_ID' },
+};
 
-  envCheck('google-ads', 'Google Ads API', 'GOOGLE_ADS_DEVELOPER_TOKEN');
-  envCheck('gmail', 'Gmail OAuth', 'GOOGLE_CLIENT_ID');
+async function testService(id) {
+  const svc = SERVICE_TESTS[id];
+  if (!svc) return null;
+  if (svc.type === 'env') {
+    const set = !!process.env[svc.envVar];
+    return { id, name: svc.name, status: set ? 'configured' : 'not_configured', detail: set ? `${svc.envVar} is set` : `${svc.envVar} not set` };
+  }
+  const start = Date.now();
+  try {
+    const detail = await svc.test();
+    return { id, name: svc.name, status: 'connected', latencyMs: Date.now() - start, detail };
+  } catch (err) {
+    return { id, name: svc.name, status: 'error', latencyMs: Date.now() - start, error: err.message };
+  }
+}
+
+app.get('/api/health/services', async (req, res) => {
+  const results = [];
+  for (const id of Object.keys(SERVICE_TESTS)) {
+    results.push(await testService(id));
+  }
 
   const connected = results.filter(r => r.status === 'connected').length;
   const configured = results.filter(r => r.status === 'configured').length;
@@ -237,6 +230,13 @@ app.get('/api/health/services', async (req, res) => {
     summary: { total: results.length, connected, configured, errors, notConfigured },
     services: results,
   });
+});
+
+// Individual service retest
+app.get('/api/health/services/:id', async (req, res) => {
+  const result = await testService(req.params.id);
+  if (!result) return res.status(404).json({ error: 'Unknown service' });
+  res.json({ timestamp: new Date().toISOString(), service: result });
 });
 
 // ==========================================
@@ -1493,8 +1493,8 @@ app.get('/stats', async (req, res) => {
               totalTokens: { input: 35000, output: 27000 },
               estimatedCost: 0.12, // USD per run
             },
-            daily: { runsPerDay: 5, estimatedCost: 0.60 },
-            monthly: { runsPerMonth: 150, estimatedCost: 18.00 },
+            daily: { runsPerDay: 1, estimatedCost: 0.12 },
+            monthly: { runsPerMonth: 30, estimatedCost: 3.60 },
           },
         },
         {
@@ -1612,13 +1612,13 @@ app.get('/stats', async (req, res) => {
       },
       // Monthly cost summary
       monthlyCostSummary: {
-        marketing: 18.00,
+        marketing: 3.60,
         ads: 0.84, // Per tenant
         photobooth: 14.00,
         intelligence: 2.70,
         accounting: 3.60,
         crm: 0.30,
-        totalBase: 39.44,
+        totalBase: 25.04,
         notes: 'Ads cost scales with tenants. Photo booth scales with events. All estimates assume typical usage patterns.',
       },
       databaseTables: [

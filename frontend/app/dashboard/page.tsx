@@ -8,10 +8,11 @@ import ApiHealthCheck from '@/components/ApiHealthCheck';
 import ScheduledJobs from '@/components/ScheduledJobs';
 import AgenticWorkflows from '@/components/AgenticWorkflows';
 import KnowledgeBase from '@/components/KnowledgeBase';
-import { LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch, BookOpen } from 'lucide-react';
+import CostAnalysis from '@/components/CostAnalysis';
+import { LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch, BookOpen, DollarSign } from 'lucide-react';
 import Link from 'next/link';
 
-type Tab = 'overview' | 'architecture' | 'analytics' | 'api' | 'scheduling' | 'knowledge' | 'workflows';
+type Tab = 'overview' | 'architecture' | 'analytics' | 'api' | 'scheduling' | 'knowledge' | 'costs' | 'workflows';
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -23,6 +24,7 @@ export default function Dashboard() {
     { id: 'api' as Tab, label: 'API', icon: Wifi },
     { id: 'scheduling' as Tab, label: 'Scheduling', icon: Calendar },
     { id: 'knowledge' as Tab, label: 'Knowledge Base', icon: BookOpen },
+    { id: 'costs' as Tab, label: 'Cost Analysis', icon: DollarSign },
     { id: 'workflows' as Tab, label: 'Workflows', icon: GitBranch },
   ];
 
@@ -89,6 +91,7 @@ export default function Dashboard() {
         {activeTab === 'api' && <ApiHealthCheck />}
         {activeTab === 'scheduling' && <ScheduledJobs />}
         {activeTab === 'knowledge' && <KnowledgeBase />}
+        {activeTab === 'costs' && <CostAnalysis />}
         {activeTab === 'workflows' && (
           <div className="bg-[#1a1b2e]">
             <AgenticWorkflows />
