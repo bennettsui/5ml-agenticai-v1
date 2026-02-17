@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import {
   createSession, getLatestSession, addMessage as persistMessage,
+  pruneExpiredSessions,
 } from '@/lib/chat-history';
 
 // ────────────────────────────────────────────
@@ -398,8 +399,9 @@ export default function AgenticWorkflows() {
   const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load previous workflow chat session on mount
+  // Prune stale empty sessions, then load previous workflow chat session on mount
   useEffect(() => {
+    pruneExpiredSessions();
     const prev = getLatestSession('workflow');
     if (prev && prev.messages.length > 0) {
       setMessages(prev.messages.map((m, i) => ({

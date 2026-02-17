@@ -26,6 +26,7 @@ import { useCrmAi } from '../context';
 import { crmApi, type ChatResponse } from '@/lib/crm-kb-api';
 import {
   createSession, getLatestSession, addMessage as persistChatMessage,
+  pruneExpiredSessions,
 } from '@/lib/chat-history';
 
 // ---------------------------------------------------------------------------
@@ -349,8 +350,9 @@ export function AiAssistant() {
   const chatHistoryRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [crmSessionId, setCrmSessionId] = useState<string | null>(null);
 
-  // Load previous CRM session on mount
+  // Prune stale empty sessions, then load previous CRM session on mount
   useEffect(() => {
+    pruneExpiredSessions();
     const prev = getLatestSession('crm');
     if (prev && prev.messages.length > 0) {
       // Restore messages into UI

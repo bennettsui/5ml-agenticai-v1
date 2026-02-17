@@ -22,7 +22,8 @@ import {
 } from '@/lib/platform-config';
 import {
   createSession, getLatestSession, addMessage, listSessions,
-  deleteSession, getSession, type ChatSession, type ChatType, type ChatMessage as StoredMessage,
+  deleteSession, getSession, pruneExpiredSessions,
+  type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
 type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat';
@@ -76,8 +77,9 @@ function AgentChatPanel() {
   const [viewingSession, setViewingSession] = useState<ChatSession | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Load previous session on mount
+  // Prune stale empty sessions, then load previous session on mount
   useEffect(() => {
+    pruneExpiredSessions();
     const prev = getLatestSession('agent');
     if (prev && prev.messages.length > 0) {
       setMessages(prev.messages.map(m => ({ role: m.role, content: m.content })));
