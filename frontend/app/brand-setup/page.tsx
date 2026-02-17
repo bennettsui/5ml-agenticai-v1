@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   ChevronRight,
   ChevronLeft,
@@ -10,6 +11,7 @@ import {
   ArrowRight,
   Download,
   Save,
+  Loader2,
 } from 'lucide-react';
 import {
   INDUSTRY_TEMPLATES,
@@ -55,12 +57,77 @@ const INITIAL_FORM_STATE: FormState = {
   teamLiaison: '',
 };
 
-export default function BrandSetupPage() {
+function BrandSetupPageContent() {
+  const searchParams = useSearchParams();
+  const editBrandName = searchParams.get('edit');
+
   const [currentStep, setCurrentStep] = useState<WizardStep>('brand-basics');
   const [formState, setFormState] = useState<FormState>(INITIAL_FORM_STATE);
   const [strategy, setStrategy] = useState<GeneratedBrandStrategy | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(!!editBrandName);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [isEditMode, setIsEditMode] = useState(!!editBrandName);
+
+  // Load existing brand data if in edit mode
+  useEffect(() => {
+    if (!editBrandName) return;
+
+    const fetchBrand = async () => {
+      try {
+        const response = await fetch(`/api/brands/${encodeURIComponent(editBrandName)}`);
+        if (!response.ok) throw new Error('Brand not found');
+
+        const data = await response.json();
+        const brand = data.brand;
+
+        if (brand?.brand_info?.profile) {
+          const profile = brand.brand_info.profile;
+          setFormState({
+            brandName: profile.brandName,
+            industry: profile.industry,
+            markets: profile.markets || [],
+            languages: profile.languages || [],
+            primaryChannels: profile.primaryChannels || [],
+            businessGoal: profile.businessGoal,
+            secondaryGoals: profile.secondaryGoals || [],
+            postsPerWeek: profile.postsPerWeek || 4,
+            monthlyBudgetHKD: profile.monthlyBudgetHKD || 25000,
+            approvalCycleDays: profile.approvalCycleDays || 1,
+            teamLiaison: profile.teamLiaison || '',
+            assetProvider: profile.assetProvider,
+            approvalAuthority: profile.approvalAuthority,
+          });
+
+          // Regenerate strategy with loaded data
+          const fullData: BrandFormData = {
+            brandName: profile.brandName,
+            industry: profile.industry,
+            markets: profile.markets || [],
+            languages: profile.languages || [],
+            primaryChannels: profile.primaryChannels || [],
+            businessGoal: profile.businessGoal,
+            secondaryGoals: profile.secondaryGoals || [],
+            postsPerWeek: profile.postsPerWeek || 4,
+            monthlyBudgetHKD: profile.monthlyBudgetHKD || 25000,
+            approvalCycleDays: profile.approvalCycleDays || 1,
+            teamLiaison: profile.teamLiaison || '',
+            assetProvider: profile.assetProvider,
+            approvalAuthority: profile.approvalAuthority,
+          };
+          const generated = generateCompleteStrategy(fullData);
+          setStrategy(generated);
+        }
+      } catch (error) {
+        console.error('Error loading brand:', error);
+        setSaveStatus('error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBrand();
+  }, [editBrandName]);
 
   // Update form state
   const updateForm = useCallback((updates: Partial<FormState>) => {
@@ -172,8 +239,8 @@ export default function BrandSetupPage() {
 
       setSaveStatus('success');
       setTimeout(() => {
-        // Redirect or show success message
-        window.location.href = `/dashboard?tab=control&brand=${strategy.brandProfile.brandName}`;
+        // Redirect to brands management
+        window.location.href = `/brands?updated=${strategy.brandProfile.brandName}`;
       }, 1500);
     } catch (error) {
       console.error('Error saving brand:', error);
@@ -193,6 +260,17 @@ export default function BrandSetupPage() {
   const stepIndex = steps.indexOf(currentStep);
   const progress = ((stepIndex + 1) / steps.length) * 100;
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-slate-600 mx-auto mb-3 animate-spin" />
+          <p className="text-slate-400">Loading brand strategy...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       {/* Header */}
@@ -204,9 +282,13 @@ export default function BrandSetupPage() {
                 <Sparkles className="w-6 h-6 text-purple-400" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Brand Onboarding</h1>
+                <h1 className="text-2xl font-bold">
+                  {isEditMode ? 'Edit Brand' : 'Brand Onboarding'}
+                </h1>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Social Media Operations Platform Setup
+                  {isEditMode
+                    ? `Updating: ${formState.brandName}`
+                    : 'Social Media Operations Platform Setup'}
                 </p>
               </div>
             </div>
@@ -286,13 +368,13 @@ export default function BrandSetupPage() {
               {saveStatus === 'success' && (
                 <div className="mt-4 flex items-center gap-2 px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm">
                   <CheckCircle2 className="w-4 h-4" />
-                  Brand saved successfully! Redirecting...
+                  {isEditMode ? 'Brand updated' : 'Brand created'} successfully! Redirecting...
                 </div>
               )}
               {saveStatus === 'error' && (
                 <div className="mt-4 flex items-center gap-2 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
                   <AlertCircle className="w-4 h-4" />
-                  Error saving brand. Please try again.
+                  Error {isEditMode ? 'updating' : 'saving'} brand. Please try again.
                 </div>
               )}
             </div>
@@ -316,5 +398,13 @@ export default function BrandSetupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BrandSetupPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <BrandSetupPageContent />
+    </Suspense>
   );
 }

@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import ExportToolbar from './ExportToolbar';
 import type { GeneratedBrandStrategy } from '@/lib/brand-strategy-generator';
 
 interface StrategyPreviewProps {
@@ -35,6 +36,9 @@ export default function StrategyPreview({ strategy }: StrategyPreviewProps) {
 
   return (
     <div className="space-y-4">
+      {/* Export toolbar */}
+      <ExportToolbar strategy={strategy} />
+
       {/* Summary */}
       <div className="bg-slate-900/60 border border-slate-700/50 rounded-xl p-4">
         <div className="text-xs text-slate-500 mb-1">Your Strategy</div>
