@@ -445,6 +445,39 @@ export default function Dashboard() {
         {/* ================================================================ */}
         {activeTab === 'control' && (
           <div className="space-y-6">
+            {/* Quick Actions — Social Content System */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Link
+                href="/brand-setup"
+                className="group bg-gradient-to-br from-purple-600/20 to-blue-600/20 border border-purple-500/30 hover:border-purple-500/60 rounded-xl p-5 transition-all hover:shadow-lg"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-bold text-white mb-1">Create Brand Strategy</h3>
+                    <p className="text-xs text-slate-400">
+                      Set up a new social media brand with AI-generated strategy
+                    </p>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-purple-400 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
+
+              <Link
+                href="/brands"
+                className="group bg-gradient-to-br from-cyan-600/20 to-blue-600/20 border border-cyan-500/30 hover:border-cyan-500/60 rounded-xl p-5 transition-all hover:shadow-lg"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-bold text-white mb-1">Manage Brands</h3>
+                    <p className="text-xs text-slate-400">
+                      View, edit, and manage all your brand strategies
+                    </p>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-cyan-400 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
+            </div>
+
             {/* KPI Metrics Strip — colored top accents */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
