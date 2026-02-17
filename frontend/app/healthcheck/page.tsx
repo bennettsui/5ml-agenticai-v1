@@ -411,12 +411,40 @@ export default function HealthCheckPage() {
                             <div className="px-4 pb-4 space-y-3 border-t border-white/[0.03]">
                               <div className="pt-3">
                                 <h4 className="text-xs text-slate-500 uppercase tracking-wider mb-1">Finding</h4>
-                                <p className="text-sm text-slate-300">{issue.finding}</p>
+                                <p className="text-sm text-slate-300 whitespace-pre-wrap">{issue.finding}</p>
                               </div>
+
+                              {/* Evidence details */}
+                              {issue.evidence && Object.keys(issue.evidence).length > 0 && (
+                                <div>
+                                  <h4 className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">Evidence</h4>
+                                  <div className="bg-white/[0.02] rounded-lg border border-white/[0.05] p-3 space-y-1.5">
+                                    {Object.entries(issue.evidence).map(([key, value]) => {
+                                      if (key === 'status' && value === 'good') return null;
+                                      const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                      let displayValue: string;
+                                      if (Array.isArray(value)) {
+                                        displayValue = value.join(', ');
+                                      } else if (typeof value === 'object' && value !== null) {
+                                        displayValue = JSON.stringify(value);
+                                      } else {
+                                        displayValue = String(value ?? '—');
+                                      }
+                                      return (
+                                        <div key={key} className="flex items-start gap-2 text-xs">
+                                          <span className="text-slate-500 min-w-[100px] flex-shrink-0">{label}:</span>
+                                          <span className="text-slate-300 break-all font-mono">{displayValue}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
                               {issue.recommendation && (
                                 <div>
-                                  <h4 className="text-xs text-slate-500 uppercase tracking-wider mb-1">Recommendation</h4>
-                                  <p className="text-sm text-slate-300">{issue.recommendation}</p>
+                                  <h4 className="text-xs text-slate-500 uppercase tracking-wider mb-1">How to Fix</h4>
+                                  <p className="text-sm text-slate-300 whitespace-pre-wrap">{issue.recommendation}</p>
                                 </div>
                               )}
                               <div className="flex items-center gap-4 text-xs text-slate-500">
