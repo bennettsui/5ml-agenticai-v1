@@ -1801,6 +1801,69 @@ server.listen(port, '0.0.0.0', async () => {
 ╚════════════════════════════════════════╝
   `);
 
+  // Auto-generate TEDx nanobanana visuals if any are missing
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const tedxFs = require('fs');
+      const tedxPath = require('path');
+      const tedxOutputDir = tedxPath.join(__dirname, 'frontend', 'public', 'tedx');
+      const tedxVisuals = require('./use-cases/tedx-boundary-street/api/routes');
+
+      // Get the VISUALS array from the routes module
+      // We check which files are missing and trigger generation
+      const visualFiles = [
+        'hero-boundary-street.png', 'map-1898-overlay.png',
+        'theme-city-space.png', 'theme-language-identity.png', 'theme-tech-humanity.png',
+        'kai-tak-memory.png', 'dot-pattern-community.png', 'partner-icons.png',
+        'partners-hero.png', 'partners-ways.png', 'partners-community.png',
+      ];
+      const missing = visualFiles.filter(f => !tedxFs.existsSync(tedxPath.join(tedxOutputDir, f)));
+
+      if (missing.length > 0) {
+        console.log(`🎨 TEDx: ${missing.length}/${visualFiles.length} visuals missing — auto-generating in background...`);
+        // Fire-and-forget: call our own generate-all endpoint after a short delay
+        setTimeout(async () => {
+          try {
+            const http = require('http');
+            const postData = JSON.stringify({ force: false });
+            const req = http.request({
+              hostname: '127.0.0.1',
+              port: port,
+              path: '/api/tedx/generate-all',
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Content-Length': postData.length },
+              timeout: 300000, // 5 min timeout for batch generation
+            }, (res) => {
+              let body = '';
+              res.on('data', (chunk) => { body += chunk; });
+              res.on('end', () => {
+                try {
+                  const result = JSON.parse(body);
+                  console.log(`🎨 TEDx auto-generation complete: ${result.summary?.generated || 0} generated, ${result.summary?.skipped || 0} skipped, ${result.summary?.failed || 0} failed`);
+                } catch {
+                  console.log('🎨 TEDx auto-generation response:', body.slice(0, 200));
+                }
+              });
+            });
+            req.on('error', (err) => {
+              console.error('🎨 TEDx auto-generation failed:', err.message);
+            });
+            req.write(postData);
+            req.end();
+          } catch (err) {
+            console.error('🎨 TEDx auto-generation error:', err.message);
+          }
+        }, 3000); // Wait 3s for server to be fully ready
+      } else {
+        console.log(`🎨 TEDx: All ${visualFiles.length} visuals present — skipping generation`);
+      }
+    } catch (err) {
+      console.warn('⚠️ TEDx auto-generation check failed:', err.message);
+    }
+  } else {
+    console.log('⚠️ TEDx visuals: GEMINI_API_KEY not set — skipping auto-generation');
+  }
+
   // Initialize scheduler for Topic Intelligence
   if (process.env.DATABASE_URL) {
     try {

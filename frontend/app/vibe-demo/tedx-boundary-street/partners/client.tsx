@@ -125,6 +125,23 @@ const globalStyles = `
       scroll-behavior: auto;
     }
   }
+
+  .gradient-line-hover {
+    position: relative;
+  }
+  .gradient-line-hover::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, ${TED_RED}, transparent);
+    transition: width 0.4s ease;
+  }
+  .gradient-line-hover:hover::after {
+    width: 100%;
+  }
 `;
 
 // ==================== MAIN COMPONENT ====================
@@ -194,8 +211,6 @@ export default function TEDxPartnersClient() {
     setErrors({});
   };
 
-  const showSolidHeader = headerSolid || mobileMenuOpen;
-
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
@@ -206,48 +221,39 @@ export default function TEDxPartnersClient() {
       </a>
 
       {/* ==================== HEADER / NAVIGATION ==================== */}
-      <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-colors duration-300 ${
-          showSolidHeader ? 'bg-white shadow-sm' : 'bg-transparent'
+      <nav
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+          headerSolid
+            ? 'bg-black/95 backdrop-blur-md shadow-lg'
+            : 'bg-transparent'
         }`}
+        aria-label="Primary navigation"
       >
-        <nav
-          aria-label="Primary navigation"
-          className="max-w-5xl mx-auto px-5 py-4 flex items-center justify-between"
-        >
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link
             href="/vibe-demo/tedx-boundary-street"
-            className={`font-bold text-lg tracking-tight transition-colors min-h-[44px] flex items-center ${
-              showSolidHeader ? 'text-neutral-900' : 'text-white'
-            }`}
+            className="text-white font-bold text-lg tracking-tight hover:opacity-80 transition-opacity min-h-[44px] flex items-center"
           >
             TEDx<span className="font-light">BoundaryStreet</span>
           </Link>
 
           {/* Desktop nav */}
-          <ul className="hidden md:flex items-center gap-8 list-none m-0 p-0">
+          <div className="hidden md:flex items-center gap-8">
             {NAV_ITEMS.map((item) => (
-              <li key={item.id}>
-                <button
-                  onClick={() => scrollTo(item.id)}
-                  className={`text-sm font-medium transition-colors hover:underline underline-offset-4 min-h-[44px] flex items-center ${
-                    showSolidHeader
-                      ? 'text-neutral-600 hover:text-neutral-900'
-                      : 'text-white/80 hover:text-white'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              </li>
+              <button
+                key={item.id}
+                onClick={() => scrollTo(item.id)}
+                className="gradient-line-hover text-white/80 hover:text-white text-sm font-medium transition-colors pb-1 min-h-[44px] flex items-center"
+              >
+                {item.label}
+              </button>
             ))}
-          </ul>
+          </div>
 
           {/* Mobile menu button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className={`md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors ${
-              showSolidHeader ? 'text-neutral-900' : 'text-white'
-            }`}
+            className="md:hidden text-white min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-menu"
             aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
@@ -262,32 +268,37 @@ export default function TEDxPartnersClient() {
               </svg>
             )}
           </button>
-        </nav>
+        </div>
 
         {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div id="mobile-menu" className="md:hidden bg-white border-t border-neutral-100">
-            <ul className="px-5 py-2 list-none m-0">
+          <div id="mobile-menu" className="md:hidden bg-black/95 backdrop-blur-md border-t border-white/10">
+            <div className="px-6 py-4 flex flex-col gap-4">
               {NAV_ITEMS.map((item) => (
-                <li key={item.id}>
-                  <button
-                    onClick={() => scrollTo(item.id)}
-                    className="w-full text-left text-neutral-700 hover:text-neutral-900 text-base py-3 min-h-[44px] transition-colors"
-                  >
-                    {item.label}
-                  </button>
-                </li>
+                <button
+                  key={item.id}
+                  onClick={() => scrollTo(item.id)}
+                  className="text-white/80 hover:text-white text-left text-base py-2 min-h-[44px] transition-colors"
+                >
+                  {item.label}
+                </button>
               ))}
-            </ul>
+            </div>
           </div>
         )}
-      </header>
+      </nav>
 
-      {/* Back to Demo Hub */}
-      <div className="fixed top-4 right-4 z-[60]">
+      {/* Cross-links */}
+      <div className="fixed top-4 right-4 z-[60] flex items-center gap-2">
+        <Link
+          href="/vibe-demo/tedx-boundary-street"
+          className="text-xs text-white/50 hover:text-white/80 transition-colors bg-black/30 backdrop-blur-sm rounded-full px-3 py-1.5"
+        >
+          Homepage
+        </Link>
         <Link
           href="/vibe-demo"
-          className="text-xs text-white/50 hover:text-white/80 transition-colors bg-black/20 backdrop-blur-sm rounded-full px-3 py-1.5 min-h-[44px] flex items-center"
+          className="text-xs text-white/50 hover:text-white/80 transition-colors bg-black/30 backdrop-blur-sm rounded-full px-3 py-1.5"
         >
           Demo Hub
         </Link>
