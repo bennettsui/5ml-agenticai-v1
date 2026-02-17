@@ -1801,61 +1801,101 @@ server.listen(port, '0.0.0.0', async () => {
 ╚════════════════════════════════════════╝
   `);
 
-  // Auto-generate TEDx nanobanana visuals if any are missing
+  // Manifest-based TEDx nanobanana visual generation
+  // Only triggers when VISUALS definitions change (new entries or updated prompts),
+  // not on every deploy or when files happen to be missing.
   if (process.env.GEMINI_API_KEY) {
     try {
       const tedxFs = require('fs');
       const tedxPath = require('path');
+      const crypto = require('crypto');
       const tedxOutputDir = tedxPath.join(__dirname, 'frontend', 'public', 'tedx');
-      const tedxVisuals = require('./use-cases/tedx-boundary-street/api/routes');
+      const manifestPath = tedxPath.join(tedxOutputDir, '.manifest.json');
+      const tedxModule = require('./use-cases/tedx-boundary-street/api/routes');
+      const VISUALS = tedxModule.VISUALS || [];
 
-      // Get the VISUALS array from the routes module
-      // We check which files are missing and trigger generation
-      const visualFiles = [
-        'hero-boundary-street.png', 'map-1898-overlay.png',
-        'theme-city-space.png', 'theme-language-identity.png', 'theme-tech-humanity.png',
-        'kai-tak-memory.png', 'dot-pattern-community.png', 'partner-icons.png',
-        'partners-hero.png', 'partners-ways.png', 'partners-community.png',
-      ];
-      const missing = visualFiles.filter(f => !tedxFs.existsSync(tedxPath.join(tedxOutputDir, f)));
+      // Ensure output dir exists
+      if (!tedxFs.existsSync(tedxOutputDir)) {
+        tedxFs.mkdirSync(tedxOutputDir, { recursive: true });
+      }
 
-      if (missing.length > 0) {
-        console.log(`🎨 TEDx: ${missing.length}/${visualFiles.length} visuals missing — auto-generating in background...`);
-        // Fire-and-forget: call our own generate-all endpoint after a short delay
+      // Build current definition fingerprint: hash each visual's id + prompt
+      const currentDefs = {};
+      for (const v of VISUALS) {
+        currentDefs[v.id] = crypto.createHash('md5').update(v.prompt).digest('hex');
+      }
+
+      // Load previous manifest (if any)
+      let previousDefs = {};
+      try {
+        if (tedxFs.existsSync(manifestPath)) {
+          previousDefs = JSON.parse(tedxFs.readFileSync(manifestPath, 'utf8'));
+        }
+      } catch { /* no manifest yet */ }
+
+      // Find visuals with new or changed definitions
+      const changed = VISUALS.filter(v => currentDefs[v.id] !== previousDefs[v.id]);
+
+      if (changed.length > 0) {
+        const newIds = changed.filter(v => !previousDefs[v.id]).map(v => v.id);
+        const updatedIds = changed.filter(v => previousDefs[v.id]).map(v => v.id);
+        console.log(`🎨 TEDx: Visual definitions changed — ${newIds.length} new, ${updatedIds.length} updated`);
+        if (newIds.length > 0) console.log(`   New: ${newIds.join(', ')}`);
+        if (updatedIds.length > 0) console.log(`   Updated: ${updatedIds.join(', ')}`);
+
+        // Fire-and-forget: generate only changed visuals after a short delay
         setTimeout(async () => {
           try {
             const http = require('http');
-            const postData = JSON.stringify({ force: false });
-            const req = http.request({
-              hostname: '127.0.0.1',
-              port: port,
-              path: '/api/tedx/generate-all',
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Content-Length': postData.length },
-              timeout: 300000, // 5 min timeout for batch generation
-            }, (res) => {
-              let body = '';
-              res.on('data', (chunk) => { body += chunk; });
-              res.on('end', () => {
-                try {
-                  const result = JSON.parse(body);
-                  console.log(`🎨 TEDx auto-generation complete: ${result.summary?.generated || 0} generated, ${result.summary?.skipped || 0} skipped, ${result.summary?.failed || 0} failed`);
-                } catch {
-                  console.log('🎨 TEDx auto-generation response:', body.slice(0, 200));
-                }
-              });
-            });
-            req.on('error', (err) => {
-              console.error('🎨 TEDx auto-generation failed:', err.message);
-            });
-            req.write(postData);
-            req.end();
+            let generated = 0;
+            let failed = 0;
+
+            for (const visual of changed) {
+              try {
+                const postData = JSON.stringify({ id: visual.id });
+                await new Promise((resolve, reject) => {
+                  const req = http.request({
+                    hostname: '127.0.0.1',
+                    port: port,
+                    path: '/api/tedx/generate',
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+                    timeout: 60000,
+                  }, (res) => {
+                    let body = '';
+                    res.on('data', (chunk) => { body += chunk; });
+                    res.on('end', () => {
+                      if (res.statusCode === 200) {
+                        generated++;
+                        // Update manifest entry on success
+                        previousDefs[visual.id] = currentDefs[visual.id];
+                        tedxFs.writeFileSync(manifestPath, JSON.stringify(previousDefs, null, 2));
+                      } else {
+                        failed++;
+                        console.error(`🎨 TEDx: Failed ${visual.id}: ${body.slice(0, 100)}`);
+                      }
+                      resolve();
+                    });
+                  });
+                  req.on('error', (err) => { failed++; console.error(`🎨 TEDx: ${visual.id} error: ${err.message}`); resolve(); });
+                  req.write(postData);
+                  req.end();
+                });
+                // Rate limit between generations
+                await new Promise(r => setTimeout(r, 2000));
+              } catch (err) {
+                failed++;
+                console.error(`🎨 TEDx: ${visual.id} error: ${err.message}`);
+              }
+            }
+
+            console.log(`🎨 TEDx auto-generation done: ${generated} generated, ${failed} failed`);
           } catch (err) {
             console.error('🎨 TEDx auto-generation error:', err.message);
           }
-        }, 3000); // Wait 3s for server to be fully ready
+        }, 3000);
       } else {
-        console.log(`🎨 TEDx: All ${visualFiles.length} visuals present — skipping generation`);
+        console.log(`🎨 TEDx: All ${VISUALS.length} visual definitions unchanged — skipping generation`);
       }
     } catch (err) {
       console.warn('⚠️ TEDx auto-generation check failed:', err.message);
