@@ -10,6 +10,7 @@ import {
   Plug,
   ArrowLeft,
   Brain,
+  Bug,
 } from 'lucide-react';
 import { CrmAiProvider } from './context';
 import { AiAssistant } from './components/AiAssistant';
@@ -19,6 +20,7 @@ const navItems = [
   { label: 'Brands', href: '/use-cases/crm/brands', icon: Users },
   { label: 'Projects', href: '/use-cases/crm/projects', icon: FolderKanban },
   { label: 'Feedback', href: '/use-cases/crm/feedback', icon: MessageSquare },
+  { label: 'Debug QA', href: '/use-cases/crm/debug', icon: Bug },
   { label: 'Integrations', href: '/use-cases/crm/integrations', icon: Plug },
   { label: 'Agentic Dashboard', href: '/use-cases/crm/agentic-dashboard', icon: Brain },
 ];

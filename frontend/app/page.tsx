@@ -112,7 +112,7 @@ export default function Home() {
       icon: Users,
       href: '/use-cases/crm',
       color: 'from-emerald-500 to-teal-600',
-      features: ['Client & Brand CRM', 'AI Feedback Analysis', 'Knowledge Rules Engine', 'Health Score Tracking'],
+      features: ['Client & Brand CRM', 'Debug QA System', 'SEO & Site Health', 'Knowledge Rules Engine'],
       status: 'New'
     },
   ];

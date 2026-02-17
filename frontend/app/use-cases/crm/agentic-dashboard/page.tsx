@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { Users, Brain, MessageSquare, Shield, TrendingUp, Database } from 'lucide-react';
+import { Users, Brain, MessageSquare, Shield, TrendingUp, Database, Bug, Search, Activity } from 'lucide-react';
 import { useCrmAi } from '../context';
 
 export default function AgenticDashboardPage() {
@@ -54,6 +54,27 @@ export default function AgenticDashboardPage() {
       description: 'Visual library of what brands like and dislike for design and content reference',
       details: ['Likes/dislikes categorization', 'Multi-type support (campaign, KV, video)', 'Tag-based filtering', 'Visual gallery interface'],
       href: '/use-cases/crm/brands',
+    },
+    {
+      icon: Bug,
+      title: 'Debug QA System',
+      description: 'Multi-module AI-powered quality assurance for deliverables with KB-integrated checks',
+      details: ['Brand Guardian compliance', 'Web QC & accessibility', 'Social best practice checks', 'Issue tracking & resolution'],
+      href: '/use-cases/crm/debug',
+    },
+    {
+      icon: Search,
+      title: 'SEO / AI SEO Audit',
+      description: 'Ahrefs-inspired SEO analysis with meta tags, structured data, internal linking, and AI content signals',
+      details: ['Meta & heading analysis', 'Schema.org structured data', 'Internal link optimization', 'E-E-A-T & AI content checks'],
+      href: '/use-cases/crm/debug',
+    },
+    {
+      icon: Activity,
+      title: 'Website Health Check',
+      description: 'Google PageSpeed-based health monitoring: Core Web Vitals, broken links, and latest Google standards',
+      details: ['LCP / INP / CLS metrics', 'Broken link detection', 'Mobile-friendliness', 'WCAG 2.2 accessibility'],
+      href: '/use-cases/crm/debug',
     },
   ];
 
