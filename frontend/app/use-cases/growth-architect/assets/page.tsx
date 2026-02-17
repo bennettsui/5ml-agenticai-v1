@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { FileText, Plus, Filter } from 'lucide-react';
 import { useGrowthArchitect } from '../context';
+import { AssetRoadmap } from '../components/AssetRoadmap';
 
 export default function AssetsPage() {
   const { selectedBrand, currentPlan } = useGrowthArchitect();
@@ -68,12 +69,9 @@ export default function AssetsPage() {
         </button>
       </div>
 
-      {/* Info Box */}
-      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
-        <p className="text-sm text-emerald-200">
-          💡 <strong>Coming Soon:</strong> Connect to AI agents to automatically generate ad copy, social content, emails,
-          and landing pages tailored to your growth plan.
-        </p>
+      {/* Asset Roadmap */}
+      <div className="mt-12 pt-8 border-t border-slate-700/50">
+        <AssetRoadmap />
       </div>
     </div>
   );

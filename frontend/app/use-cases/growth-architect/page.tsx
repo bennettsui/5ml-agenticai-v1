@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader, CheckCircle2, AlertCircle, Zap, BookOpen, BarChart3 } from 'lucide-react';
+import { Loader, CheckCircle2, AlertCircle, Zap, BookOpen, BarChart3, Plug } from 'lucide-react';
 import { useGrowthArchitect } from './context';
 import { BrandSelector } from './components/BrandSelector';
 import { DetailedPlanDisplay } from './components/DetailedPlanDisplay';
 import { GrowthFlowchart } from './components/GrowthFlowchart';
+import { IntegrationsCard } from './components/IntegrationsCard';
 
 export default function GrowthArchitectPage() {
   const { selectedBrand, currentPlan, setCurrentPlan, isLoadingPlan, setIsLoadingPlan } =
@@ -13,7 +14,7 @@ export default function GrowthArchitectPage() {
   const [productBrief, setProductBrief] = useState('');
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(!currentPlan);
-  const [activeTab, setActiveTab] = useState<'plan' | 'flowchart'>('plan');
+  const [activeTab, setActiveTab] = useState<'plan' | 'flowchart' | 'integrations'>('plan');
 
   useEffect(() => {
     // Auto-set product brief from selected brand
@@ -178,14 +179,23 @@ export default function GrowthArchitectPage() {
               <BarChart3 className="w-4 h-4" />
               Growth Architecture
             </button>
+            <button
+              onClick={() => setActiveTab('integrations')}
+              className={`px-4 py-3 text-sm font-medium transition-colors flex items-center gap-2 ${
+                activeTab === 'integrations'
+                  ? 'text-emerald-400 border-b-2 border-emerald-400'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Plug className="w-4 h-4" />
+              Integrations
+            </button>
           </div>
 
           {/* Tab Content */}
-          {activeTab === 'plan' ? (
-            <DetailedPlanDisplay plan={currentPlan.plan_data} />
-          ) : (
-            <GrowthFlowchart plan={currentPlan.plan_data} />
-          )}
+          {activeTab === 'plan' && <DetailedPlanDisplay plan={currentPlan.plan_data} />}
+          {activeTab === 'flowchart' && <GrowthFlowchart plan={currentPlan.plan_data} />}
+          {activeTab === 'integrations' && <IntegrationsCard />}
         </div>
       )}
     </div>

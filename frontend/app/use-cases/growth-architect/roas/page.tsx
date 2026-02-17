@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { BarChart3, Plus, TrendingUp } from 'lucide-react';
+import Link from 'next/link';
+import { BarChart3, Plus, TrendingUp, ExternalLink, AlertCircle } from 'lucide-react';
 import { useGrowthArchitect } from '../context';
 
 export default function ROASPage() {
@@ -105,11 +106,51 @@ export default function ROASPage() {
         </div>
       </div>
 
-      {/* Info Box */}
+      {/* Data Sources */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <TrendingUp className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-blue-200 mb-1">Ad Performance Connected</p>
+              <p className="text-xs text-blue-100 mb-3">
+                Real-time data from Facebook, Google, and LinkedIn ads ready to analyze.
+              </p>
+              <Link
+                href="/ads-dashboard/client"
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded font-medium transition-colors"
+              >
+                View Performance <ExternalLink className="w-3 h-3" />
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-200 mb-1">E-commerce & Lead Gen</p>
+              <p className="text-xs text-amber-100 mb-3">
+                Connect Shopify, WooCommerce, or lead forms for complete funnel analysis (Phase 5).
+              </p>
+              <Link
+                href="/use-cases/growth-architect?tab=integrations"
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs rounded font-medium transition-colors"
+              >
+                View Roadmap <ExternalLink className="w-3 h-3" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Auto-Generate Feature Box */}
       <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
         <p className="text-sm text-green-200">
-          💡 <strong>Coming Soon:</strong> Connect real ad performance data to auto-generate ROAS models with actual channel mix and
-          revenue projections.
+          💡 <strong>How to Use:</strong> With performance data connected, click "Analyze Performance" above to auto-generate ROAS
+          models with actual channel mix, spend patterns, and revenue projections. Add ecommerce or lead generation data for
+          complete funnel ROAS analysis.
         </p>
       </div>
     </div>
