@@ -222,7 +222,7 @@ export default function FeedbackPage() {
         )}
 
         {/* Empty */}
-        {!loading && !error && data && data.items.length === 0 && (
+        {!loading && !error && data && (data.items ?? []).length === 0 && (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <MessageSquare className="w-10 h-10 text-slate-600 mb-3" />
             <p className="text-slate-400 font-medium">
@@ -237,10 +237,10 @@ export default function FeedbackPage() {
         )}
 
         {/* Cards list */}
-        {!loading && !error && data && data.items.length > 0 && (
+        {!loading && !error && data && (data.items ?? []).length > 0 && (
           <>
             <div className="grid grid-cols-1 gap-4">
-              {data.items.map((event) => {
+              {(data.items ?? []).map((event) => {
                 const SourceIcon =
                   sourceIcons[event.source] || HelpCircle;
 
@@ -312,10 +312,10 @@ export default function FeedbackPage() {
             </div>
 
             {/* Pagination */}
-            {data.pages > 1 && (
+            {(data.pages ?? 1) > 1 && (
               <div className="flex items-center justify-between mt-8">
                 <p className="text-sm text-slate-500">
-                  Page {data.page} of {data.pages} &middot; {data.total}{" "}
+                  Page {data.page ?? 1} of {data.pages ?? 1} &middot; {data.total ?? 0}{" "}
                   total events
                 </p>
                 <div className="flex items-center gap-2">
@@ -329,9 +329,9 @@ export default function FeedbackPage() {
                   </button>
                   <button
                     onClick={() =>
-                      setPage((p) => Math.min(data.pages, p + 1))
+                      setPage((p) => Math.min(data.pages ?? 1, p + 1))
                     }
-                    disabled={page >= data.pages}
+                    disabled={page >= (data.pages ?? 1)}
                     className="inline-flex items-center gap-1 px-3 py-2 text-sm rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     Next

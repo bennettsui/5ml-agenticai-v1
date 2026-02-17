@@ -197,4 +197,57 @@ Applicable to: Marketing strategy, Ads analysis, Photo booth configuration, Inte
   },
 ]);
 
+// Pre-populate with 5ML company context (powers all chatbot RAG)
+instance.addDocuments([
+  {
+    id: '5ml-identity',
+    content: `5 Miles Lab (5ML) is a Hong Kong-based agentic AI solutions agency.
+Positioning: We are not an HR tech or generic AI tool vendor; we are an AI solutions agency that builds agentic workflow automation on top of our own 5ML Agentic OS infrastructure, competing with agencies like NDN and Fimmick.
+Core infra: 5ml-agenticai-v1 Node.js stack, deployed on Fly.io and AWS (EC2 + PostgreSQL/RDS), used as the backbone for all agentic workflows and client projects.
+Design: 7-layer agentic architecture (infrastructure, execution engine, knowledge, tools, tasks, orchestration, governance) designed for multi-tenant, multi-agent workflows.
+Markets: Core = Hong Kong; expansion = GBA, Mainland China (via partners and alternative LLMs), SEA.
+Pricing: Enterprise project fees (~HK$500k) plus retainers at 10-20% below NDN/Fimmick. SME HK$2k-5k/month subscriptions with optional profit-sharing.`,
+    metadata: { useCase: 'company', title: '5ML Company Identity' },
+  },
+  {
+    id: '5ml-solution-lines',
+    content: `5ML Solution Lines:
+1. Enterprise / Big Corp (攻 side): Listed companies, banks, property developers, large brands. Enterprise-grade agentic workflows and C-Suite intelligence (CEO/CMO/CFO/COO/CTO agents) at 10-20% below NDN/Fimmick pricing, with 3-7 day pilot deployment.
+2. SME / Quick-win (守 side): HK/GBA/Mainland/SEA SMEs (clinics, insurance brokers, ecommerce). Pre-packaged agentic workflows (RecruitAIStudio, Man's Accounting, social media & ads performance, website health, AI photo booth) at subscription price points with 3-day launch and clear ROI.
+Model Routing: DeepSeek primary ($0.14/$0.28 per 1M tokens), Claude Haiku fallback ($0.25/$1.25 per 1M), Perplexity for web research ($3/$15 per 1M), Claude Sonnet for vision/complex only ($3/$15 per 1M).`,
+    metadata: { useCase: 'company', title: '5ML Solution Lines & Pricing' },
+  },
+  {
+    id: '5ml-use-cases',
+    content: `5ML Existing Use Cases:
+Growth/Media: Social Media Team Agent (campaign research, brand config), Ads Performance Intelligence (Meta + Google multi-tenant analysis), Social reporting with visual monthly reports.
+Exec & Intelligence: AI Executive Council / C-Suite (5 AI executives: CEO, CMO, CFO, COO, CTO) thinking independently across growth, finance, ops and tech, summarised into a cockpit.
+Ops & Finance: Man's Accounting (receipt OCR, categorisation, P&L tracking), Internal finance automation (invoice tracking, client chasing).
+Talent/HR: RecruitAIStudio (dual-track agentic AI strategy for recruitment workflows and SME automation).
+Experience/Events: AI video/content pipelines, AI photo booth concept, TEDx salon site and visual prompts.
+All use cases built on the same 7-layer infra and often re-use agents.`,
+    metadata: { useCase: 'company', title: '5ML Use Cases' },
+  },
+  {
+    id: 'crm-architecture',
+    content: `CRM Marketing Intelligence 8-Phase Architecture:
+Phase 0 - Pre-CRM Setup & Research: Brand Discovery Agent, Market Research Agent, Competitor Analysis Agent, LinkedIn Network Analyzer, Initial Relationship Mapper, Brand Hierarchy Builder, Initial Knowledge Base Populator. Purpose: Set up brand/client intelligence BEFORE ongoing CRM. Triggered by new client onboarding or brand research request.
+Phase 1 - Data Ingestion & Ongoing Research: Brand Monitor (news, mentions), Market Intelligence Collector, Competitor Tracker, Social Listening Agent, Industry Trend Researcher, CRM Data Collector, Marketing Platform Fetcher.
+Phase 2 - Data Processing & Normalization: Clean, deduplicate, and normalize incoming data streams.
+Phase 3 - Knowledge Synthesis & Graph Building: Knowledge Graph Builder integrates findings, Relationship Mapper connects people/companies, Hierarchy Builder creates organizational structure.
+Phase 4 - Domain Intelligence Application: Client Intelligence Agent creates intelligence profiles, applies domain-specific analysis.
+Phase 5 - Action Planning & Strategy: Campaign strategy synthesis, budget optimization, resource allocation.
+Phase 6 - Execution & System Updates: CRM Updater populates systems, Alert Setup configures monitoring, action execution.
+Phase 7 - User Interface & Interaction: Client-facing AI chat, dashboards, reports, feedback collection.
+
+Orchestration Patterns:
+Pattern A (Quick Setup - Low Priority): Basic web search, key contacts only, minimal CRM fields, basic monitoring.
+Pattern B (Comprehensive Setup - Key Client): Full Layer 0 research, deep competitor analysis, 2nd/3rd degree relationship mapping, custom alert configuration.
+Pattern C (Ongoing Research Refresh): Quarterly review trigger, market updates, competitor changes, knowledge graph refresh.
+
+Critical: Brand setup is NOT one-time. Research needs periodic refresh. Setup quality affects everything downstream.`,
+    metadata: { useCase: 'crm', title: 'CRM 8-Phase Architecture' },
+  },
+]);
+
 module.exports = instance;

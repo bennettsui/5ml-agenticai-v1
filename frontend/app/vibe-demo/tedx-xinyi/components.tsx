@@ -136,6 +136,10 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
   const showDark = heroMode && !headerSolid && !mobileMenuOpen;
 
   return (
+    <header role="banner">
+    <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-neutral-900 focus:rounded-md focus:shadow-lg focus:text-sm focus:font-bold">
+      Skip to main content
+    </a>
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         headerSolid || mobileMenuOpen || !heroMode
@@ -239,6 +243,7 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
         </div>
       )}
     </nav>
+    </header>
   );
 }
 
@@ -265,7 +270,7 @@ export function SiteFooter() {
 
           {/* Links */}
           <div>
-            <h4 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-4">Links</h4>
+            <h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-4">Links</h3>
             <ul className="space-y-2">
               {FOOTER_LINKS.map((link) => (
                 <li key={link.href}>
@@ -284,7 +289,7 @@ export function SiteFooter() {
 
           {/* Social */}
           <div>
-            <h4 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-4">Follow</h4>
+            <h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-4">Follow</h3>
             <div className="flex gap-4">
               {SOCIAL_LINKS.map((link) => (
                 <a

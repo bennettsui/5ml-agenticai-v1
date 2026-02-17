@@ -7,7 +7,11 @@ import {
   Eye, Image, QrCode, Database, Globe, Mail, TrendingUp, Layers, Bot,
   ZoomIn, ZoomOut, Maximize2, AlertTriangle, Send, Trash2, MessageSquare,
   UserCheck, Sparkles, ChevronRight, PanelRightOpen, PanelRightClose,
+  Plus,
 } from 'lucide-react';
+import {
+  createSession, getLatestSession, addMessage as persistMessage,
+} from '@/lib/chat-history';
 
 // ────────────────────────────────────────────
 // Types
@@ -251,27 +255,65 @@ const INITIAL_WORKFLOWS: WorkflowDef[] = [
   },
   {
     id: 'crm',
-    title: 'CRM Knowledge Agents',
-    subtitle: 'Event-driven feedback analysis and knowledge extraction',
+    title: 'CRM Marketing Intelligence',
+    subtitle: '16 agents — 8-phase pipeline with brand setup & ongoing research',
     icon: BookOpen,
     gradient: 'from-emerald-500 to-teal-600',
-    pattern: 'Event-Driven Analysis',
-    patternDesc: 'Client feedback triggers analysis chain that extracts patterns and enriches future interactions',
-    trigger: 'API Request (POST /crm/feedback)',
-    canvasWidth: 900,
-    canvasHeight: 300,
+    pattern: 'Phased Intelligence Pipeline',
+    patternDesc: 'Phase 0 pre-CRM brand research → data ingestion → processing → knowledge synthesis → domain intelligence → action planning → execution → UI. Setup-to-ongoing orchestration with tiered depth (Quick/Comprehensive/Refresh)',
+    trigger: 'New Client Onboarding / API Request / Quarterly Review',
+    canvasWidth: 1500,
+    canvasHeight: 620,
     nodes: [
-      { id: 'feedback', name: 'Feedback Analyzer', role: 'Sentiment & themes', icon: Brain, color: '#3b82f6', x: 60, y: 110 },
-      { id: 'pattern', name: 'Pattern Recognizer', role: 'Cross-client patterns', icon: Search, color: '#a855f7', x: 280, y: 110 },
-      { id: 'kb', name: 'KB Search Engine', role: 'Semantic search', icon: Database, color: '#06b6d4', x: 500, y: 40 },
-      { id: 'context', name: 'Context Builder', role: 'History + brand rules', icon: Layers, color: '#22c55e', x: 500, y: 200 },
-      { id: 'chat', name: 'Chat Agent', role: 'Client-facing AI', icon: Bot, color: '#10b981', x: 730, y: 110 },
+      // Phase 0: Pre-CRM Setup & Research
+      { id: 'brand-discover', name: 'Brand Discovery', role: 'Phase 0 · Web search, basic profile · Haiku ($0.25/M)', icon: Search, color: '#3b82f6', x: 60, y: 60 },
+      { id: 'market-research', name: 'Market Research', role: 'Phase 0 · Industry context & trends · Perplexity ($3/M)', icon: Globe, color: '#06b6d4', x: 60, y: 200 },
+      { id: 'competitor-analysis', name: 'Competitor Analysis', role: 'Phase 0 · Market position · Perplexity ($3/M)', icon: Target, color: '#f97316', x: 60, y: 340 },
+      { id: 'linkedin-analyzer', name: 'LinkedIn Analyzer', role: 'Phase 0 · Key contacts, org structure · Haiku ($0.25/M)', icon: Users, color: '#8b5cf6', x: 60, y: 480 },
+      // Phase 1: Data Ingestion & Ongoing
+      { id: 'brand-monitor', name: 'Brand Monitor', role: 'Phase 1 · News, mentions, social · Haiku ($0.25/M)', icon: Eye, color: '#22c55e', x: 320, y: 60 },
+      { id: 'crm-collector', name: 'CRM Data Collector', role: 'Phase 1 · Feedback, emails, forms · DeepSeek ($0.14/M)', icon: Mail, color: '#0ea5e9', x: 320, y: 200 },
+      { id: 'competitor-tracker', name: 'Competitor Tracker', role: 'Phase 1 · Ongoing intel · Haiku ($0.25/M)', icon: RefreshCw, color: '#f59e0b', x: 320, y: 340 },
+      // Phase 2-3: Processing & Knowledge
+      { id: 'normalizer', name: 'Data Normalizer', role: 'Phase 2 · Clean, dedupe, normalize', icon: Database, color: '#64748b', x: 570, y: 130 },
+      { id: 'kg-builder', name: 'Knowledge Graph', role: 'Phase 3 · Relationship mapping, hierarchy · DeepSeek ($0.14/M)', icon: Layers, color: '#a855f7', x: 570, y: 330 },
+      // Phase 4: Domain Intelligence
+      { id: 'pattern-detect', name: 'Pattern Recognizer', role: 'Phase 4 · Cross-brand patterns · DeepSeek ($0.14/M)', icon: Brain, color: '#ec4899', x: 820, y: 130 },
+      { id: 'health-scorer', name: 'Health Scorer', role: 'Phase 4 · Multi-factor scoring · Haiku ($0.25/M)', icon: TrendingUp, color: '#10b981', x: 820, y: 330 },
+      // Phase 5-6: Action & Execution
+      { id: 'strategy-planner', name: 'Strategy Planner', role: 'Phase 5 · Budget, resource allocation · DeepSeek ($0.14/M)', icon: Target, color: '#6366f1', x: 1070, y: 130 },
+      { id: 'crm-updater', name: 'CRM Updater', role: 'Phase 6 · System updates, alerts · Haiku ($0.25/M)', icon: Database, color: '#22c55e', x: 1070, y: 330 },
+      // Phase 7: UI & Interaction
+      { id: 'quality-gate', name: 'Quality Gate', role: 'Phase 6 · Research completeness validator · DeepSeek ($0.14/M)', icon: Shield, color: '#ef4444', x: 1070, y: 500 },
+      { id: 'context-builder', name: 'Context Builder', role: 'Phase 7 · History + brand rules + RAG', icon: BookOpen, color: '#06b6d4', x: 1320, y: 200 },
+      { id: 'chat-agent', name: 'CRM Chat Agent', role: 'Phase 7 · Client-facing AI · Sonnet ($3/M)', icon: Bot, color: '#10b981', x: 1320, y: 420 },
     ],
     edges: [
-      { from: 'feedback', to: 'pattern', type: 'solid' },
-      { from: 'pattern', to: 'kb', label: 'updates rules', type: 'solid' },
-      { from: 'kb', to: 'context', label: 'on query', type: 'conditional' },
-      { from: 'context', to: 'chat', type: 'solid' },
+      // Phase 0 parallel research → Phase 1/2
+      { from: 'brand-discover', to: 'normalizer', label: 'profile', type: 'solid' },
+      { from: 'market-research', to: 'normalizer', label: 'parallel', type: 'conditional' },
+      { from: 'competitor-analysis', to: 'normalizer', label: 'parallel', type: 'conditional' },
+      { from: 'linkedin-analyzer', to: 'kg-builder', label: 'contacts', type: 'solid' },
+      // Phase 1 ongoing feeds
+      { from: 'brand-monitor', to: 'normalizer', type: 'solid' },
+      { from: 'crm-collector', to: 'normalizer', type: 'solid' },
+      { from: 'competitor-tracker', to: 'normalizer', type: 'solid' },
+      // Phase 2 → 3
+      { from: 'normalizer', to: 'kg-builder', type: 'solid' },
+      // Phase 3 → 4
+      { from: 'kg-builder', to: 'pattern-detect', type: 'solid' },
+      { from: 'kg-builder', to: 'health-scorer', type: 'solid' },
+      // Phase 4 → 5-6
+      { from: 'pattern-detect', to: 'strategy-planner', type: 'solid' },
+      { from: 'health-scorer', to: 'strategy-planner', type: 'solid' },
+      { from: 'strategy-planner', to: 'crm-updater', type: 'solid' },
+      { from: 'strategy-planner', to: 'quality-gate', label: 'validate', type: 'conditional' },
+      // Quality gate feedback
+      { from: 'quality-gate', to: 'brand-discover', label: 'gaps → re-research', type: 'feedback' },
+      // Phase 6 → 7
+      { from: 'crm-updater', to: 'context-builder', type: 'solid' },
+      { from: 'pattern-detect', to: 'context-builder', label: 'rules', type: 'conditional' },
+      { from: 'context-builder', to: 'chat-agent', type: 'solid' },
     ],
   },
 ];
@@ -337,7 +379,32 @@ export default function AgenticWorkflows() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
+  const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load previous workflow chat session on mount
+  useEffect(() => {
+    const prev = getLatestSession('workflow');
+    if (prev && prev.messages.length > 0) {
+      setMessages(prev.messages.map((m, i) => ({
+        id: `loaded-${i}`,
+        role: m.role,
+        content: m.content,
+        mode: m.metadata?.mode as string || 'assistant',
+        timestamp: new Date(m.timestamp),
+      })));
+      setChatSessionId(prev.id);
+    } else {
+      const fresh = createSession('workflow');
+      setChatSessionId(fresh.id);
+    }
+  }, []);
+
+  const startNewChat = useCallback(() => {
+    const fresh = createSession('workflow');
+    setChatSessionId(fresh.id);
+    setMessages([]);
+  }, []);
 
   const active = workflows.find(w => w.id === selected) || workflows[0];
   const totalAgents = workflows.reduce((sum, w) => sum + w.nodes.length, 0);
@@ -496,6 +563,9 @@ export default function AgenticWorkflows() {
     setInput('');
     setIsLoading(true);
 
+    // Persist user message
+    if (chatSessionId) persistMessage(chatSessionId, { role: 'user', content: msg, timestamp: new Date().toISOString(), metadata: { mode: chatMode } });
+
     try {
       const res = await fetch('/api/workflow-chat', {
         method: 'POST',
@@ -518,13 +588,15 @@ export default function AgenticWorkflows() {
       const data = await res.json();
 
       if (data.error) {
+        const errContent = `Error: ${data.error}`;
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: `Error: ${data.error}`,
+          content: errContent,
           mode: chatMode,
           timestamp: new Date(),
         }]);
+        if (chatSessionId) persistMessage(chatSessionId, { role: 'assistant', content: errContent, timestamp: new Date().toISOString() });
       } else {
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
@@ -533,6 +605,7 @@ export default function AgenticWorkflows() {
           mode: chatMode,
           timestamp: new Date(),
         }]);
+        if (chatSessionId) persistMessage(chatSessionId, { role: 'assistant', content: data.message, timestamp: new Date().toISOString(), metadata: { rag_used: data.rag_used } });
 
         // Apply any workflow modifications
         if (data.workflow_updates && data.workflow_updates.length > 0) {
@@ -540,17 +613,19 @@ export default function AgenticWorkflows() {
         }
       }
     } catch {
+      const failMsg = 'Failed to connect to the chat API. Please check the server is running.';
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Failed to connect to the chat API. Please check the server is running.',
+        content: failMsg,
         mode: chatMode,
         timestamp: new Date(),
       }]);
+      if (chatSessionId) persistMessage(chatSessionId, { role: 'assistant', content: failMsg, timestamp: new Date().toISOString() });
     } finally {
       setIsLoading(false);
     }
-  }, [input, isLoading, chatMode, messages, active, applyUpdates]);
+  }, [input, isLoading, chatMode, messages, active, applyUpdates, chatSessionId]);
 
   // ── Suggestions ───────────────────────────
   const suggestions = chatMode === 'business_analyst'
@@ -788,11 +863,11 @@ export default function AgenticWorkflows() {
               </div>
               {messages.length > 0 && (
                 <button
-                  onClick={() => setMessages([])}
+                  onClick={startNewChat}
                   className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-slate-300"
-                  title="Clear chat"
+                  title="New chat session"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Plus className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>

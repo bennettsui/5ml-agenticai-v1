@@ -110,11 +110,11 @@ export default function DashboardPage() {
         ]);
 
         const totalBrands =
-          brandsRes.status === 'fulfilled' ? brandsRes.value.total : 0;
+          brandsRes.status === 'fulfilled' ? (brandsRes.value.total ?? 0) : 0;
         const activeProjects =
-          projectsRes.status === 'fulfilled' ? projectsRes.value.total : 0;
+          projectsRes.status === 'fulfilled' ? (projectsRes.value.total ?? 0) : 0;
         const feedbackItems =
-          feedbackRes.status === 'fulfilled' ? feedbackRes.value.total : 0;
+          feedbackRes.status === 'fulfilled' ? (feedbackRes.value.total ?? 0) : 0;
 
         // Health score: average from clients or fallback placeholder
         let healthScore = 85;
@@ -122,8 +122,8 @@ export default function DashboardPage() {
           // Fetch more brands to compute average health
           try {
             const allBrands = await crmApi.brands.list({ page: 1, size: 50 });
-            if (allBrands.items?.length > 0) {
-              const sum = allBrands.items.reduce(
+            if ((allBrands.items ?? []).length > 0) {
+              const sum = (allBrands.items ?? []).reduce(
                 (acc, c) => acc + (c.health_score ?? 0),
                 0
               );

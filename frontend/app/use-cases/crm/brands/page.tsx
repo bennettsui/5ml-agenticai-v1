@@ -58,9 +58,9 @@ export default function BrandsPage() {
         size: 20,
         search: debouncedSearch || undefined,
       });
-      setBrands(data.items);
-      setTotalPages(data.pages);
-      setTotal(data.total);
+      setBrands(data.items ?? []);
+      setTotalPages(data.pages ?? 1);
+      setTotal(data.total ?? 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load brands');
     } finally {
