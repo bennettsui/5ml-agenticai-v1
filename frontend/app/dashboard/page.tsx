@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, FormEvent } from 'react';
 import ArchitectureViz from '@/components/ArchitectureViz';
+import MessageActions from '@/components/MessageActions';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import PlatformOverview from '@/components/PlatformOverview';
 import ApiHealthCheck from '@/components/ApiHealthCheck';
@@ -305,13 +306,14 @@ function AgentChatPanel() {
           )}
 
           {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} group`}>
               <div className={`max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed ${
                 msg.role === 'user'
                   ? 'bg-blue-600/20 text-blue-100 border border-blue-500/20'
                   : 'bg-slate-800/80 text-slate-300 border border-slate-700/50'
               }`}>
                 <div className="whitespace-pre-wrap">{msg.content}</div>
+                <MessageActions content={msg.content} variant={msg.role === 'user' ? 'user' : 'assistant'} />
               </div>
             </div>
           ))}

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { crmApi } from '@/lib/crm-kb-api';
 import { useCrmAi } from './context';
+import MessageActions from '@/components/MessageActions';
 
 interface DashboardStats {
   totalBrands: number;
@@ -564,7 +565,7 @@ export default function DashboardPage() {
                 <div
                   key={idx}
                   className={
-                    'flex ' + (msg.role === 'user' ? 'justify-end' : 'justify-start')
+                    'flex group ' + (msg.role === 'user' ? 'justify-end' : 'justify-start')
                   }
                 >
                   <div
@@ -576,6 +577,7 @@ export default function DashboardPage() {
                     }
                   >
                     {msg.content}
+                    <MessageActions content={msg.content} variant={msg.role === 'user' ? 'user' : 'assistant'} />
                   </div>
                 </div>
               ))}

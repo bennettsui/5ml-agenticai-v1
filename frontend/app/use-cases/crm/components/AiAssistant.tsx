@@ -28,6 +28,7 @@ import {
   createSession, getLatestSession, addMessage as persistChatMessage,
   pruneExpiredSessions,
 } from '@/lib/chat-history';
+import MessageActions from '@/components/MessageActions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -220,9 +221,10 @@ function MessageBubble({
 
   if (msg.role === 'user') {
     return (
-      <div className="flex justify-end mb-3">
+      <div className="flex justify-end mb-3 group">
         <div className="max-w-[85%] rounded-lg bg-emerald-600/80 px-3 py-2 text-sm text-white">
           {msg.content}
+          <MessageActions content={msg.content} variant="user" />
         </div>
       </div>
     );
@@ -241,13 +243,14 @@ function MessageBubble({
 
   // assistant or system
   return (
-    <div className="flex items-start gap-2 mb-3">
+    <div className="flex items-start gap-2 mb-3 group">
       <div className="flex-shrink-0 mt-0.5 rounded-full bg-emerald-600/20 p-1">
         <Bot size={14} className="text-emerald-400" />
       </div>
       <div className="max-w-[85%]">
         <div className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-300 whitespace-pre-wrap break-words">
           {renderContent(stripActionBlocks(msg.content))}
+          <MessageActions content={stripActionBlocks(msg.content)} variant="assistant" />
         </div>
         {msg.toolCalls?.map((tc, i) => (
           <ToolCallBadge key={i} tc={tc} />

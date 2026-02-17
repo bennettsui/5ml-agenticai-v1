@@ -13,6 +13,7 @@ import {
   createSession, getLatestSession, addMessage as persistMessage,
   pruneExpiredSessions,
 } from '@/lib/chat-history';
+import MessageActions from '@/components/MessageActions';
 
 // ────────────────────────────────────────────
 // Types
@@ -992,7 +993,7 @@ export default function AgenticWorkflows() {
               </div>
             ) : (
               messages.map(msg => (
-                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} group`}>
                   <div className={`max-w-[90%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
                     msg.role === 'user'
                       ? 'bg-purple-500/20 text-purple-100 border border-purple-500/20'
@@ -1010,6 +1011,7 @@ export default function AgenticWorkflows() {
                       </div>
                     )}
                     <div className="whitespace-pre-wrap">{msg.content}</div>
+                    <MessageActions content={msg.content} variant={msg.role === 'user' ? 'user' : 'assistant'} />
                   </div>
                 </div>
               ))

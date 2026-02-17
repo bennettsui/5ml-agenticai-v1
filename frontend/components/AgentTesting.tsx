@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Sparkles, Search, Share2, TrendingUp, Loader2, Building2, Plus, Clock, ChevronDown, ChevronUp, Send, User, Bot, History, Trash2 } from 'lucide-react';
 import DatabaseStatusBanner from './DatabaseStatusBanner';
+import MessageActions from '@/components/MessageActions';
 
 interface Agent {
   id: string;
@@ -1173,7 +1174,7 @@ export default function AgentTesting() {
                       conversation.map((msg, idx) => (
                         <div
                           key={idx}
-                          className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                          className={`flex gap-3 group ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                         >
                           {msg.role === 'assistant' && (
                             <div className={`p-2 rounded-full ${
@@ -1208,6 +1209,7 @@ export default function AgentTesting() {
                                 {models.find(m => m.id === msg.model)?.name || msg.model}
                               </p>
                             )}
+                            <MessageActions content={msg.content} variant={msg.role === 'user' ? 'user' : 'assistant'} />
                           </div>
                           {msg.role === 'user' && (
                             <div className="p-2 rounded-full bg-primary-100 dark:bg-primary-900/20 flex-shrink-0 self-start">
