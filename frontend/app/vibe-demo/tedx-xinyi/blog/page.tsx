@@ -7,6 +7,14 @@ type Category = 'all' | 'curatorial' | 'guide';
 
 const POSTS = [
   {
+    title: '從『樂觀』到『We are Becoming』：我們如何面對 AI 時代',
+    date: '2026-02-XX',
+    category: 'curatorial' as const,
+    categoryLabel: '策展觀點',
+    thumbnail: null,
+    excerpt: '當 AI 變成每一個活動都在談的 buzzword，我們更在意的是：\n在現場，說話的人和聽的人，還能不能真的互相信任？',
+  },
+  {
     title: '策展筆記｜AI 模組化的未來，真正不能被複製的，是人的感知與信念',
     date: '2025-09-25',
     category: 'curatorial' as const,

@@ -24,18 +24,14 @@ export default function SpeakersPage() {
 
       {/* ==================== HERO ==================== */}
       <section className="relative min-h-[55vh] flex items-end overflow-hidden bg-neutral-900">
-        <div className="absolute inset-0">
-          <img
-            src="/tedx-xinyi/hero-speakers.png"
-            alt=""
-            className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
-            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.5'; }}
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-white via-neutral-900/30 to-neutral-900/60" />
-        </div>
-
-        <div className="absolute inset-0 bg-gradient-to-t from-white via-neutral-800/30 to-neutral-900" style={{ zIndex: 0 }} />
+        <img
+          src="/tedx-xinyi/hero-speakers.png"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+          onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.45'; }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/70 via-transparent to-white" />
 
         <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-32">
           <FadeIn>
