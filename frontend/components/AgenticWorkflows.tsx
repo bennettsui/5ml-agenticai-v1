@@ -299,6 +299,13 @@ export default function AgenticWorkflows() {
   const [zoom, setZoom] = useState(1);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Pan state
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const isPanning = useRef(false);
+  const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
   // Chat state
   const [chatMode, setChatMode] = useState<'assistant' | 'business_analyst'>('assistant');
@@ -311,13 +318,20 @@ export default function AgenticWorkflows() {
   const active = workflows.find(w => w.id === selected) || workflows[0];
   const totalAgents = workflows.reduce((sum, w) => sum + w.nodes.length, 0);
 
-  // ── Canvas zoom ────────────────────────────
+  // ── Canvas zoom & pan ──────────────────────
   const fitToView = useCallback(() => {
-    if (!canvasRef.current) return;
-    const containerWidth = canvasRef.current.parentElement?.clientWidth || 600;
-    const scale = Math.min(1, (containerWidth - 48) / active.canvasWidth);
-    setZoom(Math.max(0.4, Math.min(1.2, scale)));
-  }, [active.canvasWidth]);
+    if (!containerRef.current) return;
+    const containerWidth = containerRef.current.clientWidth || 600;
+    const containerHeight = containerRef.current.clientHeight || 400;
+    const scale = Math.min(1, (containerWidth - 48) / active.canvasWidth, (containerHeight - 48) / active.canvasHeight);
+    const newZoom = Math.max(0.4, Math.min(1.2, scale));
+    setZoom(newZoom);
+    // Center the canvas
+    const scaledW = active.canvasWidth * newZoom;
+    const scaledH = active.canvasHeight * newZoom;
+    setPanX((containerWidth - scaledW) / 2);
+    setPanY((containerHeight - scaledH) / 2);
+  }, [active.canvasWidth, active.canvasHeight]);
 
   useEffect(() => { fitToView(); }, [selected, fitToView]);
   useEffect(() => {
@@ -325,6 +339,70 @@ export default function AgenticWorkflows() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [fitToView]);
+
+  // ── Drag-to-pan handlers ───────────────────
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only pan on left-click on the background (not on nodes)
+    if (e.button !== 0) return;
+    isPanning.current = true;
+    panStart.current = { x: e.clientX, y: e.clientY, panX, panY };
+    e.preventDefault();
+  }, [panX, panY]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanning.current) return;
+    const dx = e.clientX - panStart.current.x;
+    const dy = e.clientY - panStart.current.y;
+    setPanX(panStart.current.panX + dx);
+    setPanY(panStart.current.panY + dy);
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    isPanning.current = false;
+  }, []);
+
+  useEffect(() => {
+    const onMouseUp = () => { isPanning.current = false; };
+    window.addEventListener('mouseup', onMouseUp);
+    return () => window.removeEventListener('mouseup', onMouseUp);
+  }, []);
+
+  // ── Pinch-to-zoom (trackpad) & scroll-zoom ─
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Pinch-to-zoom on Mac trackpad (reports as ctrlKey + wheel)
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const rect = container.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Calculate new zoom
+        const delta = -e.deltaY * 0.01;
+        const newZoom = Math.max(0.2, Math.min(2.5, zoom + delta));
+        const scaleFactor = newZoom / zoom;
+
+        // Zoom towards mouse position
+        const newPanX = mouseX - (mouseX - panX) * scaleFactor;
+        const newPanY = mouseY - (mouseY - panY) * scaleFactor;
+
+        setZoom(newZoom);
+        setPanX(newPanX);
+        setPanY(newPanY);
+      } else {
+        // Normal two-finger scroll → pan
+        e.preventDefault();
+        setPanX(prev => prev - e.deltaX);
+        setPanY(prev => prev - e.deltaY);
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [zoom, panX, panY]);
 
   // ── Auto-scroll chat ──────────────────────
   useEffect(() => {
@@ -538,9 +616,27 @@ export default function AgenticWorkflows() {
           </div>
 
           <div className="flex items-center gap-1 shrink-0 ml-3">
-            <button onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400" title="Zoom out"><ZoomOut className="w-4 h-4" /></button>
+            <button onClick={() => {
+              if (!containerRef.current) return;
+              const rect = containerRef.current.getBoundingClientRect();
+              const cx = rect.width / 2, cy = rect.height / 2;
+              const newZoom = Math.max(0.2, zoom - 0.1);
+              const sf = newZoom / zoom;
+              setPanX(cx - (cx - panX) * sf);
+              setPanY(cy - (cy - panY) * sf);
+              setZoom(newZoom);
+            }} className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400" title="Zoom out"><ZoomOut className="w-4 h-4" /></button>
             <span className="text-xs text-slate-500 w-10 text-center font-mono">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom(z => Math.min(1.5, z + 0.1))} className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400" title="Zoom in"><ZoomIn className="w-4 h-4" /></button>
+            <button onClick={() => {
+              if (!containerRef.current) return;
+              const rect = containerRef.current.getBoundingClientRect();
+              const cx = rect.width / 2, cy = rect.height / 2;
+              const newZoom = Math.min(2.5, zoom + 0.1);
+              const sf = newZoom / zoom;
+              setPanX(cx - (cx - panX) * sf);
+              setPanY(cy - (cy - panY) * sf);
+              setZoom(newZoom);
+            }} className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400" title="Zoom in"><ZoomIn className="w-4 h-4" /></button>
             <button onClick={fitToView} className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 ml-1" title="Fit to view"><Maximize2 className="w-4 h-4" /></button>
             <div className="w-px h-5 bg-white/10 mx-1" />
             <button
@@ -559,19 +655,32 @@ export default function AgenticWorkflows() {
         </div>
 
         {/* Canvas */}
-        <div className="flex-1 relative overflow-hidden">
-          <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle, #ffffff 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-          <div className="overflow-auto p-4 h-full">
+        <div
+          ref={containerRef}
+          className="flex-1 relative overflow-hidden"
+          style={{ cursor: isPanning.current ? 'grabbing' : 'grab' }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          <div
+            className="absolute inset-0 opacity-[0.03]"
+            style={{
+              backgroundImage: 'radial-gradient(circle, #ffffff 1px, transparent 1px)',
+              backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
+              backgroundPosition: `${panX}px ${panY}px`,
+            }}
+          />
+          <div className="absolute" style={{ left: 0, top: 0 }}>
             <div
               ref={canvasRef}
-              className="relative mx-auto transition-transform duration-200"
+              className="relative"
               style={{
                 width: active.canvasWidth,
                 height: active.canvasHeight,
-                transform: `scale(${zoom})`,
-                transformOrigin: 'top left',
-                marginBottom: active.canvasHeight * (zoom - 1),
-                marginRight: active.canvasWidth * (zoom - 1),
+                transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
+                transformOrigin: '0 0',
               }}
             >
               {/* SVG Edges */}
@@ -607,7 +716,7 @@ export default function AgenticWorkflows() {
                 const isConnected = connectedNodeIds.has(node.id);
                 const isDimmed = hoveredNode && !isConnected;
                 return (
-                  <div key={node.id} className={`absolute select-none transition-all duration-200 ${isDimmed ? 'opacity-20' : ''}`} style={{ left: node.x, top: node.y, width: NODE_W, height: NODE_H }} onMouseEnter={() => setHoveredNode(node.id)} onMouseLeave={() => setHoveredNode(null)}>
+                  <div key={node.id} className={`absolute select-none transition-all duration-200 ${isDimmed ? 'opacity-20' : ''}`} style={{ left: node.x, top: node.y, width: NODE_W, height: NODE_H }} onMouseEnter={() => setHoveredNode(node.id)} onMouseLeave={() => setHoveredNode(null)} onMouseDown={(e) => e.stopPropagation()}>
                     <div className={`w-full h-full rounded-xl border-2 flex items-center gap-2.5 px-3 transition-all duration-200 cursor-default ${isHovered ? 'bg-white/10 border-white/40 shadow-lg shadow-white/5 scale-105' : 'bg-[#1e1f35] border-white/[0.08] hover:border-white/20'}`} style={isHovered ? { borderColor: node.color + '80' } : {}}>
                       <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: node.color + '20' }}>
                         <Icon className="w-4 h-4" style={{ color: node.color }} />
