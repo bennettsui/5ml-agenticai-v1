@@ -82,6 +82,7 @@ export default function TEDxXinyiHome() {
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
       <SiteNav currentPath="/vibe-demo/tedx-xinyi" heroMode />
 
+      <main id="main-content" role="main">
       {/* ==================== HERO ==================== */}
       <section className="relative min-h-screen flex items-center overflow-hidden bg-neutral-900">
         {/* nanobanana-generated background with CSS fallback */}
@@ -207,7 +208,8 @@ export default function TEDxXinyiHome() {
                 <div className="aspect-[16/10] overflow-hidden bg-neutral-100">
                   <img
                     src={card.image}
-                    alt=""
+                    alt={card.title}
+                    loading="lazy"
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     style={i === 2 ? { objectFit: 'contain', padding: '1.5rem', background: '#1a1a1a' } : undefined}
                   />
@@ -276,7 +278,8 @@ export default function TEDxXinyiHome() {
             <div className="aspect-video rounded-xl overflow-hidden bg-neutral-100">
               <img
                 src="/tedx-xinyi/salon-teaser.png"
-                alt=""
+                alt="We are Becoming AI salon teaser"
+                loading="lazy"
                 className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
                 onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
                 onError={(e) => {
@@ -330,6 +333,7 @@ export default function TEDxXinyiHome() {
                   <img
                     src={speaker.image}
                     alt={speaker.name}
+                    loading="lazy"
                     className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -363,7 +367,8 @@ export default function TEDxXinyiHome() {
                   <div className="aspect-[16/9] overflow-hidden bg-neutral-100">
                     <img
                       src={post.image}
-                      alt=""
+                      alt={post.title}
+                      loading="lazy"
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   </div>
@@ -423,6 +428,7 @@ export default function TEDxXinyiHome() {
                 <img
                   src={logo.src}
                   alt={logo.name}
+                  loading="lazy"
                   className="max-w-full max-h-full object-contain"
                 />
               </div>
@@ -463,6 +469,7 @@ export default function TEDxXinyiHome() {
         </div>
       </section>
 
+      </main>
       <SiteFooter />
     </div>
   );
