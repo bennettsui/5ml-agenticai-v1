@@ -106,14 +106,14 @@ export const USE_CASES: UseCaseConfig[] = [
   {
     id: 'ads-performance',
     name: 'Social Ad Performance',
-    description: 'Meta & Google Ads dashboard with AI analysis, multi-tenant support, automated reporting',
+    description: '12-agent orchestrated pipeline with temporal data strategy, validation, backfill & cost-optimized model routing',
     solutionLine: 'GrowthOS',
     status: 'live',
-    progress: 0.75,
+    progress: 0.8,
     priority: 'high',
     path: '/ads-dashboard',
-    agentCount: 8,
-    features: ['Meta Ads Analytics', 'Google Ads Analytics', 'AI Weekly Reports', 'Multi-Tenant Clients'],
+    agentCount: 12,
+    features: ['Pipeline Orchestrator', 'Temporal Fetchers', 'Data Validator', 'Backfill Manager', 'Report Generator', 'Multi-Tenant'],
   },
   {
     id: 'short-url-vcard',
@@ -257,7 +257,7 @@ export const USE_CASES: UseCaseConfig[] = [
 
 export const ROADMAP_ITEMS: RoadmapItem[] = [
   // NOW (0-3 months)
-  { ...USE_CASES.find(u => u.id === 'ads-performance')!, timeframe: 'now', type: 'product', owner: 'Growth Team', notes: 'v1 live, enhancing report generation and AI assistant' },
+  { ...USE_CASES.find(u => u.id === 'ads-performance')!, timeframe: 'now', type: 'product', owner: 'Growth Team', notes: 'v2: orchestrated pipeline with temporal data strategy, validation layer, backfill manager, cost-optimized routing' },
   { ...USE_CASES.find(u => u.id === 'crm')!, timeframe: 'now', type: 'platform', owner: 'Platform Team', notes: 'Relationship Intelligence Platform: orchestrator, relationship graph, scoring, signal feed, action center' },
   { id: 'founder-cockpit', name: 'Founder Cockpit Agent', description: 'CEO-level strategic dashboard with all business KPIs', solutionLine: 'ExecIntel', status: 'in_progress', progress: 0.2, priority: 'critical', path: '#', timeframe: 'now', type: 'csuite', owner: 'CEO / CSO', notes: 'Integrates CSO orchestrator with business metrics' },
   { ...USE_CASES.find(u => u.id === 'photo-booth')!, timeframe: 'now', type: 'product', owner: 'Experience Team', notes: 'v2: additional themes, faster generation, gallery admin' },
@@ -299,7 +299,7 @@ export const SEVEN_LAYERS = [
   { number: 6, name: 'Orchestration & Workflow', components: ['Schedule Registry', 'CSO Orchestrator', 'Scan Queue', 'WebSocket', 'Health Monitor'] },
   { number: 5, name: 'Task Definitions', components: ['DailySync', 'WeeklyAnalysis', 'MonthlyExecutive', 'NewsDiscovery', 'DigestWorkflow'] },
   { number: 4, name: 'Knowledge Management', components: ['pgvector', 'Notion Connector', 'Vector Embeddings', 'Semantic Search', 'Multi-source'] },
-  { number: 3, name: 'Roles & Agents', components: ['52+ Agents', 'Marketing (14)', 'Ads (8)', 'Photo Booth (9)', 'Intelligence (3)', 'CRM (18)'] },
+  { number: 3, name: 'Roles & Agents', components: ['56+ Agents', 'Marketing (14)', 'Ads (12)', 'Photo Booth (9)', 'Intelligence (3)', 'CRM (18)'] },
   { number: 2, name: 'Execution Engine', components: ['DeepSeek', 'Claude API', 'Perplexity', 'ComfyUI', 'Model Router', 'Tesseract OCR'] },
   { number: 1, name: 'Infrastructure & Storage', components: ['PostgreSQL + pgvector', 'Express API', 'Fly.io', 'WebSocket', 'SSE Streaming'] },
 ];
