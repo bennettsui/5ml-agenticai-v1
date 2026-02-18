@@ -154,6 +154,7 @@ export default function SocialStrategyPage() {
           messages: [{ role: 'user', content: prompts[section] }],
           use_case_id: 'social-content-ops',
           brand_name: selectedBrand.name,
+          current_module: 'Social Strategy',
         }),
       });
       if (res.ok) {

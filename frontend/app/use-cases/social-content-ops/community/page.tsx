@@ -175,6 +175,7 @@ Return ONLY the reply text, no other formatting.`,
           }],
           use_case_id: 'social-content-ops',
           brand_name: selectedBrand.name,
+          current_module: 'Community Management',
         }),
       });
       if (res.ok) {
