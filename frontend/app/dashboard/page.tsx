@@ -13,11 +13,12 @@ import CostAnalysis from '@/components/CostAnalysis';
 import ZiweiChat from '@/components/ZiweiChat';
 import ZiweiCompatibility from '@/components/ZiweiCompatibility';
 import ZiweiInsights from '@/components/ZiweiInsights';
+import ZiweiRuleManagement from '@/components/ZiweiRuleManagement';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
   ChevronRight, Map, Zap, Send, Loader2, Sparkles, History,
-  Plus, Trash2, Clock, Monitor, TrendingUp,
+  Plus, Trash2, Clock, Monitor, TrendingUp, Wand2,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -30,7 +31,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'ziwei-rules';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -371,7 +372,7 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','ziwei-rules'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
@@ -385,6 +386,7 @@ export default function Dashboard() {
     { id: 'chat', label: 'Agent Chat', icon: MessageSquare },
     { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen },
     { id: 'analytics', label: 'Analytics & API', icon: Wifi },
+    { id: 'ziwei-rules', label: '🧿 Ziwei Rules', icon: Wand2 },
     { id: 'architecture', label: 'Architecture', icon: Layers },
   ];
 
@@ -651,6 +653,11 @@ export default function Dashboard() {
             <AgenticWorkflows />
           </div>
         )}
+
+        {/* ================================================================ */}
+        {/* ZIWEI RULES MANAGEMENT TAB                                       */}
+        {/* ================================================================ */}
+        {activeTab === 'ziwei-rules' && <ZiweiRuleManagement />}
 
       </main>
     </div>
