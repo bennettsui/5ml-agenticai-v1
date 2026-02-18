@@ -35,12 +35,12 @@ export default function CaseStudiesPage() {
     },
     {
       slug: 'filorga',
-      title: 'FILORGA - Beauty & Skincare Brand PR',
+      title: 'FILORGA - NCEF-SHOT & TIME-FILLER Launch',
       category: 'Beauty & Skincare',
-      challenge: 'Promote anti-aging skincare and aesthetic medicine brand in Hong Kong market',
-      result: 'Established media presence and brand positioning in luxury beauty category',
-      metrics: ['New market entry', 'Premium positioning', 'Luxury publication coverage'],
-      tags: ['PR', 'Beauty', 'Brand Launch']
+      challenge: 'Launch premium winter skincare products and support holiday e-commerce campaign',
+      result: '20+ media placements in top-tier fashion and beauty publications',
+      metrics: ['20+ Media Placements', 'Featured in Hong Kong Tatler, Madame Figaro, Girl Secret', 'Holiday shopping season support'],
+      tags: ['PR', 'Beauty', 'Product Launch']
     },
     {
       slug: 'lung-fu-shan',
