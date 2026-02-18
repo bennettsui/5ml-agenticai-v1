@@ -559,15 +559,15 @@ export const USE_CASES: UseCaseConfig[] = [
   },
   {
     id: 'ziwei-astrology',
-    name: 'Ziwei Astrology System',
-    description: '中州派紫微斗數 - AI-powered birth chart calculation and interpretation with accuracy-tracked rules',
+    name: '紫微 Purple Star Astrology',
+    description: 'AI-powered Ziwei (中州派紫微斗數) birth chart calculation and interpretation with accuracy-tracked rules',
     solutionLine: 'Experience',
-    status: 'prototype',
-    progress: 0.1,
-    priority: 'medium',
+    status: 'live',
+    progress: 0.5,
+    priority: 'high',
     path: '/use-cases/ziwei',
     agentCount: 3,
-    features: ['Chart Engine', 'Interpretation Engine', 'Evaluation Engine', 'Accuracy Tracking', 'Rule Database'],
+    features: ['Chart Engine', 'Interpretation Engine', 'Rule Database', 'Compatibility Analysis', 'Accuracy Tracking'],
   },
 
   // ========================================================================
