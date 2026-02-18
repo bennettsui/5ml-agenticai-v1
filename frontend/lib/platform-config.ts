@@ -511,6 +511,17 @@ export const USE_CASES: UseCaseConfig[] = [
     path: '#',
     features: ['Chart Calculator', 'Type Analysis', 'Strategy Guide', 'Authority Tracker'],
   },
+  {
+    id: 'event-management',
+    name: 'Event Management System',
+    description: 'End-to-end AI event planning with attendee management, venue logistics, and real-time coordination',
+    solutionLine: 'FrontierVentures',
+    status: 'planned',
+    progress: 0,
+    priority: 'medium',
+    path: '#',
+    features: ['Attendee Management', 'Venue Logistics', 'Schedule Builder', 'Live Coordination'],
+  },
 
   // ========================================================================
   // C-SUITE MANAGEMENT — CSuite
