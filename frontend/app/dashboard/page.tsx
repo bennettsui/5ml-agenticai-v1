@@ -28,7 +28,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'growth';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -36,9 +36,12 @@ type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' 
 
 const LINE_BORDER: Record<string, string> = {
   GrowthOS: 'border-l-purple-500',
-  ExecIntel: 'border-l-teal-500',
-  OpsFinance: 'border-l-blue-500',
-  Experience: 'border-l-amber-500',
+  IntelStudio: 'border-l-teal-500',
+  TechNexus: 'border-l-blue-500',
+  ExpLab: 'border-l-indigo-500',
+  MediaChannel: 'border-l-rose-500',
+  FrontierVentures: 'border-l-amber-500',
+  CSuite: 'border-l-emerald-500',
   Platform: 'border-l-slate-500',
 };
 
