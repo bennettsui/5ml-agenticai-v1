@@ -8,10 +8,10 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
-    { label: 'Services', href: '#services' },
+    { label: 'Services', href: '/vibe-demo/radiance/services' },
     { label: 'Case Studies', href: '/vibe-demo/radiance/case-studies' },
     { label: 'About', href: '/vibe-demo/radiance/about' },
-    { label: 'Blog', href: '/vibe-demo/radiance/blog' },
+    { label: 'Consultation', href: '/vibe-demo/radiance/consultation' },
     { label: 'Contact', href: '/vibe-demo/radiance/contact' },
   ];
 
