@@ -176,7 +176,7 @@ export default function ConsultationPage() {
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
 
-      <main className="flex-1 pt-20">
+      <main id="main-content" className="flex-1 pt-20">
 
         {/* Breadcrumb */}
         <section className="py-6 px-6 border-b border-slate-100 dark:border-slate-800">
@@ -297,16 +297,18 @@ export default function ConsultationPage() {
                   <form onSubmit={handleSubmit} className="space-y-5">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Name *</label>
+                        <label htmlFor="consult-name" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Name *</label>
                         <input
+                          id="consult-name"
                           type="text" name="name" value={formData.name} onChange={handleChange} required
                           placeholder="Your name"
                           className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 text-sm"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Email *</label>
+                        <label htmlFor="consult-email" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Email *</label>
                         <input
+                          id="consult-email"
                           type="email" name="email" value={formData.email} onChange={handleChange} required
                           placeholder="you@company.com"
                           className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 text-sm"
@@ -316,16 +318,18 @@ export default function ConsultationPage() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Phone</label>
+                        <label htmlFor="consult-phone" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Phone</label>
                         <input
+                          id="consult-phone"
                           type="tel" name="phone" value={formData.phone} onChange={handleChange}
                           placeholder="+852 xxxx xxxx"
                           className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 text-sm"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Company</label>
+                        <label htmlFor="consult-company" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Company</label>
                         <input
+                          id="consult-company"
                           type="text" name="company" value={formData.company} onChange={handleChange}
                           placeholder="Your company"
                           className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 text-sm"
@@ -335,15 +339,16 @@ export default function ConsultationPage() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Industry</label>
+                        <label htmlFor="consult-industry" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Industry</label>
                         <input
+                          id="consult-industry"
                           type="text" name="industry" value={formData.industry} onChange={handleChange}
                           placeholder="e.g. Fashion, F&B"
                           className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 text-sm"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Service Interest *</label>
+                        <label htmlFor="consult-service" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Service Interest *</label>
                         <CustomSelect
                           name="serviceInterest"
                           value={formData.serviceInterest}
@@ -357,7 +362,7 @@ export default function ConsultationPage() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Budget Range</label>
+                        <label htmlFor="consult-budget" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Budget Range</label>
                         <CustomSelect
                           name="budget"
                           value={formData.budget}
@@ -367,7 +372,7 @@ export default function ConsultationPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Timeline</label>
+                        <label htmlFor="consult-timeline" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Timeline</label>
                         <CustomSelect
                           name="timeline"
                           value={formData.timeline}
@@ -379,8 +384,9 @@ export default function ConsultationPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Goals or challenge *</label>
+                      <label htmlFor="consult-message" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Goals or challenge *</label>
                       <textarea
+                        id="consult-message"
                         name="message" value={formData.message} onChange={handleChange} required rows={4}
                         placeholder="What are you looking to achieve? Any specific challenges we should know about?"
                         className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 text-sm"

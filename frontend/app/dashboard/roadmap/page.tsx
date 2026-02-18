@@ -83,9 +83,12 @@ type SolutionLineKey = keyof typeof SOLUTION_LINES;
 
 const AREA_KEYS: SolutionLineKey[] = [
   'GrowthOS',
-  'ExecIntel',
-  'OpsFinance',
-  'Experience',
+  'IntelStudio',
+  'TechNexus',
+  'ExpLab',
+  'MediaChannel',
+  'FrontierVentures',
+  'CSuite',
   'Platform',
 ];
 

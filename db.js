@@ -347,8 +347,172 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       );
+
+      -- ==========================================
+      -- Ziwei Astrology Tables (中州派紫微斗數)
+      -- ==========================================
+      CREATE TABLE IF NOT EXISTS ziwei_interpretation_rules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        version INTEGER DEFAULT 1,
+        scope VARCHAR(50) NOT NULL,
+        condition JSONB NOT NULL,
+        interpretation JSONB NOT NULL,
+        dimension_tags JSONB DEFAULT '[]',
+        school VARCHAR(50) DEFAULT 'zhongzhou',
+        consensus_label VARCHAR(20) DEFAULT 'consensus',
+        source_refs JSONB DEFAULT '[]',
+        statistics JSONB DEFAULT '{"sample_size": 0, "match_rate": 0.5, "confidence_level": 0}',
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_rules_scope ON ziwei_interpretation_rules(scope);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_rules_consensus ON ziwei_interpretation_rules(consensus_label);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_rules_status ON ziwei_interpretation_rules(status);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_rules_school ON ziwei_interpretation_rules(school);
+
+      CREATE TABLE IF NOT EXISTS ziwei_birth_charts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR(255),
+        name VARCHAR(255),
+        birth_info JSONB NOT NULL,
+        gan_zhi JSONB NOT NULL,
+        base_chart JSONB NOT NULL,
+        xuan_patterns JSONB DEFAULT '{}',
+        decade_luck JSONB DEFAULT '[]',
+        annual_luck JSONB DEFAULT '[]',
+        monthly_luck JSONB DEFAULT '[]',
+        daily_luck JSONB DEFAULT '[]',
+        interpretations JSONB DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_charts_user ON ziwei_birth_charts(user_id);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_charts_created ON ziwei_birth_charts(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS ziwei_rule_feedback (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        chart_id UUID REFERENCES ziwei_birth_charts(id) ON DELETE SET NULL,
+        rule_id UUID REFERENCES ziwei_interpretation_rules(id) ON DELETE CASCADE,
+        user_rating INTEGER,
+        outcome_status VARCHAR(50),
+        accuracy_flag VARCHAR(50),
+        user_notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_feedback_chart ON ziwei_rule_feedback(chart_id);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_feedback_rule ON ziwei_rule_feedback(rule_id);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_feedback_created ON ziwei_rule_feedback(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS ziwei_rule_statistics (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        rule_id UUID UNIQUE REFERENCES ziwei_interpretation_rules(id) ON DELETE CASCADE,
+        sample_size INTEGER DEFAULT 0,
+        match_count INTEGER DEFAULT 0,
+        mismatch_count INTEGER DEFAULT 0,
+        match_rate DECIMAL(5, 4) DEFAULT 0.5,
+        confidence_level DECIMAL(5, 4) DEFAULT 0,
+        last_updated TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_stats_match_rate ON ziwei_rule_statistics(match_rate DESC);
+
+      -- ==========================================
+      -- Ziwei DeepSeek Enhancement Tables (Steps 4-6)
+      -- ==========================================
+
+      CREATE TABLE IF NOT EXISTS ziwei_enhanced_interpretations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        chart_id UUID NOT NULL REFERENCES ziwei_birth_charts(id) ON DELETE CASCADE,
+        rule_interpretation_id UUID,
+        llm_enhancement JSONB NOT NULL,
+        confidence_boost DECIMAL(5, 4),
+        synthesis_summary TEXT,
+        model_used VARCHAR(50) DEFAULT 'deepseek-reasoner',
+        tokens_input INTEGER,
+        tokens_output INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_enhanced_chart ON ziwei_enhanced_interpretations(chart_id);
+
+      CREATE TABLE IF NOT EXISTS ziwei_conversations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        chart_id UUID NOT NULL REFERENCES ziwei_birth_charts(id) ON DELETE CASCADE,
+        user_id VARCHAR(255),
+        title VARCHAR(255),
+        summary TEXT,
+        message_count INTEGER DEFAULT 0,
+        last_message_at TIMESTAMP,
+        system_prompt TEXT,
+        model_used VARCHAR(50) DEFAULT 'deepseek-chat',
+        tokens_used INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_conv_chart ON ziwei_conversations(chart_id);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_conv_user ON ziwei_conversations(user_id);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_conv_updated ON ziwei_conversations(updated_at DESC);
+
+      CREATE TABLE IF NOT EXISTS ziwei_conversation_messages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        conversation_id UUID NOT NULL REFERENCES ziwei_conversations(id) ON DELETE CASCADE,
+        role VARCHAR(20),
+        content TEXT NOT NULL,
+        tokens_used INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_msg_conv ON ziwei_conversation_messages(conversation_id);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_msg_created ON ziwei_conversation_messages(created_at);
+
+      CREATE TABLE IF NOT EXISTS ziwei_compatibility_analyses (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        chart1_id UUID NOT NULL REFERENCES ziwei_birth_charts(id) ON DELETE CASCADE,
+        chart2_id UUID NOT NULL REFERENCES ziwei_birth_charts(id) ON DELETE CASCADE,
+        relationship_type VARCHAR(50),
+        compatibility_score DECIMAL(5, 4),
+        harmonious_elements JSONB,
+        conflicting_elements JSONB,
+        full_report TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_compat_chart1 ON ziwei_compatibility_analyses(chart1_id);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_compat_chart2 ON ziwei_compatibility_analyses(chart2_id);
+
+      CREATE TABLE IF NOT EXISTS ziwei_insights (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        chart_id UUID NOT NULL REFERENCES ziwei_birth_charts(id) ON DELETE CASCADE,
+        life_stage VARCHAR(50),
+        analysis_depth VARCHAR(20),
+        life_guidance TEXT,
+        decade_analysis JSONB,
+        recommendations JSONB,
+        warnings JSONB,
+        model_used VARCHAR(50) DEFAULT 'deepseek-reasoner',
+        tokens_used INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_insights_chart ON ziwei_insights(chart_id);
+
+      ALTER TABLE ziwei_birth_charts
+      ADD COLUMN IF NOT EXISTS enhanced_interpretations JSONB,
+      ADD COLUMN IF NOT EXISTS llm_enhancements JSONB,
+      ADD COLUMN IF NOT EXISTS conversation_count INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS last_chat_at TIMESTAMP;
     `);
     console.log('✅ Database schema initialized (including CRM tables)');
+
+    // Seed Ziwei interpretation rules
+    await seedZiweiRules();
   } catch (error) {
     console.error('❌ Database initialization error:', error.message);
     console.error('Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
@@ -1226,6 +1390,348 @@ async function getEdmById(edmId) {
   }
 }
 
+// ==========================================
+// Ziwei Seeder Functions
+// ==========================================
+
+async function seedZiweiRules() {
+  try {
+    const rules = require('./services/ziwei-rules-seed');
+
+    let insertedCount = 0;
+    for (const rule of rules) {
+      const existing = await pool.query(
+        `SELECT id FROM ziwei_interpretation_rules
+         WHERE scope = $1 AND condition = $2 AND consensus_label = $3 LIMIT 1`,
+        [rule.scope, JSON.stringify(rule.condition), rule.consensus_label]
+      );
+
+      if (existing.rows.length === 0) {
+        await pool.query(
+          `INSERT INTO ziwei_interpretation_rules
+           (version, scope, condition, interpretation, consensus_label, statistics, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            1,
+            rule.scope,
+            JSON.stringify(rule.condition),
+            JSON.stringify(rule.interpretation),
+            rule.consensus_label,
+            JSON.stringify(rule.statistics),
+            'active'
+          ]
+        );
+        insertedCount++;
+      }
+    }
+
+    console.log(`✅ Ziwei rules seeded: ${insertedCount} new rules added`);
+    return insertedCount;
+  } catch (error) {
+    console.error('⚠️ Ziwei seeding error:', error.message);
+    return 0;
+  }
+}
+
+async function getZiweiRules(filters = {}) {
+  try {
+    let query = `SELECT * FROM ziwei_interpretation_rules WHERE status = 'active'`;
+    const params = [];
+
+    if (filters.scope) {
+      query += ` AND scope = $${params.length + 1}`;
+      params.push(filters.scope);
+    }
+
+    if (filters.consensus) {
+      query += ` AND consensus_label = $${params.length + 1}`;
+      params.push(filters.consensus);
+    }
+
+    query += ` ORDER BY consensus_label DESC, statistics->>'confidence_level' DESC`;
+
+    const result = await pool.query(query, params);
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching Ziwei rules:', error);
+    throw error;
+  }
+}
+
+async function saveZiweiRuleFeedback(chartId, ruleId, feedback) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO ziwei_rule_feedback (chart_id, rule_id, user_rating, outcome_status, accuracy_flag, user_notes)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [chartId, ruleId, feedback.rating, feedback.outcome, feedback.accuracy, feedback.notes]
+    );
+    return result.rows[0].id;
+  } catch (error) {
+    console.error('Error saving rule feedback:', error);
+    throw error;
+  }
+}
+
+async function updateZiweiRuleStatistics(ruleId) {
+  try {
+    // Calculate match rate from feedback
+    const feedback = await pool.query(
+      `SELECT COUNT(*) as total,
+              SUM(CASE WHEN accuracy_flag = 'accurate' THEN 1 ELSE 0 END) as matches
+       FROM ziwei_rule_feedback WHERE rule_id = $1`,
+      [ruleId]
+    );
+
+    const { total, matches } = feedback.rows[0];
+    const matchRate = total > 0 ? (matches / total) : 0.5;
+
+    await pool.query(
+      `UPDATE ziwei_rule_statistics
+       SET sample_size = $1, match_count = $2, match_rate = $3, confidence_level = $4, updated_at = NOW()
+       WHERE rule_id = $5`,
+      [total, matches, matchRate, Math.sqrt(matchRate), ruleId]
+    );
+
+    console.log(`✅ Updated statistics for rule ${ruleId}: ${matches}/${total} matches`);
+  } catch (error) {
+    console.error('Error updating rule statistics:', error);
+  }
+}
+
+// ==========================================
+// Ziwei Step 4: LLM Enhancement Functions
+// ==========================================
+
+async function saveEnhancedInterpretation(chartId, enhancement) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO ziwei_enhanced_interpretations
+       (chart_id, llm_enhancement, confidence_boost, synthesis_summary, model_used, tokens_input, tokens_output)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        chartId,
+        JSON.stringify(enhancement.llmEnhancement),
+        enhancement.confidenceBoost || 0.4,
+        enhancement.synthesizeSummary || null,
+        enhancement.model || 'deepseek-reasoner',
+        enhancement.tokensInput || 0,
+        enhancement.tokensOutput || 0
+      ]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving enhanced interpretation:', error);
+    throw error;
+  }
+}
+
+async function getEnhancedInterpretations(chartId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_enhanced_interpretations WHERE chart_id = $1 ORDER BY created_at DESC`,
+      [chartId]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching enhanced interpretations:', error);
+    throw error;
+  }
+}
+
+// ==========================================
+// Ziwei Step 5: Conversation Functions
+// ==========================================
+
+async function createConversation(chartId, userId, title = null) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO ziwei_conversations (chart_id, user_id, title)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [chartId, userId, title]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error creating conversation:', error);
+    throw error;
+  }
+}
+
+async function addConversationMessage(conversationId, role, content, tokensUsed = 0) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO ziwei_conversation_messages (conversation_id, role, content, tokens_used)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [conversationId, role, content, tokensUsed]
+    );
+
+    // Update conversation metadata
+    await pool.query(
+      `UPDATE ziwei_conversations
+       SET message_count = message_count + 1,
+           last_message_at = NOW(),
+           tokens_used = tokens_used + $1,
+           updated_at = NOW()
+       WHERE id = $2`,
+      [tokensUsed, conversationId]
+    );
+
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error adding conversation message:', error);
+    throw error;
+  }
+}
+
+async function getConversationMessages(conversationId, limit = 50) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_conversation_messages
+       WHERE conversation_id = $1
+       ORDER BY created_at ASC
+       LIMIT $2`,
+      [conversationId, limit]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching conversation messages:', error);
+    throw error;
+  }
+}
+
+async function updateConversationMetadata(conversationId, updates) {
+  try {
+    const { title, summary } = updates;
+    const result = await pool.query(
+      `UPDATE ziwei_conversations
+       SET title = COALESCE($1, title),
+           summary = COALESCE($2, summary),
+           updated_at = NOW()
+       WHERE id = $3
+       RETURNING *`,
+      [title || null, summary || null, conversationId]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error updating conversation metadata:', error);
+    throw error;
+  }
+}
+
+async function getConversationsByChart(chartId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_conversations WHERE chart_id = $1 ORDER BY updated_at DESC`,
+      [chartId]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching conversations by chart:', error);
+    throw error;
+  }
+}
+
+async function getZiweiConversation(conversationId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_conversations WHERE id = $1`,
+      [conversationId]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching conversation:', error);
+    throw error;
+  }
+}
+
+// ==========================================
+// Ziwei Step 6: Compatibility Functions
+// ==========================================
+
+async function saveCompatibilityAnalysis(chart1Id, chart2Id, relationshipType, analysis) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO ziwei_compatibility_analyses
+       (chart1_id, chart2_id, relationship_type, compatibility_score, harmonious_elements, conflicting_elements, full_report)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        chart1Id,
+        chart2Id,
+        relationshipType,
+        analysis.compatibilityScore || 0,
+        JSON.stringify(analysis.harmoniousElements || []),
+        JSON.stringify(analysis.conflictingElements || []),
+        analysis.fullReport || null
+      ]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving compatibility analysis:', error);
+    throw error;
+  }
+}
+
+async function getCompatibilityAnalysis(chart1Id, chart2Id) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_compatibility_analyses
+       WHERE (chart1_id = $1 AND chart2_id = $2) OR (chart1_id = $2 AND chart2_id = $1)
+       ORDER BY created_at DESC LIMIT 1`,
+      [chart1Id, chart2Id]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching compatibility analysis:', error);
+    throw error;
+  }
+}
+
+// ==========================================
+// Ziwei Step 6: Insights Functions
+// ==========================================
+
+async function saveInsights(chartId, insights) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO ziwei_insights
+       (chart_id, life_stage, analysis_depth, life_guidance, decade_analysis, recommendations, warnings, model_used, tokens_used)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        chartId,
+        insights.lifeStage || null,
+        insights.analysisDepth || 'detailed',
+        insights.lifeGuidance || '',
+        JSON.stringify(insights.decadeAnalysis || {}),
+        JSON.stringify(insights.recommendations || []),
+        JSON.stringify(insights.warnings || []),
+        insights.model || 'deepseek-reasoner',
+        insights.tokensUsed || 0
+      ]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving insights:', error);
+    throw error;
+  }
+}
+
+async function getInsights(chartId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_insights WHERE chart_id = $1 ORDER BY created_at DESC`,
+      [chartId]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching insights:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -1274,4 +1780,25 @@ module.exports = {
   saveEdmHistory,
   getEdmHistory,
   getEdmById,
+  // Ziwei Astrology
+  seedZiweiRules,
+  getZiweiRules,
+  saveZiweiRuleFeedback,
+  updateZiweiRuleStatistics,
+  // Ziwei Step 4-6 (LLM Enhancement)
+  saveEnhancedInterpretation,
+  getEnhancedInterpretations,
+  // Ziwei Step 5 (Conversations)
+  createConversation,
+  addConversationMessage,
+  getConversationMessages,
+  updateConversationMetadata,
+  getConversationsByChart,
+  getConversation: getZiweiConversation,
+  // Ziwei Step 6 (Compatibility)
+  saveCompatibilityAnalysis,
+  getCompatibilityAnalysis,
+  // Ziwei Step 6 (Insights)
+  saveInsights,
+  getInsights,
 };

@@ -78,7 +78,7 @@ export default function BlogPage() {
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
 
-      <main className="flex-1 pt-20">
+      <main id="main-content" className="flex-1 pt-20">
         {/* Hero Section */}
         <section className="pt-16 pb-12 px-6 max-w-6xl mx-auto">
           <div className="space-y-4">
@@ -117,9 +117,9 @@ export default function BlogPage() {
                       <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide mb-2">
                         {article.category}
                       </div>
-                      <h3 className="text-2xl font-bold text-slate-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors leading-tight">
+                      <h2 className="text-2xl font-bold text-slate-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors leading-tight">
                         {article.title}
-                      </h3>
+                      </h2>
                     </div>
                   </div>
                   <p className="text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
@@ -146,7 +146,9 @@ export default function BlogPage() {
               Subscribe to our newsletter for regular updates on PR strategy, campaign case studies, and communications best practices.
             </p>
             <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+              <label htmlFor="newsletter-email" className="sr-only">Email address</label>
               <input
+                id="newsletter-email"
                 type="email"
                 placeholder="Your email"
                 className="px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 flex-1"

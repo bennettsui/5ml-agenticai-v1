@@ -8,7 +8,7 @@ export default function RadianceAboutPage() {
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
       {/* Hero Intro */}
       <section className="pt-32 pb-16 px-6 max-w-4xl mx-auto">
         <div className="space-y-6">

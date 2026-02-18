@@ -129,7 +129,7 @@ export default function LeadGenPage() {
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
 
-      <main className="flex-1 pt-20">
+      <main id="main-content" className="flex-1 pt-20">
         {/* Hero Section */}
         <section className="relative py-20 px-6 bg-gradient-to-br from-purple-50 via-white to-slate-50 dark:from-purple-950/20 dark:via-slate-950 dark:to-slate-900">
           <div className="max-w-4xl mx-auto text-center">
@@ -273,69 +273,93 @@ export default function LeadGenPage() {
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6 bg-white/10 backdrop-blur-sm p-8 rounded-lg border border-white/20">
                 <div className="grid md:grid-cols-2 gap-6">
-                  <input
-                    type="text"
-                    name="name"
-                    placeholder="Your Name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    required
-                    className="px-4 py-3 bg-white/90 text-slate-900 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-white"
-                  />
-                  <input
-                    type="email"
-                    name="email"
-                    placeholder="your@email.com"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                    className="px-4 py-3 bg-white/90 text-slate-900 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-white"
-                  />
+                  <div>
+                    <label htmlFor="leadgen-name" className="sr-only">Your Name</label>
+                    <input
+                      id="leadgen-name"
+                      type="text"
+                      name="name"
+                      placeholder="Your Name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3 bg-white/90 text-slate-900 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="leadgen-email" className="sr-only">Email Address</label>
+                    <input
+                      id="leadgen-email"
+                      type="email"
+                      name="email"
+                      placeholder="your@email.com"
+                      value={formData.email}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3 bg-white/90 text-slate-900 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-white"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-6">
-                  <input
-                    type="tel"
-                    name="phone"
-                    placeholder="+852 xxxx xxxx"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    className="px-4 py-3 bg-white/90 text-slate-900 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-white"
-                  />
-                  <input
-                    type="text"
-                    name="company"
-                    placeholder="Your Company"
-                    value={formData.company}
-                    onChange={handleChange}
-                    className="px-4 py-3 bg-white/90 text-slate-900 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-white"
-                  />
+                  <div>
+                    <label htmlFor="leadgen-phone" className="sr-only">Phone Number</label>
+                    <input
+                      id="leadgen-phone"
+                      type="tel"
+                      name="phone"
+                      placeholder="+852 xxxx xxxx"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-white/90 text-slate-900 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="leadgen-company" className="sr-only">Company Name</label>
+                    <input
+                      id="leadgen-company"
+                      type="text"
+                      name="company"
+                      placeholder="Your Company"
+                      value={formData.company}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-white/90 text-slate-900 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-white"
+                    />
+                  </div>
                 </div>
 
-                <CustomSelect
-                  name="service"
-                  value={formData.service}
-                  onChange={handleSelectChange}
-                  options={[
-                    { label: 'Public Relations', value: 'pr' },
-                    { label: 'Events & Experiences', value: 'events' },
-                    { label: 'Social Media Strategy', value: 'social' },
-                    { label: 'KOL & Influencer Marketing', value: 'kol' },
-                    { label: 'Creative Production', value: 'creative' },
-                    { label: 'Integrated Campaign', value: 'integrated' }
-                  ]}
-                  placeholder="Select Service of Interest"
-                  required
-                />
+                <div>
+                  <label htmlFor="leadgen-service" className="sr-only">Service of Interest</label>
+                  <select
+                    id="leadgen-service"
+                    name="service"
+                    value={formData.service}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-3 bg-white/90 text-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-white"
+                  >
+                    <option value="">Select Service of Interest</option>
+                    <option value="pr">Public Relations</option>
+                    <option value="events">Events & Experiences</option>
+                    <option value="social">Social Media Strategy</option>
+                    <option value="kol">KOL & Influencer Marketing</option>
+                    <option value="creative">Creative Production</option>
+                    <option value="integrated">Integrated Campaign</option>
+                  </select>
+                </div>
 
-                <textarea
-                  name="message"
-                  placeholder="Tell us about your project or challenge..."
-                  value={formData.message}
-                  onChange={handleChange}
-                  rows={5}
-                  className="w-full px-4 py-3 bg-white/90 text-slate-900 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-white"
-                />
+                <div>
+                  <label htmlFor="leadgen-message" className="sr-only">Tell us about your project or challenge</label>
+                  <textarea
+                    id="leadgen-message"
+                    name="message"
+                    placeholder="Tell us about your project or challenge..."
+                    value={formData.message}
+                    onChange={handleChange}
+                    rows={5}
+                    className="w-full px-4 py-3 bg-white/90 text-slate-900 rounded-lg placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-white"
+                  />
+                </div>
 
                 <button
                   type="submit"

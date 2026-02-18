@@ -1,5 +1,6 @@
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
+const fs = require('fs');
 const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
@@ -56,7 +57,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -1040,79 +1041,103 @@ app.delete('/api/sandbox/tests', async (req, res) => {
 // ==========================================
 
 // Search brands for autocomplete
+// Search brands in crm_clients
 app.get('/api/brands/search', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    const query = req.query.q || '';
+    const q = (req.query.q || '').trim();
     const limit = parseInt(req.query.limit) || 10;
-
-    if (!query || query.trim().length < 2) {
-      return res.json({ success: true, brands: [] });
-    }
-
-    const brands = await searchBrands(query, limit);
-    res.json({ success: true, brands });
-  } catch (error) {
-    console.error('Error searching brands:', error);
+    if (q.length < 2) return res.json({ items: [], total: 0, page: 1, size: limit, pages: 0 });
+    const result = await pool.query(
+      `SELECT * FROM crm_clients WHERE name ILIKE $1 ORDER BY name LIMIT $2`,
+      [`%${q}%`, limit]
+    );
+    res.json({ items: result.rows, total: result.rows.length, page: 1, size: limit, pages: 1 });
+  } catch (err) {
+    console.error('Error searching brands:', err);
     res.status(500).json({ error: 'Failed to search brands' });
   }
 });
 
-// Get all brands
+// List brands from crm_clients with pagination
 app.get('/api/brands', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    const limit = parseInt(req.query.limit) || 50;
-    const brands = await getAllBrands(limit);
-    res.json({ success: true, brands });
-  } catch (error) {
-    console.error('Error fetching brands:', error);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const size = Math.min(100, parseInt(req.query.size) || 20);
+    const search = (req.query.search || '').trim();
+    const offset = (page - 1) * size;
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM crm_clients${search ? ' WHERE name ILIKE $1' : ''}`,
+      search ? [`%${search}%`] : []
+    );
+    const total = parseInt(countResult.rows[0].count);
+
+    const dataResult = await pool.query(
+      `SELECT * FROM crm_clients${search ? ' WHERE name ILIKE $1' : ''} ORDER BY updated_at DESC LIMIT ${search ? '$2' : '$1'} OFFSET ${search ? '$3' : '$2'}`,
+      search ? [`%${search}%`, size, offset] : [size, offset]
+    );
+
+    res.json({ items: dataResult.rows, total, page, size, pages: Math.ceil(total / size) });
+  } catch (err) {
+    console.error('Error fetching brands:', err);
     res.status(500).json({ error: 'Failed to fetch brands' });
   }
 });
 
-// Get specific brand by name
-app.get('/api/brands/:name', async (req, res) => {
+// Get brand by UUID or name from crm_clients
+app.get('/api/brands/:id', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    const brand = await getBrandWithResults(req.params.name);
-    if (!brand) {
-      return res.status(404).json({ error: 'Brand not found' });
-    }
-    res.json({ success: true, brand });
-  } catch (error) {
-    console.error('Error fetching brand:', error);
+    const { id } = req.params;
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const result = uuidRe.test(id)
+      ? await pool.query('SELECT * FROM crm_clients WHERE id = $1', [id])
+      : await pool.query('SELECT * FROM crm_clients WHERE LOWER(name) = LOWER($1)', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Brand not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching brand:', err);
     res.status(500).json({ error: 'Failed to fetch brand' });
   }
 });
 
-// Save or update brand
+// Create brand in crm_clients
 app.post('/api/brands', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    const { brand_name, industry, brand_info } = req.body;
-
-    if (!brand_name) {
-      return res.status(400).json({ error: 'brand_name is required' });
+    const { name, legal_name, industry, region, status, website_url, company_size, client_value_tier } = req.body;
+    const resolvedName = name || req.body.brand_name;
+    if (!resolvedName) {
+      return res.status(400).json({ error: 'name is required' });
     }
-
-    const brand = await saveBrand(brand_name, industry, brand_info);
-    res.json({ success: true, brand });
-  } catch (error) {
-    console.error('Error saving brand:', error);
-    res.status(500).json({ error: 'Failed to save brand' });
+    const result = await pool.query(
+      `INSERT INTO crm_clients (name, legal_name, industry, region, status, website_url, company_size, client_value_tier)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [
+        resolvedName,
+        legal_name || null,
+        JSON.stringify(Array.isArray(industry) ? industry : (industry ? [industry] : [])),
+        JSON.stringify(Array.isArray(region) ? region : (region ? [region] : [])),
+        status || 'prospect',
+        website_url || null,
+        company_size || null,
+        client_value_tier || null,
+      ]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error creating brand:', err);
+    res.status(500).json({ error: 'Failed to create brand' });
   }
 });
 
@@ -1190,17 +1215,17 @@ app.delete('/api/conversation/:id', async (req, res) => {
   }
 });
 
-// Delete a brand (and all its conversations)
-app.delete('/api/brands/:brand_name', async (req, res) => {
+// Delete a brand from crm_clients (cascades to crm_projects + crm_feedback)
+app.delete('/api/brands/:id', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    await deleteBrand(req.params.brand_name);
-    res.json({ success: true, message: 'Brand deleted' });
-  } catch (error) {
-    console.error('Error deleting brand:', error);
+    const result = await pool.query('DELETE FROM crm_clients WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Brand not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error('Error deleting brand:', err);
     res.status(500).json({ error: 'Failed to delete brand' });
   }
 });
@@ -1225,18 +1250,80 @@ app.delete('/api/brands/:brand_name/projects', async (req, res) => {
   }
 });
 
-// Get projects for a brand (grouped by brief)
+// Get projects for a brand from crm_projects
 app.get('/api/brands/:brand_name/projects', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    const projects = await getProjectsByBrand(req.params.brand_name);
-    res.json({ success: true, projects });
-  } catch (error) {
-    console.error('Error fetching projects:', error);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const size = Math.min(100, parseInt(req.query.size) || 20);
+    const offset = (page - 1) * size;
+    const clientId = req.params.brand_name;
+    const countResult = await pool.query('SELECT COUNT(*) FROM crm_projects WHERE client_id = $1', [clientId]);
+    const total = parseInt(countResult.rows[0].count);
+    const result = await pool.query(
+      'SELECT * FROM crm_projects WHERE client_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [clientId, size, offset]
+    );
+    res.json({ items: result.rows, total, page, size, pages: Math.ceil(total / size) });
+  } catch (err) {
+    console.error('Error fetching projects:', err);
     res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+// List all CRM projects with pagination
+app.get('/api/projects', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const size = Math.min(100, parseInt(req.query.size) || 20);
+    const status = req.query.status || '';
+    const offset = (page - 1) * size;
+    const where = status ? 'WHERE status = $1' : '';
+    const countResult = await pool.query(`SELECT COUNT(*) FROM crm_projects ${where}`, status ? [status] : []);
+    const total = parseInt(countResult.rows[0].count);
+    const params = status ? [status, size, offset] : [size, offset];
+    const dataResult = await pool.query(
+      `SELECT * FROM crm_projects ${where} ORDER BY created_at DESC LIMIT ${status ? '$2' : '$1'} OFFSET ${status ? '$3' : '$2'}`,
+      params
+    );
+    res.json({ items: dataResult.rows, total, page, size, pages: Math.ceil(total / size) });
+  } catch (err) {
+    console.error('Error listing projects:', err);
+    res.status(500).json({ error: 'Failed to list projects' });
+  }
+});
+
+// Create CRM project
+app.post('/api/projects', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const { client_id, name, type, brief, start_date, end_date, status } = req.body;
+    if (!client_id || !name) return res.status(400).json({ error: 'client_id and name are required' });
+    const result = await pool.query(
+      `INSERT INTO crm_projects (client_id, name, type, brief, start_date, end_date, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [client_id, name, type || 'other', brief || null, start_date || null, end_date || null, status || 'planning']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error creating project:', err);
+    res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// Delete CRM project
+app.delete('/api/projects/:id', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const result = await pool.query('DELETE FROM crm_projects WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Project not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error('Error deleting project:', err);
+    res.status(500).json({ error: 'Failed to delete project' });
   }
 });
 
@@ -1724,6 +1811,43 @@ console.log('✅ Debug routes loaded: /api/debug/sessions, /api/debug/modules, /
 // ==========================================
 const llm = require('./lib/llm');
 
+// Helper: read use case source code for chatbot context
+function readUseCaseCode(useCaseId, maxChars = 8000) {
+  const baseDir = path.join(__dirname, 'frontend', 'app', 'use-cases', useCaseId);
+  if (!fs.existsSync(baseDir)) return '';
+  const files = [];
+  function walkDir(dir, prefix) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      const fullPath = path.join(dir, entry.name);
+      const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        walkDir(fullPath, relPath);
+      } else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
+        files.push({ path: relPath, fullPath });
+      }
+    }
+  }
+  walkDir(baseDir, '');
+  let result = `\n## Use Case Source Code (${useCaseId})\nFiles:\n`;
+  result += files.map(f => `- ${f.path}`).join('\n') + '\n\n';
+  let totalChars = result.length;
+  for (const file of files) {
+    const content = fs.readFileSync(file.fullPath, 'utf8');
+    const header = `### ${file.path}\n\`\`\`tsx\n`;
+    const footer = '\n```\n\n';
+    const available = maxChars - totalChars - header.length - footer.length;
+    if (available <= 200) break;
+    const truncated = content.length > available ? content.slice(0, available) + '\n// ... (truncated)' : content;
+    result += header + truncated + footer;
+    totalChars = result.length;
+    if (totalChars >= maxChars) break;
+  }
+  return result;
+}
+
 // List available LLM models
 app.get('/api/llm/models', (req, res) => {
   res.json({ success: true, models: llm.listModels(), default: llm.DEFAULT_MODEL });
@@ -1732,7 +1856,7 @@ app.get('/api/llm/models', (req, res) => {
 // CRM AI Assistant chat endpoint
 app.post('/api/crm/chat', async (req, res) => {
   try {
-    const { messages, model: modelKey, page_context } = req.body;
+    const { messages, model: modelKey, page_context, use_case_id } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages array is required' });
@@ -1743,9 +1867,12 @@ app.post('/api/crm/chat', async (req, res) => {
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'crm', 3) : '';
     const companyContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
 
+    // Include use case source code for code-aware assistance
+    const codeContext = readUseCaseCode(use_case_id || 'crm', 6000);
+
     const system = `You are an AI assistant embedded in a Brand CRM + Knowledge Base system built by 5 Miles Lab (5ML).
 You help users manage brands, projects, feedback, and brand knowledge.
-${ragContext ? `\n${ragContext}` : ''}${companyContext ? `\n${companyContext}` : ''}
+${ragContext ? `\n${ragContext}` : ''}${companyContext ? `\n${companyContext}` : ''}${codeContext}
 
 When the user asks you to research a company, provide structured information including:
 - industry (as an array of strings)
@@ -1806,6 +1933,60 @@ Respond concisely. Use English or the language the user writes in.`;
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Unknown error',
     });
+  }
+});
+
+// Growth Chatbot Assistant endpoint (used by Growth Architect & Growth Hacking Studio)
+app.post('/api/growth/chatbot/message', async (req, res) => {
+  try {
+    const { brand_name, plan_id, message, conversation_history, use_case_id } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    // RAG context
+    const ragContext = ragService.getContext(message, 'company', 3);
+
+    // Include use case source code
+    const codeContext = readUseCaseCode(use_case_id || 'growth-architect', 6000);
+
+    const systemPrompt = `You are a Growth Strategy AI assistant for 5 Miles Lab (5ML).
+You help users evaluate growth plans, suggest modifications, identify risks, and recommend optimizations.
+${brand_name ? `Current brand: ${brand_name}` : ''}
+${plan_id ? `Current plan ID: ${plan_id}` : ''}
+${ragContext ? `\n${ragContext}` : ''}${codeContext}
+
+Your capabilities:
+1. Critique and improve growth plans
+2. Suggest new channels, tactics, and experiments
+3. Identify risks and mitigation strategies
+4. Recommend budget allocation and KPI targets
+5. Answer questions about the use case code and architecture
+
+Be concise and actionable. Use bullet points for lists.`;
+
+    const messages = [
+      ...(conversation_history || []),
+      { role: 'user', content: message },
+    ];
+
+    // Try DeepSeek first, fall back to Claude
+    const deepseek = require('./services/deepseekService');
+    if (deepseek.isAvailable()) {
+      const result = await deepseek.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+      );
+      return res.json({ data: { response: result.content, model: 'deepseek-chat' } });
+    }
+
+    const result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+    return res.json({ data: { response: result.text, model: result.modelName || 'claude-haiku' } });
+
+  } catch (error) {
+    console.error('Growth chatbot error:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 
@@ -2349,6 +2530,564 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
     res.status(500).json({
       error: 'Failed to fetch submissions'
     });
+  }
+});
+
+// ==========================================
+// Ziwei Astrology API
+// ==========================================
+
+const { calcBaseChart } = require('./services/ziwei-chart-engine');
+
+// POST /api/ziwei/calculate - Calculate a birth chart
+app.post('/api/ziwei/calculate', async (req, res) => {
+  try {
+    const { lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch, gender, name } = req.body;
+
+    // Validate required fields
+    if (!lunarYear || !lunarMonth || !lunarDay || !hourBranch || !yearStem || !yearBranch || !gender) {
+      return res.status(400).json({
+        error: 'Missing required fields: lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch, gender'
+      });
+    }
+
+    // Calculate chart
+    const chart = calcBaseChart({
+      lunarYear,
+      lunarMonth,
+      lunarDay,
+      hourBranch,
+      yearStem,
+      yearBranch,
+      gender
+    });
+
+    // Store in database if available
+    let chartId = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.query(
+          `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
+           VALUES ($1, $2, $3, $4) RETURNING id`,
+          [
+            name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
+            JSON.stringify({ lunarYear, lunarMonth, lunarDay, hourBranch, gender }),
+            JSON.stringify({ yearStem, yearBranch }),
+            JSON.stringify(chart)
+          ]
+        );
+        chartId = result.rows[0].id;
+      } catch (dbErr) {
+        console.warn('⚠️ Ziwei chart not stored:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      chartId,
+      chart
+    });
+  } catch (error) {
+    console.error('❌ Ziwei calculation error:', error);
+    res.status(500).json({
+      error: 'Failed to calculate chart',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/ziwei/charts - List saved charts
+app.get('/api/ziwei/charts', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const result = await db.query(
+      `SELECT id, name, birth_info, gan_zhi, created_at
+       FROM ziwei_birth_charts
+       ORDER BY created_at DESC
+       LIMIT 50`
+    );
+
+    res.json({
+      success: true,
+      charts: result.rows
+    });
+  } catch (error) {
+    console.error('❌ Error fetching charts:', error);
+    res.status(500).json({
+      error: 'Failed to fetch charts',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/ziwei/charts/:id - Get specific chart
+app.get('/api/ziwei/charts/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const result = await db.query(
+      `SELECT * FROM ziwei_birth_charts WHERE id = $1`,
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    res.json({
+      success: true,
+      chart: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Error fetching chart:', error);
+    res.status(500).json({
+      error: 'Failed to fetch chart',
+      details: error.message
+    });
+  }
+});
+
+// POST /api/ziwei/interpret - Generate interpretations for a chart
+app.post('/api/ziwei/interpret', async (req, res) => {
+  try {
+    const { chart, chartId, consensusLevel = 'consensus' } = req.body;
+
+    if (!chart) {
+      return res.status(400).json({ error: 'Missing required field: chart' });
+    }
+
+    // Load interpretation engine with database rules
+    let InterpretationEngine;
+    try {
+      const module = require('./services/ziwei-interpretation-engine');
+      InterpretationEngine = module.InterpretationEngine;
+    } catch (e) {
+      return res.status(501).json({
+        error: 'Interpretation engine not available'
+      });
+    }
+
+    // Use database rules if available
+    const engine = await InterpretationEngine.fromDatabase();
+
+    // Generate interpretations
+    const allInterpretations = engine.generateInterpretations(chart);
+    const filtered = engine.filterByConsensus(allInterpretations, consensusLevel);
+    const ranked = engine.rankByAccuracy(filtered);
+    const grouped = engine.groupByDimension(ranked);
+
+    // Store interpretations with chart if DB is available
+    if (chartId && process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.query(
+          `UPDATE ziwei_birth_charts SET interpretations = $1, updated_at = NOW() WHERE id = $2`,
+          [JSON.stringify(grouped), chartId]
+        );
+      } catch (dbErr) {
+        console.warn('⚠️ Could not store interpretations:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      summary: {
+        totalInterpretations: allInterpretations.length,
+        filteredCount: filtered.length,
+        dimensionCount: grouped.length,
+        avgConfidence: grouped.length > 0
+          ? grouped.reduce((sum, g) => sum + g.avgConfidence, 0) / grouped.length
+          : 0
+      },
+      interpretations: ranked,
+      grouped
+    });
+  } catch (error) {
+    console.error('❌ Interpretation error:', error);
+    res.status(500).json({
+      error: 'Failed to generate interpretations',
+      details: error.message
+    });
+  }
+});
+
+// ==========================================
+// Step 4: Enhanced Interpretation with DeepSeek LLM
+// ==========================================
+
+app.post('/api/ziwei/enhance-interpretation', async (req, res) => {
+  try {
+    const { chart, interpretations, chartId } = req.body;
+
+    if (!chart || !interpretations) {
+      return res.status(400).json({ error: 'Missing chart or interpretations' });
+    }
+
+    // Initialize LLM enhancer
+    const { ZiweiLLMEnhancer } = require('./services/ziwei-llm-enhancer');
+    const enhancer = new ZiweiLLMEnhancer();
+
+    if (!enhancer.isAvailable()) {
+      return res.status(503).json({
+        error: 'LLM enhancement not available',
+        fallback: interpretations
+      });
+    }
+
+    // Generate enhanced interpretations
+    const enhancement = await enhancer.enhanceInterpretations(chart, interpretations);
+
+    if (!enhancement) {
+      return res.status(500).json({
+        error: 'Failed to enhance interpretations',
+        fallback: interpretations
+      });
+    }
+
+    // Save to database if available
+    if (chartId && process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.saveEnhancedInterpretation(chartId, {
+          llmEnhancement: enhancement.enhancement,
+          confidenceBoost: 0.4,
+          model: enhancement.model,
+          tokensInput: enhancement.tokensInput,
+          tokensOutput: enhancement.tokensOutput
+        });
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save enhancement to DB:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      enhancement: enhancement.enhancement,
+      tokens: {
+        input: enhancement.tokensInput,
+        output: enhancement.tokensOutput
+      },
+      model: enhancement.model
+    });
+  } catch (error) {
+    console.error('❌ Enhancement error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Step 5: Conversational Chat Interface
+// ==========================================
+
+app.post('/api/ziwei/conversations', async (req, res) => {
+  try {
+    const { chartId, userId, title } = req.body;
+
+    if (!chartId) {
+      return res.status(400).json({ error: 'Missing chartId' });
+    }
+
+    // Get chart data
+    let chart = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.query(
+          'SELECT * FROM ziwei_birth_charts WHERE id = $1',
+          [chartId]
+        );
+        chart = result.rows[0]?.base_chart;
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch chart:', dbErr.message);
+      }
+    }
+
+    if (!chart) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    // Initialize conversation manager
+    const { ZiweiConversationManager } = require('./services/ziwei-conversation-manager');
+    const manager = new ZiweiConversationManager();
+
+    if (!manager.isAvailable()) {
+      return res.status(503).json({ error: 'Chat service not available' });
+    }
+
+    // Create conversation
+    const conversation = manager.createConversation(chart, userId);
+
+    // Save to database if available
+    let conversationId = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.createConversation(chartId, userId, title);
+        conversationId = result.id;
+      } catch (dbErr) {
+        console.warn('⚠️ Could not create conversation in DB:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      conversationId,
+      systemPrompt: conversation.systemPrompt,
+      chartContext: conversation.chartContext
+    });
+  } catch (error) {
+    console.error('❌ Conversation creation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/ziwei/conversations/:id/messages', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content, messages: messageHistory } = req.body;
+
+    if (!content) {
+      return res.status(400).json({ error: 'Missing message content' });
+    }
+
+    // Get conversation and chart data
+    let chart = null;
+    if (process.env.DATABASE_URL && id) {
+      try {
+        const db = require('./db');
+        const conv = await db.getZiweiConversation(id);
+        if (conv) {
+          const chartResult = await db.query(
+            'SELECT base_chart FROM ziwei_birth_charts WHERE id = $1',
+            [conv.chart_id]
+          );
+          chart = chartResult.rows[0]?.base_chart;
+        }
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch conversation/chart:', dbErr.message);
+      }
+    }
+
+    if (!chart) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    // Generate response
+    const { ZiweiConversationManager } = require('./services/ziwei-conversation-manager');
+    const manager = new ZiweiConversationManager();
+
+    if (!manager.isAvailable()) {
+      return res.status(503).json({ error: 'Chat service not available' });
+    }
+
+    const responseData = await manager.generateResponse(chart, messageHistory || [], content);
+
+    if (!responseData) {
+      return res.status(500).json({ error: 'Failed to generate response' });
+    }
+
+    // Save message to database if available
+    if (id && process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.addConversationMessage(id, 'user', content, responseData.tokensInput);
+        await db.addConversationMessage(id, 'assistant', responseData.response, responseData.tokensOutput);
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save messages:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      response: responseData.response,
+      tokens: {
+        input: responseData.tokensInput,
+        output: responseData.tokensOutput
+      },
+      timestamp: responseData.timestamp
+    });
+  } catch (error) {
+    console.error('❌ Message generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/ziwei/conversations/:id/history', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const db = require('./db');
+    const messages = await db.getConversationMessages(id);
+
+    res.json({
+      success: true,
+      messages,
+      count: messages.length
+    });
+  } catch (error) {
+    console.error('❌ History fetch error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Step 6: Compatibility Analysis
+// ==========================================
+
+app.post('/api/ziwei/compatibility', async (req, res) => {
+  try {
+    const { chart1Id, chart2Id, relationshipType } = req.body;
+
+    if (!chart1Id || !chart2Id) {
+      return res.status(400).json({ error: 'Missing chart IDs' });
+    }
+
+    // Fetch both charts from database
+    let chart1 = null, chart2 = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const [result1, result2] = await Promise.all([
+          db.query('SELECT base_chart FROM ziwei_birth_charts WHERE id = $1', [chart1Id]),
+          db.query('SELECT base_chart FROM ziwei_birth_charts WHERE id = $1', [chart2Id])
+        ]);
+        chart1 = result1.rows[0]?.base_chart;
+        chart2 = result2.rows[0]?.base_chart;
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch charts:', dbErr.message);
+      }
+    }
+
+    if (!chart1 || !chart2) {
+      return res.status(404).json({ error: 'One or both charts not found' });
+    }
+
+    // Analyze compatibility
+    const { ZiweiCompatibilityAnalyzer } = require('./services/ziwei-compatibility-analyzer');
+    const analyzer = new ZiweiCompatibilityAnalyzer();
+
+    if (!analyzer.isAvailable()) {
+      return res.status(503).json({ error: 'Compatibility analysis not available' });
+    }
+
+    const analysis = await analyzer.analyzeCompatibility(chart1, chart2, relationshipType || 'romantic');
+
+    if (!analysis) {
+      return res.status(500).json({ error: 'Failed to analyze compatibility' });
+    }
+
+    // Save to database if available
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.saveCompatibilityAnalysis(chart1Id, chart2Id, relationshipType, analysis);
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save compatibility analysis:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      compatibilityScore: analysis.compatibilityScore,
+      harmoniousElements: analysis.harmoniousElements,
+      conflictingElements: analysis.conflictingElements,
+      report: analysis.report,
+      tokens: {
+        input: analysis.tokensInput,
+        output: analysis.tokensOutput
+      }
+    });
+  } catch (error) {
+    console.error('❌ Compatibility analysis error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Step 6: Personalized Insights
+// ==========================================
+
+app.post('/api/ziwei/insights', async (req, res) => {
+  try {
+    const { chartId, lifeStage, analysisDepth } = req.body;
+
+    if (!chartId) {
+      return res.status(400).json({ error: 'Missing chartId' });
+    }
+
+    // Fetch chart data
+    let chart = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.query(
+          'SELECT base_chart FROM ziwei_birth_charts WHERE id = $1',
+          [chartId]
+        );
+        chart = result.rows[0]?.base_chart;
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch chart:', dbErr.message);
+      }
+    }
+
+    if (!chart) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    // Use LLM enhancer to generate insights
+    const { ZiweiLLMEnhancer } = require('./services/ziwei-llm-enhancer');
+    const enhancer = new ZiweiLLMEnhancer();
+
+    if (!enhancer.isAvailable()) {
+      return res.status(503).json({ error: 'Insights generation not available' });
+    }
+
+    const insights = await enhancer.generateLifeGuidance(chart, lifeStage || 'current', {});
+
+    if (!insights) {
+      return res.status(500).json({ error: 'Failed to generate insights' });
+    }
+
+    // Save to database if available
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.saveInsights(chartId, {
+          lifeStage: lifeStage || 'current',
+          analysisDepth: analysisDepth || 'detailed',
+          lifeGuidance: insights.guidance,
+          model: insights.model,
+          tokensUsed: insights.tokensInput + insights.tokensOutput
+        });
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save insights:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      guidance: insights.guidance,
+      lifeStage: lifeStage || 'current',
+      tokens: {
+        input: insights.tokensInput,
+        output: insights.tokensOutput
+      }
+    });
+  } catch (error) {
+    console.error('❌ Insights generation error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
