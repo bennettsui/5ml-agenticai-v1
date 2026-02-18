@@ -9,7 +9,6 @@ import ScheduledJobs from '@/components/ScheduledJobs';
 import AgenticWorkflows from '@/components/AgenticWorkflows';
 import KnowledgeBase from '@/components/KnowledgeBase';
 import CostAnalysis from '@/components/CostAnalysis';
-import GrowthArchitect from '@/components/GrowthArchitect';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
@@ -26,7 +25,7 @@ import {
   deleteSession, getSession, type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'growth' | 'social-ops';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'social-ops';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -359,11 +358,10 @@ const TYPE_LABELS: Record<ChatType, { label: string; color: string }> = {
 // ---------------------------------------------------------------------------
 
 export default function Dashboard() {
-  // Support /dashboard?tab=growth direct links from homepage
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','api','scheduling','knowledge','costs','workflows','chat','growth','social-ops'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','api','scheduling','knowledge','costs','workflows','chat','social-ops'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
@@ -374,7 +372,6 @@ export default function Dashboard() {
       tabs: [
         { id: 'control' as Tab, label: 'Control Tower', icon: LayoutDashboard },
         { id: 'overview' as Tab, label: 'Overview', icon: Activity },
-        { id: 'growth' as Tab, label: 'Growth Architect', icon: TrendingUp },
       ]
     },
     {
@@ -650,11 +647,6 @@ export default function Dashboard() {
         {/* AGENT CHAT TAB                                                  */}
         {/* ================================================================ */}
         {activeTab === 'chat' && <AgentChatPanel />}
-
-        {/* ================================================================ */}
-        {/* GROWTH ARCHITECT TAB                                            */}
-        {/* ================================================================ */}
-        {activeTab === 'growth' && <GrowthArchitect />}
 
         {/* Existing tabs */}
         {activeTab === 'overview' && <PlatformOverview />}

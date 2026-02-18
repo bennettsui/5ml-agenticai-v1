@@ -104,6 +104,18 @@ export const USE_CASES: UseCaseConfig[] = [
     features: ['Input Validator', 'Budget Optimizer', 'Multi-Channel', 'Compliance Agent', 'Performance Tracker'],
   },
   {
+    id: 'growth-architect',
+    name: 'Growth Architect',
+    description: 'AI-powered growth strategy builder with market analysis, audience insights, and tactical recommendations',
+    solutionLine: 'GrowthOS',
+    status: 'live',
+    progress: 0.8,
+    priority: 'high',
+    path: '/growth-architect',
+    agentCount: 5,
+    features: ['Market Analysis', 'Audience Insights', 'Strategy Builder', 'KPI Dashboard', 'Recommendations'],
+  },
+  {
     id: 'ads-performance',
     name: 'Social Ad Performance',
     description: 'Meta & Google Ads dashboard with AI analysis, multi-tenant support, automated reporting',
