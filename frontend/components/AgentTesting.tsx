@@ -1234,14 +1234,16 @@ export default function AgentTesting() {
                   {/* Chat Input */}
                   <div className="p-4 border-t border-slate-200 dark:border-slate-700">
                     <div className="flex gap-2">
-                      <input
-                        type="text"
+                      <textarea
                         value={chatInput}
                         onChange={(e) => setChatInput(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSendUnifiedMessage()}
-                        placeholder={selectedAgent ? "Type your message..." : "Select an agent first..."}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!isLoading) handleSendUnifiedMessage(); } }}
+                        placeholder={selectedAgent ? "Type your message... (Shift+Enter for new line)" : "Select an agent first..."}
                         disabled={!selectedAgent || isLoading}
-                        className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed"
+                        rows={1}
+                        className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed resize-none"
+                        style={{ maxHeight: '120px' }}
+                        onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; }}
                       />
                       <button
                         onClick={handleSendUnifiedMessage}

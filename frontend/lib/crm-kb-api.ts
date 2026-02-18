@@ -373,6 +373,9 @@ export const crmApi = {
         body: JSON.stringify(data),
       });
     },
+    delete(id: string) {
+      return request<void>(`/projects/${id}`, { method: "DELETE" });
+    },
   },
 
   feedback: {
@@ -488,7 +491,7 @@ export const crmApi = {
 
   chat(
     messages: Array<{ role: "user" | "assistant"; content: string }>,
-    opts?: { model?: string; page_context?: Record<string, unknown> }
+    opts?: { model?: string; page_context?: Record<string, unknown>; use_case_id?: string }
   ) {
     // Chat goes to the main Express backend, not the CRM KB FastAPI
     return fetch("/api/crm/chat", {
@@ -498,6 +501,7 @@ export const crmApi = {
         messages,
         model: opts?.model,
         page_context: opts?.page_context,
+        use_case_id: opts?.use_case_id || "crm",
       }),
     }).then(async (res) => {
       const text = await res.text();
