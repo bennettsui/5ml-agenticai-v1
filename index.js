@@ -2222,10 +2222,10 @@ server.listen(port, '0.0.0.0', async () => {
   // Only triggers when VISUALS definitions change (new entries or updated prompts),
   // not on every deploy or when files happen to be missing.
   if (process.env.GEMINI_API_KEY) {
+    const tedxFs = require('fs');
+    const tedxPath = require('path');
+    const crypto = require('crypto');
     try {
-      const tedxFs = require('fs');
-      const tedxPath = require('path');
-      const crypto = require('crypto');
       const tedxOutputDir = tedxPath.join(__dirname, 'frontend', 'public', 'tedx');
       const manifestPath = tedxPath.join(tedxOutputDir, '.manifest.json');
       const tedxModule = require('./use-cases/tedx-boundary-street/api/routes');
