@@ -433,6 +433,265 @@
         "match_rate": 0.82,
         "confidence_level": 0.88
       }
+    },
+    {
+      "id": "star-group-01-ziwei-group",
+      "scope": "star_group",
+      "condition": {
+        "stars": ["紫微", "天機", "武曲", "廉貞"]
+      },
+      "interpretation": {
+        "zh": "紫微星群：紫微在某宮必有天機相伴。紫微命宮則財帛宮必武曲、官祿宮必廉貞。三方四正互相會照，構成完整權力星群。",
+        "en": "Ziwei Group: Ziwei always has Tianjl nearby. When Ziwei is in Life Palace, Wuqu must be in Wealth Palace and Lianzheng in Career Palace. Forms complete power configuration.",
+        "short": "紫微星群：權力氣度，帝王格局"
+      },
+      "dimension_tags": ["leadership", "authority", "power"],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": ["鬥數技法講義", "fushantang"],
+      "statistics": {
+        "sample_size": 180,
+        "match_rate": 0.91,
+        "confidence_level": 0.95
+      }
+    },
+    {
+      "id": "star-group-02-tiandu-group",
+      "scope": "star_group",
+      "condition": {
+        "stars": ["天府", "天相", "七殺", "破軍"]
+      },
+      "interpretation": {
+        "zh": "天府星群：天府命宮則官祿宮必天相、遷移宮必七殺、夫妻宮必破軍。形成管理與權力組合，適合中高階主管職位。",
+        "en": "Tianfu Group: When Tianfu is in Life Palace, Tianxiang must be in Career, Qisha in Migration, Pojun in Marriage. Management and authority configuration.",
+        "short": "天府星群：穩定管理，中高階主管"
+      },
+      "dimension_tags": ["management", "authority", "stability"],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": ["鬥數技法講義", "fushantang"],
+      "statistics": {
+        "sample_size": 165,
+        "match_rate": 0.88,
+        "confidence_level": 0.92
+      }
+    },
+    {
+      "id": "star-group-03-four-major-groups",
+      "scope": "star_group",
+      "condition": {
+        "condition_description": "Four major star groups in Ziwei system"
+      },
+      "interpretation": {
+        "zh": "四大星群分類：\n1. 紫微、武曲、廉貞、天府、天相一組\n2. 貪狼、七殺、破軍一組\n3. 天機、天同、太陰、天梁一組\n4. 太陽、巨門一組\n\n第一組與第二組易同宮或互會，後兩組亦常互會。格局多來自這幾組星群的搭配。",
+        "en": "Four Major Star Groups:\n1. Ziwei/Wuqu/Lianzheng/Tianfu/Tianxiang Group (Authority)\n2. Tanlang/Qisha/Pojun Group (Innovation)\n3. Tianjl/Tiantong/Taiyin/Tianliang Group (Intellect)\n4. Taiyang/Jumen Group (Expression)\n\nGroup 1 + 2 often meet; Groups 3 + 4 often meet. Patterns emerge from combinations.",
+        "short": "四大星群：命盤格局的基礎框架"
+      },
+      "dimension_tags": ["system", "framework", "patterns"],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": ["鬥數技法講義"],
+      "statistics": {
+        "sample_size": 500,
+        "match_rate": 0.95,
+        "confidence_level": 0.98
+      }
+    },
+    {
+      "id": "pattern-01-shapolanng",
+      "scope": "major_pattern",
+      "condition": {
+        "stars": ["七殺", "破軍", "貪狼"],
+        "pattern_description": "All three stars in Life/Career/Wealth Palaces"
+      },
+      "interpretation": {
+        "zh": "殺破狼格：七殺、破軍、貪狼輪流坐守命宮、官祿宮、財帛宮三宮。代表高度變動與破舊立新，運勢起伏大：好命很好，壞命很糟。適合冒險、創業、轉型行業，不適合求穩定終身職。",
+        "en": "Sha Po Lang Pattern: High volatility and transformation. Extreme ups and downs: excellent when good, terrible when bad. Suitable for entrepreneurship, risk-taking, career transitions. Not for seeking stability.",
+        "short": "殺破狼格：變動多舛，大起大落"
+      },
+      "dimension_tags": ["career", "wealth", "change", "entrepreneurship"],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": ["LifeDNA"],
+      "statistics": {
+        "sample_size": 140,
+        "match_rate": 0.86,
+        "confidence_level": 0.90
+      }
+    },
+    {
+      "id": "pattern-02-fu-xiang",
+      "scope": "major_pattern",
+      "condition": {
+        "stars": ["天府", "天相"],
+        "pattern_description": "Tianfu + Tianxiang combination in major palaces"
+      },
+      "interpretation": {
+        "zh": "府相格：天府與天相形成主星組合，常見於命宮或官祿宮。作事穩重、面面俱到、善管理，適合中高階主管與組織管理職，重視人和與制度。",
+        "en": "Fu Xiang Pattern: Stable, thorough, strong management skills. Suitable for middle to senior management positions in organizations. Emphasis on relationships and systems.",
+        "short": "府相格：穩定周全，組織管理"
+      },
+      "dimension_tags": ["management", "career", "stability", "leadership"],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": ["YouTube"],
+      "statistics": {
+        "sample_size": 120,
+        "match_rate": 0.89,
+        "confidence_level": 0.93
+      }
+    },
+    {
+      "id": "pattern-03-ziwei-wuqu-lianzheng",
+      "scope": "major_pattern",
+      "condition": {
+        "stars": ["紫微", "武曲", "廉貞"],
+        "pattern_description": "Ziwei/Wuqu/Lianzheng in same palace or tri-positional"
+      },
+      "interpretation": {
+        "zh": "紫武廉格：紫微、武曲、廉貞為一組星群，同宮或三方鼎立。代表氣度、權力、財政掌控能力，適合領導層、掌權職位。可與殺破狼、府相進一步組合形成複合格局。",
+        "en": "Ziwei-Wuqu-Lianzheng Pattern: Authority, power, and financial control ability. Suitable for leadership positions and decision-making roles. Can combine with Sha Po Lang or Fu Xiang patterns.",
+        "short": "紫武廉格：氣度權勢，領導格局"
+      },
+      "dimension_tags": ["leadership", "authority", "wealth"],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": ["YouTube"],
+      "statistics": {
+        "sample_size": 130,
+        "match_rate": 0.87,
+        "confidence_level": 0.91
+      }
+    },
+    {
+      "id": "pattern-04-riryue-bingming",
+      "scope": "basic_pattern",
+      "condition": {
+        "stars": ["太陽", "太陰"],
+        "pattern_description": "Sun and Moon mutual support in bright light position"
+      },
+      "interpretation": {
+        "zh": "日月並明格：太陽與太陰互拱或同宮，且光明不受遮蔽，多伴天魁、天鉞等吉曜。古稱貴格，主聰明、名望與貴人。需視所在宮位與是否受煞忌影響。",
+        "en": "Sun-Moon Brilliance Pattern: Sun and Moon together in bright, unobstructed positions, often with Tianku and Tianyue. Classical auspicious pattern: intelligence, fame, and noble support.",
+        "short": "日月並明：聰慧名望，貴人相助"
+      },
+      "dimension_tags": ["intellect", "fame", "fortune", "support"],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": ["pressstore"],
+      "statistics": {
+        "sample_size": 110,
+        "match_rate": 0.82,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "miscellaneous-01-tianxing-tianyao",
+      "scope": "miscellaneous_star_combo",
+      "condition": {
+        "stars": ["天刑", "天姚"]
+      },
+      "interpretation": {
+        "zh": "天刑天姚對星：天刑屬陽火自律，天姚屬陰水放縱，為本質相反對星。兩星同宮或互會時，在「自律 vs 享樂」之間拉扯。天刑遇昌曲可變成紀律而不殘酷。",
+        "en": "Tianxing-Tianyao Opposition: Tianxing (discipline, Yang Fire) vs Tianyao (indulgence, Yin Water). Tension between self-control and pleasure. Tianxing with Wenchang/Wenqu becomes disciplined without harshness.",
+        "short": "天刑天姚：自律與享樂的拉扯"
+      },
+      "dimension_tags": ["personality", "behavior", "balance"],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": ["中州派深造講義", "vlee0610.pixnet"],
+      "statistics": {
+        "sample_size": 85,
+        "match_rate": 0.75,
+        "confidence_level": 0.82
+      }
+    },
+    {
+      "id": "miscellaneous-02-tianxing-wenchang",
+      "scope": "miscellaneous_star_combo",
+      "condition": {
+        "stars": ["天刑", "文昌", "文曲"],
+        "palaces": ["寅", "卯", "酉", "戌"]
+      },
+      "interpretation": {
+        "zh": "天刑見昌曲：天刑在寅卯酉戌入廟，與文昌、文曲成對會照或同度。主「職掌邊疆」，多為武職文官，如海關、移民官。自律但不帶肅殺之氣。",
+        "en": "Tianxing with Wenchang/Wenqu in Yin/Mao/You/Xu (exalted): Jurisdiction over borders. Martial civil officials like customs, immigration. Disciplined but without harshness.",
+        "short": "天刑昌曲：職掌邊疆，武職文官"
+      },
+      "dimension_tags": ["career", "government", "authority"],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": ["vlee0610.pixnet"],
+      "statistics": {
+        "sample_size": 45,
+        "match_rate": 0.78,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "miscellaneous-03-sigan-fa",
+      "scope": "miscellaneous_star_combo",
+      "condition": {
+        "stars": ["太陽", "巨門", "天刑"]
+      },
+      "interpretation": {
+        "zh": "太陽巨門天刑同會：為「司刑法之星」，多主從事法律、司法、裁判等工作。",
+        "en": "Taiyang-Jumen-Tianxing Together: Law and justice stars. Primarily law, judiciary, arbitration careers.",
+        "short": "司刑法之星：法律司法工作"
+      },
+      "dimension_tags": ["career", "law", "justice"],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": ["vlee0610.pixnet"],
+      "statistics": {
+        "sample_size": 35,
+        "match_rate": 0.80,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "miscellaneous-04-guansi",
+      "scope": "miscellaneous_star_combo",
+      "condition": {
+        "stars": ["太陽", "天梁", "天刑"],
+        "with_afflictions": true
+      },
+      "interpretation": {
+        "zh": "太陽天梁天刑同會見煞忌：主「官司詞訟」，多涉訴訟糾紛，而非職業司刑。與太陽巨門天刑不同。",
+        "en": "Taiyang-Tianliang-Tianxing with afflictions: Litigation and disputes. Differs from Taiyang-Jumen-Tianxing which indicates law careers.",
+        "short": "官司詞訟：訴訟糾紛困擾"
+      },
+      "dimension_tags": ["misfortune", "legal", "disputes"],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": ["vlee0610.pixnet"],
+      "statistics": {
+        "sample_size": 28,
+        "match_rate": 0.72,
+        "confidence_level": 0.80
+      }
+    },
+    {
+      "id": "miscellaneous-05-ziwei-tanlang-tianxing",
+      "scope": "miscellaneous_star_combo",
+      "condition": {
+        "stars": ["紫微", "貪狼", "天刑"],
+        "palace_positions": ["子", "午", "卯", "酉"]
+      },
+      "interpretation": {
+        "zh": "紫微會貪狼加天刑：紫微會貪狼於子午，或同貪狼於卯酉，且喜見天刑。本來易成桃花犯主，但遇天刑時傾向「自律」，減低桃色是非，變成對感情有節制的人。",
+        "en": "Ziwei with Tanlang and Tianxing: Naturally prone to romantic entanglements, but Tianxing's discipline reduces indiscretion. Results in restraint in relationships.",
+        "short": "紫微貪狼天刑：感情節制，避免桃花"
+      },
+      "dimension_tags": ["romance", "discipline", "relationships"],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": ["vlee0610.pixnet"],
+      "statistics": {
+        "sample_size": 52,
+        "match_rate": 0.76,
+        "confidence_level": 0.83
+      }
     }
   ]
 }
