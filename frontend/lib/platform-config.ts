@@ -557,6 +557,18 @@ export const USE_CASES: UseCaseConfig[] = [
     path: '#',
     features: ['Attendee Management', 'Venue Logistics', 'Schedule Builder', 'Live Coordination'],
   },
+  {
+    id: 'ziwei-astrology',
+    name: 'Ziwei Astrology System',
+    description: '中州派紫微斗數 - AI-powered birth chart calculation and interpretation with accuracy-tracked rules',
+    solutionLine: 'Experience',
+    status: 'prototype',
+    progress: 0.1,
+    priority: 'medium',
+    path: '/use-cases/ziwei',
+    agentCount: 3,
+    features: ['Chart Engine', 'Interpretation Engine', 'Evaluation Engine', 'Accuracy Tracking', 'Rule Database'],
+  },
 
   // ========================================================================
   // C-SUITE MANAGEMENT — CSuite
