@@ -2943,6 +2943,130 @@ app.post('/api/ziwei/insights', async (req, res) => {
 });
 
 // ==========================================
+// Step 7: Rule Evaluation & Pattern Recognition
+// ==========================================
+
+app.post('/api/ziwei/evaluate-rules', async (req, res) => {
+  try {
+    const { chart, minConsensus = 'consensus', dimensions = null } = req.body;
+
+    if (!chart || !chart.houses) {
+      return res.status(400).json({ error: 'Invalid chart data - must include houses' });
+    }
+
+    // Load rules from database or seed file
+    let rules = [];
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.query(
+          'SELECT * FROM ziwei_rules WHERE status = $1 ORDER BY consensus_label, statistics->\'confidence\' DESC',
+          ['active']
+        );
+        rules = result.rows.map(row => ({
+          id: row.id,
+          name: row.name,
+          ruleType: row.rule_type,
+          scope: row.scope,
+          condition: row.condition,
+          interpretation: row.interpretation,
+          dimensionTags: row.dimension_tags || [],
+          school: row.school,
+          consensusLabel: row.consensus_label,
+          sources: row.sources || [],
+          statistics: row.statistics,
+          notes: row.notes,
+          relatedRuleIds: row.related_rule_ids
+        }));
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch rules from DB:', dbErr.message);
+      }
+    }
+
+    // Fallback to seed file if no DB rules
+    if (rules.length === 0) {
+      try {
+        const fs = require('fs');
+        const rulesData = JSON.parse(fs.readFileSync('./data/ziwei-rules-seed.json', 'utf8'));
+        rules = rulesData.rules.map(r => ({
+          id: r.id,
+          name: r.id,
+          ruleType: r.scope === 'base' ? 'basic_pattern' : r.scope === 'star_group' ? 'star_group' : r.scope === 'major_pattern' ? 'major_pattern' : 'miscellaneous_combo',
+          scope: 'base',
+          condition: {
+            involvedPalaces: r.condition.palaces,
+            requiredStars: r.condition.stars,
+            notes: r.condition.condition_description
+          },
+          interpretation: r.interpretation,
+          dimensionTags: r.dimension_tags || [],
+          school: r.school,
+          consensusLabel: r.consensus_label,
+          sources: r.source_refs.map(ref => typeof ref === 'string' ? { type: 'note', title: ref } : ref) || [],
+          statistics: r.statistics || { sampleSize: null, matchRate: null, confidence: null },
+          notes: r.notes,
+          relatedRuleIds: []
+        }));
+      } catch (err) {
+        console.warn('⚠️ Could not load rules from seed file:', err.message);
+      }
+    }
+
+    // Initialize evaluator with rules
+    const ZiweiRuleEvaluator = require('./services/ziwei-rule-evaluator').default || require('./services/ziwei-rule-evaluator').ZiweiRuleEvaluator;
+    const evaluator = new ZiweiRuleEvaluator(rules);
+
+    // Evaluate chart
+    let results = evaluator.evaluateChart(chart);
+
+    // Filter by consensus if specified
+    if (minConsensus !== 'minority_view') {
+      results = evaluator.filterByConsensus(results, minConsensus);
+    }
+
+    // Filter by dimensions if specified
+    if (dimensions && Array.isArray(dimensions) && dimensions.length > 0) {
+      results = evaluator.filterByDimension(results, dimensions);
+    }
+
+    // Save results to database if available
+    if (process.env.DATABASE_URL && chart.id) {
+      try {
+        const db = require('./db');
+        await db.query(
+          'INSERT INTO ziwei_rule_evaluations (chart_id, total_rules, matched_rules, results, created_at) VALUES ($1, $2, $3, $4, NOW()) ON CONFLICT (chart_id) DO UPDATE SET matched_rules = $3, results = $4, updated_at = NOW()',
+          [
+            chart.id,
+            results.totalRules,
+            results.matchedRules,
+            JSON.stringify(results.results)
+          ]
+        );
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save evaluation results:', dbErr.message);
+      }
+    }
+
+    // Return results
+    res.json({
+      success: true,
+      evaluation: results,
+      stats: {
+        totalRules: results.totalRules,
+        matchedRules: results.matchedRules,
+        matchPercentage: ((results.matchedRules / results.totalRules) * 100).toFixed(1),
+        avgConfidence: results.results.length > 0
+          ? (results.results.reduce((sum, r) => sum + r.confidence, 0) / results.results.length).toFixed(3)
+          : 0
+      }
+    });
+  } catch (error) {
+    console.error('❌ Rule evaluation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
