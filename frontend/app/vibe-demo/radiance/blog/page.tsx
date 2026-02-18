@@ -1,155 +1,186 @@
 'use client';
 
+import Link from 'next/link';
+import { Header } from '../components/Header';
+import { Footer } from '../components/Footer';
+
 export default function BlogPage() {
+  const articles = [
+    {
+      slug: 'earned-media-strategy',
+      title: 'Why Earned Media Should Be at the Heart of Your PR Strategy',
+      excerpt: 'Earned media—coverage that you don\'t pay for, earned through genuine relationships and compelling stories—carries credibility that paid content cannot match. Here\'s why it matters more than ever.',
+      category: 'Public Relations',
+      date: '18 Feb 2026',
+      readTime: '5 min read'
+    },
+    {
+      slug: 'integrated-campaigns',
+      title: 'The Power of Integrated Campaigns: When PR, Events and Social Actually Work Together',
+      excerpt: 'Most campaigns fail because PR, events and social media operate in silos. Learn how integrated campaigns amplify every channel and deliver measurable results.',
+      category: 'Strategy',
+      date: '15 Feb 2026',
+      readTime: '7 min read'
+    },
+    {
+      slug: 'product-launch-pr',
+      title: 'Launching a Product in Hong Kong: A PR Playbook for Local Market Entry',
+      excerpt: 'Hong Kong\'s media landscape has unique dynamics. Discover the key steps for securing meaningful coverage and building awareness for new product launches in the market.',
+      category: 'Product Launch',
+      date: '12 Feb 2026',
+      readTime: '6 min read'
+    },
+    {
+      slug: 'event-media-strategy',
+      title: 'Beyond the Event: How to Generate Media Coverage Before, During and After Your Launch',
+      excerpt: 'Events are powerful, but they\'re even more powerful when paired with strategic PR. Learn how to maximize media impact across the full event lifecycle.',
+      category: 'Events',
+      date: '10 Feb 2026',
+      readTime: '5 min read'
+    },
+    {
+      slug: 'thought-leadership',
+      title: 'Building Thought Leadership: Positioning Your Executives as Industry Experts',
+      excerpt: 'Thought leadership isn\'t just for B2B. Learn how to position your executives or spokespeople as trusted voices in your industry through media interviews and strategic positioning.',
+      category: 'Thought Leadership',
+      date: '8 Feb 2026',
+      readTime: '6 min read'
+    },
+    {
+      slug: 'ngos-reputation',
+      title: 'Reputation Building for NGOs: Earned Media and Community Engagement',
+      excerpt: 'NGOs face unique communication challenges. Discover how strategic PR, authentic storytelling and community engagement build trust and drive support.',
+      category: 'NGO Communications',
+      date: '5 Feb 2026',
+      readTime: '7 min read'
+    },
+    {
+      slug: 'cultural-pr',
+      title: 'Cultural Marketing: How Art and Culture Organisations Build Audiences Through PR',
+      excerpt: 'Cultural organisations need to balance artistic integrity with audience development. Learn how strategic PR and media relations help galleries, museums and cultural events thrive.',
+      category: 'Cultural Communications',
+      date: '1 Feb 2026',
+      readTime: '6 min read'
+    },
+    {
+      slug: 'social-media-strategy',
+      title: 'Beyond Posting: Why Your Social Media Strategy Needs PR at Its Core',
+      excerpt: 'Social content alone isn\'t enough. The most successful brands connect their social strategy with earned media, events and consistent messaging for compounded impact.',
+      category: 'Social Media',
+      date: '28 Jan 2026',
+      readTime: '5 min read'
+    }
+  ];
+
+  const categories = ['All', ...new Set(articles.map(a => a.category))];
+
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <a href="/vibe-demo/radiance" className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:opacity-80">
-            ← Back to Radiance
-          </a>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Blog & Insights</h2>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
+      <Header />
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-16 px-6 max-w-4xl mx-auto">
-        <div className="space-y-6">
-          <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
-            Insights & Perspectives
-          </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
-            The communications landscape in Hong Kong is changing quickly, but some fundamentals stay the same: clear stories, consistent execution and respect for your audience. In our articles, we share reflections from our work in public relations, events, KOL marketing and social media—with a focus on practical ideas you can apply to your own organisation.
-          </p>
-        </div>
-      </section>
+      <main className="flex-1 pt-20">
+        {/* Hero Section */}
+        <section className="pt-16 pb-12 px-6 max-w-6xl mx-auto">
+          <div className="space-y-4">
+            <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
+              Radiance Blog
+            </h1>
+            <p className="text-xl text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl">
+              Insights on PR strategy, integrated campaigns, media relations, and communications best practices for brands and organizations in Hong Kong.
+            </p>
+          </div>
+        </section>
 
-      {/* Articles Grid */}
-      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-12">Latest articles</h2>
+        {/* Articles */}
+        <section className="py-16 px-6 max-w-4xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-12">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                className="px-4 py-2 text-sm font-medium rounded-full border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-purple-600 dark:hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
 
-        <div className="grid md:grid-cols-2 gap-8 mb-16">
-          {[
-            {
-              title: '[Article Title]',
-              category: 'Public Relations',
-              date: 'Coming soon',
-              excerpt: 'Article excerpt coming soon.',
-              readTime: '5 min read'
-            },
-            {
-              title: '[Article Title]',
-              category: 'Event Strategy',
-              date: 'Coming soon',
-              excerpt: 'Article excerpt coming soon.',
-              readTime: '7 min read'
-            },
-            {
-              title: '[Article Title]',
-              category: 'Social Media',
-              date: 'Coming soon',
-              excerpt: 'Article excerpt coming soon.',
-              readTime: '4 min read'
-            },
-            {
-              title: '[Article Title]',
-              category: 'KOL Marketing',
-              date: 'Coming soon',
-              excerpt: 'Article excerpt coming soon.',
-              readTime: '6 min read'
-            }
-          ].map((article, idx) => (
-            <div key={idx} className="group cursor-pointer border border-slate-200 dark:border-slate-800 rounded-lg p-8 hover:border-purple-400 dark:hover:border-purple-600 transition-all">
-              <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-3 uppercase tracking-wide">{article.category}</div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">{article.title}</h3>
-              <p className="text-slate-600 dark:text-slate-400 mb-4 leading-relaxed text-sm">{article.excerpt}</p>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-500 dark:text-slate-500">{article.date}</span>
-                <span className="text-xs text-slate-500 dark:text-slate-500">{article.readTime}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+          <div className="space-y-8">
+            {articles.map((article) => (
+              <Link
+                key={article.slug}
+                href={`/vibe-demo/radiance/blog/${article.slug}`}
+                className="group"
+              >
+                <article className="py-8 border-b border-slate-200 dark:border-slate-800 hover:border-purple-400 dark:hover:border-purple-500 transition-colors">
+                  <div className="flex justify-between items-start gap-4 mb-3">
+                    <div>
+                      <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide mb-2">
+                        {article.category}
+                      </div>
+                      <h3 className="text-2xl font-bold text-slate-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors leading-tight">
+                        {article.title}
+                      </h3>
+                    </div>
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
+                    {article.excerpt}
+                  </p>
+                  <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-500">
+                    <span>{article.date}</span>
+                    <span>•</span>
+                    <span>{article.readTime}</span>
+                  </div>
+                </article>
+              </Link>
+            ))}
+          </div>
+        </section>
 
-        <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8">
-          <p className="text-slate-700 dark:text-slate-300 leading-relaxed">
-            <strong>Blog articles and insights are coming soon.</strong> We're developing thought leadership content on PR strategy, event management, influencer marketing and digital communications. Subscribe to be notified when new articles are published.
-          </p>
-        </div>
-      </section>
+        {/* Newsletter CTA */}
+        <section className="py-16 px-6 max-w-4xl mx-auto bg-slate-50 dark:bg-slate-900/30 rounded-lg border border-slate-200 dark:border-slate-800">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+              Get communications insights in your inbox
+            </h2>
+            <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed max-w-2xl mx-auto">
+              Subscribe to our newsletter for regular updates on PR strategy, campaign case studies, and communications best practices.
+            </p>
+            <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+              <input
+                type="email"
+                placeholder="Your email"
+                className="px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 flex-1"
+              />
+              <button
+                type="submit"
+                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
+              >
+                Subscribe
+              </button>
+            </form>
+          </div>
+        </section>
 
-      {/* Topics Covered */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Topics we cover</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {[
-            'PR Strategy & Media Relations',
-            'Event Planning & Execution',
-            'Social Media Best Practices',
-            'Influencer Partnerships',
-            'Content Strategy & Creation',
-            'Brand Positioning & Messaging',
-            'Crisis Communication',
-            'Integrated Campaign Planning',
-            'Audience Insights & Data',
-            'Hong Kong Media Landscape',
-            'Cultural Sensitivity & Inclusivity',
-            'Measuring Campaign Impact'
-          ].map((topic) => (
-            <div key={topic} className="flex gap-3 p-4 bg-slate-50 dark:bg-slate-900/30 rounded-lg">
-              <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">→</span>
-              <span className="text-slate-700 dark:text-slate-300">{topic}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Newsletter Signup */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8">
-          <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Get insights in your inbox</h3>
-          <p className="text-slate-700 dark:text-slate-300 mb-6 leading-relaxed">
-            Subscribe to our newsletter and get the latest articles, case studies and insights delivered to your inbox monthly. We share practical thinking on PR, events, digital and integrated campaigns.
-          </p>
-          <form className="flex gap-3 flex-col sm:flex-row">
-            <input
-              type="email"
-              placeholder="Your email"
-              className="flex-1 px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-600"
-            />
-            <button
-              type="submit"
-              className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap"
+        {/* Case Studies CTA */}
+        <section className="py-16 px-6 max-w-4xl mx-auto">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+              See these insights in action
+            </h2>
+            <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed max-w-2xl mx-auto">
+              From environmental education to cultural events to product launches, explore how we\'ve applied PR strategy to deliver real results.
+            </p>
+            <Link
+              href="/vibe-demo/radiance/case-studies"
+              className="inline-block px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
             >
-              Subscribe
-            </button>
-          </form>
-        </div>
-      </section>
+              View All Case Studies →
+            </Link>
+          </div>
+        </section>
+      </main>
 
-      {/* CTA */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <div className="text-center">
-          <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Want to discuss something specific?</h3>
-          <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed max-w-2xl mx-auto">
-            Have a question about PR strategy, event planning, social media or influencer marketing? We're happy to discuss your specific situation and share what we've learned from similar projects.
-          </p>
-          <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
-            Get in touch
-          </button>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 py-12 px-6 mt-16">
-        <div className="max-w-6xl mx-auto text-center text-sm text-slate-500 dark:text-slate-400">
-          <p>Radiance PR & Martech Limited | Hong Kong</p>
-          <p className="mt-2">
-            <a href="/vibe-demo/radiance" className="text-purple-600 dark:text-purple-400 hover:underline">Back to Radiance</a>
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
