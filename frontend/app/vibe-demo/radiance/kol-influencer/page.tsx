@@ -315,15 +315,6 @@ export default function KOLInfluencerPage() {
         </div>
       </section>
 
-      {/* Chinese Summary */}
-      <section className="py-16 px-6 bg-gray-50">
-        <div className="max-w-4xl mx-auto border-t-4 border-blue-600 pt-12">
-          <h3 className="text-2xl font-bold mb-6 text-blue-600">繁體中文總結</h3>
-          <p className="text-gray-700 leading-relaxed text-lg">
-            KOL 和網紅行銷透過受眾信任的聲音放大品牌信息，是現代數碼行銷中最具公信力的渠道。Radiance 提供從 KOL 識別和篩選、合作洽談、內容指引、活動協調，到表現追蹤和報告的完整服務。我們不只追求粉絲數量，而是尋找與你品牌價值一致、擁有高參與率和真實受眾的創作者。無論是消費品牌、科技公司或 NGO，我們都能幫助你構建有效的 KOL 和網紅合作計畫。我們管理整個流程，讓你的品牌能安心與合適的聲音達成長期合作，創造真實、高效的行銷成果。立即聯絡我們，探索如何透過 KOL 和網紅的力量放大你的品牌。
-          </p>
-        </div>
-      </section>
 
       {/* Footer */}
       <footer className="py-12 px-6 bg-gray-900 text-gray-300">

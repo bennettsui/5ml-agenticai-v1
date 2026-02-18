@@ -318,16 +318,6 @@ export default function SocialContentPage() {
         </div>
       </section>
 
-      {/* Chinese Summary */}
-      <section className="py-16 px-6 bg-gray-50">
-        <div className="max-w-4xl mx-auto border-t-4 border-blue-600 pt-12">
-          <h3 className="text-2xl font-bold mb-6 text-blue-600">繁體中文總結</h3>
-          <p className="text-gray-700 leading-relaxed text-lg">
-            社交媒體與內容是品牌與受眾建立直接互動、維持品牌活躍度的核心渠道。Radiance 提供完整的社交媒體策略與執行服務，包括平台選擇、受眾研究、內容日曆規劃、視頻製作、設計創意、日常社交管理和有償社交放大。我們為消費品牌、科技公司、NGO 和文化機構構建參與度高的社區，透過故事化內容、用戶生成內容和實時互動，把粉絲轉化為品牌倡導者。無論是產品發佈、品牌意識提升，還是社群忠誠度建設，我們都能幫助你規劃和執行高效的社交媒體戰略。立即聯絡我們，一起探索如何透過社交媒體放大你的品牌聲量。
-          </p>
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="py-12 px-6 bg-gray-900 text-gray-300">
         <div className="max-w-6xl mx-auto">

@@ -316,15 +316,6 @@ export default function EventsPage() {
         </div>
       </section>
 
-      {/* Chinese Summary */}
-      <section className="py-16 px-6 bg-gray-50">
-        <div className="max-w-4xl mx-auto border-t-4 border-blue-600 pt-12">
-          <h3 className="text-2xl font-bold mb-6 text-blue-600">繁體中文總結</h3>
-          <p className="text-gray-700 leading-relaxed text-lg">
-            活動與體驗是品牌與眾生直接互動、創造難忘時刻的最有力渠道。Radiance 提供從活動概念策劃、場地選址、全面物流管理，到現場執行、媒體協調和事後內容放大的全方位服務。我們設計體驗式活動，包括新品發佈會、媒體預覽、社區聚集活動、文化展覽等，讓每個細節都強化品牌故事，同時為公關、社交媒體和口碑行銷生成珍貴內容。無論你是科技新創、消費品牌、NGO 還是文化機構，我們都能根據你的目標量身設計活動。我們不只處理後勤，更重要的是在現場管理每一刻，讓你的品牌故事栩栩如生。立即聯絡我們，探索如何透過一場精心策劃的活動，為你的品牌帶來動力和聲量。
-          </p>
-        </div>
-      </section>
 
       {/* Footer */}
       <footer className="py-12 px-6 bg-gray-900 text-gray-300">

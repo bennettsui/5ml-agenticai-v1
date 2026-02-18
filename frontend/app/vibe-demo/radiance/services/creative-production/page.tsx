@@ -352,23 +352,6 @@ export default function CreativeProductionServicePage() {
         </div>
       </section>
 
-      {/* Traditional Chinese Summary */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">繁體中文摘要</h3>
-        <div className="bg-slate-50 dark:bg-slate-900/30 rounded-lg p-6 text-slate-700 dark:text-slate-300 space-y-4 leading-relaxed text-sm">
-          <p>
-            Radiance 的創意設計及內容製作服務涵蓋文案創作、平面設計、影片製作、攝影和內容策略。我們相信高質素、具策略性的創意能有效吸引受眾、強化品牌形象，並驅動業務成果。無論是產品發佈、文化展覽或品牌重塑，我們會為你的品牌創作統一一致、專業高質的視覺和文字資產。
-          </p>
-          <p>
-            我們的服務特色是整合跨越多個學科的創意——設計、文案、影像、影片——確保每項資產都互相補成，服務於更大的行銷和傳播目標。我們深入了解香港和大灣區的文化偏好、設計趨勢及語言細節，確保你的創意訊息真正能引起本地受眾共鳴。
-          </p>
-          <p>
-            如你準備進行創意項目、需要長期內容支援，或想以高質素的設計和文案來提升品牌形象，歡迎聯絡 Radiance 的團隊了解更多。
-          </p>
-        </div>
-      </section>
-
-      {/* Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-800 py-12 px-6 mt-16">
         <div className="max-w-6xl mx-auto text-center text-sm text-slate-500 dark:text-slate-400">
           <p>Radiance PR & Martech Limited | Hong Kong</p>

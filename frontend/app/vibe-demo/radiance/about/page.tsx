@@ -1,18 +1,14 @@
 'use client';
 
+import { Header } from '../components/Header';
+import { Footer } from '../components/Footer';
+
 export default function RadianceAboutPage() {
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <a href="/vibe-demo" className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:opacity-80">
-            ← Back to Vibe Demo
-          </a>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Radiance</h2>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
+      <Header />
 
+      <main className="flex-1">
       {/* Hero Intro */}
       <section className="pt-32 pb-16 px-6 max-w-4xl mx-auto">
         <div className="space-y-6">
@@ -206,31 +202,9 @@ export default function RadianceAboutPage() {
         </div>
       </section>
 
-      {/* Traditional Chinese Summary */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">繁體中文摘要</h3>
-        <div className="bg-slate-50 dark:bg-slate-900/30 rounded-lg p-6 text-slate-700 dark:text-slate-300 space-y-4 leading-relaxed text-sm">
-          <p>
-            Radiance 是一間香港資深整合行銷傳播公司，結合公關、活動、社交媒體、KOL 行銷及創意製作。我們相信以搏得媒體報導為策略核心，加上整合傳播和貼地執行。無論客戶是商業品牌、文化藝術機構、NGO 或教育機構，我們都以量身訂造的策略、充足的業界經驗和認真的夥伴關係為基礎，助力品牌建立信譽、強化形象和推動業務成果。
-          </p>
-          <p>
-            我們的服務涵蓋策略公關、媒體關係、活動策劃與執行、社交內容創作、創意設計生產，以及數據驅動的數位整合方案。我們重視細節、講求執行，確保每項活動相輔相成而非各自為政，最終為客戶帶來真實的影響力。
-          </p>
-          <p>
-            如果你正在籌劃一場推廣、發佈活動、建立社交策略或應對傳播挑戰，Radiance 樂意與你探討如何助力達成目標。歡迎聯絡我們，一起為你的品牌或機構打造有力的傳播策略。
-          </p>
-        </div>
-      </section>
+      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 py-12 px-6 mt-16">
-        <div className="max-w-6xl mx-auto text-center text-sm text-slate-500 dark:text-slate-400">
-          <p>Radiance PR & Martech Limited | Hong Kong</p>
-          <p className="mt-2">
-            <a href="/vibe-demo" className="text-purple-600 dark:text-purple-400 hover:underline">Back to Vibe Demo</a>
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

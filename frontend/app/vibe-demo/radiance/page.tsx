@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { RadianceLogo } from './components/RadianceLogo';
+import { ServicesCube } from './components/ServicesCube';
 
 export default function RadiancePage() {
   return (
@@ -11,31 +12,33 @@ export default function RadiancePage() {
       <Header />
 
       {/* Hero Section */}
-      <section className="pt-32 pb-24 px-6 bg-gradient-to-br from-purple-50 via-white to-slate-50 dark:from-purple-950/30 dark:via-slate-950 dark:to-slate-900 relative overflow-hidden">
-        {/* Decorative elements */}
-        <div className="absolute top-20 right-10 w-72 h-72 bg-purple-200 dark:bg-purple-900/20 rounded-full blur-3xl opacity-30"></div>
-        <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-purple-100 dark:bg-purple-900/10 rounded-full blur-3xl opacity-20"></div>
+      <section className="pt-40 pb-32 px-6 bg-white dark:bg-slate-950 relative overflow-hidden">
+        {/* Subtle background gradients */}
+        <div className="absolute inset-0 opacity-20 dark:opacity-10">
+          <div className="absolute top-0 right-1/4 w-96 h-96 bg-purple-300 dark:bg-purple-900/40 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-1/3 -left-48 w-80 h-80 bg-slate-300 dark:bg-slate-800/30 rounded-full blur-3xl"></div>
+        </div>
 
-        <div className="max-w-5xl mx-auto text-center relative z-10">
-          <div className="mb-8 inline-block">
+        <div className="max-w-6xl mx-auto text-center relative z-10">
+          <div className="mb-12 inline-block">
             <RadianceLogo variant="text" size="md" />
           </div>
-          <h1 className="text-6xl md:text-7xl font-bold mb-8 leading-tight text-slate-900 dark:text-white">
-            Integrated PR & Marketing for Hong Kong Brands
+          <h1 className="text-7xl md:text-8xl font-light mb-8 leading-tight text-slate-900 dark:text-white tracking-tight">
+            Integrated PR<br className="hidden md:block" />& Marketing
           </h1>
-          <p className="text-2xl text-slate-600 dark:text-slate-300 mb-8 leading-relaxed max-w-3xl mx-auto font-light">
-            Strategy meets execution. We orchestrate PR, events, and digital to build real momentum for your brand.
+          <p className="text-xl text-slate-600 dark:text-slate-400 mb-16 leading-relaxed max-w-2xl mx-auto font-light">
+            Strategy meets execution. We orchestrate PR, events, and digital to build real momentum for your brand in Hong Kong.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
             <Link
-              href="/vibe-demo/radiance/lead-gen"
-              className="px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors text-lg shadow-lg hover:shadow-xl"
+              href="/vibe-demo/radiance/consultation"
+              className="px-8 py-3 border border-slate-900 dark:border-white text-slate-900 dark:text-white font-medium rounded-none hover:bg-slate-900 dark:hover:bg-white hover:text-white dark:hover:text-slate-900 transition-all duration-300 text-lg"
             >
-              Get Your Free Strategy Session
+              Free Consultation
             </Link>
             <Link
-              href="/vibe-demo/radiance/contact"
-              className="px-8 py-4 border-2 border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400 font-semibold rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors text-lg"
+              href="/vibe-demo/radiance/case-studies"
+              className="px-8 py-3 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-medium rounded-none hover:border-slate-900 dark:hover:border-white hover:text-slate-900 dark:hover:text-white transition-all duration-300 text-lg"
             >
               See Our Work
             </Link>
@@ -44,12 +47,12 @@ export default function RadiancePage() {
       </section>
 
       {/* Trust/Credibility Strip */}
-      <section className="py-16 px-6 bg-slate-100 dark:bg-slate-900/50 border-y border-slate-200 dark:border-slate-800">
-        <div className="max-w-5xl mx-auto">
-          <p className="text-center text-slate-600 dark:text-slate-400 mb-8 text-lg font-medium">
+      <section className="py-24 px-6 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/50">
+        <div className="max-w-6xl mx-auto">
+          <p className="text-center text-slate-500 dark:text-slate-500 mb-12 text-sm uppercase tracking-wide font-medium">
             Trusted by leading brands across sectors
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 text-center text-sm font-semibold text-slate-700 dark:text-slate-300">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 text-center text-xs font-medium text-slate-700 dark:text-slate-300 tracking-wide">
             {[
               'Consumer & Lifestyle',
               'Technology',
@@ -58,8 +61,7 @@ export default function RadiancePage() {
               'Financial Services',
               'Education'
             ].map((item) => (
-              <div key={item} className="flex items-center justify-center gap-2">
-                <div className="w-1.5 h-1.5 bg-purple-600 rounded-full"></div>
+              <div key={item}>
                 <span>{item}</span>
               </div>
             ))}
@@ -67,14 +69,17 @@ export default function RadiancePage() {
         </div>
       </section>
 
+      {/* Interactive 3D Services Cube */}
+      <ServicesCube />
+
       {/* Services Overview */}
-      <section id="services" className="py-24 px-6">
+      <section id="services" className="py-32 px-6 bg-white dark:bg-slate-950">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-5xl font-bold text-slate-900 dark:text-white mb-4">
+          <div className="text-center mb-24">
+            <h2 className="text-6xl md:text-7xl font-light text-slate-900 dark:text-white mb-6 tracking-tight">
               Our Services
             </h2>
-            <p className="text-xl text-slate-600 dark:text-slate-400">
+            <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
               Integrated solutions across PR, events, digital, and creative
             </p>
           </div>
