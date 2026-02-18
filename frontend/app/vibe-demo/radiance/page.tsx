@@ -1,67 +1,66 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
+import { Header } from './components/Header';
+import { Footer } from './components/Footer';
+import { RadianceLogo } from './components/RadianceLogo';
 
 export default function RadiancePage() {
-  const [email, setEmail] = useState('');
-
   return (
-    <main className="bg-white text-gray-900">
-      {/* Header */}
-      <header className="fixed top-0 w-full bg-white/95 backdrop-blur-md border-b border-gray-200 z-50">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="text-2xl font-bold tracking-tight">
-            <span className="text-blue-600">Radiance</span>
-          </div>
-          <nav className="hidden md:flex gap-8 text-sm font-medium">
-            <a href="#services" className="hover:text-blue-600 transition">Services</a>
-            <a href="#cases" className="hover:text-blue-600 transition">Cases</a>
-            <a href="#contact" className="hover:text-blue-600 transition">Contact</a>
-          </nav>
-        </div>
-      </header>
+    <main className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <Header />
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-6 bg-gradient-to-br from-blue-50 to-white">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
-            PR, Events, and Digital—Unified for Hong Kong Brands
+      <section className="pt-32 pb-24 px-6 bg-gradient-to-br from-purple-50 via-white to-slate-50 dark:from-purple-950/30 dark:via-slate-950 dark:to-slate-900 relative overflow-hidden">
+        {/* Decorative elements */}
+        <div className="absolute top-20 right-10 w-72 h-72 bg-purple-200 dark:bg-purple-900/20 rounded-full blur-3xl opacity-30"></div>
+        <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-purple-100 dark:bg-purple-900/10 rounded-full blur-3xl opacity-20"></div>
+
+        <div className="max-w-5xl mx-auto text-center relative z-10">
+          <div className="mb-8 inline-block">
+            <RadianceLogo variant="text" size="md" />
+          </div>
+          <h1 className="text-6xl md:text-7xl font-bold mb-8 leading-tight text-slate-900 dark:text-white">
+            Integrated PR & Marketing for Hong Kong Brands
           </h1>
-          <p className="text-xl text-gray-600 mb-8 leading-relaxed max-w-2xl mx-auto">
-            We don't separate strategy from execution. Radiance connects earned media, live experiences, and social momentum to build real momentum for your brand—whether you're launching a product, shifting perception, or deepening community trust.
+          <p className="text-2xl text-slate-600 dark:text-slate-300 mb-8 leading-relaxed max-w-3xl mx-auto font-light">
+            Strategy meets execution. We orchestrate PR, events, and digital to build real momentum for your brand.
           </p>
-          <p className="text-lg text-gray-700 mb-12 max-w-2xl mx-auto leading-relaxed">
-            Radiance bridges the traditional PR and events world with modern digital excellence. We're a hybrid agency working across public relations, experiential activations, and always-on content—orchestrating these channels so they amplify each other. From media relations and press events to influencer partnerships and in-house video production, we design integrated campaigns that move the needle for brands and institutions across Hong Kong and beyond.
-          </p>
-          <div className="flex gap-4 justify-center flex-wrap">
-            <button className="px-8 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition">
-              Plan Your Next Campaign
-            </button>
-            <button className="px-8 py-3 border-2 border-gray-300 text-gray-900 font-medium rounded-lg hover:border-blue-600 hover:text-blue-600 transition">
-              Start a Conversation
-            </button>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+            <Link
+              href="/vibe-demo/radiance/lead-gen"
+              className="px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors text-lg shadow-lg hover:shadow-xl"
+            >
+              Get Your Free Strategy Session
+            </Link>
+            <Link
+              href="/vibe-demo/radiance/contact"
+              className="px-8 py-4 border-2 border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400 font-semibold rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors text-lg"
+            >
+              See Our Work
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Credibility Strip */}
-      <section className="py-16 px-6 bg-gray-50">
-        <div className="max-w-4xl mx-auto">
-          <p className="text-lg text-gray-700 mb-8 leading-relaxed">
-            We've earned trust working with leading commercial brands, cultural institutions, NGOs, and mission-driven organizations across Hong Kong. Our experience spans category launches and reputation shifts to community engagement and sustainability initiatives—each requiring a blend of strategic thinking and on-the-ground execution.
+      {/* Trust/Credibility Strip */}
+      <section className="py-16 px-6 bg-slate-100 dark:bg-slate-900/50 border-y border-slate-200 dark:border-slate-800">
+        <div className="max-w-5xl mx-auto">
+          <p className="text-center text-slate-600 dark:text-slate-400 mb-8 text-lg font-medium">
+            Trusted by leading brands across sectors
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 text-center text-sm font-semibold text-slate-700 dark:text-slate-300">
             {[
-              'Consumer & Lifestyle Brands',
-              'Technology Companies',
-              'NGOs & Charities',
+              'Consumer & Lifestyle',
+              'Technology',
+              'NGOs & Social Impact',
               'Cultural Institutions',
-              'Education & Social Enterprise',
-              'Sustainability & Impact'
+              'Financial Services',
+              'Education'
             ].map((item) => (
-              <div key={item} className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                <span className="text-sm font-medium text-gray-700">{item}</span>
+              <div key={item} className="flex items-center justify-center gap-2">
+                <div className="w-1.5 h-1.5 bg-purple-600 rounded-full"></div>
+                <span>{item}</span>
               </div>
             ))}
           </div>
@@ -69,110 +68,193 @@ export default function RadiancePage() {
       </section>
 
       {/* Services Overview */}
-      <section id="services" className="py-20 px-6">
+      <section id="services" className="py-24 px-6">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-4xl font-bold mb-4 text-center">Our Services</h2>
-          <p className="text-center text-gray-600 mb-16 text-lg">
-            Integrated solutions across PR, events, digital, and creative
-          </p>
+          <div className="text-center mb-16">
+            <h2 className="text-5xl font-bold text-slate-900 dark:text-white mb-4">
+              Our Services
+            </h2>
+            <p className="text-xl text-slate-600 dark:text-slate-400">
+              Integrated solutions across PR, events, digital, and creative
+            </p>
+          </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
               {
                 title: 'Public Relations',
-                desc: 'Build credibility and shape narratives through earned media and thought leadership.',
-                bullets: [
-                  'Strategic media relations and press release campaigns tailored to Hong Kong and regional journalists',
-                  'Media training and executive positioning to amplify your voice',
-                  'Press events, conferences, and media briefings—from concept through execution'
-                ]
+                desc: 'Earn credible media coverage through strategic communications and strong media relationships.',
+                icon: '📰',
+                href: '/vibe-demo/radiance/services/public-relations'
               },
               {
                 title: 'Events & Experiences',
-                desc: 'Create memorable moments that turn audiences into advocates.',
-                bullets: [
-                  'Product launches, press conferences, and brand experiences designed for impact',
-                  'Community events, charity galas, exhibitions, and cultural activations',
-                  'Full-service event management: logistics, registration, on-site production, and post-event storytelling'
-                ]
+                desc: 'Create memorable brand moments that connect with audiences and generate social momentum.',
+                icon: '🎉',
+                href: '/vibe-demo/radiance/services/events'
               },
               {
                 title: 'Social Media & Content',
-                desc: 'Own the conversation with always-on content that resonates.',
-                bullets: [
-                  'Strategic social planning and community management across platforms',
-                  'Long-form and short-form video content, photography, and written storytelling',
-                  'Campaign ideation, content calendars, and real-time social response'
-                ]
+                desc: 'Build engaged communities through strategic content and consistent social presence.',
+                icon: '📱',
+                href: '/vibe-demo/radiance/services/social-media'
               },
               {
                 title: 'KOL & Influencer Marketing',
-                desc: 'Amplify reach through authentic partnerships with trusted voices.',
-                bullets: [
-                  'KOL identification, outreach, and partnership management aligned with brand values',
-                  'Influencer campaign strategy and performance tracking',
-                  'Micro and macro influencer networks across lifestyle, tech, sustainability, and social impact'
-                ]
+                desc: 'Amplify reach through authentic partnerships with creators your audience trusts.',
+                icon: '⭐',
+                href: '/vibe-demo/radiance/services/kol-marketing'
               },
               {
                 title: 'Creative & Production',
-                desc: 'Bring ideas to life with in-house design, video, and motion expertise.',
-                bullets: [
-                  'Graphic design, branding, and digital design assets',
-                  'Professional video production, motion graphics, and photography services',
-                  'Creative direction and post-production to ensure consistency across all channels'
-                ]
+                desc: 'Professional design, video, and content production that brings ideas to life.',
+                icon: '🎨',
+                href: '/vibe-demo/radiance/services/creative-production'
+              },
+              {
+                title: 'Integrated Campaigns',
+                desc: 'All channels working together so each touchpoint reinforces the others.',
+                icon: '🎯',
+                href: '/vibe-demo/radiance/lead-gen'
               }
             ].map((service, idx) => (
-              <div key={idx} className="border border-gray-200 rounded-lg p-8 hover:shadow-lg hover:border-blue-200 transition">
-                <h3 className="text-2xl font-bold mb-2 text-blue-600">{service.title}</h3>
-                <p className="text-gray-600 mb-6 font-medium">{service.desc}</p>
-                <ul className="space-y-3">
-                  {service.bullets.map((bullet, i) => (
-                    <li key={i} className="flex gap-3 text-sm text-gray-700 leading-relaxed">
-                      <span className="text-blue-600 font-bold mt-1">•</span>
-                      <span>{bullet}</span>
-                    </li>
-                  ))}
-                </ul>
+              <Link
+                key={idx}
+                href={service.href}
+                className="group p-8 bg-gradient-to-br from-slate-50 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-xl dark:hover:shadow-purple-900/20 transition-all"
+              >
+                <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">{service.icon}</div>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                  {service.title}
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">{service.desc}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Why Radiance */}
+      <section className="py-24 px-6 bg-gradient-to-br from-purple-950 to-purple-900 text-white">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-5xl font-bold mb-16 text-center">Why Work with Radiance</h2>
+
+          <div className="grid md:grid-cols-2 gap-12">
+            {[
+              {
+                title: 'Integrated by Design',
+                desc: 'We orchestrate PR, events, and digital as one strategy. Each channel amplifies the others instead of working in isolation.'
+              },
+              {
+                title: 'Hands-On Execution',
+                desc: 'We\'re not strategists who disappear. Our team manages media relations, produces events, creates content—we own the outcomes.'
+              },
+              {
+                title: 'Hybrid Experience',
+                desc: 'We\'ve worked with commercial brands, NGOs, cultural institutions, and social enterprises. That breadth informs every project.'
+              },
+              {
+                title: 'In-House Creative',
+                desc: 'We produce video, design assets, and manage content internally. You get speed, consistency, and creative control.'
+              }
+            ].map((item, idx) => (
+              <div key={idx} className="border-l-4 border-purple-400 pl-6">
+                <h3 className="text-2xl font-bold mb-3">{item.title}</h3>
+                <p className="text-purple-100 leading-relaxed text-lg">{item.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Featured Cases */}
-      <section id="cases" className="py-20 px-6 bg-gray-50">
+      {/* Case Studies Highlight */}
+      <section id="cases" className="py-24 px-6">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-4xl font-bold mb-4 text-center">Integrated Campaigns That Deliver</h2>
-          <p className="text-center text-gray-600 mb-16 max-w-3xl mx-auto leading-relaxed">
-            The best campaigns aren't built in silos. We start with a clear business challenge—whether it's breaking into a new market, shifting brand perception, or driving awareness for a social cause—then orchestrate PR, events, content, and influencer partnerships into a unified strategy. Our clients see the power of integration: earned media that boosts event attendance, experiential moments that fuel social content, influencer partnerships that extend campaign reach.
-          </p>
+          <div className="text-center mb-16">
+            <h2 className="text-5xl font-bold text-slate-900 dark:text-white mb-4">
+              Results That Speak
+            </h2>
+            <p className="text-xl text-slate-600 dark:text-slate-400">
+              Integrated campaigns that drive real business outcomes
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 mb-12">
+            {[
+              {
+                title: 'Lung Fu Shan Conservation',
+                challenge: 'Build awareness for environmental education initiative',
+                result: '80+ earned media placements, featured in top-tier outlets'
+              },
+              {
+                title: 'Art & Cultural Launch',
+                challenge: 'Generate buzz for international exhibition in Hong Kong',
+                result: 'Record attendance, strong media coverage, sustained social engagement'
+              },
+              {
+                title: 'Tech Company Entry',
+                challenge: 'Market entry for AI-powered platform in Asia',
+                result: '25+ launch day mentions, strong analyst coverage, 10K+ social reach'
+              }
+            ].map((item, idx) => (
+              <div
+                key={idx}
+                className="p-8 bg-gradient-to-br from-purple-50 to-slate-50 dark:from-slate-800 dark:to-slate-900 border border-purple-200 dark:border-slate-700 rounded-lg hover:shadow-lg transition-all"
+              >
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">{item.title}</h3>
+                <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
+                  <span className="font-semibold">Challenge:</span> {item.challenge}
+                </p>
+                <p className="text-purple-600 dark:text-purple-400 font-semibold">
+                  ✓ {item.result}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="text-center">
+            <Link
+              href="/vibe-demo/radiance/case-studies"
+              className="inline-block px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
+            >
+              View All Case Studies →
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* How We Work */}
+      <section className="py-24 px-6 bg-slate-50 dark:bg-slate-900/30">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-5xl font-bold text-slate-900 dark:text-white mb-16 text-center">
+            Our Process
+          </h2>
 
           <div className="grid md:grid-cols-3 gap-8">
             {[
               {
-                title: 'Reframing a Legacy Brand as Climate-Forward',
-                challenge: 'A multinational consumer brand sought to rebuild trust with Hong Kong\'s environmentally conscious audience after criticism over sustainability commitments. We combined an executive media briefing and press conference unveiling new eco-initiatives, coordinated social content and video storytelling showcasing supply-chain improvements, and partnered with sustainability micro-influencers to reach engaged audiences.',
-                result: '15+ media placements in tier-1 outlets, 40% uplift in brand sentiment tracking pre/post-campaign, strong attendance and social amplification of launch event.'
+                step: '01',
+                title: 'Discover',
+                desc: 'We start with your challenge and goals. Through workshops and research, we map narrative opportunities and identify which channels will move the needle.'
               },
               {
-                title: 'Building Movement for an Education-Focused Nonprofit',
-                challenge: 'A Hong Kong charity launching a new youth education initiative needed to reach donors, educators, and families. We designed an integrated approach: a media campaign positioning education as systemic change, a community launch event featuring partner schools and student testimonials, professional video content shared across social platforms, and strategic partnerships with education-focused influencers.',
-                result: '30% increase in website traffic, 18 new organizational partnerships, successful event with 200+ attendees and strong social lift.'
+                step: '02',
+                title: 'Design',
+                desc: 'We develop an integrated strategy weaving together PR, events, content, and partnerships into a coherent narrative. You see the full roadmap before execution begins.'
               },
               {
-                title: 'Go-to-Market for AI-Powered SaaS in Asia',
-                challenge: 'An early-stage tech company launching its first product in Hong Kong and Singapore needed awareness and credibility in a crowded category. We executed a pre-launch PR campaign targeting tech journalists and industry analysts, staged an intimate launch event for press and key opinion leaders, and orchestrated influencer partnerships with tech-savvy business leaders.',
-                result: '25+ launch-day media mentions, 500+ event RSVPs and strong video content repurposing, 10K+ social reach in first month.'
+                step: '03',
+                title: 'Deliver',
+                desc: 'Our team executes across all channels—media outreach, event production, content creation, partnerships. We track results and adapt in real time.'
               }
-            ].map((caseItem, idx) => (
-              <div key={idx} className="bg-white rounded-lg p-8 border border-gray-200 hover:shadow-lg transition">
-                <h3 className="text-xl font-bold mb-4 text-blue-600">{caseItem.title}</h3>
-                <p className="text-gray-700 text-sm mb-4 leading-relaxed">{caseItem.challenge}</p>
-                <div className="flex gap-2 text-sm text-gray-600 italic border-l-4 border-blue-600 pl-4">
-                  <span className="font-medium text-blue-600">✓</span>
-                  <span>{caseItem.result}</span>
+            ].map((item, idx) => (
+              <div key={idx} className="relative">
+                <div className="absolute -top-8 left-0 w-16 h-16 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold text-2xl">
+                  {item.step}
+                </div>
+                <div className="pt-12 p-8 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">{item.title}</h3>
+                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed">{item.desc}</p>
                 </div>
               </div>
             ))}
@@ -180,128 +262,70 @@ export default function RadiancePage() {
         </div>
       </section>
 
-      {/* Why Radiance */}
-      <section className="py-20 px-6">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-4xl font-bold mb-8 text-center">Why Work with Radiance</h2>
-          <p className="text-lg text-gray-700 mb-12 text-center leading-relaxed max-w-3xl mx-auto">
-            Most agencies specialize in one channel—PR, events, or social media. That's the problem. Radiance exists because great brands need integrated thinking and hands-on execution across all three. We're not a traditional agency that hands you a strategy deck; we're in the room, on-site, managing the details that turn campaigns into results.
-          </p>
+      {/* Testimonials */}
+      <section className="py-24 px-6">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-5xl font-bold text-slate-900 dark:text-white mb-16 text-center">
+            What Our Clients Say
+          </h2>
 
           <div className="grid md:grid-cols-2 gap-8">
             {[
               {
-                title: 'Integrated by Design',
-                desc: 'We orchestrate PR, events, and digital as one strategy, not three separate tactics, so each channel amplifies the others.'
+                quote: 'Radiance transformed how we think about integrated marketing. The PR actually drives event attendance, the content gets picked up by media. It works.',
+                author: 'Marketing Director',
+                company: 'Tech Startup'
               },
               {
-                title: 'Hands-on Execution, Not Just Strategy',
-                desc: 'Our team manages everything from media relations to event logistics to video production—we own the outcome.'
-              },
-              {
-                title: 'Hybrid Experience',
-                desc: 'We\'ve worked with commercial brands, NGOs, cultural institutions, and social enterprises, so we understand both business and purpose-driven narratives.'
-              },
-              {
-                title: 'In-House Creative & Production',
-                desc: 'We shoot video, design assets, and manage content creation internally, ensuring speed, consistency, and creative control.'
+                quote: 'We went from completely unknown to being recognized as an industry thought leader in 6 months. The team is professional, responsive, and actually delivers.',
+                author: 'Founder',
+                company: 'SaaS Company'
               }
-            ].map((item, idx) => (
-              <div key={idx} className="border-l-4 border-blue-600 pl-6">
-                <h3 className="text-xl font-bold mb-3">{item.title}</h3>
-                <p className="text-gray-700 leading-relaxed">{item.desc}</p>
+            ].map((testimonial, idx) => (
+              <div key={idx} className="p-8 bg-gradient-to-br from-purple-50 to-white dark:from-slate-800 dark:to-slate-900 border border-purple-200 dark:border-slate-700 rounded-lg">
+                <div className="flex gap-1 mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <span key={i} className="text-yellow-400 text-lg">★</span>
+                  ))}
+                </div>
+                <p className="text-slate-700 dark:text-slate-300 text-lg italic mb-4">"{testimonial.quote}"</p>
+                <div>
+                  <p className="font-bold text-slate-900 dark:text-white">{testimonial.author}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{testimonial.company}</p>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Simple Process */}
-      <section className="py-20 px-6 bg-gray-50">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-4xl font-bold mb-16 text-center">How We Work</h2>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                step: '01',
-                title: 'Discover',
-                desc: 'We begin with your challenge, your audience, and your goals. Through workshop conversations and market insight, we map the narrative opportunity and identify which channels—PR, events, content, influencers—will move the needle. This isn\'t about ticking boxes; it\'s about understanding what will truly resonate.'
-              },
-              {
-                step: '02',
-                title: 'Design',
-                desc: 'We develop an integrated campaign strategy that weaves together earned media, experiential moments, and content into a coherent narrative arc. You\'ll see the full roadmap: media targets, event concept, content calendar, influencer partnerships, and creative deliverables. We iterate with you until the strategy feels right.'
-              },
-              {
-                step: '03',
-                title: 'Deliver',
-                desc: 'Execution is where strategy becomes real. Our team manages media outreach, produces events, creates content, and coordinates partnerships in real time. We track what\'s working, adapt as we go, and report transparently so you see the impact at every stage.'
-              }
-            ].map((item, idx) => (
-              <div key={idx} className="bg-white rounded-lg p-8 border border-gray-200">
-                <div className="text-5xl font-bold text-blue-600 mb-4 opacity-20">{item.step}</div>
-                <h3 className="text-2xl font-bold mb-4">{item.title}</h3>
-                <p className="text-gray-700 leading-relaxed">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA / Contact Strip */}
-      <section id="contact" className="py-20 px-6 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
-        <div className="max-w-2xl mx-auto text-center">
-          <h2 className="text-4xl font-bold mb-6">Ready to Move Your Brand Forward?</h2>
-          <p className="text-lg mb-8 leading-relaxed opacity-95">
-            We'd love to learn about your next challenge—whether it's a campaign, an event, a reputation shift, or a market entry. We're happy to start with a 30-minute conversation, no pitch deck required. Let's explore what's possible when PR, events, and digital work as one.
+      {/* Final CTA */}
+      <section className="py-24 px-6 bg-gradient-to-r from-purple-600 to-purple-700">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-5xl font-bold text-white mb-6">
+            Ready to Move Your Brand Forward?
+          </h2>
+          <p className="text-2xl text-purple-100 mb-12 leading-relaxed">
+            Let's discuss your next challenge. Whether it's a campaign, reputation shift, or market entry—we're here to help.
           </p>
-          <div className="flex gap-4 justify-center flex-wrap">
-            <button className="px-8 py-3 bg-white text-blue-600 font-medium rounded-lg hover:bg-gray-100 transition">
-              Start the Conversation
-            </button>
-            <button className="px-8 py-3 border-2 border-white text-white font-medium rounded-lg hover:bg-white/10 transition">
-              Book a 30-Minute Call
-            </button>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              href="/vibe-demo/radiance/lead-gen"
+              className="px-8 py-4 bg-white text-purple-600 font-bold rounded-lg hover:bg-purple-50 transition-colors text-lg"
+            >
+              Schedule Your Free Session →
+            </Link>
+            <Link
+              href="/vibe-demo/radiance/contact"
+              className="px-8 py-4 border-2 border-white text-white font-bold rounded-lg hover:bg-white/10 transition-colors text-lg"
+            >
+              Get in Touch
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-12 px-6 bg-gray-900 text-gray-300">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <h4 className="font-bold text-white mb-4">Radiance</h4>
-              <p className="text-sm">PR & Martech for Hong Kong brands</p>
-            </div>
-            <div>
-              <h4 className="font-bold text-white mb-4">Services</h4>
-              <ul className="text-sm space-y-2">
-                <li><a href="/vibe-demo/radiance/services/public-relations" className="hover:text-white transition">Public Relations</a></li>
-                <li><a href="/vibe-demo/radiance/services/social-media" className="hover:text-white transition">Social Media</a></li>
-                <li><a href="/vibe-demo/radiance/services/kol-marketing" className="hover:text-white transition">KOL Marketing</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold text-white mb-4">Company</h4>
-              <ul className="text-sm space-y-2">
-                <li><a href="/vibe-demo/radiance/case-studies" className="hover:text-white transition">Case Studies</a></li>
-                <li><a href="/vibe-demo/radiance/team" className="hover:text-white transition">Team</a></li>
-                <li><a href="/vibe-demo/radiance/blog" className="hover:text-white transition">Blog</a></li>
-                <li><a href="/vibe-demo/radiance/contact" className="hover:text-white transition">Contact</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold text-white mb-4">Hong Kong</h4>
-              <p className="text-sm">hello@radiancehk.com</p>
-            </div>
-          </div>
-          <div className="border-t border-gray-700 pt-8 text-center text-sm">
-            <p>&copy; 2026 Radiance PR & Martech Limited. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </main>
   );
 }
