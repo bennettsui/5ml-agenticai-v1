@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://radiancehk.com'),
+  metadataBase: new URL('https://5ml-agenticai-v1.fly.dev'),
   title: {
     template: '%s | Radiance PR & Marketing Hong Kong',
     default: 'Radiance - Integrated PR & Marketing for Hong Kong Brands',
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_HK',
-    url: 'https://radiancehk.com',
+    url: '/vibe-demo/radiance',
     siteName: 'Radiance PR & Marketing',
     title: 'Radiance - Integrated PR & Marketing for Hong Kong Brands',
     description:
@@ -56,7 +56,7 @@ export const metadata: Metadata = {
     images: ['/images/twitter-image.png'],
   },
   alternates: {
-    canonical: 'https://radiancehk.com',
+    canonical: '/vibe-demo/radiance',
   },
   verification: {
     google: 'google-site-verification-code',

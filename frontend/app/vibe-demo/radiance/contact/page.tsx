@@ -126,7 +126,7 @@ export default function ContactPage() {
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
 
-      <main className="flex-1 pt-20">
+      <main id="main-content" className="flex-1 pt-20">
         {/* Hero Section */}
         <section className="py-24 px-6 border-b border-slate-200 dark:border-slate-800">
           <div className="max-w-6xl mx-auto mb-8">
@@ -175,10 +175,11 @@ export default function ContactPage() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label htmlFor="contact-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Name *
                       </label>
                       <input
+                        id="contact-name"
                         type="text"
                         name="name"
                         value={formData.name}
@@ -189,10 +190,11 @@ export default function ContactPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label htmlFor="contact-email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Email *
                       </label>
                       <input
+                        id="contact-email"
                         type="email"
                         name="email"
                         value={formData.email}
@@ -206,10 +208,11 @@ export default function ContactPage() {
 
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label htmlFor="contact-phone" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Phone
                       </label>
                       <input
+                        id="contact-phone"
                         type="tel"
                         name="phone"
                         value={formData.phone}
@@ -219,10 +222,11 @@ export default function ContactPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label htmlFor="contact-company" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Company
                       </label>
                       <input
+                        id="contact-company"
                         type="text"
                         name="company"
                         value={formData.company}
@@ -235,10 +239,11 @@ export default function ContactPage() {
 
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label htmlFor="contact-industry" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Industry
                       </label>
                       <input
+                        id="contact-industry"
                         type="text"
                         name="industry"
                         value={formData.industry}
@@ -248,7 +253,7 @@ export default function ContactPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label htmlFor="contact-service" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         What service interests you? *
                       </label>
                       <CustomSelect
@@ -263,10 +268,11 @@ export default function ContactPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="contact-message" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Message *
                     </label>
                     <textarea
+                      id="contact-message"
                       name="message"
                       value={formData.message}
                       onChange={handleChange}

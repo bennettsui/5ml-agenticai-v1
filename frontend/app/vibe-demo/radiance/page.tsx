@@ -8,7 +8,7 @@ import { ServicesShowcase } from './components/ServicesShowcase';
 
 export default function RadiancePage() {
   return (
-    <main className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+    <main id="main-content" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <Header />
 
       {/* Hero Section */}
