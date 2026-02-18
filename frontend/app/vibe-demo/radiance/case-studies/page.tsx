@@ -1,165 +1,196 @@
 'use client';
 
+import Link from 'next/link';
+import { Header } from '../components/Header';
+import { Footer } from '../components/Footer';
+
 export default function CaseStudiesPage() {
+  const caseStudies = [
+    {
+      slug: 'her-own-words-sport',
+      title: 'Her Own Words Sport - Sportswear Launch',
+      category: 'Fashion & Apparel',
+      challenge: 'Launch Hong Kong\'s first sportswear brand featuring 17 Asian sizing options',
+      result: '40+ media placements in major fashion and lifestyle outlets',
+      metrics: ['40+ Media Placements', 'Featured in Marie Claire, Elle, Cosmopolitan', 'Celebrity partnership with Sammie (Collar)'],
+      tags: ['PR', 'Fashion', 'Launch']
+    },
+    {
+      slug: 'daikin',
+      title: 'Daikin - Thought Leadership Campaign',
+      category: 'Home Appliances',
+      challenge: 'Establish thought leadership and strengthen brand image in air conditioning market',
+      result: 'Secured coverage from Ming Pao, am730, and TOPick',
+      metrics: ['Executive Feature Coverage', '18+ years expertise highlighted', 'Multiple mainstream publications'],
+      tags: ['PR', 'Thought Leadership', 'Executive Positioning']
+    },
+    {
+      slug: 'gp-batteries',
+      title: 'GP Batteries - Limited Edition Minions Collection',
+      category: 'Consumer Products',
+      challenge: 'Drive brand awareness and consumer interest through unique product collaboration',
+      result: '20+ media placements for novelty product line',
+      metrics: ['20+ Media Placements', 'Featured in HK01, TOPick, Baby Kingdom', 'Collectible product success'],
+      tags: ['PR', 'Product Launch', 'Consumer Goods']
+    },
+    {
+      slug: 'filorga',
+      title: 'FILORGA - Beauty & Skincare Brand PR',
+      category: 'Beauty & Skincare',
+      challenge: 'Promote anti-aging skincare and aesthetic medicine brand in Hong Kong market',
+      result: 'Established media presence and brand positioning in luxury beauty category',
+      metrics: ['New market entry', 'Premium positioning', 'Luxury publication coverage'],
+      tags: ['PR', 'Beauty', 'Brand Launch']
+    },
+    {
+      slug: 'lung-fu-shan',
+      title: 'Lung Fu Shan - "Into the Woods" Environmental Campaign',
+      category: 'Education & Environment',
+      challenge: 'Promote environmental education and encourage public engagement with nature',
+      result: '80+ earned media placements from top-tier outlets',
+      metrics: ['80+ Media Placements', '12 media attendees at preview', 'South China Morning Post, Hong Kong Economic Times featured'],
+      tags: ['PR', 'Events', 'Environmental', 'Education']
+    },
+    {
+      slug: 'chinese-culture-exhibition',
+      title: 'Chinese Culture Exhibition - "華衣．武藝" (Robes & Martial Arts)',
+      category: 'Art & Culture',
+      challenge: 'Showcase relationship between traditional Chinese martial arts and cultural attire',
+      result: 'Successful cultural event promotion and media coverage',
+      metrics: ['Cultural dialogue', 'Multiple partner coordination', 'Community engagement'],
+      tags: ['PR', 'Events', 'Cultural', 'Art']
+    },
+    {
+      slug: 'venice-biennale-hk',
+      title: 'Venice Biennale 2025 - Hong Kong Architecture Exhibition',
+      category: 'Architecture & Art',
+      challenge: 'Promote Hong Kong\'s architectural heritage and innovation at world-premier architecture biennial',
+      result: 'International PR and media coverage for prestigious architecture exhibition',
+      metrics: ['International Event', 'Architecture Focus', 'Global Media Reach'],
+      tags: ['PR', 'International', 'Architecture', 'Cultural']
+    }
+  ];
+
+  const categories = ['All', ...new Set(caseStudies.map(cs => cs.category))];
+
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <a href="/vibe-demo/radiance" className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:opacity-80">
-            ← Back to Radiance
-          </a>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Case Studies</h2>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
+      <Header />
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-16 px-6 max-w-4xl mx-auto">
-        <div className="space-y-6">
-          <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
-            Our Work
-          </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
-            Our work spans art and culture, NGOs, government and institutions, technology, consumer brands and more. Below is a selection of campaigns and events that demonstrate how we bring strategy, creativity and execution together. Each project reflects our commitment to integrated thinking and measurable results.
-          </p>
-        </div>
-      </section>
+      <main className="flex-1 pt-20">
+        {/* Hero Section */}
+        <section className="pt-16 pb-12 px-6 max-w-6xl mx-auto">
+          <div className="space-y-4">
+            <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
+              Our Work
+            </h1>
+            <p className="text-xl text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl">
+              Integrated campaigns across PR, events, and digital that deliver real business results for brands and institutions across Hong Kong and beyond.
+            </p>
+          </div>
+        </section>
 
-      {/* Case Studies Grid */}
-      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-12">Featured campaigns & events</h2>
+        {/* Case Studies Grid */}
+        <section className="py-16 px-6 max-w-6xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-12">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                className="px-4 py-2 text-sm font-medium rounded-full border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-purple-600 dark:hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
 
-        <div className="grid md:grid-cols-2 gap-12 mb-16">
-          {[
-            {
-              title: 'Chinese Culture Exhibition',
-              category: 'Cultural Institution',
-              description: 'Media strategy, press events and audience engagement for a major cultural exhibition.',
-              tags: ['PR', 'Events', 'Content']
-            },
-            {
-              title: 'Venice Biennale Hong Kong Exhibition',
-              category: 'Art & Culture',
-              description: 'International exhibition launch, media relations and global audience outreach.',
-              tags: ['PR', 'Events', 'International']
-            },
-            {
-              title: 'Consumer Brand Product Launch',
-              category: 'Consumer & Lifestyle',
-              description: 'Integrated campaign combining press conference, KOL partnerships and social amplification.',
-              tags: ['PR', 'KOL', 'Social Media']
-            },
-            {
-              title: 'Tech Company Market Entry',
-              category: 'Technology',
-              description: 'Go-to-market strategy for Asian expansion with PR, events and industry outreach.',
-              tags: ['PR', 'Events', 'Strategy']
-            },
-            {
-              title: 'NGO Awareness Campaign',
-              category: 'Social Enterprise',
-              description: 'Multi-channel campaign raising awareness and fundraising for social impact initiatives.',
-              tags: ['PR', 'Events', 'Content']
-            },
-            {
-              title: 'Beauty Brand Social Campaign',
-              category: 'Consumer & Lifestyle',
-              description: 'Influencer partnerships, user-generated content and social community building.',
-              tags: ['KOL', 'Social Media', 'Community']
-            }
-          ].map((caseItem, idx) => (
-            <div key={idx} className="group cursor-pointer">
-              <div className="bg-gradient-to-br from-purple-50 to-purple-25 dark:from-purple-950/30 dark:to-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8 h-full hover:border-purple-400 dark:hover:border-purple-600 transition-all">
-                <div className="text-sm font-semibold text-purple-600 dark:text-purple-400 mb-2 uppercase tracking-wide">{caseItem.category}</div>
-                <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">{caseItem.title}</h3>
-                <p className="text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">{caseItem.description}</p>
-                <div className="flex flex-wrap gap-2">
-                  {caseItem.tags.map((tag) => (
-                    <span key={tag} className="px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 rounded-full">
-                      {tag}
-                    </span>
-                  ))}
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {caseStudies.map((caseItem) => (
+              <Link
+                key={caseItem.slug}
+                href={`/vibe-demo/radiance/case-studies/${caseItem.slug}`}
+                className="group"
+              >
+                <div className="bg-gradient-to-br from-purple-50 to-slate-50 dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-8 h-full hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-lg dark:hover:shadow-purple-900/20 transition-all">
+                  <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide mb-3">
+                    {caseItem.category}
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                    {caseItem.title}
+                  </h3>
+                  <p className="text-slate-600 dark:text-slate-400 text-sm mb-4 leading-relaxed">
+                    {caseItem.challenge}
+                  </p>
+                  <p className="text-purple-600 dark:text-purple-400 font-semibold text-sm mb-4">
+                    ✓ {caseItem.result}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {caseItem.tags.map((tag) => (
+                      <span key={tag} className="px-2 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs text-slate-700 dark:text-slate-300 rounded">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        {/* Industries Served */}
+        <section className="py-16 px-6 bg-slate-50 dark:bg-slate-900/30 border-y border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8 text-center">
+              Industries We Serve
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {[
+                'Architecture & City Planning',
+                'Art & Culture',
+                'Beauty & Skincare',
+                'Consumer Products',
+                'Education',
+                'Environment & Conservation',
+                'Fashion & Apparel',
+                'Food & Hospitality',
+                'Home Appliances',
+                'Luxury Goods',
+                'Technology'
+              ].map((industry) => (
+                <div key={industry} className="flex gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg">
+                  <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">✓</span>
+                  <span className="text-slate-700 dark:text-slate-300 text-sm">{industry}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-
-        <div className="border-t border-slate-200 dark:border-slate-800 pt-12">
-          <p className="text-slate-600 dark:text-slate-400 leading-relaxed mb-8">
-            Each of these projects demonstrates a different aspect of our expertise. We're happy to share more detail about specific campaigns that align with your industry or objectives. Let's discuss what you're looking to achieve.
-          </p>
-          <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
-            Schedule a conversation
-          </button>
-        </div>
-      </section>
-
-      {/* Approach Section */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800 mt-8">
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">How we work on every project</h2>
-        <div className="space-y-6">
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-3">Strategy First</h3>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              Every campaign starts with clear business objectives and audience insights. We identify the most effective channels—PR, events, KOL partnerships, social content—and design an integrated strategy that makes each channel stronger.
-            </p>
           </div>
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-3">Creativity + Execution</h3>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              We develop compelling ideas and then execute meticulously. Our team manages media relations, produces events, creates content, coordinates partnerships—whatever it takes to bring the strategy to life.
-            </p>
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-3">Measurement & Impact</h3>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              We track what matters to your business: media coverage and sentiment, audience engagement, event attendance, conversions, brand lift. We share transparent reporting so you see the impact at every stage.
-            </p>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Industries We Serve */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Industries we serve</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {['Art & Culture', 'NGOs & Social Enterprise', 'Consumer & Lifestyle Brands', 'Technology & Innovation', 'Financial Services', 'Education & Institutions', 'Food & Hospitality', 'Fashion & Beauty'].map((industry) => (
-            <div key={industry} className="flex gap-3 p-4 bg-slate-50 dark:bg-slate-900/30 rounded-lg">
-              <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">✓</span>
-              <span className="text-slate-700 dark:text-slate-300">{industry}</span>
+        {/* CTA */}
+        <section className="py-16 px-6 max-w-4xl mx-auto">
+          <div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg p-8 text-center">
+            <h3 className="text-3xl font-bold text-white mb-4">Ready for your next campaign?</h3>
+            <p className="text-purple-100 mb-8 leading-relaxed max-w-2xl mx-auto">
+              Whether your challenge is brand awareness, perception shift, community engagement or market entry, we bring integrated strategy and hands-on execution. Let's discuss what's possible for your brand.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                href="/vibe-demo/radiance/lead-gen"
+                className="px-6 py-3 bg-white text-purple-600 font-bold rounded-lg hover:bg-purple-50 transition-colors"
+              >
+                Schedule Your Free Session →
+              </Link>
+              <Link
+                href="/vibe-demo/radiance/contact"
+                className="px-6 py-3 border-2 border-white text-white font-bold rounded-lg hover:bg-white/10 transition-colors"
+              >
+                Get in Touch
+              </Link>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8">
-          <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Ready for your next campaign?</h3>
-          <p className="text-slate-700 dark:text-slate-300 mb-8 leading-relaxed">
-            Whether your challenge is brand awareness, perception shift, community engagement or market entry, we bring integrated strategy and hands-on execution. Let's discuss what's possible for your brand.
-          </p>
-          <div className="flex gap-4 flex-wrap">
-            <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
-              Let's talk
-            </button>
-            <button className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
-              See all services
-            </button>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 py-12 px-6 mt-16">
-        <div className="max-w-6xl mx-auto text-center text-sm text-slate-500 dark:text-slate-400">
-          <p>Radiance PR & Martech Limited | Hong Kong</p>
-          <p className="mt-2">
-            <a href="/vibe-demo/radiance" className="text-purple-600 dark:text-purple-400 hover:underline">Back to Radiance</a>
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
