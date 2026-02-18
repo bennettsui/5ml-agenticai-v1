@@ -2474,6 +2474,58 @@ app.get('/api/ziwei/charts/:id', async (req, res) => {
   }
 });
 
+// POST /api/ziwei/interpret - Generate interpretations for a chart
+app.post('/api/ziwei/interpret', async (req, res) => {
+  try {
+    const { chart, consensusLevel = 'consensus' } = req.body;
+
+    if (!chart) {
+      return res.status(400).json({ error: 'Missing required field: chart' });
+    }
+
+    // Import interpretation engine dynamically
+    let InterpretationEngine;
+    try {
+      // Try to use compiled JS first, fallback to TS
+      const module = await import('./services/ziwei-interpretation-engine.js').catch(() =>
+        import('./services/ziwei-interpretation-engine.ts')
+      );
+      InterpretationEngine = module.InterpretationEngine;
+    } catch (e) {
+      // If both fail, provide a basic fallback
+      return res.status(501).json({
+        error: 'Interpretation engine not available',
+        details: 'TypeScript compilation required'
+      });
+    }
+
+    const engine = new InterpretationEngine();
+
+    // Generate interpretations
+    const allInterpretations = engine.generateInterpretations(chart);
+    const filtered = engine.filterByConsensus(allInterpretations, consensusLevel);
+    const ranked = engine.rankByAccuracy(filtered);
+    const grouped = engine.groupByDimension(ranked);
+
+    res.json({
+      success: true,
+      summary: {
+        totalInterpretations: allInterpretations.length,
+        filteredCount: filtered.length,
+        dimensionCount: grouped.length
+      },
+      interpretations: ranked,
+      grouped
+    });
+  } catch (error) {
+    console.error('❌ Interpretation error:', error);
+    res.status(500).json({
+      error: 'Failed to generate interpretations',
+      details: error.message
+    });
+  }
+});
+
 // ==========================================
 // Start Server
 // ==========================================
