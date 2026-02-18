@@ -561,7 +561,7 @@ export const USE_CASES: UseCaseConfig[] = [
     id: 'ziwei-astrology',
     name: '紫微 Purple Star Astrology',
     description: 'AI-powered Ziwei (中州派紫微斗數) birth chart calculation and interpretation with accuracy-tracked rules',
-    solutionLine: 'Experience',
+    solutionLine: 'ExpLab',
     status: 'live',
     progress: 0.5,
     priority: 'high',
