@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   ArrowLeft, Target, Search, Calendar, Pencil, Sparkles,
   DollarSign, Users, BarChart3, ChevronDown, Building2, FolderKanban, Loader2,
+  TrendingUp, Activity,
 } from 'lucide-react';
 import { useState } from 'react';
 import { BrandProvider, useBrandProject } from '@/lib/brand-context';
@@ -26,6 +27,13 @@ const NAV_SECTIONS = [
       { label: 'Content Development', href: '/use-cases/social-content-ops/content-dev', icon: Pencil },
       { label: 'Interactive Content', href: '/use-cases/social-content-ops/interactive', icon: Sparkles },
       { label: 'Media Buy', href: '/use-cases/social-content-ops/media-buy', icon: DollarSign },
+    ],
+  },
+  {
+    label: 'Intelligence',
+    items: [
+      { label: 'Trend Research', href: '/use-cases/social-content-ops/trend-research', icon: TrendingUp },
+      { label: 'Social Monitoring', href: '/use-cases/social-content-ops/monitoring', icon: Activity },
     ],
   },
   {
