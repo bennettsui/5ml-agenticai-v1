@@ -135,6 +135,18 @@ export const USE_CASES: UseCaseConfig[] = [
   // GROWTH HACKING STUDIO — GrowthOS
   // ========================================================================
   {
+    id: 'crm-brand-profile',
+    name: 'Brand Profile',
+    description: '18-agent Relationship Intelligence Platform with orchestrator, relationship graph, scoring, signal analysis & RAG-powered chat',
+    solutionLine: 'GrowthOS',
+    status: 'in_progress',
+    progress: 0.65,
+    priority: 'critical',
+    path: '/use-cases/crm',
+    agentCount: 18,
+    features: ['Relationship Orchestrator', 'Relationship Graph', 'Signal Analysis', 'RAG Chat'],
+  },
+  {
     id: 'growth-architect',
     name: 'Growth Architect',
     description: 'AI-powered growth strategy builder with market analysis, audience insights, and tactical recommendations',
@@ -593,18 +605,6 @@ export const USE_CASES: UseCaseConfig[] = [
     path: '#',
     features: ['KPI Dashboard', 'Strategic AI', 'Cross-Function', 'Scenario Planning'],
   },
-  {
-    id: 'crm',
-    name: 'CRM Relationship Intelligence',
-    description: '18-agent Relationship Intelligence Platform with orchestrator, relationship graph, scoring, signal analysis & RAG-powered chat',
-    solutionLine: 'CSuite',
-    status: 'in_progress',
-    progress: 0.65,
-    priority: 'critical',
-    path: '/use-cases/crm',
-    agentCount: 18,
-    features: ['Relationship Orchestrator', 'Relationship Graph', 'Signal Analysis', 'RAG Chat'],
-  },
 
   // ========================================================================
   // PLATFORM & INFRASTRUCTURE — Platform
@@ -659,7 +659,7 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
     notes: 'v2: 12-agent orchestrated pipeline with temporal data strategy, validation layer, backfill manager, cost-optimized routing',
   },
   {
-    ...USE_CASES.find(u => u.id === 'crm')!,
+    ...USE_CASES.find(u => u.id === 'crm-brand-profile')!,
     timeframe: 'now',
     type: 'platform',
     owner: 'Platform Team',
