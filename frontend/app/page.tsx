@@ -4,6 +4,8 @@ import Link from 'next/link';
 import {
   Layers, ArrowRight, LayoutDashboard, GitBranch, Shield,
   Sparkles, TrendingUp, Brain, DollarSign, Zap, ExternalLink,
+  ChevronRight, BookOpen, Database, Workflow, MessageCircle, Monitor,
+  Share2, Calendar, Settings, Plus,
 } from 'lucide-react';
 import {
   USE_CASES, SOLUTION_LINES, ROADMAP_ITEMS, STATUS_CONFIG, SEVEN_LAYERS,
@@ -20,8 +22,15 @@ const LINE_ICONS: Record<string, typeof TrendingUp> = {
   Experience: Sparkles,
 };
 
+const LINE_BORDER: Record<string, string> = {
+  GrowthOS: 'border-l-purple-500',
+  ExecIntel: 'border-l-teal-500',
+  OpsFinance: 'border-l-blue-500',
+  Experience: 'border-l-amber-500',
+  Platform: 'border-l-slate-500',
+};
+
 const LAYER_COLORS = [
-  // index 0 = L1 (bottom) → index 6 = L7 (top)
   { bar: 'from-violet-600/70 to-violet-500/40', text: 'text-violet-400', dot: 'bg-violet-400' },
   { bar: 'from-indigo-600/70 to-indigo-500/40', text: 'text-indigo-400', dot: 'bg-indigo-400' },
   { bar: 'from-blue-600/70 to-blue-500/40', text: 'text-blue-400', dot: 'bg-blue-400' },
@@ -30,13 +39,6 @@ const LAYER_COLORS = [
   { bar: 'from-amber-600/70 to-amber-500/40', text: 'text-amber-400', dot: 'bg-amber-400' },
   { bar: 'from-rose-600/70 to-rose-500/40', text: 'text-rose-400', dot: 'bg-rose-400' },
 ];
-
-const LINE_BORDER: Record<string, string> = {
-  GrowthOS: 'border-l-purple-500',
-  ExecIntel: 'border-l-teal-500',
-  OpsFinance: 'border-l-blue-500',
-  Experience: 'border-l-amber-500',
-};
 
 // ---------------------------------------------------------------------------
 // Page
@@ -93,16 +95,38 @@ export default function Home() {
         </div>
       </section>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 space-y-16 pb-20">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 space-y-20 pb-20">
 
         {/* ============================================================== */}
-        {/* SOLUTION LINES — visual cards with count indicators            */}
+        {/* QUICK ACCESS CARDS - POPULAR FEATURES                          */}
+        {/* ============================================================== */}
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { icon: LayoutDashboard, label: 'Control Tower', desc: 'Dashboard', href: '/dashboard', color: 'from-blue-600/60 to-blue-500/20', iconBg: 'bg-blue-500/10' },
+            { icon: TrendingUp, label: 'Growth Architect', desc: 'Try new', href: '/dashboard?tab=growth', color: 'from-emerald-600/60 to-emerald-500/20', iconBg: 'bg-emerald-500/10' },
+            { icon: Share2, label: 'Social Content', desc: 'Brand setup', href: '/dashboard?tab=social-ops', color: 'from-purple-600/60 to-purple-500/20', iconBg: 'bg-purple-500/10' },
+            { icon: Brain, label: 'Agent Chat', desc: 'Ask anything', href: '/dashboard?tab=chat', color: 'from-pink-600/60 to-pink-500/20', iconBg: 'bg-pink-500/10' },
+          ].map((card) => (
+            <Link key={card.label} href={card.href} className={`rounded-lg border border-slate-700/50 bg-gradient-to-br ${card.color} p-4 hover:border-slate-600 transition-all group`}>
+              <div className={`${card.iconBg} w-fit p-2 rounded-lg mb-3`}>
+                <card.icon className="w-5 h-5 text-white" />
+              </div>
+              <div className="text-sm font-semibold text-white group-hover:text-blue-300 transition-colors">{card.label}</div>
+              <div className="text-xs text-slate-400">{card.desc}</div>
+            </Link>
+          ))}
+        </section>
+
+        {/* ============================================================== */}
+        {/* SOLUTION LINES WITH GROUPED USE CASES                          */}
         {/* ============================================================== */}
         <section id="solution-lines">
-          <h2 className="text-2xl font-bold text-white mb-2 text-center">Solution Lines</h2>
-          <p className="text-slate-500 text-center mb-8 text-sm">Four product families powered by the agentic platform</p>
+          <div className="mb-10">
+            <h2 className="text-3xl font-bold text-white mb-2">Solution Lines</h2>
+            <p className="text-slate-400">Four product families powered by the agentic platform</p>
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-12">
             {solutionLineEntries.map(([key, line]) => {
               const cases = USE_CASES.filter(u => u.solutionLine === key);
               const live = cases.filter(c => c.status === 'live').length;
@@ -112,51 +136,121 @@ export default function Home() {
               const Icon = LINE_ICONS[key] || Sparkles;
 
               return (
-                <div key={key} className={`rounded-xl border-l-4 ${LINE_BORDER[key]} border border-slate-700/50 bg-slate-800/60 p-5`}>
-                  {/* Header */}
-                  <div className="flex items-center gap-2.5 mb-1">
-                    <div className={`p-1.5 rounded-lg ${line.darkBg}`}>
-                      <Icon className={`w-4 h-4 ${line.textColor}`} />
+                <div key={key}>
+                  {/* Solution Line Header */}
+                  <div className={`rounded-lg border-l-4 ${LINE_BORDER[key]} border border-slate-700/50 bg-slate-800/40 p-6 mb-4`}>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${line.darkBg}`}>
+                          <Icon className={`w-5 h-5 ${line.textColor}`} />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-white">{line.name}</h3>
+                          <p className="text-sm text-slate-500">{line.tagline}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs">
+                        {live > 0 && <span className="flex items-center gap-1 text-green-400"><span className="w-2 h-2 rounded-full bg-green-400" />{live} Live</span>}
+                        {building > 0 && <span className="flex items-center gap-1 text-amber-400"><span className="w-2 h-2 rounded-full bg-amber-400" />{building} Building</span>}
+                        {planned > 0 && <span className="flex items-center gap-1 text-blue-400"><span className="w-2 h-2 rounded-full bg-blue-400" />{planned} Planned</span>}
+                      </div>
                     </div>
-                    <h3 className="text-base font-bold text-white">{line.name}</h3>
-                  </div>
-                  <p className="text-xs text-slate-500 mb-4 ml-9">{line.tagline}</p>
-
-                  {/* Visual status row */}
-                  <div className="flex items-center gap-4 mb-3">
-                    {live > 0 && (
-                      <span className="flex items-center gap-1.5 text-xs">
-                        <span className="w-2 h-2 rounded-full bg-green-400" />
-                        <span className="text-green-400 font-medium">{live} Live</span>
-                      </span>
-                    )}
-                    {building > 0 && (
-                      <span className="flex items-center gap-1.5 text-xs">
-                        <span className="w-2 h-2 rounded-full bg-amber-400" />
-                        <span className="text-amber-400 font-medium">{building} Building</span>
-                      </span>
-                    )}
-                    {planned > 0 && (
-                      <span className="flex items-center gap-1.5 text-xs">
-                        <span className="w-2 h-2 rounded-full bg-blue-400" />
-                        <span className="text-blue-400 font-medium">{planned} Planned</span>
-                      </span>
-                    )}
-                    {agents > 0 && (
-                      <span className="text-[10px] text-slate-600 ml-auto">{agents} agents</span>
-                    )}
                   </div>
 
-                  {/* Progress bar */}
-                  <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-green-500/70 to-green-400/40 transition-all"
-                      style={{ width: `${cases.length > 0 ? (live / cases.length) * 100 : 0}%` }}
-                    />
+                  {/* Use Cases Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {cases.map((uc) => {
+                      const sc = STATUS_CONFIG[uc.status];
+                      return (
+                        <Link
+                          key={uc.id}
+                          href={uc.path}
+                          className={`group rounded-lg border-l-4 ${LINE_BORDER[uc.solutionLine] || 'border-l-slate-500'} border border-slate-700/50 bg-slate-800/60 hover:bg-white/[0.02] hover:border-slate-600 p-4 transition-all`}
+                        >
+                          {/* Top row: status + progress */}
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border ${sc.bg} ${sc.color}`}>
+                              <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                              {sc.label}
+                            </span>
+                            {uc.agentCount && <span className="text-[10px] text-slate-600">{uc.agentCount} agents</span>}
+                          </div>
+
+                          {/* Name */}
+                          <h4 className="text-sm font-bold text-white mb-2 group-hover:text-blue-400 transition-colors">{uc.name}</h4>
+
+                          {/* Description */}
+                          <p className="text-xs text-slate-500 mb-3 line-clamp-2">{uc.description}</p>
+
+                          {/* Features */}
+                          {uc.features && (
+                            <div className="flex flex-wrap gap-1 mb-3">
+                              {uc.features.slice(0, 2).map((f, i) => (
+                                <span key={i} className="text-[10px] px-1.5 py-0.5 bg-white/[0.04] rounded text-slate-500">{f}</span>
+                              ))}
+                              {uc.features.length > 2 && <span className="text-[10px] text-slate-600">+{uc.features.length - 2}</span>}
+                            </div>
+                          )}
+
+                          {/* Progress bar */}
+                          {uc.progress > 0 && (
+                            <div className="h-1 rounded-full bg-white/[0.04] overflow-hidden">
+                              <div className="h-full rounded-full bg-gradient-to-r from-blue-500/60 to-cyan-400/40" style={{ width: `${uc.progress * 100}%` }} />
+                            </div>
+                          )}
+
+                          {/* Footer link indicator */}
+                          <div className="mt-4 flex items-center text-xs text-slate-600 group-hover:text-blue-400 transition-colors">
+                            Visit <ChevronRight className="w-3 h-3" />
+                          </div>
+                        </Link>
+                      );
+                    })}
                   </div>
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        {/* ============================================================== */}
+        {/* SOCIAL CONTENT OPERATIONS - FEATURED SECTION                   */}
+        {/* ============================================================== */}
+        <section className="rounded-2xl border border-slate-700/50 bg-gradient-to-br from-purple-900/20 to-purple-800/10 p-8">
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full text-xs text-purple-400 mb-3">
+                <Sparkles className="w-3 h-3" /> New Feature
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">Social Content Operations</h3>
+              <p className="text-slate-400 max-w-2xl">AI-powered platform for multi-brand social media strategy, content planning, and performance tracking. Brand onboarding flow, content calendar management, and real-time analytics.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              { icon: Plus, title: 'Brand Setup', desc: 'Interactive onboarding wizard', action: 'Start New Brand' },
+              { icon: Calendar, title: 'Content Calendar', desc: 'AI-generated content plans', action: 'View Calendar' },
+              { icon: Monitor, title: 'Performance Dashboard', desc: 'Track KPIs and ROI', action: 'View Analytics' },
+            ].map((card) => (
+              <div key={card.title} className="rounded-lg border border-slate-700/50 bg-slate-800/40 p-4 hover:bg-slate-800/60 transition-colors">
+                <div className="p-2 rounded-lg bg-purple-500/10 w-fit mb-3">
+                  <card.icon className="w-5 h-5 text-purple-400" />
+                </div>
+                <h4 className="font-semibold text-white mb-1">{card.title}</h4>
+                <p className="text-xs text-slate-500 mb-4">{card.desc}</p>
+                <button className="text-xs text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1 font-medium">
+                  {card.action} <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-slate-700/50 flex items-center justify-between">
+            <span className="text-sm text-slate-400">Complete brand-agnostic platform for all social media operations</span>
+            <Link href="/dashboard?tab=social-ops" className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-medium transition-colors">
+              Explore Social Ops <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
         </section>
 
