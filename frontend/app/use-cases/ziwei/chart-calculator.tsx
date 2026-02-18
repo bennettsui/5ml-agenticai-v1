@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Loader } from 'lucide-react';
+import { Sparkles, Loader, Brain } from 'lucide-react';
 
 interface ChartInput {
   lunarYear: number;
@@ -31,12 +31,16 @@ export function ChartCalculator() {
   });
 
   const [chart, setChart] = useState<any>(null);
+  const [interpretations, setInterpretations] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [interpretLoading, setInterpretLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleCalculate = async () => {
     setLoading(true);
     setError(null);
+    setChart(null);
+    setInterpretations(null);
     try {
       const response = await fetch('/api/ziwei/calculate', {
         method: 'POST',
@@ -50,10 +54,41 @@ export function ChartCalculator() {
 
       const data = await response.json();
       setChart(data.chart);
+
+      // Auto-generate interpretations
+      if (data.chart) {
+        await generateInterpretations(data.chart, data.chartId);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateInterpretations = async (chartData: any, chartId?: string) => {
+    setInterpretLoading(true);
+    try {
+      const response = await fetch('/api/ziwei/interpret', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chart: chartData,
+          chartId,
+          consensusLevel: 'consensus'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Interpretation generation failed');
+      }
+
+      const data = await response.json();
+      setInterpretations(data);
+    } catch (err: any) {
+      console.error('Interpretation error:', err);
+    } finally {
+      setInterpretLoading(false);
     }
   };
 
@@ -250,6 +285,82 @@ export function ChartCalculator() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Interpretations Display */}
+      {interpretations && (
+        <div className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-8">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Brain className="w-5 h-5 text-teal-400" />
+            Chart Interpretations
+          </h3>
+
+          {interpretLoading && (
+            <div className="flex items-center gap-2 text-slate-400">
+              <Loader className="w-4 h-4 animate-spin" />
+              Generating interpretations...
+            </div>
+          )}
+
+          {!interpretLoading && interpretations.grouped && (
+            <div className="space-y-6">
+              {/* Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="rounded-lg bg-slate-900/50 p-3">
+                  <div className="text-xs text-slate-500 mb-1">Total</div>
+                  <div className="text-xl font-bold text-blue-400">
+                    {interpretations.summary.totalInterpretations}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-900/50 p-3">
+                  <div className="text-xs text-slate-500 mb-1">Consensus</div>
+                  <div className="text-xl font-bold text-green-400">
+                    {interpretations.summary.filteredCount}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-900/50 p-3">
+                  <div className="text-xs text-slate-500 mb-1">Dimensions</div>
+                  <div className="text-xl font-bold text-purple-400">
+                    {interpretations.summary.dimensionCount}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-900/50 p-3">
+                  <div className="text-xs text-slate-500 mb-1">Confidence</div>
+                  <div className="text-xl font-bold text-amber-400">
+                    {(interpretations.summary.avgConfidence * 100).toFixed(0)}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Grouped Interpretations */}
+              <div className="space-y-4">
+                {interpretations.grouped.map((group: any) => (
+                  <div key={group.dimension} className="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-bold text-white">{group.dimension}</h4>
+                      <span className="text-xs text-slate-400">
+                        {(group.avgConfidence * 100).toFixed(0)}% confidence
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {group.interpretations.map((interp: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="text-sm text-slate-300 bg-slate-800/50 rounded px-3 py-2 border-l-2 border-teal-500"
+                        >
+                          {interp.text}
+                          <div className="text-xs text-slate-500 mt-1">
+                            {interp.consensus === 'consensus' && '✓ Consensus'} • {interp.scope}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

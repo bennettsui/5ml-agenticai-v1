@@ -2477,29 +2477,25 @@ app.get('/api/ziwei/charts/:id', async (req, res) => {
 // POST /api/ziwei/interpret - Generate interpretations for a chart
 app.post('/api/ziwei/interpret', async (req, res) => {
   try {
-    const { chart, consensusLevel = 'consensus' } = req.body;
+    const { chart, chartId, consensusLevel = 'consensus' } = req.body;
 
     if (!chart) {
       return res.status(400).json({ error: 'Missing required field: chart' });
     }
 
-    // Import interpretation engine dynamically
+    // Load interpretation engine with database rules
     let InterpretationEngine;
     try {
-      // Try to use compiled JS first, fallback to TS
-      const module = await import('./services/ziwei-interpretation-engine.js').catch(() =>
-        import('./services/ziwei-interpretation-engine.ts')
-      );
+      const module = require('./services/ziwei-interpretation-engine.ts');
       InterpretationEngine = module.InterpretationEngine;
     } catch (e) {
-      // If both fail, provide a basic fallback
       return res.status(501).json({
-        error: 'Interpretation engine not available',
-        details: 'TypeScript compilation required'
+        error: 'Interpretation engine not available'
       });
     }
 
-    const engine = new InterpretationEngine();
+    // Use database rules if available
+    const engine = await InterpretationEngine.fromDatabase();
 
     // Generate interpretations
     const allInterpretations = engine.generateInterpretations(chart);
@@ -2507,12 +2503,28 @@ app.post('/api/ziwei/interpret', async (req, res) => {
     const ranked = engine.rankByAccuracy(filtered);
     const grouped = engine.groupByDimension(ranked);
 
+    // Store interpretations with chart if DB is available
+    if (chartId && process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.query(
+          `UPDATE ziwei_birth_charts SET interpretations = $1, updated_at = NOW() WHERE id = $2`,
+          [JSON.stringify(grouped), chartId]
+        );
+      } catch (dbErr) {
+        console.warn('⚠️ Could not store interpretations:', dbErr.message);
+      }
+    }
+
     res.json({
       success: true,
       summary: {
         totalInterpretations: allInterpretations.length,
         filteredCount: filtered.length,
-        dimensionCount: grouped.length
+        dimensionCount: grouped.length,
+        avgConfidence: grouped.length > 0
+          ? grouped.reduce((sum, g) => sum + g.avgConfidence, 0) / grouped.length
+          : 0
       },
       interpretations: ranked,
       grouped

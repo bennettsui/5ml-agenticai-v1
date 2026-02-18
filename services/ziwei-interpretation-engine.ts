@@ -142,6 +142,32 @@ export class InterpretationEngine {
   }
 
   /**
+   * Load rules from database (async)
+   */
+  static async fromDatabase() {
+    try {
+      const db = require('../db');
+      const dbRules = await db.getZiweiRules({ consensus: 'consensus' });
+
+      const rules: InterpretationRule[] = dbRules.map((row: any) => ({
+        id: row.id,
+        version: row.version,
+        scope: row.scope,
+        condition: row.condition,
+        interpretation: row.interpretation,
+        consensusLabel: row.consensus_label,
+        statistics: row.statistics,
+        status: row.status
+      }));
+
+      return new InterpretationEngine(rules);
+    } catch (error) {
+      console.warn('⚠️ Could not load rules from DB, using defaults:', error.message);
+      return new InterpretationEngine();
+    }
+  }
+
+  /**
    * Match and generate interpretations for a calculated chart
    */
   generateInterpretations(chart: BaseChart): ChartInterpretation[] {
