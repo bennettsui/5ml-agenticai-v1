@@ -22,6 +22,22 @@ export default function HerOwnWordsSportCaseStudy() {
           </div>
         </section>
 
+        {/* Featured Image */}
+        <section className="py-12 px-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="relative h-96 bg-gradient-to-br from-pink-100 to-purple-100 dark:from-slate-800 dark:to-slate-900 rounded-lg overflow-hidden">
+              <img
+                src="/images/radiance/case-studies/her-own-words-sport/HerOwnWords-scaled.jpg"
+                alt="Her Own Words Sport Launch"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-3">
+              Her Own Words Sport Launch Campaign
+            </p>
+          </div>
+        </section>
+
         <section className="py-20 px-6 max-w-4xl mx-auto">
           <div className="mb-16 pb-16 border-b border-slate-200 dark:border-slate-800">
             <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Background</h2>
@@ -154,6 +170,37 @@ export default function HerOwnWordsSportCaseStudy() {
                 </div>
               </li>
             </ul>
+          </div>
+        </section>
+
+        {/* Image Gallery */}
+        <section className="py-20 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
+          <div className="mb-12">
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Campaign & Product Gallery</h2>
+            <p className="text-lg text-slate-600 dark:text-slate-400">Behind-the-scenes and product photography from the Her Own Words SPORT launch</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { src: '/images/radiance/case-studies/her-own-words-sport/HerOwnWords2-scaled.jpg', alt: 'Product Launch' },
+              { src: '/images/radiance/case-studies/her-own-words-sport/HerOwnWords3.jpeg', alt: 'Sportswear Collection' },
+              { src: '/images/radiance/case-studies/her-own-words-sport/HerOwnWords4.jpeg', alt: 'Brand Campaign' },
+              { src: '/images/radiance/case-studies/her-own-words-sport/HerOwnWords5.jpeg', alt: 'Product Details' },
+            ].map((image, idx) => (
+              <div
+                key={idx}
+                className="relative group overflow-hidden rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 aspect-video"
+              >
+                <img
+                  src={image.src}
+                  alt={image.alt}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                  <p className="text-white text-sm font-medium">{image.alt}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 

@@ -27,6 +27,22 @@ export default function LungFuShanCaseStudy() {
           </div>
         </section>
 
+        {/* Featured Image */}
+        <section className="py-12 px-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="relative h-96 bg-gradient-to-br from-green-100 to-emerald-100 dark:from-slate-800 dark:to-slate-900 rounded-lg overflow-hidden">
+              <img
+                src="/images/radiance/case-studies/lung-fu-shan/Lung-Fu-Shan-Environmental-Education-Centre-1-1024x683.jpg"
+                alt="Lung Fu Shan Environmental Education Centre"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-3">
+              Lung Fu Shan Environmental Education Centre
+            </p>
+          </div>
+        </section>
+
         {/* Content */}
         <section className="py-20 px-6 max-w-4xl mx-auto">
           {/* Overview */}
@@ -208,6 +224,39 @@ export default function LungFuShanCaseStudy() {
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">Hong Kong architecture exhibition at world-premier biennial</p>
               </Link>
             </div>
+          </div>
+        </section>
+
+        {/* Image Gallery */}
+        <section className="py-20 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
+          <div className="mb-12">
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Campaign & Media Gallery</h2>
+            <p className="text-lg text-slate-600 dark:text-slate-400">Behind-the-scenes from the "Into the Woods" campaign and environmental education initiatives</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { src: '/images/radiance/case-studies/lung-fu-shan/Lung-Fu-Shan-Environmental-Education-Centre-2-1024x683.jpg', alt: 'Environmental Education Program' },
+              { src: '/images/radiance/case-studies/lung-fu-shan/Lung-Fu-Shan-Environmental-Education-Centre-3-1024x683.jpg', alt: 'Nature Exploration Activity' },
+              { src: '/images/radiance/case-studies/lung-fu-shan/Lung-Fu-Shan-Environmental-Education-Centre-4-1024x683.jpg', alt: 'Community Engagement' },
+              { src: '/images/radiance/case-studies/lung-fu-shan/Ecology-in-The-Making-1816-present-Exhibition.jpg', alt: 'Exhibition Opening' },
+              { src: '/images/radiance/case-studies/lung-fu-shan/Into-the-Woods-Souvenir-1024x683.jpg', alt: 'Campaign Material' },
+              { src: '/images/radiance/case-studies/lung-fu-shan/Lung-Fu-Shan-Workout-Guide-1024x683.jpg', alt: 'Health & Wellness Guide' },
+            ].map((image, idx) => (
+              <div
+                key={idx}
+                className="relative group overflow-hidden rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 aspect-video"
+              >
+                <img
+                  src={image.src}
+                  alt={image.alt}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                  <p className="text-white text-sm font-medium">{image.alt}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
