@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
+import { Breadcrumb } from '../components/Breadcrumb';
 
 /* ── Custom dropdown ─────────────────────────────────────── */
 function CustomSelect({
@@ -177,18 +178,39 @@ export default function ConsultationPage() {
 
       <main className="flex-1 pt-20">
 
+        {/* Breadcrumb */}
+        <section className="py-6 px-6 border-b border-slate-100 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <Breadcrumb items={[
+              { label: 'Home', href: '/vibe-demo/radiance' },
+              { label: 'Free Consultation' }
+            ]} />
+          </div>
+        </section>
+
         {/* Hero */}
         <section className="py-24 px-6 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
-          <div className="max-w-5xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <p className="text-xs font-semibold uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-4">
               Free Strategy Session
             </p>
-            <h1 className="text-6xl md:text-7xl font-light text-slate-900 dark:text-white mb-6 leading-tight tracking-tight">
+            <h1 className="text-6xl md:text-7xl font-bold text-slate-900 dark:text-white mb-6 leading-tight">
               Let's talk about<br />your brand
             </h1>
-            <p className="text-xl text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl font-light">
+            <p className="text-xl text-slate-600 dark:text-slate-400 leading-relaxed max-w-3xl font-light mb-8">
               A 30-minute call with our strategy team. No obligations—just honest ideas on how integrated PR and marketing can move your brand forward.
             </p>
+            <div className="max-w-3xl mb-8">
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Common challenges we help with:</p>
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-600 dark:text-slate-400">
+                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Unclear brand positioning or messaging</span></li>
+                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Struggling to build media credibility</span></li>
+                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Disconnected PR, events, and digital efforts</span></li>
+                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Entering a competitive market</span></li>
+                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Limited budget, need strategy not just tactics</span></li>
+                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Scaling brand awareness or reputation</span></li>
+              </ul>
+            </div>
             <div className="mt-8 flex flex-wrap gap-6 text-sm text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
@@ -208,7 +230,7 @@ export default function ConsultationPage() {
 
         {/* Two Column Layout */}
         <section className="py-16 px-6">
-          <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-start">
+          <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-20 items-start">
 
             {/* Left: Why + Process */}
             <div className="space-y-10">
@@ -385,7 +407,7 @@ export default function ConsultationPage() {
 
         {/* FAQ */}
         <section className="py-16 px-6 border-t border-slate-100 dark:border-slate-800">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <h2 className="text-2xl font-light text-slate-900 dark:text-white mb-10">Frequently asked questions</h2>
             <div className="grid md:grid-cols-2 gap-8">
               {[
@@ -405,7 +427,7 @@ export default function ConsultationPage() {
 
         {/* Back link */}
         <section className="py-10 px-6 border-t border-slate-100 dark:border-slate-800">
-          <div className="max-w-4xl mx-auto text-center">
+          <div className="max-w-6xl mx-auto text-center">
             <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
               Prefer email? Reach us at{' '}
               <a href="mailto:hello@radiancehk.com" className="text-purple-600 dark:text-purple-400 hover:underline">
