@@ -104,8 +104,10 @@ export function ChartCalculator() {
 
   const [chart, setChart] = useState<any>(null);
   const [interpretations, setInterpretations] = useState<any>(null);
+  const [ruleEvaluation, setRuleEvaluation] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [interpretLoading, setInterpretLoading] = useState(false);
+  const [rulesLoading, setRulesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleCalculate = async () => {
@@ -113,6 +115,7 @@ export function ChartCalculator() {
     setError(null);
     setChart(null);
     setInterpretations(null);
+    setRuleEvaluation(null);
     try {
       const response = await fetch('/api/ziwei/calculate', {
         method: 'POST',
@@ -127,9 +130,10 @@ export function ChartCalculator() {
       const data = await response.json();
       setChart(data.chart);
 
-      // Auto-generate interpretations
+      // Auto-generate interpretations and evaluate rules
       if (data.chart) {
         await generateInterpretations(data.chart, data.chartId);
+        await evaluateRules(data.chart);
       }
     } catch (err: any) {
       setError(err.message);
@@ -161,6 +165,32 @@ export function ChartCalculator() {
       console.error('Interpretation error:', err);
     } finally {
       setInterpretLoading(false);
+    }
+  };
+
+  const evaluateRules = async (chartData: any) => {
+    setRulesLoading(true);
+    try {
+      const response = await fetch('/api/ziwei/evaluate-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chart: chartData,
+          minConsensus: 'consensus'
+        })
+      });
+
+      if (!response.ok) {
+        console.warn('Rule evaluation failed:', await response.text());
+        return;
+      }
+
+      const data = await response.json();
+      setRuleEvaluation(data.evaluation);
+    } catch (err: any) {
+      console.error('Rule evaluation error:', err);
+    } finally {
+      setRulesLoading(false);
     }
   };
 
@@ -444,6 +474,119 @@ export function ChartCalculator() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Rule Evaluation Display */}
+      {ruleEvaluation && (
+        <div className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-8">
+          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-purple-400" />
+            Pattern Recognition & Star Groups (格局星群分析)
+          </h3>
+
+          {rulesLoading && (
+            <div className="flex items-center gap-2 text-slate-400">
+              <Loader className="w-4 h-4 animate-spin" />
+              Evaluating patterns...
+            </div>
+          )}
+
+          {!rulesLoading && ruleEvaluation.results && (
+            <div className="space-y-6">
+              {/* Statistics Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="rounded-lg bg-slate-900/50 p-4">
+                  <div className="text-xs text-slate-500 mb-1">Matched Rules</div>
+                  <div className="text-2xl font-bold text-purple-400">
+                    {ruleEvaluation.results.length}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-900/50 p-4">
+                  <div className="text-xs text-slate-500 mb-1">Total Rules</div>
+                  <div className="text-2xl font-bold text-slate-400">
+                    {ruleEvaluation.totalRules}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-900/50 p-4">
+                  <div className="text-xs text-slate-500 mb-1">Match Rate</div>
+                  <div className="text-2xl font-bold text-blue-400">
+                    {ruleEvaluation.matchPercentage}%
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-900/50 p-4">
+                  <div className="text-xs text-slate-500 mb-1">Avg Confidence</div>
+                  <div className="text-2xl font-bold text-green-400">
+                    {(parseFloat(ruleEvaluation.stats?.avgConfidence || '0') * 100).toFixed(0)}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Summary - Dominant Patterns */}
+              {ruleEvaluation.summary?.dominantPatterns && ruleEvaluation.summary.dominantPatterns.length > 0 && (
+                <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-4">
+                  <h4 className="font-semibold text-white mb-2">🎯 Dominant Patterns (主格局)</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {ruleEvaluation.summary.dominantPatterns.map((pattern: string, idx: number) => (
+                      <span
+                        key={idx}
+                        className="inline-block px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-sm font-medium"
+                      >
+                        {pattern}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Matched Rules List */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-white">Matched Patterns:</h4>
+                {ruleEvaluation.results.map((result: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4"
+                  >
+                    {/* Rule Header */}
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h5 className="font-semibold text-white">{result.ruleName}</h5>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {result.interpretation.zh}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-purple-400">
+                          {(result.confidence * 100).toFixed(0)}%
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {result.consensusLabel === 'consensus' ? '✓' : '?'} {result.consensusLabel}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Relevant Stars & Palaces */}
+                    {(result.relevantStars?.length > 0 || result.relevantPalaces?.length > 0) && (
+                      <div className="flex flex-wrap gap-4 mt-3 text-xs">
+                        {result.relevantStars?.length > 0 && (
+                          <div>
+                            <span className="text-slate-500">Stars: </span>
+                            <span className="text-blue-300">{result.relevantStars.join(', ')}</span>
+                          </div>
+                        )}
+                        {result.relevantPalaces?.length > 0 && (
+                          <div>
+                            <span className="text-slate-500">Palaces: </span>
+                            <span className="text-amber-300">{result.relevantPalaces.join(', ')}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
