@@ -10,6 +10,9 @@ import ScheduledJobs from '@/components/ScheduledJobs';
 import AgenticWorkflows from '@/components/AgenticWorkflows';
 import KnowledgeBase from '@/components/KnowledgeBase';
 import CostAnalysis from '@/components/CostAnalysis';
+import ZiweiChat from '@/components/ZiweiChat';
+import ZiweiCompatibility from '@/components/ZiweiCompatibility';
+import ZiweiInsights from '@/components/ZiweiInsights';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,

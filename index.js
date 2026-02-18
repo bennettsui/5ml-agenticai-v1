@@ -2518,7 +2518,7 @@ app.post('/api/ziwei/interpret', async (req, res) => {
     // Load interpretation engine with database rules
     let InterpretationEngine;
     try {
-      const module = require('./services/ziwei-interpretation-engine.ts');
+      const module = require('./services/ziwei-interpretation-engine');
       InterpretationEngine = module.InterpretationEngine;
     } catch (e) {
       return res.status(501).json({
@@ -2567,6 +2567,378 @@ app.post('/api/ziwei/interpret', async (req, res) => {
       error: 'Failed to generate interpretations',
       details: error.message
     });
+  }
+});
+
+// ==========================================
+// Step 4: Enhanced Interpretation with DeepSeek LLM
+// ==========================================
+
+app.post('/api/ziwei/enhance-interpretation', async (req, res) => {
+  try {
+    const { chart, interpretations, chartId } = req.body;
+
+    if (!chart || !interpretations) {
+      return res.status(400).json({ error: 'Missing chart or interpretations' });
+    }
+
+    // Initialize LLM enhancer
+    const { ZiweiLLMEnhancer } = require('./services/ziwei-llm-enhancer');
+    const enhancer = new ZiweiLLMEnhancer();
+
+    if (!enhancer.isAvailable()) {
+      return res.status(503).json({
+        error: 'LLM enhancement not available',
+        fallback: interpretations
+      });
+    }
+
+    // Generate enhanced interpretations
+    const enhancement = await enhancer.enhanceInterpretations(chart, interpretations);
+
+    if (!enhancement) {
+      return res.status(500).json({
+        error: 'Failed to enhance interpretations',
+        fallback: interpretations
+      });
+    }
+
+    // Save to database if available
+    if (chartId && process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.saveEnhancedInterpretation(chartId, {
+          llmEnhancement: enhancement.enhancement,
+          confidenceBoost: 0.4,
+          model: enhancement.model,
+          tokensInput: enhancement.tokensInput,
+          tokensOutput: enhancement.tokensOutput
+        });
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save enhancement to DB:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      enhancement: enhancement.enhancement,
+      tokens: {
+        input: enhancement.tokensInput,
+        output: enhancement.tokensOutput
+      },
+      model: enhancement.model
+    });
+  } catch (error) {
+    console.error('❌ Enhancement error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Step 5: Conversational Chat Interface
+// ==========================================
+
+app.post('/api/ziwei/conversations', async (req, res) => {
+  try {
+    const { chartId, userId, title } = req.body;
+
+    if (!chartId) {
+      return res.status(400).json({ error: 'Missing chartId' });
+    }
+
+    // Get chart data
+    let chart = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.query(
+          'SELECT * FROM ziwei_birth_charts WHERE id = $1',
+          [chartId]
+        );
+        chart = result.rows[0]?.base_chart;
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch chart:', dbErr.message);
+      }
+    }
+
+    if (!chart) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    // Initialize conversation manager
+    const { ZiweiConversationManager } = require('./services/ziwei-conversation-manager');
+    const manager = new ZiweiConversationManager();
+
+    if (!manager.isAvailable()) {
+      return res.status(503).json({ error: 'Chat service not available' });
+    }
+
+    // Create conversation
+    const conversation = manager.createConversation(chart, userId);
+
+    // Save to database if available
+    let conversationId = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.createConversation(chartId, userId, title);
+        conversationId = result.id;
+      } catch (dbErr) {
+        console.warn('⚠️ Could not create conversation in DB:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      conversationId,
+      systemPrompt: conversation.systemPrompt,
+      chartContext: conversation.chartContext
+    });
+  } catch (error) {
+    console.error('❌ Conversation creation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/ziwei/conversations/:id/messages', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content, messages: messageHistory } = req.body;
+
+    if (!content) {
+      return res.status(400).json({ error: 'Missing message content' });
+    }
+
+    // Get conversation and chart data
+    let chart = null;
+    if (process.env.DATABASE_URL && id) {
+      try {
+        const db = require('./db');
+        const conv = await db.getZiweiConversation(id);
+        if (conv) {
+          const chartResult = await db.query(
+            'SELECT base_chart FROM ziwei_birth_charts WHERE id = $1',
+            [conv.chart_id]
+          );
+          chart = chartResult.rows[0]?.base_chart;
+        }
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch conversation/chart:', dbErr.message);
+      }
+    }
+
+    if (!chart) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    // Generate response
+    const { ZiweiConversationManager } = require('./services/ziwei-conversation-manager');
+    const manager = new ZiweiConversationManager();
+
+    if (!manager.isAvailable()) {
+      return res.status(503).json({ error: 'Chat service not available' });
+    }
+
+    const responseData = await manager.generateResponse(chart, messageHistory || [], content);
+
+    if (!responseData) {
+      return res.status(500).json({ error: 'Failed to generate response' });
+    }
+
+    // Save message to database if available
+    if (id && process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.addConversationMessage(id, 'user', content, responseData.tokensInput);
+        await db.addConversationMessage(id, 'assistant', responseData.response, responseData.tokensOutput);
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save messages:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      response: responseData.response,
+      tokens: {
+        input: responseData.tokensInput,
+        output: responseData.tokensOutput
+      },
+      timestamp: responseData.timestamp
+    });
+  } catch (error) {
+    console.error('❌ Message generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/ziwei/conversations/:id/history', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const db = require('./db');
+    const messages = await db.getConversationMessages(id);
+
+    res.json({
+      success: true,
+      messages,
+      count: messages.length
+    });
+  } catch (error) {
+    console.error('❌ History fetch error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Step 6: Compatibility Analysis
+// ==========================================
+
+app.post('/api/ziwei/compatibility', async (req, res) => {
+  try {
+    const { chart1Id, chart2Id, relationshipType } = req.body;
+
+    if (!chart1Id || !chart2Id) {
+      return res.status(400).json({ error: 'Missing chart IDs' });
+    }
+
+    // Fetch both charts from database
+    let chart1 = null, chart2 = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const [result1, result2] = await Promise.all([
+          db.query('SELECT base_chart FROM ziwei_birth_charts WHERE id = $1', [chart1Id]),
+          db.query('SELECT base_chart FROM ziwei_birth_charts WHERE id = $1', [chart2Id])
+        ]);
+        chart1 = result1.rows[0]?.base_chart;
+        chart2 = result2.rows[0]?.base_chart;
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch charts:', dbErr.message);
+      }
+    }
+
+    if (!chart1 || !chart2) {
+      return res.status(404).json({ error: 'One or both charts not found' });
+    }
+
+    // Analyze compatibility
+    const { ZiweiCompatibilityAnalyzer } = require('./services/ziwei-compatibility-analyzer');
+    const analyzer = new ZiweiCompatibilityAnalyzer();
+
+    if (!analyzer.isAvailable()) {
+      return res.status(503).json({ error: 'Compatibility analysis not available' });
+    }
+
+    const analysis = await analyzer.analyzeCompatibility(chart1, chart2, relationshipType || 'romantic');
+
+    if (!analysis) {
+      return res.status(500).json({ error: 'Failed to analyze compatibility' });
+    }
+
+    // Save to database if available
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.saveCompatibilityAnalysis(chart1Id, chart2Id, relationshipType, analysis);
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save compatibility analysis:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      compatibilityScore: analysis.compatibilityScore,
+      harmoniousElements: analysis.harmoniousElements,
+      conflictingElements: analysis.conflictingElements,
+      report: analysis.report,
+      tokens: {
+        input: analysis.tokensInput,
+        output: analysis.tokensOutput
+      }
+    });
+  } catch (error) {
+    console.error('❌ Compatibility analysis error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Step 6: Personalized Insights
+// ==========================================
+
+app.post('/api/ziwei/insights', async (req, res) => {
+  try {
+    const { chartId, lifeStage, analysisDepth } = req.body;
+
+    if (!chartId) {
+      return res.status(400).json({ error: 'Missing chartId' });
+    }
+
+    // Fetch chart data
+    let chart = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.query(
+          'SELECT base_chart FROM ziwei_birth_charts WHERE id = $1',
+          [chartId]
+        );
+        chart = result.rows[0]?.base_chart;
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch chart:', dbErr.message);
+      }
+    }
+
+    if (!chart) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    // Use LLM enhancer to generate insights
+    const { ZiweiLLMEnhancer } = require('./services/ziwei-llm-enhancer');
+    const enhancer = new ZiweiLLMEnhancer();
+
+    if (!enhancer.isAvailable()) {
+      return res.status(503).json({ error: 'Insights generation not available' });
+    }
+
+    const insights = await enhancer.generateLifeGuidance(chart, lifeStage || 'current', {});
+
+    if (!insights) {
+      return res.status(500).json({ error: 'Failed to generate insights' });
+    }
+
+    // Save to database if available
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.saveInsights(chartId, {
+          lifeStage: lifeStage || 'current',
+          analysisDepth: analysisDepth || 'detailed',
+          lifeGuidance: insights.guidance,
+          model: insights.model,
+          tokensUsed: insights.tokensInput + insights.tokensOutput
+        });
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save insights:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      guidance: insights.guidance,
+      lifeStage: lifeStage || 'current',
+      tokens: {
+        input: insights.tokensInput,
+        output: insights.tokensOutput
+      }
+    });
+  } catch (error) {
+    console.error('❌ Insights generation error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
