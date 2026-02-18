@@ -2486,7 +2486,7 @@ app.post('/api/ziwei/interpret', async (req, res) => {
     // Load interpretation engine with database rules
     let InterpretationEngine;
     try {
-      const module = require('./services/ziwei-interpretation-engine.ts');
+      const module = require('./services/ziwei-interpretation-engine');
       InterpretationEngine = module.InterpretationEngine;
     } catch (e) {
       return res.status(501).json({
