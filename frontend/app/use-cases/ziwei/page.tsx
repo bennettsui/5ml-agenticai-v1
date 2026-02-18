@@ -255,7 +255,7 @@ export default function ZiweiPage() {
             </div>
             <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
               <div className="text-sm font-medium text-blue-400 mb-2">? Under Review</div>
-              <div className="text-xs text-slate-400">Needs validation or revision (< 0.40)</div>
+              <div className="text-xs text-slate-400">Needs validation or revision (&lt; 0.40)</div>
             </div>
           </div>
 
