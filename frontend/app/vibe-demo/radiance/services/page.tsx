@@ -12,6 +12,7 @@ export default function ServicesPage() {
       desc: 'Earn credible media coverage through strategic communications and strong media relationships.',
       longDesc: 'We build authentic media relationships and craft narratives that resonate. Whether it\'s product launches, thought leadership, or crisis management, we deliver earned media that builds credibility.',
       icon: '📰',
+      bgIcon: '✍️',
       href: '/vibe-demo/radiance/services/public-relations',
       benefits: ['Media coverage', 'Press releases', 'Media relations', 'Thought leadership']
     },
@@ -20,6 +21,7 @@ export default function ServicesPage() {
       desc: 'Create memorable brand moments that connect with audiences and generate social momentum.',
       longDesc: 'From intimate workshops to large-scale conferences, we design and execute events that create real momentum. Every touchpoint is orchestrated to amplify your brand message.',
       icon: '🎉',
+      bgIcon: '🎪',
       href: '/vibe-demo/radiance/services/events',
       benefits: ['Event strategy', 'Logistics management', 'Live production', 'Post-event amplification']
     },
@@ -28,6 +30,7 @@ export default function ServicesPage() {
       desc: 'Build engaged communities through strategic content and consistent social presence.',
       longDesc: 'We create content that resonates and builds communities. From daily posts to long-form narratives, we help you stay relevant and connected with your audience.',
       icon: '📱',
+      bgIcon: '💬',
       href: '/vibe-demo/radiance/services/social-media',
       benefits: ['Content calendars', 'Community management', 'Engagement strategy', 'Analytics & reporting']
     },
@@ -36,6 +39,7 @@ export default function ServicesPage() {
       desc: 'Amplify reach through authentic partnerships with creators your audience trusts.',
       longDesc: 'We identify and partner with the right voices for your brand. Not just reach—authentic alignment that drives real conversations and conversions.',
       icon: '⭐',
+      bgIcon: '👥',
       href: '/vibe-demo/radiance/services/kol-marketing',
       benefits: ['Creator identification', 'Negotiation & contracts', 'Campaign management', 'Performance tracking']
     },
@@ -44,6 +48,7 @@ export default function ServicesPage() {
       desc: 'Professional design, video, and content production that brings ideas to life.',
       longDesc: 'Our in-house creative team produces everything from stunning visuals to compelling video content. Fast turnarounds, consistent quality, full creative control.',
       icon: '🎨',
+      bgIcon: '🎬',
       href: '/vibe-demo/radiance/services/creative-production',
       benefits: ['Graphic design', 'Video production', 'Photography', 'Content creation']
     },
@@ -52,6 +57,7 @@ export default function ServicesPage() {
       desc: 'All channels working together so each touchpoint reinforces the others.',
       longDesc: 'This is where our strength shines. We weave PR, events, content, and creative into cohesive campaigns. Each channel amplifies the others, creating momentum that\'s greater than the sum of its parts.',
       icon: '🎯',
+      bgIcon: '🚀',
       href: '/vibe-demo/radiance/consultation',
       benefits: ['Strategy development', 'Cross-channel execution', 'ROI optimization', 'Performance metrics']
     }
@@ -94,13 +100,18 @@ export default function ServicesPage() {
                 className="group h-full"
               >
                 <div className="h-full p-8 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-xl dark:hover:shadow-purple-900/20 transition-all">
-                  <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">
-                    {service.icon}
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="text-5xl group-hover:scale-110 transition-transform">
+                      {service.icon}
+                    </div>
+                    <div className="text-4xl opacity-40 group-hover:opacity-60 transition-opacity">
+                      {service.bgIcon}
+                    </div>
                   </div>
                   <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                     {service.title}
                   </h3>
-                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed mb-5">
+                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed mb-5 text-sm">
                     {service.longDesc}
                   </p>
                   <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-200 dark:border-slate-700">
@@ -135,19 +146,24 @@ export default function ServicesPage() {
             {[
               {
                 title: 'Each channel amplifies the others',
-                desc: 'A press mention drives social conversation. An event creates content. Content becomes earned media. This is multiplication, not addition.'
+                desc: 'A press mention drives social conversation. An event creates content. Content becomes earned media. This is multiplication, not addition.',
+                icon: '🔄'
               },
               {
                 title: 'Consistent narrative across touchpoints',
-                desc: 'Your audience hears the same story everywhere—PR, social, events, email. This repetition builds recall and trust.'
+                desc: 'Your audience hears the same story everywhere—PR, social, events, email. This repetition builds recall and trust.',
+                icon: '🎯'
               },
               {
                 title: 'Efficient resource use',
-                desc: 'One campaign fuels multiple channels. We maximize impact while minimizing waste. Your budget goes further.'
+                desc: 'One campaign fuels multiple channels. We maximize impact while minimizing waste. Your budget goes further.',
+                icon: '⚡'
               }
             ].map((item, idx) => (
               <div key={idx} className="text-center">
-                <div className="text-3xl mb-4 text-purple-600 dark:text-purple-400">✓</div>
+                <div className="text-6xl mb-4 opacity-80">
+                  {item.icon}
+                </div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
                   {item.title}
                 </h3>
