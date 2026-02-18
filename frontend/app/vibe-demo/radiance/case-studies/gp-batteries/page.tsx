@@ -42,33 +42,44 @@ export default function GPBatteriesCaseStudy() {
           </div>
 
           <div className="mb-16 pb-16 border-b border-slate-200 dark:border-slate-800">
-            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Challenge</h2>
-            <p className="text-lg text-slate-600 dark:text-slate-400 leading-relaxed">
-              GP Batteries needed to create buzz and drive consumer interest in its limited edition product line through a unique partnership with the Minions franchise. The challenge was to transform a practical commodity product (batteries) into a collectible, desirable item through playful character branding and strategic media coverage targeting families, collectors and lifestyle audiences.
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Background</h2>
+            <p className="text-lg text-slate-600 dark:text-slate-400 leading-relaxed mb-6">
+              GP Batteries International collaborated with Universal Pictures to launch a limited-edition Minions collection featuring portable fans and alkaline batteries. The collection was positioned as a fun, functional and collectible summer essential, tapping into the enduring popularity of the Minions IP among families and young adults in Hong Kong.
             </p>
+            <p className="text-lg text-slate-600 dark:text-slate-400 leading-relaxed">
+              The campaign aimed to drive awareness and sales during the summer season, when demand for portable fans peaks, while reinforcing GP Batteries' reputation for quality and innovation through a high-profile IP partnership.
+            </p>
+          </div>
+
+          <div className="mb-16 pb-16 border-b border-slate-200 dark:border-slate-800">
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Objectives</h2>
+            <ul className="space-y-3 mb-6">
+              <li className="flex gap-3">
+                <span className="text-yellow-600 dark:text-yellow-400 font-bold flex-shrink-0">•</span>
+                <span className="text-slate-600 dark:text-slate-400">Generate media coverage and consumer awareness for the GP x Minions limited-edition collection</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-yellow-600 dark:text-yellow-400 font-bold flex-shrink-0">•</span>
+                <span className="text-slate-600 dark:text-slate-400">Position the products as must-have summer items for families and Minions fans</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-yellow-600 dark:text-yellow-400 font-bold flex-shrink-0">•</span>
+                <span className="text-slate-600 dark:text-slate-400">Drive retail and e-commerce sales during the peak summer period</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-yellow-600 dark:text-yellow-400 font-bold flex-shrink-0">•</span>
+                <span className="text-slate-600 dark:text-slate-400">Secure placements in lifestyle, parenting, consumer and entertainment media</span>
+              </li>
+            </ul>
           </div>
 
           <div className="mb-16 pb-16 border-b border-slate-200 dark:border-slate-800">
             <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Strategy & Approach</h2>
             <p className="text-lg text-slate-600 dark:text-slate-400 leading-relaxed mb-6">
-              Radiance developed a PR strategy that positioned the limited edition Minions collection as more than just batteries – positioning them as collectibles and fun, practical gifts for families. We leveraged the emotional connection consumers have with the Minions character brand, creating story angles that would appeal to:
+              Radiance framed the launch as a seasonal lifestyle story rather than a pure product announcement, emphasising the fun, collectible nature of the Minions designs and the practical utility of the portable fans during Hong Kong's hot, humid summer. This angle made the story appealing to lifestyle, parenting and consumer editors looking for timely, relatable content.
             </p>
-            <ul className="space-y-3 mb-6">
-              <li className="flex gap-3">
-                <span className="text-yellow-600 dark:text-yellow-400 font-bold flex-shrink-0">•</span>
-                <span className="text-slate-600 dark:text-slate-400">Parents seeking novelty gifts for children</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="text-yellow-600 dark:text-yellow-400 font-bold flex-shrink-0">•</span>
-                <span className="text-slate-600 dark:text-slate-400">Collectors and Minions franchise enthusiasts</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="text-yellow-600 dark:text-yellow-400 font-bold flex-shrink-0">•</span>
-                <span className="text-slate-600 dark:text-slate-400">Lifestyle and shopping media seeking seasonal content</span>
-              </li>
-            </ul>
             <p className="text-lg text-slate-600 dark:text-slate-400 leading-relaxed">
-              Media outreach emphasized the collectibility, limited availability and the integration of practicality with fun design, creating urgency and interest across multiple audience segments.
+              Our media outreach targeted outlets with strong family and consumer readership, and we emphasised the limited-edition nature of the collection to create urgency and newsworthiness.
             </p>
           </div>
 
@@ -91,23 +102,19 @@ export default function GPBatteriesCaseStudy() {
             <ul className="space-y-3">
               <li className="flex gap-3">
                 <span className="text-yellow-600 dark:text-yellow-400 font-bold flex-shrink-0">✓</span>
-                <span className="text-slate-600 dark:text-slate-400">Product partnership coordination and communication development</span>
+                <span className="text-slate-600 dark:text-slate-400">PR planning and campaign timeline aligned with product availability</span>
               </li>
               <li className="flex gap-3">
                 <span className="text-yellow-600 dark:text-yellow-400 font-bold flex-shrink-0">✓</span>
-                <span className="text-slate-600 dark:text-slate-400">Press release drafting targeting toy, lifestyle and parenting media</span>
+                <span className="text-slate-600 dark:text-slate-400">Press release drafting in Traditional Chinese for lifestyle and consumer media</span>
               </li>
               <li className="flex gap-3">
                 <span className="text-yellow-600 dark:text-yellow-400 font-bold flex-shrink-0">✓</span>
-                <span className="text-slate-600 dark:text-slate-400">Product seeding to journalists and lifestyle editors</span>
+                <span className="text-slate-600 dark:text-slate-400">Targeted media pitching to parenting, lifestyle, consumer and entertainment outlets</span>
               </li>
               <li className="flex gap-3">
                 <span className="text-yellow-600 dark:text-yellow-400 font-bold flex-shrink-0">✓</span>
-                <span className="text-slate-600 dark:text-slate-400">Targeted media pitching for holiday and gift guide coverage</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="text-yellow-600 dark:text-yellow-400 font-bold flex-shrink-0">✓</span>
-                <span className="text-slate-600 dark:text-slate-400">Ongoing media relations during promotional period</span>
+                <span className="text-slate-600 dark:text-slate-400">Media relations and follow-up to secure product features and seasonal round-ups</span>
               </li>
             </ul>
           </div>
@@ -120,8 +127,8 @@ export default function GPBatteriesCaseStudy() {
                 <p className="text-slate-600 dark:text-slate-400 font-medium">Media Placements</p>
               </div>
               <div className="text-center p-6 bg-yellow-50 dark:bg-slate-800 rounded-lg">
-                <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400 mb-2">Collectors</div>
-                <p className="text-slate-600 dark:text-slate-400 font-medium">& Lifestyle Focus</p>
+                <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400 mb-2">Summer</div>
+                <p className="text-slate-600 dark:text-slate-400 font-medium">Peak Season Campaign</p>
               </div>
               <div className="text-center p-6 bg-yellow-50 dark:bg-slate-800 rounded-lg">
                 <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400 mb-2">Limited</div>
@@ -130,7 +137,7 @@ export default function GPBatteriesCaseStudy() {
             </div>
 
             <div className="bg-slate-50 dark:bg-slate-800 p-6 rounded-lg mb-8">
-              <h3 className="font-semibold text-slate-900 dark:text-white mb-4">Featured in:</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4">Featured in Popular Consumer & Parenting Media:</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {[
                   'HK01',
@@ -147,7 +154,7 @@ export default function GPBatteriesCaseStudy() {
             </div>
 
             <p className="text-lg text-slate-600 dark:text-slate-400 leading-relaxed">
-              The campaign successfully transformed GP Batteries' image from commodity product to collectible lifestyle item. Media coverage in toy, parenting and lifestyle outlets drove consumer awareness and positioned the limited edition collection as must-have items for Minions fans and gift-seekers. The character-driven storytelling resonated particularly well with family and lifestyle media segments.
+              The coverage successfully positioned the GP x Minions collection as a fun, practical summer product, supporting retail visibility and sales momentum during the peak season. The campaign transformed GP Batteries' image from a commodity product provider to a brand capable of delivering collectible lifestyle items. Character-driven storytelling resonated strongly with family and lifestyle media segments, driving both consumer interest and retail activity.
             </p>
           </div>
 
