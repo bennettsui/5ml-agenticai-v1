@@ -12,11 +12,33 @@ interface ChartInput {
   yearBranch: string;
   gender: string;
   name: string;
+  placeOfBirth?: string;
+  timezone?: string;
+  calendarType?: 'gregorian' | 'lunar';
 }
 
 const branches = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
 const stems = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
 const palaceNames = ['命宮', '兄弟宮', '夫妻宮', '子女宮', '財帛宮', '疾厄宮', '遷移宮', '僕役宮', '官祿宮', '田宅宮', '福德宮', '父母宮'];
+
+// Helper function to calculate age
+function calculateAge(year: number): number {
+  return new Date().getFullYear() - year;
+}
+
+// Timezone mapping for common cities
+const TIMEZONES: Record<string, string> = {
+  'Hong Kong': 'Asia/Hong_Kong',
+  '香港': 'Asia/Hong_Kong',
+  'Taiwan': 'Asia/Taipei',
+  '台灣': 'Asia/Taipei',
+  'Beijing': 'Asia/Shanghai',
+  '北京': 'Asia/Shanghai',
+  'Shanghai': 'Asia/Shanghai',
+  '上海': 'Asia/Shanghai',
+  'Singapore': 'Asia/Singapore',
+  '新加坡': 'Asia/Singapore',
+};
 
 // Palace Card Component - Displays individual palace with stars
 function PalaceCard({ house, ageMarkers, compact }: { house: any; ageMarkers: number[]; compact?: boolean }) {
@@ -99,7 +121,10 @@ export function ChartCalculator() {
     yearStem: '庚',
     yearBranch: '午',
     gender: '女',
-    name: 'Sample'
+    name: 'Sample',
+    placeOfBirth: 'Hong Kong',
+    timezone: 'Asia/Hong_Kong',
+    calendarType: 'lunar'
   });
 
   const [chart, setChart] = useState<any>(null);
@@ -109,6 +134,9 @@ export function ChartCalculator() {
   const [interpretLoading, setInterpretLoading] = useState(false);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const currentAge = calculateAge(input.lunarYear);
 
   const handleCalculate = async () => {
     setLoading(true);
@@ -200,104 +228,190 @@ export function ChartCalculator() {
       <div className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-8">
         <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-amber-400" />
-          Calculate Your Birth Chart
+          計算紫微排盤 Calculate Your Birth Chart
         </h3>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-2">年 Year</label>
-            <input
-              type="number"
-              value={input.lunarYear}
-              onChange={(e) => setInput({ ...input, lunarYear: parseInt(e.target.value) })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm"
-            />
+        {/* Personal Information Section */}
+        <div className="space-y-4 mb-6 pb-6 border-b border-slate-700/50">
+          <h4 className="text-sm font-semibold text-slate-300">📋 基本信息 Personal Information</h4>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-2">名字 Name *</label>
+              <input
+                type="text"
+                value={input.name}
+                onChange={(e) => setInput({ ...input, name: e.target.value })}
+                placeholder="Your name"
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-2">性別 Gender *</label>
+              <select
+                value={input.gender}
+                onChange={(e) => setInput({ ...input, gender: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
+              >
+                <option value="男">男 Male</option>
+                <option value="女">女 Female</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-2">年齡 Current Age</label>
+              <div className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700/50 text-slate-300 text-sm flex items-center">
+                <span className="text-white font-semibold">{currentAge}</span>
+                <span className="ml-2 text-xs text-slate-500">years old</span>
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-2">月 Month</label>
-            <select
-              value={input.lunarMonth}
-              onChange={(e) => setInput({ ...input, lunarMonth: parseInt(e.target.value) })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm"
-            >
-              {Array.from({ length: 12 }, (_, i) => (
-                <option key={i + 1} value={i + 1}>{i + 1}月</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-2">日 Day</label>
-            <select
-              value={input.lunarDay}
-              onChange={(e) => setInput({ ...input, lunarDay: parseInt(e.target.value) })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm"
-            >
-              {Array.from({ length: 30 }, (_, i) => (
-                <option key={i + 1} value={i + 1}>{i + 1}日</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-2">時 Hour</label>
-            <select
-              value={input.hourBranch}
-              onChange={(e) => setInput({ ...input, hourBranch: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm"
-            >
-              {branches.map((b) => (
-                <option key={b} value={b}>{b}時</option>
-              ))}
-            </select>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-2">年干 Stem</label>
-            <select
-              value={input.yearStem}
-              onChange={(e) => setInput({ ...input, yearStem: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm"
-            >
-              {stems.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-2">年支 Branch</label>
-            <select
-              value={input.yearBranch}
-              onChange={(e) => setInput({ ...input, yearBranch: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm"
-            >
-              {branches.map((b) => (
-                <option key={b} value={b}>{b}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-2">性別 Gender</label>
-            <select
-              value={input.gender}
-              onChange={(e) => setInput({ ...input, gender: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm"
-            >
-              <option value="男">男</option>
-              <option value="女">女</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-2">名字 Name</label>
+            <label className="block text-xs font-medium text-slate-400 mb-2">出生地 Place of Birth *</label>
             <input
               type="text"
-              value={input.name}
-              onChange={(e) => setInput({ ...input, name: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm"
+              value={input.placeOfBirth || ''}
+              onChange={(e) => {
+                const place = e.target.value;
+                setInput({
+                  ...input,
+                  placeOfBirth: place,
+                  timezone: TIMEZONES[place] || input.timezone
+                });
+              }}
+              placeholder="e.g., Hong Kong / 香港"
+              list="places"
+              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-amber-500"
             />
+            <datalist id="places">
+              {Object.keys(TIMEZONES).map(place => (
+                <option key={place} value={place} />
+              ))}
+            </datalist>
           </div>
         </div>
 
+        {/* Birth Date Section */}
+        <div className="space-y-4 mb-6 pb-6 border-b border-slate-700/50">
+          <h4 className="text-sm font-semibold text-slate-300">📅 出生日期 Birth Date</h4>
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setInput({ ...input, calendarType: 'lunar' })}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                input.calendarType === 'lunar' || !input.calendarType
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+              }`}
+            >
+              農曆 Lunar
+            </button>
+            <button
+              onClick={() => setInput({ ...input, calendarType: 'gregorian' })}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                input.calendarType === 'gregorian'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+              }`}
+            >
+              西曆 Gregorian
+            </button>
+            <span className="text-xs text-slate-500 ml-auto self-center">
+              💡 Tip: Use 萬年曆 (perpetual calendar) to convert Gregorian to Lunar
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-2">年 Year *</label>
+              <input
+                type="number"
+                value={input.lunarYear}
+                onChange={(e) => setInput({ ...input, lunarYear: parseInt(e.target.value) })}
+                min="1900"
+                max="2100"
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-2">月 Month *</label>
+              <select
+                value={input.lunarMonth}
+                onChange={(e) => setInput({ ...input, lunarMonth: parseInt(e.target.value) })}
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
+              >
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>{i + 1}月</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-2">日 Day *</label>
+              <select
+                value={input.lunarDay}
+                onChange={(e) => setInput({ ...input, lunarDay: parseInt(e.target.value) })}
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
+              >
+                {Array.from({ length: 30 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>{i + 1}日</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-2">時 Time (Hour Branch) *</label>
+              <select
+                value={input.hourBranch}
+                onChange={(e) => setInput({ ...input, hourBranch: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
+              >
+                {branches.map((b) => (
+                  <option key={b} value={b}>{b}時</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Stem-Branch Section (Advanced) */}
+        {showAdvanced && (
+          <div className="space-y-4 mb-6 pb-6 border-b border-slate-700/50">
+            <h4 className="text-sm font-semibold text-slate-300">⚙️ 天干地支 Stem-Branch (Advanced)</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-2">年干 Year Stem</label>
+                <select
+                  value={input.yearStem}
+                  onChange={(e) => setInput({ ...input, yearStem: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
+                >
+                  {stems.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-2">年支 Year Branch</label>
+                <select
+                  value={input.yearBranch}
+                  onChange={(e) => setInput({ ...input, yearBranch: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
+                >
+                  {branches.map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Toggle Advanced */}
+        <button
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="text-xs text-slate-500 hover:text-slate-400 mb-6 transition-colors"
+        >
+          {showAdvanced ? '▼ Hide Advanced' : '▶ Show Advanced Options'}
+        </button>
+
+        {/* Calculate Button */}
         <button
           onClick={handleCalculate}
           disabled={loading}
@@ -306,19 +420,19 @@ export function ChartCalculator() {
           {loading ? (
             <>
               <Loader className="w-4 h-4 animate-spin" />
-              Calculating...
+              計算中 Calculating...
             </>
           ) : (
             <>
               <Sparkles className="w-4 h-4" />
-              Calculate Chart
+              計算排盤 Calculate Chart
             </>
           )}
         </button>
 
         {error && (
           <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-            {error}
+            ❌ {error}
           </div>
         )}
       </div>
