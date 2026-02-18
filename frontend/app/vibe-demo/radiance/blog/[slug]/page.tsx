@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Metadata } from 'next';
 import { Header } from '../../components/Header';
 import { Footer } from '../../components/Footer';
 
@@ -452,6 +453,39 @@ export const articles = {
     `,
   },
 };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { slug: string };
+}): Promise<Metadata> {
+  const article = articles[params.slug];
+
+  if (!article) {
+    return {
+      title: 'Article Not Found',
+      description: 'The article you are looking for could not be found.',
+    };
+  }
+
+  return {
+    title: article.title,
+    description: article.excerpt,
+    keywords: [article.category, 'PR strategy', 'marketing', 'Hong Kong'],
+    openGraph: {
+      title: article.title,
+      description: article.excerpt,
+      type: 'article',
+      url: `https://radiancehk.com/vibe-demo/radiance/blog/${params.slug}`,
+      publishedTime: new Date(article.date).toISOString(),
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: article.title,
+      description: article.excerpt,
+    },
+  };
+}
 
 export function generateStaticParams() {
   return Object.keys(articles).map((slug) => ({
