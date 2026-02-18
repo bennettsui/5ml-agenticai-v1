@@ -2259,6 +2259,100 @@ const http = require('http');
 const wsServer = require('./services/websocket-server');
 
 // ==========================================
+// Radiance PR Contact Form API
+// ==========================================
+
+// Contact form submission endpoint
+app.post('/api/radiance/contact', async (req, res) => {
+  try {
+    const { name, email, phone, company, industry, serviceInterest, message } = req.body;
+
+    // Validation
+    if (!name || !email || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name, email, and message are required'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email address'
+      });
+    }
+
+    // Message length validation
+    if (message.length < 10 || message.length > 5000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Message must be between 10 and 5000 characters'
+      });
+    }
+
+    // Store contact submission (in-memory for now, can be extended to database)
+    const submission = {
+      id: Date.now().toString(),
+      name,
+      email,
+      phone: phone || '',
+      company: company || '',
+      industry: industry || '',
+      serviceInterest: serviceInterest || '',
+      message,
+      submittedAt: new Date().toISOString(),
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    };
+
+    // Log the submission
+    console.log('📧 New Radiance contact submission:', {
+      id: submission.id,
+      name: submission.name,
+      email: submission.email,
+      company: submission.company,
+      submittedAt: submission.submittedAt
+    });
+
+    // TODO: Implement email notification to hello@radiancehk.com
+    // TODO: Implement database storage
+    // TODO: Implement automated response email to user
+
+    // Return success response
+    res.status(201).json({
+      success: true,
+      message: 'Thank you for your inquiry. We\'ll be in touch within 2 business days.',
+      submissionId: submission.id
+    });
+
+  } catch (error) {
+    console.error('❌ Contact form submission error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process contact form. Please try again later.'
+    });
+  }
+});
+
+// Contact form submission history (for admin dashboard)
+app.get('/api/radiance/contact/submissions', async (req, res) => {
+  try {
+    // This would typically check authentication and fetch from database
+    // For now, return a placeholder
+    res.status(501).json({
+      error: 'Not yet implemented - requires database integration'
+    });
+  } catch (error) {
+    console.error('❌ Error fetching submissions:', error);
+    res.status(500).json({
+      error: 'Failed to fetch submissions'
+    });
+  }
+});
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
@@ -2290,10 +2384,10 @@ server.listen(port, '0.0.0.0', async () => {
   // Only triggers when VISUALS definitions change (new entries or updated prompts),
   // not on every deploy or when files happen to be missing.
   if (process.env.GEMINI_API_KEY) {
+    const tedxFs = require('fs');
+    const tedxPath = require('path');
+    const crypto = require('crypto');
     try {
-      const tedxFs = require('fs');
-      const tedxPath = require('path');
-      const crypto = require('crypto');
       const tedxOutputDir = tedxPath.join(__dirname, 'frontend', 'public', 'tedx');
       const manifestPath = tedxPath.join(tedxOutputDir, '.manifest.json');
       const tedxModule = require('./use-cases/tedx-boundary-street/api/routes');
