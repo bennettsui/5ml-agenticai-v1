@@ -22,6 +22,22 @@ export default function RichmondFellowshipCaseStudy() {
           </div>
         </section>
 
+        {/* Featured Image */}
+        <section className="py-12 px-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="relative h-96 bg-gradient-to-br from-cyan-100 to-blue-100 dark:from-slate-800 dark:to-slate-900 rounded-lg overflow-hidden">
+              <img
+                src="/images/radiance/case-studies/richmond-fellowship/Richmond-1.jpg"
+                alt="Richmond Fellowship Mental Health Advocacy Campaign"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-3">
+              Richmond Fellowship Mental Health Advocacy Initiative
+            </p>
+          </div>
+        </section>
+
         <section className="py-20 px-6 max-w-4xl mx-auto">
           <div className="mb-16 pb-16 border-b border-slate-200 dark:border-slate-800">
             <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">Overview</h2>
@@ -167,6 +183,51 @@ export default function RichmondFellowshipCaseStudy() {
                 </div>
               </li>
             </ul>
+          </div>
+        </section>
+
+        {/* Image Gallery */}
+        <section className="py-20 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
+          <div className="mb-12">
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Campaign & Community Gallery</h2>
+            <p className="text-lg text-slate-600 dark:text-slate-400">Behind-the-scenes from mental health advocacy events and community engagement initiatives</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { src: '/images/radiance/case-studies/richmond-fellowship/Richmond-1.jpg', alt: 'Community Event' },
+              { src: '/images/radiance/case-studies/richmond-fellowship/Richmond-2.jpg', alt: 'Mental Health Awareness Activity' },
+              { src: '/images/radiance/case-studies/richmond-fellowship/Richmond-3.jpg', alt: 'Community Engagement' },
+              { src: '/images/radiance/case-studies/richmond-fellowship/Richmond-4.jpg', alt: 'Support Program' },
+              { src: '/images/radiance/case-studies/richmond-fellowship/Richmond-5.jpg', alt: 'Advocacy Campaign' },
+            ].map((image, idx) => (
+              <div
+                key={idx}
+                className="relative group overflow-hidden rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 aspect-video"
+              >
+                <img
+                  src={image.src}
+                  alt={image.alt}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                  <p className="text-white text-sm font-medium">{image.alt}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="py-16 px-6 max-w-4xl mx-auto">
+          <div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg p-8 text-center">
+            <h3 className="text-2xl font-bold text-white mb-4">Let's discuss your NGO, healthcare or advocacy campaign</h3>
+            <Link
+              href="/vibe-demo/radiance/consultation"
+              className="inline-block px-6 py-3 bg-white text-purple-600 font-bold rounded-lg hover:bg-purple-50 transition-colors"
+            >
+              Schedule Your Free Consultation →
+            </Link>
           </div>
         </section>
 
