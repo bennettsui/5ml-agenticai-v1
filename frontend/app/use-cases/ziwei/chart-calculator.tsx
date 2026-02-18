@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { Sparkles, Loader, Brain } from 'lucide-react';
+import { ZiweiCustomSelect } from '@/components/ZiweiCustomSelect';
+import { ZiweiTimeSelector } from '@/components/ZiweiTimeSelector';
+import { ZiweiChartCanvas } from '@/components/ZiweiChartCanvas';
 
 interface ChartInput {
   lunarYear: number;
@@ -39,78 +42,6 @@ const TIMEZONES: Record<string, string> = {
   'Singapore': 'Asia/Singapore',
   '新加坡': 'Asia/Singapore',
 };
-
-// Palace Card Component - Displays individual palace with stars
-function PalaceCard({ house, ageMarkers, compact }: { house: any; ageMarkers: number[]; compact?: boolean }) {
-  const starColors = {
-    primary: 'text-blue-300 bg-blue-500/20',
-    secondary: 'text-teal-300 bg-teal-500/20',
-    transformation: 'text-amber-300 bg-amber-500/20',
-    calamity: 'text-red-300 bg-red-500/20',
-  };
-
-  if (compact) {
-    return (
-      <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-3">
-        <div className="text-xs font-bold text-white mb-1">{house.name}</div>
-        <div className="text-[10px] text-slate-500 mb-2">{house.branch}</div>
-        {house.majorStars && house.majorStars.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {house.majorStars.slice(0, 3).map((star: string) => (
-              <span key={star} className={`text-[9px] px-1.5 py-0.5 rounded ${starColors.primary}`}>
-                {star}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-4 min-h-32">
-      {/* Palace Header */}
-      <div className="mb-3 pb-2 border-b border-slate-700/30">
-        <div className="text-sm font-bold text-white">{house.name}</div>
-        <div className="text-xs text-slate-500">{house.branch}</div>
-      </div>
-
-      {/* Age Markers */}
-      <div className="text-[9px] text-slate-600 mb-2 leading-tight">
-        <div>{ageMarkers.slice(0, 4).join(' ')}</div>
-        <div>{ageMarkers.slice(4, 8).join(' ')}</div>
-      </div>
-
-      {/* Stars */}
-      {house.majorStars && house.majorStars.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {house.majorStars.map((star: string) => (
-            <span
-              key={star}
-              className={`text-[10px] px-2 py-1 rounded font-medium ${starColors.primary}`}
-            >
-              {star}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Transformations */}
-      {house.transformations && house.transformations.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {house.transformations.map((t: string) => (
-            <span
-              key={t}
-              className={`text-[10px] px-1.5 py-0.5 rounded ${starColors.transformation}`}
-            >
-              化{t}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function ChartCalculator() {
   const [input, setInput] = useState<ChartInput>({
@@ -246,15 +177,15 @@ export function ChartCalculator() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-2">性別 Gender *</label>
-              <select
+              <ZiweiCustomSelect
+                label="性別 Gender *"
                 value={input.gender}
-                onChange={(e) => setInput({ ...input, gender: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
-              >
-                <option value="男">男 Male</option>
-                <option value="女">女 Female</option>
-              </select>
+                onChange={(value) => setInput({ ...input, gender: String(value) })}
+                options={[
+                  { value: '男', label: '男 Male' },
+                  { value: '女', label: '女 Female' }
+                ]}
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-2">年齡 Current Age</label>
@@ -332,40 +263,33 @@ export function ChartCalculator() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-2">月 Month *</label>
-              <select
+              <ZiweiCustomSelect
+                label="月 Month *"
                 value={input.lunarMonth}
-                onChange={(e) => setInput({ ...input, lunarMonth: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
-              >
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i + 1} value={i + 1}>{i + 1}月</option>
-                ))}
-              </select>
+                onChange={(value) => setInput({ ...input, lunarMonth: Number(value) })}
+                options={Array.from({ length: 12 }, (_, i) => ({
+                  value: i + 1,
+                  label: `${i + 1}月`
+                }))}
+              />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-2">日 Day *</label>
-              <select
+              <ZiweiCustomSelect
+                label="日 Day *"
                 value={input.lunarDay}
-                onChange={(e) => setInput({ ...input, lunarDay: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
-              >
-                {Array.from({ length: 30 }, (_, i) => (
-                  <option key={i + 1} value={i + 1}>{i + 1}日</option>
-                ))}
-              </select>
+                onChange={(value) => setInput({ ...input, lunarDay: Number(value) })}
+                options={Array.from({ length: 30 }, (_, i) => ({
+                  value: i + 1,
+                  label: `${i + 1}日`
+                }))}
+              />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-2">時 Time (Hour Branch) *</label>
-              <select
+              <ZiweiTimeSelector
+                label="時 Time (Hour Branch) *"
                 value={input.hourBranch}
-                onChange={(e) => setInput({ ...input, hourBranch: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
-              >
-                {branches.map((b) => (
-                  <option key={b} value={b}>{b}時</option>
-                ))}
-              </select>
+                onChange={(value) => setInput({ ...input, hourBranch: value })}
+              />
             </div>
           </div>
         </div>
@@ -376,28 +300,20 @@ export function ChartCalculator() {
             <h4 className="text-sm font-semibold text-slate-300">⚙️ 天干地支 Stem-Branch (Advanced)</h4>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-2">年干 Year Stem</label>
-                <select
+                <ZiweiCustomSelect
+                  label="年干 Year Stem"
                   value={input.yearStem}
-                  onChange={(e) => setInput({ ...input, yearStem: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
-                >
-                  {stems.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
+                  onChange={(value) => setInput({ ...input, yearStem: String(value) })}
+                  options={stems.map((s) => ({ value: s, label: s }))}
+                />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-2">年支 Year Branch</label>
-                <select
+                <ZiweiCustomSelect
+                  label="年支 Year Branch"
                   value={input.yearBranch}
-                  onChange={(e) => setInput({ ...input, yearBranch: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-amber-500"
-                >
-                  {branches.map((b) => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
+                  onChange={(value) => setInput({ ...input, yearBranch: String(value) })}
+                  options={branches.map((b) => ({ value: b, label: b }))}
+                />
               </div>
             </div>
           </div>
@@ -437,65 +353,23 @@ export function ChartCalculator() {
         )}
       </div>
 
-      {/* Chart Display - Traditional 4x3 Grid Layout */}
+      {/* Chart Display - Canvas-Based Rendering */}
       {chart && (
         <div className="rounded-xl border border-slate-700/50 bg-slate-900/80 p-8">
           <h3 className="text-xl font-bold text-white mb-8">命盤 Birth Chart (紫微斗數排盤)</h3>
 
-          {/* Chart Container */}
-          <div className="bg-slate-800/50 rounded-lg p-8 border border-slate-700/30">
-            {/* 12-Palace Grid (4 cols x 3 rows) */}
-            <div className="grid grid-cols-4 gap-2 mb-8">
-              {/* Row 1: Top 4 palaces */}
-              {[0, 1, 2, 3].map((idx) => (
-                <PalaceCard key={idx} house={chart.houses[idx]} ageMarkers={[6, 18, 30, 42, 54, 66, 78, 90]} />
-              ))}
-            </div>
-
-            {/* Center Info + Middle Row */}
-            <div className="flex gap-4 mb-8">
-              {/* Left Column - Palaces 11, 10, 9 */}
-              <div className="flex flex-col gap-2 flex-1">
-                {[11, 10, 9].map((idx) => (
-                  <PalaceCard key={idx} house={chart.houses[idx]} ageMarkers={[6, 18, 30, 42, 54, 66, 78, 90]} compact />
-                ))}
-              </div>
-
-              {/* Center Info Box */}
-              <div className="w-48 flex-shrink-0 bg-slate-900/50 border border-slate-700/30 rounded-lg p-4">
-                <div className="text-center text-xs space-y-2">
-                  <div className="font-bold text-white text-sm">{input.name}</div>
-                  <div className="text-slate-400">
-                    {input.lunarYear}年 {input.lunarMonth}月 {input.lunarDay}日
-                  </div>
-                  <div className="text-slate-500 text-[10px]">
-                    {input.hourBranch}時 {input.gender}
-                  </div>
-                  <div className="border-t border-slate-700/30 pt-2 mt-2">
-                    <div className="text-amber-400 font-medium">
-                      {palaceNames[chart.lifeHouseIndex]}
-                    </div>
-                    <div className="text-slate-400 text-[10px]">
-                      五行: {chart.fiveElementBureau}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column - Palaces 4, 5, 6 */}
-              <div className="flex flex-col gap-2 flex-1">
-                {[4, 5, 6].map((idx) => (
-                  <PalaceCard key={idx} house={chart.houses[idx]} ageMarkers={[6, 18, 30, 42, 54, 66, 78, 90]} compact />
-                ))}
-              </div>
-            </div>
-
-            {/* Row 3: Bottom 4 palaces */}
-            <div className="grid grid-cols-4 gap-2">
-              {[8, 7, 6, 5].map((idx) => (
-                <PalaceCard key={idx} house={chart.houses[idx]} ageMarkers={[6, 18, 30, 42, 54, 66, 78, 90]} />
-              ))}
-            </div>
+          {/* Canvas Chart Display */}
+          <div className="bg-slate-800/50 rounded-lg p-8 border border-slate-700/30 flex flex-col items-center">
+            <ZiweiChartCanvas
+              houses={chart.houses}
+              lifeHouseIndex={chart.lifeHouseIndex}
+              personName={input.name}
+              birthDate={`${input.lunarYear}年 ${input.lunarMonth}月 ${input.lunarDay}日`}
+              hourBranch={input.hourBranch}
+              gender={input.gender}
+              fiveElementBureau={chart.fiveElementBureau}
+              starCount={Object.keys(chart.starPositions).length}
+            />
           </div>
 
           {/* Stats */}
