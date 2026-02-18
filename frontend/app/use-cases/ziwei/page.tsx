@@ -5,6 +5,7 @@ import {
   ArrowRight, ChevronRight, Sparkles, Brain, Zap, Database,
   GitBranch, BookOpen, TrendingUp, Users, Shield, Radar,
 } from 'lucide-react';
+import { ChartCalculator } from './chart-calculator';
 
 export default function ZiweiPage() {
   return (
@@ -43,6 +44,11 @@ export default function ZiweiPage() {
             Three-agent system for calculating 排盤 (birth charts), generating interpretations,
             and tracking accuracy across traditional Chinese astrology rules with empirical validation.
           </p>
+        </section>
+
+        {/* CHART CALCULATOR */}
+        <section className="py-12 mb-12">
+          <ChartCalculator />
         </section>
 
         {/* SYSTEM ARCHITECTURE */}
