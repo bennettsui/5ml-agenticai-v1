@@ -147,6 +147,15 @@ export default function VibeDemoPage() {
       color: 'from-emerald-500 to-cyan-600',
       tags: ['Storytelling', 'Infographics', 'Parallax', 'Interactive Charts'],
     },
+    {
+      id: 'radiance',
+      title: 'Radiance PR & Martech',
+      titleZh: '光芒公關及數字行銷',
+      description: 'Hong Kong integrated PR, events, social media and creative production agency — strategic communications with hands-on execution',
+      href: '/vibe-demo/radiance',
+      color: 'from-purple-600 to-pink-600',
+      tags: ['PR & Marketing', 'Integrated Agency', 'Hong Kong', 'Communications'],
+    },
   ];
 
   return (
