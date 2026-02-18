@@ -68,6 +68,15 @@ export default function CaseStudiesPage() {
       result: 'International PR and media coverage for prestigious architecture exhibition',
       metrics: ['International Event', 'Architecture Focus', 'Global Media Reach'],
       tags: ['PR', 'International', 'Architecture', 'Cultural']
+    },
+    {
+      slug: 'richmond-fellowship',
+      title: 'Richmond Fellowship - Mental Health Advocacy Campaign',
+      category: 'NGO & Healthcare',
+      challenge: 'Raise public awareness of mental health issues and advocate for policy support',
+      result: 'Secured coverage on TVB and Medical Inspire platforms',
+      metrics: ['TVB Broadcast Coverage', 'Medical Inspire Platform', 'Policy Advocacy Support'],
+      tags: ['PR', 'Healthcare', 'Advocacy', 'NGO']
     }
   ];
 
