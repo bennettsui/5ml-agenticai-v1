@@ -10,6 +10,9 @@ import ScheduledJobs from '@/components/ScheduledJobs';
 import AgenticWorkflows from '@/components/AgenticWorkflows';
 import KnowledgeBase from '@/components/KnowledgeBase';
 import CostAnalysis from '@/components/CostAnalysis';
+import ZiweiChat from '@/components/ZiweiChat';
+import ZiweiCompatibility from '@/components/ZiweiCompatibility';
+import ZiweiInsights from '@/components/ZiweiInsights';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
@@ -27,7 +30,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'social-ops';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'social-ops' | 'ziwei-chat' | 'ziwei-compatibility' | 'ziwei-insights';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -365,7 +368,7 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','api','scheduling','knowledge','costs','workflows','chat','social-ops'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','api','scheduling','knowledge','costs','workflows','chat','social-ops','ziwei-chat','ziwei-compatibility','ziwei-insights'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
@@ -399,6 +402,14 @@ export default function Dashboard() {
         { id: 'knowledge' as Tab, label: 'Knowledge Base', icon: BookOpen },
         { id: 'analytics' as Tab, label: 'Analytics & API', icon: Wifi },
         { id: 'architecture' as Tab, label: 'Architecture', icon: Layers },
+      ]
+    },
+    {
+      category: 'ZIWEI ASTROLOGY',
+      tabs: [
+        { id: 'ziwei-chat' as Tab, label: 'Chart Chat', icon: MessageSquare },
+        { id: 'ziwei-compatibility' as Tab, label: 'Compatibility', icon: Users },
+        { id: 'ziwei-insights' as Tab, label: 'Insights', icon: Sparkles },
       ]
     },
   ];
@@ -775,6 +786,39 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ================================================================ */}
+        {/* ZIWEI ASTROLOGY TABS                                             */}
+        {/* ================================================================ */}
+        {activeTab === 'ziwei-chat' && (
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-2xl font-bold text-white">Ziwei Chart Conversation</h1>
+              <p className="text-sm text-slate-400 mt-1">Chat with an AI expert about your Ziwei birth chart</p>
+            </div>
+            <ZiweiChat chartId="sample-chart-1" />
+          </div>
+        )}
+
+        {activeTab === 'ziwei-compatibility' && (
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-2xl font-bold text-white">Ziwei Compatibility Analysis</h1>
+              <p className="text-sm text-slate-400 mt-1">Analyze compatibility between two birth charts</p>
+            </div>
+            <ZiweiCompatibility chartId="sample-chart-1" />
+          </div>
+        )}
+
+        {activeTab === 'ziwei-insights' && (
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-2xl font-bold text-white">Personalized Life Guidance</h1>
+              <p className="text-sm text-slate-400 mt-1">Get AI-powered insights tailored to your birth chart</p>
+            </div>
+            <ZiweiInsights chartId="sample-chart-1" />
           </div>
         )}
       </main>
