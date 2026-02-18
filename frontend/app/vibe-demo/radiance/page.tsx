@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { RadianceLogo } from './components/RadianceLogo';
+import { ServicesCube } from './components/ServicesCube';
 
 export default function RadiancePage() {
   return (
@@ -66,6 +67,9 @@ export default function RadiancePage() {
           </div>
         </div>
       </section>
+
+      {/* Interactive 3D Services Cube */}
+      <ServicesCube />
 
       {/* Services Overview */}
       <section id="services" className="py-24 px-6">
