@@ -329,15 +329,6 @@ export default function CreativeProductionPage() {
         </div>
       </section>
 
-      {/* Chinese Summary */}
-      <section className="py-16 px-6 bg-gray-50">
-        <div className="max-w-4xl mx-auto border-t-4 border-blue-600 pt-12">
-          <h3 className="text-2xl font-bold mb-6 text-blue-600">繁體中文總結</h3>
-          <p className="text-gray-700 leading-relaxed text-lg">
-            創意和製作是放大品牌傳播的關鍵。Radiance 提供室內設計、影片製作、攝影、動畫和運動圖形等完整創意服務，涵蓋品牌設計、社交媒體資產、活動物料和企業視頻製作。我們在內部進行所有創意和製作工作，確保品牌視覺一致性和快速執行。無論是新品牌推出、產品發佈還是社群整合傳播活動，我們都能提供專業、高效的創意和製作支持。我們的創意團隊與你的公關和行銷團隊密切合作，確保所有視覺資產都支撐你的核心傳播策略。立即聯絡我們，探索如何透過高質量創意和製作，放大你的品牌影響力。
-          </p>
-        </div>
-      </section>
 
       {/* Footer */}
       <footer className="py-12 px-6 bg-gray-900 text-gray-300">

@@ -310,15 +310,6 @@ export default function PublicRelationsPage() {
         </div>
       </section>
 
-      {/* Chinese Summary */}
-      <section className="py-16 px-6 bg-gray-50">
-        <div className="max-w-4xl mx-auto border-t-4 border-blue-600 pt-12">
-          <h3 className="text-2xl font-bold mb-6 text-blue-600">繁體中文總結</h3>
-          <p className="text-gray-700 leading-relaxed text-lg">
-            公共關係（PR）是品牌建立信譽感、塑造故事、爭取媒體報導的關鍵渠道。Radiance 提供從策略規劃、媒體關係管理、新聞發佈、PR 活動策劃，到危機溝通和結果報告的全方位服務。我們深入了解香港媒體生態和記者偏好，為消費品牌、科技公司、NGO 和文化機構量身設計傳播戰略。我們不只撰寫新聞稿，而是融合媒體關係、活動策劃和社交內容，讓每個渠道相互增強，為品牌爭取更大影響力。無論是產品發佈、聲譽管理或建立思想領導力，我們都能幫助你透過扎實的 PR 執行，贏得媒體和持份者的信任。立即聯絡我們，探索如何透過整合 PR 策略推動你的品牌前進。
-          </p>
-        </div>
-      </section>
 
       {/* Footer */}
       <footer className="py-12 px-6 bg-gray-900 text-gray-300">
