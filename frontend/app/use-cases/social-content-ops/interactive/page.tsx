@@ -157,6 +157,7 @@ Return ONLY the JSON array.`,
           }],
           use_case_id: 'social-content-ops',
           brand_name: selectedBrand.name,
+          current_module: 'Interactive Content',
         }),
       });
       if (res.ok) {

@@ -119,6 +119,7 @@ export default function ResearchPage() {
           messages: [{ role: 'user', content: `Research the brand "${selectedBrand.name}" for ${tab === 'business' ? 'business overview, key customers, and competitive landscape' : tab === 'audience' ? 'target audience segmentation, demographics, psychographics, and positioning' : 'products and services portfolio, key features, pricing, and unique selling propositions'}. Provide structured data.` }],
           use_case_id: 'social-content-ops',
           brand_name: selectedBrand.name,
+          current_module: 'Brand & Competitive Research',
         }),
       });
       if (res.ok) {

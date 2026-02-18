@@ -158,6 +158,14 @@ Create 12-16 posts spread across the month with a mix of:
 - Formats: Reel, Static, Carousel
 - Pillars: Educate (30%), Authority (20%), Showcase (20%), Conversion (15%), Community (15%)
 
+## Format Best Practices (apply to every post):
+- **Reels**: 9:16 vertical, 15-30s sweet spot, hook in 1.5s, trending audio boosts 30% reach
+- **Carousel**: 4:5 or 1:1, 5-10 slides, educational carousels get 1.4x reach
+- **Static**: 4:5 preferred, max 30 chars headline on image, faces boost engagement 38%
+- **Posting times**: IG 7-9PM HKT, FB 12-2PM HKT, TikTok 6-10PM HKT
+- **Hashtags**: 3-5 niche > 30 generic. Saves > Shares > Comments for algorithm.
+- **80/20 rule**: 80% value/entertainment, 20% promotional
+
 For each post, provide these exact fields as a JSON array:
 [{
   "date": "2026-03-XX",
@@ -177,6 +185,7 @@ IMPORTANT: Return ONLY the JSON array, no other text.`,
           }],
           use_case_id: 'social-content-ops',
           brand_name: selectedBrand.name,
+          current_module: 'Content Calendar',
         }),
       });
       if (res.ok) {

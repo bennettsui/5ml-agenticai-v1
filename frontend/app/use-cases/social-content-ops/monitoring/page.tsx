@@ -173,6 +173,7 @@ Be specific and actionable.`,
           }],
           use_case_id: 'social-content-ops',
           brand_name: selectedBrand.name,
+          current_module: 'Social Monitoring',
         }),
       });
       if (res.ok) {
