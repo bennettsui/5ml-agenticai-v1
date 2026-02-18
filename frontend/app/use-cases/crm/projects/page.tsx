@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -11,6 +11,8 @@ import {
   ChevronRight,
   ArrowLeft,
   Filter,
+  Trash2,
+  Zap,
 } from "lucide-react";
 import {
   crmApi,
@@ -71,6 +73,21 @@ export default function ProjectsPage() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = useCallback(async (e: React.MouseEvent, project: Project) => {
+    e.stopPropagation();
+    if (!confirm(`Delete "${project.name}"? This cannot be undone.`)) return;
+    setDeletingId(project.id);
+    try {
+      await crmApi.projects.delete(project.id);
+      setData((prev) => prev ? { ...prev, items: prev.items.filter((p) => p.id !== project.id), total: prev.total - 1 } : prev);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete project');
+    } finally {
+      setDeletingId(null);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -214,6 +231,7 @@ export default function ProjectsPage() {
                       <th className="px-6 py-4 font-semibold text-slate-300 whitespace-nowrap">
                         Success
                       </th>
+                      <th className="w-10" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700/50">
@@ -221,13 +239,20 @@ export default function ProjectsPage() {
                       <tr
                         key={project.id}
                         onClick={() => router.push(`/use-cases/crm/projects/detail?id=${project.id}`)}
-                        className="hover:bg-slate-700/40 cursor-pointer transition-colors"
+                        className="group hover:bg-slate-700/40 cursor-pointer transition-colors"
                       >
                         <td className="px-6 py-4 font-medium text-white whitespace-nowrap">
                           {project.name}
                         </td>
                         <td className="px-6 py-4 text-slate-300 whitespace-nowrap">
-                          {formatType(project.type)}
+                          <span className="inline-flex items-center gap-1.5">
+                            {formatType(project.type)}
+                            {(project.type === 'social_campaign' || project.type === 'content_production') && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-purple-500/10 border border-purple-700/30 rounded text-[10px] text-purple-400" title="Social Content Ops eligible">
+                                <Zap className="w-2.5 h-2.5" /> SCO
+                              </span>
+                            )}
+                          </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
@@ -244,6 +269,19 @@ export default function ProjectsPage() {
                         </td>
                         <td className="px-6 py-4 text-slate-400 whitespace-nowrap">
                           {project.success_flag ?? "\u2014"}
+                        </td>
+                        <td className="pr-4 py-4 text-right">
+                          <button
+                            onClick={(e) => handleDelete(e, project)}
+                            disabled={deletingId === project.id}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-400/10 transition-all disabled:opacity-40"
+                            title="Delete project"
+                          >
+                            {deletingId === project.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Trash2 className="w-3.5 h-3.5" />
+                            }
+                          </button>
                         </td>
                       </tr>
                     ))}

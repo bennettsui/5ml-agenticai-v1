@@ -1,5 +1,6 @@
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
+const fs = require('fs');
 const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
@@ -1214,17 +1215,17 @@ app.delete('/api/conversation/:id', async (req, res) => {
   }
 });
 
-// Delete a brand (and all its conversations)
-app.delete('/api/brands/:brand_name', async (req, res) => {
+// Delete a brand from crm_clients (cascades to crm_projects + crm_feedback)
+app.delete('/api/brands/:id', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    await deleteBrand(req.params.brand_name);
-    res.json({ success: true, message: 'Brand deleted' });
-  } catch (error) {
-    console.error('Error deleting brand:', error);
+    const result = await pool.query('DELETE FROM crm_clients WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Brand not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error('Error deleting brand:', err);
     res.status(500).json({ error: 'Failed to delete brand' });
   }
 });
@@ -1269,6 +1270,60 @@ app.get('/api/brands/:brand_name/projects', async (req, res) => {
   } catch (err) {
     console.error('Error fetching projects:', err);
     res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+// List all CRM projects with pagination
+app.get('/api/projects', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const size = Math.min(100, parseInt(req.query.size) || 20);
+    const status = req.query.status || '';
+    const offset = (page - 1) * size;
+    const where = status ? 'WHERE status = $1' : '';
+    const countResult = await pool.query(`SELECT COUNT(*) FROM crm_projects ${where}`, status ? [status] : []);
+    const total = parseInt(countResult.rows[0].count);
+    const params = status ? [status, size, offset] : [size, offset];
+    const dataResult = await pool.query(
+      `SELECT * FROM crm_projects ${where} ORDER BY created_at DESC LIMIT ${status ? '$2' : '$1'} OFFSET ${status ? '$3' : '$2'}`,
+      params
+    );
+    res.json({ items: dataResult.rows, total, page, size, pages: Math.ceil(total / size) });
+  } catch (err) {
+    console.error('Error listing projects:', err);
+    res.status(500).json({ error: 'Failed to list projects' });
+  }
+});
+
+// Create CRM project
+app.post('/api/projects', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const { client_id, name, type, brief, start_date, end_date, status } = req.body;
+    if (!client_id || !name) return res.status(400).json({ error: 'client_id and name are required' });
+    const result = await pool.query(
+      `INSERT INTO crm_projects (client_id, name, type, brief, start_date, end_date, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [client_id, name, type || 'other', brief || null, start_date || null, end_date || null, status || 'planning']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error creating project:', err);
+    res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// Delete CRM project
+app.delete('/api/projects/:id', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const result = await pool.query('DELETE FROM crm_projects WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Project not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error('Error deleting project:', err);
+    res.status(500).json({ error: 'Failed to delete project' });
   }
 });
 
@@ -1756,6 +1811,43 @@ console.log('✅ Debug routes loaded: /api/debug/sessions, /api/debug/modules, /
 // ==========================================
 const llm = require('./lib/llm');
 
+// Helper: read use case source code for chatbot context
+function readUseCaseCode(useCaseId, maxChars = 8000) {
+  const baseDir = path.join(__dirname, 'frontend', 'app', 'use-cases', useCaseId);
+  if (!fs.existsSync(baseDir)) return '';
+  const files = [];
+  function walkDir(dir, prefix) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      const fullPath = path.join(dir, entry.name);
+      const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        walkDir(fullPath, relPath);
+      } else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
+        files.push({ path: relPath, fullPath });
+      }
+    }
+  }
+  walkDir(baseDir, '');
+  let result = `\n## Use Case Source Code (${useCaseId})\nFiles:\n`;
+  result += files.map(f => `- ${f.path}`).join('\n') + '\n\n';
+  let totalChars = result.length;
+  for (const file of files) {
+    const content = fs.readFileSync(file.fullPath, 'utf8');
+    const header = `### ${file.path}\n\`\`\`tsx\n`;
+    const footer = '\n```\n\n';
+    const available = maxChars - totalChars - header.length - footer.length;
+    if (available <= 200) break;
+    const truncated = content.length > available ? content.slice(0, available) + '\n// ... (truncated)' : content;
+    result += header + truncated + footer;
+    totalChars = result.length;
+    if (totalChars >= maxChars) break;
+  }
+  return result;
+}
+
 // List available LLM models
 app.get('/api/llm/models', (req, res) => {
   res.json({ success: true, models: llm.listModels(), default: llm.DEFAULT_MODEL });
@@ -1764,7 +1856,7 @@ app.get('/api/llm/models', (req, res) => {
 // CRM AI Assistant chat endpoint
 app.post('/api/crm/chat', async (req, res) => {
   try {
-    const { messages, model: modelKey, page_context } = req.body;
+    const { messages, model: modelKey, page_context, use_case_id } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages array is required' });
@@ -1775,9 +1867,12 @@ app.post('/api/crm/chat', async (req, res) => {
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'crm', 3) : '';
     const companyContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
 
+    // Include use case source code for code-aware assistance
+    const codeContext = readUseCaseCode(use_case_id || 'crm', 6000);
+
     const system = `You are an AI assistant embedded in a Brand CRM + Knowledge Base system built by 5 Miles Lab (5ML).
 You help users manage brands, projects, feedback, and brand knowledge.
-${ragContext ? `\n${ragContext}` : ''}${companyContext ? `\n${companyContext}` : ''}
+${ragContext ? `\n${ragContext}` : ''}${companyContext ? `\n${companyContext}` : ''}${codeContext}
 
 When the user asks you to research a company, provide structured information including:
 - industry (as an array of strings)
@@ -1838,6 +1933,60 @@ Respond concisely. Use English or the language the user writes in.`;
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Unknown error',
     });
+  }
+});
+
+// Growth Chatbot Assistant endpoint (used by Growth Architect & Growth Hacking Studio)
+app.post('/api/growth/chatbot/message', async (req, res) => {
+  try {
+    const { brand_name, plan_id, message, conversation_history, use_case_id } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    // RAG context
+    const ragContext = ragService.getContext(message, 'company', 3);
+
+    // Include use case source code
+    const codeContext = readUseCaseCode(use_case_id || 'growth-architect', 6000);
+
+    const systemPrompt = `You are a Growth Strategy AI assistant for 5 Miles Lab (5ML).
+You help users evaluate growth plans, suggest modifications, identify risks, and recommend optimizations.
+${brand_name ? `Current brand: ${brand_name}` : ''}
+${plan_id ? `Current plan ID: ${plan_id}` : ''}
+${ragContext ? `\n${ragContext}` : ''}${codeContext}
+
+Your capabilities:
+1. Critique and improve growth plans
+2. Suggest new channels, tactics, and experiments
+3. Identify risks and mitigation strategies
+4. Recommend budget allocation and KPI targets
+5. Answer questions about the use case code and architecture
+
+Be concise and actionable. Use bullet points for lists.`;
+
+    const messages = [
+      ...(conversation_history || []),
+      { role: 'user', content: message },
+    ];
+
+    // Try DeepSeek first, fall back to Claude
+    const deepseek = require('./services/deepseekService');
+    if (deepseek.isAvailable()) {
+      const result = await deepseek.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+      );
+      return res.json({ data: { response: result.content, model: 'deepseek-chat' } });
+    }
+
+    const result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+    return res.json({ data: { response: result.text, model: result.modelName || 'claude-haiku' } });
+
+  } catch (error) {
+    console.error('Growth chatbot error:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 

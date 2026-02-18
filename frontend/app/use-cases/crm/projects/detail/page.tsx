@@ -15,6 +15,7 @@ import {
   RefreshCw,
   FileText,
   Tag,
+  Zap,
 } from 'lucide-react';
 import type { Project, Brand, FeedbackEvent } from '@/lib/crm-kb-api';
 import { useCrmAi } from '../../context';
@@ -302,6 +303,30 @@ function ProjectDetailInner() {
           <p className="text-sm text-slate-500 italic">No brief provided for this project.</p>
         )}
       </div>
+
+      {/* Social Content Ops Connection */}
+      {(project.type === 'social_campaign' || project.type === 'content_production') && (
+        <div className="bg-gradient-to-r from-purple-900/20 to-blue-900/20 border border-purple-700/30 rounded-xl p-5">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-purple-500/20 rounded-lg">
+              <Zap className="w-4 h-4 text-purple-400" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-white mb-1">Social Content Ops Available</h3>
+              <p className="text-xs text-slate-400 mb-3">
+                This {project.type === 'social_campaign' ? 'social campaign' : 'content production'} project can be connected to Social Content Ops for automated content calendar, publishing workflows, and performance tracking.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {['Content Calendar', 'Auto Publishing', 'Performance Tracking', 'Brand Guidelines'].map((feature) => (
+                  <span key={feature} className="px-2 py-0.5 bg-purple-500/10 border border-purple-700/30 rounded text-xs text-purple-300">
+                    {feature}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Feedback Section */}
       <div>
