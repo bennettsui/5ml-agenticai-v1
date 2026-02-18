@@ -14,7 +14,7 @@ import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
   ChevronRight, Map, Zap, Send, Loader2, Sparkles, History,
-  Plus, Trash2, Clock, Share2, Monitor, Database, TrendingUp,
+  Plus, Trash2, Clock, Monitor, TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -27,7 +27,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'social-ops';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -368,45 +368,22 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','api','scheduling','knowledge','costs','workflows','chat','social-ops'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
 
-  const tabGroups = [
-    {
-      category: 'CONTROL CENTER',
-      tabs: [
-        { id: 'control' as Tab, label: 'Control Tower', icon: LayoutDashboard },
-        { id: 'overview' as Tab, label: 'Overview', icon: Activity },
-      ]
-    },
-    {
-      category: 'OPERATIONS',
-      tabs: [
-        { id: 'workflows' as Tab, label: 'Agentic Workflows', icon: GitBranch },
-        { id: 'scheduling' as Tab, label: 'Scheduling & Jobs', icon: Calendar },
-        { id: 'costs' as Tab, label: 'Cost Analysis', icon: DollarSign },
-      ]
-    },
-    {
-      category: 'BRAND MANAGEMENT',
-      tabs: [
-        { id: 'social-ops' as Tab, label: 'Social Content Ops', icon: Share2 },
-      ]
-    },
-    {
-      category: 'INTELLIGENCE',
-      tabs: [
-        { id: 'chat' as Tab, label: 'Agent Chat', icon: MessageSquare },
-        { id: 'knowledge' as Tab, label: 'Knowledge Base', icon: BookOpen },
-        { id: 'analytics' as Tab, label: 'Analytics & API', icon: Wifi },
-        { id: 'architecture' as Tab, label: 'Architecture', icon: Layers },
-      ]
-    },
+  const tabs: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
+    { id: 'control', label: 'Control Tower', icon: LayoutDashboard },
+    { id: 'overview', label: 'Overview', icon: Activity },
+    { id: 'workflows', label: 'Agentic Workflows', icon: GitBranch },
+    { id: 'scheduling', label: 'Scheduling & Jobs', icon: Calendar },
+    { id: 'costs', label: 'Cost Analysis', icon: DollarSign },
+    { id: 'chat', label: 'Agent Chat', icon: MessageSquare },
+    { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen },
+    { id: 'analytics', label: 'Analytics & API', icon: Wifi },
+    { id: 'architecture', label: 'Architecture', icon: Layers },
   ];
-
-  const allTabs = tabGroups.flatMap(g => g.tabs);
 
   // Derived stats
   const liveCount = USE_CASES.filter(u => u.status === 'live').length;
@@ -445,34 +422,27 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Tab Navigation - Grouped by Category */}
-      <nav className="bg-slate-900/60 border-b border-slate-700/50">
+      {/* Tab Navigation — flat single row */}
+      <nav className="bg-slate-800 border-b border-slate-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="space-y-2 py-3">
-            {tabGroups.map((group) => (
-              <div key={group.category}>
-                <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide px-3 mb-1.5">{group.category}</div>
-                <div className="flex space-x-1 overflow-x-auto pb-1">
-                  {group.tabs.map((tab) => {
-                    const Icon = tab.icon;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
-                          activeTab === tab.id
-                            ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                            : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.03]'
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5" />
-                        {tab.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+          <div className="flex space-x-6 overflow-x-auto">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1.5 px-1 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-500'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </nav>
@@ -679,111 +649,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ================================================================ */}
-        {/* SOCIAL OPERATIONS TAB                                           */}
-        {/* ================================================================ */}
-        {activeTab === 'social-ops' && (
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-start justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-white">Social Content Operations</h1>
-                <p className="text-sm text-slate-400 mt-1">AI-powered multi-brand social media strategy, content planning, and performance tracking</p>
-              </div>
-              <Link
-                href="/dashboard?tab=social-ops&mode=new-brand"
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                New Brand
-              </Link>
-            </div>
-
-            {/* Quick Access Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[
-                {
-                  icon: Plus,
-                  title: 'Brand Setup',
-                  description: 'Interactive onboarding wizard to configure brand strategy, goals, and content scope',
-                  action: 'Start Setup',
-                  color: 'bg-blue-500/10 border-blue-500/20 text-blue-400',
-                },
-                {
-                  icon: Calendar,
-                  title: 'Content Calendar',
-                  description: 'AI-generated content plans with post types, pillars, and publishing schedule',
-                  action: 'View Calendar',
-                  color: 'bg-purple-500/10 border-purple-500/20 text-purple-400',
-                },
-                {
-                  icon: Monitor,
-                  title: 'Performance Dashboard',
-                  description: 'Real-time analytics, KPI tracking, and post-level insights for all brands',
-                  action: 'View Analytics',
-                  color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
-                },
-              ].map((card) => (
-                <div key={card.title} className={`rounded-lg border ${card.color} bg-slate-800/60 p-6 hover:bg-white/[0.02] transition-colors`}>
-                  <div className={`w-10 h-10 rounded-lg ${card.color} flex items-center justify-center mb-4`}>
-                    <card.icon className="w-5 h-5" />
-                  </div>
-                  <h3 className="font-semibold text-white mb-2">{card.title}</h3>
-                  <p className="text-sm text-slate-500 mb-4">{card.description}</p>
-                  <button className={`text-sm font-medium ${card.color} hover:opacity-80 transition-opacity flex items-center gap-1`}>
-                    {card.action} <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Saved Brands Section (Placeholder) */}
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-6">
-              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <Database className="w-5 h-5 text-slate-400" />
-                Saved Brands
-              </h2>
-              <div className="text-center py-12">
-                <div className="w-16 h-16 rounded-full bg-white/[0.03] flex items-center justify-center mx-auto mb-4">
-                  <Plus className="w-8 h-8 text-slate-600" />
-                </div>
-                <p className="text-slate-500 font-medium mb-2">No brands created yet</p>
-                <p className="text-xs text-slate-600 mb-4 max-w-sm mx-auto">
-                  Create your first brand to get started with AI-powered social media strategy and content management.
-                </p>
-                <button className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors">
-                  <Plus className="w-4 h-4" />
-                  Create First Brand
-                </button>
-              </div>
-            </div>
-
-            {/* Information Section */}
-            <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-6">
-              <h2 className="text-lg font-bold text-white mb-4">How It Works</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
-                <div>
-                  <div className="font-semibold text-blue-400 mb-2">Step 1: Brand Onboarding</div>
-                  <p className="text-slate-500">
-                    Set up your brand profile with industry, goals, channels, budget, and approval workflows. Our wizard guides you through strategy configuration.
-                  </p>
-                </div>
-                <div>
-                  <div className="font-semibold text-purple-400 mb-2">Step 2: Content Planning</div>
-                  <p className="text-slate-500">
-                    AI generates content pillars, posts types mix, and monthly calendar based on your strategy. Customize and approve before deployment.
-                  </p>
-                </div>
-                <div>
-                  <div className="font-semibold text-emerald-400 mb-2">Step 3: Performance Tracking</div>
-                  <p className="text-slate-500">
-                    Real-time analytics dashboard tracks engagement, reach, conversions, and ROI. Monthly reports with actionable insights and recommendations.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );
