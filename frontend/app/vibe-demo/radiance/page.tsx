@@ -23,7 +23,7 @@ export default function RadiancePage() {
           <div className="mb-12 inline-block">
             <RadianceLogo variant="text" size="md" />
           </div>
-          <h1 className="text-7xl md:text-8xl font-light mb-8 leading-tight text-slate-900 dark:text-white tracking-tight">
+          <h1 className="text-7xl md:text-8xl font-bold mb-8 leading-tight text-slate-900 dark:text-white">
             Integrated PR<br className="hidden md:block" />& Marketing
           </h1>
           <p className="text-xl text-slate-600 dark:text-slate-400 mb-16 leading-relaxed max-w-2xl mx-auto font-light">
@@ -76,7 +76,7 @@ export default function RadiancePage() {
       <section id="services" className="py-32 px-6 bg-white dark:bg-slate-950">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-24">
-            <h2 className="text-6xl md:text-7xl font-light text-slate-900 dark:text-white mb-6 tracking-tight">
+            <h2 className="text-5xl font-bold text-slate-900 dark:text-white mb-6">
               Our Services
             </h2>
             <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
