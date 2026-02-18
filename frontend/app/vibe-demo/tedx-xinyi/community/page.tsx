@@ -23,12 +23,12 @@ export default function CommunityPage() {
           src="/tedx-xinyi/hero-community.png"
           alt=""
           className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
-          onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.45'; }}
+          onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.7'; }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/70 via-transparent to-white" />
+        <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/30 via-neutral-900/40 to-white" />
 
-        <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-32">
+        <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-32" style={{ textShadow: '0 2px 16px rgba(0,0,0,0.6), 0 1px 3px rgba(0,0,0,0.4)' }}>
           <FadeIn>
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white">
               <span lang="en">Community </span>

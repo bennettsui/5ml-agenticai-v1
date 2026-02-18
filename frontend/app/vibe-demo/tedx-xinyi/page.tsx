@@ -91,18 +91,18 @@ export default function TEDxXinyiHome() {
             src="/tedx-xinyi/hero-home.png"
             alt=""
             className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
-            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.55'; }}
+            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.75'; }}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
           {/* Warm gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/80 via-neutral-900/40 to-neutral-900" />
+          <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/50 via-neutral-900/20 to-neutral-900/70" />
         </div>
 
         {/* Fallback: warm amber glow when no image */}
         <div className="absolute inset-0 bg-gradient-to-br from-neutral-900 via-neutral-800 to-amber-950/30" style={{ zIndex: 0 }} />
 
         {/* Content */}
-        <div className="relative z-10 max-w-5xl mx-auto px-6 text-center pt-24 pb-16">
+        <div className="relative z-10 max-w-5xl mx-auto px-6 text-center pt-24 pb-16" style={{ textShadow: '0 2px 16px rgba(0,0,0,0.6), 0 1px 3px rgba(0,0,0,0.4)' }}>
           <FadeIn>
             <p className="text-xs sm:text-sm font-bold tracking-[0.3em] uppercase text-white/50 mb-6">
               TEDxXinyi 2026 · NEXT SALON
