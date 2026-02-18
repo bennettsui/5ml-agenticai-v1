@@ -8,25 +8,60 @@ export default function ContactPage() {
     email: '',
     phone: '',
     company: '',
-    subject: '',
+    industry: '',
+    serviceInterest: '',
     message: ''
   });
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (error) setError('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real implementation, this would send data to an API
-    console.log('Form submitted:', formData);
-    setSubmitted(true);
-    setTimeout(() => {
-      setFormData({ name: '', email: '', phone: '', company: '', subject: '', message: '' });
-      setSubmitted(false);
-    }, 3000);
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/radiance/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit form');
+      }
+
+      setSubmitted(true);
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        company: '',
+        industry: '',
+        serviceInterest: '',
+        message: ''
+      });
+
+      // Reset success message after 5 seconds
+      setTimeout(() => {
+        setSubmitted(false);
+      }, 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -63,10 +98,17 @@ export default function ContactPage() {
 
               {submitted ? (
                 <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg p-6 text-center">
-                  <h3 className="font-semibold text-green-900 dark:text-green-200 mb-2">Thank you!</h3>
-                  <p className="text-green-800 dark:text-green-300">We've received your message and will get back to you soon.</p>
+                  <h3 className="font-semibold text-green-900 dark:text-green-200 mb-2">✓ Thank you!</h3>
+                  <p className="text-green-800 dark:text-green-300">We've received your message and will get back to you within 2 business days.</p>
                 </div>
-              ) : (
+              ) : error ? (
+                <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg p-6 mb-6">
+                  <h3 className="font-semibold text-red-900 dark:text-red-200 mb-2">Error</h3>
+                  <p className="text-red-800 dark:text-red-300">{error}</p>
+                </div>
+              ) : null}
+
+              {!submitted && (
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
@@ -128,26 +170,41 @@ export default function ContactPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      What's this about? *
-                    </label>
-                    <select
-                      name="subject"
-                      value={formData.subject}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
-                    >
-                      <option value="">Select a topic</option>
-                      <option value="PR Campaign">PR Campaign Inquiry</option>
-                      <option value="Event Management">Event Management</option>
-                      <option value="Social Media">Social Media Strategy</option>
-                      <option value="KOL Marketing">KOL & Influencer Marketing</option>
-                      <option value="Creative Services">Creative & Content Production</option>
-                      <option value="General">General Inquiry</option>
-                      <option value="Other">Other</option>
-                    </select>
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Industry
+                      </label>
+                      <input
+                        type="text"
+                        name="industry"
+                        value={formData.industry}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
+                        placeholder="e.g., Tech, Fashion, F&B"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        What service interests you? *
+                      </label>
+                      <select
+                        name="serviceInterest"
+                        value={formData.serviceInterest}
+                        onChange={handleChange}
+                        required
+                        className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
+                      >
+                        <option value="">Select a service</option>
+                        <option value="Public Relations">Public Relations</option>
+                        <option value="Events">Event Management</option>
+                        <option value="Social Media">Social Media Strategy</option>
+                        <option value="KOL Marketing">KOL & Influencer Marketing</option>
+                        <option value="Creative Production">Creative & Content Production</option>
+                        <option value="Multiple Services">Multiple Services</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div>
@@ -167,9 +224,10 @@ export default function ContactPage() {
 
                   <button
                     type="submit"
-                    className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
+                    disabled={loading}
+                    className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
                   >
-                    Send Message
+                    {loading ? 'Sending...' : 'Send Message'}
                   </button>
                 </form>
               )}
