@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { Header } from '../components/Header';
+import { Footer } from '../components/Footer';
+import { Breadcrumb } from '../components/Breadcrumb';
 
 function CustomSelect({ name, value, onChange, options, placeholder, required }: {
   name: string; value: string;
@@ -120,32 +123,37 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <a href="/vibe-demo/radiance" className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:opacity-80">
-            ← Back to Radiance
-          </a>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Get in Touch</h2>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
+      <Header />
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-16 px-6 max-w-4xl mx-auto">
-        <div className="space-y-6">
-          <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
-            Get in Touch
-          </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
-            Whether you're exploring a new campaign, want to discuss your PR strategy, or have a question about our services—we'd love to hear from you. Fill out the form below or reach out directly, and we'll get back to you within 24 hours.
-          </p>
-        </div>
-      </section>
+      <main id="main-content" className="flex-1 pt-20">
+        {/* Hero Section */}
+        <section className="py-24 px-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto mb-8">
+            <Breadcrumb items={[
+              { label: 'Home', href: '/vibe-demo/radiance' },
+              { label: 'Get in Touch' }
+            ]} />
+          </div>
+        </section>
 
-      {/* Contact Content */}
-      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <div className="grid md:grid-cols-3 gap-12">
+        <section className="py-16 px-6">
+          <div className="max-w-6xl mx-auto">
+            <div className="space-y-6">
+              <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
+                Get in Touch
+              </h1>
+              <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
+                Whether you're exploring a new campaign, want to discuss your PR strategy, or have a question about our services—we'd love to hear from you. Fill out the form below or reach out directly, and we'll get back to you within 24 hours.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Contact Content */}
+        <section className="py-16 px-6 border-t border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <div className="grid md:grid-cols-3 gap-12">
           {/* Contact Form */}
           <div className="md:col-span-2">
             <div className="bg-slate-50 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 rounded-lg p-8">
@@ -167,10 +175,11 @@ export default function ContactPage() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label htmlFor="contact-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Name *
                       </label>
                       <input
+                        id="contact-name"
                         type="text"
                         name="name"
                         value={formData.name}
@@ -181,10 +190,11 @@ export default function ContactPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label htmlFor="contact-email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Email *
                       </label>
                       <input
+                        id="contact-email"
                         type="email"
                         name="email"
                         value={formData.email}
@@ -198,10 +208,11 @@ export default function ContactPage() {
 
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label htmlFor="contact-phone" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Phone
                       </label>
                       <input
+                        id="contact-phone"
                         type="tel"
                         name="phone"
                         value={formData.phone}
@@ -211,10 +222,11 @@ export default function ContactPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label htmlFor="contact-company" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Company
                       </label>
                       <input
+                        id="contact-company"
                         type="text"
                         name="company"
                         value={formData.company}
@@ -227,10 +239,11 @@ export default function ContactPage() {
 
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label htmlFor="contact-industry" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Industry
                       </label>
                       <input
+                        id="contact-industry"
                         type="text"
                         name="industry"
                         value={formData.industry}
@@ -240,7 +253,7 @@ export default function ContactPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      <label htmlFor="contact-service" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         What service interests you? *
                       </label>
                       <CustomSelect
@@ -255,10 +268,11 @@ export default function ContactPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="contact-message" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Message *
                     </label>
                     <textarea
+                      id="contact-message"
                       name="message"
                       value={formData.message}
                       onChange={handleChange}
@@ -340,10 +354,12 @@ export default function ContactPage() {
             </div>
           </div>
         </div>
-      </section>
+        </div>
+        </section>
 
-      {/* FAQ Section */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+        {/* FAQ Section */}
+        <section className="py-16 px-6 border-t border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Frequently asked questions</h2>
         <div className="space-y-6">
           <div>
@@ -370,30 +386,24 @@ export default function ContactPage() {
               Projects vary widely depending on scope and complexity. We work with startups and smaller organisations, as well as larger corporations. Let's have a conversation about your objectives and we can discuss what makes sense for your budget.
             </p>
           </div>
-        </div>
-      </section>
+          </div>
+          </div>
+        </section>
 
-      {/* CTA */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <div className="text-center">
-          <p className="text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
-            Prefer to start with a conversation? We're happy to discuss your challenge, share ideas and explore what's possible—no sales pitch, just practical thinking.
-          </p>
-          <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
-            Schedule a 30-Minute Call
-          </button>
-        </div>
-      </section>
+        {/* CTA */}
+        <section className="py-16 px-6 border-t border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto text-center">
+            <p className="text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+              Prefer to start with a conversation? We're happy to discuss your challenge, share ideas and explore what's possible—no sales pitch, just practical thinking.
+            </p>
+            <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+              Schedule a 30-Minute Call
+            </button>
+          </div>
+        </section>
+      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 py-12 px-6 mt-16">
-        <div className="max-w-6xl mx-auto text-center text-sm text-slate-500 dark:text-slate-400">
-          <p>Radiance PR & Martech Limited | Hong Kong</p>
-          <p className="mt-2">
-            <a href="/vibe-demo/radiance" className="text-purple-600 dark:text-purple-400 hover:underline">Back to Radiance</a>
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

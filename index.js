@@ -56,7 +56,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -1040,79 +1040,103 @@ app.delete('/api/sandbox/tests', async (req, res) => {
 // ==========================================
 
 // Search brands for autocomplete
+// Search brands in crm_clients
 app.get('/api/brands/search', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    const query = req.query.q || '';
+    const q = (req.query.q || '').trim();
     const limit = parseInt(req.query.limit) || 10;
-
-    if (!query || query.trim().length < 2) {
-      return res.json({ success: true, brands: [] });
-    }
-
-    const brands = await searchBrands(query, limit);
-    res.json({ success: true, brands });
-  } catch (error) {
-    console.error('Error searching brands:', error);
+    if (q.length < 2) return res.json({ items: [], total: 0, page: 1, size: limit, pages: 0 });
+    const result = await pool.query(
+      `SELECT * FROM crm_clients WHERE name ILIKE $1 ORDER BY name LIMIT $2`,
+      [`%${q}%`, limit]
+    );
+    res.json({ items: result.rows, total: result.rows.length, page: 1, size: limit, pages: 1 });
+  } catch (err) {
+    console.error('Error searching brands:', err);
     res.status(500).json({ error: 'Failed to search brands' });
   }
 });
 
-// Get all brands
+// List brands from crm_clients with pagination
 app.get('/api/brands', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    const limit = parseInt(req.query.limit) || 50;
-    const brands = await getAllBrands(limit);
-    res.json({ success: true, brands });
-  } catch (error) {
-    console.error('Error fetching brands:', error);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const size = Math.min(100, parseInt(req.query.size) || 20);
+    const search = (req.query.search || '').trim();
+    const offset = (page - 1) * size;
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM crm_clients${search ? ' WHERE name ILIKE $1' : ''}`,
+      search ? [`%${search}%`] : []
+    );
+    const total = parseInt(countResult.rows[0].count);
+
+    const dataResult = await pool.query(
+      `SELECT * FROM crm_clients${search ? ' WHERE name ILIKE $1' : ''} ORDER BY updated_at DESC LIMIT ${search ? '$2' : '$1'} OFFSET ${search ? '$3' : '$2'}`,
+      search ? [`%${search}%`, size, offset] : [size, offset]
+    );
+
+    res.json({ items: dataResult.rows, total, page, size, pages: Math.ceil(total / size) });
+  } catch (err) {
+    console.error('Error fetching brands:', err);
     res.status(500).json({ error: 'Failed to fetch brands' });
   }
 });
 
-// Get specific brand by name
-app.get('/api/brands/:name', async (req, res) => {
+// Get brand by UUID or name from crm_clients
+app.get('/api/brands/:id', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    const brand = await getBrandWithResults(req.params.name);
-    if (!brand) {
-      return res.status(404).json({ error: 'Brand not found' });
-    }
-    res.json({ success: true, brand });
-  } catch (error) {
-    console.error('Error fetching brand:', error);
+    const { id } = req.params;
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const result = uuidRe.test(id)
+      ? await pool.query('SELECT * FROM crm_clients WHERE id = $1', [id])
+      : await pool.query('SELECT * FROM crm_clients WHERE LOWER(name) = LOWER($1)', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Brand not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching brand:', err);
     res.status(500).json({ error: 'Failed to fetch brand' });
   }
 });
 
-// Save or update brand
+// Create brand in crm_clients
 app.post('/api/brands', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    const { brand_name, industry, brand_info } = req.body;
-
-    if (!brand_name) {
-      return res.status(400).json({ error: 'brand_name is required' });
+    const { name, legal_name, industry, region, status, website_url, company_size, client_value_tier } = req.body;
+    const resolvedName = name || req.body.brand_name;
+    if (!resolvedName) {
+      return res.status(400).json({ error: 'name is required' });
     }
-
-    const brand = await saveBrand(brand_name, industry, brand_info);
-    res.json({ success: true, brand });
-  } catch (error) {
-    console.error('Error saving brand:', error);
-    res.status(500).json({ error: 'Failed to save brand' });
+    const result = await pool.query(
+      `INSERT INTO crm_clients (name, legal_name, industry, region, status, website_url, company_size, client_value_tier)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [
+        resolvedName,
+        legal_name || null,
+        JSON.stringify(Array.isArray(industry) ? industry : (industry ? [industry] : [])),
+        JSON.stringify(Array.isArray(region) ? region : (region ? [region] : [])),
+        status || 'prospect',
+        website_url || null,
+        company_size || null,
+        client_value_tier || null,
+      ]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error creating brand:', err);
+    res.status(500).json({ error: 'Failed to create brand' });
   }
 });
 
@@ -1225,17 +1249,25 @@ app.delete('/api/brands/:brand_name/projects', async (req, res) => {
   }
 });
 
-// Get projects for a brand (grouped by brief)
+// Get projects for a brand from crm_projects
 app.get('/api/brands/:brand_name/projects', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    const projects = await getProjectsByBrand(req.params.brand_name);
-    res.json({ success: true, projects });
-  } catch (error) {
-    console.error('Error fetching projects:', error);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const size = Math.min(100, parseInt(req.query.size) || 20);
+    const offset = (page - 1) * size;
+    const clientId = req.params.brand_name;
+    const countResult = await pool.query('SELECT COUNT(*) FROM crm_projects WHERE client_id = $1', [clientId]);
+    const total = parseInt(countResult.rows[0].count);
+    const result = await pool.query(
+      'SELECT * FROM crm_projects WHERE client_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [clientId, size, offset]
+    );
+    res.json({ items: result.rows, total, page, size, pages: Math.ceil(total / size) });
+  } catch (err) {
+    console.error('Error fetching projects:', err);
     res.status(500).json({ error: 'Failed to fetch projects' });
   }
 });

@@ -8,24 +8,32 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
-    { label: 'Services', href: '#services' },
+    { label: 'Services', href: '/vibe-demo/radiance/services' },
     { label: 'Case Studies', href: '/vibe-demo/radiance/case-studies' },
     { label: 'About', href: '/vibe-demo/radiance/about' },
-    { label: 'Blog', href: '/vibe-demo/radiance/blog' },
+    { label: 'Consultation', href: '/vibe-demo/radiance/consultation' },
     { label: 'Contact', href: '/vibe-demo/radiance/contact' },
   ];
 
   return (
     <>
+      {/* Skip navigation link for keyboard users (WCAG 2.4.1) */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-purple-600 focus:text-white focus:rounded-lg focus:font-medium focus:text-sm"
+      >
+        Skip to main content
+      </a>
+
       <header className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/vibe-demo/radiance" className="flex-shrink-0 hover:opacity-80 transition">
+          <Link href="/vibe-demo/radiance" className="flex-shrink-0 hover:opacity-80 transition" aria-label="Radiance PR & Marketing — Home">
             <RadianceLogo variant="text" size="sm" />
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex gap-8 items-center">
+          <nav aria-label="Main navigation" className="hidden md:flex gap-8 items-center">
             {navItems.map((item) => (
               <a
                 key={item.href}
@@ -49,6 +57,9 @@ export function Header() {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-menu"
+              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
               className="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             >
               <svg
@@ -59,6 +70,7 @@ export function Header() {
                 strokeWidth="2"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
+                aria-hidden="true"
               >
                 <path d="M4 6h16M4 12h16M4 18h16"></path>
               </svg>
@@ -68,7 +80,7 @@ export function Header() {
 
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+          <nav id="mobile-menu" aria-label="Mobile navigation" className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
             <div className="px-6 py-4 space-y-3">
               {navItems.map((item) => (
                 <a
@@ -90,7 +102,7 @@ export function Header() {
                 </Link>
               </div>
             </div>
-          </div>
+          </nav>
         )}
       </header>
     </>
