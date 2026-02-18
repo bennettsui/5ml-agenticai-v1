@@ -24,6 +24,7 @@ export interface ChatSession {
 
 const STORAGE_KEY = '5ml-chat-sessions';
 const MAX_SESSIONS_PER_TYPE = 50;
+const EMPTY_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function genId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -47,6 +48,23 @@ function writeAll(sessions: ChatSession[]): void {
     // Storage full — prune oldest
     const pruned = sessions.slice(-MAX_SESSIONS_PER_TYPE * 3);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pruned)); } catch { /* noop */ }
+  }
+}
+
+/**
+ * Remove empty sessions (no messages) older than 24 hours.
+ * Sessions with conversations are kept indefinitely.
+ */
+export function pruneExpiredSessions(): void {
+  const all = readAll();
+  const now = Date.now();
+  const filtered = all.filter(s => {
+    if (s.messages.length > 0) return true; // keep sessions with conversations
+    const age = now - new Date(s.createdAt).getTime();
+    return age < EMPTY_SESSION_TTL_MS;
+  });
+  if (filtered.length < all.length) {
+    writeAll(filtered);
   }
 }
 

@@ -11,7 +11,9 @@ import {
 } from 'lucide-react';
 import {
   createSession, getLatestSession, addMessage as persistMessage,
+  pruneExpiredSessions,
 } from '@/lib/chat-history';
+import MessageActions from '@/components/MessageActions';
 
 // ────────────────────────────────────────────
 // Types
@@ -126,33 +128,62 @@ const INITIAL_WORKFLOWS: WorkflowDef[] = [
   {
     id: 'ads',
     title: 'Ads Performance Pipeline',
-    subtitle: '8 agents in a cron-scheduled sequential pipeline',
+    subtitle: '12 agents — orchestrated pipeline with temporal data strategy, validation & backfill',
     icon: Megaphone,
     gradient: 'from-orange-500 to-red-600',
-    pattern: 'Cron-Batch Pipeline',
-    patternDesc: 'Daily/weekly pipeline processes 5 concurrent tenants through a fixed analysis sequence',
+    pattern: 'Orchestrated Cron Pipeline',
+    patternDesc: 'Orchestrator routes cron triggers → parallel fetch with 72h priority + historical backfill → normalize → validate → anomaly/funnel analysis → budget/recommendations → internal strategy → report generation. Circuit breakers (10min timeout), quality scoring, cost-optimized model routing.',
     trigger: 'Cron (Daily 07:00, Weekly Sun 08:00 HKT)',
-    canvasWidth: 1100,
-    canvasHeight: 380,
+    canvasWidth: 1400,
+    canvasHeight: 500,
     nodes: [
-      { id: 'meta-fetch', name: 'Meta Fetcher', role: 'Pull Meta campaigns', icon: Megaphone, color: '#3b82f6', x: 60, y: 80 },
-      { id: 'google-fetch', name: 'Google Fetcher', role: 'Pull Google campaigns', icon: Globe, color: '#22c55e', x: 60, y: 230 },
-      { id: 'normalizer', name: 'Data Normalizer', role: 'Unify metrics', icon: Database, color: '#06b6d4', x: 300, y: 155 },
-      { id: 'anomaly', name: 'Anomaly Detector', role: 'Flag unusual shifts', icon: AlertTriangle, color: '#f59e0b', x: 460, y: 155 },
-      { id: 'funnel', name: 'Funnel Analyzer', role: 'Conversion analysis', icon: BarChart3, color: '#a855f7', x: 620, y: 155 },
-      { id: 'budget', name: 'Budget Planner', role: 'Budget allocation', icon: Target, color: '#10b981', x: 780, y: 80 },
-      { id: 'recommend', name: 'Recommendation Writer', role: 'Action items', icon: PenTool, color: '#ec4899', x: 780, y: 230 },
-      { id: 'internal', name: 'Internal Strategy', role: 'Cross-tenant patterns', icon: Brain, color: '#6366f1', x: 980, y: 155 },
+      // Column 1: Entry
+      { id: 'orchestrator', name: 'Pipeline Orchestrator', role: 'Trigger routing, circuit breakers, recovery · Haiku ($0.25/M)', icon: Workflow, color: '#a855f7', x: 60, y: 210 },
+      // Column 2: Data Fetch (parallel)
+      { id: 'meta-fetch', name: 'Meta Fetcher', role: '72h priority + historical backfill · DeepSeek ($0.14/M)', icon: Megaphone, color: '#3b82f6', x: 280, y: 50 },
+      { id: 'google-fetch', name: 'Google Fetcher', role: '72h priority + historical backfill · DeepSeek ($0.14/M)', icon: Globe, color: '#22c55e', x: 280, y: 210 },
+      { id: 'backfill', name: 'Backfill Manager', role: 'Historical recovery · 1 month/run · DeepSeek ($0.14/M)', icon: RefreshCw, color: '#64748b', x: 280, y: 380 },
+      // Column 3: Normalize
+      { id: 'normalizer', name: 'Data Normalizer', role: 'Unify metrics, dedupe, timezone · DeepSeek ($0.14/M)', icon: Database, color: '#06b6d4', x: 500, y: 130 },
+      // Column 4: Validate
+      { id: 'validator', name: 'Data Validator', role: 'Schema, temporal, business checks · DeepSeek ($0.14/M)', icon: Shield, color: '#ef4444', x: 660, y: 130 },
+      // Column 5: Analysis (parallel)
+      { id: 'anomaly', name: 'Anomaly Detector', role: 'Trend breaks, unusual shifts · Haiku ($0.25/M)', icon: AlertTriangle, color: '#f59e0b', x: 840, y: 50 },
+      { id: 'funnel', name: 'Funnel Analyzer', role: 'Conversion funnels, attribution · Haiku ($0.25/M)', icon: BarChart3, color: '#a855f7', x: 840, y: 250 },
+      // Column 6: Strategy (parallel)
+      { id: 'budget', name: 'Budget Planner', role: 'Allocation & forecasting · DeepSeek ($0.14/M)', icon: Target, color: '#10b981', x: 1020, y: 50 },
+      { id: 'recommend', name: 'Recommendation Writer', role: 'Action items & optimization · Haiku ($0.25/M)', icon: PenTool, color: '#ec4899', x: 1020, y: 250 },
+      // Column 7: Output
+      { id: 'internal', name: 'Internal Strategy', role: 'Cross-tenant patterns · Sonnet ($3/M)', icon: Brain, color: '#6366f1', x: 1220, y: 100 },
+      { id: 'reporter', name: 'Report Generator', role: 'Weekly/monthly reports & alerts · Haiku ($0.25/M)', icon: FileSpreadsheet, color: '#14b8a6', x: 1220, y: 310 },
     ],
     edges: [
+      // Orchestrator routing
+      { from: 'orchestrator', to: 'meta-fetch', label: 'daily/weekly', type: 'conditional' },
+      { from: 'orchestrator', to: 'google-fetch', label: 'daily/weekly', type: 'conditional' },
+      { from: 'orchestrator', to: 'backfill', label: 'if capacity', type: 'conditional' },
+      // Fetch → Normalize
       { from: 'meta-fetch', to: 'normalizer', type: 'solid' },
       { from: 'google-fetch', to: 'normalizer', type: 'solid' },
-      { from: 'normalizer', to: 'anomaly', type: 'solid' },
-      { from: 'anomaly', to: 'funnel', type: 'solid' },
+      { from: 'backfill', to: 'normalizer', label: 'historical', type: 'solid' },
+      // Normalize → Validate
+      { from: 'normalizer', to: 'validator', type: 'solid' },
+      // Validate → Analysis (parallel)
+      { from: 'validator', to: 'anomaly', label: 'pass/flag', type: 'conditional' },
+      { from: 'validator', to: 'funnel', label: 'pass/flag', type: 'conditional' },
+      // Validator feedback
+      { from: 'validator', to: 'orchestrator', label: 'block → retry', type: 'feedback' },
+      // Analysis → Strategy
+      { from: 'anomaly', to: 'budget', type: 'solid' },
       { from: 'funnel', to: 'budget', type: 'solid' },
       { from: 'funnel', to: 'recommend', type: 'solid' },
+      // Strategy → Output
       { from: 'budget', to: 'internal', label: 'weekly', type: 'conditional' },
       { from: 'recommend', to: 'internal', label: 'weekly', type: 'conditional' },
+      { from: 'recommend', to: 'reporter', type: 'solid' },
+      { from: 'internal', to: 'reporter', label: 'weekly', type: 'conditional' },
+      // Reporter feedback
+      { from: 'reporter', to: 'orchestrator', label: 'run complete', type: 'feedback' },
     ],
   },
   {
@@ -398,8 +429,9 @@ export default function AgenticWorkflows() {
   const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load previous workflow chat session on mount
+  // Prune stale empty sessions, then load previous workflow chat session on mount
   useEffect(() => {
+    pruneExpiredSessions();
     const prev = getLatestSession('workflow');
     if (prev && prev.messages.length > 0) {
       setMessages(prev.messages.map((m, i) => ({
@@ -961,7 +993,7 @@ export default function AgenticWorkflows() {
               </div>
             ) : (
               messages.map(msg => (
-                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} group`}>
                   <div className={`max-w-[90%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
                     msg.role === 'user'
                       ? 'bg-purple-500/20 text-purple-100 border border-purple-500/20'
@@ -979,6 +1011,7 @@ export default function AgenticWorkflows() {
                       </div>
                     )}
                     <div className="whitespace-pre-wrap">{msg.content}</div>
+                    <MessageActions content={msg.content} variant={msg.role === 'user' ? 'user' : 'assistant'} />
                   </div>
                 </div>
               ))

@@ -220,7 +220,7 @@ Model Routing: DeepSeek primary ($0.14/$0.28 per 1M tokens), Claude Haiku fallba
   {
     id: '5ml-use-cases',
     content: `5ML Existing Use Cases:
-Growth/Media: Social Media Team Agent (campaign research, brand config), Ads Performance Intelligence (Meta + Google multi-tenant analysis), Social reporting with visual monthly reports.
+Growth/Media: Social Media Team Agent (campaign research, brand config, 14-agent pipeline), Ads Performance Intelligence (12-agent orchestrated pipeline with temporal data strategy, validation, backfill, Meta + Google multi-tenant analysis), Social reporting with visual monthly reports.
 Exec & Intelligence: AI Executive Council / C-Suite (5 AI executives: CEO, CMO, CFO, COO, CTO) thinking independently across growth, finance, ops and tech, summarised into a cockpit.
 Ops & Finance: Man's Accounting (receipt OCR, categorisation, P&L tracking), Internal finance automation (invoice tracking, client chasing).
 Talent/HR: RecruitAIStudio (dual-track agentic AI strategy for recruitment workflows and SME automation).
@@ -267,6 +267,28 @@ Analytics: Overall relationship health score, at-risk/stable/strong distribution
 
 Cost Optimization: Orchestration uses Haiku ($0.25/M), data collection uses DeepSeek ($0.14/M), analysis uses DeepSeek, strategy uses Sonnet ($3/M), client-facing uses Sonnet. Enterprise clients get Perplexity for research; SME clients use DeepSeek with web search.`,
     metadata: { useCase: 'crm', title: 'CRM Relationship Intelligence Concepts' },
+  },
+  {
+    id: 'ads-pipeline-architecture',
+    content: `Ads Performance Pipeline — 12-Agent Orchestrated Architecture:
+
+Pipeline Orchestrator (Haiku $0.25/M): Entry point for all cron triggers (Daily 07:00, Weekly Sun 08:00 HKT). Classifies trigger type, routes to appropriate agents, implements circuit breakers (10-minute timeout per agent), handles partial success and error recovery with exponential backoff.
+
+Temporal Data Strategy:
+- Priority 1: Always fetch last 72 hours completely (compensates for platform attribution delays)
+- Priority 2: Backfill 1 historical month per run if resources allow
+- Never mix recent and historical data in same analysis run
+- Maintain consistency flags for reporting
+- Backfill rate: ~2 months/week
+
+12 Agents in sequence: Orchestrator → Meta Fetcher + Google Fetcher + Backfill Manager (parallel) → Data Normalizer → Data Validator → Anomaly Detector + Funnel Analyzer (parallel) → Budget Planner + Recommendation Writer (parallel) → Internal Strategy + Report Generator
+
+Data Validator (DeepSeek $0.14/M): Positioned between Normalizer and Analysis. Checks: schema compliance (required fields, data types, value ranges), temporal consistency (no overlapping periods, sequential timestamps), business logic (CTR 0-100%, CPC positive, conversions <= clicks), cross-source alignment (Meta vs Google date ranges, currency, timezone). Actions: PASS → forward, FLAG → forward with warnings, BLOCK → trigger orchestrator retry.
+
+Cost Optimization: DeepSeek for validation/normalization ($0.14/M), Haiku for analysis ($0.25/M), Sonnet for complex strategy only ($3/M). Daily run per tenant ~$0.68, weekly run ~$1.22, monthly estimate for 5 tenants ~$125.
+
+Quality Metrics: Schema compliance (target 99%), temporal consistency (97%), business logic (95%), cross-source alignment (92%). Overall quality score target: 95%+.`,
+    metadata: { useCase: 'ads', title: 'Ads Performance Pipeline Architecture' },
   },
 ]);
 

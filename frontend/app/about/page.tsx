@@ -95,7 +95,7 @@ const SEVEN_LAYERS = [
   { n: 6, name: 'Orchestration & Workflow', desc: 'Schedule registry, CSO Orchestrator, Scan Queue, WebSocket, Health Monitor' },
   { n: 5, name: 'Task Definitions', desc: 'DailySync, WeeklyAnalysis, MonthlyExecutive, NewsDiscovery, DigestWorkflow' },
   { n: 4, name: 'Knowledge Management', desc: 'pgvector, Notion Connector, Vector Embeddings, Semantic Search' },
-  { n: 3, name: 'Roles & Agents', desc: '52+ agents across Marketing (14), Ads (8), Photo Booth (9), Intelligence (3), CRM (18)' },
+  { n: 3, name: 'Roles & Agents', desc: '56+ agents across Marketing (14), Ads (12), Photo Booth (9), Intelligence (3), CRM (18)' },
   { n: 2, name: 'Execution Engine', desc: 'DeepSeek, Claude API, Perplexity, ComfyUI, Model Router, Tesseract OCR' },
   { n: 1, name: 'Infrastructure & Storage', desc: 'PostgreSQL + pgvector, Express API, Fly.io, WebSocket, SSE Streaming' },
 ];

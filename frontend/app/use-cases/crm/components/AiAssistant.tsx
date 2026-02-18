@@ -26,7 +26,9 @@ import { useCrmAi } from '../context';
 import { crmApi, type ChatResponse } from '@/lib/crm-kb-api';
 import {
   createSession, getLatestSession, addMessage as persistChatMessage,
+  pruneExpiredSessions,
 } from '@/lib/chat-history';
+import MessageActions from '@/components/MessageActions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -219,9 +221,10 @@ function MessageBubble({
 
   if (msg.role === 'user') {
     return (
-      <div className="flex justify-end mb-3">
+      <div className="flex justify-end mb-3 group">
         <div className="max-w-[85%] rounded-lg bg-emerald-600/80 px-3 py-2 text-sm text-white">
           {msg.content}
+          <MessageActions content={msg.content} variant="user" />
         </div>
       </div>
     );
@@ -240,13 +243,14 @@ function MessageBubble({
 
   // assistant or system
   return (
-    <div className="flex items-start gap-2 mb-3">
+    <div className="flex items-start gap-2 mb-3 group">
       <div className="flex-shrink-0 mt-0.5 rounded-full bg-emerald-600/20 p-1">
         <Bot size={14} className="text-emerald-400" />
       </div>
       <div className="max-w-[85%]">
         <div className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-300 whitespace-pre-wrap break-words">
           {renderContent(stripActionBlocks(msg.content))}
+          <MessageActions content={stripActionBlocks(msg.content)} variant="assistant" />
         </div>
         {msg.toolCalls?.map((tc, i) => (
           <ToolCallBadge key={i} tc={tc} />
@@ -349,8 +353,9 @@ export function AiAssistant() {
   const chatHistoryRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [crmSessionId, setCrmSessionId] = useState<string | null>(null);
 
-  // Load previous CRM session on mount
+  // Prune stale empty sessions, then load previous CRM session on mount
   useEffect(() => {
+    pruneExpiredSessions();
     const prev = getLatestSession('crm');
     if (prev && prev.messages.length > 0) {
       // Restore messages into UI
