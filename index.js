@@ -2385,6 +2385,180 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
 });
 
 // ==========================================
+// Ziwei Astrology API
+// ==========================================
+
+const { calcBaseChart } = require('./services/ziwei-chart-engine');
+
+// POST /api/ziwei/calculate - Calculate a birth chart
+app.post('/api/ziwei/calculate', async (req, res) => {
+  try {
+    const { lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch, gender, name } = req.body;
+
+    // Validate required fields
+    if (!lunarYear || !lunarMonth || !lunarDay || !hourBranch || !yearStem || !yearBranch || !gender) {
+      return res.status(400).json({
+        error: 'Missing required fields: lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch, gender'
+      });
+    }
+
+    // Calculate chart
+    const chart = calcBaseChart({
+      lunarYear,
+      lunarMonth,
+      lunarDay,
+      hourBranch,
+      yearStem,
+      yearBranch,
+      gender
+    });
+
+    // Store in database if available
+    let chartId = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.query(
+          `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
+           VALUES ($1, $2, $3, $4) RETURNING id`,
+          [
+            name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
+            JSON.stringify({ lunarYear, lunarMonth, lunarDay, hourBranch, gender }),
+            JSON.stringify({ yearStem, yearBranch }),
+            JSON.stringify(chart)
+          ]
+        );
+        chartId = result.rows[0].id;
+      } catch (dbErr) {
+        console.warn('⚠️ Ziwei chart not stored:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      chartId,
+      chart
+    });
+  } catch (error) {
+    console.error('❌ Ziwei calculation error:', error);
+    res.status(500).json({
+      error: 'Failed to calculate chart',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/ziwei/charts - List saved charts
+app.get('/api/ziwei/charts', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const result = await db.query(
+      `SELECT id, name, birth_info, gan_zhi, created_at
+       FROM ziwei_birth_charts
+       ORDER BY created_at DESC
+       LIMIT 50`
+    );
+
+    res.json({
+      success: true,
+      charts: result.rows
+    });
+  } catch (error) {
+    console.error('❌ Error fetching charts:', error);
+    res.status(500).json({
+      error: 'Failed to fetch charts',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/ziwei/charts/:id - Get specific chart
+app.get('/api/ziwei/charts/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const result = await db.query(
+      `SELECT * FROM ziwei_birth_charts WHERE id = $1`,
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    res.json({
+      success: true,
+      chart: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Error fetching chart:', error);
+    res.status(500).json({
+      error: 'Failed to fetch chart',
+      details: error.message
+    });
+  }
+});
+
+// POST /api/ziwei/interpret - Generate interpretations for a chart
+app.post('/api/ziwei/interpret', async (req, res) => {
+  try {
+    const { chart, consensusLevel = 'consensus' } = req.body;
+
+    if (!chart) {
+      return res.status(400).json({ error: 'Missing required field: chart' });
+    }
+
+    // Import interpretation engine dynamically
+    let InterpretationEngine;
+    try {
+      // Try to use compiled JS first, fallback to TS
+      const module = await import('./services/ziwei-interpretation-engine.js').catch(() =>
+        import('./services/ziwei-interpretation-engine.ts')
+      );
+      InterpretationEngine = module.InterpretationEngine;
+    } catch (e) {
+      // If both fail, provide a basic fallback
+      return res.status(501).json({
+        error: 'Interpretation engine not available',
+        details: 'TypeScript compilation required'
+      });
+    }
+
+    const engine = new InterpretationEngine();
+
+    // Generate interpretations
+    const allInterpretations = engine.generateInterpretations(chart);
+    const filtered = engine.filterByConsensus(allInterpretations, consensusLevel);
+    const ranked = engine.rankByAccuracy(filtered);
+    const grouped = engine.groupByDimension(ranked);
+
+    res.json({
+      success: true,
+      summary: {
+        totalInterpretations: allInterpretations.length,
+        filteredCount: filtered.length,
+        dimensionCount: grouped.length
+      },
+      interpretations: ranked,
+      grouped
+    });
+  } catch (error) {
+    console.error('❌ Interpretation error:', error);
+    res.status(500).json({
+      error: 'Failed to generate interpretations',
+      details: error.message
+    });
+  }
+});
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
