@@ -347,6 +347,80 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       );
+
+      -- ==========================================
+      -- Ziwei Astrology Tables (中州派紫微斗數)
+      -- ==========================================
+      CREATE TABLE IF NOT EXISTS ziwei_interpretation_rules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        version INTEGER DEFAULT 1,
+        scope VARCHAR(50) NOT NULL,
+        condition JSONB NOT NULL,
+        interpretation JSONB NOT NULL,
+        dimension_tags JSONB DEFAULT '[]',
+        school VARCHAR(50) DEFAULT 'zhongzhou',
+        consensus_label VARCHAR(20) DEFAULT 'consensus',
+        source_refs JSONB DEFAULT '[]',
+        statistics JSONB DEFAULT '{"sample_size": 0, "match_rate": 0.5, "confidence_level": 0}',
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_rules_scope ON ziwei_interpretation_rules(scope);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_rules_consensus ON ziwei_interpretation_rules(consensus_label);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_rules_status ON ziwei_interpretation_rules(status);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_rules_school ON ziwei_interpretation_rules(school);
+
+      CREATE TABLE IF NOT EXISTS ziwei_birth_charts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR(255),
+        name VARCHAR(255),
+        birth_info JSONB NOT NULL,
+        gan_zhi JSONB NOT NULL,
+        base_chart JSONB NOT NULL,
+        xuan_patterns JSONB DEFAULT '{}',
+        decade_luck JSONB DEFAULT '[]',
+        annual_luck JSONB DEFAULT '[]',
+        monthly_luck JSONB DEFAULT '[]',
+        daily_luck JSONB DEFAULT '[]',
+        interpretations JSONB DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_charts_user ON ziwei_birth_charts(user_id);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_charts_created ON ziwei_birth_charts(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS ziwei_rule_feedback (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        chart_id UUID REFERENCES ziwei_birth_charts(id) ON DELETE SET NULL,
+        rule_id UUID REFERENCES ziwei_interpretation_rules(id) ON DELETE CASCADE,
+        user_rating INTEGER,
+        outcome_status VARCHAR(50),
+        accuracy_flag VARCHAR(50),
+        user_notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_feedback_chart ON ziwei_rule_feedback(chart_id);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_feedback_rule ON ziwei_rule_feedback(rule_id);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_feedback_created ON ziwei_rule_feedback(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS ziwei_rule_statistics (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        rule_id UUID UNIQUE REFERENCES ziwei_interpretation_rules(id) ON DELETE CASCADE,
+        sample_size INTEGER DEFAULT 0,
+        match_count INTEGER DEFAULT 0,
+        mismatch_count INTEGER DEFAULT 0,
+        match_rate DECIMAL(5, 4) DEFAULT 0.5,
+        confidence_level DECIMAL(5, 4) DEFAULT 0,
+        last_updated TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_stats_match_rate ON ziwei_rule_statistics(match_rate DESC);
     `);
     console.log('✅ Database schema initialized (including CRM tables)');
   } catch (error) {

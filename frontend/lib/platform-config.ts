@@ -213,6 +213,18 @@ export const USE_CASES: UseCaseConfig[] = [
     path: '/vibe-demo',
     features: ['Parallax Effects', 'Mouse Tracking', 'Click Animations'],
   },
+  {
+    id: 'ziwei-astrology',
+    name: 'Ziwei Astrology System',
+    description: '中州派紫微斗數 - AI-powered birth chart calculation and interpretation with accuracy-tracked rules',
+    solutionLine: 'Experience',
+    status: 'prototype',
+    progress: 0.1,
+    priority: 'medium',
+    path: '/use-cases/ziwei',
+    agentCount: 3,
+    features: ['Chart Engine', 'Interpretation Engine', 'Evaluation Engine', 'Accuracy Tracking', 'Rule Database'],
+  },
 
   // ---- Platform ----
   {
