@@ -595,6 +595,147 @@ export interface RuleSet {
   };
 }
 
+// ============================================================================
+// SECTION 9: COMPREHENSIVE RULE SYSTEM (星群、格局、雜曜組合)
+// ============================================================================
+
+/**
+ * Consensus level for rule reliability
+ */
+export enum ConsensusLabel {
+  CONSENSUS = 'consensus',              // 廣泛共識
+  DISPUTED = 'disputed',                // 有爭議
+  MINORITY_VIEW = 'minority_view'       // 少數派
+}
+
+/**
+ * Rule source reference
+ */
+export interface RuleSourceRef {
+  type: 'web' | 'book' | 'note' | 'tradition';
+  id?: string;              // e.g., 'web:81', 'book:123'
+  title?: string;
+  author?: string;
+  url?: string;
+  note?: string;
+}
+
+/**
+ * Star group definition (星群)
+ */
+export interface StarGroup {
+  groupId: string;
+  stars: (string | PrimaryStar)[];
+  relation?: 'same_palace' | 'tri_positional' | 'mutual_watch';  // 同宮、三方四正、互會
+  description?: string;
+}
+
+/**
+ * Comprehensive rule condition
+ */
+export interface ZiweiRuleCondition {
+  scope: 'base' | 'decade' | 'annual' | 'monthly' | 'daily';  // 本命、大限、流年等
+  involvedPalaces?: Palace[];
+  requiredStars?: (PrimaryStar | string)[];
+  excludedStars?: (PrimaryStar | string)[];
+
+  /**
+   * Star groups requirement: for fixed configurations, patterns, or combinations
+   */
+  starGroups?: StarGroup[];
+
+  /**
+   * Custom condition description in human language
+   */
+  notes?: string;
+
+  /**
+   * Afflictions or blessings (凶星、吉星)
+   */
+  withAffections?: boolean;  // Must have afflictions
+  withBlessings?: boolean;   // Must have blessings
+
+  /**
+   * Optional palace position constraints
+   */
+  palacePositions?: ('zi' | 'chou' | 'yin' | 'mao' | 'chen' | 'si' | 'wu' | 'wei' | 'shen' | 'you' | 'xu' | 'hai')[];
+}
+
+/**
+ * Rule statistics and confidence
+ */
+export interface RuleStatistics {
+  sampleSize: number | null;           // Number of samples analyzed
+  matchRate: number | null;             // Success/accuracy rate (0-1)
+  confidence: number | null;            // Confidence level (0-1)
+  lastUpdatedAt?: string;               // ISO date
+}
+
+/**
+ * Comprehensive Ziwei interpretation rule
+ */
+export interface ZiweiRule {
+  id: string;
+  name: string;
+
+  // Rule classification
+  ruleType: 'star_group' | 'major_pattern' | 'complex_pattern' | 'basic_pattern' | 'miscellaneous_combo';
+  scope: 'base' | 'decade' | 'annual' | 'monthly' | 'daily';
+
+  // Condition & interpretation
+  condition: ZiweiRuleCondition;
+  interpretation: {
+    zh: string;        // 中文解釋
+    en: string;        // English explanation
+    short?: string;    // Short summary
+  };
+
+  // Metadata
+  dimensionTags: LifeDimension[];
+  school: AstrologySchool;
+  consensusLabel: ConsensusLabel;
+  sources: RuleSourceRef[];
+
+  // Statistics
+  statistics: RuleStatistics;
+
+  // Additional context
+  notes?: string;
+  relatedRuleIds?: string[];  // Cross-references to related rules
+}
+
+/**
+ * Rule evaluation result for a given birth chart
+ */
+export interface RuleEvaluationResult {
+  ruleId: string;
+  ruleName: string;
+  matched: boolean;           // Does chart match rule condition?
+  matchStrength: number;      // 0-1, confidence in match
+  relevantStars?: string[];   // Stars that triggered this rule
+  relevantPalaces?: Palace[];  // Palaces involved
+  interpretation: {
+    zh?: string;
+    en?: string;
+  };
+}
+
+/**
+ * Batch of related rules (rule set)
+ */
+export interface RuleEvaluationSet {
+  chartId: string;
+  evaluationTime: string;     // ISO timestamp
+  totalRules: number;
+  matchedRules: number;
+  results: RuleEvaluationResult[];
+  summary?: {
+    dominantPatterns: string[];      // Major patterns found
+    keyDimensions: LifeDimension[];
+    overallTone: 'auspicious' | 'neutral' | 'challenging';
+  };
+}
+
 export default {
   BirthInfo,
   BirthChart,
