@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Users, Plus, Search, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Plus, Search, Loader2, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { crmApi, type Brand, type PaginatedResponse } from '@/lib/crm-kb-api';
 import { useCrmAi } from '../context';
 
@@ -39,6 +39,22 @@ export default function BrandsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = useCallback(async (e: React.MouseEvent, brand: Brand) => {
+    e.stopPropagation();
+    if (!confirm(`Delete "${brand.name}"? This cannot be undone.`)) return;
+    setDeletingId(brand.id);
+    try {
+      await crmApi.brands.delete(brand.id);
+      setBrands((prev) => prev.filter((b) => b.id !== brand.id));
+      setTotal((t) => t - 1);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete brand');
+    } finally {
+      setDeletingId(null);
+    }
+  }, []);
 
   // Debounce search input
   useEffect(() => {
@@ -167,6 +183,7 @@ export default function BrandsPage() {
                     <th className="text-left px-6 py-3 text-slate-400 font-medium">Health Score</th>
                     <th className="text-left px-6 py-3 text-slate-400 font-medium">Value Tier</th>
                     <th className="text-left px-6 py-3 text-slate-400 font-medium">Created</th>
+                    <th className="w-10" />
                   </tr>
                 </thead>
                 <tbody>
@@ -176,7 +193,7 @@ export default function BrandsPage() {
                       onClick={() => {
                         router.push(`/use-cases/crm/brands/detail?id=${brand.id}`);
                       }}
-                      className={`border-b border-slate-700/50 cursor-pointer transition-colors ${
+                      className={`group border-b border-slate-700/50 cursor-pointer transition-colors ${
                         selectedId === brand.id
                           ? 'bg-emerald-900/20'
                           : 'hover:bg-slate-700/50'
@@ -223,6 +240,19 @@ export default function BrandsPage() {
                       </td>
                       <td className="px-6 py-4 text-slate-400 text-xs">
                         {formatDate(brand.created_at)}
+                      </td>
+                      <td className="pr-4 py-4 text-right">
+                        <button
+                          onClick={(e) => handleDelete(e, brand)}
+                          disabled={deletingId === brand.id}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-400/10 transition-all disabled:opacity-40"
+                          title="Delete brand"
+                        >
+                          {deletingId === brand.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Trash2 className="w-3.5 h-3.5" />
+                          }
+                        </button>
                       </td>
                     </tr>
                   ))}

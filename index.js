@@ -1214,17 +1214,17 @@ app.delete('/api/conversation/:id', async (req, res) => {
   }
 });
 
-// Delete a brand (and all its conversations)
-app.delete('/api/brands/:brand_name', async (req, res) => {
+// Delete a brand from crm_clients (cascades to crm_projects + crm_feedback)
+app.delete('/api/brands/:id', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    await deleteBrand(req.params.brand_name);
-    res.json({ success: true, message: 'Brand deleted' });
-  } catch (error) {
-    console.error('Error deleting brand:', error);
+    const result = await pool.query('DELETE FROM crm_clients WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Brand not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error('Error deleting brand:', err);
     res.status(500).json({ error: 'Failed to delete brand' });
   }
 });

@@ -333,6 +333,9 @@ export const crmApi = {
         body: JSON.stringify(data),
       });
     },
+    delete(id: string) {
+      return request<void>(`/brands/${id}`, { method: "DELETE" });
+    },
     projects(clientId: string, params?: { page?: number; size?: number }) {
       const qs = new URLSearchParams();
       if (params?.page) qs.set("page", String(params.page));
