@@ -4,11 +4,21 @@
 
 export type Status = 'live' | 'in_progress' | 'planned' | 'prototype';
 
+export type SolutionLineKey =
+  | 'GrowthOS'
+  | 'IntelStudio'
+  | 'TechNexus'
+  | 'ExpLab'
+  | 'MediaChannel'
+  | 'FrontierVentures'
+  | 'CSuite'
+  | 'Platform';
+
 export interface UseCaseConfig {
   id: string;
   name: string;
   description: string;
-  solutionLine: 'GrowthOS' | 'ExecIntel' | 'OpsFinance' | 'Experience' | 'Platform';
+  solutionLine: SolutionLineKey;
   status: Status;
   progress: number; // 0–1
   priority: 'low' | 'medium' | 'high' | 'critical';
@@ -42,43 +52,74 @@ export interface CSuiteRole {
 // Solution Line definitions
 // ---------------------------------------------------------------------------
 
-export const SOLUTION_LINES = {
+export const SOLUTION_LINES: Record<SolutionLineKey, {
+  id: SolutionLineKey;
+  name: string;
+  tagline: string;
+  color: string;
+  darkBg: string;
+  textColor: string;
+}> = {
   GrowthOS: {
     id: 'GrowthOS',
-    name: 'GrowthOS for Brands',
-    tagline: 'AI-powered marketing, social and advertising intelligence',
+    name: 'Growth Hacking Studio',
+    tagline: 'End-to-end brand growth: social strategy, ads, SEO, PR, content, and media buy',
     color: 'from-purple-500 to-pink-600',
     darkBg: 'bg-purple-500/10 border-purple-500/20',
     textColor: 'text-purple-400',
   },
-  ExecIntel: {
-    id: 'ExecIntel',
-    name: 'ExecIntel Studio',
-    tagline: 'Strategic intelligence and market monitoring for C-Suite',
+  IntelStudio: {
+    id: 'IntelStudio',
+    name: 'ExcelIntel Studio',
+    tagline: 'Market research, competitive intelligence, trend analysis, and strategic insights',
     color: 'from-teal-500 to-cyan-600',
     darkBg: 'bg-teal-500/10 border-teal-500/20',
     textColor: 'text-teal-400',
   },
-  OpsFinance: {
-    id: 'OpsFinance',
-    name: 'Agentic Ops & Finance',
-    tagline: 'Automated accounting, P&L, and operational workflows',
+  TechNexus: {
+    id: 'TechNexus',
+    name: 'NexTech Studio',
+    tagline: 'Web tech stack: eCom channels, healthcheck, SEO/AI SEO, WCAG compliance, vibe tools',
     color: 'from-blue-500 to-cyan-600',
     darkBg: 'bg-blue-500/10 border-blue-500/20',
     textColor: 'text-blue-400',
   },
-  Experience: {
-    id: 'Experience',
+  ExpLab: {
+    id: 'ExpLab',
     name: 'Agentic Experience Lab',
-    tagline: 'Interactive AI experiences, events, and creative tools',
+    tagline: 'Immersive AI experiences: video generation, live characters, interactive installations',
+    color: 'from-indigo-500 to-violet-600',
+    darkBg: 'bg-indigo-500/10 border-indigo-500/20',
+    textColor: 'text-indigo-400',
+  },
+  MediaChannel: {
+    id: 'MediaChannel',
+    name: 'Owned Media Channel',
+    tagline: 'Own your audience: website content, social channels, and eCom content engine',
+    color: 'from-rose-500 to-pink-600',
+    darkBg: 'bg-rose-500/10 border-rose-500/20',
+    textColor: 'text-rose-400',
+  },
+  FrontierVentures: {
+    id: 'FrontierVentures',
+    name: 'Frontier Ventures',
+    tagline: 'New business lines: AI booths, longevity tech, 3D printing, astrology, human design',
     color: 'from-amber-500 to-orange-600',
     darkBg: 'bg-amber-500/10 border-amber-500/20',
     textColor: 'text-amber-400',
   },
+  CSuite: {
+    id: 'CSuite',
+    name: 'C-Suite Management',
+    tagline: 'Agency ops, finance, HR, CRM, and C-level decision intelligence',
+    color: 'from-emerald-500 to-green-600',
+    darkBg: 'bg-emerald-500/10 border-emerald-500/20',
+    textColor: 'text-emerald-400',
+  },
   Platform: {
     id: 'Platform',
     name: 'Platform & Infrastructure',
-    tagline: 'Core platform, dashboard, workflows, API, and CRM',
+    tagline: 'Core platform, dashboard, workflows, API, and agentic orchestration layer',
     color: 'from-slate-500 to-slate-700',
     darkBg: 'bg-slate-500/10 border-slate-500/20',
     textColor: 'text-slate-400',
@@ -90,10 +131,12 @@ export const SOLUTION_LINES = {
 // ---------------------------------------------------------------------------
 
 export const USE_CASES: UseCaseConfig[] = [
-  // ---- GrowthOS ----
+  // ========================================================================
+  // GROWTH HACKING STUDIO — GrowthOS
+  // ========================================================================
   {
     id: 'social-agents',
-    name: 'Social Media & SEO Agents',
+    name: 'Social Strategy & Content',
     description: '14-agent event-driven pipeline with parallel execution, budget optimization, compliance gate & circuit breakers',
     solutionLine: 'GrowthOS',
     status: 'live',
@@ -125,26 +168,116 @@ export const USE_CASES: UseCaseConfig[] = [
     priority: 'high',
     path: '/ads-dashboard',
     agentCount: 12,
-    features: ['Pipeline Orchestrator', 'Temporal Fetchers', 'Data Validator', 'Backfill Manager', 'Report Generator', 'Multi-Tenant'],
+    features: ['Pipeline Orchestrator', 'Temporal Fetchers', 'Data Validator', 'Backfill Manager', 'Report Generator'],
   },
   {
-    id: 'short-url-vcard',
-    name: 'Short URL + vCard',
-    description: 'Branded short links and digital business card generator',
+    id: 'brand-strategy',
+    name: 'Brand Strategy & Setup',
+    description: 'AI-guided brand onboarding, identity generation, and strategy documentation',
+    solutionLine: 'GrowthOS',
+    status: 'in_progress',
+    progress: 0.55,
+    priority: 'high',
+    path: '/brand-setup',
+    features: ['Brand Onboarding', 'AI Strategy', 'Identity Design', 'Positioning'],
+  },
+  {
+    id: 'content-calendar',
+    name: 'Content Calendar',
+    description: 'Automated content planning, scheduling, and cross-channel publishing calendar',
+    solutionLine: 'GrowthOS',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '#',
+    features: ['AI Scheduling', 'Cross-Channel', 'Template Library', 'Approvals'],
+  },
+  {
+    id: 'community-management',
+    name: 'Community Management',
+    description: 'Automated engagement, moderation, and community growth across platforms',
     solutionLine: 'GrowthOS',
     status: 'planned',
     progress: 0,
     priority: 'medium',
     path: '#',
-    features: ['Branded Links', 'QR Codes', 'Digital vCard', 'Analytics'],
+    features: ['Auto-Reply', 'Sentiment Monitor', 'Escalation', 'Growth Metrics'],
+  },
+  {
+    id: 'sem-seo',
+    name: 'SEM & SEO',
+    description: 'Paid search campaign management and organic search strategy with AI recommendations',
+    solutionLine: 'GrowthOS',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '#',
+    features: ['Keyword Research', 'Ad Copy', 'Bid Strategy', 'Rank Tracking'],
+  },
+  {
+    id: 'media-buy',
+    name: 'Media Buy',
+    description: 'Cross-channel media planning, buying, and performance tracking automation',
+    solutionLine: 'GrowthOS',
+    status: 'planned',
+    progress: 0,
+    priority: 'medium',
+    path: '#',
+    features: ['Media Planning', 'Channel Mix', 'Budget Allocation', 'ROI Analysis'],
+  },
+  {
+    id: 'pr-projects',
+    name: 'PR Projects',
+    description: 'PR monitoring, press release generation, media outreach, and coverage tracking',
+    solutionLine: 'GrowthOS',
+    status: 'planned',
+    progress: 0,
+    priority: 'medium',
+    path: '#',
+    features: ['Media Monitoring', 'Press Releases', 'Outreach', 'Coverage Report'],
+  },
+  {
+    id: 'design-projects',
+    name: 'Design Projects',
+    description: 'AI-assisted creative brief generation, design workflow management, and asset delivery',
+    solutionLine: 'GrowthOS',
+    status: 'planned',
+    progress: 0,
+    priority: 'low',
+    path: '#',
+    features: ['Creative Briefs', 'Asset Library', 'Approval Flow', 'Brand Consistency'],
+  },
+  {
+    id: 'video-projects',
+    name: 'Video Projects',
+    description: 'Video production pipeline with AI scripting, storyboarding, and distribution',
+    solutionLine: 'GrowthOS',
+    status: 'planned',
+    progress: 0,
+    priority: 'medium',
+    path: '#',
+    features: ['AI Scripting', 'Storyboard', 'Production Queue', 'Distribution'],
+  },
+  {
+    id: 'event-projects',
+    name: 'Event Projects',
+    description: 'End-to-end event marketing: planning, promotion, on-site coordination, and post-event analysis',
+    solutionLine: 'GrowthOS',
+    status: 'planned',
+    progress: 0,
+    priority: 'medium',
+    path: '#',
+    features: ['Event Planning', 'Promotion', 'Registration', 'Post-Analysis'],
   },
 
-  // ---- ExecIntel ----
+  // ========================================================================
+  // EXCELINTEL STUDIO — IntelStudio
+  // ========================================================================
   {
     id: 'topic-intelligence',
-    name: 'Topic Intelligence',
+    name: 'Market Research & Topic Intel',
     description: 'Multi-topic news monitoring with daily scraping, analysis, and weekly digests',
-    solutionLine: 'ExecIntel',
+    solutionLine: 'IntelStudio',
     status: 'live',
     progress: 0.8,
     priority: 'high',
@@ -152,27 +285,181 @@ export const USE_CASES: UseCaseConfig[] = [
     agentCount: 3,
     features: ['Source Curator', 'News Analyst', 'Newsletter Writer', 'Real-time Scan'],
   },
-
-  // ---- OpsFinance ----
   {
-    id: 'mans-accounting',
-    name: "Man's Accounting Firm",
-    description: 'Receipt to P&L automation with Claude Vision OCR and HK compliance',
-    solutionLine: 'OpsFinance',
-    status: 'live',
-    progress: 0.9,
+    id: 'social-trend-research',
+    name: 'Social Trend Research',
+    description: 'Real-time social media trend identification across platforms with virality prediction',
+    solutionLine: 'IntelStudio',
+    status: 'planned',
+    progress: 0,
     priority: 'high',
-    path: '/use-cases/mans-accounting',
-    agentCount: 1,
-    features: ['OCR Processing', 'Auto-Categorization', 'Excel Export', 'HK Compliance'],
+    path: '#',
+    features: ['Trend Detection', 'Virality Score', 'Platform Comparison', 'Alerts'],
+  },
+  {
+    id: 'ai-trend-research',
+    name: 'AI Trend Research',
+    description: 'Track emerging AI tools, model releases, and technology landscape shifts',
+    solutionLine: 'IntelStudio',
+    status: 'planned',
+    progress: 0,
+    priority: 'medium',
+    path: '#',
+    features: ['Model Tracker', 'Tool Discovery', 'Tech Radar', 'Weekly Digest'],
+  },
+  {
+    id: 'brand-competitive-research',
+    name: 'Brand & Competitive Research',
+    description: 'Deep competitor analysis, brand positioning audits, and differentiation opportunities',
+    solutionLine: 'IntelStudio',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '#',
+    features: ['Competitor Profiles', 'Positioning Map', 'SWOT Analysis', 'Gap Finder'],
+  },
+  {
+    id: 'web-tech-research',
+    name: 'Web & Tech Research',
+    description: 'Technology stack analysis, digital footprint audits, and web innovation scouting',
+    solutionLine: 'IntelStudio',
+    status: 'planned',
+    progress: 0,
+    priority: 'low',
+    path: '#',
+    features: ['Stack Detection', 'Tech Audit', 'Innovation Scouting', 'Reports'],
   },
 
-  // ---- Experience ----
+  // ========================================================================
+  // NEXTECH STUDIO — TechNexus
+  // ========================================================================
+  {
+    id: 'healthcheck',
+    name: 'Website Health Check',
+    description: '7-layer AI-orchestrated SEO, security, accessibility, and performance audit with live monitoring',
+    solutionLine: 'TechNexus',
+    status: 'in_progress',
+    progress: 0.6,
+    priority: 'high',
+    path: '/healthcheck',
+    features: ['SEO / AI SEO Audit', 'Security Scan', 'WCAG 2.2', 'Live Monitoring'],
+  },
+  {
+    id: 'ecom-channels',
+    name: 'eCom Channels',
+    description: 'Multi-channel eCommerce management: product listing optimization and channel performance',
+    solutionLine: 'TechNexus',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '#',
+    features: ['Listing Optimizer', 'Channel Sync', 'Price Monitor', 'Inventory Alerts'],
+  },
+  {
+    id: 'ai-seo',
+    name: 'SEO / AI SEO',
+    description: 'Next-gen SEO optimized for both traditional search engines and AI-powered discovery',
+    solutionLine: 'TechNexus',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '#',
+    features: ['AI Search Optimization', 'Schema Markup', 'Content Clusters', 'SERP Tracking'],
+  },
+  {
+    id: 'wcag-compliance',
+    name: 'WCAG 2.0 Compliance',
+    description: 'Automated accessibility auditing, remediation suggestions, and compliance certification',
+    solutionLine: 'TechNexus',
+    status: 'planned',
+    progress: 0,
+    priority: 'medium',
+    path: '#',
+    features: ['WCAG 2.0 Audit', 'Color Contrast', 'Screen Reader', 'Remediation Guide'],
+  },
+  {
+    id: 'vibe-demo',
+    name: 'Vibe Code Demo',
+    description: 'Interactive showcase of modern web effects and dynamic animations',
+    solutionLine: 'TechNexus',
+    status: 'live',
+    progress: 1.0,
+    priority: 'low',
+    path: '/vibe-demo',
+    features: ['Parallax Effects', 'Mouse Tracking', 'Click Animations'],
+  },
+
+  // ========================================================================
+  // AGENTIC EXPERIENCE LAB — ExpLab
+  // ========================================================================
+  {
+    id: 'ai-video-generation',
+    name: 'AI Video Generation',
+    description: 'Text-to-video and image-to-video generation for marketing, social, and creative content',
+    solutionLine: 'ExpLab',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '#',
+    features: ['Text-to-Video', 'Script-to-Scene', 'Brand Templates', 'Auto-Captions'],
+  },
+  {
+    id: 'fictional-character',
+    name: 'Live Fictional Character',
+    description: 'AI persona engine that transforms speech into character-voiced content for live events',
+    solutionLine: 'ExpLab',
+    status: 'prototype',
+    progress: 0.3,
+    priority: 'medium',
+    path: '/use-cases/fictional-character',
+    features: ['Persona Engine', 'TTS-Ready Output', 'Multi-Character', 'Avatar Integration'],
+  },
+
+  // ========================================================================
+  // OWNED MEDIA CHANNEL — MediaChannel
+  // ========================================================================
+  {
+    id: 'website-content',
+    name: 'Website Content Studio',
+    description: 'AI-powered content strategy, writing, and publishing for owned web properties',
+    solutionLine: 'MediaChannel',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '#',
+    features: ['Content Strategy', 'AI Copywriting', 'SEO Integrated', 'CMS Publish'],
+  },
+  {
+    id: 'social-channel',
+    name: 'Social Media Channel',
+    description: 'Owned social channel management across FB, IG, XHS (Little Red Book), and TikTok',
+    solutionLine: 'MediaChannel',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '#',
+    features: ['FB/IG', 'XHS (小红书)', 'TikTok', 'Cross-Post Scheduler'],
+  },
+  {
+    id: 'ecom-content',
+    name: 'eCom Content Engine',
+    description: 'Product description generation, enhanced content, and A/B testing for eCom listings',
+    solutionLine: 'MediaChannel',
+    status: 'planned',
+    progress: 0,
+    priority: 'medium',
+    path: '#',
+    features: ['Product Descriptions', 'A+ Content', 'A/B Testing', 'Multi-language'],
+  },
+
+  // ========================================================================
+  // FRONTIER VENTURES — FrontierVentures
+  // ========================================================================
   {
     id: 'photo-booth',
     name: 'AI Photo Booth',
     description: '18th-century fashion portrait generator for live events with real-time AI transformation',
-    solutionLine: 'Experience',
+    solutionLine: 'FrontierVentures',
     status: 'live',
     progress: 0.7,
     priority: 'high',
@@ -181,40 +468,114 @@ export const USE_CASES: UseCaseConfig[] = [
     features: ['Face Detection', 'Theme Selection', '18th Century Styles', 'QR Code Sharing'],
   },
   {
-    id: 'healthcheck',
-    name: 'Website Health Check',
-    description: '7-layer AI-orchestrated SEO, security, accessibility, and performance audit',
-    solutionLine: 'Experience',
-    status: 'in_progress',
-    progress: 0.6,
-    priority: 'high',
-    path: '/healthcheck',
-    features: ['SEO / AI SEO Audit', 'Security Scan', 'WCAG 2.2', 'Best Practices'],
-  },
-  {
-    id: 'fictional-character',
-    name: 'Live Fictional Character',
-    description: 'AI persona engine that transforms speech into character-voiced content',
-    solutionLine: 'Experience',
-    status: 'prototype',
-    progress: 0.3,
+    id: 'longevity-elderly',
+    name: 'Longevity & Elderly Living',
+    description: 'AI-powered elderly care experiences, wellness programs, and smart senior engagement',
+    solutionLine: 'FrontierVentures',
+    status: 'planned',
+    progress: 0,
     priority: 'medium',
-    path: '/use-cases/fictional-character',
-    features: ['Persona Engine', 'TTS-Ready Output', 'Multi-Character', 'Avatar Integration'],
+    path: '#',
+    features: ['Wellness Programs', 'Cognitive Engagement', 'Family Connect', 'Health Tracking'],
   },
   {
-    id: 'vibe-demo',
-    name: 'Vibe Code Demo',
-    description: 'Interactive showcase of modern web effects and dynamic animations',
-    solutionLine: 'Experience',
-    status: 'live',
-    progress: 1.0,
+    id: '3d-printing',
+    name: '3D Printing Studio',
+    description: 'AI-assisted 3D model design, print optimization, and factory management platform',
+    solutionLine: 'FrontierVentures',
+    status: 'planned',
+    progress: 0,
+    priority: 'medium',
+    path: '#',
+    features: ['AI Model Design', 'Print Queue', 'Material Optimizer', 'Factory Dashboard'],
+  },
+  {
+    id: 'purple-star',
+    name: '紫微 Purple Star Astrology',
+    description: 'AI-powered Zi Wei Dou Shu reading, personalized charts, and destiny analysis platform',
+    solutionLine: 'FrontierVentures',
+    status: 'planned',
+    progress: 0,
+    priority: 'medium',
+    path: '#',
+    features: ['Chart Generator', 'AI Interpretation', 'Personalized Reading', 'Bilingual'],
+  },
+  {
+    id: 'human-design',
+    name: 'Human Design Platform',
+    description: 'Human Design chart calculation, type analysis, and personalized guidance engine',
+    solutionLine: 'FrontierVentures',
+    status: 'planned',
+    progress: 0,
     priority: 'low',
-    path: '/vibe-demo',
-    features: ['Parallax Effects', 'Mouse Tracking', 'Click Animations'],
+    path: '#',
+    features: ['Chart Calculator', 'Type Analysis', 'Strategy Guide', 'Authority Tracker'],
   },
 
-  // ---- Platform ----
+  // ========================================================================
+  // C-SUITE MANAGEMENT — CSuite
+  // ========================================================================
+  {
+    id: 'crm',
+    name: 'CRM Relationship Intelligence',
+    description: '18-agent Relationship Intelligence Platform with orchestrator, relationship graph, scoring, signal analysis & RAG-powered chat',
+    solutionLine: 'CSuite',
+    status: 'in_progress',
+    progress: 0.65,
+    priority: 'critical',
+    path: '/use-cases/crm',
+    agentCount: 18,
+    features: ['Relationship Orchestrator', 'Relationship Graph', 'Signal Analysis', 'RAG Chat'],
+  },
+  {
+    id: 'mans-accounting',
+    name: 'Finance & Accounting',
+    description: 'Receipt to P&L automation with Claude Vision OCR and HK compliance',
+    solutionLine: 'CSuite',
+    status: 'live',
+    progress: 0.9,
+    priority: 'high',
+    path: '/use-cases/mans-accounting',
+    agentCount: 1,
+    features: ['OCR Processing', 'Auto-Categorization', 'Excel Export', 'HK Compliance'],
+  },
+  {
+    id: 'agency-management',
+    name: 'Agency Management',
+    description: 'End-to-end agency operations: project tracking, client management, and resource planning',
+    solutionLine: 'CSuite',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '#',
+    features: ['Project Tracking', 'Client Portal', 'Resource Planning', 'Billing'],
+  },
+  {
+    id: 'hr-platform',
+    name: 'HR Platform',
+    description: 'Talent management, onboarding, capacity planning, and team performance insights',
+    solutionLine: 'CSuite',
+    status: 'planned',
+    progress: 0,
+    priority: 'medium',
+    path: '#',
+    features: ['Talent Pipeline', 'Onboarding', 'Capacity Planner', 'Performance Reviews'],
+  },
+  {
+    id: 'c-level-decision',
+    name: 'C-Level Decision Center',
+    description: 'Unified executive intelligence: KPIs, strategic recommendations, and cross-function insights',
+    solutionLine: 'CSuite',
+    status: 'in_progress',
+    progress: 0.2,
+    priority: 'critical',
+    path: '#',
+    features: ['KPI Dashboard', 'Strategic AI', 'Cross-Function', 'Scenario Planning'],
+  },
+
+  // ========================================================================
+  // PLATFORM & INFRASTRUCTURE — Platform
+  // ========================================================================
   {
     id: 'platform-dashboard',
     name: 'Platform Dashboard',
@@ -238,18 +599,6 @@ export const USE_CASES: UseCaseConfig[] = [
     features: ['Node Graph', 'Agent Relationships', 'Data Flow', '6 Pipelines'],
   },
   {
-    id: 'crm',
-    name: 'CRM Relationship Intelligence',
-    description: '18-agent Relationship Intelligence Platform with orchestrator, relationship graph, scoring, signal analysis & RAG-powered chat',
-    solutionLine: 'Platform',
-    status: 'in_progress',
-    progress: 0.65,
-    priority: 'critical',
-    path: '/use-cases/crm',
-    agentCount: 18,
-    features: ['Relationship Orchestrator', 'Relationship Graph', 'Signal Analysis', 'Relationship Scoring', 'Connection Suggester', 'RAG Chat'],
-  },
-  {
     id: 'api-docs',
     name: 'API Documentation',
     description: 'Complete API reference, endpoints, request/response schemas, and examples',
@@ -269,24 +618,115 @@ export const USE_CASES: UseCaseConfig[] = [
 
 export const ROADMAP_ITEMS: RoadmapItem[] = [
   // NOW (0-3 months)
-  { ...USE_CASES.find(u => u.id === 'ads-performance')!, timeframe: 'now', type: 'product', owner: 'Growth Team', notes: 'v2: orchestrated pipeline with temporal data strategy, validation layer, backfill manager, cost-optimized routing' },
-  { ...USE_CASES.find(u => u.id === 'crm')!, timeframe: 'now', type: 'platform', owner: 'Platform Team', notes: 'Relationship Intelligence Platform: orchestrator, relationship graph, scoring, signal feed, action center' },
-  { id: 'founder-cockpit', name: 'Founder Cockpit Agent', description: 'CEO-level strategic dashboard with all business KPIs', solutionLine: 'ExecIntel', status: 'in_progress', progress: 0.2, priority: 'critical', path: '#', timeframe: 'now', type: 'csuite', owner: 'CEO / CSO', notes: 'Integrates CSO orchestrator with business metrics' },
-  { ...USE_CASES.find(u => u.id === 'photo-booth')!, timeframe: 'now', type: 'product', owner: 'Experience Team', notes: 'v2: additional themes, faster generation, gallery admin' },
-  { ...USE_CASES.find(u => u.id === 'healthcheck')!, timeframe: 'now', type: 'product', owner: 'Platform Team', notes: '7-layer architecture, WCAG + security modules, best practices' },
+  {
+    ...USE_CASES.find(u => u.id === 'ads-performance')!,
+    timeframe: 'now',
+    type: 'product',
+    owner: 'Growth Team',
+    notes: 'v2: 12-agent orchestrated pipeline with temporal data strategy, validation layer, backfill manager, cost-optimized routing',
+  },
+  {
+    ...USE_CASES.find(u => u.id === 'crm')!,
+    timeframe: 'now',
+    type: 'platform',
+    owner: 'Platform Team',
+    notes: '18-agent Relationship Intelligence Platform: orchestrator, relationship graph, scoring, signal feed, RAG chat',
+  },
+  {
+    ...USE_CASES.find(u => u.id === 'healthcheck')!,
+    timeframe: 'now',
+    type: 'product',
+    owner: 'TechNexus Team',
+    notes: '7-layer architecture, WCAG + security modules, live monitoring',
+  },
+  {
+    ...USE_CASES.find(u => u.id === 'brand-strategy')!,
+    timeframe: 'now',
+    type: 'product',
+    owner: 'Growth Team',
+    notes: 'AI-guided brand onboarding with identity generation and strategy output',
+  },
+  {
+    ...USE_CASES.find(u => u.id === 'c-level-decision')!,
+    timeframe: 'now',
+    type: 'csuite',
+    owner: 'CEO / CSO',
+    notes: 'Phase 1: KPI dashboard and strategic AI recommendations',
+  },
 
   // NEXT (3-9 months)
-  { id: 'execintel-v2', name: 'ExecIntel Studio v2', description: 'Advanced market intelligence with multi-source analysis and automated briefings', solutionLine: 'ExecIntel', status: 'planned', progress: 0, priority: 'high', path: '#', timeframe: 'next', type: 'product', owner: 'CSO', notes: 'Build on Topic Intelligence, add cross-source correlation' },
-  { id: 'pnl-cash-agent', name: 'P&L & Cash Agent', description: 'Automated financial reporting, cash flow forecasting, and variance analysis', solutionLine: 'OpsFinance', status: 'planned', progress: 0, priority: 'high', path: '#', timeframe: 'next', type: 'csuite', owner: 'CFO', notes: 'Extends Man\'s Accounting into full finance automation' },
-  { id: 'project-health-agent', name: 'Project Health Agent', description: 'Operational health monitoring, resource tracking, and risk alerts', solutionLine: 'OpsFinance', status: 'planned', progress: 0, priority: 'medium', path: '#', timeframe: 'next', type: 'csuite', owner: 'COO', notes: 'Track project delivery, team velocity, blockers' },
-  { id: 'smart-silver-lab', name: 'Smart Silver Experience Lab', description: 'AI-powered elderly engagement experiences for senior care and wellness', solutionLine: 'Experience', status: 'planned', progress: 0, priority: 'medium', path: '#', timeframe: 'next', type: 'product', owner: 'Experience Team', notes: 'Pilot with elderly care partners' },
-  { ...USE_CASES.find(u => u.id === 'short-url-vcard')!, timeframe: 'next', type: 'product', owner: 'Growth Team', notes: 'Branded short links for campaign tracking' },
+  {
+    ...USE_CASES.find(u => u.id === 'brand-competitive-research')!,
+    timeframe: 'next',
+    type: 'product',
+    owner: 'IntelStudio Team',
+    notes: 'Deep competitor profiles, positioning maps, SWOT analysis',
+  },
+  {
+    ...USE_CASES.find(u => u.id === 'ecom-channels')!,
+    timeframe: 'next',
+    type: 'product',
+    owner: 'TechNexus Team',
+    notes: 'Multi-channel eCom listing management and performance optimization',
+  },
+  {
+    ...USE_CASES.find(u => u.id === 'ai-video-generation')!,
+    timeframe: 'next',
+    type: 'product',
+    owner: 'ExpLab Team',
+    notes: 'Text-to-video pipeline for social and marketing content',
+  },
+  {
+    ...USE_CASES.find(u => u.id === 'social-channel')!,
+    timeframe: 'next',
+    type: 'product',
+    owner: 'Media Team',
+    notes: 'Owned social presence across FB, IG, XHS, TikTok',
+  },
+  {
+    ...USE_CASES.find(u => u.id === 'agency-management')!,
+    timeframe: 'next',
+    type: 'csuite',
+    owner: 'COO',
+    notes: 'Full project and client lifecycle management for agency ops',
+  },
 
   // LATER (9-18 months)
-  { id: 'agentic-pr-lab', name: 'Agentic PR Lab', description: 'AI-powered PR monitoring, press release generation, and media outreach', solutionLine: 'GrowthOS', status: 'planned', progress: 0, priority: 'medium', path: '#', timeframe: 'later', type: 'product', owner: 'CMO', notes: 'Partnership with Radiance HK' },
-  { id: 'lead-gen-studio', name: 'Lead Gen Studio', description: 'Automated lead generation, qualification, and nurture sequences', solutionLine: 'GrowthOS', status: 'planned', progress: 0, priority: 'medium', path: '#', timeframe: 'later', type: 'product', owner: 'Growth Team', notes: 'Packages for SME clients' },
-  { id: 'csuite-cockpit-v2', name: 'Full C-Suite Cockpit v2', description: 'Unified executive dashboard with all 6 C-Suite agent families', solutionLine: 'ExecIntel', status: 'planned', progress: 0, priority: 'high', path: '#', timeframe: 'later', type: 'csuite', owner: 'CEO', notes: 'All roles: CEO, CSO, CMO, COO, CFO, CHRO' },
-  { id: 'capacity-planner', name: 'Capacity & Talent Planner', description: 'AI-driven team capacity planning, skill gap analysis, and hiring recommendations', solutionLine: 'OpsFinance', status: 'planned', progress: 0, priority: 'low', path: '#', timeframe: 'later', type: 'csuite', owner: 'CHRO', notes: 'Workforce planning for scaling teams' },
+  {
+    ...USE_CASES.find(u => u.id === 'photo-booth')!,
+    timeframe: 'later',
+    type: 'product',
+    owner: 'FrontierVentures Team',
+    notes: 'v2: new themes, faster generation, gallery admin, white-label',
+  },
+  {
+    ...USE_CASES.find(u => u.id === 'purple-star')!,
+    timeframe: 'later',
+    type: 'product',
+    owner: 'FrontierVentures Team',
+    notes: 'Bilingual Zi Wei Dou Shu platform with AI interpretation',
+  },
+  {
+    ...USE_CASES.find(u => u.id === '3d-printing')!,
+    timeframe: 'later',
+    type: 'product',
+    owner: 'FrontierVentures Team',
+    notes: 'AI-assisted design + factory management for 3D printing operations',
+  },
+  {
+    ...USE_CASES.find(u => u.id === 'longevity-elderly')!,
+    timeframe: 'later',
+    type: 'product',
+    owner: 'FrontierVentures Team',
+    notes: 'Pilot with elderly care partners',
+  },
+  {
+    ...USE_CASES.find(u => u.id === 'hr-platform')!,
+    timeframe: 'later',
+    type: 'csuite',
+    owner: 'CHRO',
+    notes: 'Talent management, capacity planning, and performance insights',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -294,12 +734,66 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
 // ---------------------------------------------------------------------------
 
 export const CSUITE_ROLES: CSuiteRole[] = [
-  { id: 'ceo', title: 'Chief Executive Officer', shortTitle: 'CEO', agentFamily: 'Founder Cockpit', description: 'Strategic overview, business KPIs, cross-functional coordination', status: 'in_progress', progress: 0.2, focus: ['Business KPIs', 'Strategy', 'Team Sync'] },
-  { id: 'cso', title: 'Chief Strategy Officer', shortTitle: 'CSO', agentFamily: 'Market Intel Studio', description: 'Market research, competitor intelligence, brand strategy', status: 'live', progress: 0.7, focus: ['Market Research', 'Competitor Intel', 'Brand Strategy'] },
-  { id: 'cmo', title: 'Chief Marketing Officer', shortTitle: 'CMO', agentFamily: 'Campaign Planner', description: 'Campaign orchestration, social strategy, content pipeline', status: 'live', progress: 0.6, focus: ['Campaigns', 'Social Media', 'Content'] },
-  { id: 'coo', title: 'Chief Operating Officer', shortTitle: 'COO', agentFamily: 'Project Health Monitor', description: 'Operational health, project delivery, resource tracking', status: 'planned', progress: 0, focus: ['Project Health', 'Delivery', 'Resources'] },
-  { id: 'cfo', title: 'Chief Financial Officer', shortTitle: 'CFO', agentFamily: 'P&L & Cash Planner', description: 'Financial reporting, cash flow forecasting, cost optimization', status: 'planned', progress: 0, focus: ['P&L', 'Cash Flow', 'Cost Analysis'] },
-  { id: 'chro', title: 'Chief HR Officer', shortTitle: 'CHRO', agentFamily: 'Capacity Planner', description: 'Team capacity planning, skill gap analysis, hiring', status: 'planned', progress: 0, focus: ['Capacity', 'Talent', 'Hiring'] },
+  {
+    id: 'ceo',
+    title: 'Chief Executive Officer',
+    shortTitle: 'CEO',
+    agentFamily: 'Decision Center',
+    description: 'Strategic overview, business KPIs, cross-functional coordination',
+    status: 'in_progress',
+    progress: 0.2,
+    focus: ['Business KPIs', 'Strategy', 'Team Sync'],
+  },
+  {
+    id: 'cso',
+    title: 'Chief Strategy Officer',
+    shortTitle: 'CSO',
+    agentFamily: 'Intel Studio',
+    description: 'Market research, competitor intelligence, brand strategy',
+    status: 'live',
+    progress: 0.7,
+    focus: ['Market Research', 'Competitor Intel', 'Brand Strategy'],
+  },
+  {
+    id: 'cmo',
+    title: 'Chief Marketing Officer',
+    shortTitle: 'CMO',
+    agentFamily: 'Growth Hacking Studio',
+    description: 'Campaign orchestration, social strategy, content pipeline',
+    status: 'live',
+    progress: 0.6,
+    focus: ['Campaigns', 'Social Media', 'Content'],
+  },
+  {
+    id: 'coo',
+    title: 'Chief Operating Officer',
+    shortTitle: 'COO',
+    agentFamily: 'Agency Management',
+    description: 'Agency operations, project delivery, resource tracking',
+    status: 'planned',
+    progress: 0,
+    focus: ['Project Health', 'Delivery', 'Resources'],
+  },
+  {
+    id: 'cfo',
+    title: 'Chief Financial Officer',
+    shortTitle: 'CFO',
+    agentFamily: 'Finance & Accounting',
+    description: 'Financial reporting, cash flow forecasting, cost optimization',
+    status: 'live',
+    progress: 0.9,
+    focus: ['P&L', 'Cash Flow', 'HK Compliance'],
+  },
+  {
+    id: 'chro',
+    title: 'Chief HR Officer',
+    shortTitle: 'CHRO',
+    agentFamily: 'HR Platform',
+    description: 'Team capacity planning, skill gap analysis, hiring',
+    status: 'planned',
+    progress: 0,
+    focus: ['Capacity', 'Talent', 'Hiring'],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -311,7 +805,7 @@ export const SEVEN_LAYERS = [
   { number: 6, name: 'Orchestration & Workflow', components: ['Schedule Registry', 'CSO Orchestrator', 'Scan Queue', 'WebSocket', 'Health Monitor'] },
   { number: 5, name: 'Task Definitions', components: ['DailySync', 'WeeklyAnalysis', 'MonthlyExecutive', 'NewsDiscovery', 'DigestWorkflow'] },
   { number: 4, name: 'Knowledge Management', components: ['pgvector', 'Notion Connector', 'Vector Embeddings', 'Semantic Search', 'Multi-source'] },
-  { number: 3, name: 'Roles & Agents', components: ['56+ Agents', 'Marketing (14)', 'Ads (12)', 'Photo Booth (9)', 'Intelligence (3)', 'CRM (18)'] },
+  { number: 3, name: 'Roles & Agents', components: ['56+ Agents', 'Growth (14+12)', 'Photo Booth (9)', 'Intel (3)', 'CRM (18)'] },
   { number: 2, name: 'Execution Engine', components: ['DeepSeek', 'Claude API', 'Perplexity', 'ComfyUI', 'Model Router', 'Tesseract OCR'] },
   { number: 1, name: 'Infrastructure & Storage', components: ['PostgreSQL + pgvector', 'Express API', 'Fly.io', 'WebSocket', 'SSE Streaming'] },
 ];

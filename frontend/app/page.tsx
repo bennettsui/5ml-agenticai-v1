@@ -13,11 +13,15 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const LINE_ICONS: Record<string, typeof TrendingUp> = {
+const LINE_ICONS: Record<SolutionLineKey, typeof TrendingUp> = {
   GrowthOS: TrendingUp,
-  ExecIntel: Brain,
-  OpsFinance: DollarSign,
-  Experience: Sparkles,
+  IntelStudio: Brain,
+  TechNexus: Globe,
+  ExpLab: Sparkles,
+  MediaChannel: Tv2,
+  FrontierVentures: Rocket,
+  CSuite: Building2,
+  Platform: Layers,
 };
 
 const LINE_BORDER: Record<string, string> = {
@@ -36,7 +40,12 @@ export default function Home() {
   const liveCount = USE_CASES.filter(u => u.status === 'live').length;
   const buildCount = USE_CASES.filter(u => u.status === 'in_progress').length;
   const totalAgents = USE_CASES.reduce((s, u) => s + (u.agentCount || 0), 0);
-  const solutionLineEntries = Object.entries(SOLUTION_LINES).filter(([k]) => k !== 'Platform');
+
+  // 7 product solution lines (exclude Platform)
+  const productLines = (Object.keys(SOLUTION_LINES) as SolutionLineKey[]).filter(k => k !== 'Platform');
+
+  // Growth Hacking Studio use cases (all 11)
+  const growthCases = USE_CASES.filter(u => u.solutionLine === 'GrowthOS');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">

@@ -35,9 +35,12 @@ type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' 
 
 const LINE_BORDER: Record<string, string> = {
   GrowthOS: 'border-l-purple-500',
-  ExecIntel: 'border-l-teal-500',
-  OpsFinance: 'border-l-blue-500',
-  Experience: 'border-l-amber-500',
+  IntelStudio: 'border-l-teal-500',
+  TechNexus: 'border-l-blue-500',
+  ExpLab: 'border-l-indigo-500',
+  MediaChannel: 'border-l-rose-500',
+  FrontierVentures: 'border-l-amber-500',
+  CSuite: 'border-l-emerald-500',
   Platform: 'border-l-slate-500',
 };
 
@@ -420,20 +423,24 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-      {/* Header */}
-      <header className="bg-slate-900/80 border-b border-slate-700/50 backdrop-blur-sm">
+      {/* Header + Tab Navigation — solid bar, consistent across all tabs */}
+      <header className="bg-slate-800 border-b border-slate-700 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/" className="text-slate-500 hover:text-white transition-colors">
+              <Link href="/" className="text-slate-400 hover:text-white transition-colors">
                 <Home className="w-5 h-5" />
               </Link>
               <div>
-                <h1 className="text-xl font-bold text-white">5ML Agentic Control Tower</h1>
-                <p className="text-xs text-slate-500 mt-0.5">{totalAgents}+ agents · {USE_CASES.length} use cases</p>
+                <h1 className="text-2xl font-bold text-white">Platform Dashboard</h1>
+                <p className="text-sm text-slate-400 mt-1">
+                  {totalAgents}+ agents · {USE_CASES.length} use cases · 7 solution lines
+                </p>
               </div>
             </div>
-            <div className="px-3 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium">● System Online</div>
+            <div className="px-3 py-1 bg-green-900/30 text-green-300 rounded-full text-xs font-medium">
+              ● System Online
+            </div>
           </div>
         </div>
       </header>
