@@ -267,16 +267,6 @@ export default function RadiancePage() {
         </div>
       </section>
 
-      {/* Traditional Chinese Summary */}
-      <section className="py-16 px-6 bg-gray-50">
-        <div className="max-w-4xl mx-auto border-t-4 border-blue-600 pt-12">
-          <h3 className="text-2xl font-bold mb-6 text-blue-600">繁體中文總結</h3>
-          <p className="text-gray-700 leading-relaxed text-lg">
-            Radiance是香港的公關及市場科技混合代理，專門融合公共關係、品牌活動及數碼內容的力量，為商業品牌、NGO及文化機構創造整合式傳播策略。我們不只提供策略方案，而是親身執行，從媒體關係和新聞發佈會，到社交媒體活動、影片製作、KOL合作及創意設計—一應俱全。無論你的目標是產品發佈、品牌重塑或社群信任建立，Radiance透過統一的公關、活動及內容策略，讓每個渠道相互增強，為你的品牌帶來真正的動力和成果。立即聯絡我們，了解如何用整合傳播策略推動你的下一步。
-          </p>
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="py-12 px-6 bg-gray-900 text-gray-300">
         <div className="max-w-6xl mx-auto">
