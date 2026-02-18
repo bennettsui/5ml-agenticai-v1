@@ -161,13 +161,13 @@ export const USE_CASES: UseCaseConfig[] = [
   {
     id: 'social-content-ops',
     name: 'Social Content Ops',
-    description: 'End-to-end social content operations: brand onboarding, content calendar, publishing, and performance tracking',
+    description: 'Social Studio: strategy, content calendar, interactive content, media buy, community management, and ad performance — all centered on brand/project profiles',
     solutionLine: 'GrowthOS',
     status: 'in_progress',
     progress: 0.5,
     priority: 'high',
-    path: '/brands',
-    features: ['Brand Onboarding', 'Content Calendar', 'Publishing', 'Performance Tracking'],
+    path: '/use-cases/social-content-ops',
+    features: ['Social Strategy', 'Content Calendar', 'Content Dev', 'Interactive Content', 'Media Buy', 'Community Management', 'Ad Performance', 'Brand Research'],
   },
   {
     id: 'social-agents',

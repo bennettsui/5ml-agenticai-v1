@@ -1990,6 +1990,61 @@ Be concise and actionable. Use bullet points for lists.`;
   }
 });
 
+// Social Content Ops chat endpoint
+app.post('/api/social/chat', async (req, res) => {
+  try {
+    const { messages, use_case_id, brand_id, brand_name, project_id, project_name, mode } = req.body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 3) : '';
+    const codeContext = readUseCaseCode(use_case_id || 'social-content-ops', 6000);
+
+    const isCritic = mode === 'business_analyst';
+    const systemPrompt = isCritic
+      ? `You are a critical Business Analyst reviewing social content operations for 5 Miles Lab (5ML).
+Your approach: QUESTION assumptions, IDENTIFY bottlenecks, CHALLENGE the user, ASSESS ROI, FIND edge cases.
+Be direct and analytical. Push back constructively. Use metrics and frameworks.
+${brand_name ? `Brand: ${brand_name}` : ''}${project_name ? ` | Project: ${project_name}` : ''}
+${ragContext ? `\n${ragContext}` : ''}${codeContext}`
+      : `You are a Social Content Ops AI assistant for 5 Miles Lab (5ML).
+You help users with social media strategy, content planning, publishing, community management, and ad performance.
+${brand_name ? `Current brand: ${brand_name}` : ''}${project_name ? ` | Current project: ${project_name}` : ''}
+${ragContext ? `\n${ragContext}` : ''}${codeContext}
+
+Your capabilities:
+1. Social strategy development and review
+2. Content calendar planning and optimization
+3. Competitive research and trend analysis
+4. Media buy planning and budget allocation
+5. Community management best practices
+6. Ad performance analysis and optimization
+7. Answer questions about the use case code and architecture
+
+Be concise and actionable. Use bullet points for lists.`;
+
+    // Try DeepSeek first, fall back to Claude
+    const deepseek = require('./services/deepseekService');
+    if (deepseek.isAvailable()) {
+      const result = await deepseek.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+      );
+      return res.json({ message: result.content, model: result.model || 'deepseek-chat' });
+    }
+
+    const result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+    return res.json({ message: result.text, model: result.modelName || 'claude-haiku' });
+
+  } catch (error) {
+    console.error('Social chat error:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
 // ==========================================
 // Use Case Routes
 // ==========================================
