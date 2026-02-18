@@ -1,10 +1,99 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { RadianceLogo } from '../components/RadianceLogo';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
+
+/* ── Custom dropdown ─────────────────────────────────────── */
+function CustomSelect({
+  name,
+  value,
+  onChange,
+  options,
+  placeholder,
+  required,
+}: {
+  name: string;
+  value: string;
+  onChange: (name: string, value: string) => void;
+  options: { label: string; value: string }[];
+  placeholder: string;
+  required?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(prev => !prev)}
+        className={`w-full px-4 py-3 border text-left flex items-center justify-between transition-colors focus:outline-none rounded-lg bg-white/90 text-slate-900 ${
+          open
+            ? 'border-white ring-1 ring-white'
+            : 'border-white/30 hover:border-white/50'
+        }`}
+      >
+        <span className={selected ? '' : 'text-slate-400'}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <svg
+          className={`w-4 h-4 flex-shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <ul className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
+          {options.map(opt => (
+            <li key={opt.value}>
+              <button
+                type="button"
+                onClick={() => { onChange(name, opt.value); setOpen(false); }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  value === opt.value
+                    ? 'bg-purple-100 text-purple-900 font-medium'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {required && (
+        <input
+          type="text"
+          name={name}
+          value={value}
+          onChange={() => {}}
+          required={required}
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+      )}
+    </div>
+  );
+}
 
 export default function LeadGenPage() {
   const [formData, setFormData] = useState({
@@ -17,8 +106,12 @@ export default function LeadGenPage() {
   });
   const [submitted, setSubmitted] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectChange = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -219,21 +312,21 @@ export default function LeadGenPage() {
                   />
                 </div>
 
-                <select
+                <CustomSelect
                   name="service"
                   value={formData.service}
-                  onChange={handleChange}
+                  onChange={handleSelectChange}
+                  options={[
+                    { label: 'Public Relations', value: 'pr' },
+                    { label: 'Events & Experiences', value: 'events' },
+                    { label: 'Social Media Strategy', value: 'social' },
+                    { label: 'KOL & Influencer Marketing', value: 'kol' },
+                    { label: 'Creative Production', value: 'creative' },
+                    { label: 'Integrated Campaign', value: 'integrated' }
+                  ]}
+                  placeholder="Select Service of Interest"
                   required
-                  className="w-full px-4 py-3 bg-white/90 text-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-white"
-                >
-                  <option value="">Select Service of Interest</option>
-                  <option value="pr">Public Relations</option>
-                  <option value="events">Events & Experiences</option>
-                  <option value="social">Social Media Strategy</option>
-                  <option value="kol">KOL & Influencer Marketing</option>
-                  <option value="creative">Creative Production</option>
-                  <option value="integrated">Integrated Campaign</option>
-                </select>
+                />
 
                 <textarea
                   name="message"
