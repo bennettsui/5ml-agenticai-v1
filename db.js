@@ -423,6 +423,9 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_ziwei_stats_match_rate ON ziwei_rule_statistics(match_rate DESC);
     `);
     console.log('✅ Database schema initialized (including CRM tables)');
+
+    // Seed Ziwei interpretation rules
+    await seedZiweiRules();
   } catch (error) {
     console.error('❌ Database initialization error:', error.message);
     console.error('Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
@@ -1300,6 +1303,114 @@ async function getEdmById(edmId) {
   }
 }
 
+// ==========================================
+// Ziwei Seeder Functions
+// ==========================================
+
+async function seedZiweiRules() {
+  try {
+    const rules = require('./services/ziwei-rules-seed');
+
+    let insertedCount = 0;
+    for (const rule of rules) {
+      const existing = await pool.query(
+        `SELECT id FROM ziwei_interpretation_rules
+         WHERE scope = $1 AND condition = $2 AND consensus_label = $3 LIMIT 1`,
+        [rule.scope, JSON.stringify(rule.condition), rule.consensus_label]
+      );
+
+      if (existing.rows.length === 0) {
+        await pool.query(
+          `INSERT INTO ziwei_interpretation_rules
+           (version, scope, condition, interpretation, consensus_label, statistics, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            1,
+            rule.scope,
+            JSON.stringify(rule.condition),
+            JSON.stringify(rule.interpretation),
+            rule.consensus_label,
+            JSON.stringify(rule.statistics),
+            'active'
+          ]
+        );
+        insertedCount++;
+      }
+    }
+
+    console.log(`✅ Ziwei rules seeded: ${insertedCount} new rules added`);
+    return insertedCount;
+  } catch (error) {
+    console.error('⚠️ Ziwei seeding error:', error.message);
+    return 0;
+  }
+}
+
+async function getZiweiRules(filters = {}) {
+  try {
+    let query = `SELECT * FROM ziwei_interpretation_rules WHERE status = 'active'`;
+    const params = [];
+
+    if (filters.scope) {
+      query += ` AND scope = $${params.length + 1}`;
+      params.push(filters.scope);
+    }
+
+    if (filters.consensus) {
+      query += ` AND consensus_label = $${params.length + 1}`;
+      params.push(filters.consensus);
+    }
+
+    query += ` ORDER BY consensus_label DESC, statistics->>'confidence_level' DESC`;
+
+    const result = await pool.query(query, params);
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching Ziwei rules:', error);
+    throw error;
+  }
+}
+
+async function saveZiweiRuleFeedback(chartId, ruleId, feedback) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO ziwei_rule_feedback (chart_id, rule_id, user_rating, outcome_status, accuracy_flag, user_notes)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [chartId, ruleId, feedback.rating, feedback.outcome, feedback.accuracy, feedback.notes]
+    );
+    return result.rows[0].id;
+  } catch (error) {
+    console.error('Error saving rule feedback:', error);
+    throw error;
+  }
+}
+
+async function updateZiweiRuleStatistics(ruleId) {
+  try {
+    // Calculate match rate from feedback
+    const feedback = await pool.query(
+      `SELECT COUNT(*) as total,
+              SUM(CASE WHEN accuracy_flag = 'accurate' THEN 1 ELSE 0 END) as matches
+       FROM ziwei_rule_feedback WHERE rule_id = $1`,
+      [ruleId]
+    );
+
+    const { total, matches } = feedback.rows[0];
+    const matchRate = total > 0 ? (matches / total) : 0.5;
+
+    await pool.query(
+      `UPDATE ziwei_rule_statistics
+       SET sample_size = $1, match_count = $2, match_rate = $3, confidence_level = $4, updated_at = NOW()
+       WHERE rule_id = $5`,
+      [total, matches, matchRate, Math.sqrt(matchRate), ruleId]
+    );
+
+    console.log(`✅ Updated statistics for rule ${ruleId}: ${matches}/${total} matches`);
+  } catch (error) {
+    console.error('Error updating rule statistics:', error);
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -1348,4 +1459,9 @@ module.exports = {
   saveEdmHistory,
   getEdmHistory,
   getEdmById,
+  // Ziwei Astrology
+  seedZiweiRules,
+  getZiweiRules,
+  saveZiweiRuleFeedback,
+  updateZiweiRuleStatistics,
 };
