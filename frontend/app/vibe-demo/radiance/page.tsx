@@ -278,16 +278,18 @@ export default function RadiancePage() {
             <div>
               <h4 className="font-bold text-white mb-4">Services</h4>
               <ul className="text-sm space-y-2">
-                <li><a href="#services" className="hover:text-white transition">Public Relations</a></li>
-                <li><a href="#services" className="hover:text-white transition">Events & Experiences</a></li>
-                <li><a href="#services" className="hover:text-white transition">Social Media & Content</a></li>
+                <li><a href="/vibe-demo/radiance/services/public-relations" className="hover:text-white transition">Public Relations</a></li>
+                <li><a href="/vibe-demo/radiance/services/social-media" className="hover:text-white transition">Social Media</a></li>
+                <li><a href="/vibe-demo/radiance/services/kol-marketing" className="hover:text-white transition">KOL Marketing</a></li>
               </ul>
             </div>
             <div>
               <h4 className="font-bold text-white mb-4">Company</h4>
               <ul className="text-sm space-y-2">
-                <li><a href="#cases" className="hover:text-white transition">Case Studies</a></li>
-                <li><a href="#contact" className="hover:text-white transition">Contact</a></li>
+                <li><a href="/vibe-demo/radiance/case-studies" className="hover:text-white transition">Case Studies</a></li>
+                <li><a href="/vibe-demo/radiance/team" className="hover:text-white transition">Team</a></li>
+                <li><a href="/vibe-demo/radiance/blog" className="hover:text-white transition">Blog</a></li>
+                <li><a href="/vibe-demo/radiance/contact" className="hover:text-white transition">Contact</a></li>
               </ul>
             </div>
             <div>
