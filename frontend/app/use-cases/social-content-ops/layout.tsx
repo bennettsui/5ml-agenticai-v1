@@ -45,11 +45,26 @@ const NAV_SECTIONS = [
   },
 ];
 
+// Module name derived from pathname for chatbot context
+const MODULE_MAP: Record<string, string> = {
+  '/use-cases/social-content-ops': 'Overview',
+  '/use-cases/social-content-ops/strategy': 'Social Strategy',
+  '/use-cases/social-content-ops/research': 'Brand & Competitive Research',
+  '/use-cases/social-content-ops/calendar': 'Content Calendar',
+  '/use-cases/social-content-ops/content-dev': 'Content Development',
+  '/use-cases/social-content-ops/interactive': 'Interactive Content',
+  '/use-cases/social-content-ops/media-buy': 'Media Buy',
+  '/use-cases/social-content-ops/trend-research': 'Trend Research',
+  '/use-cases/social-content-ops/monitoring': 'Social Monitoring',
+  '/use-cases/social-content-ops/community': 'Community Management',
+  '/use-cases/social-content-ops/ad-performance': 'Ad Performance',
+};
+
 const chatConfig: AiChatConfig = {
   endpoint: '/api/social/chat',
   useCaseId: 'social-content-ops',
   chatType: 'social',
-  title: 'Social Ops Assistant',
+  title: 'Sarah — Social Director',
   accent: 'purple',
   criticMode: true,
 };
@@ -146,7 +161,8 @@ function SocialContentOpsInner({ children }: { children: React.ReactNode }) {
     return pathname.startsWith(href);
   }
 
-  // Inject brand/project context into chatbot
+  // Inject brand/project + page context into chatbot
+  const currentModule = MODULE_MAP[pathname] || 'Social Content Ops';
   const enrichedConfig: AiChatConfig = {
     ...chatConfig,
     extraContext: {
@@ -154,6 +170,8 @@ function SocialContentOpsInner({ children }: { children: React.ReactNode }) {
       brand_name: selectedBrand?.name,
       project_id: selectedProject?.id,
       project_name: selectedProject?.name,
+      current_page: pathname,
+      current_module: currentModule,
     },
   };
 
