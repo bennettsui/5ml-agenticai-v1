@@ -1,6 +1,46 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+
+function CustomSelect({ name, value, onChange, options, placeholder, required }: {
+  name: string; value: string;
+  onChange: (name: string, value: string) => void;
+  options: { label: string; value: string }[];
+  placeholder: string; required?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function outside(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener('mousedown', outside);
+    return () => document.removeEventListener('mousedown', outside);
+  }, []);
+  const selected = options.find(o => o.value === value);
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen(p => !p)}
+        className={`w-full px-4 py-3 border text-left flex items-center justify-between transition-colors focus:outline-none rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white ${open ? 'border-purple-600 ring-1 ring-purple-600' : 'border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500'}`}>
+        <span className={selected ? '' : 'text-slate-400 dark:text-slate-500'}>{selected ? selected.label : placeholder}</span>
+        <svg className={`w-4 h-4 flex-shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <ul className="absolute z-50 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden">
+          {options.map(opt => (
+            <li key={opt.value}>
+              <button type="button" onClick={() => { onChange(name, opt.value); setOpen(false); }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value === opt.value ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
+                {opt.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {required && <input type="text" name={name} value={value} onChange={() => {}} required className="sr-only" tabIndex={-1} aria-hidden="true" />}
+    </div>
+  );
+}
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -16,11 +56,26 @@ export default function ContactPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (error) setError('');
   };
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (error) setError('');
+  };
+
+  const serviceOptions = [
+    { label: 'Public Relations', value: 'Public Relations' },
+    { label: 'Event Management', value: 'Events' },
+    { label: 'Social Media Strategy', value: 'Social Media' },
+    { label: 'KOL & Influencer Marketing', value: 'KOL Marketing' },
+    { label: 'Creative & Content Production', value: 'Creative Production' },
+    { label: 'Multiple Services', value: 'Multiple Services' },
+    { label: 'Other', value: 'Other' },
+  ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,22 +243,14 @@ export default function ContactPage() {
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         What service interests you? *
                       </label>
-                      <select
+                      <CustomSelect
                         name="serviceInterest"
                         value={formData.serviceInterest}
-                        onChange={handleChange}
+                        onChange={handleSelectChange}
+                        options={serviceOptions}
+                        placeholder="Select a service"
                         required
-                        className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
-                      >
-                        <option value="">Select a service</option>
-                        <option value="Public Relations">Public Relations</option>
-                        <option value="Events">Event Management</option>
-                        <option value="Social Media">Social Media Strategy</option>
-                        <option value="KOL Marketing">KOL & Influencer Marketing</option>
-                        <option value="Creative Production">Creative & Content Production</option>
-                        <option value="Multiple Services">Multiple Services</option>
-                        <option value="Other">Other</option>
-                      </select>
+                      />
                     </div>
                   </div>
 
