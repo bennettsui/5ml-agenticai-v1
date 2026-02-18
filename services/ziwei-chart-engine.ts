@@ -346,5 +346,6 @@ function test(): void {
   console.log("\n✨ All tests passed!\n");
 }
 
-// Export for testing
+// Export types and functions
+export type { BaseChartInput, House, BaseChart };
 export { test };
