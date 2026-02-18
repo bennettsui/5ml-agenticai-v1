@@ -1,0 +1,403 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "lastUpdated": "2026-02-18",
+    "totalSources": 32,
+    "authorityBase": "王亭之 (Wang Ting Zhi) & 中州派 (Zhongzhou School)",
+    "scraperStatus": "pending",
+    "coverage": {
+      "mainStars": 14,
+      "secondaryStars": 30,
+      "minorStars": 60,
+      "totalStars": 104,
+      "palaces": 12,
+      "palmaceStarCombinations": 1248
+    }
+  },
+  "sources": [
+    {
+      "id": "source-001",
+      "priority": 1,
+      "authority": "⭐⭐⭐⭐⭐",
+      "type": "official_institute",
+      "name": "Ziwei.asia - Official Sihua 18 Flying Stars",
+      "url": "https://ziwei.asia/",
+      "school": "Sihua (Si Hua 飛星)",
+      "focusAreas": ["complete_system", "flying_stars", "interpretation", "online_courses"],
+      "scraperPriority": 1,
+      "contentTypes": ["star_meanings", "palace_interpretations", "flying_stars_rules", "courses"],
+      "status": "not_scraped",
+      "keyPages": [
+        {
+          "name": "What is Ziwei Doushu",
+          "url": "https://ziwei.asia/ZWDS/What_is_ZiWei_DouShu.php",
+          "contentType": "overview"
+        },
+        {
+          "name": "Interpretation & Analysis",
+          "url": "https://ziwei.asia/ZWDS/Zi_Wei_Interpretation_Analysis.php",
+          "contentType": "star_meanings"
+        },
+        {
+          "name": "Online Courses",
+          "url": "https://ziwei.asia/ZI_WEI_DOU_SHU/zwdscourses/Ziwei_Online_Courses.php",
+          "contentType": "courses"
+        }
+      ]
+    },
+    {
+      "id": "source-002",
+      "priority": 1,
+      "authority": "⭐⭐⭐⭐⭐",
+      "type": "wang_ting_zhi_collection",
+      "name": "Zhihu - Wang Ting Zhi Complete Teachings (中州派)",
+      "url": "https://zhuanlan.zhihu.com/p/690223394",
+      "school": "Zhongzhou (中州派)",
+      "focusAreas": ["wang_ting_zhi_authoritative", "all_stars", "transformations", "luck_cycles"],
+      "scraperPriority": 1,
+      "contentTypes": ["star_meanings", "palace_interpretations", "transformation_rules", "decade_luck", "annual_luck"],
+      "status": "not_scraped",
+      "importantWorks": [
+        "斗數四書 (Four Books of Doushu)",
+        "紫微斗數講義 (Ziwei Doushu Lectures)",
+        "中州派紫微斗數初級講義 (Elementary Lectures)",
+        "周易象數例解 (I Ching Symbolic Numbers)"
+      ],
+      "notes": "Most comprehensive 王亭之 resource - PRIMARY SOURCE"
+    },
+    {
+      "id": "source-003",
+      "priority": 1,
+      "authority": "⭐⭐⭐⭐⭐",
+      "type": "academic_peer_reviewed",
+      "name": "De Gruyter Brill - Scholarly Works on Ziwei",
+      "url": "https://www.degruyterbrill.com/",
+      "school": "Academic (All schools)",
+      "focusAreas": ["historical_development", "academic_analysis", "system_accuracy"],
+      "scraperPriority": 2,
+      "contentTypes": ["academic_papers", "historical_context", "system_validation"],
+      "status": "not_scraped",
+      "notes": "Peer-reviewed academic resource"
+    },
+    {
+      "id": "source-004",
+      "priority": 2,
+      "authority": "⭐⭐⭐⭐",
+      "type": "educational_academy",
+      "name": "Zi Wei Dou Shu Academy",
+      "url": "https://ziweidoushuacademy.com/",
+      "school": "General (Multi-school)",
+      "focusAreas": ["all_stars", "palace_meanings", "fundamentals"],
+      "scraperPriority": 2,
+      "contentTypes": ["star_dictionary", "palace_interpretations", "articles"],
+      "status": "not_scraped",
+      "keyArticles": [
+        "History & Origins",
+        "Decoding the Stars",
+        "Understanding Wealth Star",
+        "14 Main Stars Meanings"
+      ]
+    },
+    {
+      "id": "source-005",
+      "priority": 2,
+      "authority": "⭐⭐⭐⭐",
+      "type": "practitioner_school",
+      "name": "Sean Chan's School of Chinese Metaphysics",
+      "url": "https://www.masterseanchan.com/",
+      "school": "General",
+      "focusAreas": ["chart_reading", "fundamentals", "consultation"],
+      "scraperPriority": 3,
+      "contentTypes": ["interpretations", "courses", "blog_articles"],
+      "status": "not_scraped"
+    },
+    {
+      "id": "source-006",
+      "priority": 2,
+      "authority": "⭐⭐⭐⭐",
+      "type": "star_dictionary",
+      "name": "Fusang Vision - 14 Main Stars Complete Guide",
+      "url": "https://fusang-vision.com/pages/ziwei-main-stars-collection",
+      "school": "General",
+      "focusAreas": ["14_main_stars", "star_meanings", "characteristics"],
+      "scraperPriority": 2,
+      "contentTypes": ["star_dictionary", "palace_meanings"],
+      "status": "not_scraped",
+      "coverage": "14 Main Stars"
+    },
+    {
+      "id": "source-007",
+      "priority": 2,
+      "authority": "⭐⭐⭐⭐",
+      "type": "luck_cycles_expert",
+      "name": "Inzense (禪香不二) - Decade Luck Complete Guide",
+      "url": "https://www.inzense.com.tw/en/how-to-read-10-year-luck-cycle-complete-guide-to-decade-fortune-and-ziwei-bazi-analysis/",
+      "school": "General",
+      "focusAreas": ["decade_luck", "annual_luck", "fortune_cycles"],
+      "scraperPriority": 1,
+      "contentTypes": ["luck_cycle_rules", "decade_analysis", "annual_analysis"],
+      "status": "not_scraped",
+      "notes": "PRIMARY SOURCE FOR 大運流年"
+    },
+    {
+      "id": "source-008",
+      "priority": 2,
+      "authority": "⭐⭐⭐⭐",
+      "type": "transformation_specialist",
+      "name": "星林學苑 - Four Transformations (四化) System Mastery",
+      "url": "https://www.108s.tw/article/info/85",
+      "school": "General",
+      "focusAreas": ["four_transformations", "si_hua", "transformation_meanings"],
+      "scraperPriority": 1,
+      "contentTypes": ["transformation_rules", "lu_quan_ke_ji", "applications"],
+      "status": "not_scraped",
+      "notes": "PRIMARY SOURCE FOR 四化 SYSTEM"
+    },
+    {
+      "id": "source-009",
+      "priority": 2,
+      "authority": "⭐⭐⭐⭐",
+      "type": "educational_course",
+      "name": "Gagan Sarkaria - Ziwei Dou Shu Courses",
+      "url": "https://gagansarkaria.com/zi-wei-dou-shu-course/",
+      "school": "General",
+      "focusAreas": ["all_104_stars", "flying_stars", "courses"],
+      "scraperPriority": 3,
+      "contentTypes": ["star_reference", "course_materials", "star_meanings_by_palace"],
+      "status": "not_scraped",
+      "notes": "Extensive 104 star reference available"
+    },
+    {
+      "id": "source-010",
+      "priority": 2,
+      "authority": "⭐⭐⭐⭐",
+      "type": "educational_platform",
+      "name": "Flourish Astrology - Ziwei Resources",
+      "url": "https://flourishastrology.com/",
+      "school": "General",
+      "focusAreas": ["chart_reading", "fundamentals", "star_meanings"],
+      "scraperPriority": 3,
+      "contentTypes": ["guides", "star_dictionary", "interpretation_articles"],
+      "status": "not_scraped"
+    },
+    {
+      "id": "source-011",
+      "priority": 3,
+      "authority": "⭐⭐⭐⭐",
+      "type": "transformation_multiple_guides",
+      "name": "Vocus - Four Transformations Complete Guides",
+      "url": "https://vocus.cc/",
+      "school": "General",
+      "focusAreas": ["four_transformations", "lu_quan_ke_ji", "transformation_effects"],
+      "scraperPriority": 2,
+      "contentTypes": ["transformation_meanings", "lu_meanings", "quan_meanings", "ke_meanings", "ji_meanings"],
+      "status": "not_scraped",
+      "keyArticles": [
+        "Basic Transformation Meanings",
+        "Transformation Effects",
+        "Heavenly Stem Transformation Table"
+      ]
+    },
+    {
+      "id": "source-012",
+      "priority": 3,
+      "authority": "⭐⭐⭐⭐",
+      "type": "cultural_educational",
+      "name": "Click108 - 紫微教學 (Ziwei Teaching Portal)",
+      "url": "https://www.click108.com.tw/teaching/teach011.php",
+      "school": "General",
+      "focusAreas": ["all_systems", "traditional_teaching", "comprehensive"],
+      "scraperPriority": 3,
+      "contentTypes": ["teaching_materials", "star_meanings", "palace_interpretations"],
+      "status": "not_scraped"
+    },
+    {
+      "id": "source-013",
+      "priority": 3,
+      "authority": "⭐⭐⭐",
+      "type": "monthly_luck_specialist",
+      "name": "科技紫微網 - Monthly Luck System",
+      "url": "https://news.click108.com.tw/2022/01/ziwei/7048/",
+      "school": "General",
+      "focusAreas": ["monthly_luck", "flow_month", "luck_cycles"],
+      "scraperPriority": 2,
+      "contentTypes": ["monthly_luck_rules", "analysis"],
+      "status": "not_scraped",
+      "notes": "PRIMARY SOURCE FOR 流月 SYSTEM"
+    },
+    {
+      "id": "source-014",
+      "priority": 3,
+      "authority": "⭐⭐⭐",
+      "type": "online_tool",
+      "name": "Ming Ming Guan Zhi - Free Tools & Si Hua Stars",
+      "url": "https://mingming3.com/",
+      "school": "General",
+      "focusAreas": ["four_transformations", "practical_tools", "fortune_telling"],
+      "scraperPriority": 3,
+      "contentTypes": ["transformation_explanations", "tools", "analysis"],
+      "status": "not_scraped"
+    },
+    {
+      "id": "source-015",
+      "priority": 1,
+      "authority": "⭐⭐⭐⭐",
+      "type": "wang_ting_zhi_books",
+      "name": "Weread (WeChat Reading) - Wang Ting Zhi Complete Works",
+      "url": "https://weread.qq.com/",
+      "school": "Zhongzhou (中州派)",
+      "focusAreas": ["wang_ting_zhi_authoritative", "all_works"],
+      "scraperPriority": 1,
+      "contentTypes": ["complete_books", "primary_texts"],
+      "status": "not_scraped",
+      "notes": "Access to complete published Wang Ting Zhi works"
+    },
+    {
+      "id": "source-016",
+      "priority": 1,
+      "authority": "⭐⭐⭐⭐",
+      "type": "wang_ting_zhi_lectures",
+      "name": "Scribd - Wang Ting Zhi Advanced Lectures",
+      "url": "https://www.scribd.com/",
+      "school": "Zhongzhou (中州派)",
+      "focusAreas": ["wang_ting_zhi_advanced", "deep_knowledge"],
+      "scraperPriority": 1,
+      "contentTypes": ["advanced_lectures", "pdf_materials"],
+      "status": "not_scraped",
+      "notes": "紫薇斗數深造講義 - Advanced level teachings"
+    },
+    {
+      "id": "source-017",
+      "priority": 3,
+      "authority": "⭐⭐⭐",
+      "type": "reference",
+      "name": "Wikipedia - Ziwei Doushu",
+      "url": "https://en.wikipedia.org/wiki/Ziwei_doushu",
+      "school": "General (All schools)",
+      "focusAreas": ["system_overview", "history", "schools_comparison"],
+      "scraperPriority": 3,
+      "contentTypes": ["overview", "historical_context", "school_differences"],
+      "status": "not_scraped"
+    }
+  ],
+  "scrapingStrategy": {
+    "phase1": {
+      "name": "Primary Sources (Wang Ting Zhi & Authoritative)",
+      "sources": ["source-002", "source-001", "source-015", "source-016"],
+      "priority": "CRITICAL",
+      "targetData": ["all_104_stars", "transformations", "luck_cycles", "palace_meanings"],
+      "estimatedContent": "50,000+ lines"
+    },
+    "phase2": {
+      "name": "Specialized Knowledge (Luck Cycles & Transformations)",
+      "sources": ["source-007", "source-008", "source-013", "source-011"],
+      "priority": "HIGH",
+      "targetData": ["decade_luck", "annual_luck", "monthly_luck", "four_transformations"],
+      "estimatedContent": "20,000+ lines"
+    },
+    "phase3": {
+      "name": "Educational & Dictionary Resources",
+      "sources": ["source-004", "source-006", "source-009", "source-010"],
+      "priority": "HIGH",
+      "targetData": ["star_meanings", "palace_interpretations", "all_104_stars_definitions"],
+      "estimatedContent": "30,000+ lines"
+    },
+    "phase4": {
+      "name": "Practical Tools & Additional Coverage",
+      "sources": ["source-012", "source-014", "source-005", "source-017"],
+      "priority": "MEDIUM",
+      "targetData": ["verification", "practical_applications", "additional_meanings"],
+      "estimatedContent": "15,000+ lines"
+    }
+  },
+  "targetDatabase": {
+    "tables": [
+      {
+        "name": "ziwei_stars",
+        "description": "All 104 stars with base meanings",
+        "fields": [
+          "star_id",
+          "chinese_name",
+          "english_name",
+          "star_type (major/secondary/minor)",
+          "five_element",
+          "yin_yang",
+          "base_meaning_zh",
+          "base_meaning_en",
+          "character_traits",
+          "source_ids",
+          "wang_ting_zhi_reference",
+          "confidence_level"
+        ]
+      },
+      {
+        "name": "star_palace_meanings",
+        "description": "Star meanings in each of 12 palaces (1248 combinations)",
+        "fields": [
+          "star_palace_id",
+          "star_id",
+          "palace_id",
+          "palace_name",
+          "meaning_zh",
+          "meaning_en",
+          "career_impact",
+          "wealth_impact",
+          "relationship_impact",
+          "health_impact",
+          "source_ids",
+          "confidence_level"
+        ]
+      },
+      {
+        "name": "transformation_rules",
+        "description": "Four Transformations (四化) system",
+        "fields": [
+          "transformation_id",
+          "stem_id",
+          "star_id",
+          "transformation_type (lu/quan/ke/ji)",
+          "transformation_meaning_zh",
+          "transformation_meaning_en",
+          "affects_palace_id",
+          "effect_description",
+          "source_ids"
+        ]
+      },
+      {
+        "name": "luck_cycle_rules",
+        "description": "Decade, Annual, Monthly, Daily luck calculations",
+        "fields": [
+          "luck_type (decade/annual/monthly/daily)",
+          "luck_id",
+          "calculation_method_zh",
+          "calculation_method_en",
+          "star_movements",
+          "palace_activation_rules",
+          "transformation_rules",
+          "source_ids"
+        ]
+      },
+      {
+        "name": "flying_stars_rules",
+        "description": "Flying Stars (飛星) system and star movement patterns",
+        "fields": [
+          "flying_star_id",
+          "time_period",
+          "star_movement_rules",
+          "activated_palaces",
+          "intensity_level",
+          "source_ids"
+        ]
+      }
+    ]
+  },
+  "scrapingProgress": {
+    "sources_scraped": 0,
+    "stars_collected": 0,
+    "palace_meanings_collected": 0,
+    "transformation_rules_collected": 0,
+    "luck_cycle_rules_collected": 0,
+    "lastScrapedDate": null,
+    "nextScheduledScrape": "2026-02-18"
+  }
+}
