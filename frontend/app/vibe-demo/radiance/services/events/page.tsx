@@ -370,22 +370,6 @@ export default function EventManagementServicePage() {
         </div>
       </section>
 
-      {/* Traditional Chinese Summary */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">繁體中文摘要</h3>
-        <div className="bg-slate-50 dark:bg-slate-900/30 rounded-lg p-6 text-slate-700 dark:text-slate-300 space-y-4 leading-relaxed text-sm">
-          <p>
-            Radiance 提供由始至終的活動管理服務，從策略規劃到執行落實。我們相信每場活動都是重要的傳播機會，不僅能為品牌帶來媒體曝光和社交內容，更能與觀眾建立真實的連結和情感。無論是產品發佈會、慈善晚宴、商場推廣或社區活動，我們都會用心規劃和執行，確保每個細節完美無缺。
-          </p>
-          <p>
-            我們的服務涵蓋完整流程：目標設定、概念創意、場地設計、嘉賓管理、表演製作、攝影錄影，以及事後追蹤和媒體監測。我們將活動與公關和社交媒體策略整合，確保活動的影響力能延伸至現場以外，達成更大的宣傳效果。
-          </p>
-          <p>
-            如果你計劃舉辦一場活動，無論規模大小，Radiance 樂意與你合作，從策略構思到完美執行，確保你的活動成功吸引目標觀眾、獲得媒體報導，並留下深刻印象。
-          </p>
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-800 py-12 px-6 mt-16">
         <div className="max-w-6xl mx-auto text-center text-sm text-slate-500 dark:text-slate-400">
