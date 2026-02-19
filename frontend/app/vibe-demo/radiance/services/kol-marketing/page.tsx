@@ -29,7 +29,9 @@ export default function KOLMarketingServicePage() {
             KOL & Influencer Marketing
           </h1>
           <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
-            Social media and KOLs are now essential levers for brand awareness and perception. When paired with the right content and structure, KOL collaborations can educate audiences, influence behaviour and build long-term affinity. Radiance operates as your strategic KOL partner, from campaign ideation and talent matching to coordination, media support and results analysis.
+            Social media and KOLs are now essential levers for brand awareness and perception. When paired with the right content and structure, KOL collaborations can educate audiences, influence behaviour and build long-term affinity. Radiance operates as your strategic KOL partner, from campaign ideation and talent matching to coordination,{' '}
+            <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">media support</Link>
+            {' '}and results analysis.
           </p>
         </div>
       </section>
@@ -155,7 +157,9 @@ export default function KOLMarketingServicePage() {
             <ul className="space-y-2 ml-6">
               <li className="flex gap-3">
                 <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
-                <span className="text-slate-600 dark:text-slate-400">Identifying suitable KOLs for event attendance and live content coverage.</span>
+                <span className="text-slate-600 dark:text-slate-400">Identifying suitable KOLs for{' '}
+                  <Link href="/vibe-demo/radiance/services/events" className="text-purple-600 dark:text-purple-400 hover:underline">event attendance</Link>
+                  {' '}and live content coverage.</span>
               </li>
               <li className="flex gap-3">
                 <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>

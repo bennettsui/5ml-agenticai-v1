@@ -29,7 +29,13 @@ export default function CreativeProductionServicePage() {
             Creative Design & Content Production
           </h1>
           <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
-            Good creative doesn't decorate a campaign—it is the campaign. The right visual identity, the right words, the right film can change how people see your brand. Radiance brings design, photography, video and copywriting together under one roof, so every asset across your PR, events and social activity feels intentional and cohesive.
+            Good creative doesn't decorate a campaign—it is the campaign. The right visual identity, the right words, the right film can change how people see your brand. Radiance brings design, photography, video and copywriting together under one roof, so every asset across your{' '}
+            <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">PR</Link>
+            {', '}
+            <Link href="/vibe-demo/radiance/services/events" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">events</Link>
+            {' and '}
+            <Link href="/vibe-demo/radiance/services/social-media" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">social activity</Link>
+            {' feels intentional and cohesive.'}
           </p>
           <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
             Creative production isn't an afterthought—it's integral to every campaign. Whether you're launching a product, running an event, building social presence or reshaping your brand identity, exceptional creative assets amplify your message and strengthen stakeholder connections. We integrate design, photography, video and copywriting so your communications feel cohesive and professional across all touchpoints.
@@ -228,7 +234,11 @@ export default function CreativeProductionServicePage() {
       <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">How brands work with us</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
-          Radiance applies creative production across diverse industries and campaign types. Often, we combine design and video with PR and social strategy to create fully integrated campaigns where every asset reinforces the core message.
+          Radiance applies creative production across diverse industries and campaign types. Often, we combine design and video with{' '}
+          <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">PR</Link>
+          {' and '}
+          <Link href="/vibe-demo/radiance/services/social-media" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">social strategy</Link>
+          {' to create fully integrated campaigns where every asset reinforces the core message.'}
         </p>
         <div className="space-y-8">
           {/* Use Case 1 */}

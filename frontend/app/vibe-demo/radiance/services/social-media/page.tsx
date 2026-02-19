@@ -107,16 +107,16 @@ export default function SocialMediaServicePage() {
           We do not treat social media as isolated posts. We align social activity with campaigns, launches, events and KOL programmes so that each touchpoint reinforces the others. When you launch a product, media coverage feeds into social content. When you host an event, social amplifies it. When you partner with influencers, social extends their reach. This integration is what creates momentum.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-6 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg">
-            <h4 className="font-semibold text-slate-900 dark:text-white mb-3">+ PR Campaigns</h4>
+          <div className="p-6 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 transition-colors">
+            <Link href="/vibe-demo/radiance/services/public-relations" className="font-semibold text-purple-600 dark:text-purple-400 hover:underline mb-3 block">+ PR Campaigns →</Link>
             <p className="text-sm text-slate-600 dark:text-slate-400">Press coverage becomes social content, expanding reach to new audiences.</p>
           </div>
-          <div className="p-6 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg">
-            <h4 className="font-semibold text-slate-900 dark:text-white mb-3">+ Events</h4>
+          <div className="p-6 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 transition-colors">
+            <Link href="/vibe-demo/radiance/services/events" className="font-semibold text-purple-600 dark:text-purple-400 hover:underline mb-3 block">+ Events →</Link>
             <p className="text-sm text-slate-600 dark:text-slate-400">Live events create authentic content moments that fuel social engagement.</p>
           </div>
-          <div className="p-6 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg">
-            <h4 className="font-semibold text-slate-900 dark:text-white mb-3">+ KOL Partnerships</h4>
+          <div className="p-6 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 transition-colors">
+            <Link href="/vibe-demo/radiance/services/kol-marketing" className="font-semibold text-purple-600 dark:text-purple-400 hover:underline mb-3 block">+ KOL Partnerships →</Link>
             <p className="text-sm text-slate-600 dark:text-slate-400">Influencer collaborations amplify through your owned social channels.</p>
           </div>
         </div>

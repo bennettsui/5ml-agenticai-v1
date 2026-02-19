@@ -40,8 +40,15 @@ export default function PublicRelationsServicePage() {
         <section className="py-16 px-6 border-t border-slate-200 dark:border-slate-800">
           <div className="max-w-6xl mx-auto">
             <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Why media matters</h2>
-            <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
+            <p className="text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
               Earned media—coverage you didn't pay for—carries more credibility than advertising. When journalists feature your brand, your spokesperson or your story, audiences trust it more because it's been editorially vetted. Strategic PR builds long-term visibility, strengthens brand authority and supports every other channel: events, social media, even sales conversations all benefit from positive press coverage and media relationships.
+            </p>
+            <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
+              In Hong Kong, building relationships with key publications—from the{' '}
+              <a href="https://www.scmp.com/" target="_blank" rel="noopener noreferrer" className="text-purple-600 dark:text-purple-400 hover:underline">South China Morning Post</a>
+              {' and '}
+              <a href="https://www.mingpao.com/" target="_blank" rel="noopener noreferrer" className="text-purple-600 dark:text-purple-400 hover:underline">Ming Pao</a>
+              {' to lifestyle titles and specialist trade press—is central to any effective media strategy. Our team has cultivated these relationships over years of consistent, credible pitching.'}
             </p>
             <ul className="space-y-4">
               <li className="flex gap-4">

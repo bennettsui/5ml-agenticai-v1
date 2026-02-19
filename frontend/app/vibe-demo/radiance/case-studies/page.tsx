@@ -121,12 +121,6 @@ export default function CaseStudiesPage() {
     ? caseStudies
     : caseStudies.filter(cs => selectedTags.some(tag => cs.tags.includes(tag)));
 
-  const categories = ['All', ...new Set(caseStudies.map(cs => cs.category))];
-
-  const filteredCaseStudies = selectedCategory === 'All'
-    ? caseStudies
-    : caseStudies.filter(cs => cs.category === selectedCategory);
-
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
@@ -149,7 +143,15 @@ export default function CaseStudiesPage() {
               Our Work
             </h1>
             <p className="text-xl text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl">
-              Integrated campaigns across PR, events, and digital that deliver real business results for brands and institutions across Hong Kong and beyond.
+              Integrated campaigns across{' '}
+              <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">PR</Link>
+              {', '}
+              <Link href="/vibe-demo/radiance/services/events" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">events</Link>
+              {', '}
+              <Link href="/vibe-demo/radiance/services/kol-marketing" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">KOL marketing</Link>
+              {' and '}
+              <Link href="/vibe-demo/radiance/services/creative-production" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">creative production</Link>
+              {' that deliver real business results for brands and institutions across Hong Kong and beyond.'}
             </p>
           </div>
         </section>
