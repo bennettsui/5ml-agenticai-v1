@@ -96,16 +96,16 @@ export default function ResearchPage() {
   // Business section state
   const [businessOverview, setBusinessOverview] = useState('');
   const [mission, setMission] = useState('');
-  const [competitors, setCompetitors] = useState<CompetitorEntry[]>(SAMPLE_COMPETITORS);
+  const [competitors, setCompetitors] = useState<CompetitorEntry[]>([]);
   const [expandedCompetitor, setExpandedCompetitor] = useState<string | null>(null);
 
   // Audience section state
   const [positioning, setPositioning] = useState('');
-  const [segments, setSegments] = useState<AudienceSegment[]>(SAMPLE_SEGMENTS);
+  const [segments, setSegments] = useState<AudienceSegment[]>([]);
   const [expandedSegment, setExpandedSegment] = useState<string | null>(null);
 
   // Products section state
-  const [products, setProducts] = useState<ProductEntry[]>(SAMPLE_PRODUCTS);
+  const [products, setProducts] = useState<ProductEntry[]>([]);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
 
   // Loading state for data persistence
@@ -121,38 +121,61 @@ export default function ResearchPage() {
   }, [selectedBrand?.id]);
 
   async function loadResearchData() {
+    if (!selectedBrand?.id) return;
     setLoading(true);
     try {
+      console.log('Loading research for brand:', selectedBrand.id);
+
       // Load business data
-      const bizRes = await fetch(`/api/research/${selectedBrand?.id}/business`);
+      const bizRes = await fetch(`/api/research/${selectedBrand.id}/business`);
       if (bizRes.ok) {
         const { data } = await bizRes.json();
         if (data) {
           setBusinessOverview(data.businessOverview || '');
           setMission(data.mission || '');
+        } else {
+          // No data, clear to empty instead of showing sample
+          setBusinessOverview('');
+          setMission('');
         }
       }
 
       // Load competitors
-      const compRes = await fetch(`/api/research/${selectedBrand?.id}/competitors`);
+      const compRes = await fetch(`/api/research/${selectedBrand.id}/competitors`);
       if (compRes.ok) {
         const { data } = await compRes.json();
-        if (data && data.length > 0) setCompetitors(data);
+        if (data && data.length > 0) {
+          setCompetitors(data);
+        } else {
+          setCompetitors([]); // Clear sample data
+        }
       }
 
       // Load audience data
-      const audRes = await fetch(`/api/research/${selectedBrand?.id}/audience`);
+      const audRes = await fetch(`/api/research/${selectedBrand.id}/audience`);
       if (audRes.ok) {
         const { data } = await audRes.json();
-        if (data?.audience) setPositioning(data.audience.positioning || '');
-        if (data?.segments && data.segments.length > 0) setSegments(data.segments);
+        if (data?.audience) {
+          setPositioning(data.audience.positioning || '');
+        } else {
+          setPositioning('');
+        }
+        if (data?.segments && data.segments.length > 0) {
+          setSegments(data.segments);
+        } else {
+          setSegments([]);
+        }
       }
 
       // Load products
-      const prodRes = await fetch(`/api/research/${selectedBrand?.id}/products`);
+      const prodRes = await fetch(`/api/research/${selectedBrand.id}/products`);
       if (prodRes.ok) {
         const { data } = await prodRes.json();
-        if (data && data.length > 0) setProducts(data);
+        if (data && data.length > 0) {
+          setProducts(data);
+        } else {
+          setProducts([]); // Clear sample data
+        }
       }
     } catch (err) {
       console.error('Error loading research data:', err);
