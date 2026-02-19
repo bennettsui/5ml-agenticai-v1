@@ -209,7 +209,7 @@ export default function AiChatAssistant({ config }: { config: AiChatConfig }) {
   }
 
   return (
-    <div className="w-[380px] flex-shrink-0 border-l border-slate-700/50 bg-slate-900 flex flex-col h-full">
+    <div className="flex-[0.35] min-w-0 border-l border-slate-700/50 bg-slate-900 flex flex-col h-full">
       {/* Header */}
       <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between">
         <div className="flex items-center gap-2">
