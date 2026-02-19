@@ -265,7 +265,7 @@ export default function ZiweiPage() {
             </div>
           </div>
 
-          <Link href="/dashboard/ziwei-rules" className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-medium transition-colors">
+          <Link href="/dashboard?tab=ziwei-rules" className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-medium transition-colors">
             View Rules Database <ChevronRight className="w-4 h-4" />
           </Link>
         </section>
