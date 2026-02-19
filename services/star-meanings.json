@@ -242,11 +242,195 @@
     }
   },
 
+  "secondary_stars": {
+    "天刑": {
+      "element": "陽火",
+      "type": "malevolent",
+      "grade": "乙級",
+      "meaning": "Heavenly Punishment - Law, Discipline, Authority",
+      "positive": ["strong principles", "integrity", "commanding presence", "law enforcement aptitude"],
+      "negative": ["rigidity", "solitary nature", "harsh", "estrangement from six relations"],
+      "suited_careers": ["law", "military", "police", "medicine", "religion"],
+      "palace_effects": {"命宮": "rigid personality, estrangement", "身宮": "illness, vulnerability to injury"},
+      "source": "starziwei.com"
+    },
+    "天巫": {
+      "element": "陰土",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Heavenly Shaman/Witch - Inheritance, Advancement, Mysticism",
+      "positive": ["intelligent", "flexible", "shamanic skill", "good communication"],
+      "negative": ["lacks responsibility", "insufficient determination", "poor momentum"],
+      "suited_careers": ["medicine", "shamanism", "religion", "metaphysics", "education"],
+      "palace_effects": {"命宮": "intelligent, eager to learn", "財帛宮": "benefits from inheritance"},
+      "requires_support": "Cannot function independently; needs auspicious primary stars",
+      "source": "lnka.tw"
+    },
+    "天官": {
+      "element": "陽土",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Heavenly Official - Status, Nobility, Heavenly Blessing",
+      "positive": ["extremely intelligent", "straightforward", "tolerant", "receives natural blessings"],
+      "negative": ["lacks fighting spirit", "lazy", "conservative thinking"],
+      "suited_careers": ["literature", "arts", "academia", "teaching", "government"],
+      "palace_effects": {"命宮": "refined demeanor, high talent", "官祿宮": "prestige and noble status"},
+      "best_combination": "with 天福: natural heavenly fortune, external respect",
+      "source": "lnka.tw"
+    },
+    "天使": {
+      "element": "癸水",
+      "type": "malevolent",
+      "grade": "丙級",
+      "meaning": "Heavenly Messenger - Disease, Injury, Calamity",
+      "positive": ["quick information grasp", "unique thinking", "good perception"],
+      "negative": ["stubborn", "prone to disease", "indicates calamity", "death indicator"],
+      "fixed_palace": "permanently in 疾厄宮 (Illness Palace)",
+      "palace_effects": {"疾厄宮": "permanently fixed, indicates disease/injury tendencies"},
+      "note": "only beneficial when surrounded by many auspicious stars",
+      "source": "lnka.tw"
+    },
+    "天才": {
+      "element": "乙木",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Heavenly Talent - Intelligence, Artistry, Strategy",
+      "positive": ["exceptional intelligence", "quick wit", "creative abilities", "problem-solving"],
+      "negative": ["lack of practical execution", "scattered focus", "procrastination"],
+      "best_palaces": ["命宮", "官祿宮"],
+      "best_combination": "with 天機: creates strategic genius",
+      "suited_careers": ["R&D", "creative industries", "research", "technology", "arts"],
+      "source": "fatebook.net"
+    },
+    "天壽": {
+      "element": "戊土",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Heavenly Longevity - Extended Lifespan, Health, Stability",
+      "positive": ["longevity", "good health", "stable fortune", "minimal major illness"],
+      "negative": "limited negative manifestations",
+      "best_palaces": ["命宮", "身宮", "福德宮"],
+      "best_combination": "with 天梁: longevity + benevolence",
+      "suited_careers": ["healthcare", "wellness", "senior services", "long-term planning"],
+      "source": "doushuxuantan.com"
+    },
+    "恩光": {
+      "element": "丙火",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Grace/Benevolence Light - Divine Assistance, Noble Patronage",
+      "positive": ["cautious and careful", "loves learning", "generous", "receives honor and favor"],
+      "negative": ["soft-hearted", "indecisive", "easily influenced", "lacks conviction"],
+      "best_palaces": ["命宮", "官祿宮"],
+      "best_combination": "with 天魁: enhances power and auspiciousness",
+      "suited_careers": ["education", "public relations", "charity", "HR", "community development"],
+      "source": "lnka.tw"
+    },
+    "天印": {
+      "element": "陽土",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Heavenly Seal/Stamp - Authority, Official Legitimacy",
+      "positive": ["represents official authority", "legitimacy of position"],
+      "negative": ["requires support from main stars"],
+      "best_palaces": ["命宮", "官祿宮"],
+      "suited_careers": ["government", "corporate executive", "law", "education", "leadership"],
+      "source": "ai5429.com"
+    },
+    "台輔": {
+      "element": "陽土",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Platform Assistant - Support, Prestige Enhancement",
+      "positive": ["enhances prestige and fame", "provides honor"],
+      "negative": ["limited power alone"],
+      "best_combination": "with 封誥: prestige pair",
+      "note": "requires strong main star support to manifest benefits",
+      "source": "ai5429.com"
+    },
+    "封誥": {
+      "element": "陰土",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Official Appointment - Imperial Reward, Material Benefits",
+      "positive": ["brings salary increases", "material benefits", "advancement"],
+      "negative": ["limited effectiveness alone"],
+      "best_palaces": ["子、醜、寅、卯、午"],
+      "best_combination": "with 台輔: official prestige pair",
+      "source": "ai5429.com"
+    },
+    "天哭": {
+      "element": "陽火 or 陽金",
+      "type": "malevolent",
+      "grade": "乙級",
+      "meaning": "Heavenly Weeping - Sorrow, Emotional Pain, Tearfulness",
+      "positive": ["with auspicious main stars: acts as cheerleader", "arts/counseling: channels emotional sensitivity"],
+      "negative": ["emotional isolation", "sorrow", "worry", "tearfulness", "poor six-relations"],
+      "palace_effects": {"命宮": "solitary personality, perpetual sorrow", "財帛宮": "financial losses", "福德宮": "chronic pessimism"},
+      "mitigation": ["strengthen with auspicious primary stars", "channel into creative fields", "cultivate philosophical outlook"],
+      "paired_star": "天虛 (opposite star, magnifies effects)",
+      "source": "lnka.tw"
+    },
+    "天虛": {
+      "element": "丁火",
+      "type": "malevolent",
+      "grade": "乙級",
+      "meaning": "Heavenly Void - Emptiness, Impracticality, Depletion",
+      "positive": ["ascetic disposition", "content with simplicity", "philosophical wisdom"],
+      "negative": ["hollow and impractical", "lacks judgment", "deceptive", "physically weak", "impoverished life"],
+      "palace_effects": {"命宮": "impractical person, lifelong poverty", "財帛宮": "wealth never accumulates", "夫妻宮": "extreme difficulty marrying"},
+      "mitigation": ["favor defensive strategies", "spiritual cultivation", "partner with auspicious main stars"],
+      "paired_star": "天哭 (opposite star)",
+      "source": "lnka.tw"
+    },
+    "天傷": {
+      "element": "壬水",
+      "type": "malevolent",
+      "grade": "丙級",
+      "meaning": "Heavenly Wound/Injury - Trauma, Damage, Loss, Setback",
+      "positive": ["high sensitivity in art/psychology", "deep empathy", "creative outlet for pain"],
+      "negative": ["injury and trauma", "sudden misfortunes", "emotional wounds"],
+      "fixed_palace": "permanently in 奴僕宮 (Servants/Friends Palace)",
+      "palace_effects": {"奴僕宮": "heavenly arrangement through servants/friends", "大限/小限": "emotional setbacks, unexpected injury"},
+      "mitigation": ["develop artistic/psychological expression", "strengthen with auspicious main stars"],
+      "classification": "one of 中天17凶星 (17 midheaven harsh stars)",
+      "source": "lnka.tw"
+    },
+    "天空": {
+      "element": "void",
+      "type": "malevolent",
+      "grade": "乙級",
+      "meaning": "Heavenly Void - Void, Emptiness, Anti-Tradition, Forgetfulness",
+      "positive": ["spiritual sensitivity", "artistic/philosophical inclination", "transcendent thinking"],
+      "negative": ["spiritual emptiness", "flightiness", "forgetfulness", "anti-tradition", "things never materialize"],
+      "palace_effects": {"命宮": "scattered personality, poor memory", "財帛宮": "wealth never arrives", "夫妻宮": "marriage difficulty"},
+      "mitigation": ["channel into spiritual/artistic pursuits", "develop mental discipline"],
+      "paired_star": "地劫 (when same palace=SEVERE)",
+      "part_of": "四大皆空 (four great voids)",
+      "source": "ziwei-yun.com"
+    },
+    "地空": {
+      "element": "陰火",
+      "type": "malevolent",
+      "grade": "乙級",
+      "meaning": "Earth Void - Things Never Arrive, Void, Wandering",
+      "positive": ["reduces material attachments", "spiritual freedom", "non-conventional thinking"],
+      "negative": ["disasters and hardships", "doesn't accumulate wealth", "wandering nature", "laboriousness"],
+      "palace_effects": {"財帛宮": "wealth never accumulates", "感情": "emotional instability", "命宮": "wandering personality"},
+      "mitigation": ["shift focus to non-material goals", "spiritual practice", "accept simplicity"],
+      "paired_star": "地劫 (when pairing=compounds effects)",
+      "part_of": "四大皆空 (four great voids)",
+      "source": "lnka.tw"
+    }
+  },
+
   "notes": {
-    "total_documented": 58,
-    "remaining_to_research": 46,
-    "commonly_referenced_minor_stars": ["龍池 (Longchi)", "鳳閣 (Phoenix Pavilion)", "台輔 (Taifu)", "天刑 (Tianxing)", "天使 (Tianshi)", "天姬 (Tianji)"],
-    "data_completeness": "Main 14 stars, 8 auxiliary benefics, 6 malevolents, 12 longevity stars, 4 transformations, 8 romance stars, 6 auspicious auxiliary stars documented with sources.",
-    "next_research_phase": "Minor/specialty stars and palace-specific combinations"
+    "total_documented": 73,
+    "remaining_to_research": 31,
+    "documented_categories": ["14 main stars", "8 auxiliary benefics", "6 malevolents", "12 longevity stars", "8 romance stars", "7 auspicious auxiliary", "15 secondary/minor stars"],
+    "data_completeness": "Comprehensive coverage of main tiers (甲級) and many secondary tiers (乙級、丙級); remaining stars are specialized/low-frequency stars",
+    "next_research_phase": "龍池, 鳳閣, 華蓋, 陰煞, 天梟, 正曜, 月照, and other 2nd-3rd tier stars",
+    "integration_ready": true,
+    "api_ready": false
   }
 }

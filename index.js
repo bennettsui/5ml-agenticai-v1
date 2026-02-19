@@ -3,6 +3,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
+const zwEngine = require('./services/ziwei-chart-engine');
 require('dotenv').config();
 
 const app = express();
@@ -255,6 +256,122 @@ app.get('/api/health/services/:id', async (req, res) => {
   const result = await testService(req.params.id);
   if (!result) return res.status(404).json({ error: 'Unknown service' });
   res.json({ timestamp: new Date().toISOString(), service: result });
+});
+
+// ==========================================
+// Ziwei Doushu Star Meanings API
+// ==========================================
+
+// Get entire star meanings database
+app.get('/api/ziwei/database', (req, res) => {
+  try {
+    const db = zwEngine.getStarDatabase();
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      metadata: db.metadata,
+      stats: {
+        main_stars: Object.keys(db.main_stars || {}).length,
+        auxiliary_stars: Object.keys(db.auxiliary_stars || {}).length,
+        malevolent_stars: Object.keys(db.malevolent_stars || {}).length,
+        longevity_stars: Object.keys(db.longevity_stars || {}).length,
+        romance_stars: Object.keys(db.romance_stars || {}).length,
+        auspicious_auxiliary: Object.keys(db.auspicious_auxiliary_stars || {}).length,
+        secondary_stars: Object.keys(db.secondary_stars || {}).length,
+        total: Object.keys(db.main_stars || {}).length +
+               Object.keys(db.auxiliary_stars || {}).length +
+               Object.keys(db.malevolent_stars || {}).length +
+               Object.keys(db.longevity_stars || {}).length +
+               Object.keys(db.romance_stars || {}).length +
+               Object.keys(db.auspicious_auxiliary_stars || {}).length +
+               Object.keys(db.secondary_stars || {}).length
+      },
+      data: db
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get single star by name
+app.get('/api/ziwei/star/:name', (req, res) => {
+  try {
+    const star = zwEngine.getStarMeaning(req.params.name);
+    if (!star) {
+      return res.status(404).json({ success: false, error: `Star '${req.params.name}' not found` });
+    }
+    res.json({ success: true, star });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get stars by category
+app.get('/api/ziwei/category/:category', (req, res) => {
+  try {
+    const stars = zwEngine.getStarsByCategory(req.params.category);
+    const count = Object.keys(stars).length;
+    res.json({
+      success: true,
+      category: req.params.category,
+      count,
+      stars
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get stars by five element
+app.get('/api/ziwei/element/:element', (req, res) => {
+  try {
+    const stars = zwEngine.getStarsByElement(req.params.element);
+    const count = Object.keys(stars).length;
+    res.json({
+      success: true,
+      element: req.params.element,
+      count,
+      stars
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get stars by type
+app.get('/api/ziwei/type/:type', (req, res) => {
+  try {
+    const stars = zwEngine.getStarsByType(req.params.type);
+    const count = Object.keys(stars).length;
+    res.json({
+      success: true,
+      type: req.params.type,
+      count,
+      stars
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Search stars by keyword
+app.get('/api/ziwei/search', (req, res) => {
+  try {
+    const keyword = req.query.q;
+    if (!keyword) {
+      return res.status(400).json({ success: false, error: 'Query parameter "q" required' });
+    }
+    const results = zwEngine.getStarsByKeyword(keyword);
+    const count = Object.keys(results).length;
+    res.json({
+      success: true,
+      keyword,
+      count,
+      results
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ==========================================
