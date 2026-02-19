@@ -2017,12 +2017,18 @@ app.post('/api/social/chat', async (req, res) => {
 When asked about brand research, competitive analysis, or audience insights, provide structured, actionable insights.
 ${brand_name ? `Brand: ${brand_name}` : ''}
 
-Format your response clearly with sections for:
-- Business Overview
-- Mission/Vision
-- Competitors Analysis
-- Audience Segments
-- Product/Service Overview
+Return ONLY valid JSON with this exact structure:
+{
+  "businessOverview": "Brand positioning, market fit, and unique value proposition",
+  "mission": "Company mission and core values",
+  "competitors": [
+    { "name": "Competitor Name", "strengths": "What they do well", "weaknesses": "Where they fall short", "threat_level": "High|Medium|Low" }
+  ],
+  "audienceSegments": [
+    { "name": "Segment Name", "size": "Market size estimate", "pain_points": "Key problems", "preferences": "What they value" }
+  ],
+  "products": "Overview of key products/services and market positioning"
+}
 
 Be specific, data-driven, and actionable.
 ${ragContext ? `\n${ragContext}` : ''}`;
@@ -2036,8 +2042,56 @@ ${ragContext ? `\n${ragContext}` : ''}`;
             )
             : await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
 
+          const responseText = result.content || result.text;
+          let researchData = null;
+
+          // Try to parse JSON from response
+          try {
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              researchData = JSON.parse(jsonMatch[0]);
+            }
+          } catch { }
+
+          // If parsed successfully, persist to database
+          if (researchData) {
+            try {
+              // Save business overview
+              if (researchData.businessOverview || researchData.mission) {
+                await saveResearchBusiness(brand_id, {
+                  business_overview: researchData.businessOverview || '',
+                  mission: researchData.mission || ''
+                });
+              }
+
+              // Save competitors
+              if (researchData.competitors && researchData.competitors.length > 0) {
+                await saveResearchCompetitors(brand_id, researchData.competitors);
+              }
+
+              // Save audience and segments
+              if (researchData.audienceSegments) {
+                const audienceResult = await saveResearchAudience(brand_id, {
+                  positioning: researchData.audienceSegments[0]?.preferences || ''
+                });
+                if (researchData.audienceSegments.length > 0) {
+                  await saveResearchSegments(audienceResult.audience_id, researchData.audienceSegments);
+                }
+              }
+
+              // Save products
+              if (researchData.products) {
+                await saveResearchProducts(brand_id, researchData.products);
+              }
+            } catch (persistErr) {
+              console.error('Error persisting research data:', persistErr);
+              // Don't fail the response if persistence fails - still return the data
+            }
+          }
+
           return res.json({
-            message: result.content || result.text,
+            message: responseText,
+            data: researchData || null,
             model: result.model || 'research-analyzer',
             node: 'research_analyzer',
             status: 'COMPLETED'
@@ -2780,7 +2834,7 @@ app.post('/api/social/calendar/:brandId', async (req, res) => {
   try {
     const { brandId } = req.params;
     const { posts, projectId } = req.body;
-    await saveSocialCalendar(brandId, posts.map((p: Record<string, unknown>) => ({ ...p, projectId })));
+    await saveSocialCalendar(brandId, posts.map(p => ({ ...p, projectId })));
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
