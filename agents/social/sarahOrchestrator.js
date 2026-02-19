@@ -56,6 +56,27 @@ You internally simulate these roles — never expose them explicitly in output:
 7. Knowledge Role — fetches and writes brand guidelines, specs, trends, past results
 
 ==================================================
+II.A. SELECTIVE ROLE ACTIVATION (CHAT EXPERIENCE)
+==================================================
+IMPORTANT: You run inside a chat-like experience where you receive incremental instructions.
+
+- You do NOT have to activate or simulate all internal roles on every turn.
+- You should only activate the minimal set of roles needed for:
+  - The current user instruction, AND
+  - The current graph node.
+- You MUST respect the human user's explicit instructions about which part to work on:
+  - If the user asks only about strategy, focus on Strategy (and Knowledge) and do NOT automatically generate content calendars or media plans.
+  - If the user asks only for post copy, focus on Content (and Knowledge) and reuse any existing strategy from state instead of re-planning everything.
+  - If the user asks for "just improve this calendar" or "only critique this media plan", stay in reflection mode for that artefact.
+
+You are still responsible for:
+- Ensuring coherence with existing artefacts in state
+- Using the knowledge base when needed
+- Updating state consistently
+But you should avoid doing unnecessary steps or calling every internal role at once.
+Act incrementally and follow the user's priorities.
+
+==================================================
 III. MODES: PRODUCTION vs REFLECTION
 ==================================================
 A) PRODUCTION MODE — called by *_generate nodes
@@ -138,11 +159,195 @@ function knowledgeQuery(domain, query, brandContext = '') {
   return null;
 }
 
+// ── Node-specific objectives (from detailed UX specs) ──────────────────────
+
+const NODE_OBJECTIVES = {
+  strategy_generate: `
+### Objectives
+- Focus on producing an initial social & media strategy draft (\`strategy_v1\`).
+- Use the Strategy Role and Knowledge Role internally.
+
+### Concretely, you MUST:
+1. **Read from state**: user_input, brand_context, existing kb_summaries.
+2. **If missing knowledge**: Call knowledge_query for brand guidelines, past campaigns, benchmarks.
+3. **Produce strategy_v1** that includes at minimum:
+   - Objectives and target audiences (explicitly stated or inferred).
+   - Recommended channel mix (platforms and role of each).
+   - 3–6 clear content pillars.
+   - Posting cadence per platform.
+   - High-level media approach: organic vs paid, rough priorities.
+   - Key KPIs to track.
+4. **Write into**: artefacts.strategy_v1 (as structured, copy-paste-ready text).
+5. **Set**: status = "DRAFT", next_step = "strategy_reflect".
+
+### Output format:
+- Briefly summarize the strategic idea (human-readable).
+- Assume the detailed text also lives in artefacts.strategy_v1.
+`,
+
+  strategy_reflect: `
+### Objectives
+- Critically evaluate strategy_v1.
+- Produce a concise critique and improved final version (strategy_final), or block.
+
+### Concretely, you MUST:
+1. **Read from state**: artefacts.strategy_v1, kb_summaries, brand_context.
+2. **Evaluate against**:
+   - Clarity of objectives & target audiences.
+   - Coherence of channel mix & content pillars.
+   - Brand alignment & differentiation.
+   - Feasibility (resources, timeline, budget).
+   - HK / target market relevance.
+3. **Score 0–10 and critique**: 3–7 strengths, 3–7 weaknesses, improvement suggestions.
+4. **Store**: artefacts.strategy_critique.
+5. **Decide**:
+   - Score ≥ 8: Polish and save as artefacts.strategy_final. Set status = "APPROVED" or "UNDER_REVIEW". next_step = "content_generate".
+   - Score < 8: Use critique as instructions to rewrite. Save improved version as artefacts.strategy_final. Set status = "REVISE_NEEDED".
+   - Severe issues: status = "BLOCKED", next_step = "done". Explain why human intervention required.
+
+### Output format:
+- Provide score & human-readable critique summary.
+- Present final strategy in clean, copy-paste-ready format.
+`,
+
+  content_generate: `
+### Objectives
+- Produce an initial content calendar (content_calendar_v1) aligned with strategy.
+
+### Concretely, you MUST:
+1. **Read from state**: artefacts.strategy_final, brand_context, kb_summaries (brand voice, platform specs, best-performing posts).
+2. **If missing**: Query knowledge base for brand voice, platform guidelines, historical performance.
+3. **Produce content_calendar_v1** that includes:
+   - Time frame covered (e.g. 2 weeks, 1 month).
+   - Per platform: posting frequency, key themes per week.
+   - Table layout: Date, Platform, Pillar, Post idea/hook, CTA, Language (Cantonese/English/bilingual).
+   - At least a few fully written example posts per key pillar.
+4. **Write into**: artefacts.content_calendar_v1.
+5. **Set**: status = "DRAFT", next_step = "content_reflect".
+
+### Output format:
+- Show calendar in clear, structured way (table or well-marked list).
+- Make it easy to copy into a spreadsheet or content tool.
+`,
+
+  content_reflect: `
+### Objectives
+- Critically evaluate content_calendar_v1.
+- Produce critique and improved final version (content_calendar_final), or block.
+
+### Concretely, you MUST:
+1. **Read from state**: artefacts.content_calendar_v1, artefacts.strategy_final, kb_summaries (brand voice, platform specs, risk rules).
+2. **Evaluate against**:
+   - Brand voice alignment & tonal consistency.
+   - Hook & CTA clarity and strength.
+   - Platform fit & technical constraints.
+   - Pillar coverage & balance.
+   - Cultural & legal safety (Hong Kong context).
+3. **Score 0–10 and critique**: 3–7 strengths, 3–7 weaknesses, improvements.
+4. **Store**: artefacts.content_critique.
+5. **Decide**:
+   - Score ≥ 8: Apply improvements, save as artefacts.content_calendar_final. status = "APPROVED". next_step = "media_generate" (or done).
+   - Score < 8: Rewrite using critique. Save as artefacts.content_calendar_final. status = "REVISE_NEEDED".
+   - Serious safety issues: status = "BLOCKED". Explain why.
+
+### Output format:
+- Score & key critique points.
+- Final improved calendar in clear table or structured list.
+`,
+
+  media_generate: `
+### Objectives
+- Propose initial paid media plan (media_plan_v1) supporting strategy & content.
+
+### Concretely, you MUST:
+1. **Read from state**: artefacts.strategy_final, artefacts.content_calendar_final, brand_context, kb benchmarks.
+2. **If missing**: Query KB for platform ad best practices, HK benchmarks (CTR, CPM, CPA), brand constraints.
+3. **Produce media_plan_v1** that includes:
+   - Objectives & KPIs per platform / campaign.
+   - Campaign structure: campaigns → ad sets → ad concepts (high-level).
+   - Rough budget split (platform, funnel stage).
+   - Target audiences (interests, lookalikes, remarketing, conceptual level).
+   - Creative/copy angles aligned with content calendar.
+4. **Write into**: artefacts.media_plan_v1.
+5. **Set**: status = "DRAFT", next_step = "media_reflect".
+
+### Output format:
+- Structured way: sections or simple tables.
+- Highlight main levers (budget, audiences, creatives).
+`,
+
+  media_reflect: `
+### Objectives
+- Critically evaluate media_plan_v1.
+- Produce critique and improved final version (media_plan_final), or block.
+
+### Concretely, you MUST:
+1. **Read from state**: artefacts.media_plan_v1, artefacts.strategy_final, kb benchmarks.
+2. **Evaluate against**:
+   - Logical campaign / ad set structure.
+   - Budget allocation vs objectives & KPIs.
+   - Audience definitions (too broad/narrow/misaligned).
+   - Synergy with organic content.
+   - Risk & feasibility.
+3. **Score 0–10 and critique**: strengths, weaknesses, improvements.
+4. **Store**: artefacts.media_critique.
+5. **Decide**:
+   - Score ≥ 8: Refine, save as artefacts.media_plan_final. status = "APPROVED". next_step = "analytics_generate" (or done).
+   - Score < 8: Rewrite, save as artefacts.media_plan_final. status = "REVISE_NEEDED".
+   - Severe issues: status = "BLOCKED".
+
+### Output format:
+- Score & key critique.
+- Final media plan clearly presented.
+`,
+
+  analytics_generate: `
+### Objectives
+- Propose how to measure success and what to watch.
+
+### Concretely, you MUST:
+1. **Read from state**: artefacts.strategy_final, content_calendar_final, media_plan_final.
+2. **Propose**:
+   - Primary KPIs per platform & funnel stage.
+   - Key secondary metrics to monitor.
+   - Reporting cadence (weekly / monthly).
+   - "If X happens, then do Y" optimization heuristics.
+3. **Save**: artefacts.analytics_report_final (structured summary).
+4. **Set**: status = "APPROVED", next_step = "done".
+
+### Output format:
+- Clean bullet-point summary + small table if helpful.
+`,
+
+  done: `
+### Objectives
+- Provide concise, human-friendly wrap-up of all artefacts and next steps.
+
+### Concretely, you MUST:
+1. **Read from state**: all artefacts with *_final versions, status.
+2. **Summarize for human user**:
+   - What has been produced (strategy, calendar, media plan, analytics).
+   - Current status (APPROVED, REVISE_NEEDED, or BLOCKED).
+   - Key risks, assumptions, items needing human input.
+3. **If BLOCKED**: Clearly explain reasons and propose unblocking questions.
+
+### Output format:
+- Short & structured (3–6 bullets per section).
+- Make it obvious what they can copy-paste into decks.
+- Make it obvious where they need to make choices.
+`,
+};
+
 // ── State context builder (token budget: ~1 200 tokens) ───────────────────────
 
 function buildStateContext(state, nodeName) {
   const a = state.artefacts;
   let ctx = '';
+
+  // Node-specific objectives (brief version to stay within token budget)
+  if (NODE_OBJECTIVES[nodeName]) {
+    ctx += `**Current logical step objectives**:\n${NODE_OBJECTIVES[nodeName].slice(0, 600)}\n\n`;
+  }
 
   // Brand + project line
   if (state.brand_context) {
@@ -240,7 +445,24 @@ async function nodeStrategyGenerate(state) {
     state.kb_summaries.push({ domain: 'brand_guidelines', summary: kbResult.slice(0, 400) });
   }
 
-  const prompt = `User brief: "${state.user_input}"\n\nProduce **strategy_v1**: a concise social strategy covering platform mix, 3–5 content pillars, KPIs, posting cadence, and brand voice recommendation. Format as a structured plan with headers and bullets. End with: next_step suggestion and status.`;
+  const prompt = `
+User brief: **"${state.user_input}"**
+
+Based on the state context and objectives above, produce **strategy_v1**.
+
+This must be a concise but complete social media strategy that includes:
+- Clear objectives and primary target audience segments
+- Recommended platform mix (which platforms, why, and role of each)
+- 3–6 distinct content pillars with brief explanation of each
+- Posting cadence recommendations per platform
+- High-level media approach: organic + paid split, key paid priorities
+- Primary and secondary KPIs to track
+
+Format it as a structured, copy-paste-ready document with clear headers and bullet points.
+Store the full detailed text in your response — assume it will be saved as \`artefacts.strategy_v1\`.
+
+After the strategy text, briefly note any assumptions made and suggest the next step.
+`;
 
   const output = await callSarah(state, 'strategy_generate', prompt);
 
@@ -253,12 +475,29 @@ async function nodeStrategyGenerate(state) {
 }
 
 async function nodeStrategyReflect(state) {
-  const prompt = `Review **strategy_v1** in the state context.\n\nEvaluate against: clarity of objectives & audiences, channel mix coherence, brand alignment, feasibility, HK/APAC relevance.\n\nScore 0–10. List concrete issues. If score ≥ 8: produce strategy_final with minor polish. If score < 8: produce strategy_v2 as strategy_final. If severe issues: set status BLOCKED.\n\nReturn: score, critique bullets, and strategy_final content.`;
+  const prompt = `
+You are now critiquing **strategy_v1** (shown in state context above).
+
+Carefully evaluate it against these criteria:
+- Clarity: Are objectives and target audiences clearly defined?
+- Coherence: Does the channel mix logically support the content pillars?
+- Brand alignment: Does it feel consistent with the brand voice and positioning?
+- Feasibility: Is it realistic given typical resource constraints?
+- Relevance: Does it address Hong Kong / APAC market context where appropriate?
+
+**Output exactly this format:**
+1. SCORE (0–10)
+2. CRITIQUE (3–7 key strengths, 3–7 concrete weaknesses / improvements)
+3. DECISION (if score ≥ 8: minor polish → FINAL; if < 8: rewrite as FINAL; if severe brand/legal issues: BLOCKED)
+4. **strategy_final** (the polished or rewritten strategy text, ready to copy-paste)
+
+Set status based on your decision and next_step appropriately.
+`;
 
   const output = await callSarah(state, 'strategy_reflect', prompt);
 
-  state.artefacts.strategy_critique = output;
-  state.artefacts.strategy_final = output; // Sarah includes the final in her output
+  state.artefacts.strategy_critique = output.split('**strategy_final**')[0] || output;
+  state.artefacts.strategy_final = output;
   state.status = 'UNDER_REVIEW';
   state.next_step = 'content_generate';
   state.history.push({ step: 'strategy_reflect', note: 'strategy critiqued and finalised', timestamp: new Date().toISOString() });
@@ -272,7 +511,30 @@ async function nodeContentGenerate(state) {
     state.kb_summaries.push({ domain: 'content_formats', summary: kbResult.slice(0, 400) });
   }
 
-  const prompt = `Based on strategy_final (in state context) and brand guidelines.\n\nProduce **content_calendar_v1**: a 4-week content calendar.\n- Weekly grid overview (weeks × days): platform, format, pillar, short title per cell\n- Master table rows: Date, Platform, Format, Pillar, Title, Objective, Key message, Copy hook, Hashtags\n\nInclude 2–3 fully expanded content cards (hook, scenes/copy, CTA, caption).\nUser brief: "${state.user_input}"`;
+  const prompt = `
+Based on **strategy_final** (in state context) and brand guidelines, produce **content_calendar_v1**.
+
+This must include:
+
+**1. Weekly Grid Overview** (next 2–4 weeks)
+- Rows = weeks, Columns = days (Mon–Sun)
+- Each cell: [Platform] – [Format] – [Pillar] – [Brief title]
+- Example: "IG – Reel – Educate – Why AI saves 10x time"
+
+**2. Master Calendar Table**
+Columns: Date | Day | Platform | Format | Content Pillar | Objective | Key Message | Copy Hook | Language | Visual Type | Notes
+- One row per post
+- Include 10–15 posts across platforms and pillars
+
+**3. Detailed Content Cards** (2–3 examples, fully written)
+For each card, show:
+- Reel format: Hook (1–2 options, max 15 words), 3 key scenes/talking points, on-screen text per scene, CTA, Caption (hook + 2–4 lines + CTA + 5–10 hashtags)
+- Static/Carousel: Slide plan, Caption with hook + paragraph/bullets + CTA + hashtags
+
+**Language**: Bilingual (Cantonese/Traditional Chinese + English support) where appropriate for HK audience.
+
+Format as a clean, copy-paste-ready document.
+`;
 
   const output = await callSarah(state, 'content_generate', prompt);
 
@@ -285,11 +547,29 @@ async function nodeContentGenerate(state) {
 }
 
 async function nodeContentReflect(state) {
-  const prompt = `Review **content_calendar_v1** in state context.\n\nEvaluate: brand voice, hook strength, platform fit (IG/TikTok/FB format rules), bilingual quality (Cantonese/EN), cultural/legal risk.\n\nScore 0–10. List issues. Produce content_calendar_final (polished or v2 if score < 8). Flag any BLOCKED risks.`;
+  const prompt = `
+You are now critiquing **content_calendar_v1** (shown in state context above).
+
+Carefully evaluate it against these criteria:
+- Brand voice: Is the tone and language style consistent with brand guidelines?
+- Hook strength: Are the opening lines compelling and platform-native (stopping scrollers)?
+- Platform fit: Do formats and lengths match platform specs (IG Reel 9:16 / 15–30s, TikTok, etc.)?
+- Bilingual quality: Is Cantonese/Traditional Chinese natural? Are English translations proper?
+- Cultural safety: Any cultural sensitivities, legal risks, or Hong Kong market misalignment?
+- Pillar balance: Are all content pillars represented fairly?
+
+**Output exactly this format:**
+1. SCORE (0–10)
+2. CRITIQUE (3–7 strengths, 3–7 weaknesses / improvements, with concrete examples)
+3. DECISION (if ≥ 8: polish → FINAL; if < 8: rewrite as FINAL; if BLOCKED: explain why)
+4. **content_calendar_final** (the polished or improved calendar, fully written, copy-paste ready)
+
+Set status and next_step accordingly.
+`;
 
   const output = await callSarah(state, 'content_reflect', prompt);
 
-  state.artefacts.content_critique = output;
+  state.artefacts.content_critique = output.split('**content_calendar_final**')[0] || output;
   state.artefacts.content_calendar_final = output;
   state.status = 'UNDER_REVIEW';
   state.next_step = 'media_generate';
