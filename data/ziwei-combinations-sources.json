@@ -1,0 +1,163 @@
+{
+  "title": "Ziwei Doushu Star Combinations (組合) - Sources Database",
+  "date_updated": "2026-02-19",
+  "language": "zh-Hant",
+  "sources": {
+    "wang_tingzhi": {
+      "name": "王亭之 (Wang Tingzhi, 1935-2024)",
+      "description": "Hong Kong Buddhist scholar and expert in Zi Wei Dou Shu (Zhongzhou School). Major works include '談星系列' (Star Talk Series) and '紫微斗數講義' (Zi Wei Dou Shu Lecture Notes).",
+      "school": "zhongzhou",
+      "key_books": [
+        "紫微斗數講義(一)之十四正曜",
+        "紫微斗數講義(二)之星曜的特性",
+        "紫微斗數古學拾零",
+        "談星系列叢書"
+      ],
+      "philosophy": "Opposition to fatalism. Belief that Zi Wei Dou Shu must adapt and change over time, not just recite formulas.",
+      "sources": [
+        "https://zh.wikipedia.org/zh-hk/%E7%8E%8B%E4%BA%AD%E4%B9%8B",
+        "https://book.douban.com/subject/3060796/"
+      ]
+    },
+    "ancient_ziwei": {
+      "name": "古傳紫微斗數 (Ancient Ziwei Doushu Tradition)",
+      "description": "Classical interpretation methods passed down through generations of Ziwei scholars.",
+      "school": "various",
+      "references": [
+        "Traditional palace-star mapping",
+        "Classical four transformations (四化) theory",
+        "Ancient pattern recognition (格局論)"
+      ]
+    },
+    "ziwei_cloud": {
+      "name": "紫微雲科技 (Ziwei-Yun Technology Inc.)",
+      "description": "Modern Ziwei Doushu education platform with detailed star explanations.",
+      "website": "https://ziwei-yun.com/",
+      "content": "Comprehensive textbook on individual stars including Tiankong and Dijie combinations",
+      "source": "https://ziwei-yun.com/textbook/star-tiankong-and-dijie/"
+    },
+    "xinglin_academy": {
+      "name": "星林學苑 (Xinglin Academy)",
+      "description": "Modern Ziwei Doushu research and education academy",
+      "website": "https://www.108s.tw/",
+      "key_articles": [
+        "四化星組合 (Four Transformations Combinations)",
+        "羊駝大忌格 (Sheep-Camel Taboo Pattern)",
+        "空劫夾命格 (Void-Robbery Sandwich Life)"
+      ],
+      "sources": [
+        "https://www.108s.tw/article/info/85",
+        "https://www.108s.tw/article/info/248",
+        "https://www.108s.tw/article/info/245"
+      ]
+    },
+    "keji_ziwei": {
+      "name": "科技紫微網 (Technology Ziwei Network)",
+      "description": "Comprehensive Ziwei Doushu education and reference website",
+      "website": "https://news.click108.com.tw/",
+      "content": "Detailed articles on four auspiciousness stars and transformations",
+      "source": "https://news.click108.com.tw/2022/01/ziwei/7163/"
+    }
+  },
+  "combinations_references": {
+    "yang_tuo_jia_ji": {
+      "name": "羊駝夾忌",
+      "english": "Sheep-Camel Sandwich with Taboo",
+      "sources": [
+        "從星開始紫微研究苑 - https://www.108s.tw/article/info/248",
+        "古傳紫微斗數傳統解釋"
+      ],
+      "key_points": [
+        "Only manifests when Yang Ren and Tuo Luo sandwich Taboo star or weak palace",
+        "Personality trait: 'Rather betray the world than be betrayed' becomes more extreme during transit periods",
+        "Severity increases during unfavorable transit or annual chart periods"
+      ]
+    },
+    "lu_quan_ke_ji": {
+      "name": "祿權科忌",
+      "english": "Four Transformations Complete Pattern",
+      "sources": [
+        "星林學苑 - https://www.108s.tw/article/info/85",
+        "科技紫微網 - https://news.click108.com.tw/2022/01/ziwei/7163/",
+        "王亭之談星系列"
+      ],
+      "key_definitions": {
+        "lu_hua": "化祿 - Wealth transformation, surplus, giving",
+        "quan_hua": "化權 - Power transformation, control, authority",
+        "ke_hua": "化科 - Talent transformation, academic achievement, reputation",
+        "ji_hua": "化忌 - Taboo transformation, deficiency, loss"
+      },
+      "key_points": [
+        "Lu-Quan together suitable for business and financial management",
+        "Lu-Ke indicates reputation and wealth combined",
+        "Quan-Ke represents easily gained reputation for technical professionals",
+        "All four transformations indicate complete destiny pattern"
+      ]
+    },
+    "kong_jie_jia_ming": {
+      "name": "空劫夾命",
+      "english": "Void and Robbery Stars Sandwich Life Palace",
+      "sources": [
+        "紫微雲科技 - https://ziwei-yun.com/textbook/star-tiankong-and-dijie/",
+        "星林學苑 - https://www.108s.tw/article/info/245",
+        "古傳紫微斗數傳統解釋"
+      ],
+      "key_points": [
+        "Only occurs when Life Palace is in Si (巳) or Hai (亥) position",
+        "If not in same palace but two separate palaces, each star's power is only half as strong",
+        "The sandwiched palace is considered a weakened or broken palace",
+        "Tiankong and Dijie create four different structures: same palace, sandwich, arch, opposition",
+        "Structure creates wave/volatility and setback characteristics"
+      ]
+    },
+    "hong_luan_tian_xi": {
+      "name": "紅鸞天喜",
+      "english": "Red Phoenix and Heaven Joy Love Pattern",
+      "sources": [
+        "古傳紫微斗數傳統解釋",
+        "Modern Ziwei education platforms"
+      ],
+      "key_points": [
+        "Both stars appear together in Life or Marriage Palace",
+        "Indicates strong romantic luck and emotional richness",
+        "More favorable when in Life or Marriage Palace",
+        "Relates to attraction and relationship harmony"
+      ]
+    },
+    "tian_liang_zhao_yuan": {
+      "name": "天梁朝垣",
+      "english": "Tian Liang Facing Court Pattern",
+      "sources": [
+        "王亭之談星系列",
+        "古傳紫微斗數傳統解釋"
+      ],
+      "key_points": [
+        "Tian Liang star with aspect to Career or Body Palace",
+        "Indicates nobility (貴氣) and good interpersonal relationships",
+        "Facing Court formation especially indicates reputation",
+        "Character is valued by others, easy to receive help"
+      ]
+    },
+    "san_fang_hui_zhao": {
+      "name": "三方會照",
+      "english": "Three-Way Convergence/Aspection",
+      "sources": [
+        "古傳紫微斗數傳統解釋",
+        "Modern palace interpretation theory"
+      ],
+      "key_points": [
+        "Main star appears in three key palaces: Life, Wealth, Career (命財官)",
+        "Power and influence concentrate in these three directions",
+        "Indicates outstanding achievement in related fields",
+        "If auspicious star: great fortune; if inauspicious: requires caution"
+      ]
+    }
+  },
+  "notes": {
+    "zhongzhou_school": "The Zhongzhou School (中州派) is known for its modern, practical approach to Ziwei interpretation, emphasizing that destiny can be changed through proper understanding and action.",
+    "four_transformations": "Four transformations (四化) are unique to Ziwei Doushu, representing the twelve earthly branches' transformative properties based on the native's birth data.",
+    "palace_structures": "Star combinations are analyzed through palace structures (格局) which determine their auspiciousness and manifestation patterns."
+  },
+  "validation_status": "Sourced from publicly available academic and educational materials. Further validation recommended for classical text interpretations.",
+  "last_reviewed": "2026-02-19"
+}

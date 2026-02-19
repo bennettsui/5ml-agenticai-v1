@@ -1,0 +1,530 @@
+{
+  "title": "Ziwei Doushu - Enhanced Curriculum with Multi-Source Comparisons",
+  "date_updated": "2026-02-19",
+  "description": "Comprehensive curriculum with detailed information from 3 authoritative sources for each level",
+  "primary_sources": {
+    "source1": {
+      "name": "王亭之 (Wang Tingzhi) - Zhongzhou School",
+      "expertise": "Modern interpretations of traditional Ziwei Doushu",
+      "approach": "Philosophical, adapting ancient texts to modern contexts",
+      "key_books": [
+        "紫微斗數講義(一)之十四正曜",
+        "紫微斗數講義(二)之星曜的特性",
+        "紫微斗數古學拾零"
+      ],
+      "philosophy": "Destiny can be changed through understanding; not purely fatalistic"
+    },
+    "source2": {
+      "name": "科技紫微網 (Keji Ziwei) - Zhang Sheng-shu",
+      "expertise": "Scientific, data-driven approach to Ziwei",
+      "approach": "Modernized, practical, narrative storytelling",
+      "platform": "https://www.click108.com.tw/",
+      "philosophy": "Making fortune-telling scientifically rigorous and practically applicable"
+    },
+    "source3": {
+      "name": "星林學苑 (Xinglin Academy) - Contemporary Research",
+      "expertise": "Step-by-step systematic teaching with rich examples",
+      "approach": "Academic, structured, case-study based",
+      "platform": "https://www.108s.tw/",
+      "philosophy": "Comprehensive learning through systematic case analysis"
+    }
+  },
+  "level_1_foundations": {
+    "name": "Level 1: Foundations (基礎)",
+    "duration": "4-6 weeks",
+    "total_hours": 20,
+    "description": "Master the foundational metaphysical concepts required for all Chinese destiny systems",
+    "core_topics": [
+      {
+        "topic": "陰陽理論 (Yin-Yang Theory)",
+        "importance": "CRITICAL - Foundation of all Chinese metaphysics",
+        "sources": {
+          "wang_tingzhi": {
+            "approach": "Philosophical interpretation - balance principle, not just binary",
+            "key_concept": "陰陽是相對的，非絕對的二元對立",
+            "application": "Understanding how stars interact based on yin-yang nature",
+            "reference": "逢甲大學經濟學系研究資料"
+          },
+          "keji_ziwei": {
+            "approach": "Practical-scientific model",
+            "key_concept": "陰陽的五行屬性對應",
+            "application": "Categorizing all 12 palaces into yin-yang pairs",
+            "reference": "科技紫微網基礎教學"
+          },
+          "xinglin_academy": {
+            "approach": "Systematic foundation",
+            "key_concept": "陰陽的動靜、升降、變化特性",
+            "application": "Understanding palace movements and star transformations",
+            "reference": "星林學苑基礎系列"
+          }
+        },
+        "key_relationships": [
+          "陰陽相對 (Relative opposition)",
+          "陰陽互根 (Mutual interdependence)",
+          "陰陽轉化 (Mutual transformation)",
+          "陰陽平衡 (Balance seeking)"
+        ],
+        "learning_hours": 2,
+        "practice": "Identify yin-yang nature of all 12 earthly branches"
+      },
+      {
+        "topic": "五行論 (Five Elements System)",
+        "importance": "CRITICAL - Core classification system",
+        "sources": {
+          "wang_tingzhi": {
+            "approach": "Elemental energy transformation",
+            "key_concept": "五行生剋乘侮的完整關係",
+            "application": "How stars of different elements affect each other",
+            "special": "Considers not just generation/clash but also advantage/disadvantage"
+          },
+          "keji_ziwei": {
+            "approach": "Classification and pattern matching",
+            "key_concept": "十天干的五行屬性決定四化表",
+            "application": "Determining four transformation tables for any birth data",
+            "special": "Emphasis on predictability through elemental systems"
+          },
+          "xinglin_academy": {
+            "approach": "Systematic element-palace correspondence",
+            "key_concept": "五行局的定法與應用",
+            "application": "Understanding 5-element structural strength",
+            "special": "How elemental balance affects overall chart strength"
+          }
+        },
+        "five_elements": {
+          "木": {
+            "english": "Wood",
+            "season": "Spring",
+            "direction": "East",
+            "heavenly_stems": ["甲", "乙"],
+            "earthly_branches": ["寅", "卯"],
+            "yin_yang": "甲陽 乙陰",
+            "qualities": "Growth, development, creativity, flexibility",
+            "in_ziwei": "Represents expansion and transformation"
+          },
+          "火": {
+            "english": "Fire",
+            "season": "Summer",
+            "direction": "South",
+            "heavenly_stems": ["丙", "丁"],
+            "earthly_branches": ["巳", "午"],
+            "yin_yang": "丙陽 丁陰",
+            "qualities": "Passion, brightness, dynamism, expression",
+            "in_ziwei": "Represents brilliance and activity"
+          },
+          "土": {
+            "english": "Earth",
+            "season": "Transition (Between seasons)",
+            "direction": "Center",
+            "heavenly_stems": ["戊", "己"],
+            "earthly_branches": ["辰", "未", "戌", "丑"],
+            "yin_yang": "戊陽 己陰",
+            "qualities": "Stability, grounding, nurture, support",
+            "in_ziwei": "Represents foundation and transformation station"
+          },
+          "金": {
+            "english": "Metal",
+            "season": "Autumn",
+            "direction": "West",
+            "heavenly_stems": ["庚", "辛"],
+            "earthly_branches": ["申", "酉"],
+            "yin_yang": "庚陽 辛陰",
+            "qualities": "Structure, clarity, discipline, value",
+            "in_ziwei": "Represents harvesting and enforcement"
+          },
+          "水": {
+            "english": "Water",
+            "season": "Winter",
+            "direction": "North",
+            "heavenly_stems": ["壬", "癸"],
+            "earthly_branches": ["子", "亥"],
+            "yin_yang": "壬陽 癸陰",
+            "qualities": "Flow, adaptation, depth, hidden potential",
+            "in_ziwei": "Represents hidden strength and flexibility"
+          }
+        },
+        "relationships": {
+          "generation": {
+            "木生火": "Wood generates Fire",
+            "火生土": "Fire generates Earth",
+            "土生金": "Earth generates Metal",
+            "金生水": "Metal generates Water",
+            "水生木": "Water generates Wood"
+          },
+          "clash": {
+            "木克土": "Wood conquers Earth",
+            "火克金": "Fire conquers Metal",
+            "土克水": "Earth conquers Water",
+            "金克木": "Metal conquers Wood",
+            "水克火": "Water conquers Fire"
+          }
+        },
+        "learning_hours": 4,
+        "practice": "Create 五行生剋圖 showing all relationships"
+      },
+      {
+        "topic": "十天干 (10 Heavenly Stems)",
+        "importance": "CRITICAL - Fundamental time markers",
+        "sources": {
+          "wang_tingzhi": {
+            "approach": "Spiritual-philosophical significance",
+            "key_concept": "十天干代表十種精神特質",
+            "application": "Heavenly stems determine four transformations"
+          },
+          "keji_ziwei": {
+            "approach": "Systematic classification",
+            "key_concept": "十天干的五行陰陽屬性表",
+            "application": "Directly used to calculate four transformations table"
+          },
+          "xinglin_academy": {
+            "approach": "Structural position mapping",
+            "key_concept": "天干與十天干四化表的關係",
+            "application": "Understanding how stems generate transformations"
+          }
+        },
+        "heavenly_stems": {
+          "甲": {"yin_yang": "陽", "element": "木", "quality": "Beginning growth"},
+          "乙": {"yin_yang": "陰", "element": "木", "quality": "Gentle flexibility"},
+          "丙": {"yin_yang": "陽", "element": "火", "quality": "Bright expression"},
+          "丁": {"yin_yang": "陰", "element": "火", "quality": "Soft warmth"},
+          "戊": {"yin_yang": "陽", "element": "土", "quality": "Solid foundation"},
+          "己": {"yin_yang": "陰", "element": "土", "quality": "Nurturing receptiveness"},
+          "庚": {"yin_yang": "陽", "element": "金", "quality": "Sharp clarity"},
+          "辛": {"yin_yang": "陰", "element": "金", "quality": "Refined precision"},
+          "壬": {"yin_yang": "陽", "element": "水", "quality": "Flowing strength"},
+          "癸": {"yin_yang": "陰", "element": "水", "quality": "Deep intuition"}
+        },
+        "learning_hours": 2,
+        "practice": "Memorize all 10 stems with their qualities; practice identifying stem from birth year"
+      },
+      {
+        "topic": "十二地支 (12 Earthly Branches)",
+        "importance": "CRITICAL - Core palace system",
+        "sources": {
+          "wang_tingzhi": {
+            "approach": "Cosmic position significance",
+            "key_concept": "十二地支對應十二個宇宙位置",
+            "application": "Branches = palaces, determining life areas"
+          },
+          "keji_ziwei": {
+            "approach": "Position-based classification",
+            "key_concept": "十二地支與十二宮位的完全對應",
+            "application": "Direct mapping to 12 palaces of destiny chart"
+          },
+          "xinglin_academy": {
+            "approach": "Comprehensive system mapping",
+            "key_concept": "地支的五行、陰陽、方位、季節完整對應",
+            "application": "Understanding palace characteristics through earthly branches"
+          }
+        },
+        "earthly_branches": {
+          "子": {"position": 1, "direction": "North", "season": "Winter", "element": "水", "yin_yang": "陽"},
+          "丑": {"position": 2, "direction": "NNE", "season": "Winter", "element": "土", "yin_yang": "陰"},
+          "寅": {"position": 3, "direction": "ENE", "season": "Spring", "element": "木", "yin_yang": "陽"},
+          "卯": {"position": 4, "direction": "East", "season": "Spring", "element": "木", "yin_yang": "陰"},
+          "辰": {"position": 5, "direction": "ESE", "season": "Spring", "element": "土", "yin_yang": "陽"},
+          "巳": {"position": 6, "direction": "SSE", "season": "Summer", "element": "火", "yin_yang": "陰"},
+          "午": {"position": 7, "direction": "South", "season": "Summer", "element": "火", "yin_yang": "陽"},
+          "未": {"position": 8, "direction": "SSW", "season": "Summer", "element": "土", "yin_yang": "陰"},
+          "申": {"position": 9, "direction": "WSW", "season": "Autumn", "element": "金", "yin_yang": "陽"},
+          "酉": {"position": 10, "direction": "West", "season": "Autumn", "element": "金", "yin_yang": "陰"},
+          "戌": {"position": 11, "direction": "WNW", "season": "Autumn", "element": "土", "yin_yang": "陽"},
+          "亥": {"position": 12, "direction": "NNW", "season": "Winter", "element": "水", "yin_yang": "陰"}
+        },
+        "learning_hours": 3,
+        "practice": "Create 12-point star diagram with all branch correspondences"
+      }
+    ],
+    "source_comparison": {
+      "wang_tingzhi": "Emphasizes philosophical meaning and spiritual principles underlying the systems",
+      "keji_ziwei": "Focuses on practical application and mathematical precision in calculations",
+      "xinglin_academy": "Provides step-by-step systematic integration with detailed case examples"
+    },
+    "key_takeaway": "Foundation level requires understanding that all 12 palaces of Ziwei Doushu are directly mapped to the 12 earthly branches, and that the 10 heavenly stems generate the four transformations unique to Ziwei prediction"
+  },
+  "level_2_basic_system": {
+    "name": "Level 2: Basic Ziwei System (紫微基礎)",
+    "duration": "8-10 weeks",
+    "total_hours": 40,
+    "description": "Learn the core structure of Ziwei Doushu: the 12 palaces, 14 main stars, and chart construction",
+    "core_topics": [
+      {
+        "topic": "十二宮位完整體系 (Complete 12-Palace System)",
+        "importance": "CRITICAL - The container for all information",
+        "sources": {
+          "wang_tingzhi": {
+            "approach": "Spiritual-functional classification",
+            "key_concept": "六親宮與人事宮的平衡",
+            "classification": [
+              "六親宮 (6 Relatives): 福德、父母、命、兄弟、夫妻、子女",
+              "人事宮 (6 Affairs): 財帛、疾厄、遷移、僕役、官祿、田宅"
+            ],
+            "emphasis": "Understanding palace interactions rather than isolated meaning"
+          },
+          "keji_ziwei": {
+            "approach": "Life-domain classification",
+            "key_concept": "十二宮位涵蓋人生全部領域",
+            "method": "Systematic palace-by-palace analysis",
+            "emphasis": "Each palace has measurable impacts on specific life areas"
+          },
+          "xinglin_academy": {
+            "approach": "Positional significance with examples",
+            "key_concept": "宮位的位置決定其特性",
+            "method": "Three-palace-four-positives framework for analysis",
+            "emphasis": "How main palace, facing palaces, and opposing palaces interact"
+          }
+        },
+        "palace_pairs": [
+          {
+            "palace": "命宮",
+            "opposite": "遷移宮",
+            "meaning_pair": "Inner Self vs. External Expression"
+          },
+          {
+            "palace": "父母宮",
+            "opposite": "福德宮",
+            "meaning_pair": "Origins vs. Spiritual Fortune"
+          },
+          {
+            "palace": "兄弟宮",
+            "opposite": "官祿宮",
+            "meaning_pair": "Peer Support vs. Career Achievement"
+          },
+          {
+            "palace": "夫妻宮",
+            "opposite": "田宅宮",
+            "meaning_pair": "Intimate Relationships vs. Home/Property"
+          },
+          {
+            "palace": "子女宮",
+            "opposite": "僕役宮",
+            "meaning_pair": "Descendants vs. Social Networks"
+          },
+          {
+            "palace": "財帛宮",
+            "opposite": "疾厄宮",
+            "meaning_pair": "Wealth vs. Health"
+          }
+        ],
+        "learning_hours": 6,
+        "practice": "Map all 12 palaces on personal birth chart; identify three-palace-four-positives"
+      },
+      {
+        "topic": "十四主星 (14 Main Stars)",
+        "importance": "CRITICAL - The protagonists of the chart",
+        "sources": {
+          "wang_tingzhi": {
+            "approach": "Personality archetype framework",
+            "total_stars": "145 stars in Zhongzhou school (but focus on 14 main)",
+            "key_concept": "十四主星代表十四種人格原型",
+            "emphasis": "Each star has inherent qualities independent of palace"
+          },
+          "keji_ziwei": {
+            "approach": "Characteristic & behavioral profile",
+            "method": "Scientific analysis of star patterns",
+            "key_concept": "主星特性決定人生基調",
+            "emphasis": "Temples vs. Declines determine expression level"
+          },
+          "xinglin_academy": {
+            "approach": "Case-study based characterization",
+            "method": "Real chart examples with detailed analysis",
+            "key_concept": "同星不同人，須考量宮位和輔星",
+            "emphasis": "Context (palace + supporting stars) modifies base meaning"
+          }
+        },
+        "main_stars_overview": [
+          {
+            "star": "紫微",
+            "english": "Ziwei (Emperor)",
+            "function": "Leadership, authority, self-discipline",
+            "temple_positions": ["寅", "午"],
+            "decline_positions": ["戌", "子"],
+            "key_phrase": "尊貴, 掌權, 自信"
+          },
+          {
+            "star": "天府",
+            "english": "Tianfu (Treasury)",
+            "function": "Wealth accumulation, stability, resourcefulness",
+            "temple_positions": ["卯", "酉"],
+            "decline_positions": ["巳", "亥"],
+            "key_phrase": "財富, 穩定, 包容"
+          },
+          {
+            "star": "太陽",
+            "english": "Taiyang (Sun)",
+            "function": "Brilliance, initiative, energy",
+            "temple_positions": ["卯", "午"],
+            "decline_positions": ["酉", "子"],
+            "key_phrase": "光明, 熱情, 慷慨"
+          },
+          {
+            "star": "太陰",
+            "english": "Taiyin (Moon)",
+            "function": "Intuition, refinement, emotional depth",
+            "temple_positions": ["酉", "午"],
+            "decline_positions": ["卯", "子"],
+            "key_phrase": "細膩, 感受, 內斂"
+          },
+          {
+            "star": "武曲",
+            "english": "Wuqu (Warrior)",
+            "function": "Decisiveness, execution, money handling",
+            "temple_positions": ["子", "午"],
+            "decline_positions": ["卯", "酉"],
+            "key_phrase": "堅定, 執行, 財務"
+          },
+          {
+            "star": "破軍",
+            "english": "Pojun (Breakthrough)",
+            "function": "Change, innovation, disruption",
+            "temple_positions": ["卯", "子"],
+            "decline_positions": ["午", "酉"],
+            "key_phrase": "變動, 突破, 創新"
+          },
+          {
+            "star": "七殺",
+            "english": "Qisha (Seven Killing)",
+            "function": "Strategy, control, power",
+            "temple_positions": ["午", "酉"],
+            "decline_positions": ["卯", "子"],
+            "key_phrase": "威權, 策略, 決斷"
+          },
+          {
+            "star": "貪狼",
+            "english": "Tanlang (Greedy Wolf)",
+            "function": "Desire, passion, magnetism",
+            "temple_positions": ["寅", "午"],
+            "decline_positions": ["戌", "子"],
+            "key_phrase": "貪慾, 桃花, 魅力"
+          },
+          {
+            "star": "廉貞",
+            "english": "Lianzhen (Integrity)",
+            "function": "Principle, passion, transformation",
+            "temple_positions": ["寅", "申"],
+            "decline_positions": ["巳", "亥"],
+            "key_phrase": "廉潔, 熱血, 變動"
+          },
+          {
+            "star": "天梁",
+            "english": "Tianliang (Heavenly Beam)",
+            "function": "Protection, leadership, maturity",
+            "temple_positions": ["寅", "卯"],
+            "decline_positions": ["申", "酉"],
+            "key_phrase": "解厄, 樂觀, 長者氣質"
+          },
+          {
+            "star": "天機",
+            "english": "Tianji (Heavenly Mechanism)",
+            "function": "Intelligence, strategy, adaptability",
+            "temple_positions": ["卯", "巳"],
+            "decline_positions": ["申", "戌"],
+            "key_phrase": "聰慧, 思考, 變化"
+          },
+          {
+            "star": "巨門",
+            "english": "Jumen (Giant Gate)",
+            "function": "Communication, investigation, secrecy",
+            "temple_positions": ["巳", "午"],
+            "decline_positions": ["丑", "亥"],
+            "key_phrase": "口舌, 保密, 調查"
+          },
+          {
+            "star": "天相",
+            "english": "Tianxiang (Heavenly Minister)",
+            "function": "Assistance, charm, resources",
+            "temple_positions": ["子", "午"],
+            "decline_positions": ["卯", "酉"],
+            "key_phrase": "助力, 魅力, 資源"
+          },
+          {
+            "star": "天同",
+            "english": "Tiantong (Heavenly Companionship)",
+            "function": "Enjoyment, contentment, simplicity",
+            "temple_positions": ["卯", "子"],
+            "decline_positions": ["午", "酉"],
+            "key_phrase": "享受, 單純, 福氣"
+          }
+        ],
+        "temple_concept": {
+          "定義": "廟代表星曜力量最強，優點發揮最充分",
+          "temple_strength_levels": [
+            "廟 - 最強",
+            "旺 - 次強",
+            "得地 - 中強",
+            "利益 - 中",
+            "平和 - 中弱",
+            "不得地 - 弱",
+            "陷 - 最弱"
+          ]
+        },
+        "learning_hours": 10,
+        "practice": "Study each main star's nature; identify temple/decline positions; analyze personal chart main star"
+      },
+      {
+        "topic": "排盤基礎 (Chart Construction Basics)",
+        "importance": "HIGH - Practical skill",
+        "sources": {
+          "wang_tingzhi": {
+            "approach": "Understanding principles behind construction",
+            "key_concept": "排盤的邏輯是按宇宙秩序",
+            "method": "Manual calculation to understand relationships"
+          },
+          "keji_ziwei": {
+            "approach": "Software-assisted with understanding",
+            "key_concept": "理解排盤邏輯勝於手工排盤",
+            "method": "Use tools then verify understanding"
+          },
+          "xinglin_academy": {
+            "approach": "Step-by-step systematic method",
+            "method": "手工排盤教程 with detailed instructions",
+            "key_concept": "逐步安宮、安星、安煞"
+          }
+        },
+        "construction_steps": [
+          {
+            "step": 1,
+            "name": "定陰陽性別 (Determine Yin/Yang Gender)",
+            "description": "Establish male/female and yin/yang classification"
+          },
+          {
+            "step": 2,
+            "name": "定命身宮 (Determine Life & Body Palaces)",
+            "description": "Calculate based on lunar month and hour"
+          },
+          {
+            "step": 3,
+            "name": "定五行局 (Determine Five-Element Structure)",
+            "description": "Identifies the 5-element framework of the chart"
+          },
+          {
+            "step": 4,
+            "name": "安十四主星 (Place 14 Main Stars)",
+            "description": "Position stars according to five-element system"
+          },
+          {
+            "step": 5,
+            "name": "安輔星與煞星 (Place Assistant & Affliction Stars)",
+            "description": "Add 6 auspicious and 6 inauspicious supporting stars"
+          },
+          {
+            "step": 6,
+            "name": "安四化星 (Place Four Transformations)",
+            "description": "Mark the transformation stars based on heavenly stems"
+          }
+        ],
+        "learning_hours": 6,
+        "practice": "Generate 3 charts using software; understand each step; manually construct one chart"
+      }
+    ],
+    "source_comparison": {
+      "wang_tingzhi": "Philosophical depth, emphasizing understand principles",
+      "keji_ziwei": "Practical efficiency, using modern tools effectively",
+      "xinglin_academy": "Systematic methodology with extensive examples"
+    },
+    "key_takeaway": "By end of Level 2, should be able to generate and read a basic chart, identifying main stars and their temple strength in relevant palaces"
+  },
+  "level_3_to_6_advanced": {
+    "description": "Detailed content for Levels 3-6 to follow in separate sections",
+    "note": "Levels 3-6 represent increasingly complex synthesis of earlier learning with specialized focus areas"
+  }
+}
