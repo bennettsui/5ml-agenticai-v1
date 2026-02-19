@@ -19,6 +19,7 @@ import ZiweiAnalytics from '@/components/ZiweiAnalytics';
 import ZiweiChartAnalysis from '@/components/ZiweiChartAnalysis';
 import ZiweiPredictions from '@/components/ZiweiPredictions';
 import ZiweiKnowledgeManagement from '@/components/ZiweiKnowledgeManagement';
+import ZiweiCelebrityValidation from '@/components/ZiweiCelebrityValidation';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
@@ -36,7 +37,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'ziwei-analytics' | 'ziwei-analysis' | 'ziwei-predictions' | 'ziwei-knowledge' | 'ziwei-charts' | 'ziwei-rules';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'ziwei-analytics' | 'ziwei-analysis' | 'ziwei-predictions' | 'ziwei-knowledge' | 'ziwei-celebrity' | 'ziwei-charts' | 'ziwei-rules';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -377,7 +378,7 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','ziwei-analytics','ziwei-analysis','ziwei-predictions','ziwei-knowledge','ziwei-charts','ziwei-rules'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','ziwei-analytics','ziwei-analysis','ziwei-predictions','ziwei-knowledge','ziwei-celebrity','ziwei-charts','ziwei-rules'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
@@ -395,6 +396,7 @@ export default function Dashboard() {
     { id: 'ziwei-analysis', label: '🔍 Ziwei Analysis', icon: Brain },
     { id: 'ziwei-predictions', label: '🔮 Predictions', icon: TrendingUp },
     { id: 'ziwei-knowledge', label: '📚 Knowledge', icon: BookOpen },
+    { id: 'ziwei-celebrity', label: '⭐ Celebrity', icon: Sparkles },
     { id: 'ziwei-charts', label: '📊 Ziwei Charts', icon: History },
     { id: 'ziwei-rules', label: '🧿 Ziwei Rules', icon: Wand2 },
     { id: 'architecture', label: 'Architecture', icon: Layers },
@@ -680,6 +682,10 @@ export default function Dashboard() {
         {/* ZIWEI KNOWLEDGE MANAGEMENT TAB                                    */}
         {/* ================================================================ */}
         {activeTab === 'ziwei-knowledge' && <ZiweiKnowledgeManagement />}
+
+        {/* ZIWEI CELEBRITY VALIDATION TAB                                    */}
+        {/* ================================================================ */}
+        {activeTab === 'ziwei-celebrity' && <ZiweiCelebrityValidation />}
 
         {/* ZIWEI CHARTS TAB                                                  */}
         {/* ================================================================ */}
