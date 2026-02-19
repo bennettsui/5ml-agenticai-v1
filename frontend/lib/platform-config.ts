@@ -12,6 +12,7 @@ export type SolutionLineKey =
   | 'MediaChannel'
   | 'FrontierVentures'
   | 'CSuite'
+  | 'GovProcurement'
   | 'Platform';
 
 export interface UseCaseConfig {
@@ -115,6 +116,14 @@ export const SOLUTION_LINES: Record<SolutionLineKey, {
     color: 'from-emerald-500 to-green-600',
     darkBg: 'bg-emerald-500/10 border-emerald-500/20',
     textColor: 'text-emerald-400',
+  },
+  GovProcurement: {
+    id: 'GovProcurement',
+    name: 'Government Procurement',
+    tagline: 'Automate RFP tracking, bid management, and procurement intelligence',
+    color: 'from-indigo-500 to-cyan-600',
+    darkBg: 'bg-indigo-500/10 border-indigo-500/20',
+    textColor: 'text-indigo-400',
   },
   Platform: {
     id: 'Platform',
@@ -618,6 +627,34 @@ export const USE_CASES: UseCaseConfig[] = [
     priority: 'critical',
     path: '#',
     features: ['KPI Dashboard', 'Strategic AI', 'Cross-Function', 'Scenario Planning'],
+  },
+
+  // ========================================================================
+  // GOVERNMENT PROCUREMENT — GovProcurement
+  // ========================================================================
+  {
+    id: 'government-tender-ops',
+    name: 'Government Tender Operations',
+    description: '10-module platform for RFP tracking, bid management, and procurement pipeline with AI orchestrator, team collaboration, and win probability scoring',
+    solutionLine: 'GovProcurement',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '/use-cases/government-tenders',
+    agentCount: 8,
+    features: ['Tender Monitoring', 'Bid Management', 'Proposal Gen', 'Competitor Analysis', 'Compliance Check', 'Deadline Alerts', 'Win Analysis', 'Team Collab'],
+  },
+  {
+    id: 'government-tender-intel',
+    name: 'Government Tender Intelligence',
+    description: 'Real-time government & public utilities tender scraping, news analysis, compliance alerts, and strategic procurement insights with daily digests',
+    solutionLine: 'GovProcurement',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '/intelligence/government-tenders',
+    agentCount: 5,
+    features: ['Tender Scraping', 'News Analysis', 'Smart Alerts', 'Relevance Scoring', 'KB Search', 'Daily Digest', 'Competitor Track', 'Trend Analysis'],
   },
 
   // ========================================================================
