@@ -666,7 +666,90 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_products_status ON brand_products_services(status);
       CREATE INDEX IF NOT EXISTS idx_products_type ON brand_products_services(type);
       CREATE INDEX IF NOT EXISTS idx_products_created ON brand_products_services(created_at DESC);
+
+      -- Research Data: Brand & Competitive Research
+      CREATE TABLE IF NOT EXISTS research_business (
+        id SERIAL PRIMARY KEY,
+        research_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        business_overview TEXT,
+        mission_vision_values TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_research_business_brand ON research_business(brand_id);
+
+      -- Research: Competitor Analysis
+      CREATE TABLE IF NOT EXISTS research_competitors (
+        id SERIAL PRIMARY KEY,
+        competitor_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        name VARCHAR(500) NOT NULL,
+        website VARCHAR(500),
+        strengths TEXT,
+        weaknesses TEXT,
+        social_presence TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_competitors_brand ON research_competitors(brand_id);
+
+      -- Research: Audience Analysis
+      CREATE TABLE IF NOT EXISTS research_audience (
+        id SERIAL PRIMARY KEY,
+        audience_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        positioning_statement TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_audience_brand ON research_audience(brand_id);
+
+      -- Research: Audience Segments
+      CREATE TABLE IF NOT EXISTS research_audience_segments (
+        id SERIAL PRIMARY KEY,
+        segment_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        audience_id UUID NOT NULL,
+        name VARCHAR(500) NOT NULL,
+        demographics TEXT,
+        psychographics TEXT,
+        pain_points TEXT,
+        channels TEXT,
+        size VARCHAR(255),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_audience_id FOREIGN KEY(audience_id) REFERENCES research_audience(audience_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_segments_audience ON research_audience_segments(audience_id);
+
+      -- Research: Products & Services
+      CREATE TABLE IF NOT EXISTS research_products (
+        id SERIAL PRIMARY KEY,
+        product_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        name VARCHAR(500) NOT NULL,
+        category VARCHAR(255),
+        description TEXT,
+        key_features TEXT,
+        price_range VARCHAR(255),
+        target_segment VARCHAR(500),
+        usp TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_research_products_brand ON research_products(brand_id);
     `);
+
     console.log('✅ Database schema initialized (including CRM tables)');
 
     // Seed Ziwei interpretation rules
@@ -2430,6 +2513,223 @@ async function getProductServicePortfolio(brandId) {
   }
 }
 
+// ── Research Data Management ─────────────────────────────────────────────────
+
+async function saveResearchBusiness(brandId, businessData) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO research_business (brand_id, business_overview, mission_vision_values)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (brand_id) DO UPDATE SET
+         business_overview = EXCLUDED.business_overview,
+         mission_vision_values = EXCLUDED.mission_vision_values,
+         updated_at = NOW()
+       RETURNING research_id`,
+      [brandId, businessData.businessOverview || '', businessData.mission || '']
+    );
+    return { research_id: result.rows[0].research_id };
+  } catch (error) {
+    console.error('Error saving research business:', error);
+    throw error;
+  }
+}
+
+async function getResearchBusiness(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM research_business WHERE brand_id = $1`,
+      [brandId]
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return {
+      research_id: row.research_id,
+      businessOverview: row.business_overview,
+      mission: row.mission_vision_values,
+    };
+  } catch (error) {
+    console.error('Error fetching research business:', error);
+    throw error;
+  }
+}
+
+async function saveResearchCompetitors(brandId, competitors) {
+  try {
+    for (const comp of competitors) {
+      await pool.query(
+        `INSERT INTO research_competitors (brand_id, name, website, strengths, weaknesses, social_presence, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT DO NOTHING`,
+        [brandId, comp.name, comp.website, comp.strengths, comp.weaknesses, comp.socialPresence, comp.notes]
+      );
+    }
+  } catch (error) {
+    console.error('Error saving research competitors:', error);
+    throw error;
+  }
+}
+
+async function getResearchCompetitors(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM research_competitors WHERE brand_id = $1 ORDER BY created_at DESC`,
+      [brandId]
+    );
+    return result.rows.map(row => ({
+      id: row.competitor_id,
+      name: row.name,
+      website: row.website,
+      strengths: row.strengths,
+      weaknesses: row.weaknesses,
+      socialPresence: row.social_presence,
+      notes: row.notes,
+    }));
+  } catch (error) {
+    console.error('Error fetching research competitors:', error);
+    throw error;
+  }
+}
+
+async function deleteResearchCompetitor(competitorId) {
+  try {
+    await pool.query(`DELETE FROM research_competitors WHERE competitor_id = $1`, [competitorId]);
+  } catch (error) {
+    console.error('Error deleting research competitor:', error);
+    throw error;
+  }
+}
+
+async function saveResearchAudience(brandId, audienceData) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO research_audience (brand_id, positioning_statement)
+       VALUES ($1, $2)
+       ON CONFLICT (brand_id) DO UPDATE SET
+         positioning_statement = EXCLUDED.positioning_statement,
+         updated_at = NOW()
+       RETURNING audience_id`,
+      [brandId, audienceData.positioning || '']
+    );
+    return { audience_id: result.rows[0].audience_id };
+  } catch (error) {
+    console.error('Error saving research audience:', error);
+    throw error;
+  }
+}
+
+async function getResearchAudience(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM research_audience WHERE brand_id = $1`,
+      [brandId]
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return {
+      audience_id: row.audience_id,
+      positioning: row.positioning_statement,
+    };
+  } catch (error) {
+    console.error('Error fetching research audience:', error);
+    throw error;
+  }
+}
+
+async function saveResearchSegments(audienceId, segments) {
+  try {
+    for (const seg of segments) {
+      await pool.query(
+        `INSERT INTO research_audience_segments (audience_id, name, demographics, psychographics, pain_points, channels, size)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT DO NOTHING`,
+        [audienceId, seg.name, seg.demographics, seg.psychographics, seg.painPoints, seg.channels, seg.size]
+      );
+    }
+  } catch (error) {
+    console.error('Error saving research segments:', error);
+    throw error;
+  }
+}
+
+async function getResearchSegments(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT s.* FROM research_audience_segments s
+       JOIN research_audience a ON s.audience_id = a.audience_id
+       WHERE a.brand_id = $1 ORDER BY s.created_at DESC`,
+      [brandId]
+    );
+    return result.rows.map(row => ({
+      id: row.segment_id,
+      name: row.name,
+      demographics: row.demographics,
+      psychographics: row.psychographics,
+      painPoints: row.pain_points,
+      channels: row.channels,
+      size: row.size,
+    }));
+  } catch (error) {
+    console.error('Error fetching research segments:', error);
+    throw error;
+  }
+}
+
+async function deleteResearchSegment(segmentId) {
+  try {
+    await pool.query(`DELETE FROM research_audience_segments WHERE segment_id = $1`, [segmentId]);
+  } catch (error) {
+    console.error('Error deleting research segment:', error);
+    throw error;
+  }
+}
+
+async function saveResearchProducts(brandId, products) {
+  try {
+    for (const prod of products) {
+      await pool.query(
+        `INSERT INTO research_products (brand_id, name, category, description, key_features, price_range, target_segment, usp)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT DO NOTHING`,
+        [brandId, prod.name, prod.category, prod.description, prod.keyFeatures, prod.priceRange, prod.targetSegment, prod.usp]
+      );
+    }
+  } catch (error) {
+    console.error('Error saving research products:', error);
+    throw error;
+  }
+}
+
+async function getResearchProducts(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM research_products WHERE brand_id = $1 ORDER BY created_at DESC`,
+      [brandId]
+    );
+    return result.rows.map(row => ({
+      id: row.product_id,
+      name: row.name,
+      category: row.category,
+      description: row.description,
+      keyFeatures: row.key_features,
+      priceRange: row.price_range,
+      targetSegment: row.target_segment,
+      usp: row.usp,
+    }));
+  } catch (error) {
+    console.error('Error fetching research products:', error);
+    throw error;
+  }
+}
+
+async function deleteResearchProduct(productId) {
+  try {
+    await pool.query(`DELETE FROM research_products WHERE product_id = $1`, [productId]);
+  } catch (error) {
+    console.error('Error deleting research product:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -2530,4 +2830,18 @@ module.exports = {
   getProductsServices,
   updateProductServiceStatus,
   getProductServicePortfolio,
+  // Research Data
+  saveResearchBusiness,
+  getResearchBusiness,
+  saveResearchCompetitors,
+  getResearchCompetitors,
+  deleteResearchCompetitor,
+  saveResearchAudience,
+  getResearchAudience,
+  saveResearchSegments,
+  getResearchSegments,
+  deleteResearchSegment,
+  saveResearchProducts,
+  getResearchProducts,
+  deleteResearchProduct,
 };

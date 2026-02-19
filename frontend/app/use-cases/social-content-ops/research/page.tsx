@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Search, AlertCircle, Building2, Users, ShoppingBag,
   Loader2, Sparkles, Globe, TrendingUp, Target, Package,
-  ChevronDown, ChevronUp, Plus, Trash2, Edit3, Save,
+  ChevronDown, ChevronUp, Plus, Trash2, Edit3, Save, X,
 } from 'lucide-react';
 import { useBrandProject } from '@/lib/brand-context';
 
@@ -108,6 +108,95 @@ export default function ResearchPage() {
   const [products, setProducts] = useState<ProductEntry[]>(SAMPLE_PRODUCTS);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
 
+  // Loading state for data persistence
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  /* ── Load research data from database ──────────── */
+
+  useEffect(() => {
+    if (selectedBrand?.id) {
+      loadResearchData();
+    }
+  }, [selectedBrand?.id]);
+
+  async function loadResearchData() {
+    setLoading(true);
+    try {
+      // Load business data
+      const bizRes = await fetch(`/api/research/${selectedBrand?.id}/business`);
+      if (bizRes.ok) {
+        const { data } = await bizRes.json();
+        if (data) {
+          setBusinessOverview(data.businessOverview || '');
+          setMission(data.mission || '');
+        }
+      }
+
+      // Load competitors
+      const compRes = await fetch(`/api/research/${selectedBrand?.id}/competitors`);
+      if (compRes.ok) {
+        const { data } = await compRes.json();
+        if (data && data.length > 0) setCompetitors(data);
+      }
+
+      // Load audience data
+      const audRes = await fetch(`/api/research/${selectedBrand?.id}/audience`);
+      if (audRes.ok) {
+        const { data } = await audRes.json();
+        if (data?.audience) setPositioning(data.audience.positioning || '');
+        if (data?.segments && data.segments.length > 0) setSegments(data.segments);
+      }
+
+      // Load products
+      const prodRes = await fetch(`/api/research/${selectedBrand?.id}/products`);
+      if (prodRes.ok) {
+        const { data } = await prodRes.json();
+        if (data && data.length > 0) setProducts(data);
+      }
+    } catch (err) {
+      console.error('Error loading research data:', err);
+    }
+    setLoading(false);
+  }
+
+  async function saveResearchData() {
+    if (!selectedBrand?.id) return;
+    setSaving(true);
+    try {
+      // Save business data
+      await fetch(`/api/research/${selectedBrand.id}/business`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessOverview, mission }),
+      });
+
+      // Save competitors
+      await fetch(`/api/research/${selectedBrand.id}/competitors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ competitors }),
+      });
+
+      // Save audience
+      await fetch(`/api/research/${selectedBrand.id}/audience`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ positioning, segments }),
+      });
+
+      // Save products
+      await fetch(`/api/research/${selectedBrand.id}/products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products }),
+      });
+    } catch (err) {
+      console.error('Error saving research data:', err);
+    }
+    setSaving(false);
+  }
+
   const handleAiGenerate = useCallback(async () => {
     if (!selectedBrand) return;
     setGenerating(true);
@@ -145,14 +234,24 @@ export default function ResearchPage() {
             Comprehensive brand intelligence — business overview, audience analysis, and product portfolio
           </p>
         </div>
-        <button
-          disabled={!selectedBrand || generating}
-          onClick={handleAiGenerate}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-colors flex items-center gap-1.5"
-        >
-          {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-          AI Research
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={!selectedBrand || saving}
+            onClick={saveResearchData}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-colors flex items-center gap-1.5"
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            disabled={!selectedBrand || generating}
+            onClick={handleAiGenerate}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-colors flex items-center gap-1.5"
+          >
+            {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            AI Research
+          </button>
+        </div>
       </div>
 
       {!selectedBrand && (
@@ -316,7 +415,12 @@ export default function ResearchPage() {
                         </div>
                         <div className="flex justify-end">
                           <button
-                            onClick={() => setCompetitors(competitors.filter(c => c.id !== comp.id))}
+                            onClick={async () => {
+                              setCompetitors(competitors.filter(c => c.id !== comp.id));
+                              if (selectedBrand?.id) {
+                                await fetch(`/api/research/${selectedBrand.id}/competitors/${comp.id}`, { method: 'DELETE' }).catch(console.error);
+                              }
+                            }}
                             className="px-2.5 py-1 text-xs text-red-400 hover:bg-red-400/10 rounded-lg transition-colors flex items-center gap-1"
                           >
                             <Trash2 className="w-3 h-3" /> Remove
@@ -447,7 +551,12 @@ export default function ResearchPage() {
                         </div>
                         <div className="flex justify-end">
                           <button
-                            onClick={() => setSegments(segments.filter(s => s.id !== seg.id))}
+                            onClick={async () => {
+                              setSegments(segments.filter(s => s.id !== seg.id));
+                              if (selectedBrand?.id) {
+                                await fetch(`/api/research/${selectedBrand.id}/segments/${seg.id}`, { method: 'DELETE' }).catch(console.error);
+                              }
+                            }}
                             className="px-2.5 py-1 text-xs text-red-400 hover:bg-red-400/10 rounded-lg transition-colors flex items-center gap-1"
                           >
                             <Trash2 className="w-3 h-3" /> Remove
@@ -578,7 +687,12 @@ export default function ResearchPage() {
                         </div>
                         <div className="flex justify-end">
                           <button
-                            onClick={() => setProducts(products.filter(p => p.id !== prod.id))}
+                            onClick={async () => {
+                              setProducts(products.filter(p => p.id !== prod.id));
+                              if (selectedBrand?.id) {
+                                await fetch(`/api/research/${selectedBrand.id}/products/${prod.id}`, { method: 'DELETE' }).catch(console.error);
+                              }
+                            }}
                             className="px-2.5 py-1 text-xs text-red-400 hover:bg-red-400/10 rounded-lg transition-colors flex items-center gap-1"
                           >
                             <Trash2 className="w-3 h-3" /> Remove
