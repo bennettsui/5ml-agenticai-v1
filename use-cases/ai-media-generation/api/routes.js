@@ -395,6 +395,21 @@ router.get('/projects/:id/performance-insights', async (req, res) => {
   }
 });
 
+// POST /api/media/chat — conversational orchestrator (template-driven system prompt)
+router.post('/chat', async (req, res) => {
+  try {
+    const { messages, projectId } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: '"messages" array is required' });
+    }
+    const result = await getOrchestrator().chat(messages, projectId || null);
+    res.json(result);
+  } catch (err) {
+    console.error('[MediaGeneration] chat error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/media/health
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'ai-media-generation', schemaInitialized });
