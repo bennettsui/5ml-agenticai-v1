@@ -4,7 +4,7 @@ import { useState } from 'react';
 import {
   Image, Film, Sparkles, FileText, CheckCircle2, Clock,
   ChevronRight, Plus, Trash2, Loader2, Copy, CheckCheck,
-  Wand2, Play, Eye, Upload, AlertCircle, RefreshCw,
+  Wand2, Play, Eye, Upload, AlertCircle, RefreshCw, Pencil, X, Save,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -87,14 +87,44 @@ function CopyButton({ text }: { text: string }) {
 
 // ─── Prompt card ──────────────────────────────────────────────────────────────
 
-function PromptCard({ prompt, onApprove, projectId }: {
+function PromptCard({ prompt, onApprove, onEdit }: {
   prompt: PromptRecord;
   onApprove: (id: number) => void;
+  onEdit: (id: number, newPromptJson: PromptRecord['prompt_json']) => Promise<void>;
   projectId: number;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
   const img = prompt.prompt_json?.image;
   const vid = prompt.prompt_json?.video;
+
+  // Editable state
+  const [editPos, setEditPos] = useState(img?.positive || '');
+  const [editNeg, setEditNeg] = useState(img?.negative || '');
+  const [editVidPos, setEditVidPos] = useState(vid?.positive || '');
+
+  const handleSave = async () => {
+    setSaving(true);
+    const newJson: PromptRecord['prompt_json'] = {};
+    if (img) {
+      newJson.image = { ...img, positive: editPos, negative: editNeg };
+    }
+    if (vid) {
+      newJson.video = { ...vid, positive: editVidPos };
+    }
+    await onEdit(prompt.id, newJson);
+    setSaving(false);
+    setEditMode(false);
+  };
+
+  const enterEdit = () => {
+    setEditPos(img?.positive || '');
+    setEditNeg(img?.negative || '');
+    setEditVidPos(vid?.positive || '');
+    setEditMode(true);
+    setExpanded(true);
+  };
 
   return (
     <div className="rounded-xl border border-slate-700/50 bg-slate-800/60 overflow-hidden">
@@ -117,13 +147,38 @@ function PromptCard({ prompt, onApprove, projectId }: {
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {prompt.status === 'draft' && (
+          {prompt.status === 'draft' && !editMode && (
             <button
               onClick={() => onApprove(prompt.id)}
               className="text-[10px] px-2.5 py-1 rounded-lg bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-colors"
             >
               Approve
             </button>
+          )}
+          {!editMode ? (
+            <button
+              onClick={enterEdit}
+              className="p-1.5 text-slate-500 hover:text-amber-400 transition-colors"
+              title="Edit prompt"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-colors disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
+              </button>
+              <button
+                onClick={() => setEditMode(false)}
+                className="p-1.5 text-slate-500 hover:text-white transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </>
           )}
           <button
             onClick={() => setExpanded(v => !v)}
@@ -137,52 +192,96 @@ function PromptCard({ prompt, onApprove, projectId }: {
       {/* Expanded body */}
       {expanded && (
         <div className="p-4 space-y-4">
-          {img && (
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Image Prompt</p>
-              <div className="rounded-lg bg-white/[0.02] border border-slate-700/40 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-xs text-green-300 leading-relaxed flex-1">✓ {img.positive}</p>
-                  <CopyButton text={img.positive} />
-                </div>
-                {img.negative && (
-                  <div className="flex items-start justify-between gap-2 mt-2 pt-2 border-t border-slate-700/30">
-                    <p className="text-xs text-red-400/80 leading-relaxed flex-1">✗ {img.negative}</p>
-                    <CopyButton text={img.negative} />
+          {/* Edit mode */}
+          {editMode ? (
+            <div className="space-y-3">
+              {img !== undefined && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-green-400 uppercase tracking-wider">✓ Positive Prompt</label>
+                    <textarea
+                      value={editPos}
+                      onChange={e => setEditPos(e.target.value)}
+                      rows={4}
+                      className="w-full bg-white/[0.03] border border-green-500/30 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-green-500/60 resize-y leading-relaxed"
+                      placeholder="Describe the image you want to generate..."
+                    />
                   </div>
-                )}
-              </div>
-              <div className="flex gap-3 text-[11px] text-slate-500">
-                {img.suggestedSampler && <span>Sampler: <span className="text-slate-300">{img.suggestedSampler}</span></span>}
-                {img.suggestedSteps   && <span>Steps: <span className="text-slate-300">{img.suggestedSteps}</span></span>}
-                {img.suggestedCfg    && <span>CFG: <span className="text-slate-300">{img.suggestedCfg}</span></span>}
-              </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-red-400 uppercase tracking-wider">✗ Negative Prompt</label>
+                    <textarea
+                      value={editNeg}
+                      onChange={e => setEditNeg(e.target.value)}
+                      rows={2}
+                      className="w-full bg-white/[0.03] border border-red-500/30 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-red-500/60 resize-y leading-relaxed"
+                      placeholder="worst quality, low quality, blurry..."
+                    />
+                  </div>
+                </>
+              )}
+              {vid !== undefined && (
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-rose-400 uppercase tracking-wider">✓ Video Prompt</label>
+                  <textarea
+                    value={editVidPos}
+                    onChange={e => setEditVidPos(e.target.value)}
+                    rows={3}
+                    className="w-full bg-white/[0.03] border border-rose-500/30 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-rose-500/60 resize-y leading-relaxed"
+                    placeholder="Video motion prompt..."
+                  />
+                </div>
+              )}
             </div>
-          )}
+          ) : (
+            <>
+              {img && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Image Prompt</p>
+                  <div className="rounded-lg bg-white/[0.02] border border-slate-700/40 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs text-green-300 leading-relaxed flex-1">✓ {img.positive}</p>
+                      <CopyButton text={img.positive} />
+                    </div>
+                    {img.negative && (
+                      <div className="flex items-start justify-between gap-2 mt-2 pt-2 border-t border-slate-700/30">
+                        <p className="text-xs text-red-400/80 leading-relaxed flex-1">✗ {img.negative}</p>
+                        <CopyButton text={img.negative} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-3 text-[11px] text-slate-500">
+                    {img.suggestedSampler && <span>Sampler: <span className="text-slate-300">{img.suggestedSampler}</span></span>}
+                    {img.suggestedSteps   && <span>Steps: <span className="text-slate-300">{img.suggestedSteps}</span></span>}
+                    {img.suggestedCfg    && <span>CFG: <span className="text-slate-300">{img.suggestedCfg}</span></span>}
+                  </div>
+                </div>
+              )}
 
-          {vid && (
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Video Prompt (AnimateDiff / SVD)</p>
-              <div className="rounded-lg bg-white/[0.02] border border-slate-700/40 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-xs text-rose-300 leading-relaxed flex-1">✓ {vid.positive}</p>
-                  <CopyButton text={vid.positive} />
+              {vid && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Video Prompt (AnimateDiff / SVD)</p>
+                  <div className="rounded-lg bg-white/[0.02] border border-slate-700/40 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs text-rose-300 leading-relaxed flex-1">✓ {vid.positive}</p>
+                      <CopyButton text={vid.positive} />
+                    </div>
+                  </div>
+                  {vid.motionKeywords?.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {vid.motionKeywords.map((kw, i) => (
+                        <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                          {kw}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="flex gap-3 text-[11px] text-slate-500">
+                    {vid.recommendedFrames && <span>Frames: <span className="text-slate-300">{vid.recommendedFrames}</span></span>}
+                    {vid.recommendedFps    && <span>FPS: <span className="text-slate-300">{vid.recommendedFps}</span></span>}
+                  </div>
                 </div>
-              </div>
-              {vid.motionKeywords?.length ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {vid.motionKeywords.map((kw, i) => (
-                    <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                      {kw}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              <div className="flex gap-3 text-[11px] text-slate-500">
-                {vid.recommendedFrames && <span>Frames: <span className="text-slate-300">{vid.recommendedFrames}</span></span>}
-                {vid.recommendedFps    && <span>FPS: <span className="text-slate-300">{vid.recommendedFps}</span></span>}
-              </div>
-            </div>
+              )}
+            </>
           )}
 
           {/* Workflow config */}
@@ -238,6 +337,17 @@ export default function MediaGenerationWorkflow() {
 
   // Prompt generation
   const [promptsGenerating, setPromptsGenerating] = useState(false);
+
+  // Manual prompt form
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualForm, setManualForm] = useState({
+    deliverable_type: 'image' as 'image' | 'video',
+    format: 'instagram_post',
+    positive: '',
+    negative: 'worst quality, low quality, blurry, deformed, watermark, text, signature',
+    vidPositive: '',
+  });
+  const [manualSaving, setManualSaving] = useState(false);
 
   // Register asset form
   const [assetForm, setAssetForm] = useState({ type: 'image', url: '' });
@@ -352,6 +462,58 @@ export default function MediaGenerationWorkflow() {
       await fetch(`/api/media/prompts/${promptId}/approve`, { method: 'PATCH' });
       await selectProject(selectedProject.project.id);
     } catch { /* silent */ }
+  };
+
+  // ── Edit prompt ───────────────────────────────────────────────────────────
+  const editPrompt = async (promptId: number, newPromptJson: PromptRecord['prompt_json']) => {
+    if (!selectedProject) return;
+    try {
+      await fetch(`/api/media/prompts/${promptId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt_json: newPromptJson }),
+      });
+      await selectProject(selectedProject.project.id);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save prompt');
+    }
+  };
+
+  // ── Create manual prompt ──────────────────────────────────────────────────
+  const createManualPrompt = async () => {
+    if (!selectedProject || !manualForm.positive.trim()) return;
+    setManualSaving(true);
+    try {
+      const promptJson: PromptRecord['prompt_json'] = {};
+      if (manualForm.deliverable_type === 'image' || manualForm.deliverable_type === 'video') {
+        promptJson.image = { positive: manualForm.positive, negative: manualForm.negative };
+      }
+      if (manualForm.deliverable_type === 'video' && manualForm.vidPositive.trim()) {
+        promptJson.video = { positive: manualForm.vidPositive, negative: '' };
+      }
+      await fetch(`/api/media/projects/${selectedProject.project.id}/prompts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deliverable_type: manualForm.deliverable_type,
+          format: manualForm.format,
+          prompt_json: promptJson,
+        }),
+      });
+      setManualForm({
+        deliverable_type: 'image',
+        format: 'instagram_post',
+        positive: '',
+        negative: 'worst quality, low quality, blurry, deformed, watermark, text, signature',
+        vidPositive: '',
+      });
+      setShowManualForm(false);
+      await selectProject(selectedProject.project.id);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create prompt');
+    } finally {
+      setManualSaving(false);
+    }
   };
 
   // ── Register asset ────────────────────────────────────────────────────────
@@ -650,31 +812,123 @@ Mood: Aspirational, high-energy summer.`}
               {/* ── Prompts pane ──────────────────────────────────────── */}
               {activePane === 'prompts' && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-slate-300">
-                        {selectedProject.prompts.length === 0
-                          ? 'No prompts yet — generate from the translated brief.'
-                          : `${selectedProject.prompts.length} prompt set${selectedProject.prompts.length !== 1 ? 's' : ''} · ${selectedProject.prompts.filter(p => p.status === 'approved').length} approved`
-                        }
-                      </p>
-                    </div>
-                    <button
-                      onClick={generatePrompts}
-                      disabled={promptsGenerating || !selectedProject.project.brief_spec_json}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30 transition-colors text-sm disabled:opacity-50"
-                      title={!selectedProject.project.brief_spec_json ? 'Submit a brief first' : ''}
-                    >
-                      {promptsGenerating
-                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
-                        : <><Wand2 className="w-3.5 h-3.5" /> Generate Prompts</>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-sm text-slate-300">
+                      {selectedProject.prompts.length === 0
+                        ? 'No prompts yet — generate from brief or write manually.'
+                        : `${selectedProject.prompts.length} prompt set${selectedProject.prompts.length !== 1 ? 's' : ''} · ${selectedProject.prompts.filter(p => p.status === 'approved').length} approved`
                       }
-                    </button>
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowManualForm(v => !v)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 border border-slate-600/50 hover:bg-slate-700 transition-colors text-sm"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Write Manually
+                      </button>
+                      <button
+                        onClick={generatePrompts}
+                        disabled={promptsGenerating || !selectedProject.project.brief_spec_json}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30 transition-colors text-sm disabled:opacity-50"
+                        title={!selectedProject.project.brief_spec_json ? 'Submit a brief first to use AI generation' : ''}
+                      >
+                        {promptsGenerating
+                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
+                          : <><Wand2 className="w-3.5 h-3.5" /> Generate with AI</>
+                        }
+                      </button>
+                    </div>
                   </div>
 
-                  {!selectedProject.project.brief_spec_json && (
+                  {!selectedProject.project.brief_spec_json && !showManualForm && (
                     <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4 text-sm text-yellow-400">
-                      Submit and translate a brief first before generating prompts.
+                      No brief translated yet. You can <button onClick={() => setShowManualForm(true)} className="underline hover:text-yellow-300">write prompts manually</button>, or go to the Brief tab to submit a brief first.
+                    </div>
+                  )}
+
+                  {/* Manual prompt form */}
+                  {showManualForm && (
+                    <div className="rounded-xl border border-slate-600/50 bg-slate-800/60 p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-white flex items-center gap-2">
+                          <Pencil className="w-4 h-4 text-slate-400" /> Write Prompt Manually
+                        </p>
+                        <button onClick={() => setShowManualForm(false)} className="p-1 text-slate-500 hover:text-white transition-colors">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-slate-400 mb-1 block">Type</label>
+                          <select
+                            value={manualForm.deliverable_type}
+                            onChange={e => setManualForm(f => ({ ...f, deliverable_type: e.target.value as 'image' | 'video' }))}
+                            className="w-full bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500/50"
+                          >
+                            <option value="image">Image</option>
+                            <option value="video">Video</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-400 mb-1 block">Format</label>
+                          <select
+                            value={manualForm.format}
+                            onChange={e => setManualForm(f => ({ ...f, format: e.target.value }))}
+                            className="w-full bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500/50"
+                          >
+                            <option value="instagram_post">Instagram Post</option>
+                            <option value="instagram_story">Instagram Story</option>
+                            <option value="tiktok">TikTok</option>
+                            <option value="youtube_shorts">YouTube Shorts</option>
+                            <option value="key_visual">Key Visual</option>
+                            <option value="product_video">Product Video</option>
+                            <option value="custom">Custom</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-green-400 uppercase tracking-wider">✓ Positive Prompt *</label>
+                        <textarea
+                          value={manualForm.positive}
+                          onChange={e => setManualForm(f => ({ ...f, positive: e.target.value }))}
+                          rows={4}
+                          placeholder="Describe what you want to generate: subject, style, lighting, camera, mood..."
+                          className="w-full bg-white/[0.03] border border-green-500/30 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-green-500/60 resize-y leading-relaxed"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-red-400 uppercase tracking-wider">✗ Negative Prompt</label>
+                        <textarea
+                          value={manualForm.negative}
+                          onChange={e => setManualForm(f => ({ ...f, negative: e.target.value }))}
+                          rows={2}
+                          className="w-full bg-white/[0.03] border border-red-500/30 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-red-500/60 resize-y leading-relaxed"
+                        />
+                      </div>
+
+                      {manualForm.deliverable_type === 'video' && (
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-rose-400 uppercase tracking-wider">✓ Video Motion Prompt</label>
+                          <textarea
+                            value={manualForm.vidPositive}
+                            onChange={e => setManualForm(f => ({ ...f, vidPositive: e.target.value }))}
+                            rows={2}
+                            placeholder="slow dolly in, gentle pan left, subtle breathing motion..."
+                            className="w-full bg-white/[0.03] border border-rose-500/30 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-rose-500/60 resize-y leading-relaxed"
+                          />
+                        </div>
+                      )}
+
+                      <button
+                        onClick={createManualPrompt}
+                        disabled={manualSaving || !manualForm.positive.trim()}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                      >
+                        {manualSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : <><Save className="w-4 h-4" /> Save Prompt</>}
+                      </button>
                     </div>
                   )}
 
@@ -684,6 +938,7 @@ Mood: Aspirational, high-energy summer.`}
                         key={p.id}
                         prompt={p}
                         onApprove={approvePrompt}
+                        onEdit={editPrompt}
                         projectId={selectedProject.project.id}
                       />
                     ))}
