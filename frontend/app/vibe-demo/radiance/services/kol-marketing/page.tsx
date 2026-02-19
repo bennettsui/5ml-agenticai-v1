@@ -1,26 +1,37 @@
 'use client';
 
+import Link from 'next/link';
+import { Header } from '../../components/Header';
+import { Footer } from '../../components/Footer';
+import { Breadcrumb } from '../../components/Breadcrumb';
+
 export default function KOLMarketingServicePage() {
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <a href="/vibe-demo/radiance" className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:opacity-80">
-            ← Back to Radiance
-          </a>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">KOL & Influencer Marketing</h2>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
+      <Header />
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-16 px-6 max-w-4xl mx-auto">
+      <main id="main-content" className="flex-1 pt-20">
+        {/* Breadcrumb */}
+        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <Breadcrumb items={[
+              { label: 'Home', href: '/vibe-demo/radiance' },
+              { label: 'Services', href: '/vibe-demo/radiance/services' },
+              { label: 'KOL & Influencer Marketing' }
+            ]} />
+          </div>
+        </section>
+
+        {/* Hero Section */}
+        <section className="pt-16 pb-16 px-6 max-w-4xl mx-auto">
         <div className="space-y-6">
           <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
             KOL & Influencer Marketing
           </h1>
           <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
-            Social media and KOLs are now essential levers for brand awareness and perception. When paired with the right content and structure, KOL collaborations can educate audiences, influence behaviour and build long-term affinity. Radiance operates as your strategic KOL partner, from campaign ideation and talent matching to coordination, media support and results analysis.
+            Social media and KOLs are now essential levers for brand awareness and perception. When paired with the right content and structure, KOL collaborations can educate audiences, influence behaviour and build long-term affinity. Radiance operates as your strategic KOL partner, from campaign ideation and talent matching to coordination,{' '}
+            <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">media support</Link>
+            {' '}and results analysis.
           </p>
         </div>
       </section>
@@ -146,7 +157,9 @@ export default function KOLMarketingServicePage() {
             <ul className="space-y-2 ml-6">
               <li className="flex gap-3">
                 <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
-                <span className="text-slate-600 dark:text-slate-400">Identifying suitable KOLs for event attendance and live content coverage.</span>
+                <span className="text-slate-600 dark:text-slate-400">Identifying suitable KOLs for{' '}
+                  <Link href="/vibe-demo/radiance/services/events" className="text-purple-600 dark:text-purple-400 hover:underline">event attendance</Link>
+                  {' '}and live content coverage.</span>
               </li>
               <li className="flex gap-3">
                 <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
@@ -254,25 +267,19 @@ export default function KOLMarketingServicePage() {
             Whether you're launching a product, building brand awareness or reaching a specific audience segment, Radiance can identify and coordinate with creators who connect authentically with your brand. Let's explore what KOL partnerships can do for your business.
           </p>
           <div className="flex gap-4 flex-wrap">
-            <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+            <Link href="/vibe-demo/radiance/consultation" className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
               Explore KOL options
-            </button>
-            <button className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
-              Our network
-            </button>
+            </Link>
+            <Link href="/vibe-demo/radiance/case-studies" className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
+              See our work
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 py-12 px-6 mt-16">
-        <div className="max-w-6xl mx-auto text-center text-sm text-slate-500 dark:text-slate-400">
-          <p>Radiance PR & Martech Limited | Hong Kong</p>
-          <p className="mt-2">
-            <a href="/vibe-demo/radiance" className="text-purple-600 dark:text-purple-400 hover:underline">Back to Radiance</a>
-          </p>
-        </div>
-      </footer>
+      </main>
+
+      <Footer />
     </div>
   );
 }

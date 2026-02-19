@@ -1,20 +1,29 @@
 'use client';
 
+import Link from 'next/link';
+import { Header } from '../../components/Header';
+import { Footer } from '../../components/Footer';
+import { Breadcrumb } from '../../components/Breadcrumb';
+
 export default function SocialMediaServicePage() {
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <a href="/vibe-demo/radiance" className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:opacity-80">
-            ← Back to Radiance
-          </a>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Social Media & Content Strategy</h2>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
+      <Header />
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-16 px-6 max-w-4xl mx-auto">
+      <main id="main-content" className="flex-1 pt-20">
+        {/* Breadcrumb */}
+        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <Breadcrumb items={[
+              { label: 'Home', href: '/vibe-demo/radiance' },
+              { label: 'Services', href: '/vibe-demo/radiance/services' },
+              { label: 'Social Media & Content' }
+            ]} />
+          </div>
+        </section>
+
+        {/* Hero Section */}
+        <section className="pt-16 pb-16 px-6 max-w-4xl mx-auto">
         <div className="space-y-6">
           <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
             Social Media & Content Strategy
@@ -34,7 +43,7 @@ export default function SocialMediaServicePage() {
         <ul className="space-y-4">
           <li className="flex gap-4">
             <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
-            <span className="text-slate-600 dark:text-slate-400">Social platforms reach your audience directly—no algorithm middleman, just you and people who want to hear from you.</span>
+            <span className="text-slate-600 dark:text-slate-400">Social platforms are where your audience discovers brands, vets purchases and follows their interests—a consistent presence puts you in those conversations at the right moment.</span>
           </li>
           <li className="flex gap-4">
             <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
@@ -98,16 +107,16 @@ export default function SocialMediaServicePage() {
           We do not treat social media as isolated posts. We align social activity with campaigns, launches, events and KOL programmes so that each touchpoint reinforces the others. When you launch a product, media coverage feeds into social content. When you host an event, social amplifies it. When you partner with influencers, social extends their reach. This integration is what creates momentum.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-6 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg">
-            <h4 className="font-semibold text-slate-900 dark:text-white mb-3">+ PR Campaigns</h4>
+          <div className="p-6 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 transition-colors">
+            <Link href="/vibe-demo/radiance/services/public-relations" className="font-semibold text-purple-600 dark:text-purple-400 hover:underline mb-3 block">+ PR Campaigns →</Link>
             <p className="text-sm text-slate-600 dark:text-slate-400">Press coverage becomes social content, expanding reach to new audiences.</p>
           </div>
-          <div className="p-6 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg">
-            <h4 className="font-semibold text-slate-900 dark:text-white mb-3">+ Events</h4>
+          <div className="p-6 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 transition-colors">
+            <Link href="/vibe-demo/radiance/services/events" className="font-semibold text-purple-600 dark:text-purple-400 hover:underline mb-3 block">+ Events →</Link>
             <p className="text-sm text-slate-600 dark:text-slate-400">Live events create authentic content moments that fuel social engagement.</p>
           </div>
-          <div className="p-6 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg">
-            <h4 className="font-semibold text-slate-900 dark:text-white mb-3">+ KOL Partnerships</h4>
+          <div className="p-6 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 transition-colors">
+            <Link href="/vibe-demo/radiance/services/kol-marketing" className="font-semibold text-purple-600 dark:text-purple-400 hover:underline mb-3 block">+ KOL Partnerships →</Link>
             <p className="text-sm text-slate-600 dark:text-slate-400">Influencer collaborations amplify through your owned social channels.</p>
           </div>
         </div>
@@ -247,25 +256,19 @@ export default function SocialMediaServicePage() {
             Whether you're starting from scratch, taking over management, or optimising existing channels, Radiance brings strategy, creativity and performance discipline to social media. Let's build a content system that engages your audience and supports your business goals.
           </p>
           <div className="flex gap-4 flex-wrap">
-            <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+            <Link href="/vibe-demo/radiance/consultation" className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
               Let's talk strategy
-            </button>
-            <button className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
-              See our approach
-            </button>
+            </Link>
+            <Link href="/vibe-demo/radiance/case-studies" className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
+              See our work
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 py-12 px-6 mt-16">
-        <div className="max-w-6xl mx-auto text-center text-sm text-slate-500 dark:text-slate-400">
-          <p>Radiance PR & Martech Limited | Hong Kong</p>
-          <p className="mt-2">
-            <a href="/vibe-demo/radiance" className="text-purple-600 dark:text-purple-400 hover:underline">Back to Radiance</a>
-          </p>
-        </div>
-      </footer>
+      </main>
+
+      <Footer />
     </div>
   );
 }

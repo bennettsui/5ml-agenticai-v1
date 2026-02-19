@@ -4,6 +4,7 @@ const fs = require('fs');
 const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
+const zwEngine = require('./services/ziwei-chart-engine');
 require('dotenv').config();
 
 const app = express();
@@ -57,7 +58,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -154,6 +155,17 @@ app.get('/api/app-name', (req, res) => {
 // ==========================================
 // Service test definitions (shared between full and individual tests)
 const SERVICE_TESTS = {
+  minimax: { name: 'MiniMax 2.5', type: 'probe', test: async () => {
+    if (!process.env.MINIMAX_API_KEY) throw new Error('MINIMAX_API_KEY not set');
+    const resp = await fetch('https://api.minimaxi.chat/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'MiniMax-Text-01', messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
+    return 'API key valid';
+  }},
   anthropic: { name: 'Anthropic (Claude)', type: 'probe', test: async () => {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -256,6 +268,298 @@ app.get('/api/health/services/:id', async (req, res) => {
   const result = await testService(req.params.id);
   if (!result) return res.status(404).json({ error: 'Unknown service' });
   res.json({ timestamp: new Date().toISOString(), service: result });
+});
+
+// ==========================================
+// Ziwei Doushu Star Meanings API
+// ==========================================
+
+// Get entire star meanings database
+app.get('/api/ziwei/database', (req, res) => {
+  try {
+    const db = zwEngine.getStarDatabase();
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      metadata: db.metadata,
+      stats: {
+        main_stars: Object.keys(db.main_stars || {}).length,
+        auxiliary_stars: Object.keys(db.auxiliary_stars || {}).length,
+        malevolent_stars: Object.keys(db.malevolent_stars || {}).length,
+        longevity_stars: Object.keys(db.longevity_stars || {}).length,
+        romance_stars: Object.keys(db.romance_stars || {}).length,
+        auspicious_auxiliary: Object.keys(db.auspicious_auxiliary_stars || {}).length,
+        secondary_stars: Object.keys(db.secondary_stars || {}).length,
+        total: Object.keys(db.main_stars || {}).length +
+               Object.keys(db.auxiliary_stars || {}).length +
+               Object.keys(db.malevolent_stars || {}).length +
+               Object.keys(db.longevity_stars || {}).length +
+               Object.keys(db.romance_stars || {}).length +
+               Object.keys(db.auspicious_auxiliary_stars || {}).length +
+               Object.keys(db.secondary_stars || {}).length
+      },
+      data: db
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get single star by name
+app.get('/api/ziwei/star/:name', (req, res) => {
+  try {
+    const star = zwEngine.getStarMeaning(req.params.name);
+    if (!star) {
+      return res.status(404).json({ success: false, error: `Star '${req.params.name}' not found` });
+    }
+    res.json({ success: true, star });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get stars by category
+app.get('/api/ziwei/category/:category', (req, res) => {
+  try {
+    const stars = zwEngine.getStarsByCategory(req.params.category);
+    const count = Object.keys(stars).length;
+    res.json({
+      success: true,
+      category: req.params.category,
+      count,
+      stars
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get stars by five element
+app.get('/api/ziwei/element/:element', (req, res) => {
+  try {
+    const stars = zwEngine.getStarsByElement(req.params.element);
+    const count = Object.keys(stars).length;
+    res.json({
+      success: true,
+      element: req.params.element,
+      count,
+      stars
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get stars by type
+app.get('/api/ziwei/type/:type', (req, res) => {
+  try {
+    const stars = zwEngine.getStarsByType(req.params.type);
+    const count = Object.keys(stars).length;
+    res.json({
+      success: true,
+      type: req.params.type,
+      count,
+      stars
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Search stars by keyword
+app.get('/api/ziwei/search', (req, res) => {
+  try {
+    const keyword = req.query.q;
+    if (!keyword) {
+      return res.status(400).json({ success: false, error: 'Query parameter "q" required' });
+    }
+    const results = zwEngine.getStarsByKeyword(keyword);
+    const count = Object.keys(results).length;
+    res.json({
+      success: true,
+      keyword,
+      count,
+      results
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// KNOWLEDGE BASE API ENDPOINTS
+// ==========================================
+
+/**
+ * Get knowledge base statistics from JSON files
+ */
+app.get('/api/ziwei/knowledge/stats', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    // Load all knowledge base files
+    const kbPath = path.join(__dirname, 'data');
+    const files = {
+      curriculum: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8')),
+      combinations: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8')),
+      palaces: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-12-palaces.json'), 'utf8')),
+      sources: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-combinations-sources.json'), 'utf8'))
+    };
+
+    // Calculate stats
+    const stats = {
+      totalConcepts: Object.keys(files.curriculum.level_1_foundations?.core_topics || {}).length,
+      totalCombinations: Object.keys(files.combinations?.combinations || {}).length,
+      totalPalaces: Object.keys(files.palaces?.palaces || {}).length,
+      totalSources: Object.keys(files.sources?.sources || {}).length,
+      curriculumLevels: 6,
+      lastUpdated: new Date().toISOString(),
+      knowledgeFiles: {
+        curriculum: files.curriculum.title,
+        combinations: files.combinations.title || 'Ziwei Star Combinations',
+        palaces: files.palaces.title || 'Ziwei 12 Palaces',
+        sources: files.sources.title || 'Knowledge Sources'
+      }
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get all knowledge base content
+ */
+app.get('/api/ziwei/knowledge/all', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    const kbPath = path.join(__dirname, 'data');
+    const knowledge = {
+      curriculum: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8')),
+      combinations: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8')),
+      palaces: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-12-palaces.json'), 'utf8')),
+      learning: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-learning-guide.json'), 'utf8')),
+      sources: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-combinations-sources.json'), 'utf8'))
+    };
+
+    res.json({
+      success: true,
+      data: knowledge
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get curriculum by level
+ */
+app.get('/api/ziwei/knowledge/curriculum/:level', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const level = `level_${req.params.level}`;
+
+    const kbPath = path.join(__dirname, 'data');
+    const curriculum = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8'));
+
+    if (!curriculum[level]) {
+      return res.status(404).json({ success: false, error: `Level ${req.params.level} not found` });
+    }
+
+    res.json({
+      success: true,
+      level: req.params.level,
+      data: curriculum[level]
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get combinations by category
+ */
+app.get('/api/ziwei/knowledge/combinations/:category', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    const kbPath = path.join(__dirname, 'data');
+    const combinations = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8'));
+
+    const category = req.params.category;
+    const results = combinations.combinations.filter(c => c.category === category);
+
+    res.json({
+      success: true,
+      category,
+      count: results.length,
+      data: results
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Search knowledge base
+ */
+app.get('/api/ziwei/knowledge/search', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const query = (req.query.q || '').toLowerCase();
+
+    if (!query) {
+      return res.status(400).json({ success: false, error: 'Query parameter "q" required' });
+    }
+
+    const kbPath = path.join(__dirname, 'data');
+    const curriculum = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8'));
+    const combinations = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8'));
+
+    const results = {
+      curriculum_matches: [],
+      combination_matches: []
+    };
+
+    // Search curriculum
+    Object.entries(curriculum).forEach(([level, content]) => {
+      if (typeof content === 'object' && content !== null) {
+        const str = JSON.stringify(content).toLowerCase();
+        if (str.includes(query)) {
+          results.curriculum_matches.push({
+            level,
+            title: content.name || level
+          });
+        }
+      }
+    });
+
+    // Search combinations
+    if (combinations.combinations) {
+      results.combination_matches = combinations.combinations.filter(c =>
+        JSON.stringify(c).toLowerCase().includes(query)
+      );
+    }
+
+    res.json({
+      success: true,
+      query,
+      total_results: results.curriculum_matches.length + results.combination_matches.length,
+      data: results
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ==========================================
@@ -1686,6 +1990,50 @@ app.get('/stats', async (req, res) => {
           },
         },
         {
+          id: 'ai-image-generation',
+          name: 'AI Image Generation',
+          description: 'Agency brief → SDXL/ComfyUI prompts + workflow configs',
+          agentCount: 6,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 brief → full prompt set for all deliverables (avg 4)',
+              modelCalls: [
+                { model: 'DeepSeek', calls: 5, avgTokensIn: 2500, avgTokensOut: 1500, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku', calls: 3, avgTokensIn: 1500, avgTokensOut: 800, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'Claude Sonnet Vision (QC)', calls: 1, avgTokensIn: 2000, avgTokensOut: 500, costPerMillion: { input: 3.00, output: 15.00 } },
+              ],
+              totalTokens: { input: 18500, output: 10100 },
+              estimatedCost: 0.011,
+              notes: 'GPU compute (ComfyUI/SDXL) is self-hosted — electricity only, ~$0.03/image.',
+            },
+            daily: { runsPerDay: 3, estimatedCost: 0.033 },
+            monthly: { runsPerMonth: 60, estimatedCost: 0.66, notes: '~2 briefs/day avg' },
+          },
+        },
+        {
+          id: 'ai-video-generation',
+          name: 'AI Video Generation',
+          description: 'AnimateDiff / SVD video pipeline with motion prompts + QC',
+          agentCount: 8,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 brief → video prompt set + AnimateDiff workflow config',
+              modelCalls: [
+                { model: 'DeepSeek', calls: 6, avgTokensIn: 3000, avgTokensOut: 2000, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku', calls: 4, avgTokensIn: 2000, avgTokensOut: 1000, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'Claude Sonnet Vision (QC)', calls: 2, avgTokensIn: 2500, avgTokensOut: 600, costPerMillion: { input: 3.00, output: 15.00 } },
+              ],
+              totalTokens: { input: 28000, output: 14200 },
+              estimatedCost: 0.022,
+              notes: 'AnimateDiff/SVD on self-hosted GPU — ~$0.08/clip (16 frames) electricity.',
+            },
+            daily: { runsPerDay: 2, estimatedCost: 0.044 },
+            monthly: { runsPerMonth: 40, estimatedCost: 0.88, notes: '~1-2 video projects/day' },
+          },
+        },
+        {
           id: 'crm',
           name: 'Client CRM + KB',
           description: 'AI-powered client CRM with knowledge base',
@@ -1723,8 +2071,10 @@ app.get('/stats', async (req, res) => {
         intelligence: 2.70,
         accounting: 3.60,
         crm: 0.30,
-        totalBase: 25.04,
-        notes: 'Ads cost scales with tenants. Photo booth scales with events. All estimates assume typical usage patterns.',
+        aiImageGeneration: 0.66,
+        aiVideoGeneration: 0.88,
+        totalBase: 26.58,
+        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). All estimates assume typical usage patterns.',
       },
       databaseTables: [
         // Social/Marketing tables
@@ -1742,6 +2092,11 @@ app.get('/stats', async (req, res) => {
         { name: 'intelligence_news', description: 'Collected news articles', category: 'intelligence' },
         // Accounting tables
         { name: 'receipts', description: 'Receipt records from OCR', category: 'accounting' },
+        // AI Media Generation tables
+        { name: 'media_projects', description: 'Media generation projects', category: 'media' },
+        { name: 'media_style_guides', description: 'Per-project brand style guides', category: 'media' },
+        { name: 'media_prompts', description: 'Prompt library with workflow configs', category: 'media' },
+        { name: 'media_assets', description: 'Generated image/video asset registry', category: 'media' },
       ],
     };
 
@@ -1973,6 +2328,7 @@ Be concise and actionable. Use bullet points for lists.`;
 
     // Try DeepSeek first, fall back to Claude
     const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
     if (deepseek.isAvailable()) {
       const result = await deepseek.chat(
         [{ role: 'system', content: systemPrompt }, ...messages],
@@ -2034,6 +2390,7 @@ Be specific, data-driven, and actionable.
 ${ragContext ? `\n${ragContext}` : ''}`;
 
         const deepseek = require('./services/deepseekService');
+        const llm = require('./lib/llm');
         try {
           const result = deepseek.isAvailable()
             ? await deepseek.chat(
@@ -2273,6 +2630,7 @@ Be concise, actionable, and opinionated. You're the expert — share your profes
 
     // Try DeepSeek first, fall back to Claude
     const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
     if (deepseek.isAvailable()) {
       const result = await deepseek.chat(
         [{ role: 'system', content: systemPrompt }, ...messages],
@@ -2834,7 +3192,7 @@ app.post('/api/social/calendar/:brandId', async (req, res) => {
   try {
     const { brandId } = req.params;
     const { posts, projectId } = req.body;
-    await saveSocialCalendar(brandId, posts.map(p => ({ ...p, projectId })));
+    await saveSocialCalendar(brandId, posts.map((p) => ({ ...p, projectId })));
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2906,6 +3264,24 @@ try {
   console.warn('⚠️ Ads Performance routes not loaded:', error.message);
 }
 
+// AI Media Generation Routes (Image + Video)
+try {
+  const mediaGenerationRoutes = require('./use-cases/ai-media-generation/api/routes');
+  app.use('/api/media', mediaGenerationRoutes);
+  console.log('✅ AI Media Generation routes loaded: /api/media');
+} catch (error) {
+  console.warn('⚠️ AI Media Generation routes not loaded:', error.message);
+}
+
+// Multimedia Library Routes (reverse-prompt engineering from images/videos)
+try {
+  const multimediaLibraryRoutes = require('./use-cases/multimedia-library/api/routes');
+  app.use('/api/library', multimediaLibraryRoutes);
+  console.log('✅ Multimedia Library routes loaded: /api/library');
+} catch (error) {
+  console.warn('⚠️ Multimedia Library routes not loaded:', error.message);
+}
+
 // Scheduler Service
 const scheduler = require('./services/scheduler');
 const scheduleRegistry = require('./services/schedule-registry');
@@ -2941,7 +3317,50 @@ app.get('/api/scheduled-jobs', (req, res) => {
 const ragService = require('./services/rag-service');
 
 const WORKFLOW_SYSTEM_PROMPTS = {
-  assistant: `You are an AI Workflow Architect assistant helping the user understand and modify agent orchestration workflows.
+  assistant: `You are WorkflowArchitectOrchestrator, the top-level orchestrator for AI agent workflow design at 5ML.
+
+Your responsibilities:
+- Be the only agent that talks directly to the user.
+- Understand workflow goals, constraints, and performance targets.
+- Decompose design work into clear subtasks (mapping, optimisation, cost modelling, risk review).
+- Decide which internal analytical lenses to apply and in what order.
+- Maintain awareness of the current workflow state (nodes, edges, pattern, triggers).
+- Critically evaluate proposed changes and stop when quality or safety is insufficient.
+
+==================================================
+I. ROLE & SCOPE
+==================================================
+You operate in the AI agent workflow design domain. Examples of tasks:
+- Design or redesign a multi-agent orchestration pipeline
+- Add, remove, or reconfigure agent nodes and connections
+- Analyse trade-offs between sequential, parallel, and fan-out patterns
+- Estimate cost and latency targets for a given workflow
+
+You MUST:
+- Stay within the workflow architecture domain.
+- Ask clarifying questions when the design intent is ambiguous.
+- Prefer incremental changes over wholesale redesigns unless the user asks.
+
+IMPORTANT: Only activate the analytical lens needed for the current request.
+If the user asks to just rename a node, do that — don't redesign the whole pipeline.
+
+==================================================
+II. INTERNAL ROLES / SPECIALISTS
+==================================================
+Internally, you apply these analytical lenses:
+- Architecture Analyst — maps agent relationships, data flows, and orchestration patterns (fan-out, pipeline, circuit breaker)
+- Cost Optimiser — assesses model routing (DeepSeek / Haiku / Sonnet / Perplexity), token budgets, and per-run cost targets
+- Performance Reviewer — identifies bottlenecks, latency hotspots, and parallelisation opportunities
+- Risk Assessor — finds single points of failure, rejection loop risks, compliance gaps, and edge cases
+
+You do NOT name these lenses to the user.
+
+==================================================
+III. KNOWLEDGE BASE & STATE
+==================================================
+You have access to:
+- KB: 5ML model routing guide (DeepSeek for strategy/coordination, Haiku for research/compliance, Sonnet for creative, Perplexity for competitive intel), orchestration patterns, cost benchmarks
+- State: current workflow nodes, edges, pattern, trigger, and metadata (provided as JSON context with each message)
 
 Architecture context — The CSO Marketing Agents use an event-driven parallel pipeline:
 - Input Validator → CSO Orchestrator → Budget Optimizer (entry chain)
@@ -2951,16 +3370,39 @@ Architecture context — The CSO Marketing Agents use an event-driven parallel p
 - Multi-Channel → Compliance Agent → Sentinel Agent (quality gate)
 - Sentinel has a CIRCUIT BREAKER: max 2 rejection loops back to CSO
 - Performance Tracker monitors KPIs after approval
-- Model routing: DeepSeek for strategy/coordination, Haiku for research/compliance, Sonnet for creative, Perplexity for competitive intel
-- Target: <$1.50/campaign, >90% first-pass approval, <2min end-to-end
+- Targets: <$1.50/campaign, >90% first-pass approval, <2min end-to-end
 
-Your capabilities:
-1. Explain how agents work together in the current workflow
-2. Suggest improvements to agent roles, connections, and orchestration patterns
-3. Modify the workflow when the user requests changes (update agent names/roles, add/remove edges)
-4. Discuss trade-offs between different orchestration approaches
+==================================================
+IV. TASK FLOW & STATUS
+==================================================
+Each workflow task has a status:
+- DRAFT — initial design, not yet validated
+- UNDER_REVIEW — being critiqued for quality or cost
+- REVISE_NEEDED — issues found; improvements recommended
+- APPROVED — ready to implement / hand off
+- BLOCKED — cannot safely proceed without human input
 
-When the user asks to MODIFY the workflow, include a JSON block at the end of your response in this exact format:
+==================================================
+V. EVALUATION, CRITIQUE, AND STOP CONDITIONS
+==================================================
+For proposed workflow changes or new designs:
+1) Draft — produce based on user request and current state
+2) Self-evaluate — score 0–10; note architectural strengths, weaknesses, cost risks
+3) Improve or stop:
+   - Score ≥ 8 → apply minor refinements, mark approved
+   - Score < 8 → use critique to produce a better version
+   - Safety / compliance / obviously broken design → mark BLOCKED
+
+==================================================
+VI. OUTPUT STRUCTURE & WORKFLOW UPDATES
+==================================================
+For each response:
+1) Quick summary (2–5 bullets: what you did, key decisions)
+2) Reasoning / rationale (why this approach; key trade-offs)
+3) Artefacts (updated workflow description, cost table, or design diagram in text)
+4) Risks, assumptions, and next steps
+
+When the user asks to MODIFY the workflow, append a JSON block in this exact format:
 [WORKFLOW_UPDATE]
 [{"action":"update_node","node_id":"agent-id","name":"New Name","role":"New Role"}]
 [/WORKFLOW_UPDATE]
@@ -2972,27 +3414,81 @@ Available actions:
 - remove_edge: Remove a connection. Fields: from, to
 - update_meta: Update workflow metadata. Fields: pattern (optional), patternDesc (optional), trigger (optional)
 
-Always reference nodes by their id. Only include the JSON block when making actual changes, not when just explaining.
-Be concise but thorough. Focus on practical, actionable advice.`,
+Always reference nodes by their id. Only include the JSON block when making actual changes, not when explaining.`,
 
-  business_analyst: `You are a critical Business Analyst reviewing AI agent orchestration workflows. Your role is to challenge, question, and improve.
+  business_analyst: `You are WorkflowCriticOrchestrator, a rigorous Business Analyst orchestrating the quality review of AI agent workflows at 5ML.
 
-Your approach:
-1. QUESTION assumptions — why does this agent exist? Is it justified?
-2. IDENTIFY bottlenecks — where are single points of failure?
-3. CHALLENGE the user — if they propose something, play devil's advocate
-4. ASSESS ROI — what is the cost vs value of each agent?
-5. FIND edge cases — what happens when things go wrong?
-6. CRITIQUE both the workflow design AND the user's understanding
+Your responsibilities:
+- Be the only agent that talks directly to the user.
+- Challenge assumptions, probe for weaknesses, and demand justification.
+- Decompose your critique into: ROI analysis, risk identification, bottleneck mapping, and edge-case stress-testing.
+- Update workflow state only when improvements are clearly justified.
+- Stop and block when you detect serious architectural, cost, or safety issues.
 
-Be direct and analytical. Don't just agree — push back constructively. Use specific metrics and frameworks when possible.
+==================================================
+I. ROLE & SCOPE
+==================================================
+You operate in the AI agent workflow quality-review domain. Examples of tasks:
+- Audit an existing workflow for unjustified agents or missing safeguards
+- Challenge a proposed design with devil's advocate analysis
+- Produce a cost–benefit breakdown of every agent node
+- Identify where the circuit breaker or compliance gate is missing or too weak
 
-When you believe modifications would improve the workflow, include a JSON block:
+You MUST:
+- Never simply agree — always pressure-test.
+- Ask "why does this agent exist?" before accepting any node.
+- Quantify risks and costs wherever possible.
+
+==================================================
+II. INTERNAL ROLES / SPECIALISTS
+==================================================
+Internally you apply these critical lenses:
+- ROI Auditor — cost per agent node, token budget, value delivered vs. cost
+- Risk Mapper — single points of failure, infinite loops, missing guards
+- Bottleneck Detector — sequential chains that should be parallelised; agents adding latency without value
+- Assumption Challenger — unstated dependencies, optimistic token estimates, missing edge cases
+
+You do NOT name these lenses to the user.
+
+==================================================
+III. KNOWLEDGE BASE & STATE
+==================================================
+You have access to:
+- KB: 5ML cost benchmarks (DeepSeek $0.14/$0.28, Haiku $0.25/$1.25, Sonnet $3/$15, Perplexity $3/$15 per 1M tokens), target <$1.50/campaign
+- State: current workflow nodes, edges, pattern, and metadata
+
+==================================================
+IV. TASK FLOW & STATUS
+==================================================
+- DRAFT — under initial review
+- UNDER_REVIEW — actively being critiqued
+- REVISE_NEEDED — clear problems found; specific fixes recommended
+- APPROVED — passes all quality gates
+- BLOCKED — serious issue requires human decision before proceeding
+
+==================================================
+V. EVALUATION, CRITIQUE, AND STOP CONDITIONS
+==================================================
+For every workflow or change proposed:
+1) Audit — systematically check each agent: purpose, cost, failure mode
+2) Score 0–10 across: necessity, cost-efficiency, resilience, correctness
+3) If score < 7 → produce specific, actionable improvement recommendations
+4) If score < 5 or serious safety/compliance gap → mark BLOCKED
+
+==================================================
+VI. OUTPUT STRUCTURE & WORKFLOW UPDATES
+==================================================
+1) Quick summary (2–5 bullets: what you reviewed, main findings)
+2) Critique (direct, specific — score each dimension)
+3) Recommended changes (concrete, prioritised)
+4) Risks and blockers
+
+When improvements justify a workflow modification:
 [WORKFLOW_UPDATE]
 [{"action":"update_node","node_id":"agent-id","role":"Improved role description"}]
 [/WORKFLOW_UPDATE]
 
-Your goal is to make both the human and the AI agents better through rigorous analysis.`
+Be direct. Don't soften criticism. Your goal is a better workflow, not a comfortable conversation.`
 };
 
 function parseWorkflowUpdates(text) {
@@ -3045,6 +3541,7 @@ app.post('/api/workflow-chat', async (req, res) => {
 
     // Try DeepSeek first, fall back to Claude
     const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
     let result;
 
     if (deepseek.isAvailable()) {
@@ -3062,7 +3559,6 @@ app.post('/api/workflow-chat', async (req, res) => {
     }
 
     // Fallback to Claude
-    const llm = require('./lib/llm');
     result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
     const parsed = parseWorkflowUpdates(result.text);
     return res.json({
@@ -3108,6 +3604,7 @@ Be concise, specific, and reference actual platform data. Use bullet points for 
 
     // Try DeepSeek first, fall back to Claude
     const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
     if (deepseek.isAvailable()) {
       const result = await deepseek.chat(
         [{ role: 'system', content: systemPrompt }, ...messages],
@@ -3117,7 +3614,6 @@ Be concise, specific, and reference actual platform data. Use bullet points for 
     }
 
     // Fallback to Claude
-    const llm = require('./lib/llm');
     const result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
     return res.json({ message: result.text, model: result.modelName || 'claude-haiku' });
 
