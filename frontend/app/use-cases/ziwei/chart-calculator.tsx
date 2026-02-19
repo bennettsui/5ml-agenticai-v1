@@ -11,8 +11,6 @@ interface ChartInput {
   lunarMonth: number;
   lunarDay: number;
   hourBranch: string;
-  yearStem: string;
-  yearBranch: string;
   gender: string;
   name: string;
   placeOfBirth?: string;
@@ -27,6 +25,17 @@ const palaceNames = ['命宮', '兄弟宮', '夫妻宮', '子女宮', '財帛宮
 // Helper function to calculate age
 function calculateAge(year: number): number {
   return new Date().getFullYear() - year;
+}
+
+// Calculate year stem and branch from lunar year
+// Formula: (year - 4) % 10 = stem index, (year - 4) % 12 = branch index
+function calculateYearStemBranch(lunarYear: number): { stem: string; branch: string } {
+  const stemIndex = (lunarYear - 4) % 10;
+  const branchIndex = (lunarYear - 4) % 12;
+  return {
+    stem: stems[stemIndex],
+    branch: branches[branchIndex]
+  };
 }
 
 // Timezone mapping for common cities
@@ -49,8 +58,6 @@ export function ChartCalculator() {
     lunarMonth: 6,
     lunarDay: 15,
     hourBranch: '午',
-    yearStem: '庚',
-    yearBranch: '午',
     gender: '女',
     name: 'Sample',
     placeOfBirth: 'Hong Kong',
@@ -65,7 +72,6 @@ export function ChartCalculator() {
   const [interpretLoading, setInterpretLoading] = useState(false);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const currentAge = calculateAge(input.lunarYear);
 
@@ -76,10 +82,18 @@ export function ChartCalculator() {
     setInterpretations(null);
     setRuleEvaluation(null);
     try {
+      // Auto-calculate year stem and branch
+      const { stem, branch } = calculateYearStemBranch(input.lunarYear);
+      const payload = {
+        ...input,
+        yearStem: stem,
+        yearBranch: branch
+      };
+
       const response = await fetch('/api/ziwei/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input)
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -294,38 +308,7 @@ export function ChartCalculator() {
           </div>
         </div>
 
-        {/* Stem-Branch Section (Advanced) */}
-        {showAdvanced && (
-          <div className="space-y-4 mb-6 pb-6 border-b border-slate-700/50">
-            <h4 className="text-sm font-semibold text-slate-300">⚙️ 天干地支 Stem-Branch (Advanced)</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <ZiweiCustomSelect
-                  label="年干 Year Stem"
-                  value={input.yearStem}
-                  onChange={(value) => setInput({ ...input, yearStem: String(value) })}
-                  options={stems.map((s) => ({ value: s, label: s }))}
-                />
-              </div>
-              <div>
-                <ZiweiCustomSelect
-                  label="年支 Year Branch"
-                  value={input.yearBranch}
-                  onChange={(value) => setInput({ ...input, yearBranch: String(value) })}
-                  options={branches.map((b) => ({ value: b, label: b }))}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Toggle Advanced */}
-        <button
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          className="text-xs text-slate-500 hover:text-slate-400 mb-6 transition-colors"
-        >
-          {showAdvanced ? '▼ Hide Advanced' : '▶ Show Advanced Options'}
-        </button>
+        {/* Note: Year Stem-Branch (天干地支) is auto-calculated and will be editable in the advanced circular method (coming soon) */}
 
         {/* Calculate Button */}
         <button
@@ -387,8 +370,13 @@ export function ChartCalculator() {
               <div className="text-sm font-bold text-amber-400">{chart.fiveElementBureau}</div>
             </div>
             <div className="rounded-lg bg-slate-900/50 p-3">
-              <div className="text-xs text-slate-500">Body Palace</div>
-              <div className="text-sm font-bold text-green-400">{palaceNames[chart.bodyHouseIndex]}</div>
+              <div className="text-xs text-slate-500">Year Stem-Branch</div>
+              <div className="text-sm font-bold text-teal-400">
+                {(() => {
+                  const { stem, branch } = calculateYearStemBranch(input.lunarYear);
+                  return `${stem}${branch}`;
+                })()}
+              </div>
             </div>
           </div>
         </div>
