@@ -657,8 +657,10 @@ function getStarsByKeyword(keyword) {
     if (typeof meanings[category] === 'object' && !Array.isArray(meanings[category])) {
       for (const [starName, starData] of Object.entries(meanings[category])) {
         const meaning = (starData.meaning || '').toLowerCase();
-        const positive = (starData.positive || []).join(' ').toLowerCase();
-        const negative = (starData.negative || []).join(' ').toLowerCase();
+        const positiveArray = Array.isArray(starData.positive) ? starData.positive : (typeof starData.positive === 'string' ? [starData.positive] : []);
+        const negativeArray = Array.isArray(starData.negative) ? starData.negative : (typeof starData.negative === 'string' ? [starData.negative] : []);
+        const positive = positiveArray.join(' ').toLowerCase();
+        const negative = negativeArray.join(' ').toLowerCase();
 
         if (meaning.includes(lowerKeyword) || positive.includes(lowerKeyword) || negative.includes(lowerKeyword)) {
           result[starName] = { category, ...starData };
