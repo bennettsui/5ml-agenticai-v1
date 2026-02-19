@@ -58,7 +58,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -2962,7 +2962,7 @@ app.post('/api/social/calendar/:brandId', async (req, res) => {
   try {
     const { brandId } = req.params;
     const { posts, projectId } = req.body;
-    await saveSocialCalendar(brandId, posts.map((p: Record<string, unknown>) => ({ ...p, projectId })));
+    await saveSocialCalendar(brandId, posts.map((p) => ({ ...p, projectId })));
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
