@@ -964,13 +964,20 @@ async function runSarah({ taskId, userInput, brandContext, brandId, projectId, r
       status:       'DRAFT',
       next_step:    null,
     };
-    // Save campaign metadata to DB on first run
-    await saveSocialCampaign(taskId, {
-      briefTitle: userInput.slice(0, 200),
-      brandId,
-      projectId,
-      status: 'DRAFT',
-    });
+    // Write social_states FIRST (social_campaigns has FK reference to it)
+    await upsertSocialState(taskId, state, brandId, projectId);
+    // Then save campaign metadata
+    try {
+      await saveSocialCampaign(taskId, {
+        briefTitle: userInput.slice(0, 200),
+        brandId,
+        projectId,
+        status: 'DRAFT',
+      });
+    } catch (campaignErr) {
+      // Non-fatal: campaign metadata is optional
+      console.warn('saveSocialCampaign skipped:', campaignErr.message);
+    }
   } else {
     // Update user input for this turn
     state.user_input = userInput;
