@@ -1,10 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
+import { Breadcrumb } from '../components/Breadcrumb';
 
 export default function CaseStudiesPage() {
+  const [selectedCategory, setSelectedCategory] = useState('All');
+
   const caseStudies = [
     {
       slug: 'her-own-words-sport',
@@ -82,11 +86,25 @@ export default function CaseStudiesPage() {
 
   const categories = ['All', ...new Set(caseStudies.map(cs => cs.category))];
 
+  const filteredCaseStudies = selectedCategory === 'All'
+    ? caseStudies
+    : caseStudies.filter(cs => cs.category === selectedCategory);
+
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
 
-      <main className="flex-1 pt-20">
+      <main id="main-content" className="flex-1 pt-20">
+        {/* Breadcrumb */}
+        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <Breadcrumb items={[
+              { label: 'Home', href: '/vibe-demo/radiance' },
+              { label: 'Case Studies' }
+            ]} />
+          </div>
+        </section>
+
         {/* Hero Section */}
         <section className="pt-16 pb-12 px-6 max-w-6xl mx-auto">
           <div className="space-y-4">
@@ -105,7 +123,12 @@ export default function CaseStudiesPage() {
             {categories.map((cat) => (
               <button
                 key={cat}
-                className="px-4 py-2 text-sm font-medium rounded-full border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-purple-600 dark:hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-2 text-sm font-medium rounded-full border-2 transition-colors ${
+                  selectedCategory === cat
+                    ? 'border-purple-600 dark:border-purple-400 bg-purple-600 dark:bg-purple-500 text-white dark:text-white'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-purple-600 dark:hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-400'
+                }`}
               >
                 {cat}
               </button>
@@ -113,7 +136,7 @@ export default function CaseStudiesPage() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {caseStudies.map((caseItem) => (
+            {filteredCaseStudies.map((caseItem) => (
               <Link
                 key={caseItem.slug}
                 href={`/vibe-demo/radiance/case-studies/${caseItem.slug}`}

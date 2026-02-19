@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { Target, Zap, TrendingUp, Newspaper, Sparkles, Smartphone, Star, Palette } from 'lucide-react';
 import { RadianceLogo } from '../components/RadianceLogo';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
@@ -69,23 +70,23 @@ export default function LeadGenPage() {
             <div className="grid md:grid-cols-3 gap-8">
               {[
                 {
-                  icon: '🎯',
+                  icon: Target,
                   title: 'Strategic Integration',
                   desc: 'PR, events, and digital work together—not in silos. Each channel amplifies the others.'
                 },
                 {
-                  icon: '⚡',
+                  icon: Zap,
                   title: 'Hands-On Execution',
                   desc: 'We don\'t hand you a deck and disappear. We\'re in the room, on-site, managing outcomes.'
                 },
                 {
-                  icon: '📊',
+                  icon: TrendingUp,
                   title: 'Measurable Results',
                   desc: 'We track what matters: media coverage, event impact, audience growth, and business results.'
                 }
               ].map((item, idx) => (
                 <div key={idx} className="p-8 bg-gradient-to-br from-purple-50 to-slate-50 dark:from-purple-950/20 dark:to-slate-900/20 border border-purple-200 dark:border-purple-900/50 rounded-lg hover:shadow-lg dark:hover:shadow-purple-900/20 transition-all">
-                  <div className="text-5xl mb-4">{item.icon}</div>
+                  <item.icon className="w-10 h-10 mb-4 text-purple-600 dark:text-purple-400" />
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">{item.title}</h3>
                   <p className="text-slate-600 dark:text-slate-400 leading-relaxed">{item.desc}</p>
                 </div>
@@ -102,18 +103,18 @@ export default function LeadGenPage() {
             </h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
               {[
-                { title: 'Public Relations', icon: '📰' },
-                { title: 'Events & Experiences', icon: '🎉' },
-                { title: 'Social Media Strategy', icon: '📱' },
-                { title: 'KOL Marketing', icon: '⭐' },
-                { title: 'Creative Production', icon: '🎨' }
+                { title: 'Public Relations', icon: Newspaper },
+                { title: 'Events & Experiences', icon: Sparkles },
+                { title: 'Social Media Strategy', icon: Smartphone },
+                { title: 'KOL Marketing', icon: Star },
+                { title: 'Creative Production', icon: Palette }
               ].map((service, idx) => (
                 <Link
                   key={idx}
                   href={`/vibe-demo/radiance/services/${service.title.toLowerCase().replace(/ & /g, '-').replace(/ /g, '-')}`}
                   className="p-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-lg transition-all"
                 >
-                  <div className="text-3xl mb-3">{service.icon}</div>
+                  <service.icon className="w-8 h-8 mb-3 text-purple-600 dark:text-purple-400 mx-auto" />
                   <h3 className="font-semibold text-slate-900 dark:text-white text-center">{service.title}</h3>
                 </Link>
               ))}
