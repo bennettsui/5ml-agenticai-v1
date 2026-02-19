@@ -57,7 +57,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -2196,6 +2196,65 @@ app.delete('/api/social/state/:taskId', async (req, res) => {
     const { resetSarah } = require('./agents/social/sarahOrchestrator');
     await resetSarah(req.params.taskId);
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Sarah Orchestrator Artefact APIs ─────────────────────────────────────────
+
+// GET /api/social/artefacts/:taskId — retrieve all Markdown + JSON artefacts
+app.get('/api/social/artefacts/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const artefacts = await getAllArtefacts(taskId);
+    if (!artefacts || artefacts.length === 0) {
+      return res.status(404).json({ error: 'No artefacts found for this task_id' });
+    }
+    res.json({ data: artefacts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/content-posts/:taskId — retrieve formatted content calendar for RECENT_POSTS view
+app.get('/api/social/content-posts/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
+    const posts = await getSocialContentPosts(taskId, limit);
+    if (!posts || posts.length === 0) {
+      return res.status(404).json({ error: 'No content posts found for this task_id' });
+    }
+    res.json({ data: posts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/ad-campaigns/:taskId — retrieve media campaigns for AD_CAMPAIGNS view
+app.get('/api/social/ad-campaigns/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const campaigns = await getSocialAdCampaigns(taskId);
+    if (!campaigns || campaigns.length === 0) {
+      return res.status(404).json({ error: 'No ad campaigns found for this task_id' });
+    }
+    res.json({ data: campaigns });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/kpis/:taskId — retrieve KPI definitions for KPI_CARDS view
+app.get('/api/social/kpis/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const kpis = await getSocialKPIs(taskId);
+    if (!kpis || kpis.length === 0) {
+      return res.status(404).json({ error: 'No KPIs found for this task_id' });
+    }
+    res.json({ data: kpis });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
