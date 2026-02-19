@@ -122,7 +122,17 @@ export default function SocialMonitoringPage() {
   const [alerts, setAlerts] = useState<MonitoringAlert[]>(SAMPLE_ALERTS);
   const [rules, setRules] = useState<AlertRule[]>(SAMPLE_RULES);
   const [expandedAlert, setExpandedAlert] = useState<string | null>(null);
-  const [tab, setTab] = useState<'alerts' | 'rules'>('alerts');
+  const [tab, setTab] = useState<'alerts' | 'rules' | 'email'>('alerts');
+
+  // Email notification settings
+  const [emailSettings, setEmailSettings] = useState({
+    enabled: true,
+    recipients: '',
+    frequency: 'immediate' as 'immediate' | 'hourly' | 'daily',
+    criticalOnly: false,
+    dailySummary: true,
+    dailySummaryTime: '09:00',
+  });
   const [generating, setGenerating] = useState(false);
   const [filterSeverity, setFilterSeverity] = useState<AlertSeverity | 'all'>('all');
 
@@ -280,6 +290,16 @@ Be specific and actionable.`,
           }`}
         >
           <Settings className="w-3 h-3" /> Alert Rules ({rules.length})
+        </button>
+        <button
+          onClick={() => setTab('email')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
+            tab === 'email'
+              ? 'bg-red-600/20 text-red-400 border border-red-700/30'
+              : 'text-slate-400 hover:text-white border border-transparent'
+          }`}
+        >
+          <Mail className="w-3 h-3" /> Email Notifications
         </button>
       </div>
 
@@ -512,6 +532,123 @@ Be specific and actionable.`,
               >
                 <Save className="w-3 h-3" /> Save Rule
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ EMAIL SETTINGS TAB ══════════════ */}
+      {tab === 'email' && (
+        <div className="space-y-4">
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-red-400" />
+                <h3 className="text-sm font-semibold text-white">Email Notification Settings</h3>
+              </div>
+              <button
+                onClick={() => setEmailSettings(s => ({ ...s, enabled: !s.enabled }))}
+                className={`w-10 h-5 rounded-full relative transition-colors ${
+                  emailSettings.enabled ? 'bg-emerald-500' : 'bg-slate-700'
+                }`}
+              >
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                  emailSettings.enabled ? 'left-[22px]' : 'left-0.5'
+                }`} />
+              </button>
+            </div>
+
+            <div>
+              <label className="text-[10px] uppercase text-slate-500 mb-1 block">Recipients (comma separated)</label>
+              <input
+                value={emailSettings.recipients}
+                onChange={e => setEmailSettings(s => ({ ...s, recipients: e.target.value }))}
+                placeholder="team@example.com, manager@example.com"
+                className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-red-500/30"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] uppercase text-slate-500 mb-1 block">Alert Frequency</label>
+                <select
+                  value={emailSettings.frequency}
+                  onChange={e => setEmailSettings(s => ({ ...s, frequency: e.target.value as typeof s.frequency }))}
+                  className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500/30"
+                >
+                  <option value="immediate">Immediate (per alert)</option>
+                  <option value="hourly">Hourly digest</option>
+                  <option value="daily">Daily summary only</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase text-slate-500 mb-1 block">Filter</label>
+                <div className="space-y-2 mt-1.5">
+                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={emailSettings.criticalOnly}
+                      onChange={e => setEmailSettings(s => ({ ...s, criticalOnly: e.target.checked }))}
+                      className="accent-red-500 w-3 h-3"
+                    />
+                    Critical alerts only
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-700/30 pt-4">
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={emailSettings.dailySummary}
+                  onChange={e => setEmailSettings(s => ({ ...s, dailySummary: e.target.checked }))}
+                  className="accent-red-500 w-3 h-3"
+                />
+                Send daily summary report
+              </label>
+              {emailSettings.dailySummary && (
+                <div className="mt-2 ml-5">
+                  <label className="text-[10px] uppercase text-slate-500 mb-1 block">Daily Summary Time</label>
+                  <input
+                    type="time"
+                    value={emailSettings.dailySummaryTime}
+                    onChange={e => setEmailSettings(s => ({ ...s, dailySummaryTime: e.target.value }))}
+                    className="bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500/30"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button className="px-3 py-1.5 text-xs rounded-lg border border-slate-700/30 text-slate-400 hover:text-white flex items-center gap-1 transition-colors">
+                <Send className="w-3 h-3" /> Send Test Email
+              </button>
+              <button className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
+                <Save className="w-3 h-3" /> Save Settings
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white/[0.02] border border-slate-700/30 rounded-xl p-4">
+            <h4 className="text-xs font-medium text-slate-400 mb-2">Email Notification Types</h4>
+            <div className="grid grid-cols-2 gap-2 text-[10px]">
+              {[
+                { type: 'Engagement Spike', desc: 'When likes/comments/shares exceed baseline by 3x+' },
+                { type: 'Negative Sentiment', desc: 'When negative sentiment is detected on brand posts' },
+                { type: 'Viral Potential', desc: 'When a post shows signs of going viral (rapid sharing)' },
+                { type: 'Mention Surge', desc: 'When brand mentions increase significantly' },
+                { type: 'Daily Summary', desc: 'All metrics, sentiment trends, and top performing posts' },
+                { type: 'Weekly Report', desc: 'Comprehensive weekly social monitoring digest' },
+              ].map(n => (
+                <div key={n.type} className="flex items-start gap-2 p-2 bg-white/[0.02] rounded-lg">
+                  <Bell className="w-3 h-3 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-slate-300 font-medium">{n.type}</p>
+                    <p className="text-slate-600">{n.desc}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

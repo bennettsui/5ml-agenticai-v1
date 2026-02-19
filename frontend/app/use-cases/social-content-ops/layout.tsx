@@ -69,6 +69,65 @@ const chatConfig: AiChatConfig = {
   criticMode: true,
 };
 
+// Contextual suggested questions per module
+const MODULE_QUESTIONS: Record<string, string[]> = {
+  Overview: [
+    'Summarize our social performance this month',
+    'What content needs my attention today?',
+    'Which campaigns are performing best?',
+  ],
+  'Social Strategy': [
+    'Suggest a social strategy for HK market',
+    'Analyze our audience demographics',
+    'What content pillars should we focus on?',
+  ],
+  'Brand & Competitive Research': [
+    'Analyze our top 3 competitors in HK',
+    'What are their content strengths vs ours?',
+    'Suggest differentiation opportunities',
+  ],
+  'Content Calendar': [
+    'Generate this week\'s content plan',
+    'Best posting times for HK audience',
+    'What format should we use for product launches?',
+  ],
+  'Content Development': [
+    'Write copy for a Reel about our product',
+    'Review this content card for quality',
+    'Suggest hashtags for IG in Hong Kong',
+  ],
+  'Interactive Content': [
+    'Create a poll for audience engagement',
+    'Design a quiz about our brand',
+    'Suggest interactive story ideas',
+  ],
+  'Media Buy': [
+    'What CPM should we expect in HK?',
+    'Optimize our ad budget allocation',
+    'Suggest targeting for HK millennials',
+  ],
+  'Trend Research': [
+    'What\'s trending on IG this week?',
+    'Latest algorithm changes to know',
+    'Format best practices for Reels',
+  ],
+  'Social Monitoring': [
+    'Analyze this engagement spike',
+    'What\'s the sentiment trend this week?',
+    'How should we respond to negative comments?',
+  ],
+  'Community Management': [
+    'Draft response templates for FAQs',
+    'Flag negative comments for review',
+    'Suggest engagement strategies',
+  ],
+  'Ad Performance': [
+    'Analyze our ROAS by campaign',
+    'Compare our CPM to HK benchmarks',
+    'Which ad creatives are performing best?',
+  ],
+};
+
 function BrandSelector() {
   const { brands, selectedBrand, selectBrand, projects, selectedProject, selectProject, loading } = useBrandProject();
   const [brandOpen, setBrandOpen] = useState(false);
@@ -165,6 +224,7 @@ function SocialContentOpsInner({ children }: { children: React.ReactNode }) {
   const currentModule = MODULE_MAP[pathname] || 'Social Content Ops';
   const enrichedConfig: AiChatConfig = {
     ...chatConfig,
+    suggestedQuestions: MODULE_QUESTIONS[currentModule] || MODULE_QUESTIONS['Overview'],
     extraContext: {
       brand_id: selectedBrand?.id,
       brand_name: selectedBrand?.name,

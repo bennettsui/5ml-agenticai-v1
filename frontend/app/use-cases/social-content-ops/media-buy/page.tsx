@@ -137,13 +137,28 @@ export default function MediaBuyPage() {
     const avgCpm = 8;
     const avgCpc = 0.60;
     const avgCtr = 1.5;
+    const avgCpv = 0.03;
     return {
       impressions: Math.round(budgetNum / avgCpm * 1000),
       clicks: Math.round(budgetNum / avgCpc),
       reach: Math.round(budgetNum / avgCpm * 1000 * 0.6),
       ctr: `${avgCtr}%`,
+      cpm: `$${avgCpm.toFixed(2)}`,
+      cpc: `$${avgCpc.toFixed(2)}`,
+      views: Math.round(budgetNum / avgCpv),
+      cpv: `$${avgCpv.toFixed(3)}`,
     };
   }, [budgetNum]);
+
+  // HK industry benchmarks for comparison
+  const HK_BENCHMARKS = {
+    cpm: { value: '$6-12', label: 'CPM' },
+    cpc: { value: '$0.40-0.90', label: 'CPC' },
+    ctr: { value: '1.2-2.5%', label: 'CTR' },
+    cpv: { value: '$0.02-0.05', label: 'CPV (video)' },
+    reach_per_1k: { value: '~600', label: 'Reach per 1K impr.' },
+    engagement_rate: { value: '1.5-4.5%', label: 'Engagement Rate' },
+  };
 
   /* ── Status counts ─────────────────────── */
   const statusCounts = STATUS_PIPELINE.reduce((acc, s) => {
@@ -477,6 +492,51 @@ Return ONLY the JSON array.`,
           </>
         )}
       </div>
+
+      {/* HK Industry Benchmarks */}
+      {budgetNum > 0 && (
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
+            <h3 className="text-xs font-semibold text-slate-400">HK Industry Benchmarks</h3>
+            <span className="text-[10px] px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 rounded-full">Reference</span>
+          </div>
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+            {Object.values(HK_BENCHMARKS).map(b => (
+              <div key={b.label} className="bg-white/[0.02] rounded-lg p-2.5">
+                <p className="text-[9px] text-slate-500 uppercase mb-0.5">{b.label}</p>
+                <p className="text-xs text-white font-medium">{b.value}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-slate-600 mt-2">* Based on Meta Ads HK market averages (social media, lifestyle vertical). Actual results vary by targeting.</p>
+        </div>
+      )}
+
+      {/* Expected Results Summary */}
+      {budgetNum > 0 && estimatedMetrics && (
+        <div className="bg-cyan-900/10 border border-cyan-700/20 rounded-xl p-4">
+          <h3 className="text-xs font-semibold text-cyan-400 mb-3">Expected Results at ${budgetNum.toLocaleString()}/mo Budget</h3>
+          <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+            {[
+              { label: 'Impressions', value: `${(estimatedMetrics.impressions / 1000).toFixed(0)}K` },
+              { label: 'Reach', value: `${(estimatedMetrics.reach / 1000).toFixed(0)}K` },
+              { label: 'CPM', value: estimatedMetrics.cpm },
+              { label: 'Clicks', value: `${(estimatedMetrics.clicks / 1000).toFixed(1)}K` },
+              { label: 'CPC', value: estimatedMetrics.cpc },
+              { label: 'CTR', value: estimatedMetrics.ctr },
+              { label: 'Views', value: `${(estimatedMetrics.views / 1000).toFixed(0)}K` },
+              { label: 'CPV', value: estimatedMetrics.cpv },
+            ].map(m => (
+              <div key={m.label} className="text-center">
+                <p className="text-[9px] text-slate-500 uppercase">{m.label}</p>
+                <p className="text-sm font-bold text-white">{m.value}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-slate-500 mt-2">These are estimates. Numbers will update to actuals once campaigns are live.</p>
+        </div>
+      )}
 
       {/* Campaign Objective */}
       <div>

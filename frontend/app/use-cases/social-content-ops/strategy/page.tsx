@@ -131,6 +131,10 @@ export default function SocialStrategyPage() {
   const [dosDonts, setDosDonts] = useState('');
   const [sampleCaptions, setSampleCaptions] = useState('');
 
+  // AI Analysis preview (for structured sections)
+  const [aiPreview, setAiPreview] = useState('');
+  const [aiPreviewSection, setAiPreviewSection] = useState<StrategySection | null>(null);
+
   /* ── AI Generation ─────────────────────── */
 
   const generateSection = useCallback(async (section: StrategySection) => {
@@ -163,11 +167,9 @@ export default function SocialStrategyPage() {
         // Place generated content into the appropriate text fields
         switch (section) {
           case 'audit': setAuditSummary(msg); break;
-          case 'platforms': break; // structured data handled by chat
-          case 'pillars': break;
-          case 'goals': break;
           case 'cadence': setCadenceOverview(msg); break;
           case 'voice': setVoiceTone(msg); break;
+          default: setAiPreview(msg); setAiPreviewSection(section); break;
         }
       }
     } catch { /* silent */ }
@@ -314,17 +316,44 @@ export default function SocialStrategyPage() {
               <Globe className="w-4 h-4 text-blue-400" />
               Platform Strategy
             </h2>
-            <button
-              onClick={() => setPlatforms([...platforms, {
-                id: Date.now().toString(), platform: '', priority: 'Secondary',
-                audience: '', contentTypes: '', postingFrequency: '',
-                goals: '', notes: '',
-              }])}
-              className="px-2.5 py-1 text-xs rounded-lg border border-purple-700/30 bg-purple-500/10 text-purple-400 hover:opacity-80 flex items-center gap-1"
-            >
-              <Plus className="w-3 h-3" /> Add Platform
-            </button>
+            <div className="flex gap-2">
+              <button
+                disabled={!selectedBrand || generatingSection === 'platforms'}
+                onClick={() => generateSection('platforms')}
+                className="px-3 py-1.5 text-xs rounded-lg border border-purple-700/30 bg-purple-500/10 text-purple-400 hover:opacity-80 flex items-center gap-1 disabled:opacity-40"
+              >
+                {generatingSection === 'platforms' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                AI Analyze
+              </button>
+              <button
+                onClick={() => setPlatforms([...platforms, {
+                  id: Date.now().toString(), platform: '', priority: 'Secondary',
+                  audience: '', contentTypes: '', postingFrequency: '',
+                  goals: '', notes: '',
+                }])}
+                className="px-2.5 py-1 text-xs rounded-lg border border-purple-700/30 bg-purple-500/10 text-purple-400 hover:opacity-80 flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Add Platform
+              </button>
+            </div>
           </div>
+
+          {/* AI Analysis Preview */}
+          {aiPreviewSection === 'platforms' && aiPreview && (
+            <div className="bg-purple-900/15 border border-purple-700/30 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  <h3 className="text-xs font-semibold text-purple-400">AI Analysis — Review & Apply</h3>
+                </div>
+                <button onClick={() => { setAiPreview(''); setAiPreviewSection(null); }} className="text-[10px] text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-white/[0.05]">
+                  Dismiss
+                </button>
+              </div>
+              <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto">{aiPreview}</p>
+              <p className="text-[10px] text-slate-500 mt-3">Review the analysis above and manually update the platform forms below with relevant insights.</p>
+            </div>
+          )}
 
           <div className="space-y-2">
             {platforms.map((plat, idx) => {
@@ -449,16 +478,43 @@ export default function SocialStrategyPage() {
               <Hash className="w-4 h-4 text-emerald-400" />
               Content Pillars & Themes
             </h2>
-            <button
-              onClick={() => setPillars([...pillars, {
-                id: Date.now().toString(), name: '', description: '',
-                percentage: '', examples: '', color: 'blue',
-              }])}
-              className="px-2.5 py-1 text-xs rounded-lg border border-emerald-700/30 bg-emerald-500/10 text-emerald-400 hover:opacity-80 flex items-center gap-1"
-            >
-              <Plus className="w-3 h-3" /> Add Pillar
-            </button>
+            <div className="flex gap-2">
+              <button
+                disabled={!selectedBrand || generatingSection === 'pillars'}
+                onClick={() => generateSection('pillars')}
+                className="px-3 py-1.5 text-xs rounded-lg border border-purple-700/30 bg-purple-500/10 text-purple-400 hover:opacity-80 flex items-center gap-1 disabled:opacity-40"
+              >
+                {generatingSection === 'pillars' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                AI Analyze
+              </button>
+              <button
+                onClick={() => setPillars([...pillars, {
+                  id: Date.now().toString(), name: '', description: '',
+                  percentage: '', examples: '', color: 'blue',
+                }])}
+                className="px-2.5 py-1 text-xs rounded-lg border border-emerald-700/30 bg-emerald-500/10 text-emerald-400 hover:opacity-80 flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Add Pillar
+              </button>
+            </div>
           </div>
+
+          {/* AI Analysis Preview */}
+          {aiPreviewSection === 'pillars' && aiPreview && (
+            <div className="bg-purple-900/15 border border-purple-700/30 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  <h3 className="text-xs font-semibold text-purple-400">AI Analysis — Review & Apply</h3>
+                </div>
+                <button onClick={() => { setAiPreview(''); setAiPreviewSection(null); }} className="text-[10px] text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-white/[0.05]">
+                  Dismiss
+                </button>
+              </div>
+              <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto">{aiPreview}</p>
+              <p className="text-[10px] text-slate-500 mt-3">Review the analysis above and update the pillar forms below with relevant insights.</p>
+            </div>
+          )}
 
           {/* Pillar allocation overview */}
           <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
@@ -591,16 +647,43 @@ export default function SocialStrategyPage() {
               <TrendingUp className="w-4 h-4 text-emerald-400" />
               Goals & KPIs
             </h2>
-            <button
-              onClick={() => setKpis([...kpis, {
-                id: Date.now().toString(), metric: '', current: '',
-                target: '', timeframe: 'Monthly', platform: 'All',
-              }])}
-              className="px-2.5 py-1 text-xs rounded-lg border border-emerald-700/30 bg-emerald-500/10 text-emerald-400 hover:opacity-80 flex items-center gap-1"
-            >
-              <Plus className="w-3 h-3" /> Add KPI
-            </button>
+            <div className="flex gap-2">
+              <button
+                disabled={!selectedBrand || generatingSection === 'goals'}
+                onClick={() => generateSection('goals')}
+                className="px-3 py-1.5 text-xs rounded-lg border border-purple-700/30 bg-purple-500/10 text-purple-400 hover:opacity-80 flex items-center gap-1 disabled:opacity-40"
+              >
+                {generatingSection === 'goals' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                AI Analyze
+              </button>
+              <button
+                onClick={() => setKpis([...kpis, {
+                  id: Date.now().toString(), metric: '', current: '',
+                  target: '', timeframe: 'Monthly', platform: 'All',
+                }])}
+                className="px-2.5 py-1 text-xs rounded-lg border border-emerald-700/30 bg-emerald-500/10 text-emerald-400 hover:opacity-80 flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Add KPI
+              </button>
+            </div>
           </div>
+
+          {/* AI Analysis Preview */}
+          {aiPreviewSection === 'goals' && aiPreview && (
+            <div className="bg-purple-900/15 border border-purple-700/30 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  <h3 className="text-xs font-semibold text-purple-400">AI Analysis — Review & Apply</h3>
+                </div>
+                <button onClick={() => { setAiPreview(''); setAiPreviewSection(null); }} className="text-[10px] text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-white/[0.05]">
+                  Dismiss
+                </button>
+              </div>
+              <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto">{aiPreview}</p>
+              <p className="text-[10px] text-slate-500 mt-3">Review the suggested KPIs above and update the table below accordingly.</p>
+            </div>
+          )}
 
           <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
             <table className="w-full">

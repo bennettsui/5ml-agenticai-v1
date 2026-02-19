@@ -125,6 +125,10 @@ export default function ContentCalendarPage() {
   const [editingPost, setEditingPost] = useState<CalendarPost | null>(null);
   const [formData, setFormData] = useState<CalendarPost>(emptyPost());
 
+  // Drag-and-drop state
+  const [dragPostId, setDragPostId] = useState<string | null>(null);
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null);
+
   const filteredPosts = filterPillar ? posts.filter(p => p.pillar === filterPillar) : posts;
 
   // Build weekly grid data
@@ -385,10 +389,20 @@ IMPORTANT: Return ONLY the JSON array, no other text.`,
                 return (
                   <div
                     key={di}
-                    className={`min-h-[90px] p-1.5 border-b border-r border-slate-700/30 ${
+                    className={`min-h-[110px] p-1.5 border-b border-r border-slate-700/30 ${
                       day ? 'hover:bg-white/[0.02] cursor-pointer group' : 'bg-slate-900/30'
-                    } transition-colors`}
+                    } ${dragOverDay === dateStr ? 'bg-emerald-500/10 ring-1 ring-emerald-500/30' : ''} transition-colors`}
                     onClick={() => day && openAddForm(dateStr)}
+                    onDragOver={e => { if (day && dragPostId) { e.preventDefault(); setDragOverDay(dateStr); } }}
+                    onDragLeave={() => setDragOverDay(null)}
+                    onDrop={e => {
+                      e.preventDefault();
+                      setDragOverDay(null);
+                      if (dragPostId && dateStr) {
+                        setPosts(prev => prev.map(p => p.id === dragPostId ? { ...p, date: dateStr, day: getDayFromDate(dateStr) } : p));
+                        setDragPostId(null);
+                      }
+                    }}
                   >
                     {day && (
                       <>
@@ -401,16 +415,21 @@ IMPORTANT: Return ONLY the JSON array, no other text.`,
                           return (
                             <div
                               key={post.id}
+                              draggable
+                              onDragStart={e => { e.stopPropagation(); setDragPostId(post.id); e.dataTransfer.effectAllowed = 'move'; }}
+                              onDragEnd={() => setDragPostId(null)}
                               onClick={e => { e.stopPropagation(); openEditForm(post); }}
-                              className={`text-[9px] leading-tight px-1.5 py-1 rounded mb-0.5 truncate cursor-pointer hover:ring-1 hover:ring-white/20 transition-all ${PILLAR_COLORS[post.pillar] || 'bg-slate-700/50 text-slate-400'}`}
-                              title={`${post.platform} – ${post.format} – ${post.pillar} – ${post.title}`}
+                              className={`text-[9px] leading-tight px-1.5 py-1.5 rounded mb-0.5 cursor-pointer hover:ring-1 hover:ring-white/20 transition-all ${PILLAR_COLORS[post.pillar] || 'bg-slate-700/50 text-slate-400'} ${dragPostId === post.id ? 'opacity-50' : ''}`}
+                              title={`${post.platform} – ${post.format} – ${post.pillar}\n${post.title}\n${post.keyMessage}`}
                             >
-                              <div className="flex items-center gap-1">
+                              <div className="truncate font-medium">{post.title}</div>
+                              <div className="flex items-center gap-1 mt-0.5">
                                 <FormatIcon className="w-2.5 h-2.5 flex-shrink-0" />
-                                <span className={PLATFORM_COLORS[post.platform]}>{post.platform}</span>
+                                <span>{post.format}</span>
                                 <span className="text-slate-500">·</span>
-                                <span className="truncate">{post.title}</span>
+                                <span className={PLATFORM_COLORS[post.platform]}>{post.platform}</span>
                               </div>
+                              <div className="text-slate-500 mt-0.5 truncate">{post.boostPlan}</div>
                             </div>
                           );
                         })}

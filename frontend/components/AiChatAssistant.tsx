@@ -27,6 +27,8 @@ export interface AiChatConfig {
   accent?: string;
   /** Extra context to send with every request */
   extraContext?: Record<string, unknown>;
+  /** Suggested questions shown when chat is empty and after responses */
+  suggestedQuestions?: string[];
   /** Enable business analyst critic mode toggle */
   criticMode?: boolean;
   /** Parse custom response format. Default expects { message, model } */
@@ -90,7 +92,7 @@ function renderInline(text: string) {
 export default function AiChatAssistant({ config }: { config: AiChatConfig }) {
   const {
     endpoint, useCaseId, chatType, title = 'AI Assistant',
-    accent = 'purple', criticMode = false, extraContext,
+    accent = 'purple', criticMode = false, suggestedQuestions, extraContext,
     parseResponse = defaultParse,
   } = config;
 
@@ -129,9 +131,9 @@ export default function AiChatAssistant({ config }: { config: AiChatConfig }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  const sendMessage = useCallback(async (e?: FormEvent) => {
+  const sendMessage = useCallback(async (e?: FormEvent, directText?: string) => {
     e?.preventDefault();
-    const text = input.trim();
+    const text = (directText || input).trim();
     if (!text || loading) return;
     setInput('');
 
@@ -240,6 +242,20 @@ export default function AiChatAssistant({ config }: { config: AiChatConfig }) {
             {isCritic && (
               <p className="text-xs text-amber-400/60 mt-1">Business Analyst mode — I&apos;ll critique and challenge.</p>
             )}
+            {suggestedQuestions && suggestedQuestions.length > 0 && (
+              <div className="mt-4 space-y-1.5 text-left">
+                <p className="text-[10px] text-slate-600 uppercase text-center mb-2">Suggested Questions</p>
+                {suggestedQuestions.map((q, i) => (
+                  <button
+                    key={i}
+                    onClick={() => sendMessage(undefined, q)}
+                    className="w-full text-left px-3 py-2 bg-white/[0.03] border border-slate-700/30 rounded-lg text-xs text-slate-400 hover:text-white hover:border-slate-500 transition-colors"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {messages.map(msg => (
@@ -261,6 +277,22 @@ export default function AiChatAssistant({ config }: { config: AiChatConfig }) {
           <div className="flex gap-2 items-center text-xs text-slate-500">
             <Loader2 className="w-3 h-3 animate-spin" />
             {isCritic ? 'Analyzing critically...' : 'Thinking...'}
+          </div>
+        )}
+        {!loading && suggestedQuestions && suggestedQuestions.length > 0 && messages.length > 0 && (
+          <div className="pt-2">
+            <p className="text-[10px] text-slate-600 mb-1.5">Suggested</p>
+            <div className="flex flex-wrap gap-1.5">
+              {suggestedQuestions.slice(0, 3).map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => sendMessage(undefined, q)}
+                  className="px-2.5 py-1 bg-white/[0.03] border border-slate-700/30 rounded-full text-[10px] text-slate-500 hover:text-white hover:border-slate-500 transition-colors"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         <div ref={bottomRef} />
