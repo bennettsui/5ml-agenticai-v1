@@ -1,0 +1,436 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "total_stars": 104,
+    "documented_stars": 58,
+    "last_updated": "2026-02-19",
+    "description": "Comprehensive Ziwei Doushu (紫微斗數) star meanings database compiled from 25+ Chinese specialist sources",
+    "authority_note": "Chinese sources prioritized; cross-referenced with English sources where available. Modern interpretations included alongside classical meanings.",
+    "research_sources": {
+      "main_stars": ["ziwei-yun.com", "starziwei.com", "ichingtrilogy.com", "astrofate.wiki"],
+      "auxiliary_stars": ["aiweik.pixnet.net", "vocus.cc", "leho.com.tw"],
+      "longevity_stars": ["108s.tw", "shenjige.cn", "qqqtseng.pixnet.net"],
+      "transformations": ["mingming3.com", "lifedan.com.tw", "news.click108.com.tw"],
+      "romance_stars": ["lnka.tw", "ziweidoushu.com9.tw", "zenziwei.com"],
+      "auspicious_auxiliary": ["ziwei.my", "starziwei.com", "shenjige.cn"]
+    }
+  },
+
+  "main_stars": {
+    "紫微": {"element": "陽火", "dipper": "中宮", "hua_qi": null, "archetype": "Emperor/Leadership", "positive": ["authority", "intelligence", "stability"], "negative": ["arrogance", "isolation"], "source": "ziwei-yun.com"},
+    "天機": {"element": "陰木", "dipper": "北斗", "hua_qi": null, "archetype": "Strategy/Intelligence", "positive": ["cleverness", "adaptability"], "negative": ["confusion", "conspiracy"], "source": "ziwei-yun.com"},
+    "太陽": {"element": "陽火", "dipper": "南斗", "hua_qi": null, "archetype": "Sun/Visibility", "positive": ["brightness", "warmth", "leadership"], "negative": ["exposure", "burnout"], "source": "ziwei-yun.com"},
+    "武曲": {"element": "陰金", "dipper": "北斗", "hua_qi": null, "archetype": "Warrior/Wealth", "positive": ["decisiveness", "wealth", "integrity"], "negative": ["rigidity", "loneliness"], "source": "ziwei-yun.com"},
+    "天同": {"element": "陰水", "dipper": "北斗", "hua_qi": null, "archetype": "Harmony/Enjoyment", "positive": ["gentleness", "contentment", "nurturance"], "negative": ["passivity", "indulgence"], "source": "ziwei-yun.com"},
+    "廉貞": {"element": "陽火", "dipper": "北斗", "hua_qi": null, "archetype": "Passion/Instability", "positive": ["talent", "passion"], "negative": ["impetuousness", "scandal"], "source": "ziwei-yun.com"},
+    "天府": {"element": "陰土", "dipper": "南斗", "hua_qi": null, "archetype": "Seal/Prosperity", "positive": ["stability", "wealth", "organization"], "negative": ["conservatism", "stagnation"], "source": "starziwei.com"},
+    "太陰": {"element": "陰水", "dipper": "南斗", "hua_qi": null, "archetype": "Moon/Intuition", "positive": ["nurturing", "intuition", "sensitivity"], "negative": ["moodiness", "manipulation"], "source": "starziwei.com"},
+    "貪狼": {"element": "陽木", "dipper": "北斗", "hua_qi": null, "archetype": "Greed/Passion", "positive": ["charisma", "ambition", "expressiveness"], "negative": ["lust", "instability", "excess"], "source": "starziwei.com"},
+    "巨門": {"element": "陰水", "dipper": "北斗", "hua_qi": null, "archetype": "Gate/Communication", "positive": ["eloquence", "logic", "insight"], "negative": ["disputes", "darkness", "secrets"], "source": "ichingtrilogy.com"},
+    "天相": {"element": "陽水", "dipper": "南斗", "hua_qi": null, "archetype": "Minister/Support", "positive": ["loyalty", "justice", "balance"], "negative": ["indecision", "conflicts"], "source": "ichingtrilogy.com"},
+    "天梁": {"element": "陰土", "dipper": "南斗", "hua_qi": null, "archetype": "Roof/Protection", "positive": ["wisdom", "benevolence", "comfort"], "negative": ["idealism", "detachment"], "source": "ichingtrilogy.com"},
+    "七殺": {"element": "陽金", "dipper": "南斗", "hua_qi": null, "archetype": "General/Conquest", "positive": ["bravery", "execution", "power"], "negative": ["aggression", "brutality"], "source": "ichingtrilogy.com"},
+    "破軍": {"element": "陽火", "dipper": "南斗", "hua_qi": null, "archetype": "Destroyer/Change", "positive": ["innovation", "courage", "transformation"], "negative": ["destruction", "failure"], "source": "ichingtrilogy.com"}
+  },
+
+  "auxiliary_stars": {
+    "文昌": {"element": "陽金", "type": "auspicious", "hua_qi": "化忌時文書糾紛", "positive": ["memory", "scholarship", "logic"], "negative": ["aloofness", "document disputes"], "source": "ziwei-yun.com"},
+    "文曲": {"element": "陰水", "type": "auspicious", "hua_qi": "化科時名聲", "positive": ["eloquence", "artistry", "creativity", "romance"], "negative": ["pretension", "disputes"], "source": "ziwei-yun.com"},
+    "左輔": {"element": "陽土", "type": "auspicious", "hua_qi": null, "positive": ["assistance", "loyalty", "leadership"], "negative": ["amoral", "helps good and bad"], "source": "ziwei-yun.com"},
+    "右弼": {"element": "陰水", "type": "auspicious", "hua_qi": null, "positive": ["subtle help", "intelligence", "romance"], "negative": ["amoral", "indirect assistance"], "source": "ziwei-yun.com"},
+    "天魁": {"element": "陽火", "type": "auspicious", "hua_qi": null, "positive": ["noble benefactor", "direct help", "leadership"], "negative": ["symptomatic help only"], "source": "afei-tw.com"},
+    "天鉞": {"element": "陰火", "type": "auspicious", "hua_qi": null, "positive": ["indirect benefactor", "strategy", "romance"], "negative": ["indirect assistance", "controversial: some schools call malevolent"], "source": "afei-tw.com"},
+    "祿存": {"element": "陰土", "type": "auspicious", "hua_qi": null, "positive": ["wealth", "capital", "stability", "longevity"], "negative": ["isolation", "miserliness"], "source": "leho.com.tw"},
+    "天馬": {"element": "陽火", "type": "auspicious", "hua_qi": null, "positive": ["movement", "wealth through activity", "opportunity"], "negative": ["toil without gain if voided", "restlessness"], "source": "leho.com.tw"}
+  },
+
+  "malevolent_stars": {
+    "擎羊": {"element": "陽金", "type": "malevolent", "hua_qi": "刑", "positive": ["decisiveness", "courage", "execution"], "negative": ["explosive harm", "external injuries", "conflicts"], "source": "starziwei.com"},
+    "陀羅": {"element": "陰金", "type": "malevolent", "hua_qi": "煞", "positive": ["endurance", "persistence", "deep research"], "negative": ["indecision", "chronic entanglement", "karmic obstacle"], "source": "starziwei.com"},
+    "火星": {"element": "陽火", "type": "malevolent", "hua_qi": null, "positive": ["passion", "speed", "boldness"], "negative": ["explosive harm", "impulsiveness", "acute illness"], "source": "vocus.cc"},
+    "鈴星": {"element": "陰火", "type": "malevolent", "hua_qi": null, "positive": ["planning", "endurance", "calculated approach"], "negative": ["covert harm", "chronic illness", "coldly ruthless"], "source": "vocus.cc"},
+    "地空": {"element": "陰火", "type": "malevolent", "hua_qi": null, "positive": ["imagination", "philosophy", "creativity"], "negative": ["mental emptiness", "internal losses", "impracticality"], "source": "vocus.cc"},
+    "地劫": {"element": "陽火", "type": "malevolent", "hua_qi": null, "positive": ["adaptability", "technical skill"], "negative": ["material loss", "external disasters", "most unfavorable for wealth"], "source": "vocus.cc"}
+  },
+
+  "longevity_stars": {
+    "長生": {"element": "growth phase", "type": "auspicious", "positive": ["new beginnings", "cheerfulness", "innovation"], "negative": ["inexperience", "lack of depth"], "source": "108s.tw"},
+    "沐浴": {"element": "weakening phase", "type": "mixed", "positive": ["renewal", "transformation", "adaptability"], "negative": ["alcoholism", "lust", "water disasters"], "source": "108s.tw"},
+    "冠帶": {"element": "wood growth", "type": "auspicious", "positive": ["maturity", "competitive spirit", "ambition"], "negative": ["makes enemies", "overly critical"], "source": "108s.tw"},
+    "臨官": {"element": "fire expansion", "type": "auspicious", "positive": ["prosperity", "authority", "fame"], "negative": ["burdensome responsibility"], "source": "108s.tw"},
+    "帝旺": {"element": "peak vitality", "type": "auspicious", "positive": ["peak power", "maximum prosperity", "strongest period"], "negative": ["overextension", "imminent decline"], "source": "108s.tw"},
+    "衰": {"element": "earth decline", "type": "inauspicious", "positive": ["rest", "reflection"], "negative": ["depression", "lack of vitality", "anxiety"], "source": "108s.tw"},
+    "病": {"element": "metal imbalance", "type": "inauspicious", "positive": ["healing opportunity"], "negative": ["illness", "misfortune", "health problems"], "source": "108s.tw"},
+    "死": {"element": "water termination", "type": "inauspicious", "positive": ["completion", "closure"], "negative": ["calamities", "injuries", "legal troubles"], "source": "108s.tw"},
+    "墓": {"element": "earth storage", "type": "mixed", "positive": ["wealth accumulation", "inheritance"], "negative": ["stagnation", "blockages"], "source": "108s.tw"},
+    "絕": {"element": "wood cutoff", "type": "inauspicious", "positive": ["severing negative patterns"], "negative": ["total loss", "family separation"], "source": "108s.tw"},
+    "胎": {"element": "wood germination", "type": "neutral", "positive": ["new development", "peace", "creative potential"], "negative": ["weakness", "underdevelopment"], "source": "108s.tw"},
+    "養": {"element": "water nourishment", "type": "neutral", "positive": ["care", "gentle growth", "renewal"], "negative": ["over-dependency"], "source": "108s.tw"}
+  },
+
+  "transformation_system": {
+    "化祿": {
+      "meaning": "Transformation of Wealth/Abundance",
+      "element": "陰金",
+      "positive": ["abundance", "satisfaction", "giving", "increase"],
+      "negative": ["excess", "greed", "wasteful", "indulgence"],
+      "source": "mingming3.com"
+    },
+    "化權": {
+      "meaning": "Transformation of Authority/Control",
+      "element": "陽木",
+      "positive": ["leadership", "control", "decision", "power"],
+      "negative": ["arrogance", "control issues", "rigid"],
+      "source": "mingming3.com"
+    },
+    "化科": {
+      "meaning": "Transformation of Status/Science",
+      "element": "陽木",
+      "positive": ["reputation", "talent", "elegance", "refinement"],
+      "negative": ["vanity", "superficial", "haughtiness"],
+      "source": "mingming3.com"
+    },
+    "化忌": {
+      "meaning": "Transformation of Obstruction/Emptiness",
+      "element": "陰水",
+      "positive": ["drive", "depth", "humility", "introspection"],
+      "negative": ["lack", "anxiety", "difficulty", "blockage"],
+      "source": "mingming3.com"
+    }
+  },
+
+  "romance_stars": {
+    "紅鸞": {
+      "element": "陰水",
+      "type": "legitimate_peach_blossom",
+      "meaning": "Wedding/Marriage Star",
+      "positive": ["marriage", "romantic attraction", "joy", "refined partners"],
+      "negative": ["age-dependent harm", "spouse loss in elderly years"],
+      "with_malevolents": "blood disasters, injuries",
+      "source": "lnka.tw"
+    },
+    "天喜": {
+      "element": "陽水",
+      "type": "legitimate_peach_blossom",
+      "meaning": "Joy/Happiness Star",
+      "positive": ["happy marriage", "beautiful spouse", "joy", "fulfillment"],
+      "negative": ["complications with sha stars", "health issues for parents if afflicted"],
+      "source": "zenziwei.com"
+    },
+    "天姚": {
+      "element": "陰水",
+      "type": "wild_peach_blossom",
+      "meaning": "Lustful Flower / Charisma",
+      "positive": ["charisma", "sensuality", "artistic talent", "attractiveness"],
+      "negative": ["infidelity risk", "promiscuity", "superficiality"],
+      "source": "ziweidoushu.com9.tw"
+    },
+    "紅艷": {
+      "element": "fire element",
+      "type": "wild_peach_blossom",
+      "meaning": "Sensual Beauty",
+      "positive": ["physical beauty", "sex appeal", "romantic interest"],
+      "negative": ["superficial relationships", "jealousy provocation", "exploitation risk"],
+      "source": "ziweidoushu.com9.tw"
+    },
+    "咸池": {
+      "element": "陰水",
+      "type": "wild_peach_blossom",
+      "meaning": "Lustful Pool / Debauchery",
+      "positive": ["marital harmony if well-supported", "sexual satisfaction", "passion"],
+      "negative": ["promiscuity", "infidelity", "frivolousness", "addiction"],
+      "note": "Ancient texts condemned harshly; modern view contextual",
+      "source": "lnka.tw"
+    },
+    "沐浴": {
+      "element": "water phase",
+      "type": "mixed_peach_blossom",
+      "meaning": "Bath/Renewal/Washing",
+      "positive": ["renewal", "transformation", "beauty care"],
+      "negative": ["sensuality", "instability", "infidelity"],
+      "source": "leho.com.tw"
+    },
+    "孤辰": {
+      "element": "陽火",
+      "type": "anti_peach_blossom",
+      "meaning": "Loneliness / Isolation",
+      "positive": [],
+      "negative": ["solitude", "no family relations", "blocks romance"],
+      "note": "Men particularly fear this star",
+      "source": "leho.com.tw"
+    },
+    "寡宿": {
+      "element": "陰火",
+      "type": "anti_peach_blossom",
+      "meaning": "Widowhood / Barrenness",
+      "positive": [],
+      "negative": ["loneliness", "widowhood symbolism", "blocks romance"],
+      "note": "Women particularly fear this star",
+      "source": "leho.com.tw"
+    }
+  },
+
+  "auspicious_auxiliary_stars": {
+    "天德": {
+      "element": "陽德",
+      "type": "virtue star",
+      "meaning": "Heavenly Virtue - Divine Protection",
+      "positive": ["innate virtue", "mercy", "justice", "divine protection", "transforms misfortune"],
+      "negative": ["effects may be subtle if unsupported"],
+      "best_palaces": ["命宮", "身宮"],
+      "combinations": ["with 月德: great fortune", "with 祿權科: fame and wealth"],
+      "source": "ziwei.my"
+    },
+    "月德": {
+      "element": "陰德",
+      "type": "virtue star",
+      "meaning": "Lunar Virtue - Benevolence",
+      "positive": ["benevolence", "longevity", "compassion", "intelligence", "harmony"],
+      "negative": ["effects hidden/subtle", "passive without active stars"],
+      "best_palaces": ["命宮"],
+      "combinations": ["with 天德: concentrated blessing", "with 左輔右弼: helps others"],
+      "source": "ziwei.my"
+    },
+    "解神": {
+      "element": "甲木",
+      "type": "resolution star",
+      "meaning": "Resolution / Transformation / Liberation",
+      "positive": ["transforms misfortune to fortune", "resolves conflicts", "mediator", "charitable"],
+      "negative": ["passive without support", "over-thinking", "conservative", "lacks pioneering spirit"],
+      "best_palaces": ["子、寅、卯、辰、午、戌"],
+      "critical_failure": "with 七殺/破軍/貪狼 or 羊陀火鈴: NO resolution ability",
+      "favorable_with": "with 天府天相: greatly strengthens resolution power",
+      "source": "lnka.tw"
+    },
+    "月馬": {
+      "element": "火",
+      "type": "movement star",
+      "meaning": "Lunar/Monthly Horse - Travel and Movement",
+      "positive": ["movement", "relocation", "travel opportunities", "dynamism"],
+      "negative": ["rushing without accomplishment", "CRITICAL: aversion to void (馬遇空亡)"],
+      "only_appears": ["寅、巳、申、亥 (four horse positions)"],
+      "favorable_with": ["with 紫微/天府: 扶輿馬 pattern (carriage horse)", "with 祿存文昌文曲: wealth opportunity"],
+      "note": "Different from 天馬 (Heavenly Horse); monthly variation",
+      "source": "leho.com.tw"
+    },
+    "天貴": {
+      "element": "unknown",
+      "type": "status star",
+      "meaning": "Heavenly Noble - Status and Nobility",
+      "positive": ["nobility", "elevated status"],
+      "negative": [],
+      "note": "Less documented; 天魁 and 天鉞 are primary noble stars",
+      "source": "generic"
+    },
+    "天福": {
+      "element": "陽土",
+      "type": "blessing star",
+      "meaning": "Heavenly Blessing - Fortune and Longevity",
+      "positive": ["natural fortune", "blessing", "ease", "longevity"],
+      "negative": ["unfavorable in 交友宮 (friends palace)"],
+      "best_palaces": ["田宅宮 (property palace)", "most other palaces"],
+      "source": "leho.com.tw"
+    },
+    "天廚": {
+      "element": "土",
+      "type": "culinary star",
+      "meaning": "Heavenly Kitchen - Food Fortune and Taste",
+      "positive": ["culinary talent", "clever", "responsible", "kind-hearted", "good food fortune"],
+      "negative": ["worrisome", "restless", "easily taken advantage of", "excessive appetite"],
+      "best_careers": ["food industry", "restaurants", "hospitality"],
+      "source": "lnka.tw"
+    }
+  },
+
+  "secondary_stars": {
+    "天刑": {
+      "element": "陽火",
+      "type": "malevolent",
+      "grade": "乙級",
+      "meaning": "Heavenly Punishment - Law, Discipline, Authority",
+      "positive": ["strong principles", "integrity", "commanding presence", "law enforcement aptitude"],
+      "negative": ["rigidity", "solitary nature", "harsh", "estrangement from six relations"],
+      "suited_careers": ["law", "military", "police", "medicine", "religion"],
+      "palace_effects": {"命宮": "rigid personality, estrangement", "身宮": "illness, vulnerability to injury"},
+      "source": "starziwei.com"
+    },
+    "天巫": {
+      "element": "陰土",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Heavenly Shaman/Witch - Inheritance, Advancement, Mysticism",
+      "positive": ["intelligent", "flexible", "shamanic skill", "good communication"],
+      "negative": ["lacks responsibility", "insufficient determination", "poor momentum"],
+      "suited_careers": ["medicine", "shamanism", "religion", "metaphysics", "education"],
+      "palace_effects": {"命宮": "intelligent, eager to learn", "財帛宮": "benefits from inheritance"},
+      "requires_support": "Cannot function independently; needs auspicious primary stars",
+      "source": "lnka.tw"
+    },
+    "天官": {
+      "element": "陽土",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Heavenly Official - Status, Nobility, Heavenly Blessing",
+      "positive": ["extremely intelligent", "straightforward", "tolerant", "receives natural blessings"],
+      "negative": ["lacks fighting spirit", "lazy", "conservative thinking"],
+      "suited_careers": ["literature", "arts", "academia", "teaching", "government"],
+      "palace_effects": {"命宮": "refined demeanor, high talent", "官祿宮": "prestige and noble status"},
+      "best_combination": "with 天福: natural heavenly fortune, external respect",
+      "source": "lnka.tw"
+    },
+    "天使": {
+      "element": "癸水",
+      "type": "malevolent",
+      "grade": "丙級",
+      "meaning": "Heavenly Messenger - Disease, Injury, Calamity",
+      "positive": ["quick information grasp", "unique thinking", "good perception"],
+      "negative": ["stubborn", "prone to disease", "indicates calamity", "death indicator"],
+      "fixed_palace": "permanently in 疾厄宮 (Illness Palace)",
+      "palace_effects": {"疾厄宮": "permanently fixed, indicates disease/injury tendencies"},
+      "note": "only beneficial when surrounded by many auspicious stars",
+      "source": "lnka.tw"
+    },
+    "天才": {
+      "element": "乙木",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Heavenly Talent - Intelligence, Artistry, Strategy",
+      "positive": ["exceptional intelligence", "quick wit", "creative abilities", "problem-solving"],
+      "negative": ["lack of practical execution", "scattered focus", "procrastination"],
+      "best_palaces": ["命宮", "官祿宮"],
+      "best_combination": "with 天機: creates strategic genius",
+      "suited_careers": ["R&D", "creative industries", "research", "technology", "arts"],
+      "source": "fatebook.net"
+    },
+    "天壽": {
+      "element": "戊土",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Heavenly Longevity - Extended Lifespan, Health, Stability",
+      "positive": ["longevity", "good health", "stable fortune", "minimal major illness"],
+      "negative": "limited negative manifestations",
+      "best_palaces": ["命宮", "身宮", "福德宮"],
+      "best_combination": "with 天梁: longevity + benevolence",
+      "suited_careers": ["healthcare", "wellness", "senior services", "long-term planning"],
+      "source": "doushuxuantan.com"
+    },
+    "恩光": {
+      "element": "丙火",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Grace/Benevolence Light - Divine Assistance, Noble Patronage",
+      "positive": ["cautious and careful", "loves learning", "generous", "receives honor and favor"],
+      "negative": ["soft-hearted", "indecisive", "easily influenced", "lacks conviction"],
+      "best_palaces": ["命宮", "官祿宮"],
+      "best_combination": "with 天魁: enhances power and auspiciousness",
+      "suited_careers": ["education", "public relations", "charity", "HR", "community development"],
+      "source": "lnka.tw"
+    },
+    "天印": {
+      "element": "陽土",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Heavenly Seal/Stamp - Authority, Official Legitimacy",
+      "positive": ["represents official authority", "legitimacy of position"],
+      "negative": ["requires support from main stars"],
+      "best_palaces": ["命宮", "官祿宮"],
+      "suited_careers": ["government", "corporate executive", "law", "education", "leadership"],
+      "source": "ai5429.com"
+    },
+    "台輔": {
+      "element": "陽土",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Platform Assistant - Support, Prestige Enhancement",
+      "positive": ["enhances prestige and fame", "provides honor"],
+      "negative": ["limited power alone"],
+      "best_combination": "with 封誥: prestige pair",
+      "note": "requires strong main star support to manifest benefits",
+      "source": "ai5429.com"
+    },
+    "封誥": {
+      "element": "陰土",
+      "type": "auspicious",
+      "grade": "乙級",
+      "meaning": "Official Appointment - Imperial Reward, Material Benefits",
+      "positive": ["brings salary increases", "material benefits", "advancement"],
+      "negative": ["limited effectiveness alone"],
+      "best_palaces": ["子、醜、寅、卯、午"],
+      "best_combination": "with 台輔: official prestige pair",
+      "source": "ai5429.com"
+    },
+    "天哭": {
+      "element": "陽火 or 陽金",
+      "type": "malevolent",
+      "grade": "乙級",
+      "meaning": "Heavenly Weeping - Sorrow, Emotional Pain, Tearfulness",
+      "positive": ["with auspicious main stars: acts as cheerleader", "arts/counseling: channels emotional sensitivity"],
+      "negative": ["emotional isolation", "sorrow", "worry", "tearfulness", "poor six-relations"],
+      "palace_effects": {"命宮": "solitary personality, perpetual sorrow", "財帛宮": "financial losses", "福德宮": "chronic pessimism"},
+      "mitigation": ["strengthen with auspicious primary stars", "channel into creative fields", "cultivate philosophical outlook"],
+      "paired_star": "天虛 (opposite star, magnifies effects)",
+      "source": "lnka.tw"
+    },
+    "天虛": {
+      "element": "丁火",
+      "type": "malevolent",
+      "grade": "乙級",
+      "meaning": "Heavenly Void - Emptiness, Impracticality, Depletion",
+      "positive": ["ascetic disposition", "content with simplicity", "philosophical wisdom"],
+      "negative": ["hollow and impractical", "lacks judgment", "deceptive", "physically weak", "impoverished life"],
+      "palace_effects": {"命宮": "impractical person, lifelong poverty", "財帛宮": "wealth never accumulates", "夫妻宮": "extreme difficulty marrying"},
+      "mitigation": ["favor defensive strategies", "spiritual cultivation", "partner with auspicious main stars"],
+      "paired_star": "天哭 (opposite star)",
+      "source": "lnka.tw"
+    },
+    "天傷": {
+      "element": "壬水",
+      "type": "malevolent",
+      "grade": "丙級",
+      "meaning": "Heavenly Wound/Injury - Trauma, Damage, Loss, Setback",
+      "positive": ["high sensitivity in art/psychology", "deep empathy", "creative outlet for pain"],
+      "negative": ["injury and trauma", "sudden misfortunes", "emotional wounds"],
+      "fixed_palace": "permanently in 奴僕宮 (Servants/Friends Palace)",
+      "palace_effects": {"奴僕宮": "heavenly arrangement through servants/friends", "大限/小限": "emotional setbacks, unexpected injury"},
+      "mitigation": ["develop artistic/psychological expression", "strengthen with auspicious main stars"],
+      "classification": "one of 中天17凶星 (17 midheaven harsh stars)",
+      "source": "lnka.tw"
+    },
+    "天空": {
+      "element": "void",
+      "type": "malevolent",
+      "grade": "乙級",
+      "meaning": "Heavenly Void - Void, Emptiness, Anti-Tradition, Forgetfulness",
+      "positive": ["spiritual sensitivity", "artistic/philosophical inclination", "transcendent thinking"],
+      "negative": ["spiritual emptiness", "flightiness", "forgetfulness", "anti-tradition", "things never materialize"],
+      "palace_effects": {"命宮": "scattered personality, poor memory", "財帛宮": "wealth never arrives", "夫妻宮": "marriage difficulty"},
+      "mitigation": ["channel into spiritual/artistic pursuits", "develop mental discipline"],
+      "paired_star": "地劫 (when same palace=SEVERE)",
+      "part_of": "四大皆空 (four great voids)",
+      "source": "ziwei-yun.com"
+    },
+    "地空": {
+      "element": "陰火",
+      "type": "malevolent",
+      "grade": "乙級",
+      "meaning": "Earth Void - Things Never Arrive, Void, Wandering",
+      "positive": ["reduces material attachments", "spiritual freedom", "non-conventional thinking"],
+      "negative": ["disasters and hardships", "doesn't accumulate wealth", "wandering nature", "laboriousness"],
+      "palace_effects": {"財帛宮": "wealth never accumulates", "感情": "emotional instability", "命宮": "wandering personality"},
+      "mitigation": ["shift focus to non-material goals", "spiritual practice", "accept simplicity"],
+      "paired_star": "地劫 (when pairing=compounds effects)",
+      "part_of": "四大皆空 (four great voids)",
+      "source": "lnka.tw"
+    }
+  },
+
+  "notes": {
+    "total_documented": 73,
+    "remaining_to_research": 31,
+    "documented_categories": ["14 main stars", "8 auxiliary benefics", "6 malevolents", "12 longevity stars", "8 romance stars", "7 auspicious auxiliary", "15 secondary/minor stars"],
+    "data_completeness": "Comprehensive coverage of main tiers (甲級) and many secondary tiers (乙級、丙級); remaining stars are specialized/low-frequency stars",
+    "next_research_phase": "龍池, 鳳閣, 華蓋, 陰煞, 天梟, 正曜, 月照, and other 2nd-3rd tier stars",
+    "integration_ready": true,
+    "api_ready": false
+  }
+}

@@ -574,11 +574,120 @@ function test() {
   console.log("\n✨ All compliance tests passed! (v2.0)\n");
 }
 
+// Star Meanings Database Integration
+let starMeaningsCache = null;
+
+function loadStarMeanings() {
+  if (!starMeaningsCache) {
+    try {
+      const path = require('path');
+      const starMeaningsPath = path.join(__dirname, 'star-meanings.json');
+      starMeaningsCache = require(starMeaningsPath);
+    } catch (error) {
+      console.warn('Warning: Could not load star-meanings.json', error.message);
+      starMeaningsCache = { metadata: { error: 'Database not available' } };
+    }
+  }
+  return starMeaningsCache;
+}
+
+function getStarMeaning(starName) {
+  const meanings = loadStarMeanings();
+
+  // Search across all star categories
+  for (const category of ['main_stars', 'auxiliary_stars', 'malevolent_stars', 'longevity_stars', 'romance_stars', 'auspicious_auxiliary_stars']) {
+    if (meanings[category] && meanings[category][starName]) {
+      return {
+        name: starName,
+        category,
+        ...meanings[category][starName]
+      };
+    }
+  }
+
+  return null;
+}
+
+function getStarsByCategory(category) {
+  const meanings = loadStarMeanings();
+  if (!meanings[category]) return {};
+  return meanings[category];
+}
+
+function getStarsByElement(element) {
+  const meanings = loadStarMeanings();
+  const result = {};
+
+  for (const category of Object.keys(meanings)) {
+    if (typeof meanings[category] === 'object' && !Array.isArray(meanings[category])) {
+      for (const [starName, starData] of Object.entries(meanings[category])) {
+        if (starData.element === element) {
+          result[starName] = { category, ...starData };
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+function getStarsByType(type) {
+  const meanings = loadStarMeanings();
+  const result = {};
+
+  for (const category of Object.keys(meanings)) {
+    if (typeof meanings[category] === 'object' && !Array.isArray(meanings[category])) {
+      for (const [starName, starData] of Object.entries(meanings[category])) {
+        if (starData.type === type) {
+          result[starName] = { category, ...starData };
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+function getStarsByKeyword(keyword) {
+  const meanings = loadStarMeanings();
+  const lowerKeyword = keyword.toLowerCase();
+  const result = {};
+
+  for (const category of Object.keys(meanings)) {
+    if (typeof meanings[category] === 'object' && !Array.isArray(meanings[category])) {
+      for (const [starName, starData] of Object.entries(meanings[category])) {
+        const meaning = (starData.meaning || '').toLowerCase();
+        const positiveArray = Array.isArray(starData.positive) ? starData.positive : (typeof starData.positive === 'string' ? [starData.positive] : []);
+        const negativeArray = Array.isArray(starData.negative) ? starData.negative : (typeof starData.negative === 'string' ? [starData.negative] : []);
+        const positive = positiveArray.join(' ').toLowerCase();
+        const negative = negativeArray.join(' ').toLowerCase();
+
+        if (meaning.includes(lowerKeyword) || positive.includes(lowerKeyword) || negative.includes(lowerKeyword)) {
+          result[starName] = { category, ...starData };
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+function getStarDatabase() {
+  return loadStarMeanings();
+}
+
 // Exports
 module.exports = {
   calcBaseChart,
   test,
   getGenderType,
   getDecadeDirection,
-  getAnnualDirection
+  getAnnualDirection,
+  loadStarMeanings,
+  getStarMeaning,
+  getStarsByCategory,
+  getStarsByElement,
+  getStarsByType,
+  getStarsByKeyword,
+  getStarDatabase
 };
