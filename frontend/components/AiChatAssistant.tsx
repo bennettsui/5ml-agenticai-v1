@@ -33,6 +33,8 @@ export interface AiChatConfig {
   criticMode?: boolean;
   /** Parse custom response format. Default expects { message, model } */
   parseResponse?: (data: unknown) => { message: string; model?: string };
+  /** Callback when chat open/close state changes */
+  onOpenChange?: (isOpen: boolean) => void;
 }
 
 interface Message {
@@ -93,7 +95,7 @@ export default function AiChatAssistant({ config }: { config: AiChatConfig }) {
   const {
     endpoint, useCaseId, chatType, title = 'AI Assistant',
     accent = 'purple', criticMode = false, suggestedQuestions, extraContext,
-    parseResponse = defaultParse,
+    parseResponse = defaultParse, onOpenChange,
   } = config;
 
   const [open, setOpen] = useState(false);
@@ -130,6 +132,11 @@ export default function AiChatAssistant({ config }: { config: AiChatConfig }) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  // Notify layout when chat opens/closes
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [open, onOpenChange]);
 
   const sendMessage = useCallback(async (e?: FormEvent, directText?: string) => {
     e?.preventDefault();

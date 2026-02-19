@@ -57,7 +57,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -2386,6 +2386,133 @@ app.get('/api/brands/:brandId/portfolio', async (req, res) => {
     const { brandId } = req.params;
     const portfolio = await getProductServicePortfolio(brandId);
     res.json({ data: portfolio });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Research Data Management ─────────────────────────────────────────────────
+
+// POST /api/research/:brandId/business — save business overview and mission
+app.post('/api/research/:brandId/business', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await saveResearchBusiness(brandId, req.body);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/research/:brandId/business — get business overview and mission
+app.get('/api/research/:brandId/business', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const data = await getResearchBusiness(brandId);
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/research/:brandId/competitors — save competitor analysis
+app.post('/api/research/:brandId/competitors', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    await saveResearchCompetitors(brandId, req.body.competitors || []);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/research/:brandId/competitors — get competitor analysis
+app.get('/api/research/:brandId/competitors', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const competitors = await getResearchCompetitors(brandId);
+    res.json({ data: competitors });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/research/:brandId/competitors/:competitorId — delete competitor
+app.delete('/api/research/:brandId/competitors/:competitorId', async (req, res) => {
+  try {
+    const { competitorId } = req.params;
+    await deleteResearchCompetitor(competitorId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/research/:brandId/audience — save audience positioning and segments
+app.post('/api/research/:brandId/audience', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const audienceResult = await saveResearchAudience(brandId, req.body);
+    if (req.body.segments && req.body.segments.length > 0) {
+      await saveResearchSegments(audienceResult.audience_id, req.body.segments);
+    }
+    res.json({ data: audienceResult });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/research/:brandId/audience — get audience data
+app.get('/api/research/:brandId/audience', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const audience = await getResearchAudience(brandId);
+    const segments = await getResearchSegments(brandId);
+    res.json({ data: { audience, segments } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/research/:brandId/segments/:segmentId — delete audience segment
+app.delete('/api/research/:brandId/segments/:segmentId', async (req, res) => {
+  try {
+    const { segmentId } = req.params;
+    await deleteResearchSegment(segmentId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/research/:brandId/products — save products and services
+app.post('/api/research/:brandId/products', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    await saveResearchProducts(brandId, req.body.products || []);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/research/:brandId/products — get products and services
+app.get('/api/research/:brandId/products', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const products = await getResearchProducts(brandId);
+    res.json({ data: products });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/research/:brandId/products/:productId — delete product
+app.delete('/api/research/:brandId/products/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    await deleteResearchProduct(productId);
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

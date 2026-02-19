@@ -214,6 +214,7 @@ function BrandSelector() {
 function SocialContentOpsInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { selectedBrand, selectedProject } = useBrandProject();
+  const [chatOpen, setChatOpen] = useState(false);
 
   function isActive(href: string) {
     if (href === '/use-cases/social-content-ops') return pathname === href;
@@ -254,6 +255,8 @@ function SocialContentOpsInner({ children }: { children: React.ReactNode }) {
         : model;
       return { message, model: nodeLabel };
     },
+    // Notify when chat opens/closes to adjust main content width
+    onOpenChange: setChatOpen,
   };
 
   return (
@@ -315,7 +318,7 @@ function SocialContentOpsInner({ children }: { children: React.ReactNode }) {
 
       {/* Main + AI Chat */}
       <div className="flex-1 min-w-0 flex">
-        <main className="flex-[0.65] min-w-0 overflow-auto">
+        <main className={`${chatOpen ? 'flex-[0.65]' : 'flex-1'} min-w-0 overflow-auto transition-all`}>
           <div className="p-8">{children}</div>
         </main>
         <AiChatAssistant config={enrichedConfig} />
