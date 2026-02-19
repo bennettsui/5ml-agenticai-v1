@@ -747,6 +747,40 @@ Return ONLY the JSON array.`,
         </div>
       )}
 
+      {/* ── Draft Pool (unpublished posts) ──── */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+            <h2 className="text-sm font-semibold text-white">Draft Pool</h2>
+            <span className="text-xs px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full">Not in calendar yet</span>
+          </div>
+          <button
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+            New Draft Post
+          </button>
+        </div>
+        <p className="text-xs text-slate-400">
+          Posts in the draft pool are saved for later use but not yet scheduled in the calendar. Promote them to add a specific publish date.
+        </p>
+        <div className="border-t border-slate-700/30 pt-4">
+          <p className="text-[10px] text-slate-500 mb-3">
+            💡 Tip: Create a library of ready-to-go content that you can quickly add to the calendar when opportunities arise.
+          </p>
+          <div className="space-y-2 bg-white/[0.02] rounded-lg p-3 border border-slate-700/20">
+            <p className="text-xs text-slate-300 font-mono text-center text-slate-500">
+              API Integration Ready — Draft posts will load here
+            </p>
+            <p className="text-[10px] text-slate-600 text-center">
+              Call GET /api/social/drafts/:taskId to fetch draft posts<br />
+              Use POST /api/social/drafts/:draftId/promote to add to calendar
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* ── Schedule Modal ──────────────────── */}
       {scheduleCardId && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
