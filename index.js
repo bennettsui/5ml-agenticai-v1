@@ -1814,6 +1814,50 @@ app.get('/stats', async (req, res) => {
           },
         },
         {
+          id: 'ai-image-generation',
+          name: 'AI Image Generation',
+          description: 'Agency brief → SDXL/ComfyUI prompts + workflow configs',
+          agentCount: 6,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 brief → full prompt set for all deliverables (avg 4)',
+              modelCalls: [
+                { model: 'DeepSeek', calls: 5, avgTokensIn: 2500, avgTokensOut: 1500, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku', calls: 3, avgTokensIn: 1500, avgTokensOut: 800, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'Claude Sonnet Vision (QC)', calls: 1, avgTokensIn: 2000, avgTokensOut: 500, costPerMillion: { input: 3.00, output: 15.00 } },
+              ],
+              totalTokens: { input: 18500, output: 10100 },
+              estimatedCost: 0.011,
+              notes: 'GPU compute (ComfyUI/SDXL) is self-hosted — electricity only, ~$0.03/image.',
+            },
+            daily: { runsPerDay: 3, estimatedCost: 0.033 },
+            monthly: { runsPerMonth: 60, estimatedCost: 0.66, notes: '~2 briefs/day avg' },
+          },
+        },
+        {
+          id: 'ai-video-generation',
+          name: 'AI Video Generation',
+          description: 'AnimateDiff / SVD video pipeline with motion prompts + QC',
+          agentCount: 8,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 brief → video prompt set + AnimateDiff workflow config',
+              modelCalls: [
+                { model: 'DeepSeek', calls: 6, avgTokensIn: 3000, avgTokensOut: 2000, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku', calls: 4, avgTokensIn: 2000, avgTokensOut: 1000, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'Claude Sonnet Vision (QC)', calls: 2, avgTokensIn: 2500, avgTokensOut: 600, costPerMillion: { input: 3.00, output: 15.00 } },
+              ],
+              totalTokens: { input: 28000, output: 14200 },
+              estimatedCost: 0.022,
+              notes: 'AnimateDiff/SVD on self-hosted GPU — ~$0.08/clip (16 frames) electricity.',
+            },
+            daily: { runsPerDay: 2, estimatedCost: 0.044 },
+            monthly: { runsPerMonth: 40, estimatedCost: 0.88, notes: '~1-2 video projects/day' },
+          },
+        },
+        {
           id: 'crm',
           name: 'Client CRM + KB',
           description: 'AI-powered client CRM with knowledge base',
@@ -1851,8 +1895,10 @@ app.get('/stats', async (req, res) => {
         intelligence: 2.70,
         accounting: 3.60,
         crm: 0.30,
-        totalBase: 25.04,
-        notes: 'Ads cost scales with tenants. Photo booth scales with events. All estimates assume typical usage patterns.',
+        aiImageGeneration: 0.66,
+        aiVideoGeneration: 0.88,
+        totalBase: 26.58,
+        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). All estimates assume typical usage patterns.',
       },
       databaseTables: [
         // Social/Marketing tables
@@ -1870,6 +1916,11 @@ app.get('/stats', async (req, res) => {
         { name: 'intelligence_news', description: 'Collected news articles', category: 'intelligence' },
         // Accounting tables
         { name: 'receipts', description: 'Receipt records from OCR', category: 'accounting' },
+        // AI Media Generation tables
+        { name: 'media_projects', description: 'Media generation projects', category: 'media' },
+        { name: 'media_style_guides', description: 'Per-project brand style guides', category: 'media' },
+        { name: 'media_prompts', description: 'Prompt library with workflow configs', category: 'media' },
+        { name: 'media_assets', description: 'Generated image/video asset registry', category: 'media' },
       ],
     };
 
@@ -2928,6 +2979,24 @@ try {
   console.log('✅ Ads Performance routes loaded: /api/ads');
 } catch (error) {
   console.warn('⚠️ Ads Performance routes not loaded:', error.message);
+}
+
+// AI Media Generation Routes (Image + Video)
+try {
+  const mediaGenerationRoutes = require('./use-cases/ai-media-generation/api/routes');
+  app.use('/api/media', mediaGenerationRoutes);
+  console.log('✅ AI Media Generation routes loaded: /api/media');
+} catch (error) {
+  console.warn('⚠️ AI Media Generation routes not loaded:', error.message);
+}
+
+// Multimedia Library Routes (reverse-prompt engineering from images/videos)
+try {
+  const multimediaLibraryRoutes = require('./use-cases/multimedia-library/api/routes');
+  app.use('/api/library', multimediaLibraryRoutes);
+  console.log('✅ Multimedia Library routes loaded: /api/library');
+} catch (error) {
+  console.warn('⚠️ Multimedia Library routes not loaded:', error.message);
 }
 
 // Scheduler Service
