@@ -4,9 +4,10 @@ import { useState, useCallback, useEffect } from 'react';
 import {
   Search, AlertCircle, Building2, Users, ShoppingBag,
   Loader2, Sparkles, Globe, TrendingUp, Target, Package,
-  ChevronDown, ChevronUp, Plus, Trash2, Edit3, Save, X,
+  ChevronDown, ChevronUp, Plus, Trash2, Edit3, Save, X, CheckCircle,
 } from 'lucide-react';
 import { useBrandProject } from '@/lib/brand-context';
+import { useAutosave } from '@/lib/useAutosave';
 
 /* ── Types ──────────────────────────────── */
 
@@ -111,6 +112,73 @@ export default function ResearchPage() {
   // Loading state for data persistence
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+
+  // Autosave hook
+  const { autosave: autosaveData, manualSave, status } = useAutosave({
+    onSave: async (data: unknown) => {
+      const research = data as {
+        businessOverview?: string;
+        mission?: string;
+        positioning?: string;
+        competitors?: CompetitorEntry[];
+        segments?: AudienceSegment[];
+        products?: ProductEntry[];
+      };
+
+      if (!selectedBrand?.id) return;
+
+      // Save business data
+      if (research.businessOverview !== undefined || research.mission !== undefined) {
+        await fetch(`/api/research/${selectedBrand.id}/business`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessOverview: research.businessOverview ?? businessOverview,
+            mission: research.mission ?? mission,
+          }),
+        });
+      }
+
+      // Save competitors
+      if (research.competitors !== undefined) {
+        await fetch(`/api/research/${selectedBrand.id}/competitors`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ competitors: research.competitors }),
+        });
+      }
+
+      // Save audience/segments
+      if (research.positioning !== undefined || research.segments !== undefined) {
+        await fetch(`/api/research/${selectedBrand.id}/audience`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            positioning: research.positioning ?? positioning,
+            segments: research.segments ?? segments,
+          }),
+        });
+      }
+
+      // Save products
+      if (research.products !== undefined) {
+        await fetch(`/api/research/${selectedBrand.id}/products`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products: research.products }),
+        });
+      }
+    },
+    debounceMs: 1500,
+    onSuccess: (msg) => {
+      setSaveMessage(msg || 'Autosaved');
+      setTimeout(() => setSaveMessage(''), 3000);
+    },
+    onError: (err) => {
+      console.error('Autosave failed:', err);
+    },
+  });
 
   /* ── Load research data from database ──────────── */
 
@@ -258,13 +326,34 @@ export default function ResearchPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Autosave Status */}
+          {status.lastSaved && !status.hasUnsaved && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-xs text-emerald-400">Autosaved</span>
+            </div>
+          )}
+          {status.hasUnsaved && (
+            <div className="text-xs text-amber-400 px-2">Unsaved changes...</div>
+          )}
+
+          {/* Save Button */}
           <button
-            disabled={!selectedBrand || saving}
-            onClick={saveResearchData}
+            disabled={!selectedBrand || status.isSaving}
+            onClick={manualSave}
             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-colors flex items-center gap-1.5"
           >
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            {saving ? 'Saving...' : 'Save'}
+            {status.isSaving ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-3.5 h-3.5" />
+                Save
+              </>
+            )}
           </button>
           <button
             disabled={!selectedBrand || generating}
@@ -319,7 +408,10 @@ export default function ResearchPage() {
             </div>
             <textarea
               value={businessOverview}
-              onChange={e => setBusinessOverview(e.target.value)}
+              onChange={e => {
+                setBusinessOverview(e.target.value);
+                autosaveData({ businessOverview: e.target.value });
+              }}
               placeholder="Describe the business: what they do, their market position, key differentiators, and brand story..."
               rows={4}
               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/30 resize-none"
@@ -334,7 +426,10 @@ export default function ResearchPage() {
             </div>
             <textarea
               value={mission}
-              onChange={e => setMission(e.target.value)}
+              onChange={e => {
+                setMission(e.target.value);
+                autosaveData({ mission: e.target.value });
+              }}
               placeholder="Mission statement, brand vision, core values, and brand personality..."
               rows={3}
               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/30 resize-none"
@@ -472,7 +567,10 @@ export default function ResearchPage() {
             </div>
             <textarea
               value={positioning}
-              onChange={e => setPositioning(e.target.value)}
+              onChange={e => {
+                setPositioning(e.target.value);
+                autosaveData({ positioning: e.target.value });
+              }}
               placeholder="For [target audience] who [need/want], [brand] is a [category] that [key benefit]. Unlike [competitors], we [unique differentiator]."
               rows={3}
               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500/30 resize-none"

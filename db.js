@@ -748,6 +748,114 @@ async function initDatabase() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_research_products_brand ON research_products(brand_id);
+
+      -- Strategy
+      CREATE TABLE IF NOT EXISTS social_strategy (
+        id SERIAL PRIMARY KEY,
+        strategy_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        objectives TEXT,
+        target_audiences TEXT,
+        channel_mix TEXT,
+        content_pillars TEXT,
+        posting_cadence TEXT,
+        media_approach TEXT,
+        kpis TEXT,
+        assumptions TEXT,
+        risks TEXT,
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_strategy FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_strategy_brand ON social_strategy(brand_id);
+      CREATE INDEX IF NOT EXISTS idx_strategy_project ON social_strategy(project_id);
+
+      -- Interactive Content
+      CREATE TABLE IF NOT EXISTS social_interactive_content (
+        id SERIAL PRIMARY KEY,
+        content_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        title VARCHAR(500) NOT NULL,
+        content_type VARCHAR(100),
+        description TEXT,
+        platforms TEXT,
+        engagement_goal VARCHAR(255),
+        expected_metrics TEXT,
+        launch_date DATE,
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_interactive FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_interactive_brand ON social_interactive_content(brand_id);
+
+      -- Trend Research
+      CREATE TABLE IF NOT EXISTS social_trend_research (
+        id SERIAL PRIMARY KEY,
+        trend_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        trend_name VARCHAR(500) NOT NULL,
+        category VARCHAR(100),
+        description TEXT,
+        relevance_score INT,
+        platforms TEXT,
+        content_ideas TEXT,
+        launch_ideas TEXT,
+        status VARCHAR(50) DEFAULT 'research',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_trend FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_trend_brand ON social_trend_research(brand_id);
+
+      -- Social Monitoring
+      CREATE TABLE IF NOT EXISTS social_monitoring (
+        id SERIAL PRIMARY KEY,
+        monitor_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        platform VARCHAR(100),
+        keyword VARCHAR(500),
+        sentiment_trend TEXT,
+        engagement_rate DECIMAL(5, 2),
+        mention_count INT,
+        top_mentions TEXT,
+        action_items TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_monitoring FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_monitoring_brand ON social_monitoring(brand_id);
+
+      -- Community Management
+      CREATE TABLE IF NOT EXISTS social_community_management (
+        id SERIAL PRIMARY KEY,
+        community_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        platform VARCHAR(100),
+        content_guideline TEXT,
+        response_templates TEXT,
+        escalation_rules TEXT,
+        moderation_policies TEXT,
+        engagement_strategies TEXT,
+        faq_content TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_community FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_community_brand ON social_community_management(brand_id);
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');
