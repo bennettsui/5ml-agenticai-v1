@@ -15,6 +15,7 @@ import ZiweiCompatibility from '@/components/ZiweiCompatibility';
 import ZiweiInsights from '@/components/ZiweiInsights';
 import ZiweiRuleManagement from '@/components/ZiweiRuleManagement';
 import ZiweiChartLibrary from '@/components/ZiweiChartLibrary';
+import ZiweiAnalytics from '@/components/ZiweiAnalytics';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
@@ -32,7 +33,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'ziwei-charts' | 'ziwei-rules';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'ziwei-analytics' | 'ziwei-charts' | 'ziwei-rules';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -373,7 +374,7 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','ziwei-charts','ziwei-rules'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','ziwei-analytics','ziwei-charts','ziwei-rules'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
@@ -387,6 +388,7 @@ export default function Dashboard() {
     { id: 'chat', label: 'Agent Chat', icon: MessageSquare },
     { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen },
     { id: 'analytics', label: 'Analytics & API', icon: Wifi },
+    { id: 'ziwei-analytics', label: '✨ Ziwei Generator', icon: Sparkles },
     { id: 'ziwei-charts', label: '📊 Ziwei Charts', icon: History },
     { id: 'ziwei-rules', label: '🧿 Ziwei Rules', icon: Wand2 },
     { id: 'architecture', label: 'Architecture', icon: Layers },
@@ -657,6 +659,10 @@ export default function Dashboard() {
         )}
 
         {/* ================================================================ */}
+        {/* ZIWEI ANALYTICS TAB                                               */}
+        {/* ================================================================ */}
+        {activeTab === 'ziwei-analytics' && <ZiweiAnalytics />}
+
         {/* ZIWEI CHARTS TAB                                                  */}
         {/* ================================================================ */}
         {activeTab === 'ziwei-charts' && <ZiweiChartLibrary />}
