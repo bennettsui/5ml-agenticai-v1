@@ -2014,28 +2014,44 @@ app.post('/api/social/chat', async (req, res) => {
         project_id:   project_id || null,
       };
 
-      const { state, nodeName, output } = await runSarah({
-        taskId:       task_id,
-        userInput,
-        brandContext,
-        brandId:      brand_id || null,
-        projectId:    project_id || null,
-      });
+      try {
+        const { state, nodeName, output } = await runSarah({
+          taskId:       task_id,
+          userInput,
+          brandContext,
+          brandId:      brand_id || null,
+          projectId:    project_id || null,
+        });
 
-      // Model label for UI indicator
-      const REFLECT_NODES = new Set(['strategy_reflect', 'content_reflect', 'media_reflect']);
-      const modelLabel = REFLECT_NODES.has(nodeName)
-        ? 'DeepSeek Reasoner (reflection)'
-        : 'DeepSeek Chat (generation)';
+        // Check if state is valid
+        if (!state || !nodeName) {
+          return res.status(400).json({
+            error: 'Invalid orchestrator state',
+            message: 'The orchestrator failed to generate a valid response.'
+          });
+        }
 
-      return res.json({
-        message:   output,
-        model:     modelLabel,
-        node:      nodeName,
-        status:    state.status,
-        next_step: state.next_step,
-        artefacts: Object.keys(state.artefacts),
-      });
+        // Model label for UI indicator
+        const REFLECT_NODES = new Set(['strategy_reflect', 'content_reflect', 'media_reflect']);
+        const modelLabel = REFLECT_NODES.has(nodeName)
+          ? 'DeepSeek Reasoner (reflection)'
+          : 'DeepSeek Chat (generation)';
+
+        return res.json({
+          message:   output,
+          model:     modelLabel,
+          node:      nodeName,
+          status:    state.status,
+          next_step: state.next_step,
+          artefacts: Object.keys(state.artefacts),
+        });
+      } catch (orchestratorErr) {
+        console.error('Sarah orchestrator error:', orchestratorErr.message);
+        return res.status(500).json({
+          error: 'Orchestrator error',
+          message: orchestratorErr.message || 'Failed to process request'
+        });
+      }
     }
     // ── Legacy path (module pages: strategy, content-dev, calendar, etc.) ────
 
