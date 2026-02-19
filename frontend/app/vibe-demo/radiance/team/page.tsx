@@ -2,6 +2,7 @@
 
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
+import { Breadcrumb } from '../components/Breadcrumb';
 
 export default function TeamPage() {
   return (
@@ -9,6 +10,16 @@ export default function TeamPage() {
       <Header />
 
       <main id="main-content" className="flex-1">
+        {/* Breadcrumb */}
+        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <Breadcrumb items={[
+              { label: 'Home', href: '/vibe-demo/radiance' },
+              { label: 'Team' }
+            ]} />
+          </div>
+        </section>
+
         {/* Hero Section */}
         <section className="pt-32 pb-16 px-6 max-w-4xl mx-auto">
           <div className="space-y-6">

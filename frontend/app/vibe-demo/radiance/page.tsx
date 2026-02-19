@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Newspaper, Sparkles, Smartphone, Star, Palette, Target } from 'lucide-react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { RadianceLogo } from './components/RadianceLogo';
@@ -89,37 +90,37 @@ export default function RadiancePage() {
               {
                 title: 'Public Relations',
                 desc: 'Earn credible media coverage through strategic communications and strong media relationships.',
-                icon: '📰',
+                icon: Newspaper,
                 href: '/vibe-demo/radiance/services/public-relations'
               },
               {
                 title: 'Events & Experiences',
                 desc: 'Create memorable brand moments that connect with audiences and generate social momentum.',
-                icon: '🎉',
+                icon: Sparkles,
                 href: '/vibe-demo/radiance/services/events'
               },
               {
                 title: 'Social Media & Content',
                 desc: 'Build engaged communities through strategic content and consistent social presence.',
-                icon: '📱',
+                icon: Smartphone,
                 href: '/vibe-demo/radiance/services/social-media'
               },
               {
                 title: 'KOL & Influencer Marketing',
                 desc: 'Amplify reach through authentic partnerships with creators your audience trusts.',
-                icon: '⭐',
+                icon: Star,
                 href: '/vibe-demo/radiance/services/kol-marketing'
               },
               {
                 title: 'Creative & Production',
                 desc: 'Professional design, video, and content production that brings ideas to life.',
-                icon: '🎨',
+                icon: Palette,
                 href: '/vibe-demo/radiance/services/creative-production'
               },
               {
                 title: 'Integrated Campaigns',
                 desc: 'All channels working together so each touchpoint reinforces the others.',
-                icon: '🎯',
+                icon: Target,
                 href: '/vibe-demo/radiance/lead-gen'
               }
             ].map((service, idx) => (
@@ -128,7 +129,7 @@ export default function RadiancePage() {
                 href={service.href}
                 className="group p-8 bg-gradient-to-br from-slate-50 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-xl dark:hover:shadow-purple-900/20 transition-all"
               >
-                <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">{service.icon}</div>
+                <service.icon className="w-12 h-12 mb-4 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                   {service.title}
                 </h3>

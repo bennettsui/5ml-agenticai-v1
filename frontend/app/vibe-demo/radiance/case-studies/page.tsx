@@ -123,6 +123,10 @@ export default function CaseStudiesPage() {
 
   const categories = ['All', ...new Set(caseStudies.map(cs => cs.category))];
 
+  const filteredCaseStudies = selectedCategory === 'All'
+    ? caseStudies
+    : caseStudies.filter(cs => cs.category === selectedCategory);
+
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
