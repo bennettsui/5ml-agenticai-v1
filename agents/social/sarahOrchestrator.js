@@ -881,6 +881,28 @@ async function persistArtefacts(taskId, artefacts) {
               }
             }
           }
+        } else if (key === 'analytics_kpi_definition' || key === 'analytics_report_final') {
+          const tables = parseMarkdownTable(value);
+          if (tables.length > 0) {
+            jsonStructure = { tables };
+            // Extract KPI definitions from the first table with KPI names
+            for (const table of tables) {
+              if (table.headers.some(h => h.includes('KPI'))) {
+                await saveSocialKPIs(taskId, table.rows.map(row => ({
+                  name: row.kpi_name || row.kpi,
+                  type: row.kpi_type,
+                  definition: row.definition,
+                  formula: row.formula,
+                  dataSource: row.data_source,
+                  frequency: row.reporting_frequency,
+                  funnelStage: row.funnel_stage,
+                  platform: row.platform,
+                  targetValue: row.target_value,
+                  targetDirection: row.target_direction,
+                })));
+              }
+            }
+          }
         }
 
         // Save the artefact (Markdown + JSON)
@@ -896,42 +918,6 @@ async function persistArtefacts(taskId, artefacts) {
         console.error(`Error persisting artefact ${key}:`, err.message);
         // Don't throw — continue with next artefact
       }
-    }
-  }
-}
-          }
-        }
-      } else if (key === 'analytics_kpi_definition' || key === 'analytics_report_final') {
-        const tables = parseMarkdownTable(value);
-        if (tables.length > 0) {
-          jsonStructure = { tables };
-          // Extract KPI definitions from the first table with KPI names
-          for (const table of tables) {
-            if (table.headers.some(h => h.includes('KPI'))) {
-              await saveSocialKPIs(taskId, table.rows.map(row => ({
-                name: row.kpi_name || row.kpi,
-                type: row.kpi_type,
-                definition: row.definition,
-                formula: row.formula,
-                dataSource: row.data_source,
-                frequency: row.reporting_frequency,
-                funnelStage: row.funnel_stage,
-                platform: row.platform,
-                targetValue: row.target_value,
-                targetDirection: row.target_direction,
-              })));
-            }
-          }
-        }
-      }
-
-      // Save the artefact (Markdown + JSON)
-      await saveArtefact(taskId, {
-        artefactKey: key,
-        artefactType: key.split('_')[0],
-        markdown: value,
-        json: jsonStructure,
-      });
     }
   }
 }
