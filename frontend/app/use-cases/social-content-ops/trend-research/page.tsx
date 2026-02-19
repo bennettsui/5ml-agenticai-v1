@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   TrendingUp, AlertCircle, Loader2, Sparkles, Search, BookOpen,
   Video, Image, FileText, Layers, ChevronDown, ChevronUp,
@@ -226,6 +226,36 @@ export default function TrendResearchPage() {
   const { selectedBrand } = useBrandProject();
   const [tab, setTab] = useState<Tab>('trends');
   const [trends, setTrends] = useState<TrendEntry[]>(SAMPLE_TRENDS);
+
+  // Load saved trends on brand change
+  useEffect(() => {
+    if (!selectedBrand) return;
+    async function load() {
+      try {
+        const res = await fetch(`/api/social/trends/${selectedBrand!.id}`);
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data && data.length > 0) {
+            const apiTrends: TrendEntry[] = data.map((r: Record<string, unknown>) => ({
+              id: String(r.id),
+              topic: String(r.trend_name || ''),
+              category: String(r.category || 'Content'),
+              platform: String(r.platforms || 'All'),
+              relevance: (r.relevance_score as number) >= 4 ? 'High' : (r.relevance_score as number) >= 2 ? 'Medium' : 'Low',
+              description: String(r.description || ''),
+              source: 'Saved',
+              dateSpotted: String(r.created_at || '').slice(0, 7),
+              actionable: String(r.content_ideas || ''),
+              importance: Number(r.relevance_score) || 3,
+              mentions: 1,
+            }));
+            setTrends([...apiTrends, ...SAMPLE_TRENDS]);
+          }
+        }
+      } catch { /* silent */ }
+    }
+    load();
+  }, [selectedBrand?.id]);
   const [expandedTrend, setExpandedTrend] = useState<string | null>(null);
   const [expandedPractice, setExpandedPractice] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -295,6 +325,25 @@ Return ONLY the JSON array.`,
               mentions: (t.mentions as number) || 1,
             }));
             setTrends(prev => [...newTrends, ...prev]);
+            // Persist each new trend to the API
+            if (selectedBrand) {
+              for (const trend of newTrends) {
+                try {
+                  await fetch(`/api/social/trends/${selectedBrand.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      trendName: trend.topic,
+                      category: trend.category,
+                      description: trend.description,
+                      platforms: trend.platform,
+                      contentIdeas: trend.actionable,
+                      relevanceScore: trend.importance,
+                    }),
+                  });
+                } catch { /* silent */ }
+              }
+            }
           }
         } catch {
           console.log('AI response (non-JSON):', msg.slice(0, 500));

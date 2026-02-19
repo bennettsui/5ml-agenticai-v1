@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Users, AlertCircle, MessageCircle, Heart, Flag, TrendingUp, Clock,
   Loader2, Sparkles, ChevronDown, ChevronUp, Send, RefreshCw,
   ThumbsUp, ThumbsDown, Minus, AlertTriangle, Mail, Bell,
-  Hash, AtSign, Plus, Trash2, X, Save,
+  Hash, AtSign, Plus, Trash2, X, Save, CheckCircle,
 } from 'lucide-react';
 import { useBrandProject } from '@/lib/brand-context';
+import { useAutosave } from '@/lib/useAutosave';
 
 /* ── Types ──────────────────────────────── */
 
@@ -109,6 +110,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 
 export default function CommunityManagementPage() {
   const { selectedBrand } = useBrandProject();
+  const isMounted = useRef(false);
   const [interactions, setInteractions] = useState<Interaction[]>(SAMPLE_INTERACTIONS);
   const [templates, setTemplates] = useState<ResponseTemplate[]>(SAMPLE_TEMPLATES);
   const [filter, setFilter] = useState<QueueFilter>('all');
@@ -120,6 +122,48 @@ export default function CommunityManagementPage() {
   // Template form
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [templateForm, setTemplateForm] = useState<ResponseTemplate>({ id: '', name: '', category: 'Positive', template: '', language: 'EN' });
+
+  /* ── Autosave templates ─────────────────── */
+  const { autosave, manualSave, status: saveStatus } = useAutosave({
+    onSave: async (data) => {
+      if (!selectedBrand) return;
+      await fetch(`/api/social/community/${selectedBrand.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: (selectedBrand as Record<string, unknown>).projectId,
+          platform: 'All',
+          responseTemplates: (data as Record<string, unknown>).responseTemplates,
+          contentGuideline: '', escalationRules: '', moderationPolicies: '', engagementStrategies: '', faqContent: '',
+        }),
+      });
+    },
+  });
+
+  // Load templates on brand change
+  useEffect(() => {
+    if (!selectedBrand) return;
+    isMounted.current = false;
+    async function load() {
+      try {
+        const res = await fetch(`/api/social/community/${selectedBrand!.id}`);
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data?.response_templates) {
+            try { setTemplates(JSON.parse(data.response_templates)); } catch { /* ignore */ }
+          }
+        }
+      } catch { /* silent */ }
+      isMounted.current = true;
+    }
+    load();
+  }, [selectedBrand?.id]);
+
+  // Auto-save templates when they change
+  useEffect(() => {
+    if (!isMounted.current || !selectedBrand) return;
+    autosave({ responseTemplates: JSON.stringify(templates) });
+  }, [templates]);
 
   // Filter interactions
   const filtered = interactions.filter(i => {
@@ -425,7 +469,21 @@ Return ONLY the reply text, no other formatting.`,
       {/* ── TEMPLATES TAB ──────────────────── */}
       {tab === 'templates' && (
         <div className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-2">
+            {saveStatus.lastSaved && !saveStatus.hasUnsaved && (
+              <span className="flex items-center gap-1 text-[10px] text-emerald-400">
+                <CheckCircle className="w-3 h-3" /> Autosaved
+              </span>
+            )}
+            {saveStatus.hasUnsaved && <span className="text-[10px] text-amber-400">Unsaved...</span>}
+            <button
+              disabled={!selectedBrand || saveStatus.isSaving}
+              onClick={manualSave}
+              className="px-3 py-1.5 text-xs rounded-lg border border-slate-700/30 bg-slate-700/50 text-slate-300 hover:bg-slate-700 disabled:opacity-40 flex items-center gap-1 transition-colors"
+            >
+              {saveStatus.isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+              {saveStatus.isSaving ? 'Saving...' : 'Save Templates'}
+            </button>
             <button
               onClick={() => setShowTemplateForm(true)}
               className="px-3 py-1.5 text-xs rounded-lg border border-orange-700/30 bg-orange-500/10 text-orange-400 hover:opacity-80 flex items-center gap-1"

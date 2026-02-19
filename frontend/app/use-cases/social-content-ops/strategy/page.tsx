@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Target, Loader2, AlertCircle, TrendingUp, Users, Globe, Megaphone,
   Sparkles, ChevronDown, ChevronUp, Plus, Trash2, CheckCircle2,
-  Clock, Hash, BarChart3, MessageSquare, Palette, Save, RotateCcw,
+  Clock, Hash, BarChart3, MessageSquare, Palette, Save, RotateCcw, CheckCircle,
 } from 'lucide-react';
 import { useBrandProject } from '@/lib/brand-context';
+import { useAutosave } from '@/lib/useAutosave';
 
 /* ── Types ──────────────────────────────── */
 
@@ -102,6 +103,7 @@ const PILLAR_COLOR_MAP: Record<string, string> = {
 
 export default function SocialStrategyPage() {
   const { selectedBrand } = useBrandProject();
+  const isMounted = useRef(false);
   const [activeSection, setActiveSection] = useState<StrategySection>('audit');
   const [generating, setGenerating] = useState(false);
   const [generatingSection, setGeneratingSection] = useState<string | null>(null);
@@ -134,6 +136,70 @@ export default function SocialStrategyPage() {
   // AI Analysis preview (for structured sections)
   const [aiPreview, setAiPreview] = useState('');
   const [aiPreviewSection, setAiPreviewSection] = useState<StrategySection | null>(null);
+
+  /* ── Autosave ──────────────────────────── */
+
+  const { autosave, manualSave, status: saveStatus } = useAutosave({
+    onSave: async (data) => {
+      if (!selectedBrand) return;
+      await fetch(`/api/social/strategy/${selectedBrand.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: (selectedBrand as Record<string, unknown>).projectId, ...(data as object) }),
+      });
+    },
+  });
+
+  // Load saved data when brand changes
+  useEffect(() => {
+    if (!selectedBrand) return;
+    isMounted.current = false;
+    async function load() {
+      try {
+        const res = await fetch(`/api/social/strategy/${selectedBrand!.id}`);
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data) {
+            setAuditSummary(data.objectives || '');
+            setCurrentPresence(data.target_audiences || '');
+            try { setPlatforms(JSON.parse(data.channel_mix) || SAMPLE_PLATFORMS); } catch { setPlatforms(SAMPLE_PLATFORMS); }
+            try { setPillars(JSON.parse(data.content_pillars) || SAMPLE_PILLARS); } catch { setPillars(SAMPLE_PILLARS); }
+            try {
+              const cd = JSON.parse(data.posting_cadence || '{}');
+              setCadenceOverview(cd.overview || ''); setWeeklyPlan(cd.weeklyPlan || '');
+            } catch { /* ignore */ }
+            try {
+              const md = JSON.parse(data.media_approach || '{}');
+              setVoiceTone(md.voiceTone || ''); setDosDonts(md.dosDonts || ''); setSampleCaptions(md.sampleCaptions || '');
+            } catch { /* ignore */ }
+            try { setKpis(JSON.parse(data.kpis) || SAMPLE_KPIS); } catch { setKpis(SAMPLE_KPIS); }
+            try {
+              const sw = JSON.parse(data.assumptions || '{}');
+              setSwot({ strengths: sw.strengths || '', weaknesses: sw.weaknesses || '', opportunities: sw.opportunities || '', threats: sw.threats || '' });
+            } catch { /* ignore */ }
+          }
+        }
+      } catch { /* silent */ }
+      isMounted.current = true;
+    }
+    load();
+  }, [selectedBrand?.id]);
+
+  // Auto-save whenever key state changes (debounced via useAutosave)
+  useEffect(() => {
+    if (!isMounted.current || !selectedBrand) return;
+    autosave({
+      objectives: auditSummary,
+      targetAudiences: currentPresence,
+      channelMix: JSON.stringify(platforms),
+      contentPillars: JSON.stringify(pillars),
+      postingCadence: JSON.stringify({ overview: cadenceOverview, weeklyPlan }),
+      mediaApproach: JSON.stringify({ voiceTone, dosDonts, sampleCaptions }),
+      kpis: JSON.stringify(kpis),
+      assumptions: JSON.stringify(swot),
+      risks: '',
+    });
+  }, [auditSummary, currentPresence, platforms, pillars, cadenceOverview, weeklyPlan, voiceTone, dosDonts, sampleCaptions, kpis, swot]);
 
   /* ── AI Generation ─────────────────────── */
 
@@ -199,14 +265,32 @@ export default function SocialStrategyPage() {
             Comprehensive social media strategy — one-off creation or annual review
           </p>
         </div>
-        <button
-          disabled={!selectedBrand || generating}
-          onClick={generateFullStrategy}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-colors flex items-center gap-1.5"
-        >
-          {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-          {generating ? 'Generating...' : 'AI Generate Strategy'}
-        </button>
+        <div className="flex items-center gap-2">
+          {saveStatus.lastSaved && !saveStatus.hasUnsaved && (
+            <span className="flex items-center gap-1 text-[10px] text-emerald-400">
+              <CheckCircle className="w-3 h-3" /> Autosaved
+            </span>
+          )}
+          {saveStatus.hasUnsaved && (
+            <span className="text-[10px] text-amber-400">Unsaved changes...</span>
+          )}
+          <button
+            disabled={!selectedBrand || saveStatus.isSaving}
+            onClick={manualSave}
+            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-colors flex items-center gap-1.5"
+          >
+            {saveStatus.isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+            {saveStatus.isSaving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            disabled={!selectedBrand || generating}
+            onClick={generateFullStrategy}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-colors flex items-center gap-1.5"
+          >
+            {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {generating ? 'Generating...' : 'AI Generate Strategy'}
+          </button>
+        </div>
       </div>
 
       {!selectedBrand && (

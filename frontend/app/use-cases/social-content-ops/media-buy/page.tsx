@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   DollarSign, AlertCircle, TrendingUp, Target, Layers, PieChart,
   Plus, Trash2, ChevronDown, ChevronUp, Loader2, Sparkles,
@@ -352,6 +352,29 @@ Return ONLY the JSON array.`,
     setPlatforms(platforms.map(p => p.id === id ? { ...p, allocation: Math.max(0, Math.min(100, value)) } : p));
   }
 
+  // Persist budget + platforms + objective to localStorage
+  const [configSaved, setConfigSaved] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('media_buy_config');
+      if (saved) {
+        const cfg = JSON.parse(saved);
+        if (cfg.monthlyBudget) setMonthlyBudget(cfg.monthlyBudget);
+        if (cfg.selectedObjective) setSelectedObjective(cfg.selectedObjective);
+        if (cfg.platforms) setPlatforms(cfg.platforms);
+        if (cfg.campaigns) setCampaigns(cfg.campaigns);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const saveConfig = useCallback(() => {
+    try {
+      localStorage.setItem('media_buy_config', JSON.stringify({ monthlyBudget, selectedObjective, platforms, campaigns }));
+      setConfigSaved(true);
+      setTimeout(() => setConfigSaved(false), 3000);
+    } catch { /* ignore */ }
+  }, [monthlyBudget, selectedObjective, platforms, campaigns]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -366,6 +389,17 @@ Return ONLY the JSON array.`,
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {configSaved && (
+            <span className="flex items-center gap-1 text-[10px] text-emerald-400">
+              <CheckCircle className="w-3 h-3" /> Saved
+            </span>
+          )}
+          <button
+            onClick={saveConfig}
+            className="px-3 py-1.5 text-xs rounded-lg border border-slate-700/30 bg-slate-700/50 text-slate-300 hover:bg-slate-700 flex items-center gap-1 transition-colors"
+          >
+            <Save className="w-3 h-3" /> Save
+          </button>
           <button
             disabled={!selectedBrand || generating}
             onClick={handleAiOptimize}
