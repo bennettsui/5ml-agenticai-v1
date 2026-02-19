@@ -17,7 +17,8 @@
 
 const deepseekService = require('../../services/deepseekService');
 const ragService       = require('../../services/rag-service');
-const { getSocialState, upsertSocialState } = require('../../db');
+const { getSocialState, upsertSocialState, saveSocialCampaign, saveArtefact, getSocialContentPosts, saveSocialContentPosts, saveSocialAdCampaigns, saveSocialKPIs } = require('../../db');
+const { parseMarkdownTable, extractMarkdownSection, extractBulletList } = require('./markdownParser');
 
 // ── Sarah system prompt ───────────────────────────────────────────────────────
 
@@ -825,6 +826,95 @@ const NODES = {
   community_generate:  nodeCommunityGenerate,
 };
 
+// ── Artefact Persistence Helper ───────────────────────────────────────────────
+
+async function persistArtefacts(taskId, artefacts) {
+  // Save all artefacts to DB (both Markdown and parse to JSON)
+  for (const [key, value] of Object.entries(artefacts)) {
+    if (value && typeof value === 'string') {
+      let jsonStructure = null;
+
+      // Parse specific artefact types to extract structured JSON
+      if (key === 'content_calendar_v1' || key === 'content_calendar_final') {
+        const tables = parseMarkdownTable(value);
+        if (tables.length > 0) {
+          jsonStructure = { tables };
+          // Also extract and save individual content posts
+          if (tables[0]?.rows) {
+            await saveSocialContentPosts(taskId, tables[0].rows.map(row => ({
+              date: row.date,
+              platform: row.platform,
+              format: row.format,
+              title: row.title || row.idea,
+              pillar: row.pillar || row.content_pillar,
+              objective: row.objective,
+              keyMessage: row.key_message,
+              copyHook: row.copy_hook || row.hook,
+              cta: row.cta,
+              language: row.language,
+              visualType: row.visual_type || row.asset_type,
+              status: 'Draft',
+              adPlan: row.ad_plan || row.notes,
+            })));
+          }
+        }
+      } else if (key === 'media_plan_v1' || key === 'media_plan_final') {
+        const tables = parseMarkdownTable(value);
+        if (tables.length > 0) {
+          jsonStructure = { tables };
+          // Extract ad campaigns from the tables
+          for (const table of tables) {
+            if (table.headers.some(h => h.includes('Campaign') || h.includes('Ad Set'))) {
+              await saveSocialAdCampaigns(taskId, table.rows.map(row => ({
+                name: row.campaign_name || row.campaign || row.ad_set,
+                objective: row.objective,
+                funnelStage: row.funnel_stage,
+                platform: row.platform,
+                budgetHKD: parseFloat(row.budget_hkd || row.budget || 0),
+                budgetPct: parseFloat(row.budget_pct || 0),
+                audienceDefinition: row.audience_definition || row.audience,
+                geo: row.geo,
+                placements: row.placement || row.placements,
+                status: 'Draft',
+              })));
+            }
+          }
+        }
+      } else if (key === 'analytics_kpi_definition' || key === 'analytics_report_final') {
+        const tables = parseMarkdownTable(value);
+        if (tables.length > 0) {
+          jsonStructure = { tables };
+          // Extract KPI definitions from the first table with KPI names
+          for (const table of tables) {
+            if (table.headers.some(h => h.includes('KPI'))) {
+              await saveSocialKPIs(taskId, table.rows.map(row => ({
+                name: row.kpi_name || row.kpi,
+                type: row.kpi_type,
+                definition: row.definition,
+                formula: row.formula,
+                dataSource: row.data_source,
+                frequency: row.reporting_frequency,
+                funnelStage: row.funnel_stage,
+                platform: row.platform,
+                targetValue: row.target_value,
+                targetDirection: row.target_direction,
+              })));
+            }
+          }
+        }
+      }
+
+      // Save the artefact (Markdown + JSON)
+      await saveArtefact(taskId, {
+        artefactKey: key,
+        artefactType: key.split('_')[0],
+        markdown: value,
+        json: jsonStructure,
+      });
+    }
+  }
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -853,6 +943,13 @@ async function runSarah({ taskId, userInput, brandContext, brandId, projectId, r
       status:       'DRAFT',
       next_step:    null,
     };
+    // Save campaign metadata to DB on first run
+    await saveSocialCampaign(taskId, {
+      briefTitle: userInput.slice(0, 200),
+      brandId,
+      projectId,
+      status: 'DRAFT',
+    });
   } else {
     // Update user input for this turn
     state.user_input = userInput;
@@ -874,6 +971,8 @@ async function runSarah({ taskId, userInput, brandContext, brandId, projectId, r
         break;
       }
       state = await NODES[nodeName](state);
+      // Persist artefacts after each node
+      await persistArtefacts(taskId, state.artefacts);
       iteration++;
     }
 
@@ -892,6 +991,8 @@ async function runSarah({ taskId, userInput, brandContext, brandId, projectId, r
   }
 
   state = await NODES[nodeName](state);
+  // Persist artefacts to DB
+  await persistArtefacts(taskId, state.artefacts);
   await upsertSocialState(taskId, state, brandId, projectId);
 
   // Return the latest artefact produced by this node
