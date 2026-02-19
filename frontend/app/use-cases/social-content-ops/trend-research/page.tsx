@@ -19,8 +19,11 @@ interface TrendEntry {
   relevance: 'High' | 'Medium' | 'Low';
   description: string;
   source: string;
+  sourceUrl?: string;
   dateSpotted: string;
   actionable: string;
+  importance: number; // 1-5 scale
+  mentions: number; // count of mentions/reports
 }
 
 interface BestPractice {
@@ -169,30 +172,42 @@ const SAMPLE_TRENDS: TrendEntry[] = [
     platform: 'All', relevance: 'High',
     description: 'Meta and TikTok now require AI-generated content labels. Brands need to disclose AI use in content creation to maintain trust and comply with platform policies.',
     source: 'Meta Newsroom, TikTok Creator Portal',
+    sourceUrl: 'https://about.fb.com/news/',
     dateSpotted: '2026-02', actionable: 'Add AI disclosure labels to all AI-assisted content. Update content guidelines.',
+    importance: 5, mentions: 47,
   },
   {
     id: '2', topic: 'Long-Form Reels (3-5 min)', category: 'Format',
     platform: 'Instagram', relevance: 'High',
     description: 'Instagram is pushing longer Reels (3-5 min) with new monetization. Educational and tutorial content in this format is getting 2-3x the reach of short clips.',
     source: 'Instagram @Creators',
+    sourceUrl: 'https://creators.instagram.com/',
     dateSpotted: '2026-02', actionable: 'Test 3-5 min educational Reels. Repurpose blog/guide content into mini-tutorials.',
+    importance: 4, mentions: 32,
   },
   {
     id: '3', topic: 'Social Commerce via Live Shopping', category: 'E-commerce',
     platform: 'TikTok', relevance: 'Medium',
     description: 'TikTok Shop live streams are becoming major revenue drivers in APAC markets. Brands seeing 5-10x conversion rates vs. static product posts.',
     source: 'TikTok for Business',
+    sourceUrl: 'https://www.tiktok.com/business/',
     dateSpotted: '2026-01', actionable: 'Explore TikTok Shop setup for applicable brands. Plan test live shopping event.',
+    importance: 3, mentions: 18,
   },
   {
     id: '4', topic: 'Threads Integration with Fediverse', category: 'Platform',
     platform: 'Meta/Threads', relevance: 'Low',
     description: 'Threads now fully integrates with ActivityPub/Fediverse. Content posted on Threads can be discovered across Mastodon and other federated platforms.',
     source: 'Meta Engineering Blog',
+    sourceUrl: 'https://engineering.fb.com/',
     dateSpotted: '2026-02', actionable: 'Monitor Threads growth. Consider cross-posting strategy if audience overlap exists.',
+    importance: 2, mentions: 8,
   },
 ];
+
+const IMPORTANCE_STARS: Record<number, string> = {
+  1: 'Low Impact', 2: 'Minor', 3: 'Moderate', 4: 'Significant', 5: 'Critical',
+};
 
 const RELEVANCE_COLORS: Record<string, string> = {
   High: 'bg-red-500/20 text-red-400',
@@ -273,8 +288,11 @@ Return ONLY the JSON array.`,
               relevance: (t.relevance as TrendEntry['relevance']) || 'Medium',
               description: t.description || '',
               source: t.source || 'AI Research',
+              sourceUrl: t.sourceUrl || '',
               dateSpotted: t.dateSpotted || '2026-02',
               actionable: t.actionable || '',
+              importance: (t.importance as number) || 3,
+              mentions: (t.mentions as number) || 1,
             }));
             setTrends(prev => [...newTrends, ...prev]);
           }
@@ -389,9 +407,39 @@ Return ONLY the JSON array.`,
                         <label className="text-[10px] uppercase text-violet-400 mb-1 block font-medium">Actionable Insight</label>
                         <p className="text-xs text-slate-300">{trend.actionable}</p>
                       </div>
+                        {/* Importance & Mentions */}
+                      <div className="flex items-center gap-4 text-[10px]">
+                        <div className="flex items-center gap-1">
+                          <span className="text-slate-500">Importance:</span>
+                          <div className="flex gap-0.5">
+                            {[1, 2, 3, 4, 5].map(i => (
+                              <Star key={i} className={`w-3 h-3 ${i <= trend.importance ? 'text-amber-400 fill-amber-400' : 'text-slate-700'}`} />
+                            ))}
+                          </div>
+                          <span className="text-slate-600 ml-1">{IMPORTANCE_STARS[trend.importance]}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-slate-500">
+                          <Hash className="w-3 h-3" />
+                          <span>{trend.mentions} mentions</span>
+                        </div>
+                      </div>
+
+                      {/* Source link */}
                       <div className="flex items-center gap-2 text-[10px] text-slate-500">
                         <Globe className="w-3 h-3" />
-                        <span>Source: {trend.source}</span>
+                        <span>Source: </span>
+                        {trend.sourceUrl ? (
+                          <a
+                            href={trend.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-violet-400 hover:text-violet-300 underline flex items-center gap-0.5"
+                          >
+                            {trend.source} <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        ) : (
+                          <span>{trend.source}</span>
+                        )}
                       </div>
                     </div>
                   )}
