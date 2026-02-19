@@ -76,10 +76,10 @@ export function ZiweiChartCanvas({
     ctx.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Draw 12 palace sections
+    // Draw 12 palace sections (arranged like reference: top-right to bottom-left clockwise, 4 per side)
     for (let i = 0; i < 12; i++) {
-      const angle = (i * 30 - 90) * (Math.PI / 180);
-      const nextAngle = ((i + 1) * 30 - 90) * (Math.PI / 180);
+      const angle = (i * 30 + 45) * (Math.PI / 180);  // Start from top-right (45°), 30° per palace
+      const nextAngle = ((i + 1) * 30 + 45) * (Math.PI / 180);
 
       // Draw dividing lines
       ctx.strokeStyle = '#475569';
