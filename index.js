@@ -57,7 +57,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -1993,11 +1993,51 @@ Be concise and actionable. Use bullet points for lists.`;
 // Social Content Ops chat endpoint
 app.post('/api/social/chat', async (req, res) => {
   try {
-    const { messages, use_case_id, brand_id, brand_name, project_id, project_name, mode } = req.body;
+    const { messages, use_case_id, brand_id, brand_name, project_id, project_name, mode, task_id } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages array is required' });
     }
+
+    // ── Orchestrator path (Sarah multi-agent state machine) ──────────────────
+    // Triggered when the caller provides a task_id (new Sarah chat panel).
+    // Module-specific pages that don't send task_id fall through to legacy path.
+    if (task_id) {
+      const { runSarah } = require('./agents/social/sarahOrchestrator');
+      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+      const userInput = lastUserMsg?.content || '';
+
+      const brandContext = {
+        brand_name:   brand_name || null,
+        project_name: project_name || null,
+        brand_id:     brand_id || null,
+        project_id:   project_id || null,
+      };
+
+      const { state, nodeName, output } = await runSarah({
+        taskId:       task_id,
+        userInput,
+        brandContext,
+        brandId:      brand_id || null,
+        projectId:    project_id || null,
+      });
+
+      // Model label for UI indicator
+      const REFLECT_NODES = new Set(['strategy_reflect', 'content_reflect', 'media_reflect']);
+      const modelLabel = REFLECT_NODES.has(nodeName)
+        ? 'DeepSeek Reasoner (reflection)'
+        : 'DeepSeek Chat (generation)';
+
+      return res.json({
+        message:   output,
+        model:     modelLabel,
+        node:      nodeName,
+        status:    state.status,
+        next_step: state.next_step,
+        artefacts: Object.keys(state.artefacts),
+      });
+    }
+    // ── Legacy path (module pages: strategy, content-dev, calendar, etc.) ────
 
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 3) : '';
@@ -2133,6 +2173,31 @@ Be concise, actionable, and opinionated. You're the expert — share your profes
   } catch (error) {
     console.error('Social chat error:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+// ── Sarah Orchestrator state endpoints ───────────────────────────────────────
+
+// GET /api/social/state/:taskId — fetch current state for polling / UI display
+app.get('/api/social/state/:taskId', async (req, res) => {
+  try {
+    const { getSarahState } = require('./agents/social/sarahOrchestrator');
+    const state = await getSarahState(req.params.taskId);
+    if (!state) return res.status(404).json({ error: 'No state found for this task_id' });
+    res.json({ state });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/social/state/:taskId — reset / start fresh
+app.delete('/api/social/state/:taskId', async (req, res) => {
+  try {
+    const { resetSarah } = require('./agents/social/sarahOrchestrator');
+    await resetSarah(req.params.taskId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
