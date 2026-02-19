@@ -3416,37 +3416,39 @@
       "english_name": "Sheep-Camel Sandwich with Taboo",
       "category": "inauspicious",
       "description": {
-        "zh": "羊刃和陀羅夾著忌星或命宮。象徵困境和阻礙，容易遭遇挫折。多主凶禍。",
-        "en": "Sheep Blade and Tuo Luo sandwich the Taboo star or Life Palace. Symbolizes difficulties and obstacles, prone to setbacks. Generally indicates misfortune."
+        "zh": "羊刃和陀羅夾著忌星或受克的宮位。形成雙重壓力結構。命盤中若呈現此格局，於大運或流年遇克應期易激發相關特性，導致該宮位問題加重。",
+        "en": "Sheep Blade (Yang Ren) and Tuo Luo sandwich a weakened palace or Taboo star. Creates dual pressure structure. If present in birth chart, during unfavorable transit or annual periods, the sandwiched palace is more prone to problems."
       },
       "patterns": [
-        "YangRen + OffspringPalace + TuoLuo",
+        "YangRen + JiStar + TuoLuo sandwich",
         "YangRen + LifePalace + TuoLuo",
-        "YangRen + ParentsPalace + TuoLuo"
+        "YangRen + Career Palace + TuoLuo"
       ],
-      "interpretation": "面臨雙重阻礙，容易陷入困局。需要謹慎待人，避免衝突。",
-      "remedies": "修養品德，多做善事，尋求貴人相助",
+      "interpretation": "面臨雙重阻礙。性格上傾向「寧願背負天下，不願被天下背負」的極端傾向在應期時更易激發。需要謹慎待人，避免衝突和極端行為。",
+      "remedies": "修養品德，控制情緒，多做善事化解，尋求貴人相助",
       "severity": "高",
       "school": "zhongzhou",
-      "source_refs": ["古傳紫微斗數", "斗數秘訣"]
+      "source_refs": ["從星開始紫微研究苑-羊駝大忌格", "古傳紫微斗數"]
     },
     {
       "id": "comb-02-lu-quan-ke-ji",
       "name": "祿權科忌",
-      "english_name": "Four Auspiciousness Pattern",
+      "english_name": "Four Transformations Pattern",
       "category": "auspicious",
       "description": {
-        "zh": "祿存、天權、科星、忌星四顆同現一宮。四化俱全，主吉兇交錯但整體運勢佳。",
-        "en": "Presence of Lu (Wealth), Quan (Power), Ke (Talent), Ji (Taboo) in the same palace. Complete four transformations, mixed blessings but generally favorable fortune."
+        "zh": "四化（化祿、化權、化科、化忌）完整出現在命盤。化祿代表盈餘與給予，化權代表掌控權，化科代表名聲與學問，化忌代表缺陷與損失。四化俱全代表命運完整，主吉兇交錯但整體發展佳。",
+        "en": "Four transformations complete in the chart. Lu transformation (surplus/giving), Quan transformation (control), Ke transformation (reputation/talent), Ji transformation (deficiency/loss). All four present indicates complete destiny with mixed fortunes but good overall development."
       },
       "patterns": [
-        "LuCun + TianQuan + KeStar + JiStar in same palace"
+        "LuHua + QuanHua + KeHua + JiHua appearing in chart",
+        "LuHua + QuanHua in Caizhai for business prosperity",
+        "LuHua + KeHua for reputation and wealth"
       ],
-      "interpretation": "綜合運勢較佳，但需要平衡各方面。機遇與挑戰並存。",
-      "remedies": "把握機遇，謹慎決策，尋求平衡",
-      "severity": "中",
+      "interpretation": "四化能量完整。若化祿化權共現則利於經營；化祿化科並現則名利雙收。化忌需謹慎應對。",
+      "remedies": "善用四化特性，趨利避害，平衡各方面發展",
+      "severity": "低",
       "school": "zhongzhou",
-      "source_refs": ["王亭之-談星系列"]
+      "source_refs": ["星林學苑-四化星組合", "科技紫微網-化祿化權化科化忌"]
     },
     {
       "id": "comb-03-hong-luan-tian-xi",
@@ -3471,22 +3473,22 @@
     {
       "id": "comb-04-kong-jie-jia-ming",
       "name": "空劫夾命",
-      "english_name": "Robbery Stars Sandwich Life Palace",
+      "english_name": "Void and Robbery Stars Sandwich Life Palace",
       "category": "inauspicious",
       "description": {
-        "zh": "空亡和劫煞夾著命宮。主虛耗、漂泊、物質不足。事業易有變動，財務需謹慎。",
-        "en": "Kong (Void) and Jie (Robbery) sandwich the Life Palace. Indicates loss, wandering, material insufficiency. Career prone to changes, finances need caution."
+        "zh": "地空與地劫夾著命宮。只會出現在巳位或亥位坐命。被地空與地劫所夾的宮位視同為弱宮或破宮。帶來波動與挫折。",
+        "en": "Tiankong (Void) and Dijie (Robbery) sandwich the Life Palace. Only occurs when Life Palace is in Si or Hai position. The sandwiched palace is considered weakened or broken. Brings volatility and setbacks."
       },
       "patterns": [
-        "Kong + LifePalace + Jie",
-        "Kong + LifePalace + Kong",
-        "Jie + LifePalace + Jie"
+        "TianKong + LifePalace in Si + DiJie",
+        "TianKong + LifePalace in Hai + DiJie",
+        "TianKong and DiJie structure creating weakness"
       ],
-      "interpretation": "財務和安定性受影響，需要穩健理財。易有意外損失。",
-      "remedies": "謹慎理財，避免投機，穩定工作，積累資本",
+      "interpretation": "被弱化的宮位失去力量。生活變動較多，資產流失風險大。若非空劫同宮，而是兩宮各一顆時，威力也各只有一半。",
+      "remedies": "謹慎理財，避免投機，建立穩定基礎，多做善事化解",
       "severity": "高",
       "school": "zhongzhou",
-      "source_refs": ["古傳紫微斗數"]
+      "source_refs": ["紫微雲科技-天空地劫詳解", "星林學苑-空劫夾命格"]
     },
     {
       "id": "comb-05-tian-liang-zhao-yuan",
