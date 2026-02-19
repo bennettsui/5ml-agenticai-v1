@@ -8,7 +8,6 @@ import {
   LayoutDashboard, Activity, Home, History, Wand2,
 } from 'lucide-react';
 import { ChartCalculator } from './chart-calculator';
-import ZiweiAnalytics from '@/components/ZiweiAnalytics';
 import ZiweiChartAnalysis from '@/components/ZiweiChartAnalysis';
 import ZiweiPredictions from '@/components/ZiweiPredictions';
 import ZiweiKnowledgeManagement from '@/components/ZiweiKnowledgeManagement';
@@ -400,9 +399,9 @@ export default function ZiweiPage() {
         )}
 
         {/* ================================================================ */}
-        {/* ZIWEI ANALYTICS TAB                                             */}
+        {/* ZIWEI ANALYTICS TAB (GENERATOR)                                 */}
         {/* ================================================================ */}
-        {activeTab === 'analytics' && <ZiweiAnalytics />}
+        {activeTab === 'analytics' && <ChartCalculator />}
 
         {/* ================================================================ */}
         {/* ZIWEI ANALYSIS TAB                                              */}

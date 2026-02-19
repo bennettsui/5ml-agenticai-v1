@@ -36,6 +36,32 @@ export default function ZiweiChartLibrary() {
     }
   };
 
+  const viewChart = (chartId: string) => {
+    // Navigate to view the chart details
+    window.location.href = `/use-cases/ziwei?tab=analysis&chartId=${chartId}`;
+  };
+
+  const exportChart = async (chart: SavedChart) => {
+    try {
+      const data = {
+        name: chart.name,
+        birth_info: chart.birth_info,
+        gan_zhi: chart.gan_zhi,
+        created_at: chart.created_at
+      };
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${chart.name || 'chart'}-${Date.now()}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export chart');
+    }
+  };
+
   const deleteChart = async (chartId: string) => {
     if (!confirm('Delete this chart?')) return;
     try {
@@ -120,12 +146,14 @@ export default function ZiweiChartLibrary() {
 
                 <div className="flex gap-2">
                   <button
+                    onClick={() => viewChart(chart.id)}
                     className="flex-1 px-2 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1"
                   >
                     <Eye className="w-3 h-3" />
                     View
                   </button>
                   <button
+                    onClick={() => exportChart(chart)}
                     className="flex-1 px-2 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1"
                   >
                     <Download className="w-3 h-3" />
