@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import {
   Layers, ArrowRight, LayoutDashboard, Sparkles, TrendingUp, Brain,
-  Monitor, Tv2, Rocket, Building2, ChevronRight,
+  Monitor, Tv2, Rocket, Building2, ChevronRight, Briefcase,
 } from 'lucide-react';
 import {
   USE_CASES, SOLUTION_LINES, STATUS_CONFIG,
@@ -21,6 +21,7 @@ const LINE_ICONS: Record<SolutionLineKey, typeof TrendingUp> = {
   ExpLab: Sparkles,
   MediaChannel: Tv2,
   FrontierVentures: Rocket,
+  GovProcurement: Briefcase,
   CSuite: Building2,
   Platform: Layers,
 };
@@ -33,11 +34,12 @@ const LINE_GRADIENT: Record<SolutionLineKey, { card: string; glow: string; borde
   ExpLab:            { card: 'from-indigo-600 to-violet-500',  glow: 'bg-indigo-500/8',   border: 'border-indigo-500/30' },
   MediaChannel:      { card: 'from-rose-600 to-pink-500',     glow: 'bg-rose-500/8',     border: 'border-rose-500/30' },
   FrontierVentures:  { card: 'from-amber-600 to-orange-500',  glow: 'bg-amber-500/8',    border: 'border-amber-500/30' },
+  GovProcurement:    { card: 'from-indigo-600 to-cyan-500',    glow: 'bg-indigo-500/8',   border: 'border-indigo-500/30' },
   CSuite:            { card: 'from-emerald-600 to-green-500',  glow: 'bg-emerald-500/8',  border: 'border-emerald-500/30' },
   Platform:          { card: 'from-slate-600 to-slate-500',    glow: 'bg-slate-500/8',    border: 'border-slate-500/30' },
 };
 
-// Solution lines in user's priority order (a→g)
+// Solution lines in user's priority order (a→h)
 const PRIORITY_ORDER: SolutionLineKey[] = [
   'GrowthOS',          // a. Growth Hacking Studio
   'IntelStudio',       // b. ExcelIntel Studio
@@ -45,7 +47,8 @@ const PRIORITY_ORDER: SolutionLineKey[] = [
   'ExpLab',            // d. Agentic Experience Lab
   'MediaChannel',      // e. Media Channel
   'FrontierVentures',  // f. Frontier Ventures
-  'CSuite',            // g. C-Suite Management
+  'GovProcurement',    // g. Government Procurement
+  'CSuite',            // h. C-Suite Management
 ];
 
 // ---------------------------------------------------------------------------

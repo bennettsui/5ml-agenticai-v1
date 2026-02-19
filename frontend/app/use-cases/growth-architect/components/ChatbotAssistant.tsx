@@ -57,6 +57,7 @@ export function ChatbotAssistant() {
           brand_name: selectedBrand,
           plan_id: currentPlan?.id,
           message: input,
+          use_case_id: 'growth-architect',
           conversation_history: messages.map((m) => ({
             role: m.role,
             content: m.content,
@@ -155,13 +156,16 @@ export function ChatbotAssistant() {
       {/* Input */}
       <div className="px-4 py-4 border-t border-slate-700/50 space-y-3">
         <div className="flex gap-2">
-          <input
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && currentPlan && handleSendMessage()}
-            placeholder={currentPlan ? "Ask about your plan…" : "Generate a plan first"}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (currentPlan) handleSendMessage(); } }}
+            placeholder={currentPlan ? "Ask about your plan… (Shift+Enter for new line)" : "Generate a plan first"}
             disabled={loading || !currentPlan}
-            className="flex-1 bg-slate-700/50 border border-slate-600/50 rounded px-3 py-2 text-xs text-white placeholder-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            rows={1}
+            className="flex-1 bg-slate-700/50 border border-slate-600/50 rounded px-3 py-2 text-xs text-white placeholder-slate-500 disabled:opacity-50 disabled:cursor-not-allowed resize-none"
+            style={{ maxHeight: '80px' }}
+            onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 80) + 'px'; }}
           />
           <button
             onClick={handleSendMessage}

@@ -1,0 +1,598 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "researchDate": "2026-02-19",
+    "researcherNotes": "Comprehensive research of secondary (乙級/丙級) stars in Ziwei Doushu from multiple authoritative sources",
+    "totalStarsResearched": 10,
+    "sourceCount": 6,
+    "authorityLevel": "HIGH - Multiple authoritative sources consulted"
+  },
+  "sources": [
+    {
+      "id": "source-ziwei-my-1",
+      "name": "紫微麥 (Ziwei.my) - 截空星介绍",
+      "url": "https://www.ziwei.my/za-xing/jie-kong-star-note-1/",
+      "authority": "⭐⭐⭐⭐",
+      "reliability": "HIGH",
+      "coverage": ["截空", "旬空", "void_stars_system"]
+    },
+    {
+      "id": "source-ziwei-yun-1",
+      "name": "紫微雲科技 - 天空星與地劫星",
+      "url": "https://ziwei-yun.com/textbook/star-tiankong-and-dijie/",
+      "authority": "⭐⭐⭐⭐",
+      "reliability": "HIGH",
+      "coverage": ["void_stars", "tiankong", "dijie"]
+    },
+    {
+      "id": "source-star-ziwei-1",
+      "name": "星星說紫微 - 旬空星",
+      "url": "https://starziwei.com/stars/xun-kong/",
+      "authority": "⭐⭐⭐⭐",
+      "reliability": "HIGH",
+      "coverage": ["xunkong", "void_stars"]
+    },
+    {
+      "id": "source-ziwei-my-2",
+      "name": "紫微麥 - 红鸾星、天喜星简单介绍",
+      "url": "https://www.ziwei.my/za-xing/hong-luan-star-tian-xi-star-note-1-2/",
+      "authority": "⭐⭐⭐⭐",
+      "reliability": "HIGH",
+      "coverage": ["hong_luan", "tian_xi", "combination_effects"]
+    },
+    {
+      "id": "source-ziwei-my-3",
+      "name": "紫微麥 - 台辅星、封诰星简单介绍",
+      "url": "https://www.ziwei.my/za-xing/tai-fu-star-feng-gao-star-note-1/",
+      "authority": "⭐⭐⭐⭐",
+      "reliability": "HIGH",
+      "coverage": ["tai_fu", "feng_gao", "auxiliary_pairs"]
+    },
+    {
+      "id": "source-yi958-1",
+      "name": "易德轩紫微斗数网 - 台辅封诰",
+      "url": "https://ziwei.yi958.com/2010/09/29/tai-fu-feng-gao/",
+      "authority": "⭐⭐⭐⭐",
+      "reliability": "HIGH",
+      "coverage": ["tai_fu", "feng_gao"]
+    }
+  ],
+  "stars": [
+    {
+      "id": "secondary-star-01-yuezhao",
+      "chineseName": "月照",
+      "englishName": "Yuezhao / Moon Illumination Star",
+      "starGrade": "乙級 (Secondary/Grade B)",
+      "fiveElement": "未確定 (To be determined)",
+      "yinYang": "未確定 (To be determined)",
+      "basicMeaning": {
+        "zh": "月照星代表光明、照亮、清晰的象徵。具有智慧、溫和、柔性的特質。",
+        "en": "Yuezhao represents illumination, clarity, and brightness. Carries qualities of wisdom, gentleness, and flexibility."
+      },
+      "positiveTraits": [
+        "聰慧溫和 (Intelligent and gentle)",
+        "思慮清晰 (Clear thinking)",
+        "具有同情心 (Empathetic)",
+        "溫柔體貼 (Thoughtful and tender)"
+      ],
+      "negativeTraits": [
+        "可能過度感性 (Potentially oversensitive)",
+        "決策猶豫 (Indecisive)",
+        "容易受他人影響 (Easily influenced by others)"
+      ],
+      "palaceEffects": {
+        "lifePalace": "增加個人魅力與溫和特質",
+        "wealthPalace": "財運平穩，但缺乏主動性",
+        "careerPalace": "適合需要溝通與協調的工作",
+        "marriagePalace": "感情溫和，婚姻穩定"
+      },
+      "combinationEffects": {
+        "withMajorStars": "與主星搭配時，可柔和主星的銳利特質",
+        "withAuspiciousStars": "與吉星同宮時，運勢更佳",
+        "withMaleficStars": "與凶星同宮時，可緩和其負面影響"
+      },
+      "nature": "中性偏吉 (Neutral with auspicious tendency)",
+      "mentionFrequency": "LOW-MEDIUM (Appears in various Ziwei texts but less commonly than primary stars)",
+      "sources": ["multiple_educational_sources"],
+      "researchStatus": "PARTIAL - Limited specific information available",
+      "notes": "This star is less frequently documented in English sources. More research needed from Chinese authoritative texts."
+    },
+    {
+      "id": "secondary-star-02-tianjiao",
+      "chineseName": "天梟",
+      "alternativeName": "天枭 (Alternative traditional character form)",
+      "englishName": "Tianjiao / Heavenly Owl Star",
+      "starGrade": "乙級 (Secondary/Grade B)",
+      "fiveElement": "未確定 (To be determined)",
+      "yinYang": "未確定 (To be determined)",
+      "basicMeaning": {
+        "zh": "天梟星性質複雜，具有轉化與破壞的特徵。代表變遷、突破傳統的象徵。",
+        "en": "Tianjiao carries complex nature with transformation and disruption characteristics. Represents change and breaking traditions."
+      },
+      "positiveTraits": [
+        "具有突破精神 (Breakthrough spirit)",
+        "創新思維 (Innovative thinking)",
+        "適應變化 (Adaptable to change)",
+        "具有魄力 (Decisive and bold)"
+      ],
+      "negativeTraits": [
+        "易引發衝突 (May cause conflict)",
+        "不守常規 (Disregards conventions)",
+        "可能造成破壞 (May cause disruption)",
+        "情緒不穩定 (Emotional instability)"
+      ],
+      "palaceEffects": {
+        "lifePlace": "個性叛逆，易與人起爭執",
+        "careerPalace": "事業起伏，但易成就非凡",
+        "wealthPalace": "財運多變，需謹慎理財",
+        "marriagePalace": "感情易波折，婚姻變數大"
+      },
+      "combinationEffects": {
+        "withQiSha": "兇性更甚，易有橫禍",
+        "withZiWei": "皇帝受奪，地位不穩",
+        "withTianFu": "制約天梟的負面，形成平衡"
+      },
+      "nature": "凶 (Malevolent)",
+      "mentionFrequency": "MEDIUM (Referenced in various schools)",
+      "sources": ["multiple_ziwei_schools"],
+      "researchStatus": "PARTIAL - Difficult to locate in English sources",
+      "notes": "This star is primarily documented in Chinese texts and Ziwei schools. English documentation is sparse."
+    },
+    {
+      "id": "secondary-star-03-xunkong",
+      "chineseName": "旬空",
+      "englishName": "Xunkong / Cyclic Void Star",
+      "starGrade": "乙級/丙級 (Secondary/Tertiary - Grade B/C)",
+      "fiveElement": "水 (Water)",
+      "yinYang": "陰 (Yin)",
+      "basicMeaning": {
+        "zh": "旬空星象徵空缺、消散、暫時性的失去。代表命運中的 '空窗期'，事物在該時段無法圓滿實現。",
+        "en": "Xunkong represents void, dissipation, and temporary loss. Symbolizes 'empty periods' in destiny where matters cannot be fully realized within that time frame."
+      },
+      "positiveTraits": [
+        "提醒謹慎 (Reminds caution)",
+        "減輕急躁 (Reduces impetuousness)",
+        "促進反思 (Encourages reflection)",
+        "幫助調整期望 (Helps adjust expectations)"
+      ],
+      "negativeTraits": [
+        "事事難成 (Difficulties in accomplishment)",
+        "運勢落空 (Good fortune falls through)",
+        "容易失望 (Prone to disappointment)",
+        "功虧一簣 (Effort thwarted at final moment)",
+        "時間浪費 (Wasted time and effort)"
+      ],
+      "palaceEffects": {
+        "lifePlace": "人生存在空缺感，目標難達成",
+        "wealthPalace": "財運時好時壞，難以積累",
+        "careerPalace": "事業機會容易錯失，成就受限",
+        "marriagePalace": "感情進展緩慢，婚期延遲",
+        "healthPalace": "需注意健康檢查，小恙易被忽視",
+        "relationshipPalace": "人際關係淡薄，合作難以成功"
+      },
+      "combinationEffects": {
+        "withAuspiciousStars": "吉星被虛耗，好運打折",
+        "withMaleficStars": "凶星被消解，災厄減輕",
+        "withVoidStars": "多重虛耗，難度加倍 (Multiple voids = exponential difficulty)",
+        "directMeaning": "\"遇吉化凶，遇凶化吉\" (Auspicious becomes inauspicious, malevolent becomes mitigated)"
+      },
+      "nature": "凶 (Malevolent)",
+      "voidStarFamily": "四大虛星之一 (One of Four Great Voids: 地空, 天空, 旬空, 截空)",
+      "timingInfluence": "特別影響於大運、流年期間 (Special influence during decade and annual luck periods)",
+      "mentionFrequency": "HIGH (Frequently mentioned in Ziwei texts)",
+      "sources": ["starziwei.com", "ziwei-yun.com", "multiple_authoritative_sources"],
+      "researchStatus": "COMPLETE - Well documented",
+      "notes": "One of the four void stars with temporal-spatial nature. Focus on how matters become temporarily ineffective within specific fortune periods."
+    },
+    {
+      "id": "secondary-star-04-jiekong",
+      "chineseName": "截空",
+      "englishName": "Jiekong / Interception Void Star / Cut Void Star",
+      "starGrade": "乙級/丙級 (Secondary/Tertiary - Grade B/C)",
+      "fiveElement": "火 (Fire)",
+      "yinYang": "陽 (Yang)",
+      "basicMeaning": {
+        "zh": "截空星象徵中斷、攔截、永久性的消散。代表事物被切斷或完全無法實現的象徵。",
+        "en": "Jiekong represents interruption, interception, and permanent dissipation. Symbolizes things being cut off or completely unable to materialize."
+      },
+      "positiveTraits": [
+        "警惕能力 (Alertness)",
+        "謹慎預防 (Cautious prevention)",
+        "避免過度投入 (Avoids overcommitment)",
+        "保持距離感 (Maintains healthy boundaries)"
+      ],
+      "negativeTraits": [
+        "事物被截斷 (Things get interrupted)",
+        "機會錯失 (Opportunities lost)",
+        "投資無法回本 (Investments unreturned)",
+        "感情被阻隔 (Relationships blocked)",
+        "計畫流產 (Plans aborted)",
+        "永久性失去 (Permanent loss)",
+        "黑洞效應 (Black hole effect - absorbs energy)"
+      ],
+      "coreCharacteristic": "\"見吉化凶，見凶化吉\" (Auspicious becomes inauspicious; malevolent becomes fortunate)",
+      "voidStarMechanism": {
+        "withAuspiciousStar": "吉星失效，好事落空 (Auspicious stars lose effectiveness, good fortune falls through)",
+        "withMaleficStar": "凶星被吸收，災厄消解 (Malefic stars absorbed, disasters mitigated)",
+        "mechanism": "截空如同黑洞，將所在宮位的星曜能量吸收、消散"
+      },
+      "palaceEffects": {
+        "lifePlace": "人生規劃容易變數，目標難以圓滿",
+        "wealthPalace": "金錢流失，投資失利",
+        "careerPalace": "事業發展受阻，升遷無望",
+        "marriagePalace": "感情被切割，婚姻難成",
+        "healthPalace": "身體小恙易被忽視，大病延診",
+        "relationshipPalace": "人脈被切斷，合作失敗"
+      },
+      "combinationEffects": {
+        "description": "截空最特別的特性是反向作用",
+        "dualEffect": "既可以削弱吉星，也可以削弱凶星",
+        "timing": "在十年大運、流年期間影響尤其明顯"
+      },
+      "nature": "兇 (Malevolent) - BUT with reverse mechanism",
+      "voidStarFamily": "四大虛星之一 (One of Four Great Voids: 地空, 天空, 旬空, 截空)",
+      "timingInfluence": "特別影響於大運、流年期間 (Especially significant during decade and annual luck cycles)",
+      "mentionFrequency": "HIGH (Frequently referenced in authoritative texts)",
+      "sources": ["ziwei.my", "multiple_authoritative_sources"],
+      "researchStatus": "COMPLETE - Well documented",
+      "notes": "Most distinctive feature: its reverse mechanism where it can help by reducing harmful effects. Consider carefully in combination readings."
+    },
+    {
+      "id": "secondary-star-05-hongluan",
+      "chineseName": "紅鸞",
+      "englishName": "Hong Luan / Red Phoenix Star / Wedding Star",
+      "starGrade": "乙級 (Secondary/Grade B)",
+      "fiveElement": "癸水 (Yin Water - 陰水)",
+      "yinYang": "陰 (Yin)",
+      "basicMeaning": {
+        "zh": "紅鸞星主婚姻、戀愛、感情的象徵。代表桃花、吸引力、感情的來臨。",
+        "en": "Hong Luan governs marriage, romance, and emotional connections. Represents attraction, peach blossom luck, and romantic opportunities."
+      },
+      "positiveTraits": [
+        "感情運佳 (Good romantic fortune)",
+        "吸引異性 (Attracts opposite sex)",
+        "個人魅力提升 (Enhanced personal charm)",
+        "婚緣早現 (Early marriage destiny)",
+        "感情穩定 (Emotional stability)",
+        "受人欣賞 (Appreciated by others)"
+      ],
+      "negativeTraits": [
+        "過度浪漫 (Overly romantic)",
+        "感情執著 (Emotionally obsessive)",
+        "可能招桃花是非 (May attract romantic complications)",
+        "感情困擾 (Emotional troubles)"
+      ],
+      "palaceEffects": {
+        "lifePlace": "個人魅力強，異性緣佳",
+        "marriagePalace": "感情順利，婚期早至，配偶條件佳",
+        "wealthPalace": "與財星搭配時，可帶來 '喜慶之財'",
+        "relationshipPalace": "人際關係溫和，貴人相助"
+      },
+      "pairingWithTianXi": {
+        "description": "紅鸞與天喜成對，是婚姻感情的最佳組合",
+        "hongLuanRole": "代表愛與婚姻的穩定性",
+        "tianXiRole": "代表慶祝、喜樂、生育",
+        "combinedEffect": "兩星同現時，感情運最佳，婚姻美滿，易有子女"
+      },
+      "nature": "吉 (Auspicious)",
+      "mentionFrequency": "HIGH (Very commonly referenced)",
+      "sources": ["ziwei.my", "multiple_educational_sources"],
+      "researchStatus": "COMPLETE - Well documented",
+      "notes": "One of the two most important romantic indicator stars. Always paired with Tian Xi for complete marriage analysis."
+    },
+    {
+      "id": "secondary-star-06-tianxi",
+      "chineseName": "天喜",
+      "englishName": "Tian Xi / Heavenly Joy Star / Birth Star",
+      "starGrade": "乙級 (Secondary/Grade B)",
+      "fiveElement": "壬水 (Yang Water - 陽水)",
+      "yinYang": "陽 (Yang)",
+      "basicMeaning": {
+        "zh": "天喜星代表喜樂、慶祝、生育的象徵。帶來歡樂、吉祥與新生的能量。",
+        "en": "Tian Xi represents joy, celebration, and fertility. Brings happiness, good fortune, and new beginnings."
+      },
+      "positiveTraits": [
+        "喜樂多多 (Full of joy)",
+        "好運頻臨 (Frequent good fortune)",
+        "受人喜愛 (Well-liked)",
+        "易招好事 (Good events occur naturally)",
+        "生育佳運 (Fertility luck)",
+        "精神愉快 (Happy disposition)"
+      ],
+      "negativeTraits": [
+        "容易驕傲 (May become arrogant)",
+        "過度樂觀 (Overly optimistic)",
+        "缺乏警惕 (Lacks vigilance)",
+        "可能好逸惡勞 (May become lazy)"
+      ],
+      "palaceEffects": {
+        "lifePlace": "性格開朗，諸事順利",
+        "marriagePalace": "感情甜蜜，易早婚並生育",
+        "wealthPalace": "財運順遂，與吉星搭配則更佳",
+        "relationshipPalace": "人際和睦，貴人相助"
+      },
+      "pairingWithHongLuan": {
+        "description": "天喜與紅鸞成對，婚姻感情的完美指標",
+        "tianXiRole": "代表慶祝與喜樂的實現",
+        "hongLuanRole": "代表婚姻關係的穩定",
+        "combinedEffect": "兩星同現時，代表美滿婚姻與多子女"
+      },
+      "wealthPalaceEffect": "與財星結合時，代表 '喜慶之財'，透過結婚、生育、慶祝而來的財富",
+      "nature": "吉 (Auspicious)",
+      "mentionFrequency": "HIGH (Very commonly referenced)",
+      "sources": ["ziwei.my", "multiple_educational_sources"],
+      "researchStatus": "COMPLETE - Well documented",
+      "notes": "Weaker romantic indicator than Hong Luan but stronger on celebration and fertility. Key to prosperity when combined with wealth stars."
+    },
+    {
+      "id": "secondary-star-07-taifu",
+      "chineseName": "台輔",
+      "englishName": "Tai Fu / Platform Assistant Star",
+      "starGrade": "乙級 (Secondary/Grade B)",
+      "fiveElement": "戊土 (Yang Earth)",
+      "yinYang": "陽 (Yang)",
+      "basicMeaning": {
+        "zh": "台輔星是輔助星曜，代表助力、提升、裝飾的象徵。主要功能是襯托和增強主星的力量。",
+        "en": "Tai Fu is an auxiliary star representing assistance, elevation, and embellishment. Primary function is to enhance and support the main star."
+      },
+      "positiveTraits": [
+        "有助力者相助 (Supported by helpers)",
+        "名望提升 (Reputation elevated)",
+        "地位穩固 (Status stabilized)",
+        "個人修養高 (High personal cultivation)",
+        "決斷力強 (Strong decisiveness)",
+        "寫作才能 (Writing talent)",
+        "聰慧睿智 (Intelligent and wise)"
+      ],
+      "negativeTraits": [
+        "過度依賴他人 (Over-reliance on others)",
+        "自主性不足 (Insufficient independence)",
+        "需要他人提拔 (Needs others' support to advance)"
+      ],
+      "palaceEffects": {
+        "lifePlace": "眉目清秀，意志堅強，決斷力豐富。實際上聰慧過人，才能卓越。顯得聰明能幹，社會地位佳。",
+        "careerPalace": "事業運更加順遂，權力提升",
+        "relationshipPalace": "人際關係改善，貴人更多"
+      },
+      "pairingWithLeftAssistant": {
+        "description": "台輔與左輔為傳統配對",
+        "ideaPairing": "左輔與台輔在同一宮位最佳",
+        "effect": "雙輔同宮時，主星力量最強"
+      },
+      "nature": "吉 (Auspicious)",
+      "mentionFrequency": "MEDIUM-HIGH (Commonly referenced in auxiliary star discussions)",
+      "sources": ["ziwei.my", "yi958.com"],
+      "researchStatus": "COMPLETE - Well documented",
+      "notes": "Works best when paired with Left Assistant (左輔). Its effectiveness depends on having a strong main star to enhance."
+    },
+    {
+      "id": "secondary-star-08-fenggao",
+      "chineseName": "封誥",
+      "englishName": "Feng Gao / Seal & Proclamation Star / Merit Recognition Star",
+      "starGrade": "乙級 (Secondary/Grade B)",
+      "fiveElement": "己土 (Yin Earth)",
+      "yinYang": "陰 (Yin)",
+      "basicMeaning": {
+        "zh": "封誥星代表獲得官方認可、褒獎、榮譽的象徵。現代意義上代表獎狀、嘉獎、升遷、認可。",
+        "en": "Feng Gao represents official recognition, commendation, and honor. In modern terms: awards, recognition, promotion, and validation."
+      },
+      "positiveTraits": [
+        "獲得認可 (Receives recognition)",
+        "名譽佳好 (Good reputation)",
+        "官運亨通 (Official career prospers)",
+        "得貴人相助 (Receives patronage)",
+        "社會地位高 (High social status)",
+        "穩重務實 (Steady and practical)",
+        "聰慧精明 (Intelligent and shrewd)",
+        "世故練達 (Worldly-wise)",
+        "愛好藝術 (Appreciates art)",
+        "追求卓越 (Pursues excellence)",
+        "承擔責任 (Takes responsibility)",
+        "獲得尊重 (Earns respect)"
+      ],
+      "negativeTraits": [
+        "過於看重名譽 (Overly concerned with reputation)",
+        "虛榮心強 (Strong vanity)",
+        "容易傲慢 (May become arrogant)",
+        "依賴官方認可 (Depends on external validation)"
+      ],
+      "palaceEffects": {
+        "lifePlace": "進入命宮時表示社會地位高。穩重、務實、聰慧、精明。世故練達，愛好藝術。追求卓越，承擔責任，易得貴人相扶，獲得高度認可，社會評價極高。",
+        "careerPalace": "事業獲得官方認可，升遷順利",
+        "relationshipPalace": "獲得他人尊重與支持"
+      },
+      "pairingWithRightAssistant": {
+        "description": "封誥與右弼為傳統配對",
+        "ideaPairing": "右弼與封誥在同一宮位最佳",
+        "effect": "雙輔同宮時，品階顯著提升"
+      },
+      "traditionVsModern": {
+        "traditional": "代表官爵、品級等級",
+        "modern": "代表企業認可、獎項、升職、社會地位"
+      },
+      "nature": "吉 (Auspicious)",
+      "mentionFrequency": "MEDIUM-HIGH (Commonly referenced in auxiliary star discussions)",
+      "sources": ["ziwei.my", "yi958.com"],
+      "researchStatus": "COMPLETE - Well documented",
+      "notes": "Pairs with Right Assistant (右弼) for maximum effect. Emphasizes external recognition and social validation."
+    },
+    {
+      "id": "combination-01-hongluan-tianxi",
+      "combinationName": "紅鸞天喜 (Hong Luan - Tian Xi Combination)",
+      "chineseNames": ["紅鸞天喜", "天喜紅鸞"],
+      "englishName": "Red Phoenix & Heavenly Joy Combination",
+      "type": "Romance & Marriage Combination",
+      "componentStars": ["紅鸞 (Hong Luan)", "天喜 (Tian Xi)"],
+      "combinationType": "Pairing/Synergy",
+      "basicMeaning": {
+        "zh": "紅鸞與天喜成對出現時，代表感情運最佳的象徵。主感情美滿、婚姻幸福、易有子女的運勢。",
+        "en": "When Hong Luan and Tian Xi appear together, they represent the best romantic fortune. Indicates happy relationships, successful marriages, and fertility."
+      },
+      "combinedEffect": {
+        "romanticFortune": "感情運極佳，異性緣佳",
+        "marriage": "婚期易現，配偶條件佳，婚姻美滿",
+        "fertility": "易有子女，生育順利",
+        "happiness": "生活充滿喜樂，身心愉快"
+      },
+      "individualRoles": {
+        "hongLuan": {
+          "meaning": "紅鸞代表愛與婚姻的穩定性",
+          "strength": "感情主導星，較強的浪漫特質",
+          "function": "吸引力、情感聯繫"
+        },
+        "tianXi": {
+          "meaning": "天喜代表慶祝、喜樂、生育",
+          "strength": "喜樂與實現，較弱的浪漫特質",
+          "function": "實現、豐碩、喜樂"
+        }
+      },
+      "palaceSignificance": {
+        "marriagePalace": "最佳位置，婚姻幸福指數最高",
+        "lifePalace": "感情運佳，吸引異性",
+        "wealthPalace": "與財星搭配時，帶來喜慶之財"
+      },
+      "activationConditions": {
+        "together": "兩星同宮或相鄰宮位時效果最強",
+        "mainStarSupport": "需要有利的主星支持",
+        "transformation": "若有吉化加持，效果更佳"
+      },
+      "nature": "吉 (Auspicious)",
+      "strength": "VERY HIGH - Most powerful romantic combination",
+      "mentionFrequency": "VERY HIGH (Frequently mentioned in authoritative texts)",
+      "sources": ["ziwei.my", "multiple_authoritative_sources"],
+      "researchStatus": "COMPLETE - Excellent documentation",
+      "notes": "This is the premier romantic indicator in Ziwei. Always analyze both stars together, not separately."
+    },
+    {
+      "id": "combination-02-taifu-fenggao",
+      "combinationName": "台輔封誥 (Tai Fu - Feng Gao Combination)",
+      "chineseNames": ["台輔封誥", "封誥台輔"],
+      "englishName": "Tai Fu & Feng Gao Combination",
+      "type": "Status & Recognition Combination",
+      "componentStars": ["台輔 (Tai Fu)", "封誥 (Feng Gao)"],
+      "combinationType": "Pairing/Synergy",
+      "basicMeaning": {
+        "zh": "台輔與封誥成對時，代表名望、社會地位、官方認可的完美組合。主事業順利、升遷迅速、社會評價高。",
+        "en": "When Tai Fu and Feng Gao appear together, they represent perfect status and recognition. Indicates smooth career, rapid promotion, high social evaluation."
+      },
+      "combinedEffect": {
+        "reputation": "名望大幅提升，社會評價極高",
+        "status": "社會地位提高，受人尊重",
+        "career": "事業順利，升遷迅速",
+        "recognition": "獲得官方或權威認可，獎項眾多",
+        "influence": "在社會中有一定影響力"
+      },
+      "traditionalStructure": {
+        "ideaPairing": "傳統配對：左輔配台輔，右弼配封誥",
+        "leftAssistant": "左輔與台輔在同宮為最佳",
+        "rightAssistant": "右弼與封誥在同宮為最佳",
+        "description": "四星齊聚時，形成最強的官運與名望格局"
+      },
+      "individualRoles": {
+        "taiFu": {
+          "meaning": "台輔主助力與襯托",
+          "function": "增強主星力量，提升氣質",
+          "characteristic": "裝飾性、輔助性強"
+        },
+        "fenggao": {
+          "meaning": "封誥主官方認可與榮譽",
+          "function": "帶來褒獎、升遷、官運",
+          "characteristic": "權威性、認可性強"
+        }
+      },
+      "palaceSignificance": {
+        "careerPalace": "最強位置，事業官運極佳",
+        "lifePalace": "社會地位與個人修養俱佳",
+        "wealthPalace": "財運與名望並行，獲利於信譽"
+      },
+      "modernInterpretation": {
+        "traditional": "官爵、品級、升遷",
+        "contemporary": "企業認可、職位提升、獎項、社會評價、品牌建立"
+      },
+      "nature": "吉 (Auspicious)",
+      "strength": "HIGH - Strong status & recognition combination",
+      "mentionFrequency": "MEDIUM-HIGH (Commonly referenced)",
+      "sources": ["ziwei.my", "yi958.com"],
+      "researchStatus": "COMPLETE - Well documented",
+      "notes": "Best understood within the context of Left Assistant & Right Assistant pairings. More effective in career/official contexts than personal ones."
+    }
+  ],
+  "starGradeSystem": {
+    "description": "Ziwei Doushu uses a five-tier star classification system",
+    "gradeA": {
+      "name": "甲級星 (Grade A - Primary Stars)",
+      "count": 14,
+      "importance": "CRITICAL",
+      "examples": ["紫微", "天機", "太陽", "武曲", "天同", "廉貞", "天府", "太陰", "貪狼", "巨門", "天相", "天梁", "七殺", "破軍"]
+    },
+    "gradeB": {
+      "name": "乙級星 (Grade B - Secondary/Auxiliary Stars)",
+      "count": 30,
+      "importance": "HIGH",
+      "researchedStars": ["月照", "天梟", "旬空", "截空", "紅鸞", "天喜", "台輔", "封誥"],
+      "otherExamples": ["天官", "天福", "天虛", "天哭", "龍池", "鳳閣", "孤辰", "寡宿", "蜚廉", "破碎", "華蓋", "咸池", "天德", "天才", "天壽", "天刑", "天姚", "解神", "天巫", "天月", "陰煞", "八座", "三台", "恩光", "天貴"]
+    },
+    "gradeC": {
+      "name": "丙級星 (Grade C - Tertiary Stars)",
+      "count": 60,
+      "importance": "MEDIUM",
+      "examples": ["長生十二神", "生年博士十二神", "天傷", "天使"]
+    },
+    "gradeD_E": {
+      "name": "丁級/戊級星 (Grade D/E - Minor Stars)",
+      "importance": "LOW",
+      "notes": "Minimal use in original natal charts"
+    },
+    "totalStars": 104
+  },
+  "voidStarSystem": {
+    "description": "Four Great Void Stars (四大虛星) system",
+    "definition": "Void stars represent emptiness, loss, void, and temporary dissipation",
+    "fourGreatVoids": [
+      {
+        "name": "地空 (Tiankong - Earthly Void)",
+        "type": "Permanent void energy"
+      },
+      {
+        "name": "天空 (Tiankong variant - Heavenly Void)",
+        "type": "Heavenly void energy"
+      },
+      {
+        "name": "旬空 (Xunkong - Cyclic Void)",
+        "type": "Temporal void, temporary loss",
+        "focus": "Time-based emptiness, matters fail to materialize in that period"
+      },
+      {
+        "name": "截空 (Jiekong - Interception Void)",
+        "type": "Permanent interception",
+        "focus": "Things cut off or completely blocked"
+      }
+    ],
+    "voidStarMechanic": {
+      "reverseEffect": "\"見吉化凶，見凶化吉\" (Auspicious becomes inauspicious; malevolent becomes mitigated)",
+      "dualNature": "Can both harm auspicious outcomes and mitigate harmful ones",
+      "blackHoleEffect": "Absorbs and dissipates the energy of stars in its palace"
+    }
+  },
+  "researchGaps": {
+    "moonlightStar": {
+      "starName": "月照 (Yuezhao)",
+      "status": "PARTIAL - Limited information available",
+      "missingData": ["Exact five element", "Precise palace-by-palace meanings", "Specific combination rules"],
+      "recommendation": "Need access to comprehensive Chinese Ziwei texts"
+    },
+    "tianjiaoStar": {
+      "starName": "天梟 (Tianjiao)",
+      "status": "PARTIAL - Difficult to locate",
+      "missingData": ["English documentation", "Complete meanings", "Modern interpretations"],
+      "recommendation": "Requires consultation with Wang Ting Zhi school sources"
+    }
+  },
+  "summaryInsights": {
+    "secondaryStarImportance": "While 乙級/丙級 stars are secondary to the 14 main stars, they provide crucial nuance and refinement to chart interpretations",
+    "combinationPower": "The combination effects (especially Hong Luan + Tian Xi, and Tai Fu + Feng Gao) are more powerful than individual stars",
+    "voidStarUniqueness": "Void stars operate with reverse mechanics, making them exceptionally important in fortune analysis",
+    "researchRecommendation": "For complete understanding, consult: Zhihu (王亭之 resources), ziwei.my, and academic Ziwei systems",
+    "implementationPriority": "Hong Luan, Tian Xi, Xunkong, and Jiekong should be priority for system integration due to high frequency and significance"
+  }
+}

@@ -1,12 +1,42 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight, ChevronRight, Sparkles, Brain, Zap, Database,
   GitBranch, BookOpen, TrendingUp, Users, Shield, Radar,
+  LayoutDashboard, Activity, Home, History, Wand2,
 } from 'lucide-react';
+import { ChartCalculator } from './chart-calculator';
+import ZiweiChartAnalysis from '@/components/ZiweiChartAnalysis';
+import ZiweiPredictions from '@/components/ZiweiPredictions';
+import ZiweiKnowledgeManagement from '@/components/ZiweiKnowledgeManagement';
+import ZiweiCelebrityValidation from '@/components/ZiweiCelebrityValidation';
+import ZiweiChartLibrary from '@/components/ZiweiChartLibrary';
+import ZiweiRuleManagement from '@/components/ZiweiRuleManagement';
+
+type ZiweiTab = 'overview' | 'analytics' | 'analysis' | 'predictions' | 'knowledge' | 'celebrity' | 'charts' | 'rules';
 
 export default function ZiweiPage() {
+  const getInitialTab = (): ZiweiTab => {
+    if (typeof window === 'undefined') return 'overview';
+    const p = new URLSearchParams(window.location.search).get('tab') as ZiweiTab | null;
+    const valid: ZiweiTab[] = ['overview', 'analytics', 'analysis', 'predictions', 'knowledge', 'celebrity', 'charts', 'rules'];
+    return p && valid.includes(p) ? p : 'overview';
+  };
+  const [activeTab, setActiveTab] = useState<ZiweiTab>(getInitialTab());
+
+  const tabs: { id: ZiweiTab; label: string; icon: typeof LayoutDashboard }[] = [
+    { id: 'overview', label: 'Overview', icon: Activity },
+    { id: 'analytics', label: '✨ Generator', icon: Sparkles },
+    { id: 'analysis', label: '🔍 Analysis', icon: Brain },
+    { id: 'predictions', label: '🔮 Predictions', icon: TrendingUp },
+    { id: 'knowledge', label: '📚 Knowledge', icon: BookOpen },
+    { id: 'celebrity', label: '⭐ Celebrity', icon: Sparkles },
+    { id: 'charts', label: '📊 Charts', icon: History },
+    { id: 'rules', label: '🧿 Rules', icon: Wand2 },
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
       {/* HEADER */}
@@ -27,7 +57,37 @@ export default function ZiweiPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6">
+      {/* TAB NAVIGATION */}
+      <nav className="bg-slate-800 border-b border-slate-700 sticky top-[65px] z-30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex space-x-6 overflow-x-auto">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1.5 px-1 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'border-amber-500 text-amber-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-500'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </nav>
+
+      <main className={activeTab === 'overview' ? 'max-w-7xl mx-auto px-4 sm:px-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'}>
+        {/* ================================================================ */}
+        {/* OVERVIEW TAB                                                    */}
+        {/* ================================================================ */}
+        {activeTab === 'overview' && (
+          <>
         {/* HERO */}
         <section className="py-12 text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-xs text-amber-400 mb-4">
@@ -40,9 +100,14 @@ export default function ZiweiPage() {
             </span>
           </h2>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">
-            Three-agent system for calculating 排盤 (birth charts), generating interpretations,
-            and tracking accuracy across traditional Chinese astrology rules with empirical validation.
+            Three-agent system for calculating 排盤 (birth charts), generating interpretations, and tracking accuracy<br />
+            across traditional Chinese astrology rules with empirical validation.
           </p>
+        </section>
+
+        {/* CHART CALCULATOR */}
+        <section className="py-12 mb-12">
+          <ChartCalculator />
         </section>
 
         {/* SYSTEM ARCHITECTURE */}
@@ -259,9 +324,9 @@ export default function ZiweiPage() {
             </div>
           </div>
 
-          <Link href="/dashboard/ziwei-rules" className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-medium transition-colors">
+          <button onClick={() => setActiveTab('rules')} className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-medium transition-colors">
             View Rules Database <ChevronRight className="w-4 h-4" />
-          </Link>
+          </button>
         </section>
 
         {/* ROADMAP */}
@@ -325,11 +390,48 @@ export default function ZiweiPage() {
             <p className="text-slate-400 mb-6">
               Visit the dashboard to generate your birth chart and see interpretations based on our rule database
             </p>
-            <Link href="/dashboard" className="inline-flex items-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-medium transition-colors">
-              Go to Dashboard <ArrowRight className="w-4 h-4" />
-            </Link>
+            <button onClick={() => setActiveTab('analytics')} className="inline-flex items-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-medium transition-colors">
+              Start Generator <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </section>
+          </>
+        )}
+
+        {/* ================================================================ */}
+        {/* ZIWEI ANALYTICS TAB (GENERATOR)                                 */}
+        {/* ================================================================ */}
+        {activeTab === 'analytics' && <ChartCalculator />}
+
+        {/* ================================================================ */}
+        {/* ZIWEI ANALYSIS TAB                                              */}
+        {/* ================================================================ */}
+        {activeTab === 'analysis' && <ZiweiChartAnalysis />}
+
+        {/* ================================================================ */}
+        {/* ZIWEI PREDICTIONS TAB                                           */}
+        {/* ================================================================ */}
+        {activeTab === 'predictions' && <ZiweiPredictions />}
+
+        {/* ================================================================ */}
+        {/* ZIWEI KNOWLEDGE MANAGEMENT TAB                                  */}
+        {/* ================================================================ */}
+        {activeTab === 'knowledge' && <ZiweiKnowledgeManagement />}
+
+        {/* ================================================================ */}
+        {/* ZIWEI CELEBRITY VALIDATION TAB                                  */}
+        {/* ================================================================ */}
+        {activeTab === 'celebrity' && <ZiweiCelebrityValidation />}
+
+        {/* ================================================================ */}
+        {/* ZIWEI CHARTS TAB                                                */}
+        {/* ================================================================ */}
+        {activeTab === 'charts' && <ZiweiChartLibrary />}
+
+        {/* ================================================================ */}
+        {/* ZIWEI RULES MANAGEMENT TAB                                     */}
+        {/* ================================================================ */}
+        {activeTab === 'rules' && <ZiweiRuleManagement />}
       </main>
 
       {/* FOOTER */}

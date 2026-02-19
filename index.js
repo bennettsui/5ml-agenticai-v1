@@ -1,8 +1,10 @@
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
+const fs = require('fs');
 const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
+const zwEngine = require('./services/ziwei-chart-engine');
 require('dotenv').config();
 
 const app = express();
@@ -56,7 +58,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -153,6 +155,17 @@ app.get('/api/app-name', (req, res) => {
 // ==========================================
 // Service test definitions (shared between full and individual tests)
 const SERVICE_TESTS = {
+  minimax: { name: 'MiniMax 2.5', type: 'probe', test: async () => {
+    if (!process.env.MINIMAX_API_KEY) throw new Error('MINIMAX_API_KEY not set');
+    const resp = await fetch('https://api.minimaxi.chat/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'MiniMax-Text-01', messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
+    return 'API key valid';
+  }},
   anthropic: { name: 'Anthropic (Claude)', type: 'probe', test: async () => {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -255,6 +268,122 @@ app.get('/api/health/services/:id', async (req, res) => {
   const result = await testService(req.params.id);
   if (!result) return res.status(404).json({ error: 'Unknown service' });
   res.json({ timestamp: new Date().toISOString(), service: result });
+});
+
+// ==========================================
+// Ziwei Doushu Star Meanings API
+// ==========================================
+
+// Get entire star meanings database
+app.get('/api/ziwei/database', (req, res) => {
+  try {
+    const db = zwEngine.getStarDatabase();
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      metadata: db.metadata,
+      stats: {
+        main_stars: Object.keys(db.main_stars || {}).length,
+        auxiliary_stars: Object.keys(db.auxiliary_stars || {}).length,
+        malevolent_stars: Object.keys(db.malevolent_stars || {}).length,
+        longevity_stars: Object.keys(db.longevity_stars || {}).length,
+        romance_stars: Object.keys(db.romance_stars || {}).length,
+        auspicious_auxiliary: Object.keys(db.auspicious_auxiliary_stars || {}).length,
+        secondary_stars: Object.keys(db.secondary_stars || {}).length,
+        total: Object.keys(db.main_stars || {}).length +
+               Object.keys(db.auxiliary_stars || {}).length +
+               Object.keys(db.malevolent_stars || {}).length +
+               Object.keys(db.longevity_stars || {}).length +
+               Object.keys(db.romance_stars || {}).length +
+               Object.keys(db.auspicious_auxiliary_stars || {}).length +
+               Object.keys(db.secondary_stars || {}).length
+      },
+      data: db
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get single star by name
+app.get('/api/ziwei/star/:name', (req, res) => {
+  try {
+    const star = zwEngine.getStarMeaning(req.params.name);
+    if (!star) {
+      return res.status(404).json({ success: false, error: `Star '${req.params.name}' not found` });
+    }
+    res.json({ success: true, star });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get stars by category
+app.get('/api/ziwei/category/:category', (req, res) => {
+  try {
+    const stars = zwEngine.getStarsByCategory(req.params.category);
+    const count = Object.keys(stars).length;
+    res.json({
+      success: true,
+      category: req.params.category,
+      count,
+      stars
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get stars by five element
+app.get('/api/ziwei/element/:element', (req, res) => {
+  try {
+    const stars = zwEngine.getStarsByElement(req.params.element);
+    const count = Object.keys(stars).length;
+    res.json({
+      success: true,
+      element: req.params.element,
+      count,
+      stars
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get stars by type
+app.get('/api/ziwei/type/:type', (req, res) => {
+  try {
+    const stars = zwEngine.getStarsByType(req.params.type);
+    const count = Object.keys(stars).length;
+    res.json({
+      success: true,
+      type: req.params.type,
+      count,
+      stars
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Search stars by keyword
+app.get('/api/ziwei/search', (req, res) => {
+  try {
+    const keyword = req.query.q;
+    if (!keyword) {
+      return res.status(400).json({ success: false, error: 'Query parameter "q" required' });
+    }
+    const results = zwEngine.getStarsByKeyword(keyword);
+    const count = Object.keys(results).length;
+    res.json({
+      success: true,
+      keyword,
+      count,
+      results
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ==========================================
@@ -1214,17 +1343,17 @@ app.delete('/api/conversation/:id', async (req, res) => {
   }
 });
 
-// Delete a brand (and all its conversations)
-app.delete('/api/brands/:brand_name', async (req, res) => {
+// Delete a brand from crm_clients (cascades to crm_projects + crm_feedback)
+app.delete('/api/brands/:id', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    await deleteBrand(req.params.brand_name);
-    res.json({ success: true, message: 'Brand deleted' });
-  } catch (error) {
-    console.error('Error deleting brand:', error);
+    const result = await pool.query('DELETE FROM crm_clients WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Brand not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error('Error deleting brand:', err);
     res.status(500).json({ error: 'Failed to delete brand' });
   }
 });
@@ -1269,6 +1398,60 @@ app.get('/api/brands/:brand_name/projects', async (req, res) => {
   } catch (err) {
     console.error('Error fetching projects:', err);
     res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+// List all CRM projects with pagination
+app.get('/api/projects', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const size = Math.min(100, parseInt(req.query.size) || 20);
+    const status = req.query.status || '';
+    const offset = (page - 1) * size;
+    const where = status ? 'WHERE status = $1' : '';
+    const countResult = await pool.query(`SELECT COUNT(*) FROM crm_projects ${where}`, status ? [status] : []);
+    const total = parseInt(countResult.rows[0].count);
+    const params = status ? [status, size, offset] : [size, offset];
+    const dataResult = await pool.query(
+      `SELECT * FROM crm_projects ${where} ORDER BY created_at DESC LIMIT ${status ? '$2' : '$1'} OFFSET ${status ? '$3' : '$2'}`,
+      params
+    );
+    res.json({ items: dataResult.rows, total, page, size, pages: Math.ceil(total / size) });
+  } catch (err) {
+    console.error('Error listing projects:', err);
+    res.status(500).json({ error: 'Failed to list projects' });
+  }
+});
+
+// Create CRM project
+app.post('/api/projects', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const { client_id, name, type, brief, start_date, end_date, status } = req.body;
+    if (!client_id || !name) return res.status(400).json({ error: 'client_id and name are required' });
+    const result = await pool.query(
+      `INSERT INTO crm_projects (client_id, name, type, brief, start_date, end_date, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [client_id, name, type || 'other', brief || null, start_date || null, end_date || null, status || 'planning']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error creating project:', err);
+    res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// Delete CRM project
+app.delete('/api/projects/:id', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const result = await pool.query('DELETE FROM crm_projects WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Project not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error('Error deleting project:', err);
+    res.status(500).json({ error: 'Failed to delete project' });
   }
 });
 
@@ -1631,6 +1814,50 @@ app.get('/stats', async (req, res) => {
           },
         },
         {
+          id: 'ai-image-generation',
+          name: 'AI Image Generation',
+          description: 'Agency brief → SDXL/ComfyUI prompts + workflow configs',
+          agentCount: 6,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 brief → full prompt set for all deliverables (avg 4)',
+              modelCalls: [
+                { model: 'DeepSeek', calls: 5, avgTokensIn: 2500, avgTokensOut: 1500, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku', calls: 3, avgTokensIn: 1500, avgTokensOut: 800, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'Claude Sonnet Vision (QC)', calls: 1, avgTokensIn: 2000, avgTokensOut: 500, costPerMillion: { input: 3.00, output: 15.00 } },
+              ],
+              totalTokens: { input: 18500, output: 10100 },
+              estimatedCost: 0.011,
+              notes: 'GPU compute (ComfyUI/SDXL) is self-hosted — electricity only, ~$0.03/image.',
+            },
+            daily: { runsPerDay: 3, estimatedCost: 0.033 },
+            monthly: { runsPerMonth: 60, estimatedCost: 0.66, notes: '~2 briefs/day avg' },
+          },
+        },
+        {
+          id: 'ai-video-generation',
+          name: 'AI Video Generation',
+          description: 'AnimateDiff / SVD video pipeline with motion prompts + QC',
+          agentCount: 8,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 brief → video prompt set + AnimateDiff workflow config',
+              modelCalls: [
+                { model: 'DeepSeek', calls: 6, avgTokensIn: 3000, avgTokensOut: 2000, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku', calls: 4, avgTokensIn: 2000, avgTokensOut: 1000, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'Claude Sonnet Vision (QC)', calls: 2, avgTokensIn: 2500, avgTokensOut: 600, costPerMillion: { input: 3.00, output: 15.00 } },
+              ],
+              totalTokens: { input: 28000, output: 14200 },
+              estimatedCost: 0.022,
+              notes: 'AnimateDiff/SVD on self-hosted GPU — ~$0.08/clip (16 frames) electricity.',
+            },
+            daily: { runsPerDay: 2, estimatedCost: 0.044 },
+            monthly: { runsPerMonth: 40, estimatedCost: 0.88, notes: '~1-2 video projects/day' },
+          },
+        },
+        {
           id: 'crm',
           name: 'Client CRM + KB',
           description: 'AI-powered client CRM with knowledge base',
@@ -1668,8 +1895,10 @@ app.get('/stats', async (req, res) => {
         intelligence: 2.70,
         accounting: 3.60,
         crm: 0.30,
-        totalBase: 25.04,
-        notes: 'Ads cost scales with tenants. Photo booth scales with events. All estimates assume typical usage patterns.',
+        aiImageGeneration: 0.66,
+        aiVideoGeneration: 0.88,
+        totalBase: 26.58,
+        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). All estimates assume typical usage patterns.',
       },
       databaseTables: [
         // Social/Marketing tables
@@ -1687,6 +1916,11 @@ app.get('/stats', async (req, res) => {
         { name: 'intelligence_news', description: 'Collected news articles', category: 'intelligence' },
         // Accounting tables
         { name: 'receipts', description: 'Receipt records from OCR', category: 'accounting' },
+        // AI Media Generation tables
+        { name: 'media_projects', description: 'Media generation projects', category: 'media' },
+        { name: 'media_style_guides', description: 'Per-project brand style guides', category: 'media' },
+        { name: 'media_prompts', description: 'Prompt library with workflow configs', category: 'media' },
+        { name: 'media_assets', description: 'Generated image/video asset registry', category: 'media' },
       ],
     };
 
@@ -1756,6 +1990,43 @@ console.log('✅ Debug routes loaded: /api/debug/sessions, /api/debug/modules, /
 // ==========================================
 const llm = require('./lib/llm');
 
+// Helper: read use case source code for chatbot context
+function readUseCaseCode(useCaseId, maxChars = 8000) {
+  const baseDir = path.join(__dirname, 'frontend', 'app', 'use-cases', useCaseId);
+  if (!fs.existsSync(baseDir)) return '';
+  const files = [];
+  function walkDir(dir, prefix) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      const fullPath = path.join(dir, entry.name);
+      const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        walkDir(fullPath, relPath);
+      } else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
+        files.push({ path: relPath, fullPath });
+      }
+    }
+  }
+  walkDir(baseDir, '');
+  let result = `\n## Use Case Source Code (${useCaseId})\nFiles:\n`;
+  result += files.map(f => `- ${f.path}`).join('\n') + '\n\n';
+  let totalChars = result.length;
+  for (const file of files) {
+    const content = fs.readFileSync(file.fullPath, 'utf8');
+    const header = `### ${file.path}\n\`\`\`tsx\n`;
+    const footer = '\n```\n\n';
+    const available = maxChars - totalChars - header.length - footer.length;
+    if (available <= 200) break;
+    const truncated = content.length > available ? content.slice(0, available) + '\n// ... (truncated)' : content;
+    result += header + truncated + footer;
+    totalChars = result.length;
+    if (totalChars >= maxChars) break;
+  }
+  return result;
+}
+
 // List available LLM models
 app.get('/api/llm/models', (req, res) => {
   res.json({ success: true, models: llm.listModels(), default: llm.DEFAULT_MODEL });
@@ -1764,7 +2035,7 @@ app.get('/api/llm/models', (req, res) => {
 // CRM AI Assistant chat endpoint
 app.post('/api/crm/chat', async (req, res) => {
   try {
-    const { messages, model: modelKey, page_context } = req.body;
+    const { messages, model: modelKey, page_context, use_case_id } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages array is required' });
@@ -1775,9 +2046,12 @@ app.post('/api/crm/chat', async (req, res) => {
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'crm', 3) : '';
     const companyContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
 
+    // Include use case source code for code-aware assistance
+    const codeContext = readUseCaseCode(use_case_id || 'crm', 6000);
+
     const system = `You are an AI assistant embedded in a Brand CRM + Knowledge Base system built by 5 Miles Lab (5ML).
 You help users manage brands, projects, feedback, and brand knowledge.
-${ragContext ? `\n${ragContext}` : ''}${companyContext ? `\n${companyContext}` : ''}
+${ragContext ? `\n${ragContext}` : ''}${companyContext ? `\n${companyContext}` : ''}${codeContext}
 
 When the user asks you to research a company, provide structured information including:
 - industry (as an array of strings)
@@ -1841,6 +2115,818 @@ Respond concisely. Use English or the language the user writes in.`;
   }
 });
 
+// Growth Chatbot Assistant endpoint (used by Growth Architect & Growth Hacking Studio)
+app.post('/api/growth/chatbot/message', async (req, res) => {
+  try {
+    const { brand_name, plan_id, message, conversation_history, use_case_id } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    // RAG context
+    const ragContext = ragService.getContext(message, 'company', 3);
+
+    // Include use case source code
+    const codeContext = readUseCaseCode(use_case_id || 'growth-architect', 6000);
+
+    const systemPrompt = `You are a Growth Strategy AI assistant for 5 Miles Lab (5ML).
+You help users evaluate growth plans, suggest modifications, identify risks, and recommend optimizations.
+${brand_name ? `Current brand: ${brand_name}` : ''}
+${plan_id ? `Current plan ID: ${plan_id}` : ''}
+${ragContext ? `\n${ragContext}` : ''}${codeContext}
+
+Your capabilities:
+1. Critique and improve growth plans
+2. Suggest new channels, tactics, and experiments
+3. Identify risks and mitigation strategies
+4. Recommend budget allocation and KPI targets
+5. Answer questions about the use case code and architecture
+
+Be concise and actionable. Use bullet points for lists.`;
+
+    const messages = [
+      ...(conversation_history || []),
+      { role: 'user', content: message },
+    ];
+
+    // Try DeepSeek first, fall back to Claude
+    const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
+    if (deepseek.isAvailable()) {
+      const result = await deepseek.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+      );
+      return res.json({ data: { response: result.content, model: 'deepseek-chat' } });
+    }
+
+    const result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+    return res.json({ data: { response: result.text, model: result.modelName || 'claude-haiku' } });
+
+  } catch (error) {
+    console.error('Growth chatbot error:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+// Social Content Ops chat endpoint
+app.post('/api/social/chat', async (req, res) => {
+  try {
+    const { messages, use_case_id, brand_id, brand_name, project_id, project_name, mode, task_id } = req.body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+
+    // ── Orchestrator path (Sarah multi-agent state machine) ──────────────────
+    // Triggered when the caller provides a task_id (new Sarah chat panel).
+    // Module-specific pages that don't send task_id fall through to legacy path.
+    if (task_id) {
+      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+      const userInput = lastUserMsg?.content || '';
+
+      // Detect research-related requests (bypass orchestrator for simpler handling)
+      const isResearchRequest = /research|competitor|business overview|mission|audience segment|positioning/i.test(userInput);
+
+      if (isResearchRequest && brand_id) {
+        // Use legacy path for research requests (simpler LLM call instead of orchestrator)
+        // This avoids the orchestrator workflow which is designed for strategy→content→media
+        const ragContext = ragService.getContext(userInput, 'company', 3) || '';
+        const systemPrompt = `You are **Sarah**, the Social Media Director helping research the brand.
+When asked about brand research, competitive analysis, or audience insights, provide structured, actionable insights.
+${brand_name ? `Brand: ${brand_name}` : ''}
+
+Format your response clearly with sections for:
+- Business Overview
+- Mission/Vision
+- Competitors Analysis
+- Audience Segments
+- Product/Service Overview
+
+Be specific, data-driven, and actionable.
+${ragContext ? `\n${ragContext}` : ''}`;
+
+        const deepseek = require('./services/deepseekService');
+        const llm = require('./lib/llm');
+        try {
+          const result = deepseek.isAvailable()
+            ? await deepseek.chat(
+              [{ role: 'system', content: systemPrompt }, ...messages],
+              { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+            )
+            : await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+
+          return res.json({
+            message: result.content || result.text,
+            model: result.model || 'research-analyzer',
+            node: 'research_analyzer',
+            status: 'COMPLETED'
+          });
+        } catch (err) {
+          console.error('Research analysis error:', err);
+          return res.status(500).json({ error: err.message });
+        }
+      }
+
+      // Run orchestrator for non-research requests
+      const { runSarah } = require('./agents/social/sarahOrchestrator');
+
+      const brandContext = {
+        brand_name:   brand_name || null,
+        project_name: project_name || null,
+        brand_id:     brand_id || null,
+        project_id:   project_id || null,
+      };
+
+      try {
+        const { state, nodeName, output } = await runSarah({
+          taskId:       task_id,
+          userInput,
+          brandContext,
+          brandId:      brand_id || null,
+          projectId:    project_id || null,
+        });
+
+        // Check if state is valid
+        if (!state || !nodeName) {
+          return res.status(400).json({
+            error: 'Invalid orchestrator state',
+            message: 'The orchestrator failed to generate a valid response.'
+          });
+        }
+
+        // Model label for UI indicator
+        const REFLECT_NODES = new Set(['strategy_reflect', 'content_reflect', 'media_reflect']);
+        const modelLabel = REFLECT_NODES.has(nodeName)
+          ? 'DeepSeek Reasoner (reflection)'
+          : 'DeepSeek Chat (generation)';
+
+        return res.json({
+          message:   output,
+          model:     modelLabel,
+          node:      nodeName,
+          status:    state.status,
+          next_step: state.next_step,
+          artefacts: Object.keys(state.artefacts),
+        });
+      } catch (orchestratorErr) {
+        console.error('Sarah orchestrator error:', orchestratorErr.message);
+        return res.status(500).json({
+          error: 'Orchestrator error',
+          message: orchestratorErr.message || 'Failed to process request'
+        });
+      }
+    }
+    // ── Legacy path (module pages: strategy, content-dev, calendar, etc.) ────
+
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 3) : '';
+    const codeContext = readUseCaseCode(use_case_id || 'social-content-ops', 6000);
+
+    const { current_page, current_module } = req.body;
+
+    const isCritic = mode === 'business_analyst';
+    const moduleContext = current_module ? `\nUser is currently on: **${current_module}** module (${current_page || 'unknown page'}).` : '';
+
+    const systemPrompt = isCritic
+      ? `You are the Social Media Director & Creative Director of Meology HK, reviewing work with a critical business lens.
+Your approach: QUESTION assumptions, IDENTIFY bottlenecks, CHALLENGE strategy, ASSESS ROI, FLAG content quality issues.
+Be direct and analytical. Push back constructively. Cite platform benchmarks and industry data.
+You evaluate content against Meology HK's brand standards, audience expectations, and commercial goals.
+${brand_name ? `Brand: ${brand_name}` : ''}${project_name ? ` | Project: ${project_name}` : ''}${moduleContext}
+${ragContext ? `\n${ragContext}` : ''}${codeContext}`
+      : `You are **Sarah**, the Social Media Director & Creative Director of Meology HK — an agency Social Studio platform by 5 Miles Lab.
+
+## Your Role & Expertise
+You wear two hats:
+1. **Social Media Director**: You set strategy, evaluate campaign performance, manage the content pipeline, oversee community engagement, and ensure every piece of content ladders up to business objectives.
+2. **Creative Director**: You guide visual identity, creative concepts, copy tone, and storytelling. You push for bold, platform-native ideas that stop the scroll.
+
+You have 12+ years of social media expertise across Hong Kong, APAC, and global markets. You stay on top of the latest platform algorithm changes, content formats, and trends.
+
+## Brand Context
+${brand_name ? `Current brand: **${brand_name}**` : 'No brand selected yet — ask the user to select one from the sidebar.'}
+${project_name ? `Current project: **${project_name}**` : ''}${moduleContext}
+
+## Your Knowledge Base — Latest Social Media Trends & Best Practices
+
+### Instagram
+- **Reels**: 9:16, 15-90s (sweet spot 15-30s), hook in first 1.5s, trending audio boosts reach 30%, cover image matters for grid
+- **Carousel**: 4:5 or 1:1, 5-10 slides optimal, educational/storytelling carousels get 1.4x more reach vs single image
+- **Static**: 4:5 preferred, 30-character headline max, CTA in image, alt-text for SEO
+- **Stories**: 9:16, 15s per frame, interactive stickers boost engagement 25%+, polls/quizzes drive DM opens
+- **Algorithm 2025-2026**: Saves > Shares > Comments > Likes. Send-to-friend signals heavily weighted. Original content preferred over reposts.
+- **SEO**: Keywords in username, name field, bio, captions, alt-text. Hashtags: 3-5 niche > 30 generic.
+
+### TikTok
+- 9:16, trending sounds = 2x reach, hook in 0.5-1s, text overlays critical, green screen + duet for engagement
+- Algorithm: Watch time % > Completion > Shares > Comments. Posting frequency matters (1-3x/day for growth).
+- SEO: TikTok is a search engine now — keyword-rich captions, on-screen text, hashtags for discovery.
+
+### Facebook
+- Feed: 1:1 or 4:5, under 80 characters ideal, link posts declining — native video/carousel preferred
+- Reels: Same as IG Reels, cross-posted from IG performs 20% worse than native
+- Groups: Community-first content, questions drive engagement, FB prioritises group content in feed
+
+### Platform-Agnostic Best Practices
+- Post at audience peak times (HK: IG 7-9PM, FB 12-2PM, TikTok 6-10PM)
+- 80/20 rule: 80% value/entertainment, 20% promotional
+- Bilingual content for HK: Lead with Cantonese/Traditional Chinese, English subtitle or vice versa
+- UGC and creator partnerships outperform brand-produced content 2-4x on engagement
+
+## Your Capabilities Across All Modules
+
+### Planning & Analysis
+- **Social Strategy**: Develop and critique social media strategy. Evaluate SWOT, platform mix, content pillars, KPIs, posting cadence, brand voice.
+- **Brand & Competitive Research**: Analyze competitors, identify whitespace, benchmark performance.
+
+### Content Development
+- **Content Calendar**: Plan monthly calendars, suggest posting patterns, balance pillars, identify key dates/moments.
+- **Content Development**: Write full content cards — hooks, scripts, captions, hashtags, visual briefs. Critique copy quality.
+- **Interactive Content**: Plan polls, quizzes, Q&A sessions, AR filters, interactive stories, UGC campaigns.
+- **Media Buy**: Optimize budget allocation, recommend targeting, critique ad creative, suggest A/B tests.
+
+### Intelligence
+- **Trend Research**: Identify emerging trends, suggest how to ride them, evaluate trend relevance for the brand.
+- **Social Monitoring**: Analyze sentiment spikes, recommend response strategies, flag PR risks.
+
+### Management
+- **Community Management**: Draft responses (EN + Cantonese), suggest escalation paths, evaluate sentiment.
+- **Ad Performance**: Analyze campaign metrics, identify optimization opportunities, benchmark against industry.
+
+## Form Interaction
+When the user asks you to help fill in forms, provide structured data they can directly paste or apply:
+- For content calendars: provide date, platform, format, pillar, title, objective, message, etc.
+- For content cards: provide hooks, talking points, scenes, captions, hashtags, visual briefs
+- For media buy: provide campaign name, targeting, budget split, ad format recommendations
+- For community responses: provide ready-to-use reply text in the appropriate language
+- For strategy sections: provide SWOT entries, goals, KPIs with specific numbers
+Always format your form-filling suggestions as clear, labeled fields so the user can copy them into the interface.
+
+## Review & Approval Process
+You are aware of the human review & approval workflow:
+- **Content Pipeline**: Draft → Submitted for Review → In Review → Changes Requested → Approved → Scheduled → Published
+- **Media Buy Pipeline**: Draft → Pending Approval → Approved → Scheduled → Live → Paused → Completed
+When content is submitted for review, provide constructive feedback covering: brand alignment, copy quality, visual direction, platform optimization, and commercial impact.
+When approving content, confirm it meets: brand guidelines, platform best practices, audience targeting, and business objectives.
+
+## Content Calendar Format
+When asked to design or refine a monthly content plan:
+1. Present a 4-week weekly grid overview (rows = weeks, columns = days). Each cell: [Platform] + [Format] + [Pillar] + [Short title].
+   Example: "IG – Reel – Educate – 'Why AI saves 10x time'"
+2. Present a master calendar table where each row = one post. Columns:
+   Date, Day, Platform (IG/FB/both), Format (Static/Carousel/Reel), Content Pillar, Campaign/theme, Post title, Objective, Key message, Visual type, Nano Banana brief ID, Caption status, Visual status, Boosting/Ad plan, Links, Notes.
+
+## Content Development Format
+For each content item, expand into a content card:
+- Post ID, Platform, Format, Date, Content Pillar, Campaign, Objective
+- Target audience insight, Core message
+
+Copy by format:
+- **Reel**: Hook (1-2 options, max 15 words), 3 key scenes/talking points, on-screen text per scene, suggested duration, CTA, Caption (hook + 2-4 lines + CTA + 5-10 hashtags)
+- **Static/Carousel**: Slide plan (Slide 1 headline, Slides 2-X key points, Final slide CTA), Caption (opening hook + short paragraph/bullets + CTA + hashtags)
+
+## Nano Banana Visual Brief (per post)
+Always produce a visual brief with:
+- Visual ID (Post ID + "-VIS"), Format & ratio, Visual type, Subject & composition, Brand style & mood, Key brand assets, Text on image (max 5-8 words + positioning), Special notes.
+
+## Language & Tone
+Default: Cantonese/Traditional Chinese with English support. Bilingual hooks for HK audiences.
+Tone: Brand-aligned, confident, non-salesy but conversion-conscious. Professional yet approachable.
+Support: 繁體中文, 粵語口語, English, 簡體中文
+
+Be concise, actionable, and opinionated. You're the expert — share your professional perspective. Use bullet points for lists. Flag issues proactively.`;
+
+    // Try DeepSeek first, fall back to Claude
+    const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
+    if (deepseek.isAvailable()) {
+      const result = await deepseek.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+      );
+      return res.json({ message: result.content, model: result.model || 'deepseek-chat' });
+    }
+
+    const result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+    return res.json({ message: result.text, model: result.modelName || 'claude-haiku' });
+
+  } catch (error) {
+    console.error('Social chat error:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+// ── Sarah Orchestrator state endpoints ───────────────────────────────────────
+
+// GET /api/social/state/:taskId — fetch current state for polling / UI display
+app.get('/api/social/state/:taskId', async (req, res) => {
+  try {
+    const { getSarahState } = require('./agents/social/sarahOrchestrator');
+    const state = await getSarahState(req.params.taskId);
+    if (!state) return res.status(404).json({ error: 'No state found for this task_id' });
+    res.json({ state });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/social/state/:taskId — reset / start fresh
+app.delete('/api/social/state/:taskId', async (req, res) => {
+  try {
+    const { resetSarah } = require('./agents/social/sarahOrchestrator');
+    await resetSarah(req.params.taskId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Sarah Orchestrator Artefact APIs ─────────────────────────────────────────
+
+// GET /api/social/artefacts/:taskId — retrieve all Markdown + JSON artefacts
+app.get('/api/social/artefacts/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const artefacts = await getAllArtefacts(taskId);
+    if (!artefacts || artefacts.length === 0) {
+      return res.status(404).json({ error: 'No artefacts found for this task_id' });
+    }
+    res.json({ data: artefacts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/content-posts/:taskId — retrieve formatted content calendar for RECENT_POSTS view
+app.get('/api/social/content-posts/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
+    const posts = await getSocialContentPosts(taskId, limit);
+    if (!posts || posts.length === 0) {
+      return res.status(404).json({ error: 'No content posts found for this task_id' });
+    }
+    res.json({ data: posts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/ad-campaigns/:taskId — retrieve media campaigns for AD_CAMPAIGNS view
+app.get('/api/social/ad-campaigns/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const campaigns = await getSocialAdCampaigns(taskId);
+    if (!campaigns || campaigns.length === 0) {
+      return res.status(404).json({ error: 'No ad campaigns found for this task_id' });
+    }
+    res.json({ data: campaigns });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/kpis/:taskId — retrieve KPI definitions for KPI_CARDS view
+app.get('/api/social/kpis/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const kpis = await getSocialKPIs(taskId);
+    if (!kpis || kpis.length === 0) {
+      return res.status(404).json({ error: 'No KPIs found for this task_id' });
+    }
+    res.json({ data: kpis });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Content Development: Draft Management ────────────────────────────────────
+
+// POST /api/social/drafts — create new draft post
+app.post('/api/social/drafts', async (req, res) => {
+  try {
+    const { taskId, platform, format, title, pillar, objective, keyMessage, copyHook, cta, language, visualType, caption, hashtags } = req.body;
+    if (!taskId || !platform || !format || !title) {
+      return res.status(400).json({ error: 'Missing required fields: taskId, platform, format, title' });
+    }
+    const result = await createContentDraft(taskId, req.body);
+    res.status(201).json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/drafts/:taskId — retrieve draft posts for a task
+app.get('/api/social/drafts/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const status = req.query.status || null;
+    const drafts = await getContentDrafts(taskId, status);
+    res.json({ data: drafts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/social/drafts/:draftId — update draft post
+app.put('/api/social/drafts/:draftId', async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    const result = await updateContentDraft(draftId, req.body);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/social/drafts/:draftId — delete draft post
+app.delete('/api/social/drafts/:draftId', async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    await deleteContentDraft(draftId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/social/drafts/:draftId/promote — promote draft to calendar
+app.post('/api/social/drafts/:draftId/promote', async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    const { postDate } = req.body;
+    if (!postDate) {
+      return res.status(400).json({ error: 'postDate is required' });
+    }
+    const result = await promoteContentDraftToCalendar(draftId, postDate);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/sync/:taskId — check sync status between calendar and development
+app.get('/api/social/sync/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const syncStatus = await syncContentCalendarAndDevelopment(taskId);
+    res.json({ data: syncStatus });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Brand Products & Services Management ─────────────────────────────────────
+
+// POST /api/brands/:brandId/products-services — create new product/service
+app.post('/api/brands/:brandId/products-services', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { name, category, description, type } = req.body;
+    if (!name || !brandId) {
+      return res.status(400).json({ error: 'Missing required fields: name, brandId' });
+    }
+    const result = await createProductService(brandId, req.body);
+    res.status(201).json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/brands/:brandId/products-services — list products/services for a brand
+app.get('/api/brands/:brandId/products-services', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const status = req.query.status || null;
+    const products = await getProductsServices(brandId, status);
+    res.json({ data: products });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/brands/:brandId/products-services/:productId/status — update product status
+app.put('/api/brands/:brandId/products-services/:productId/status', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { status, discontinueDate } = req.body;
+    if (!status || !['active', 'paused', 'retired'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be: active, paused, or retired' });
+    }
+    const result = await updateProductServiceStatus(productId, status, discontinueDate);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/brands/:brandId/portfolio — get full product portfolio by status
+app.get('/api/brands/:brandId/portfolio', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const portfolio = await getProductServicePortfolio(brandId);
+    res.json({ data: portfolio });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Research Data Management ─────────────────────────────────────────────────
+
+// POST /api/research/:brandId/business — save business overview and mission
+app.post('/api/research/:brandId/business', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await saveResearchBusiness(brandId, req.body);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/research/:brandId/business — get business overview and mission
+app.get('/api/research/:brandId/business', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const data = await getResearchBusiness(brandId);
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/research/:brandId/competitors — save competitor analysis
+app.post('/api/research/:brandId/competitors', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    await saveResearchCompetitors(brandId, req.body.competitors || []);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/research/:brandId/competitors — get competitor analysis
+app.get('/api/research/:brandId/competitors', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const competitors = await getResearchCompetitors(brandId);
+    res.json({ data: competitors });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/research/:brandId/competitors/:competitorId — delete competitor
+app.delete('/api/research/:brandId/competitors/:competitorId', async (req, res) => {
+  try {
+    const { competitorId } = req.params;
+    await deleteResearchCompetitor(competitorId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/research/:brandId/audience — save audience positioning and segments
+app.post('/api/research/:brandId/audience', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const audienceResult = await saveResearchAudience(brandId, req.body);
+    if (req.body.segments && req.body.segments.length > 0) {
+      await saveResearchSegments(audienceResult.audience_id, req.body.segments);
+    }
+    res.json({ data: audienceResult });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/research/:brandId/audience — get audience data
+app.get('/api/research/:brandId/audience', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const audience = await getResearchAudience(brandId);
+    const segments = await getResearchSegments(brandId);
+    res.json({ data: { audience, segments } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/research/:brandId/segments/:segmentId — delete audience segment
+app.delete('/api/research/:brandId/segments/:segmentId', async (req, res) => {
+  try {
+    const { segmentId } = req.params;
+    await deleteResearchSegment(segmentId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/research/:brandId/products — save products and services
+app.post('/api/research/:brandId/products', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    await saveResearchProducts(brandId, req.body.products || []);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/research/:brandId/products — get products and services
+app.get('/api/research/:brandId/products', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const products = await getResearchProducts(brandId);
+    res.json({ data: products });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/research/:brandId/products/:productId — delete product
+app.delete('/api/research/:brandId/products/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    await deleteResearchProduct(productId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Strategy
+// ==========================================
+
+// POST /api/social/strategy/:brandId — save strategy
+app.post('/api/social/strategy/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, objectives, targetAudiences, channelMix, contentPillars, postingCadence, mediaApproach, kpis, assumptions, risks } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_strategy (brand_id, project_id, objectives, target_audiences, channel_mix, content_pillars, posting_cadence, media_approach, kpis, assumptions, risks)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (brand_id) DO UPDATE SET
+         objectives = $3, target_audiences = $4, channel_mix = $5, content_pillars = $6,
+         posting_cadence = $7, media_approach = $8, kpis = $9, assumptions = $10, risks = $11,
+         updated_at = NOW()`,
+      [brandId, projectId, objectives, targetAudiences, channelMix, contentPillars, postingCadence, mediaApproach, kpis, assumptions, risks]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/strategy/:brandId — get strategy
+app.get('/api/social/strategy/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_strategy WHERE brand_id = $1', [brandId]);
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Interactive Content
+// ==========================================
+
+// POST /api/social/interactive/:brandId — save interactive content
+app.post('/api/social/interactive/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, title, contentType, description, platforms, engagementGoal, expectedMetrics, launchDate } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_interactive_content (brand_id, project_id, title, content_type, description, platforms, engagement_goal, expected_metrics, launch_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [brandId, projectId, title, contentType, description, platforms, engagementGoal, expectedMetrics, launchDate]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/interactive/:brandId — list interactive content
+app.get('/api/social/interactive/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_interactive_content WHERE brand_id = $1 ORDER BY created_at DESC', [brandId]);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Trend Research
+// ==========================================
+
+// POST /api/social/trends/:brandId — save trend research
+app.post('/api/social/trends/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, trendName, category, description, platforms, contentIdeas, launchIdeas, relevanceScore } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_trend_research (brand_id, project_id, trend_name, category, description, platforms, content_ideas, launch_ideas, relevance_score)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [brandId, projectId, trendName, category, description, platforms, contentIdeas, launchIdeas, relevanceScore]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/trends/:brandId — list trends
+app.get('/api/social/trends/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_trend_research WHERE brand_id = $1 ORDER BY relevance_score DESC, created_at DESC', [brandId]);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Social Monitoring
+// ==========================================
+
+// POST /api/social/monitoring/:brandId — save monitoring data
+app.post('/api/social/monitoring/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, platform, keyword, sentimentTrend, engagementRate, mentionCount, topMentions, actionItems } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_monitoring (brand_id, project_id, platform, keyword, sentiment_trend, engagement_rate, mention_count, top_mentions, action_items)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [brandId, projectId, platform, keyword, sentimentTrend, engagementRate, mentionCount, topMentions, actionItems]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/monitoring/:brandId — get monitoring data
+app.get('/api/social/monitoring/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_monitoring WHERE brand_id = $1 ORDER BY created_at DESC LIMIT 10', [brandId]);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Community Management
+// ==========================================
+
+// POST /api/social/community/:brandId — save community management guidelines
+app.post('/api/social/community/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, platform, contentGuideline, responseTemplates, escalationRules, moderationPolicies, engagementStrategies, faqContent } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_community_management (brand_id, project_id, platform, content_guideline, response_templates, escalation_rules, moderation_policies, engagement_strategies, faq_content)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (brand_id) DO UPDATE SET
+         platform = $3, content_guideline = $4, response_templates = $5, escalation_rules = $6,
+         moderation_policies = $7, engagement_strategies = $8, faq_content = $9, updated_at = NOW()`,
+      [brandId, projectId, platform, contentGuideline, responseTemplates, escalationRules, moderationPolicies, engagementStrategies, faqContent]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/community/:brandId — get community management data
+app.get('/api/social/community/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_community_management WHERE brand_id = $1', [brandId]);
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==========================================
 // Use Case Routes
 // ==========================================
@@ -1893,6 +2979,24 @@ try {
   console.log('✅ Ads Performance routes loaded: /api/ads');
 } catch (error) {
   console.warn('⚠️ Ads Performance routes not loaded:', error.message);
+}
+
+// AI Media Generation Routes (Image + Video)
+try {
+  const mediaGenerationRoutes = require('./use-cases/ai-media-generation/api/routes');
+  app.use('/api/media', mediaGenerationRoutes);
+  console.log('✅ AI Media Generation routes loaded: /api/media');
+} catch (error) {
+  console.warn('⚠️ AI Media Generation routes not loaded:', error.message);
+}
+
+// Multimedia Library Routes (reverse-prompt engineering from images/videos)
+try {
+  const multimediaLibraryRoutes = require('./use-cases/multimedia-library/api/routes');
+  app.use('/api/library', multimediaLibraryRoutes);
+  console.log('✅ Multimedia Library routes loaded: /api/library');
+} catch (error) {
+  console.warn('⚠️ Multimedia Library routes not loaded:', error.message);
 }
 
 // Scheduler Service
@@ -2034,6 +3138,7 @@ app.post('/api/workflow-chat', async (req, res) => {
 
     // Try DeepSeek first, fall back to Claude
     const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
     let result;
 
     if (deepseek.isAvailable()) {
@@ -2051,7 +3156,6 @@ app.post('/api/workflow-chat', async (req, res) => {
     }
 
     // Fallback to Claude
-    const llm = require('./lib/llm');
     result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
     const parsed = parseWorkflowUpdates(result.text);
     return res.json({
@@ -2097,6 +3201,7 @@ Be concise, specific, and reference actual platform data. Use bullet points for 
 
     // Try DeepSeek first, fall back to Claude
     const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
     if (deepseek.isAvailable()) {
       const result = await deepseek.chat(
         [{ role: 'system', content: systemPrompt }, ...messages],
@@ -2106,7 +3211,6 @@ Be concise, specific, and reference actual platform data. Use bullet points for 
     }
 
     // Fallback to Claude
-    const llm = require('./lib/llm');
     const result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
     return res.json({ message: result.text, model: result.modelName || 'claude-haiku' });
 
@@ -2381,6 +3485,688 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
     res.status(500).json({
       error: 'Failed to fetch submissions'
     });
+  }
+});
+
+// ==========================================
+// Ziwei Astrology API
+// ==========================================
+
+const { calcBaseChart } = require('./services/ziwei-chart-engine');
+
+// POST /api/ziwei/calculate - Calculate a birth chart
+app.post('/api/ziwei/calculate', async (req, res) => {
+  try {
+    const { lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch, gender, name } = req.body;
+
+    // Validate required fields
+    if (!lunarYear || !lunarMonth || !lunarDay || !hourBranch || !yearStem || !yearBranch || !gender) {
+      return res.status(400).json({
+        error: 'Missing required fields: lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch, gender'
+      });
+    }
+
+    // Calculate chart
+    const chart = calcBaseChart({
+      lunarYear,
+      lunarMonth,
+      lunarDay,
+      hourBranch,
+      yearStem,
+      yearBranch,
+      gender
+    });
+
+    // Store in database if available
+    let chartId = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.query(
+          `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
+           VALUES ($1, $2, $3, $4) RETURNING id`,
+          [
+            name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
+            JSON.stringify({ lunarYear, lunarMonth, lunarDay, hourBranch, gender }),
+            JSON.stringify({ yearStem, yearBranch }),
+            JSON.stringify(chart)
+          ]
+        );
+        chartId = result.rows[0].id;
+      } catch (dbErr) {
+        console.warn('⚠️ Ziwei chart not stored:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      chartId,
+      chart
+    });
+  } catch (error) {
+    console.error('❌ Ziwei calculation error:', error);
+    res.status(500).json({
+      error: 'Failed to calculate chart',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/ziwei/charts - List saved charts
+app.get('/api/ziwei/charts', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const result = await db.query(
+      `SELECT id, name, birth_info, gan_zhi, created_at
+       FROM ziwei_birth_charts
+       ORDER BY created_at DESC
+       LIMIT 50`
+    );
+
+    res.json({
+      success: true,
+      charts: result.rows
+    });
+  } catch (error) {
+    console.error('❌ Error fetching charts:', error);
+    res.status(500).json({
+      error: 'Failed to fetch charts',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/ziwei/charts/:id - Get specific chart
+app.get('/api/ziwei/charts/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const result = await db.query(
+      `SELECT * FROM ziwei_birth_charts WHERE id = $1`,
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    res.json({
+      success: true,
+      chart: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Error fetching chart:', error);
+    res.status(500).json({
+      error: 'Failed to fetch chart',
+      details: error.message
+    });
+  }
+});
+
+// POST /api/ziwei/interpret - Generate interpretations for a chart
+app.post('/api/ziwei/interpret', async (req, res) => {
+  try {
+    const { chart, chartId, consensusLevel = 'consensus' } = req.body;
+
+    if (!chart) {
+      return res.status(400).json({ error: 'Missing required field: chart' });
+    }
+
+    // Load interpretation engine with database rules
+    let InterpretationEngine;
+    try {
+      const module = require('./services/ziwei-interpretation-engine');
+      InterpretationEngine = module.InterpretationEngine;
+    } catch (e) {
+      return res.status(501).json({
+        error: 'Interpretation engine not available'
+      });
+    }
+
+    // Use database rules if available
+    const engine = await InterpretationEngine.fromDatabase();
+
+    // Generate interpretations
+    const allInterpretations = engine.generateInterpretations(chart);
+    const filtered = engine.filterByConsensus(allInterpretations, consensusLevel);
+    const ranked = engine.rankByAccuracy(filtered);
+    const grouped = engine.groupByDimension(ranked);
+
+    // Store interpretations with chart if DB is available
+    if (chartId && process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.query(
+          `UPDATE ziwei_birth_charts SET interpretations = $1, updated_at = NOW() WHERE id = $2`,
+          [JSON.stringify(grouped), chartId]
+        );
+      } catch (dbErr) {
+        console.warn('⚠️ Could not store interpretations:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      summary: {
+        totalInterpretations: allInterpretations.length,
+        filteredCount: filtered.length,
+        dimensionCount: grouped.length,
+        avgConfidence: grouped.length > 0
+          ? grouped.reduce((sum, g) => sum + g.avgConfidence, 0) / grouped.length
+          : 0
+      },
+      interpretations: ranked,
+      grouped
+    });
+  } catch (error) {
+    console.error('❌ Interpretation error:', error);
+    res.status(500).json({
+      error: 'Failed to generate interpretations',
+      details: error.message
+    });
+  }
+});
+
+// ==========================================
+// Step 4: Enhanced Interpretation with DeepSeek LLM
+// ==========================================
+
+app.post('/api/ziwei/enhance-interpretation', async (req, res) => {
+  try {
+    const { chart, interpretations, chartId } = req.body;
+
+    if (!chart || !interpretations) {
+      return res.status(400).json({ error: 'Missing chart or interpretations' });
+    }
+
+    // Initialize LLM enhancer
+    const { ZiweiLLMEnhancer } = require('./services/ziwei-llm-enhancer');
+    const enhancer = new ZiweiLLMEnhancer();
+
+    if (!enhancer.isAvailable()) {
+      return res.status(503).json({
+        error: 'LLM enhancement not available',
+        fallback: interpretations
+      });
+    }
+
+    // Generate enhanced interpretations
+    const enhancement = await enhancer.enhanceInterpretations(chart, interpretations);
+
+    if (!enhancement) {
+      return res.status(500).json({
+        error: 'Failed to enhance interpretations',
+        fallback: interpretations
+      });
+    }
+
+    // Save to database if available
+    if (chartId && process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.saveEnhancedInterpretation(chartId, {
+          llmEnhancement: enhancement.enhancement,
+          confidenceBoost: 0.4,
+          model: enhancement.model,
+          tokensInput: enhancement.tokensInput,
+          tokensOutput: enhancement.tokensOutput
+        });
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save enhancement to DB:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      enhancement: enhancement.enhancement,
+      tokens: {
+        input: enhancement.tokensInput,
+        output: enhancement.tokensOutput
+      },
+      model: enhancement.model
+    });
+  } catch (error) {
+    console.error('❌ Enhancement error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Step 5: Conversational Chat Interface
+// ==========================================
+
+app.post('/api/ziwei/conversations', async (req, res) => {
+  try {
+    const { chartId, userId, title } = req.body;
+
+    if (!chartId) {
+      return res.status(400).json({ error: 'Missing chartId' });
+    }
+
+    // Get chart data
+    let chart = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.query(
+          'SELECT * FROM ziwei_birth_charts WHERE id = $1',
+          [chartId]
+        );
+        chart = result.rows[0]?.base_chart;
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch chart:', dbErr.message);
+      }
+    }
+
+    if (!chart) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    // Initialize conversation manager
+    const { ZiweiConversationManager } = require('./services/ziwei-conversation-manager');
+    const manager = new ZiweiConversationManager();
+
+    if (!manager.isAvailable()) {
+      return res.status(503).json({ error: 'Chat service not available' });
+    }
+
+    // Create conversation
+    const conversation = manager.createConversation(chart, userId);
+
+    // Save to database if available
+    let conversationId = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.createConversation(chartId, userId, title);
+        conversationId = result.id;
+      } catch (dbErr) {
+        console.warn('⚠️ Could not create conversation in DB:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      conversationId,
+      systemPrompt: conversation.systemPrompt,
+      chartContext: conversation.chartContext
+    });
+  } catch (error) {
+    console.error('❌ Conversation creation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/ziwei/conversations/:id/messages', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content, messages: messageHistory } = req.body;
+
+    if (!content) {
+      return res.status(400).json({ error: 'Missing message content' });
+    }
+
+    // Get conversation and chart data
+    let chart = null;
+    if (process.env.DATABASE_URL && id) {
+      try {
+        const db = require('./db');
+        const conv = await db.getZiweiConversation(id);
+        if (conv) {
+          const chartResult = await db.query(
+            'SELECT base_chart FROM ziwei_birth_charts WHERE id = $1',
+            [conv.chart_id]
+          );
+          chart = chartResult.rows[0]?.base_chart;
+        }
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch conversation/chart:', dbErr.message);
+      }
+    }
+
+    if (!chart) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    // Generate response
+    const { ZiweiConversationManager } = require('./services/ziwei-conversation-manager');
+    const manager = new ZiweiConversationManager();
+
+    if (!manager.isAvailable()) {
+      return res.status(503).json({ error: 'Chat service not available' });
+    }
+
+    const responseData = await manager.generateResponse(chart, messageHistory || [], content);
+
+    if (!responseData) {
+      return res.status(500).json({ error: 'Failed to generate response' });
+    }
+
+    // Save message to database if available
+    if (id && process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.addConversationMessage(id, 'user', content, responseData.tokensInput);
+        await db.addConversationMessage(id, 'assistant', responseData.response, responseData.tokensOutput);
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save messages:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      response: responseData.response,
+      tokens: {
+        input: responseData.tokensInput,
+        output: responseData.tokensOutput
+      },
+      timestamp: responseData.timestamp
+    });
+  } catch (error) {
+    console.error('❌ Message generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/ziwei/conversations/:id/history', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const db = require('./db');
+    const messages = await db.getConversationMessages(id);
+
+    res.json({
+      success: true,
+      messages,
+      count: messages.length
+    });
+  } catch (error) {
+    console.error('❌ History fetch error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Step 6: Compatibility Analysis
+// ==========================================
+
+app.post('/api/ziwei/compatibility', async (req, res) => {
+  try {
+    const { chart1Id, chart2Id, relationshipType } = req.body;
+
+    if (!chart1Id || !chart2Id) {
+      return res.status(400).json({ error: 'Missing chart IDs' });
+    }
+
+    // Fetch both charts from database
+    let chart1 = null, chart2 = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const [result1, result2] = await Promise.all([
+          db.query('SELECT base_chart FROM ziwei_birth_charts WHERE id = $1', [chart1Id]),
+          db.query('SELECT base_chart FROM ziwei_birth_charts WHERE id = $1', [chart2Id])
+        ]);
+        chart1 = result1.rows[0]?.base_chart;
+        chart2 = result2.rows[0]?.base_chart;
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch charts:', dbErr.message);
+      }
+    }
+
+    if (!chart1 || !chart2) {
+      return res.status(404).json({ error: 'One or both charts not found' });
+    }
+
+    // Analyze compatibility
+    const { ZiweiCompatibilityAnalyzer } = require('./services/ziwei-compatibility-analyzer');
+    const analyzer = new ZiweiCompatibilityAnalyzer();
+
+    if (!analyzer.isAvailable()) {
+      return res.status(503).json({ error: 'Compatibility analysis not available' });
+    }
+
+    const analysis = await analyzer.analyzeCompatibility(chart1, chart2, relationshipType || 'romantic');
+
+    if (!analysis) {
+      return res.status(500).json({ error: 'Failed to analyze compatibility' });
+    }
+
+    // Save to database if available
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.saveCompatibilityAnalysis(chart1Id, chart2Id, relationshipType, analysis);
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save compatibility analysis:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      compatibilityScore: analysis.compatibilityScore,
+      harmoniousElements: analysis.harmoniousElements,
+      conflictingElements: analysis.conflictingElements,
+      report: analysis.report,
+      tokens: {
+        input: analysis.tokensInput,
+        output: analysis.tokensOutput
+      }
+    });
+  } catch (error) {
+    console.error('❌ Compatibility analysis error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Step 6: Personalized Insights
+// ==========================================
+
+app.post('/api/ziwei/insights', async (req, res) => {
+  try {
+    const { chartId, lifeStage, analysisDepth } = req.body;
+
+    if (!chartId) {
+      return res.status(400).json({ error: 'Missing chartId' });
+    }
+
+    // Fetch chart data
+    let chart = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.query(
+          'SELECT base_chart FROM ziwei_birth_charts WHERE id = $1',
+          [chartId]
+        );
+        chart = result.rows[0]?.base_chart;
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch chart:', dbErr.message);
+      }
+    }
+
+    if (!chart) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    // Use LLM enhancer to generate insights
+    const { ZiweiLLMEnhancer } = require('./services/ziwei-llm-enhancer');
+    const enhancer = new ZiweiLLMEnhancer();
+
+    if (!enhancer.isAvailable()) {
+      return res.status(503).json({ error: 'Insights generation not available' });
+    }
+
+    const insights = await enhancer.generateLifeGuidance(chart, lifeStage || 'current', {});
+
+    if (!insights) {
+      return res.status(500).json({ error: 'Failed to generate insights' });
+    }
+
+    // Save to database if available
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.saveInsights(chartId, {
+          lifeStage: lifeStage || 'current',
+          analysisDepth: analysisDepth || 'detailed',
+          lifeGuidance: insights.guidance,
+          model: insights.model,
+          tokensUsed: insights.tokensInput + insights.tokensOutput
+        });
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save insights:', dbErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      guidance: insights.guidance,
+      lifeStage: lifeStage || 'current',
+      tokens: {
+        input: insights.tokensInput,
+        output: insights.tokensOutput
+      }
+    });
+  } catch (error) {
+    console.error('❌ Insights generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// Step 7: Rule Evaluation & Pattern Recognition
+// ==========================================
+
+app.post('/api/ziwei/evaluate-rules', async (req, res) => {
+  try {
+    const { chart, minConsensus = 'consensus', dimensions = null } = req.body;
+
+    if (!chart || !chart.houses) {
+      return res.status(400).json({ error: 'Invalid chart data - must include houses' });
+    }
+
+    // Load rules from database or seed file
+    let rules = [];
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        const result = await db.query(
+          'SELECT * FROM ziwei_rules WHERE status = $1 ORDER BY consensus_label, statistics->\'confidence\' DESC',
+          ['active']
+        );
+        rules = result.rows.map(row => ({
+          id: row.id,
+          name: row.name,
+          ruleType: row.rule_type,
+          scope: row.scope,
+          condition: row.condition,
+          interpretation: row.interpretation,
+          dimensionTags: row.dimension_tags || [],
+          school: row.school,
+          consensusLabel: row.consensus_label,
+          sources: row.sources || [],
+          statistics: row.statistics,
+          notes: row.notes,
+          relatedRuleIds: row.related_rule_ids
+        }));
+      } catch (dbErr) {
+        console.warn('⚠️ Could not fetch rules from DB:', dbErr.message);
+      }
+    }
+
+    // Fallback to seed file if no DB rules
+    if (rules.length === 0) {
+      try {
+        const fs = require('fs');
+        const rulesData = JSON.parse(fs.readFileSync('./data/ziwei-rules-seed.json', 'utf8'));
+        rules = rulesData.rules.map(r => ({
+          id: r.id,
+          name: r.id,
+          ruleType: r.scope === 'base' ? 'basic_pattern' : r.scope === 'star_group' ? 'star_group' : r.scope === 'major_pattern' ? 'major_pattern' : 'miscellaneous_combo',
+          scope: 'base',
+          condition: {
+            involvedPalaces: r.condition.palaces,
+            requiredStars: r.condition.stars,
+            notes: r.condition.condition_description
+          },
+          interpretation: r.interpretation,
+          dimensionTags: r.dimension_tags || [],
+          school: r.school,
+          consensusLabel: r.consensus_label,
+          sources: r.source_refs.map(ref => typeof ref === 'string' ? { type: 'note', title: ref } : ref) || [],
+          statistics: r.statistics || { sampleSize: null, matchRate: null, confidence: null },
+          notes: r.notes,
+          relatedRuleIds: []
+        }));
+      } catch (err) {
+        console.warn('⚠️ Could not load rules from seed file:', err.message);
+      }
+    }
+
+    // Initialize evaluator with rules
+    const ZiweiRuleEvaluator = require('./services/ziwei-rule-evaluator').default || require('./services/ziwei-rule-evaluator').ZiweiRuleEvaluator;
+    const evaluator = new ZiweiRuleEvaluator(rules);
+
+    // Evaluate chart
+    let results = evaluator.evaluateChart(chart);
+
+    // Filter by consensus if specified
+    if (minConsensus !== 'minority_view') {
+      results = evaluator.filterByConsensus(results, minConsensus);
+    }
+
+    // Filter by dimensions if specified
+    if (dimensions && Array.isArray(dimensions) && dimensions.length > 0) {
+      results = evaluator.filterByDimension(results, dimensions);
+    }
+
+    // Save results to database if available
+    if (process.env.DATABASE_URL && chart.id) {
+      try {
+        const db = require('./db');
+        await db.query(
+          'INSERT INTO ziwei_rule_evaluations (chart_id, total_rules, matched_rules, results, created_at) VALUES ($1, $2, $3, $4, NOW()) ON CONFLICT (chart_id) DO UPDATE SET matched_rules = $3, results = $4, updated_at = NOW()',
+          [
+            chart.id,
+            results.totalRules,
+            results.matchedRules,
+            JSON.stringify(results.results)
+          ]
+        );
+      } catch (dbErr) {
+        console.warn('⚠️ Could not save evaluation results:', dbErr.message);
+      }
+    }
+
+    // Return results
+    res.json({
+      success: true,
+      evaluation: results,
+      stats: {
+        totalRules: results.totalRules,
+        matchedRules: results.matchedRules,
+        matchPercentage: ((results.matchedRules / results.totalRules) * 100).toFixed(1),
+        avgConfidence: results.results.length > 0
+          ? (results.results.reduce((sum, r) => sum + r.confidence, 0) / results.results.length).toFixed(3)
+          : 0
+      }
+    });
+  } catch (error) {
+    console.error('❌ Rule evaluation error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

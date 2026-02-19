@@ -12,7 +12,6 @@ export function Header() {
     { label: 'Case Studies', href: '/vibe-demo/radiance/case-studies' },
     { label: 'About', href: '/vibe-demo/radiance/about' },
     { label: 'Consultation', href: '/vibe-demo/radiance/consultation' },
-    { label: 'Blog', href: '/vibe-demo/radiance/blog' },
     { label: 'Contact', href: '/vibe-demo/radiance/contact' },
   ];
 

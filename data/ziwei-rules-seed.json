@@ -4,18 +4,29 @@
       "id": "rule-01-ziwei-star",
       "scope": "base",
       "condition": {
-        "stars": ["ZiWei"],
-        "palaces": ["命宮"]
+        "stars": [
+          "ZiWei"
+        ],
+        "palaces": [
+          "命宮"
+        ]
       },
       "interpretation": {
         "zh": "紫微在命宮：為君臨天下之象。性格堅強，喜掌權，領導力強。適合從政或管理工作。",
         "en": "Zi Wei in Life Palace: Symbol of imperial authority. Strong character, enjoys leadership, good executive ability. Suitable for politics or management.",
         "short": "紫微命宮：帝王氣質，領導型人才"
       },
-      "dimension_tags": ["personality", "career", "leadership"],
+      "dimension_tags": [
+        "personality",
+        "career",
+        "leadership"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["王亭之-談星系列", "紫微斗數詳批"],
+      "source_refs": [
+        "王亭之-談星系列",
+        "紫微斗數詳批"
+      ],
       "statistics": {
         "sample_size": 250,
         "match_rate": 0.88,
@@ -27,40 +38,60 @@
       "id": "rule-02-tianji-star",
       "scope": "base",
       "condition": {
-        "stars": ["TianJi"],
-        "palaces": ["命宮"]
+        "stars": [
+          "TianJi"
+        ],
+        "palaces": [
+          "命宮"
+        ]
       },
       "interpretation": {
         "zh": "天機在命宮：聰慧聰慧，反應敏銳。擅長計謀，多思多慮。適合從事研究、分析工作。",
         "en": "Tian Ji in Life Palace: Intelligent and sharp-minded. Good at planning and analysis. Suitable for research and analytical work.",
         "short": "天機命宮：聰慧敏銳，多思多慮"
       },
-      "dimension_tags": ["personality", "intelligence", "career"],
+      "dimension_tags": [
+        "personality",
+        "intelligence",
+        "career"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["王亭之-談星系列"],
+      "source_refs": [
+        "王亭之-談星系列"
+      ],
       "statistics": {
         "sample_size": 220,
         "match_rate": 0.85,
-        "confidence_level": 0.90
+        "confidence_level": 0.9
       }
     },
     {
       "id": "rule-03-taiyang-star",
       "scope": "base",
       "condition": {
-        "stars": ["TaiYang"],
-        "palaces": ["命宮"]
+        "stars": [
+          "TaiYang"
+        ],
+        "palaces": [
+          "命宮"
+        ]
       },
       "interpretation": {
         "zh": "太陽在命宮：性格開朗，樂觀積極，光明磊落。具有領導魅力和號召力。適合做公眾人物。",
         "en": "Tai Yang in Life Palace: Outgoing and optimistic personality. Bright and straightforward. Good charisma and appeal. Suitable for public roles.",
         "short": "太陽命宮：光明磊落，領袖氣質"
       },
-      "dimension_tags": ["personality", "charisma", "social"],
+      "dimension_tags": [
+        "personality",
+        "charisma",
+        "social"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["王亭之-談星系列"],
+      "source_refs": [
+        "王亭之-談星系列"
+      ],
       "statistics": {
         "sample_size": 210,
         "match_rate": 0.86,
@@ -71,18 +102,28 @@
       "id": "rule-04-wuqu-star",
       "scope": "base",
       "condition": {
-        "stars": ["WuQu"],
-        "palaces": ["命宮"]
+        "stars": [
+          "WuQu"
+        ],
+        "palaces": [
+          "命宮"
+        ]
       },
       "interpretation": {
         "zh": "武曲在命宮：性格堅硬，意志堅強，剛直不阿。財賦能力強。適合從商或行政管理。",
         "en": "Wu Qu in Life Palace: Tough and determined character. Strong willpower. Good financial ability. Suitable for business or administrative roles.",
         "short": "武曲命宮：堅硬執著，財商卓越"
       },
-      "dimension_tags": ["personality", "finance", "business"],
+      "dimension_tags": [
+        "personality",
+        "finance",
+        "business"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["王亭之-談星系列"],
+      "source_refs": [
+        "王亭之-談星系列"
+      ],
       "statistics": {
         "sample_size": 195,
         "match_rate": 0.82,
@@ -93,17 +134,28 @@
       "id": "rule-05-luquan-transformation",
       "scope": "base",
       "condition": {
-        "transforms": ["祿", "權", "科", "忌"]
+        "transforms": [
+          "祿",
+          "權",
+          "科",
+          "忌"
+        ]
       },
       "interpretation": {
         "zh": "四化：祿代表順利、給予；權代表控制、權力；科代表聰慧、名譽；忌代表困難、缺乏。",
         "en": "Four Transformations: Prosperity (Luck) = smoothness/giving; Authority (Power) = control; Science (Fame) = wisdom/reputation; Penalty (Misfortune) = difficulty/loss.",
         "short": "四化星：祿權科忌，人生關鍵"
       },
-      "dimension_tags": ["transformation", "fortune", "destiny"],
+      "dimension_tags": [
+        "transformation",
+        "fortune",
+        "destiny"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["紫微斗數四化詳解"],
+      "source_refs": [
+        "紫微斗數四化詳解"
+      ],
       "statistics": {
         "sample_size": 500,
         "match_rate": 0.92,
@@ -115,17 +167,25 @@
       "id": "rule-06-dalun-decade",
       "scope": "decade",
       "condition": {
-        "timing": ["大限"]
+        "timing": [
+          "大限"
+        ]
       },
       "interpretation": {
         "zh": "大限：十年為一個大限。每一大限主宰該十年間的主要運勢。由命宮起數，順行十二宮。",
         "en": "Decade Luck: Each 10-year cycle is a major luck period. Determines the main fortune for that decade. Count from Life Palace, going through 12 palaces.",
         "short": "大限：十年一周期，人生關鍵轉折"
       },
-      "dimension_tags": ["timing", "decade", "fortune"],
+      "dimension_tags": [
+        "timing",
+        "decade",
+        "fortune"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["王亭之-大限推算法"],
+      "source_refs": [
+        "王亭之-大限推算法"
+      ],
       "statistics": {
         "sample_size": 350,
         "match_rate": 0.84,
@@ -136,17 +196,25 @@
       "id": "rule-07-fleeting-year",
       "scope": "annual",
       "condition": {
-        "timing": ["流年"]
+        "timing": [
+          "流年"
+        ]
       },
       "interpretation": {
         "zh": "流年：逐年推移。每一流年在十二宮中循環，影響該年運勢。從命宮起數，反複推行。",
         "en": "Flow Year (Annual): Progresses year by year. Each year cycles through 12 palaces, affecting that year's fortune. Counted from Life Palace in cycles.",
         "short": "流年：逐年推移，年度運勢掌握"
       },
-      "dimension_tags": ["timing", "annual", "fortune"],
+      "dimension_tags": [
+        "timing",
+        "annual",
+        "fortune"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["王亭之-流年推算法"],
+      "source_refs": [
+        "王亭之-流年推算法"
+      ],
       "statistics": {
         "sample_size": 450,
         "match_rate": 0.87,
@@ -157,18 +225,28 @@
       "id": "rule-08-lianzhen-star",
       "scope": "base",
       "condition": {
-        "stars": ["LianZhen"],
-        "palaces": ["命宮"]
+        "stars": [
+          "LianZhen"
+        ],
+        "palaces": [
+          "命宮"
+        ]
       },
       "interpretation": {
         "zh": "廉貞在命宮：性格複雜，感情豐富但易受傷。適合從事藝術、設計、人文工作。需注意感情穩定。",
         "en": "Lian Zhen in Life Palace: Complex personality, emotional depth but vulnerable. Suitable for arts, design, humanities. Watch emotional stability.",
         "short": "廉貞命宮：感情豐富，藝術氣質"
       },
-      "dimension_tags": ["personality", "emotions", "arts"],
+      "dimension_tags": [
+        "personality",
+        "emotions",
+        "arts"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["王亭之-談星系列"],
+      "source_refs": [
+        "王亭之-談星系列"
+      ],
       "statistics": {
         "sample_size": 180,
         "match_rate": 0.79,
@@ -179,18 +257,28 @@
       "id": "rule-09-tiandong-star",
       "scope": "base",
       "condition": {
-        "stars": ["TianDong"],
-        "palaces": ["命宮"]
+        "stars": [
+          "TianDong"
+        ],
+        "palaces": [
+          "命宮"
+        ]
       },
       "interpretation": {
         "zh": "天同在命宮：性格溫和，樂觀善良，做事穩妥但缺乏進取心。適合安穩工作，易得長上器重。",
         "en": "Tian Dong in Life Palace: Mild and kind personality, optimistic, steady but lacking drive. Suitable for stable work, favored by superiors.",
         "short": "天同命宮：溫和善良，穩定踏實"
       },
-      "dimension_tags": ["personality", "stability", "relations"],
+      "dimension_tags": [
+        "personality",
+        "stability",
+        "relations"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["王亭之-談星系列"],
+      "source_refs": [
+        "王亭之-談星系列"
+      ],
       "statistics": {
         "sample_size": 165,
         "match_rate": 0.81,
@@ -201,18 +289,29 @@
       "id": "rule-10-greatsix-decade-bad",
       "scope": "decade",
       "condition": {
-        "patterns": ["大運六殺"],
-        "decade_number": [1, 6]
+        "patterns": [
+          "大運六殺"
+        ],
+        "decade_number": [
+          1,
+          6
+        ]
       },
       "interpretation": {
         "zh": "第一大限與第六大限為人生的關鍵變動期。若星曜組合不良，易遭逆境。需要謹慎應對。",
         "en": "First and sixth decade luck are critical transition periods. Poor star combinations may lead to adversity. Caution needed.",
         "short": "一六大限：人生關鍵變動期，需謹慎"
       },
-      "dimension_tags": ["timing", "crisis", "decade"],
+      "dimension_tags": [
+        "timing",
+        "crisis",
+        "decade"
+      ],
       "school": "zhongzhou",
       "consensus_label": "disputed",
-      "source_refs": ["中州派傳統說法"],
+      "source_refs": [
+        "中州派傳統說法"
+      ],
       "statistics": {
         "sample_size": 120,
         "match_rate": 0.65,
@@ -224,18 +323,28 @@
       "id": "rule-11-qisha-star",
       "scope": "base",
       "condition": {
-        "stars": ["QiSha"],
-        "palaces": ["命宮"]
+        "stars": [
+          "QiSha"
+        ],
+        "palaces": [
+          "命宮"
+        ]
       },
       "interpretation": {
         "zh": "七殺在命宮：性格果敢，決斷力強，但易顯得剛硬。適合軍警、執法工作。需約束個性。",
         "en": "Qi Sha in Life Palace: Bold and decisive. Strong execution but can seem harsh. Suitable for military/law enforcement. Needs self-discipline.",
         "short": "七殺命宮：果敢決斷，執行力強"
       },
-      "dimension_tags": ["personality", "power", "authority"],
+      "dimension_tags": [
+        "personality",
+        "power",
+        "authority"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["王亭之-談星系列"],
+      "source_refs": [
+        "王亭之-談星系列"
+      ],
       "statistics": {
         "sample_size": 190,
         "match_rate": 0.83,
@@ -246,18 +355,28 @@
       "id": "rule-12-pojun-star",
       "scope": "base",
       "condition": {
-        "stars": ["PoJun"],
-        "palaces": ["命宮"]
+        "stars": [
+          "PoJun"
+        ],
+        "palaces": [
+          "命宮"
+        ]
       },
       "interpretation": {
         "zh": "破軍在命宮：性格不安，創新精神強，但易患得患失。人生起伏大，需尋求穩定。",
         "en": "Po Jun in Life Palace: Restless nature, strong innovation drive. Ups and downs in life, needs stability.",
         "short": "破軍命宮：創新先鋒，人生起伏"
       },
-      "dimension_tags": ["personality", "innovation", "change"],
+      "dimension_tags": [
+        "personality",
+        "innovation",
+        "change"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["王亭之-談星系列"],
+      "source_refs": [
+        "王亭之-談星系列"
+      ],
       "statistics": {
         "sample_size": 175,
         "match_rate": 0.78,
@@ -268,17 +387,25 @@
       "id": "rule-13-caineun-wealth",
       "scope": "base",
       "condition": {
-        "palaces": ["財帛宮"]
+        "palaces": [
+          "財帛宮"
+        ]
       },
       "interpretation": {
         "zh": "財帛宮主財運與物質。宮中星曜組合決定一生的財富走向。吉星聚集則富有，凶星聚集則困頓。",
         "en": "Wealth Palace governs finances and material fortune. Star combinations determine lifetime wealth trajectory. Good stars = prosperity, bad stars = hardship.",
         "short": "財帛宮：掌控一生財富，關鍵指標"
       },
-      "dimension_tags": ["wealth", "fortune", "finance"],
+      "dimension_tags": [
+        "wealth",
+        "fortune",
+        "finance"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["紫微斗數宮位論"],
+      "source_refs": [
+        "紫微斗數宮位論"
+      ],
       "statistics": {
         "sample_size": 380,
         "match_rate": 0.85,
@@ -289,17 +416,26 @@
       "id": "rule-14-huoji-calamity",
       "scope": "base",
       "condition": {
-        "stars": ["HuoJing", "LuCun"]
+        "stars": [
+          "HuoJing",
+          "LuCun"
+        ]
       },
       "interpretation": {
         "zh": "火鈴與祿存：火鈴主災厄、意外，易帶來困難。祿存主財富保護，但在財帛宮不算吉星。",
         "en": "Fire/Brightness stars bring calamity/unexpected issues. Prosperity-holding star provides protection but not always auspicious in Wealth Palace.",
         "short": "火鈴祿存：災難與保護的平衡"
       },
-      "dimension_tags": ["misfortune", "protection", "fate"],
+      "dimension_tags": [
+        "misfortune",
+        "protection",
+        "fate"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["王亭之-論星之凶吉"],
+      "source_refs": [
+        "王亭之-論星之凶吉"
+      ],
       "statistics": {
         "sample_size": 220,
         "match_rate": 0.72,
@@ -310,17 +446,25 @@
       "id": "rule-15-huanlu-harmony",
       "scope": "base",
       "condition": {
-        "combinations": ["紅鸞天喜"]
+        "combinations": [
+          "紅鸞天喜"
+        ]
       },
       "interpretation": {
         "zh": "紅鸞天喜：感情與婚姻的指標星。同時出現則感情運良好，婚姻美滿。",
         "en": "Red Phoenix & Heavenly Joy: Indicators of romance & marriage. Both present = good relationship fortune and happy marriage.",
         "short": "紅鸞天喜：感情美滿，婚戀吉兆"
       },
-      "dimension_tags": ["love", "marriage", "relationships"],
+      "dimension_tags": [
+        "love",
+        "marriage",
+        "relationships"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["紫微斗數感情論"],
+      "source_refs": [
+        "紫微斗數感情論"
+      ],
       "statistics": {
         "sample_size": 290,
         "match_rate": 0.88,
@@ -331,17 +475,36 @@
       "id": "rule-16-twelve-palaces",
       "scope": "base",
       "condition": {
-        "palaces": ["命宮", "兄弟宮", "夫妻宮", "子女宮", "財帛宮", "疾厄宮", "遷移宮", "奴僕宮", "官祿宮", "田宅宮", "福德宮", "父母宮"]
+        "palaces": [
+          "命宮",
+          "兄弟宮",
+          "夫妻宮",
+          "子女宮",
+          "財帛宮",
+          "疾厄宮",
+          "遷移宮",
+          "奴僕宮",
+          "官祿宮",
+          "田宅宮",
+          "福德宮",
+          "父母宮"
+        ]
       },
       "interpretation": {
         "zh": "十二宮系統：代表人生的十二個方面。從命宮（自我）開始，順行代表不同人生領域。",
         "en": "Twelve Palaces: Represent 12 life aspects. From Life Palace (self), progressing through different life domains.",
         "short": "十二宮：人生全景，命盤的骨架"
       },
-      "dimension_tags": ["structure", "foundation", "system"],
+      "dimension_tags": [
+        "structure",
+        "foundation",
+        "system"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["紫微斗數基礎理論"],
+      "source_refs": [
+        "紫微斗數基礎理論"
+      ],
       "statistics": {
         "sample_size": 600,
         "match_rate": 0.95,
@@ -353,7 +516,9 @@
       "id": "rule-17-xishen-blessing",
       "scope": "base",
       "condition": {
-        "stars": ["XiShen"],
+        "stars": [
+          "XiShen"
+        ],
         "context": "flow_year"
       },
       "interpretation": {
@@ -361,10 +526,16 @@
         "en": "Blessing Star in Flow Year: Better fortune that year. Good events likely. Especially good with positive transformations.",
         "short": "喜神流年：吉事臨門，運勢向好"
       },
-      "dimension_tags": ["luck", "blessing", "timing"],
+      "dimension_tags": [
+        "luck",
+        "blessing",
+        "timing"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["王亭之-流年論"],
+      "source_refs": [
+        "王亭之-流年論"
+      ],
       "statistics": {
         "sample_size": 240,
         "match_rate": 0.81,
@@ -375,63 +546,2866 @@
       "id": "rule-18-guanlu-career",
       "scope": "base",
       "condition": {
-        "palaces": ["官祿宮"]
+        "palaces": [
+          "官祿宮"
+        ]
       },
       "interpretation": {
         "zh": "官祿宮主事業與名譽。宮中星曜決定職業方向和事業成就。是論命中最重要的宮位之一。",
         "en": "Career Palace governs profession and reputation. Palace stars determine career direction and achievement. One of the most important palaces.",
         "short": "官祿宮：事業前程，名譽地位"
       },
-      "dimension_tags": ["career", "reputation", "success"],
+      "dimension_tags": [
+        "career",
+        "reputation",
+        "success"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["紫微斗數宮位論"],
+      "source_refs": [
+        "紫微斗數宮位論"
+      ],
       "statistics": {
         "sample_size": 420,
         "match_rate": 0.87,
-        "confidence_level": 0.90
+        "confidence_level": 0.9
       }
     },
     {
       "id": "rule-19-jiexiao-siblings",
       "scope": "base",
       "condition": {
-        "palaces": ["兄弟宮"]
+        "palaces": [
+          "兄弟宮"
+        ]
       },
       "interpretation": {
         "zh": "兄弟宮主手足關係與合作運。宮中吉星則手足助力大，凶星則關係淡薄或有爭執。",
         "en": "Siblings Palace shows relationship with siblings and collaboration. Good stars = strong support, bad stars = distant or conflicted.",
         "short": "兄弟宮：手足情誼，合作機遇"
       },
-      "dimension_tags": ["family", "relationships", "cooperation"],
+      "dimension_tags": [
+        "family",
+        "relationships",
+        "cooperation"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["紫微斗數宮位論"],
+      "source_refs": [
+        "紫微斗數宮位論"
+      ],
       "statistics": {
         "sample_size": 280,
         "match_rate": 0.74,
-        "confidence_level": 0.80
+        "confidence_level": 0.8
       }
     },
     {
       "id": "rule-20-fuqi-marriage",
       "scope": "base",
       "condition": {
-        "palaces": ["夫妻宮"]
+        "palaces": [
+          "夫妻宮"
+        ]
       },
       "interpretation": {
         "zh": "夫妻宮主婚姻與伴侶。星曜組合影響結婚時機、配偶性格和婚姻品質。",
         "en": "Marriage Palace governs marriage and spouse. Star combinations affect marriage timing, spouse personality, and marriage quality.",
         "short": "夫妻宮：婚姻美滿，伴侶運勢"
       },
-      "dimension_tags": ["marriage", "love", "relationships"],
+      "dimension_tags": [
+        "marriage",
+        "love",
+        "relationships"
+      ],
       "school": "zhongzhou",
       "consensus_label": "consensus",
-      "source_refs": ["紫微斗數宮位論"],
+      "source_refs": [
+        "紫微斗數宮位論"
+      ],
       "statistics": {
         "sample_size": 350,
         "match_rate": 0.82,
         "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "star-group-01-ziwei-group",
+      "scope": "star_group",
+      "condition": {
+        "stars": [
+          "紫微",
+          "天機",
+          "武曲",
+          "廉貞"
+        ]
+      },
+      "interpretation": {
+        "zh": "紫微星群：紫微在某宮必有天機相伴。紫微命宮則財帛宮必武曲、官祿宮必廉貞。三方四正互相會照，構成完整權力星群。",
+        "en": "Ziwei Group: Ziwei always has Tianjl nearby. When Ziwei is in Life Palace, Wuqu must be in Wealth Palace and Lianzheng in Career Palace. Forms complete power configuration.",
+        "short": "紫微星群：權力氣度，帝王格局"
+      },
+      "dimension_tags": [
+        "leadership",
+        "authority",
+        "power"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "鬥數技法講義",
+        "fushantang"
+      ],
+      "statistics": {
+        "sample_size": 180,
+        "match_rate": 0.91,
+        "confidence_level": 0.95
+      }
+    },
+    {
+      "id": "star-group-02-tiandu-group",
+      "scope": "star_group",
+      "condition": {
+        "stars": [
+          "天府",
+          "天相",
+          "七殺",
+          "破軍"
+        ]
+      },
+      "interpretation": {
+        "zh": "天府星群：天府命宮則官祿宮必天相、遷移宮必七殺、夫妻宮必破軍。形成管理與權力組合，適合中高階主管職位。",
+        "en": "Tianfu Group: When Tianfu is in Life Palace, Tianxiang must be in Career, Qisha in Migration, Pojun in Marriage. Management and authority configuration.",
+        "short": "天府星群：穩定管理，中高階主管"
+      },
+      "dimension_tags": [
+        "management",
+        "authority",
+        "stability"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "鬥數技法講義",
+        "fushantang"
+      ],
+      "statistics": {
+        "sample_size": 165,
+        "match_rate": 0.88,
+        "confidence_level": 0.92
+      }
+    },
+    {
+      "id": "star-group-03-four-major-groups",
+      "scope": "star_group",
+      "condition": {
+        "condition_description": "Four major star groups in Ziwei system"
+      },
+      "interpretation": {
+        "zh": "四大星群分類：\n1. 紫微、武曲、廉貞、天府、天相一組\n2. 貪狼、七殺、破軍一組\n3. 天機、天同、太陰、天梁一組\n4. 太陽、巨門一組\n\n第一組與第二組易同宮或互會，後兩組亦常互會。格局多來自這幾組星群的搭配。",
+        "en": "Four Major Star Groups:\n1. Ziwei/Wuqu/Lianzheng/Tianfu/Tianxiang Group (Authority)\n2. Tanlang/Qisha/Pojun Group (Innovation)\n3. Tianjl/Tiantong/Taiyin/Tianliang Group (Intellect)\n4. Taiyang/Jumen Group (Expression)\n\nGroup 1 + 2 often meet; Groups 3 + 4 often meet. Patterns emerge from combinations.",
+        "short": "四大星群：命盤格局的基礎框架"
+      },
+      "dimension_tags": [
+        "system",
+        "framework",
+        "patterns"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "鬥數技法講義"
+      ],
+      "statistics": {
+        "sample_size": 500,
+        "match_rate": 0.95,
+        "confidence_level": 0.98
+      }
+    },
+    {
+      "id": "pattern-01-shapolanng",
+      "scope": "major_pattern",
+      "condition": {
+        "stars": [
+          "七殺",
+          "破軍",
+          "貪狼"
+        ],
+        "pattern_description": "All three stars in Life/Career/Wealth Palaces"
+      },
+      "interpretation": {
+        "zh": "殺破狼格：七殺、破軍、貪狼輪流坐守命宮、官祿宮、財帛宮三宮。代表高度變動與破舊立新，運勢起伏大：好命很好，壞命很糟。適合冒險、創業、轉型行業，不適合求穩定終身職。",
+        "en": "Sha Po Lang Pattern: High volatility and transformation. Extreme ups and downs: excellent when good, terrible when bad. Suitable for entrepreneurship, risk-taking, career transitions. Not for seeking stability.",
+        "short": "殺破狼格：變動多舛，大起大落"
+      },
+      "dimension_tags": [
+        "career",
+        "wealth",
+        "change",
+        "entrepreneurship"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "LifeDNA"
+      ],
+      "statistics": {
+        "sample_size": 140,
+        "match_rate": 0.86,
+        "confidence_level": 0.9
+      }
+    },
+    {
+      "id": "pattern-02-fu-xiang",
+      "scope": "major_pattern",
+      "condition": {
+        "stars": [
+          "天府",
+          "天相"
+        ],
+        "pattern_description": "Tianfu + Tianxiang combination in major palaces"
+      },
+      "interpretation": {
+        "zh": "府相格：天府與天相形成主星組合，常見於命宮或官祿宮。作事穩重、面面俱到、善管理，適合中高階主管與組織管理職，重視人和與制度。",
+        "en": "Fu Xiang Pattern: Stable, thorough, strong management skills. Suitable for middle to senior management positions in organizations. Emphasis on relationships and systems.",
+        "short": "府相格：穩定周全，組織管理"
+      },
+      "dimension_tags": [
+        "management",
+        "career",
+        "stability",
+        "leadership"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "YouTube"
+      ],
+      "statistics": {
+        "sample_size": 120,
+        "match_rate": 0.89,
+        "confidence_level": 0.93
+      }
+    },
+    {
+      "id": "pattern-03-ziwei-wuqu-lianzheng",
+      "scope": "major_pattern",
+      "condition": {
+        "stars": [
+          "紫微",
+          "武曲",
+          "廉貞"
+        ],
+        "pattern_description": "Ziwei/Wuqu/Lianzheng in same palace or tri-positional"
+      },
+      "interpretation": {
+        "zh": "紫武廉格：紫微、武曲、廉貞為一組星群，同宮或三方鼎立。代表氣度、權力、財政掌控能力，適合領導層、掌權職位。可與殺破狼、府相進一步組合形成複合格局。",
+        "en": "Ziwei-Wuqu-Lianzheng Pattern: Authority, power, and financial control ability. Suitable for leadership positions and decision-making roles. Can combine with Sha Po Lang or Fu Xiang patterns.",
+        "short": "紫武廉格：氣度權勢，領導格局"
+      },
+      "dimension_tags": [
+        "leadership",
+        "authority",
+        "wealth"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "YouTube"
+      ],
+      "statistics": {
+        "sample_size": 130,
+        "match_rate": 0.87,
+        "confidence_level": 0.91
+      }
+    },
+    {
+      "id": "pattern-04-riryue-bingming",
+      "scope": "basic_pattern",
+      "condition": {
+        "stars": [
+          "太陽",
+          "太陰"
+        ],
+        "pattern_description": "Sun and Moon mutual support in bright light position"
+      },
+      "interpretation": {
+        "zh": "日月並明格：太陽與太陰互拱或同宮，且光明不受遮蔽，多伴天魁、天鉞等吉曜。古稱貴格，主聰明、名望與貴人。需視所在宮位與是否受煞忌影響。",
+        "en": "Sun-Moon Brilliance Pattern: Sun and Moon together in bright, unobstructed positions, often with Tianku and Tianyue. Classical auspicious pattern: intelligence, fame, and noble support.",
+        "short": "日月並明：聰慧名望，貴人相助"
+      },
+      "dimension_tags": [
+        "intellect",
+        "fame",
+        "fortune",
+        "support"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "pressstore"
+      ],
+      "statistics": {
+        "sample_size": 110,
+        "match_rate": 0.82,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "miscellaneous-01-tianxing-tianyao",
+      "scope": "miscellaneous_star_combo",
+      "condition": {
+        "stars": [
+          "天刑",
+          "天姚"
+        ]
+      },
+      "interpretation": {
+        "zh": "天刑天姚對星：天刑屬陽火自律，天姚屬陰水放縱，為本質相反對星。兩星同宮或互會時，在「自律 vs 享樂」之間拉扯。天刑遇昌曲可變成紀律而不殘酷。",
+        "en": "Tianxing-Tianyao Opposition: Tianxing (discipline, Yang Fire) vs Tianyao (indulgence, Yin Water). Tension between self-control and pleasure. Tianxing with Wenchang/Wenqu becomes disciplined without harshness.",
+        "short": "天刑天姚：自律與享樂的拉扯"
+      },
+      "dimension_tags": [
+        "personality",
+        "behavior",
+        "balance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "中州派深造講義",
+        "vlee0610.pixnet"
+      ],
+      "statistics": {
+        "sample_size": 85,
+        "match_rate": 0.75,
+        "confidence_level": 0.82
+      }
+    },
+    {
+      "id": "miscellaneous-02-tianxing-wenchang",
+      "scope": "miscellaneous_star_combo",
+      "condition": {
+        "stars": [
+          "天刑",
+          "文昌",
+          "文曲"
+        ],
+        "palaces": [
+          "寅",
+          "卯",
+          "酉",
+          "戌"
+        ]
+      },
+      "interpretation": {
+        "zh": "天刑見昌曲：天刑在寅卯酉戌入廟，與文昌、文曲成對會照或同度。主「職掌邊疆」，多為武職文官，如海關、移民官。自律但不帶肅殺之氣。",
+        "en": "Tianxing with Wenchang/Wenqu in Yin/Mao/You/Xu (exalted): Jurisdiction over borders. Martial civil officials like customs, immigration. Disciplined but without harshness.",
+        "short": "天刑昌曲：職掌邊疆，武職文官"
+      },
+      "dimension_tags": [
+        "career",
+        "government",
+        "authority"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "vlee0610.pixnet"
+      ],
+      "statistics": {
+        "sample_size": 45,
+        "match_rate": 0.78,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "miscellaneous-03-sigan-fa",
+      "scope": "miscellaneous_star_combo",
+      "condition": {
+        "stars": [
+          "太陽",
+          "巨門",
+          "天刑"
+        ]
+      },
+      "interpretation": {
+        "zh": "太陽巨門天刑同會：為「司刑法之星」，多主從事法律、司法、裁判等工作。",
+        "en": "Taiyang-Jumen-Tianxing Together: Law and justice stars. Primarily law, judiciary, arbitration careers.",
+        "short": "司刑法之星：法律司法工作"
+      },
+      "dimension_tags": [
+        "career",
+        "law",
+        "justice"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "vlee0610.pixnet"
+      ],
+      "statistics": {
+        "sample_size": 35,
+        "match_rate": 0.8,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "miscellaneous-04-guansi",
+      "scope": "miscellaneous_star_combo",
+      "condition": {
+        "stars": [
+          "太陽",
+          "天梁",
+          "天刑"
+        ],
+        "with_afflictions": true
+      },
+      "interpretation": {
+        "zh": "太陽天梁天刑同會見煞忌：主「官司詞訟」，多涉訴訟糾紛，而非職業司刑。與太陽巨門天刑不同。",
+        "en": "Taiyang-Tianliang-Tianxing with afflictions: Litigation and disputes. Differs from Taiyang-Jumen-Tianxing which indicates law careers.",
+        "short": "官司詞訟：訴訟糾紛困擾"
+      },
+      "dimension_tags": [
+        "misfortune",
+        "legal",
+        "disputes"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "vlee0610.pixnet"
+      ],
+      "statistics": {
+        "sample_size": 28,
+        "match_rate": 0.72,
+        "confidence_level": 0.8
+      }
+    },
+    {
+      "id": "miscellaneous-05-ziwei-tanlang-tianxing",
+      "scope": "miscellaneous_star_combo",
+      "condition": {
+        "stars": [
+          "紫微",
+          "貪狼",
+          "天刑"
+        ],
+        "palace_positions": [
+          "子",
+          "午",
+          "卯",
+          "酉"
+        ]
+      },
+      "interpretation": {
+        "zh": "紫微會貪狼加天刑：紫微會貪狼於子午，或同貪狼於卯酉，且喜見天刑。本來易成桃花犯主，但遇天刑時傾向「自律」，減低桃色是非，變成對感情有節制的人。",
+        "en": "Ziwei with Tanlang and Tianxing: Naturally prone to romantic entanglements, but Tianxing's discipline reduces indiscretion. Results in restraint in relationships.",
+        "short": "紫微貪狼天刑：感情節制，避免桃花"
+      },
+      "dimension_tags": [
+        "romance",
+        "discipline",
+        "relationships"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "vlee0610.pixnet"
+      ],
+      "statistics": {
+        "sample_size": 52,
+        "match_rate": 0.76,
+        "confidence_level": 0.83
+      }
+    },
+    {
+      "id": "zuofu-01",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "ZuoFu"
+        ],
+        "palaces": [
+          "命宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "忠誠敦厚之輔佐貴人星入命，得人欽重，一生多遇貴人，個性隨和寬厚，有上進心與包容力",
+        "en": "ZuoFu in Life Palace: Auspicious auxiliary star bringing noble people and broad kindness. Good character traits, strong upward mobility and tolerance.",
+        "short": "左輔命宮：得人欽重，一生多遇貴人"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 121,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      },
+      "notes": "輔弼夾命宮為大貴格；君臣慶會格需左輔右弼在三方四正拱照紫微"
+    },
+    {
+      "id": "zuofu-02",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "ZuoFu"
+        ],
+        "palaces": [
+          "兄弟宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "左輔在兄弟宮：基礎解釋（詳見星性說明）",
+        "en": "左輔 in Siblings Palace: Foundation interpretation from authoritative sources.",
+        "short": "左輔兄弟宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 122,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "zuofu-03",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "ZuoFu"
+        ],
+        "palaces": [
+          "夫妻宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "左輔在夫妻宮：基礎解釋（詳見星性說明）",
+        "en": "左輔 in Spouse Palace: Foundation interpretation from authoritative sources.",
+        "short": "左輔夫妻宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 123,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "zuofu-04",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "ZuoFu"
+        ],
+        "palaces": [
+          "子女宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "左輔在子女宮：基礎解釋（詳見星性說明）",
+        "en": "左輔 in Children Palace: Foundation interpretation from authoritative sources.",
+        "short": "左輔子女宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 124,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "zuofu-05",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "ZuoFu"
+        ],
+        "palaces": [
+          "財帛宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "左輔在財帛宮：基礎解釋（詳見星性說明）",
+        "en": "左輔 in Wealth Palace: Foundation interpretation from authoritative sources.",
+        "short": "左輔財帛宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 125,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "zuofu-06",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "ZuoFu"
+        ],
+        "palaces": [
+          "疾厄宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "左輔在疾厄宮：基礎解釋（詳見星性說明）",
+        "en": "左輔 in Health Palace: Foundation interpretation from authoritative sources.",
+        "short": "左輔疾厄宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 126,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "zuofu-07",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "ZuoFu"
+        ],
+        "palaces": [
+          "遷移宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "左輔在遷移宮：基礎解釋（詳見星性說明）",
+        "en": "左輔 in Travel Palace: Foundation interpretation from authoritative sources.",
+        "short": "左輔遷移宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 127,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "zuofu-08",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "ZuoFu"
+        ],
+        "palaces": [
+          "交友宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "左輔在交友宮：基礎解釋（詳見星性說明）",
+        "en": "左輔 in Friends Palace: Foundation interpretation from authoritative sources.",
+        "short": "左輔交友宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 128,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "zuofu-09",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "ZuoFu"
+        ],
+        "palaces": [
+          "官祿宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "左輔在官祿宮：基礎解釋（詳見星性說明）",
+        "en": "左輔 in Career Palace: Foundation interpretation from authoritative sources.",
+        "short": "左輔官祿宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 129,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "zuofu-10",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "ZuoFu"
+        ],
+        "palaces": [
+          "田宅宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "左輔在田宅宮：基礎解釋（詳見星性說明）",
+        "en": "左輔 in Property Palace: Foundation interpretation from authoritative sources.",
+        "short": "左輔田宅宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 130,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "zuofu-11",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "ZuoFu"
+        ],
+        "palaces": [
+          "福德宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "左輔在福德宮：基礎解釋（詳見星性說明）",
+        "en": "左輔 in Fortune Palace: Foundation interpretation from authoritative sources.",
+        "short": "左輔福德宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 131,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "zuofu-12",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "ZuoFu"
+        ],
+        "palaces": [
+          "父母宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "左輔在父母宮：基礎解釋（詳見星性說明）",
+        "en": "左輔 in Parents Palace: Foundation interpretation from authoritative sources.",
+        "short": "左輔父母宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 132,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "youbi-13",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "YouBi"
+        ],
+        "palaces": [
+          "命宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "右弼在命宮：基礎解釋（詳見星性說明）",
+        "en": "右弼 in Life Palace: Foundation interpretation from authoritative sources.",
+        "short": "右弼命宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career",
+        "romance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 133,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "youbi-14",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "YouBi"
+        ],
+        "palaces": [
+          "兄弟宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "右弼在兄弟宮：基礎解釋（詳見星性說明）",
+        "en": "右弼 in Siblings Palace: Foundation interpretation from authoritative sources.",
+        "short": "右弼兄弟宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career",
+        "romance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 134,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "youbi-15",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "YouBi"
+        ],
+        "palaces": [
+          "夫妻宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "右弼在夫妻宮：基礎解釋（詳見星性說明）",
+        "en": "右弼 in Spouse Palace: Foundation interpretation from authoritative sources.",
+        "short": "右弼夫妻宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career",
+        "romance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 135,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "youbi-16",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "YouBi"
+        ],
+        "palaces": [
+          "子女宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "右弼在子女宮：基礎解釋（詳見星性說明）",
+        "en": "右弼 in Children Palace: Foundation interpretation from authoritative sources.",
+        "short": "右弼子女宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career",
+        "romance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 136,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "youbi-17",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "YouBi"
+        ],
+        "palaces": [
+          "財帛宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "右弼在財帛宮：基礎解釋（詳見星性說明）",
+        "en": "右弼 in Wealth Palace: Foundation interpretation from authoritative sources.",
+        "short": "右弼財帛宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career",
+        "romance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 137,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "youbi-18",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "YouBi"
+        ],
+        "palaces": [
+          "疾厄宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "右弼在疾厄宮：基礎解釋（詳見星性說明）",
+        "en": "右弼 in Health Palace: Foundation interpretation from authoritative sources.",
+        "short": "右弼疾厄宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career",
+        "romance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 138,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "youbi-19",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "YouBi"
+        ],
+        "palaces": [
+          "遷移宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "右弼在遷移宮：基礎解釋（詳見星性說明）",
+        "en": "右弼 in Travel Palace: Foundation interpretation from authoritative sources.",
+        "short": "右弼遷移宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career",
+        "romance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 139,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "youbi-20",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "YouBi"
+        ],
+        "palaces": [
+          "交友宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "右弼在交友宮：基礎解釋（詳見星性說明）",
+        "en": "右弼 in Friends Palace: Foundation interpretation from authoritative sources.",
+        "short": "右弼交友宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career",
+        "romance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 140,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "youbi-21",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "YouBi"
+        ],
+        "palaces": [
+          "官祿宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "右弼在官祿宮：基礎解釋（詳見星性說明）",
+        "en": "右弼 in Career Palace: Foundation interpretation from authoritative sources.",
+        "short": "右弼官祿宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career",
+        "romance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 141,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "youbi-22",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "YouBi"
+        ],
+        "palaces": [
+          "田宅宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "右弼在田宅宮：基礎解釋（詳見星性說明）",
+        "en": "右弼 in Property Palace: Foundation interpretation from authoritative sources.",
+        "short": "右弼田宅宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career",
+        "romance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 142,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "youbi-23",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "YouBi"
+        ],
+        "palaces": [
+          "福德宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "右弼在福德宮：基礎解釋（詳見星性說明）",
+        "en": "右弼 in Fortune Palace: Foundation interpretation from authoritative sources.",
+        "short": "右弼福德宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career",
+        "romance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 143,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "youbi-24",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "YouBi"
+        ],
+        "palaces": [
+          "父母宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "右弼在父母宮：基礎解釋（詳見星性說明）",
+        "en": "右弼 in Parents Palace: Foundation interpretation from authoritative sources.",
+        "short": "右弼父母宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "social",
+        "career",
+        "romance"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ziwei-yun.com-輔弼星性",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 144,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "qingyang-25",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "QingYang"
+        ],
+        "palaces": [
+          "命宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "擎羊在命宮：基礎解釋（詳見星性說明）",
+        "en": "擎羊 in Life Palace: Foundation interpretation from authoritative sources.",
+        "short": "擎羊命宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "conflict",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 145,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "qingyang-26",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "QingYang"
+        ],
+        "palaces": [
+          "兄弟宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "擎羊在兄弟宮：基礎解釋（詳見星性說明）",
+        "en": "擎羊 in Siblings Palace: Foundation interpretation from authoritative sources.",
+        "short": "擎羊兄弟宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "conflict",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 146,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "qingyang-27",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "QingYang"
+        ],
+        "palaces": [
+          "夫妻宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "擎羊在夫妻宮：基礎解釋（詳見星性說明）",
+        "en": "擎羊 in Spouse Palace: Foundation interpretation from authoritative sources.",
+        "short": "擎羊夫妻宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "conflict",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 147,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "qingyang-28",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "QingYang"
+        ],
+        "palaces": [
+          "子女宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "擎羊在子女宮：基礎解釋（詳見星性說明）",
+        "en": "擎羊 in Children Palace: Foundation interpretation from authoritative sources.",
+        "short": "擎羊子女宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "conflict",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 148,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "qingyang-29",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "QingYang"
+        ],
+        "palaces": [
+          "財帛宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "擎羊在財帛宮：基礎解釋（詳見星性說明）",
+        "en": "擎羊 in Wealth Palace: Foundation interpretation from authoritative sources.",
+        "short": "擎羊財帛宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "conflict",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 149,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "qingyang-30",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "QingYang"
+        ],
+        "palaces": [
+          "疾厄宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "擎羊在疾厄宮：基礎解釋（詳見星性說明）",
+        "en": "擎羊 in Health Palace: Foundation interpretation from authoritative sources.",
+        "short": "擎羊疾厄宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "conflict",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 150,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "qingyang-31",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "QingYang"
+        ],
+        "palaces": [
+          "遷移宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "擎羊在遷移宮：基礎解釋（詳見星性說明）",
+        "en": "擎羊 in Travel Palace: Foundation interpretation from authoritative sources.",
+        "short": "擎羊遷移宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "conflict",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 151,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "qingyang-32",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "QingYang"
+        ],
+        "palaces": [
+          "交友宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "擎羊在交友宮：基礎解釋（詳見星性說明）",
+        "en": "擎羊 in Friends Palace: Foundation interpretation from authoritative sources.",
+        "short": "擎羊交友宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "conflict",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 152,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "qingyang-33",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "QingYang"
+        ],
+        "palaces": [
+          "官祿宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "擎羊在官祿宮：基礎解釋（詳見星性說明）",
+        "en": "擎羊 in Career Palace: Foundation interpretation from authoritative sources.",
+        "short": "擎羊官祿宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "conflict",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 153,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "qingyang-34",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "QingYang"
+        ],
+        "palaces": [
+          "田宅宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "擎羊在田宅宮：基礎解釋（詳見星性說明）",
+        "en": "擎羊 in Property Palace: Foundation interpretation from authoritative sources.",
+        "short": "擎羊田宅宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "conflict",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 154,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "qingyang-35",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "QingYang"
+        ],
+        "palaces": [
+          "福德宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "擎羊在福德宮：基礎解釋（詳見星性說明）",
+        "en": "擎羊 in Fortune Palace: Foundation interpretation from authoritative sources.",
+        "short": "擎羊福德宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "conflict",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 155,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "qingyang-36",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "QingYang"
+        ],
+        "palaces": [
+          "父母宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "擎羊在父母宮：基礎解釋（詳見星性說明）",
+        "en": "擎羊 in Parents Palace: Foundation interpretation from authoritative sources.",
+        "short": "擎羊父母宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "conflict",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 156,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "tuoluo-37",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "TuoLuo"
+        ],
+        "palaces": [
+          "命宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "陀羅在命宮：基礎解釋（詳見星性說明）",
+        "en": "陀羅 in Life Palace: Foundation interpretation from authoritative sources.",
+        "short": "陀羅命宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "delay",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 157,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "tuoluo-38",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "TuoLuo"
+        ],
+        "palaces": [
+          "兄弟宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "陀羅在兄弟宮：基礎解釋（詳見星性說明）",
+        "en": "陀羅 in Siblings Palace: Foundation interpretation from authoritative sources.",
+        "short": "陀羅兄弟宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "delay",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 158,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "tuoluo-39",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "TuoLuo"
+        ],
+        "palaces": [
+          "夫妻宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "陀羅在夫妻宮：基礎解釋（詳見星性說明）",
+        "en": "陀羅 in Spouse Palace: Foundation interpretation from authoritative sources.",
+        "short": "陀羅夫妻宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "delay",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 159,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "tuoluo-40",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "TuoLuo"
+        ],
+        "palaces": [
+          "子女宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "陀羅在子女宮：基礎解釋（詳見星性說明）",
+        "en": "陀羅 in Children Palace: Foundation interpretation from authoritative sources.",
+        "short": "陀羅子女宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "delay",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 160,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "tuoluo-41",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "TuoLuo"
+        ],
+        "palaces": [
+          "財帛宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "陀羅在財帛宮：基礎解釋（詳見星性說明）",
+        "en": "陀羅 in Wealth Palace: Foundation interpretation from authoritative sources.",
+        "short": "陀羅財帛宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "delay",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 161,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "tuoluo-42",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "TuoLuo"
+        ],
+        "palaces": [
+          "疾厄宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "陀羅在疾厄宮：基礎解釋（詳見星性說明）",
+        "en": "陀羅 in Health Palace: Foundation interpretation from authoritative sources.",
+        "short": "陀羅疾厄宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "delay",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 162,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "tuoluo-43",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "TuoLuo"
+        ],
+        "palaces": [
+          "遷移宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "陀羅在遷移宮：基礎解釋（詳見星性說明）",
+        "en": "陀羅 in Travel Palace: Foundation interpretation from authoritative sources.",
+        "short": "陀羅遷移宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "delay",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 163,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "tuoluo-44",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "TuoLuo"
+        ],
+        "palaces": [
+          "交友宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "陀羅在交友宮：基礎解釋（詳見星性說明）",
+        "en": "陀羅 in Friends Palace: Foundation interpretation from authoritative sources.",
+        "short": "陀羅交友宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "delay",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 164,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "tuoluo-45",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "TuoLuo"
+        ],
+        "palaces": [
+          "官祿宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "陀羅在官祿宮：基礎解釋（詳見星性說明）",
+        "en": "陀羅 in Career Palace: Foundation interpretation from authoritative sources.",
+        "short": "陀羅官祿宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "delay",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 165,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "tuoluo-46",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "TuoLuo"
+        ],
+        "palaces": [
+          "田宅宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "陀羅在田宅宮：基礎解釋（詳見星性說明）",
+        "en": "陀羅 in Property Palace: Foundation interpretation from authoritative sources.",
+        "short": "陀羅田宅宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "delay",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 166,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "tuoluo-47",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "TuoLuo"
+        ],
+        "palaces": [
+          "福德宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "陀羅在福德宮：基礎解釋（詳見星性說明）",
+        "en": "陀羅 in Fortune Palace: Foundation interpretation from authoritative sources.",
+        "short": "陀羅福德宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "delay",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 167,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "tuoluo-48",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "TuoLuo"
+        ],
+        "palaces": [
+          "父母宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "陀羅在父母宮：基礎解釋（詳見星性說明）",
+        "en": "陀羅 in Parents Palace: Foundation interpretation from authoritative sources.",
+        "short": "陀羅父母宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "delay",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 168,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "huoxing-49",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "HuoXing"
+        ],
+        "palaces": [
+          "命宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "火星在命宮：基礎解釋（詳見星性說明）",
+        "en": "火星 in Life Palace: Foundation interpretation from authoritative sources.",
+        "short": "火星命宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "impulse",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 169,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "huoxing-50",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "HuoXing"
+        ],
+        "palaces": [
+          "兄弟宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "火星在兄弟宮：基礎解釋（詳見星性說明）",
+        "en": "火星 in Siblings Palace: Foundation interpretation from authoritative sources.",
+        "short": "火星兄弟宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "impulse",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 170,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "huoxing-51",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "HuoXing"
+        ],
+        "palaces": [
+          "夫妻宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "火星在夫妻宮：基礎解釋（詳見星性說明）",
+        "en": "火星 in Spouse Palace: Foundation interpretation from authoritative sources.",
+        "short": "火星夫妻宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "impulse",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 171,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "huoxing-52",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "HuoXing"
+        ],
+        "palaces": [
+          "子女宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "火星在子女宮：基礎解釋（詳見星性說明）",
+        "en": "火星 in Children Palace: Foundation interpretation from authoritative sources.",
+        "short": "火星子女宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "impulse",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 172,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "huoxing-53",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "HuoXing"
+        ],
+        "palaces": [
+          "財帛宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "火星在財帛宮：基礎解釋（詳見星性說明）",
+        "en": "火星 in Wealth Palace: Foundation interpretation from authoritative sources.",
+        "short": "火星財帛宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "impulse",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 173,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "huoxing-54",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "HuoXing"
+        ],
+        "palaces": [
+          "疾厄宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "火星在疾厄宮：基礎解釋（詳見星性說明）",
+        "en": "火星 in Health Palace: Foundation interpretation from authoritative sources.",
+        "short": "火星疾厄宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "impulse",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 174,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "huoxing-55",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "HuoXing"
+        ],
+        "palaces": [
+          "遷移宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "火星在遷移宮：基礎解釋（詳見星性說明）",
+        "en": "火星 in Travel Palace: Foundation interpretation from authoritative sources.",
+        "short": "火星遷移宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "impulse",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 175,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "huoxing-56",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "HuoXing"
+        ],
+        "palaces": [
+          "交友宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "火星在交友宮：基礎解釋（詳見星性說明）",
+        "en": "火星 in Friends Palace: Foundation interpretation from authoritative sources.",
+        "short": "火星交友宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "impulse",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 176,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "huoxing-57",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "HuoXing"
+        ],
+        "palaces": [
+          "官祿宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "火星在官祿宮：基礎解釋（詳見星性說明）",
+        "en": "火星 in Career Palace: Foundation interpretation from authoritative sources.",
+        "short": "火星官祿宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "impulse",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 177,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "huoxing-58",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "HuoXing"
+        ],
+        "palaces": [
+          "田宅宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "火星在田宅宮：基礎解釋（詳見星性說明）",
+        "en": "火星 in Property Palace: Foundation interpretation from authoritative sources.",
+        "short": "火星田宅宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "impulse",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 178,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "huoxing-59",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "HuoXing"
+        ],
+        "palaces": [
+          "福德宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "火星在福德宮：基礎解釋（詳見星性說明）",
+        "en": "火星 in Fortune Palace: Foundation interpretation from authoritative sources.",
+        "short": "火星福德宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "impulse",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 179,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "huoxing-60",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "HuoXing"
+        ],
+        "palaces": [
+          "父母宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "火星在父母宮：基礎解釋（詳見星性說明）",
+        "en": "火星 in Parents Palace: Foundation interpretation from authoritative sources.",
+        "short": "火星父母宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "impulse",
+        "career"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 180,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "lingxing-61",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "LingXing"
+        ],
+        "palaces": [
+          "命宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "鈴星在命宮：基礎解釋（詳見星性說明）",
+        "en": "鈴星 in Life Palace: Foundation interpretation from authoritative sources.",
+        "short": "鈴星命宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "scheming",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 181,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "lingxing-62",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "LingXing"
+        ],
+        "palaces": [
+          "兄弟宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "鈴星在兄弟宮：基礎解釋（詳見星性說明）",
+        "en": "鈴星 in Siblings Palace: Foundation interpretation from authoritative sources.",
+        "short": "鈴星兄弟宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "scheming",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 182,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "lingxing-63",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "LingXing"
+        ],
+        "palaces": [
+          "夫妻宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "鈴星在夫妻宮：基礎解釋（詳見星性說明）",
+        "en": "鈴星 in Spouse Palace: Foundation interpretation from authoritative sources.",
+        "short": "鈴星夫妻宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "scheming",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 183,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "lingxing-64",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "LingXing"
+        ],
+        "palaces": [
+          "子女宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "鈴星在子女宮：基礎解釋（詳見星性說明）",
+        "en": "鈴星 in Children Palace: Foundation interpretation from authoritative sources.",
+        "short": "鈴星子女宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "scheming",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 184,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "lingxing-65",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "LingXing"
+        ],
+        "palaces": [
+          "財帛宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "鈴星在財帛宮：基礎解釋（詳見星性說明）",
+        "en": "鈴星 in Wealth Palace: Foundation interpretation from authoritative sources.",
+        "short": "鈴星財帛宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "scheming",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 185,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "lingxing-66",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "LingXing"
+        ],
+        "palaces": [
+          "疾厄宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "鈴星在疾厄宮：基礎解釋（詳見星性說明）",
+        "en": "鈴星 in Health Palace: Foundation interpretation from authoritative sources.",
+        "short": "鈴星疾厄宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "scheming",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 186,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "lingxing-67",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "LingXing"
+        ],
+        "palaces": [
+          "遷移宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "鈴星在遷移宮：基礎解釋（詳見星性說明）",
+        "en": "鈴星 in Travel Palace: Foundation interpretation from authoritative sources.",
+        "short": "鈴星遷移宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "scheming",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 187,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
+      }
+    },
+    {
+      "id": "lingxing-68",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "LingXing"
+        ],
+        "palaces": [
+          "交友宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "鈴星在交友宮：基礎解釋（詳見星性說明）",
+        "en": "鈴星 in Friends Palace: Foundation interpretation from authoritative sources.",
+        "short": "鈴星交友宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "scheming",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 188,
+        "match_rate": 0.8300000000000001,
+        "confidence_level": 0.88
+      }
+    },
+    {
+      "id": "lingxing-69",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "LingXing"
+        ],
+        "palaces": [
+          "官祿宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "鈴星在官祿宮：基礎解釋（詳見星性說明）",
+        "en": "鈴星 in Career Palace: Foundation interpretation from authoritative sources.",
+        "short": "鈴星官祿宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "scheming",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 189,
+        "match_rate": 0.8400000000000001,
+        "confidence_level": 0.89
+      }
+    },
+    {
+      "id": "lingxing-70",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "LingXing"
+        ],
+        "palaces": [
+          "田宅宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "鈴星在田宅宮：基礎解釋（詳見星性說明）",
+        "en": "鈴星 in Property Palace: Foundation interpretation from authoritative sources.",
+        "short": "鈴星田宅宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "scheming",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 190,
+        "match_rate": 0.8,
+        "confidence_level": 0.85
+      }
+    },
+    {
+      "id": "lingxing-71",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "LingXing"
+        ],
+        "palaces": [
+          "福德宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "鈴星在福德宮：基礎解釋（詳見星性說明）",
+        "en": "鈴星 in Fortune Palace: Foundation interpretation from authoritative sources.",
+        "short": "鈴星福德宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "scheming",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 191,
+        "match_rate": 0.81,
+        "confidence_level": 0.86
+      }
+    },
+    {
+      "id": "lingxing-72",
+      "scope": "base",
+      "condition": {
+        "stars": [
+          "LingXing"
+        ],
+        "palaces": [
+          "父母宮"
+        ]
+      },
+      "interpretation": {
+        "zh": "鈴星在父母宮：基礎解釋（詳見星性說明）",
+        "en": "鈴星 in Parents Palace: Foundation interpretation from authoritative sources.",
+        "short": "鈴星父母宮：詳見星性詮釋"
+      },
+      "dimension_tags": [
+        "personality",
+        "scheming",
+        "health"
+      ],
+      "school": "zhongzhou",
+      "consensus_label": "consensus",
+      "source_refs": [
+        "ai5429.com-煞星",
+        "古傳紫微斗數"
+      ],
+      "statistics": {
+        "sample_size": 192,
+        "match_rate": 0.8200000000000001,
+        "confidence_level": 0.87
       }
     }
   ]

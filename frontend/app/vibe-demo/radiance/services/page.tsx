@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { Newspaper, Sparkles, Smartphone, Star, Palette, Target } from 'lucide-react';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Breadcrumb } from '../components/Breadcrumb';
@@ -11,169 +10,199 @@ export default function ServicesPage() {
     {
       title: 'Public Relations',
       desc: 'Earn credible media coverage through strategic communications and strong media relationships.',
-      icon: Newspaper,
+      longDesc: 'We build authentic media relationships and craft narratives that resonate. Whether it\'s product launches, thought leadership, or crisis management, we deliver earned media that builds credibility.',
+      icon: '📰',
+      bgIcon: '✍️',
       href: '/vibe-demo/radiance/services/public-relations',
-      features: ['Media relations', 'Press releases', 'Media pitching', 'Crisis management']
+      benefits: ['Media coverage', 'Press releases', 'Media relations', 'Thought leadership']
     },
     {
       title: 'Events & Experiences',
       desc: 'Create memorable brand moments that connect with audiences and generate social momentum.',
-      icon: Sparkles,
+      longDesc: 'From intimate workshops to large-scale conferences, we design and execute events that create real momentum. Every touchpoint is orchestrated to amplify your brand message.',
+      icon: '🎉',
+      bgIcon: '🎪',
       href: '/vibe-demo/radiance/services/events',
-      features: ['Product launches', 'Brand activations', 'Conferences', 'Experiential marketing']
+      benefits: ['Event strategy', 'Logistics management', 'Live production', 'Post-event amplification']
     },
     {
       title: 'Social Media & Content',
       desc: 'Build engaged communities through strategic content and consistent social presence.',
-      icon: Smartphone,
+      longDesc: 'We create content that resonates and builds communities. From daily posts to long-form narratives, we help you stay relevant and connected with your audience.',
+      icon: '📱',
+      bgIcon: '💬',
       href: '/vibe-demo/radiance/services/social-media',
-      features: ['Content strategy', 'Social management', 'Community building', 'Analytics']
+      benefits: ['Content calendars', 'Community management', 'Engagement strategy', 'Analytics & reporting']
     },
     {
       title: 'KOL & Influencer Marketing',
       desc: 'Amplify reach through authentic partnerships with creators your audience trusts.',
-      icon: Star,
+      longDesc: 'We identify and partner with the right voices for your brand. Not just reach—authentic alignment that drives real conversations and conversions.',
+      icon: '⭐',
+      bgIcon: '👥',
       href: '/vibe-demo/radiance/services/kol-marketing',
-      features: ['Influencer partnerships', 'Ambassador programs', 'Creator relations', 'Campaign seeding']
+      benefits: ['Creator identification', 'Negotiation & contracts', 'Campaign management', 'Performance tracking']
     },
     {
       title: 'Creative & Production',
       desc: 'Professional design, video, and content production that brings ideas to life.',
-      icon: Palette,
+      longDesc: 'Our in-house creative team produces everything from stunning visuals to compelling video content. Fast turnarounds, consistent quality, full creative control.',
+      icon: '🎨',
+      bgIcon: '🎬',
       href: '/vibe-demo/radiance/services/creative-production',
-      features: ['Video production', 'Graphic design', 'Content creation', 'Brand assets']
+      benefits: ['Graphic design', 'Video production', 'Photography', 'Content creation']
     },
     {
       title: 'Integrated Campaigns',
       desc: 'All channels working together so each touchpoint reinforces the others.',
-      icon: Target,
-      href: '/vibe-demo/radiance/lead-gen',
-      features: ['Campaign strategy', 'Multi-channel execution', 'Budget optimization', 'Reporting']
+      longDesc: 'This is where our strength shines. We weave PR, events, content, and creative into cohesive campaigns. Each channel amplifies the others, creating momentum that\'s greater than the sum of its parts.',
+      icon: '🎯',
+      bgIcon: '🚀',
+      href: '/vibe-demo/radiance/consultation',
+      benefits: ['Strategy development', 'Cross-channel execution', 'ROI optimization', 'Performance metrics']
     }
   ];
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
+    <main className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <Header />
 
-      <main id="main-content" className="flex-1 pt-20">
-        {/* Breadcrumb */}
-        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
-          <div className="max-w-6xl mx-auto">
-            <Breadcrumb items={[
-              { label: 'Home', href: '/vibe-demo/radiance' },
-              { label: 'Services' }
-            ]} />
-          </div>
-        </section>
+      {/* Breadcrumb */}
+      <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800 pt-24">
+        <div className="max-w-6xl mx-auto">
+          <Breadcrumb items={[
+            { label: 'Home', href: '/vibe-demo/radiance' },
+            { label: 'Services' }
+          ]} />
+        </div>
+      </section>
 
-        {/* Hero Section */}
-        <section className="py-24 px-6 border-b border-slate-200 dark:border-slate-800">
-          <div className="max-w-6xl mx-auto">
-            <p className="text-xs font-semibold uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-4">
-              Our Expertise
-            </p>
-            <h1 className="text-5xl md:text-6xl font-bold text-slate-900 dark:text-white mb-6 leading-tight">
-              Integrated Marketing Solutions
-            </h1>
-            <p className="text-xl text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl">
-              From earned media to creative production, we offer comprehensive services designed to work together. Each discipline amplifies the others, creating campaigns that deliver measurable results.
-            </p>
-          </div>
-        </section>
+      {/* Hero */}
+      <section className="py-24 px-6 bg-white dark:bg-slate-950">
+        <div className="max-w-6xl mx-auto">
+          <h1 className="text-5xl md:text-6xl font-bold mb-6 text-slate-900 dark:text-white">
+            Our Services
+          </h1>
+          <p className="text-xl text-slate-600 dark:text-slate-400 leading-relaxed max-w-3xl">
+            Integrated solutions across PR, events, digital, and creative. We don't just execute tactics—we orchestrate strategies that build real momentum for your brand.
+          </p>
+        </div>
+      </section>
 
-        {/* Services Grid */}
-        <section className="py-24 px-6">
-          <div className="max-w-6xl mx-auto">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-              {services.map((service, idx) => (
-                <Link
-                  key={idx}
-                  href={service.href}
-                  className="group p-8 bg-gradient-to-br from-slate-50 to-white dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-xl dark:hover:shadow-purple-900/20 transition-all"
-                >
-                  <service.icon className="w-12 h-12 mb-4 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+      {/* Services Grid */}
+      <section className="py-24 px-6 bg-slate-50 dark:bg-slate-900/30">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {services.map((service, idx) => (
+              <Link
+                key={idx}
+                href={service.href}
+                className="group h-full"
+              >
+                <div className="h-full p-8 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-xl dark:hover:shadow-purple-900/20 transition-all">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="text-5xl group-hover:scale-110 transition-transform">
+                      {service.icon}
+                    </div>
+                    <div className="text-4xl opacity-40 group-hover:opacity-60 transition-opacity">
+                      {service.bgIcon}
+                    </div>
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                     {service.title}
                   </h3>
-                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed mb-6">
-                    {service.desc}
+                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed mb-5 text-sm">
+                    {service.longDesc}
                   </p>
-                  <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
-                    {service.features.map((feature) => (
-                      <li key={feature} className="flex gap-2">
-                        <span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span>
-                        <span>{feature}</span>
-                      </li>
+                  <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    {service.benefits.slice(0, 2).map((benefit, i) => (
+                      <span
+                        key={i}
+                        className="text-xs px-3 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-full"
+                      >
+                        {benefit}
+                      </span>
                     ))}
-                  </ul>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Why Integration Matters */}
-        <section className="py-24 px-6 bg-gradient-to-br from-purple-950 to-purple-900 text-white">
-          <div className="max-w-4xl mx-auto">
-            <h2 className="text-4xl font-bold mb-8 text-center">Why Integrated Services Matter</h2>
-            <div className="grid md:grid-cols-2 gap-8">
-              <div className="border-l-4 border-purple-400 pl-6">
-                <h3 className="text-lg font-semibold mb-3">Synergy</h3>
-                <p className="text-purple-100 leading-relaxed">
-                  When PR, events, and digital work together, they amplify each other. A press release becomes event content. An event generates social momentum. Your content feeds your media strategy.
-                </p>
-              </div>
-              <div className="border-l-4 border-purple-400 pl-6">
-                <h3 className="text-lg font-semibold mb-3">Consistency</h3>
-                <p className="text-purple-100 leading-relaxed">
-                  One team means one message. Your brand voice, visual identity, and strategic direction remain consistent across every touchpoint, every channel, every campaign.
-                </p>
-              </div>
-              <div className="border-l-4 border-purple-400 pl-6">
-                <h3 className="text-lg font-semibold mb-3">Efficiency</h3>
-                <p className="text-purple-100 leading-relaxed">
-                  No duplicate efforts, no siloed thinking. We coordinate budgets, timelines, and resources across all services to maximize impact and minimize waste.
-                </p>
-              </div>
-              <div className="border-l-4 border-purple-400 pl-6">
-                <h3 className="text-lg font-semibold mb-3">Results</h3>
-                <p className="text-purple-100 leading-relaxed">
-                  Integrated campaigns drive measurable outcomes: more media mentions, larger event attendance, stronger social growth, and ultimately stronger business results.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="py-24 px-6">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-6">
-              Ready to Work Together?
-            </h2>
-            <p className="text-xl text-slate-600 dark:text-slate-400 mb-12 leading-relaxed max-w-2xl mx-auto">
-              Let's discuss how our integrated services can drive real results for your brand. Book a free consultation to explore what's possible.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                href="/vibe-demo/radiance/consultation"
-                className="px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
-              >
-                Book Free Consultation
+                    {service.benefits.length > 2 && (
+                      <span className="text-xs px-3 py-1 text-slate-500 dark:text-slate-400">
+                        +{service.benefits.length - 2} more
+                      </span>
+                    )}
+                  </div>
+                </div>
               </Link>
-              <Link
-                href="/vibe-demo/radiance/case-studies"
-                className="px-8 py-4 border-2 border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400 font-semibold rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors"
-              >
-                See Our Work
-              </Link>
-            </div>
+            ))}
           </div>
-        </section>
-      </main>
+        </div>
+      </section>
+
+      {/* Why Integrated Approach */}
+      <section className="py-24 px-6 bg-white dark:bg-slate-950">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-12 text-center">
+            Why Integrated Matters
+          </h2>
+          <div className="grid md:grid-cols-3 gap-12">
+            {[
+              {
+                title: 'Each channel amplifies the others',
+                desc: 'A press mention drives social conversation. An event creates content. Content becomes earned media. This is multiplication, not addition.',
+                icon: '🔄'
+              },
+              {
+                title: 'Consistent narrative across touchpoints',
+                desc: 'Your audience hears the same story everywhere—PR, social, events, email. This repetition builds recall and trust.',
+                icon: '🎯'
+              },
+              {
+                title: 'Efficient resource use',
+                desc: 'One campaign fuels multiple channels. We maximize impact while minimizing waste. Your budget goes further.',
+                icon: '⚡'
+              }
+            ].map((item, idx) => (
+              <div key={idx} className="text-center">
+                <div className="text-6xl mb-4 opacity-80">
+                  {item.icon}
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                  {item.title}
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                  {item.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-24 px-6 bg-gradient-to-r from-purple-600 to-purple-700">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-4xl font-bold text-white mb-6">
+            Ready to discuss your challenge?
+          </h2>
+          <p className="text-xl text-purple-100 mb-8 leading-relaxed">
+            Let's explore which services fit your goals. No obligation—just a conversation about what's possible.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              href="/vibe-demo/radiance/consultation"
+              className="px-8 py-4 bg-white text-purple-600 font-bold rounded-lg hover:bg-purple-50 transition-colors"
+            >
+              Schedule Consultation →
+            </Link>
+            <Link
+              href="/vibe-demo/radiance/contact"
+              className="px-8 py-4 border-2 border-white text-white font-bold rounded-lg hover:bg-white/10 transition-colors"
+            >
+              Get in Touch
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <Footer />
-    </div>
+    </main>
   );
 }
