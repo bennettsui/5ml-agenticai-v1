@@ -41,8 +41,8 @@ export default function ZiweiPage() {
             </span>
           </h2>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">
-            Three-agent system for calculating 排盤 (birth charts), generating interpretations,
-            and tracking accuracy across traditional Chinese astrology rules with empirical validation.
+            Three-agent system for calculating 排盤 (birth charts), generating interpretations, and tracking accuracy<br />
+            across traditional Chinese astrology rules with empirical validation.
           </p>
         </section>
 
