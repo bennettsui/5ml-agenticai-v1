@@ -155,6 +155,17 @@ app.get('/api/app-name', (req, res) => {
 // ==========================================
 // Service test definitions (shared between full and individual tests)
 const SERVICE_TESTS = {
+  minimax: { name: 'MiniMax 2.5', type: 'probe', test: async () => {
+    if (!process.env.MINIMAX_API_KEY) throw new Error('MINIMAX_API_KEY not set');
+    const resp = await fetch('https://api.minimaxi.chat/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'MiniMax-Text-01', messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
+    return 'API key valid';
+  }},
   anthropic: { name: 'Anthropic (Claude)', type: 'probe', test: async () => {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -2088,8 +2099,17 @@ Be concise and actionable. Use bullet points for lists.`;
       { role: 'user', content: message },
     ];
 
-    // Try DeepSeek first, fall back to Claude
+    // Try MiniMax first (default for textual conversation), then DeepSeek, then Claude
+    const minimax = require('./services/minimaxService');
     const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
+    if (minimax.isAvailable()) {
+      const result = await minimax.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { maxTokens: 2000, temperature: 0.7 }
+      );
+      return res.json({ data: { response: result.content, model: result.model || 'MiniMax-Text-01' } });
+    }
     if (deepseek.isAvailable()) {
       const result = await deepseek.chat(
         [{ role: 'system', content: systemPrompt }, ...messages],
@@ -2144,14 +2164,24 @@ Format your response clearly with sections for:
 Be specific, data-driven, and actionable.
 ${ragContext ? `\n${ragContext}` : ''}`;
 
+        const minimax = require('./services/minimaxService');
         const deepseek = require('./services/deepseekService');
+        const llm = require('./lib/llm');
         try {
-          const result = deepseek.isAvailable()
-            ? await deepseek.chat(
+          let result;
+          if (minimax.isAvailable()) {
+            result = await minimax.chat(
+              [{ role: 'system', content: systemPrompt }, ...messages],
+              { maxTokens: 2000, temperature: 0.7 }
+            );
+          } else if (deepseek.isAvailable()) {
+            result = await deepseek.chat(
               [{ role: 'system', content: systemPrompt }, ...messages],
               { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
-            )
-            : await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+            );
+          } else {
+            result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+          }
 
           return res.json({
             message: result.content || result.text,
@@ -2334,8 +2364,17 @@ Support: 繁體中文, 粵語口語, English, 簡體中文
 
 Be concise, actionable, and opinionated. You're the expert — share your professional perspective. Use bullet points for lists. Flag issues proactively.`;
 
-    // Try DeepSeek first, fall back to Claude
+    // Try MiniMax first (default for textual conversation), then DeepSeek, then Claude
+    const minimax = require('./services/minimaxService');
     const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
+    if (minimax.isAvailable()) {
+      const result = await minimax.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { maxTokens: 2000, temperature: 0.7 }
+      );
+      return res.json({ message: result.content, model: result.model || 'MiniMax-Text-01' });
+    }
     if (deepseek.isAvailable()) {
       const result = await deepseek.chat(
         [{ role: 'system', content: systemPrompt }, ...messages],
@@ -2886,9 +2925,25 @@ app.post('/api/workflow-chat', async (req, res) => {
       companyRag ? `\n${companyRag}` : '',
     ].join('\n');
 
-    // Try DeepSeek first, fall back to Claude
+    // Try MiniMax first (default for textual conversation), then DeepSeek, then Claude
+    const minimax = require('./services/minimaxService');
     const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
     let result;
+
+    if (minimax.isAvailable()) {
+      result = await minimax.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { maxTokens: 2000, temperature: 0.7 }
+      );
+      const parsed = parseWorkflowUpdates(result.content);
+      return res.json({
+        message: parsed.message,
+        workflow_updates: parsed.updates,
+        model: result.model || 'MiniMax-Text-01',
+        rag_used: !!ragContext,
+      });
+    }
 
     if (deepseek.isAvailable()) {
       result = await deepseek.chat(
@@ -2905,7 +2960,6 @@ app.post('/api/workflow-chat', async (req, res) => {
     }
 
     // Fallback to Claude
-    const llm = require('./lib/llm');
     result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
     const parsed = parseWorkflowUpdates(result.text);
     return res.json({
@@ -2949,8 +3003,17 @@ Your capabilities:
 
 Be concise, specific, and reference actual platform data. Use bullet points for lists.`;
 
-    // Try DeepSeek first, fall back to Claude
+    // Try MiniMax first (default for textual conversation), then DeepSeek, then Claude
+    const minimax = require('./services/minimaxService');
     const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
+    if (minimax.isAvailable()) {
+      const result = await minimax.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { maxTokens: 2000, temperature: 0.7 }
+      );
+      return res.json({ message: result.content, model: result.model || 'MiniMax-Text-01' });
+    }
     if (deepseek.isAvailable()) {
       const result = await deepseek.chat(
         [{ role: 'system', content: systemPrompt }, ...messages],
@@ -2960,7 +3023,6 @@ Be concise, specific, and reference actual platform data. Use bullet points for 
     }
 
     // Fallback to Claude
-    const llm = require('./lib/llm');
     const result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
     return res.json({ message: result.text, model: result.modelName || 'claude-haiku' });
 
