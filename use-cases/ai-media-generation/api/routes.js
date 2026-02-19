@@ -231,6 +231,45 @@ router.patch('/prompts/:id/approve', async (req, res) => {
   }
 });
 
+// PATCH /api/media/prompts/:id — update prompt content (manual edit)
+router.patch('/prompts/:id', async (req, res) => {
+  try {
+    const { prompt_json, status } = req.body;
+    const fields = [];
+    const params = [];
+    if (prompt_json !== undefined) { fields.push(`prompt_json = $${params.length + 1}`); params.push(JSON.stringify(prompt_json)); }
+    if (status !== undefined)      { fields.push(`status = $${params.length + 1}`);      params.push(status); }
+    if (!fields.length) return res.status(400).json({ error: 'No fields to update' });
+    fields.push(`updated_at = NOW()`);
+    params.push(req.params.id);
+    await pool.query(
+      `UPDATE media_prompts SET ${fields.join(', ')} WHERE id = $${params.length}`,
+      params
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/media/projects/:id/prompts — create a manual prompt
+router.post('/projects/:id/prompts', async (req, res) => {
+  try {
+    const { deliverable_type = 'image', format = 'custom', prompt_json } = req.body;
+    if (!prompt_json) return res.status(400).json({ error: '"prompt_json" is required' });
+    const result = await pool.query(
+      `INSERT INTO media_prompts
+         (project_id, deliverable_type, format, prompt_json, status, version, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'draft', 'v1.0-manual', NOW(), NOW())
+       RETURNING *`,
+      [req.params.id, deliverable_type, format, JSON.stringify(prompt_json)]
+    );
+    res.json({ success: true, prompt: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Brand history + memory ────────────────────────────────────────────────────
 
 // POST /api/media/projects/:id/link-brand — link project to a CRM brand
