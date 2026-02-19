@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useAutosave } from '@/lib/useAutosave';
 import {
   Sparkles, AlertCircle, Zap, MessageCircle, Vote, Gamepad2, Camera,
   Plus, Trash2, ChevronDown, ChevronUp, Loader2, Calendar, Clock,
@@ -109,6 +110,7 @@ function emptyCampaign(type: ContentType): InteractiveCampaign {
 
 export default function InteractiveContentPage() {
   const { selectedBrand } = useBrandProject();
+  const isMounted = useRef(false);
   const [selectedType, setSelectedType] = useState<ContentType | null>(null);
   const [campaigns, setCampaigns] = useState<InteractiveCampaign[]>([]);
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
@@ -123,6 +125,44 @@ export default function InteractiveContentPage() {
   const filteredCampaigns = selectedType
     ? campaigns.filter(c => c.type === selectedType)
     : campaigns;
+
+  /* ── Autosave ──────────────────────────── */
+
+  const { autosave, manualSave, status: saveStatus } = useAutosave({
+    onSave: async (data) => {
+      if (!selectedBrand) return;
+      for (const campaign of (data as {campaigns: InteractiveCampaign[]}).campaigns) {
+        await fetch(`/api/social/interactive/${selectedBrand.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(campaign),
+        });
+      }
+    },
+  });
+
+  // Load campaigns on brand change
+  useEffect(() => {
+    if (!selectedBrand) return;
+    isMounted.current = false;
+    async function load() {
+      try {
+        const res = await fetch(`/api/social/interactive/${selectedBrand!.id}`);
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data?.length > 0) setCampaigns(data);
+        }
+      } catch { /* silent */ }
+      isMounted.current = true;
+    }
+    load();
+  }, [selectedBrand?.id]);
+
+  // Auto-save campaigns
+  useEffect(() => {
+    if (!isMounted.current || !selectedBrand) return;
+    autosave({ campaigns });
+  }, [campaigns]);
 
   /* ── AI Generate ─────────────────────── */
 

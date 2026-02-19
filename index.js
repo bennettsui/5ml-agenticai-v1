@@ -2746,6 +2746,59 @@ app.get('/api/social/community/:brandId', async (req, res) => {
 });
 
 // ==========================================
+// Social Content Ops: Content Development
+// ==========================================
+
+// POST /api/social/content-dev/:brandId — save content draft
+app.post('/api/social/content-dev/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    await saveSocialContentDraft(brandId, req.body);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/content-dev/:brandId — get content drafts
+app.get('/api/social/content-dev/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const data = await getSocialContentDraft(brandId);
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Content Calendar
+// ==========================================
+
+// POST /api/social/calendar/:brandId — save calendar posts
+app.post('/api/social/calendar/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { posts, projectId } = req.body;
+    await saveSocialCalendar(brandId, posts.map((p: Record<string, unknown>) => ({ ...p, projectId })));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/calendar/:brandId — get calendar posts
+app.get('/api/social/calendar/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const data = await getSocialCalendar(brandId);
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // Use Case Routes
 // ==========================================
 

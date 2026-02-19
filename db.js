@@ -794,6 +794,35 @@ async function initDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_interactive_brand ON social_interactive_content(brand_id);
 
+      -- Content Calendar
+      CREATE TABLE IF NOT EXISTS social_calendar (
+        id SERIAL PRIMARY KEY,
+        post_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        date DATE NOT NULL,
+        platform VARCHAR(50),
+        format VARCHAR(50),
+        pillar VARCHAR(100),
+        campaign VARCHAR(255),
+        title VARCHAR(500),
+        objective VARCHAR(255),
+        key_message TEXT,
+        visual_type VARCHAR(100),
+        caption_status VARCHAR(50) DEFAULT 'Draft',
+        visual_status VARCHAR(50) DEFAULT 'Draft',
+        boost_plan VARCHAR(100),
+        link TEXT,
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'Draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_calendar FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_calendar_brand ON social_calendar(brand_id);
+      CREATE INDEX IF NOT EXISTS idx_calendar_date ON social_calendar(date);
+
       -- Trend Research
       CREATE TABLE IF NOT EXISTS social_trend_research (
         id SERIAL PRIMARY KEY,
@@ -2838,6 +2867,92 @@ async function deleteResearchProduct(productId) {
   }
 }
 
+// ── Social Content Development ──────────────────────────────────────────────
+
+async function saveSocialContentDraft(brandId, data) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO social_content_drafts (brand_id, post_id, platform, format, title, pillar, objective, key_message, copy_hook, cta, caption, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ON CONFLICT (post_id) DO UPDATE SET
+         platform = $3, format = $4, title = $5, pillar = $6, objective = $7, key_message = $8, copy_hook = $9, cta = $10, caption = $11, status = $12, updated_at = NOW()`,
+      [brandId, data.postId || data.id, data.platform, data.format, data.title, data.pillar, data.objective, data.keyMessage, data.hook?.join(',') || '', data.cta, data.caption, data.status || 'Draft']
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving content draft:', error);
+    throw error;
+  }
+}
+
+async function getSocialContentDraft(brandId) {
+  try {
+    const result = await pool.query('SELECT * FROM social_content_drafts WHERE brand_id = $1 ORDER BY updated_at DESC LIMIT 50', [brandId]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting content drafts:', error);
+    throw error;
+  }
+}
+
+// ── Social Interactive Content ────────────────────────────────────────────────
+
+async function saveSocialInteractive(brandId, data) {
+  try {
+    await pool.query(
+      `INSERT INTO social_interactive_content (brand_id, project_id, title, content_type, description, platforms, engagement_goal, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (content_id) DO UPDATE SET
+         title = $3, content_type = $4, description = $5, platforms = $6, engagement_goal = $7, status = $8, updated_at = NOW()`,
+      [brandId, data.projectId, data.name, data.type, data.description, data.platform, data.objective, data.status || 'Draft']
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving interactive content:', error);
+    throw error;
+  }
+}
+
+async function getSocialInteractive(brandId) {
+  try {
+    const result = await pool.query('SELECT * FROM social_interactive_content WHERE brand_id = $1 ORDER BY updated_at DESC', [brandId]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting interactive content:', error);
+    throw error;
+  }
+}
+
+// ── Social Content Calendar ──────────────────────────────────────────────────
+
+async function saveSocialCalendar(brandId, posts) {
+  try {
+    for (const post of posts) {
+      await pool.query(
+        `INSERT INTO social_calendar (brand_id, project_id, date, platform, format, pillar, campaign, title, objective, key_message, visual_type, caption_status, visual_status, boost_plan, link, notes, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+         ON CONFLICT (post_id) DO UPDATE SET
+           date = $3, platform = $4, format = $5, pillar = $6, campaign = $7, title = $8, objective = $9, key_message = $10, visual_type = $11, caption_status = $12, visual_status = $13, boost_plan = $14, link = $15, notes = $16, status = $17, updated_at = NOW()`,
+        [brandId, post.projectId, post.date, post.platform, post.format, post.pillar, post.campaign, post.title, post.objective, post.keyMessage, post.visualType, post.captionStatus || 'Draft', post.visualStatus || 'Draft', post.boostPlan || 'Organic only', post.link || '', post.notes || '', post.status || 'Draft']
+      );
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving calendar posts:', error);
+    throw error;
+  }
+}
+
+async function getSocialCalendar(brandId) {
+  try {
+    const result = await pool.query('SELECT * FROM social_calendar WHERE brand_id = $1 ORDER BY date ASC', [brandId]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting calendar posts:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -2952,4 +3067,11 @@ module.exports = {
   saveResearchProducts,
   getResearchProducts,
   deleteResearchProduct,
+  // Content Development, Interactive, Calendar
+  saveSocialContentDraft,
+  getSocialContentDraft,
+  saveSocialInteractive,
+  getSocialInteractive,
+  saveSocialCalendar,
+  getSocialCalendar,
 };
