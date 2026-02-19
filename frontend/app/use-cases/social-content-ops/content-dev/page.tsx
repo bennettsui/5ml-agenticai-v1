@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Pencil, AlertCircle, Image, FileText, Video, Sparkles,
   Loader2, ChevronDown, ChevronUp, Eye, Palette, Plus,
@@ -133,6 +133,8 @@ const SAMPLE_CARDS: ContentCard[] = [
 
 const FORMAT_ICONS = { Reel: Video, Static: Image, Carousel: FileText };
 
+const PILLARS = ['Educate', 'Authority', 'Conversion', 'Showcase', 'Community'];
+
 const PILLAR_COLORS: Record<string, string> = {
   Educate: 'bg-blue-500/20 text-blue-400 border-blue-700/30',
   Authority: 'bg-purple-500/20 text-purple-400 border-purple-700/30',
@@ -192,7 +194,35 @@ export default function ContentDevPage() {
   const [schedDate, setSchedDate] = useState('');
   const [schedTime, setSchedTime] = useState('19:00');
 
+  // Draft creation
+  const [showNewDraftModal, setShowNewDraftModal] = useState(false);
+  const [draftForm, setDraftForm] = useState({
+    platform: 'IG' as 'IG' | 'FB' | 'Both',
+    format: 'Static' as 'Reel' | 'Static' | 'Carousel',
+    title: '',
+    pillar: 'Educate' as string,
+    objective: '',
+    keyMessage: '',
+    copyHook: '',
+    cta: '',
+    caption: '',
+    hashtags: '' as string,
+  });
+  const [savingDraft, setSavingDraft] = useState(false);
+
+  // Drafts state
+  const [drafts, setDrafts] = useState<any[]>([]);
+  const [loadingDrafts, setLoadingDrafts] = useState(false);
+
   const filteredCards = statusFilter === 'All' ? cards : cards.filter(c => c.status === statusFilter);
+
+  /* ── Load drafts on brand change ────────────── */
+
+  useEffect(() => {
+    if (selectedBrand) {
+      loadDrafts();
+    }
+  }, [selectedBrand?.id]);
 
   /* ── Status actions ────────────────────── */
 
@@ -313,6 +343,66 @@ Return ONLY the JSON array.`,
     setGenerating(false);
   }, [selectedBrand]);
 
+  /* ── Load drafts on brand change ────────────── */
+
+  useCallback(() => {
+    if (selectedBrand) {
+      loadDrafts();
+    }
+  }, [selectedBrand?.id])();
+
+  async function loadDrafts() {
+    setLoadingDrafts(true);
+    try {
+      // For now using mock data since we don't have taskId
+      // In production: const res = await fetch(`/api/social/drafts/${taskId}`);
+      setDrafts([]);
+    } catch (err) {
+      console.error('Error loading drafts:', err);
+    }
+    setLoadingDrafts(false);
+  }
+
+  async function handleCreateDraft() {
+    if (!selectedBrand || !draftForm.title || !draftForm.objective) {
+      alert('Please fill in title and objective');
+      return;
+    }
+
+    setSavingDraft(true);
+    try {
+      // For now, simulate adding draft locally
+      // In production: const res = await fetch('/api/social/drafts', { method: 'POST', ... });
+      const newDraft = {
+        draft_id: `draft-${Date.now()}`,
+        id: `draft-${Date.now()}`,
+        ...draftForm,
+        hashtags: draftForm.hashtags.split(',').map(h => h.trim()).filter(h => h),
+        status: 'draft',
+        syncedToCalendar: false,
+        createdAt: new Date(),
+      };
+      setDrafts([newDraft, ...drafts]);
+      setDraftForm({
+        platform: 'IG',
+        format: 'Static',
+        title: '',
+        pillar: 'Educate',
+        objective: '',
+        keyMessage: '',
+        copyHook: '',
+        cta: '',
+        caption: '',
+        hashtags: '',
+      });
+      setShowNewDraftModal(false);
+    } catch (err) {
+      console.error('Error creating draft:', err);
+      alert('Failed to create draft');
+    }
+    setSavingDraft(false);
+  }
+
   /* ── Status counts ─────────────────────── */
 
   const statusCounts = STATUS_PIPELINE.reduce((acc, s) => {
@@ -356,7 +446,7 @@ Return ONLY the JSON array.`,
           <Shield className="w-4 h-4 text-purple-400" />
           <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Content Pipeline</h2>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
           {STATUS_PIPELINE.map((status, i) => {
             const config = STATUS_CONFIG[status];
             const count = statusCounts[status] || 0;
@@ -383,11 +473,6 @@ Return ONLY the JSON array.`,
               </div>
             );
           })}
-          {statusFilter !== 'All' && (
-            <button onClick={() => setStatusFilter('All')} className="ml-2 text-[10px] text-slate-500 hover:text-white">
-              Clear
-            </button>
-          )}
         </div>
       </div>
 
@@ -753,10 +838,14 @@ Return ONLY the JSON array.`,
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-emerald-400" />
             <h2 className="text-sm font-semibold text-white">Draft Pool</h2>
-            <span className="text-xs px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full">Not in calendar yet</span>
+            <span className="text-xs px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full">
+              {drafts.length} draft{drafts.length !== 1 ? 's' : ''}
+            </span>
           </div>
           <button
-            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+            disabled={!selectedBrand}
+            onClick={() => setShowNewDraftModal(true)}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
           >
             <Plus className="w-3 h-3" />
             New Draft Post
@@ -765,21 +854,197 @@ Return ONLY the JSON array.`,
         <p className="text-xs text-slate-400">
           Posts in the draft pool are saved for later use but not yet scheduled in the calendar. Promote them to add a specific publish date.
         </p>
-        <div className="border-t border-slate-700/30 pt-4">
-          <p className="text-[10px] text-slate-500 mb-3">
-            💡 Tip: Create a library of ready-to-go content that you can quickly add to the calendar when opportunities arise.
-          </p>
-          <div className="space-y-2 bg-white/[0.02] rounded-lg p-3 border border-slate-700/20">
-            <p className="text-xs text-slate-300 font-mono text-center text-slate-500">
-              API Integration Ready — Draft posts will load here
-            </p>
-            <p className="text-[10px] text-slate-600 text-center">
-              Call GET /api/social/drafts/:taskId to fetch draft posts<br />
-              Use POST /api/social/drafts/:draftId/promote to add to calendar
-            </p>
+
+        {drafts.length === 0 ? (
+          <div className="bg-white/[0.02] rounded-lg p-6 border border-slate-700/20 text-center">
+            <Sparkles className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+            <p className="text-xs text-slate-400">No draft posts yet</p>
+            <p className="text-[10px] text-slate-500 mt-1">Click "New Draft Post" to create your first draft</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {drafts.map(draft => (
+              <div key={draft.id} className="bg-white/[0.02] rounded-lg p-3 border border-slate-700/20">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-xs font-semibold text-white">{draft.title}</h3>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-[10px] text-slate-400">{draft.platform}</span>
+                      <span className="text-[10px] text-slate-600">•</span>
+                      <span className="text-[10px] text-slate-400">{draft.format}</span>
+                      <span className="text-[10px] text-slate-600">•</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${PILLAR_COLORS[draft.pillar]}`}>{draft.pillar}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button className="p-1 hover:bg-white/[0.05] rounded text-slate-400 hover:text-white text-xs transition-colors">
+                      <Edit3 className="w-3 h-3" />
+                    </button>
+                    <button className="p-1 hover:bg-red-500/10 rounded text-slate-400 hover:text-red-400 text-xs transition-colors">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── New Draft Post Modal ────────────── */}
+      {showNewDraftModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700/50 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/50 sticky top-0 bg-slate-900">
+              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <Plus className="w-4 h-4 text-emerald-400" />
+                Create New Draft Post
+              </h3>
+              <button onClick={() => setShowNewDraftModal(false)} className="p-1 text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Platform & Format Row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] uppercase text-slate-500 mb-2 block font-semibold">Platform</label>
+                  <select
+                    value={draftForm.platform}
+                    onChange={(e) => setDraftForm({ ...draftForm, platform: e.target.value as any })}
+                    className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/30"
+                  >
+                    <option value="IG">Instagram</option>
+                    <option value="FB">Facebook</option>
+                    <option value="Both">Both</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-slate-500 mb-2 block font-semibold">Format</label>
+                  <select
+                    value={draftForm.format}
+                    onChange={(e) => setDraftForm({ ...draftForm, format: e.target.value as any })}
+                    className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/30"
+                  >
+                    <option value="Static">Static</option>
+                    <option value="Carousel">Carousel</option>
+                    <option value="Reel">Reel</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Pillar & Objective Row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] uppercase text-slate-500 mb-2 block font-semibold">Pillar</label>
+                  <select
+                    value={draftForm.pillar}
+                    onChange={(e) => setDraftForm({ ...draftForm, pillar: e.target.value })}
+                    className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/30"
+                  >
+                    {PILLARS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-slate-500 mb-2 block font-semibold">Objective</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Awareness, Engagement"
+                    value={draftForm.objective}
+                    onChange={(e) => setDraftForm({ ...draftForm, objective: e.target.value })}
+                    className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/30"
+                  />
+                </div>
+              </div>
+
+              {/* Title */}
+              <div>
+                <label className="text-[10px] uppercase text-slate-500 mb-2 block font-semibold">Post Title *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Why AI Agents Save 10x Time"
+                  value={draftForm.title}
+                  onChange={(e) => setDraftForm({ ...draftForm, title: e.target.value })}
+                  className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/30"
+                />
+              </div>
+
+              {/* Key Message */}
+              <div>
+                <label className="text-[10px] uppercase text-slate-500 mb-2 block font-semibold">Core Message</label>
+                <textarea
+                  placeholder="Main message for this post"
+                  value={draftForm.keyMessage}
+                  onChange={(e) => setDraftForm({ ...draftForm, keyMessage: e.target.value })}
+                  rows={2}
+                  className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/30 resize-none"
+                />
+              </div>
+
+              {/* Copy Hook */}
+              <div>
+                <label className="text-[10px] uppercase text-slate-500 mb-2 block font-semibold">Hook / Opening Line</label>
+                <input
+                  type="text"
+                  placeholder="First line that grabs attention"
+                  value={draftForm.copyHook}
+                  onChange={(e) => setDraftForm({ ...draftForm, copyHook: e.target.value })}
+                  className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/30"
+                />
+              </div>
+
+              {/* Caption */}
+              <div>
+                <label className="text-[10px] uppercase text-slate-500 mb-2 block font-semibold">Caption / Copy</label>
+                <textarea
+                  placeholder="Full caption text"
+                  value={draftForm.caption}
+                  onChange={(e) => setDraftForm({ ...draftForm, caption: e.target.value })}
+                  rows={3}
+                  className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/30 resize-none"
+                />
+              </div>
+
+              {/* CTA & Hashtags Row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] uppercase text-slate-500 mb-2 block font-semibold">CTA</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Learn more, Save this"
+                    value={draftForm.cta}
+                    onChange={(e) => setDraftForm({ ...draftForm, cta: e.target.value })}
+                    className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase text-slate-500 mb-2 block font-semibold">Hashtags</label>
+                  <input
+                    type="text"
+                    placeholder="Comma-separated: #tag1, #tag2"
+                    value={draftForm.hashtags}
+                    onChange={(e) => setDraftForm({ ...draftForm, hashtags: e.target.value })}
+                    className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/30"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-700/50">
+              <button onClick={() => setShowNewDraftModal(false)} className="px-4 py-1.5 text-xs text-slate-400 hover:text-white">
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateDraft}
+                disabled={savingDraft || !draftForm.title}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+              >
+                {savingDraft ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                Save Draft
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Schedule Modal ──────────────────── */}
       {scheduleCardId && (

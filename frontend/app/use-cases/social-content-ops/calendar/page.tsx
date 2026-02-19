@@ -129,6 +129,10 @@ export default function ContentCalendarPage() {
   const [dragPostId, setDragPostId] = useState<string | null>(null);
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
 
+  // Drafts state
+  const [drafts, setDrafts] = useState<any[]>([]);
+  const [loadingDrafts] = useState(false);
+
   const filteredPosts = filterPillar ? posts.filter(p => p.pillar === filterPillar) : posts;
 
   // Build weekly grid data
@@ -511,6 +515,53 @@ IMPORTANT: Return ONLY the JSON array, no other text.`,
         {PILLARS.map(p => (
           <span key={p} className={`px-1.5 py-0.5 rounded ${PILLAR_COLORS[p]}`}>{p}</span>
         ))}
+      </div>
+
+      {/* ── Draft Pool Section ──────────────– */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+            <h2 className="text-sm font-semibold text-white">Draft Pool</h2>
+            <span className="text-xs px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full">
+              {drafts.length} draft{drafts.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </div>
+        <p className="text-xs text-slate-400">
+          Posts from the Draft Pool — not yet scheduled in the calendar. Promote them by dragging to a calendar date.
+        </p>
+
+        {drafts.length === 0 ? (
+          <div className="bg-white/[0.02] rounded-lg p-6 border border-slate-700/20 text-center">
+            <Sparkles className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+            <p className="text-xs text-slate-400">No draft posts available</p>
+            <p className="text-[10px] text-slate-500 mt-1">Create drafts in Content Development to see them here</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {drafts.map(draft => (
+              <div
+                key={draft.id}
+                draggable
+                className="bg-white/[0.02] rounded-lg p-3 border border-slate-700/20 hover:bg-white/[0.04] cursor-move transition-colors"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-xs font-semibold text-white">{draft.title}</h3>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-[10px] text-slate-400">{draft.platform}</span>
+                      <span className="text-[10px] text-slate-600">•</span>
+                      <span className="text-[10px] text-slate-400">{draft.format}</span>
+                      <span className="text-[10px] text-slate-600">•</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${PILLAR_COLORS[draft.pillar]}`}>{draft.pillar}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Add/Edit Post Modal ──────────── */}
