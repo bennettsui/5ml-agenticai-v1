@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Pencil, AlertCircle, Image, FileText, Video, Sparkles,
   Loader2, ChevronDown, ChevronUp, Eye, Palette, Plus,
@@ -8,6 +8,7 @@ import {
   Calendar, ArrowRight, BookOpen, X, Save, Edit3, Trash2,
 } from 'lucide-react';
 import { useBrandProject } from '@/lib/brand-context';
+import { useAutosave } from '@/lib/useAutosave';
 
 /* ── Types ──────────────────────────────── */
 
@@ -177,6 +178,7 @@ const FORMAT_SPECS: Record<string, { specs: string[]; tips: string[]; seo: strin
 
 export default function ContentDevPage() {
   const { selectedBrand } = useBrandProject();
+  const isMounted = useRef(false);
   const [cards, setCards] = useState<ContentCard[]>(SAMPLE_CARDS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showVisualBrief, setShowVisualBrief] = useState<string | null>(null);
@@ -209,6 +211,43 @@ export default function ContentDevPage() {
     hashtags: '' as string,
   });
   const [savingDraft, setSavingDraft] = useState(false);
+
+  /* ── Autosave ──────────────────────────── */
+  const { autosave, manualSave, status: saveStatus } = useAutosave({
+    onSave: async (data) => {
+      if (!selectedBrand) return;
+      await fetch(`/api/social/content-dev/${selectedBrand.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+    },
+  });
+
+  // Load saved drafts on brand change
+  useEffect(() => {
+    if (!selectedBrand) return;
+    isMounted.current = false;
+    async function load() {
+      try {
+        const res = await fetch(`/api/social/content-dev/${selectedBrand!.id}`);
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data && data.length > 0) {
+            setCards(data.length > 0 ? data : SAMPLE_CARDS);
+          }
+        }
+      } catch { /* silent */ }
+      isMounted.current = true;
+    }
+    load();
+  }, [selectedBrand?.id]);
+
+  // Auto-save cards when they change
+  useEffect(() => {
+    if (!isMounted.current || !selectedBrand) return;
+    autosave(cards);
+  }, [cards]);
 
   // Drafts state
   const [drafts, setDrafts] = useState<any[]>([]);
@@ -423,14 +462,30 @@ Return ONLY the JSON array.`,
             Full content cards with copy, visual briefs, review workflow, and scheduling
           </p>
         </div>
-        <button
-          disabled={!selectedBrand || generating}
-          onClick={handleAiExpand}
-          className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-colors flex items-center gap-1.5"
-        >
-          {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-          AI Generate Cards
-        </button>
+        <div className="flex items-center gap-2">
+          {saveStatus.lastSaved && !saveStatus.hasUnsaved && (
+            <span className="flex items-center gap-1 text-[10px] text-emerald-400">
+              <CheckCircle className="w-3 h-3" /> Autosaved
+            </span>
+          )}
+          {saveStatus.hasUnsaved && <span className="text-[10px] text-amber-400">Unsaved...</span>}
+          <button
+            disabled={!selectedBrand || saveStatus.isSaving}
+            onClick={manualSave}
+            className="px-3 py-1.5 text-xs rounded-lg border border-slate-700/30 bg-slate-700/50 text-slate-300 hover:bg-slate-700 disabled:opacity-40 flex items-center gap-1 transition-colors"
+          >
+            {saveStatus.isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+            {saveStatus.isSaving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            disabled={!selectedBrand || generating}
+            onClick={handleAiExpand}
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-colors flex items-center gap-1.5"
+          >
+            {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            AI Generate Cards
+          </button>
+        </div>
       </div>
 
       {!selectedBrand && (
