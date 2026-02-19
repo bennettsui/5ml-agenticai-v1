@@ -834,50 +834,71 @@ async function persistArtefacts(taskId, artefacts) {
     if (value && typeof value === 'string') {
       let jsonStructure = null;
 
-      // Parse specific artefact types to extract structured JSON
-      if (key === 'content_calendar_v1' || key === 'content_calendar_final') {
-        const tables = parseMarkdownTable(value);
-        if (tables.length > 0) {
-          jsonStructure = { tables };
-          // Also extract and save individual content posts
-          if (tables[0]?.rows) {
-            await saveSocialContentPosts(taskId, tables[0].rows.map(row => ({
-              date: row.date,
-              platform: row.platform,
-              format: row.format,
-              title: row.title || row.idea,
-              pillar: row.pillar || row.content_pillar,
-              objective: row.objective,
-              keyMessage: row.key_message,
-              copyHook: row.copy_hook || row.hook,
-              cta: row.cta,
-              language: row.language,
-              visualType: row.visual_type || row.asset_type,
-              status: 'Draft',
-              adPlan: row.ad_plan || row.notes,
-            })));
-          }
-        }
-      } else if (key === 'media_plan_v1' || key === 'media_plan_final') {
-        const tables = parseMarkdownTable(value);
-        if (tables.length > 0) {
-          jsonStructure = { tables };
-          // Extract ad campaigns from the tables
-          for (const table of tables) {
-            if (table.headers.some(h => h.includes('Campaign') || h.includes('Ad Set'))) {
-              await saveSocialAdCampaigns(taskId, table.rows.map(row => ({
-                name: row.campaign_name || row.campaign || row.ad_set,
-                objective: row.objective,
-                funnelStage: row.funnel_stage,
+      try {
+        // Parse specific artefact types to extract structured JSON
+        if (key === 'content_calendar_v1' || key === 'content_calendar_final') {
+          const tables = parseMarkdownTable(value);
+          if (tables.length > 0) {
+            jsonStructure = { tables };
+            // Also extract and save individual content posts
+            if (tables[0]?.rows) {
+              await saveSocialContentPosts(taskId, tables[0].rows.map(row => ({
+                date: row.date,
                 platform: row.platform,
-                budgetHKD: parseFloat(row.budget_hkd || row.budget || 0),
-                budgetPct: parseFloat(row.budget_pct || 0),
-                audienceDefinition: row.audience_definition || row.audience,
-                geo: row.geo,
-                placements: row.placement || row.placements,
+                format: row.format,
+                title: row.title || row.idea,
+                pillar: row.pillar || row.content_pillar,
+                objective: row.objective,
+                keyMessage: row.key_message,
+                copyHook: row.copy_hook || row.hook,
+                cta: row.cta,
+                language: row.language,
+                visualType: row.visual_type || row.asset_type,
                 status: 'Draft',
+                adPlan: row.ad_plan || row.notes,
               })));
             }
+          }
+        } else if (key === 'media_plan_v1' || key === 'media_plan_final') {
+          const tables = parseMarkdownTable(value);
+          if (tables.length > 0) {
+            jsonStructure = { tables };
+            // Extract ad campaigns from the tables
+            for (const table of tables) {
+              if (table.headers.some(h => h.includes('Campaign') || h.includes('Ad Set'))) {
+                await saveSocialAdCampaigns(taskId, table.rows.map(row => ({
+                  name: row.campaign_name || row.campaign || row.ad_set,
+                  objective: row.objective,
+                  funnelStage: row.funnel_stage,
+                  platform: row.platform,
+                  budgetHKD: parseFloat(row.budget_hkd || row.budget || 0),
+                  budgetPct: parseFloat(row.budget_pct || 0),
+                  audienceDefinition: row.audience_definition || row.audience,
+                  geo: row.geo,
+                  placements: row.placement || row.placements,
+                  status: 'Draft',
+                })));
+              }
+            }
+          }
+        }
+
+        // Save the artefact (Markdown + JSON)
+        if (saveArtefact) {
+          await saveArtefact(taskId, {
+            artefactKey: key,
+            artefactType: key.split('_')[0],
+            markdown: value,
+            json: jsonStructure,
+          });
+        }
+      } catch (err) {
+        console.error(`Error persisting artefact ${key}:`, err.message);
+        // Don't throw — continue with next artefact
+      }
+    }
+  }
+}
           }
         }
       } else if (key === 'analytics_kpi_definition' || key === 'analytics_report_final') {
@@ -970,9 +991,16 @@ async function runSarah({ taskId, userInput, brandContext, brandId, projectId, r
         lastOutput = summary;
         break;
       }
-      state = await NODES[nodeName](state);
-      // Persist artefacts after each node
-      await persistArtefacts(taskId, state.artefacts);
+      try {
+        state = await NODES[nodeName](state);
+        // Persist artefacts after each node
+        await persistArtefacts(taskId, state.artefacts);
+      } catch (nodeErr) {
+        console.error(`Node ${nodeName} failed:`, nodeErr.message);
+        state.status = 'BLOCKED';
+        state.next_step = 'done';
+        break;
+      }
       iteration++;
     }
 
@@ -990,9 +1018,15 @@ async function runSarah({ taskId, userInput, brandContext, brandId, projectId, r
     return { state, nodeName, output: summary };
   }
 
-  state = await NODES[nodeName](state);
-  // Persist artefacts to DB
-  await persistArtefacts(taskId, state.artefacts);
+  try {
+    state = await NODES[nodeName](state);
+    // Persist artefacts to DB
+    await persistArtefacts(taskId, state.artefacts);
+  } catch (nodeErr) {
+    console.error(`Node ${nodeName} error:`, nodeErr.message);
+    state.status = 'BLOCKED';
+    state.next_step = 'done';
+  }
   await upsertSocialState(taskId, state, brandId, projectId);
 
   // Return the latest artefact produced by this node
