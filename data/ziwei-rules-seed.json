@@ -3408,5 +3408,200 @@
         "confidence_level": 0.87
       }
     }
+  ],
+  "combinations": [
+    {
+      "id": "comb-01-yang-tuo-jia-ji",
+      "name": "羊駝夾忌",
+      "english_name": "Sheep-Camel Sandwich with Taboo",
+      "category": "inauspicious",
+      "description": {
+        "zh": "羊刃和陀羅夾著忌星或命宮。象徵困境和阻礙，容易遭遇挫折。多主凶禍。",
+        "en": "Sheep Blade and Tuo Luo sandwich the Taboo star or Life Palace. Symbolizes difficulties and obstacles, prone to setbacks. Generally indicates misfortune."
+      },
+      "patterns": [
+        "YangRen + OffspringPalace + TuoLuo",
+        "YangRen + LifePalace + TuoLuo",
+        "YangRen + ParentsPalace + TuoLuo"
+      ],
+      "interpretation": "面臨雙重阻礙，容易陷入困局。需要謹慎待人，避免衝突。",
+      "remedies": "修養品德，多做善事，尋求貴人相助",
+      "severity": "高",
+      "school": "zhongzhou",
+      "source_refs": ["古傳紫微斗數", "斗數秘訣"]
+    },
+    {
+      "id": "comb-02-lu-quan-ke-ji",
+      "name": "祿權科忌",
+      "english_name": "Four Auspiciousness Pattern",
+      "category": "auspicious",
+      "description": {
+        "zh": "祿存、天權、科星、忌星四顆同現一宮。四化俱全，主吉兇交錯但整體運勢佳。",
+        "en": "Presence of Lu (Wealth), Quan (Power), Ke (Talent), Ji (Taboo) in the same palace. Complete four transformations, mixed blessings but generally favorable fortune."
+      },
+      "patterns": [
+        "LuCun + TianQuan + KeStar + JiStar in same palace"
+      ],
+      "interpretation": "綜合運勢較佳，但需要平衡各方面。機遇與挑戰並存。",
+      "remedies": "把握機遇，謹慎決策，尋求平衡",
+      "severity": "中",
+      "school": "zhongzhou",
+      "source_refs": ["王亭之-談星系列"]
+    },
+    {
+      "id": "comb-03-hong-luan-tian-xi",
+      "name": "紅鸞天喜",
+      "english_name": "Red Phoenix Heaven Joy",
+      "category": "auspicious_love",
+      "description": {
+        "zh": "紅鸞星和天喜星共現。主桃花運佳，感情生活豐富。若在命宮或婚姻宮更佳。",
+        "en": "Red Phoenix and Heaven Joy stars appear together. Indicates good romantic luck and rich emotional life. Even more favorable in Life or Marriage Palace."
+      },
+      "patterns": [
+        "HongLuan + TianXi in LifePalace",
+        "HongLuan + TianXi in MarriagePalace",
+        "HongLuan + TianXi in any palace"
+      ],
+      "interpretation": "感情運勢佳，容易結識異性。婚姻和感情較為順利。",
+      "remedies": "珍惜感情，避免感情糾紛，主動培養人際關係",
+      "severity": "低",
+      "school": "zhongzhou",
+      "source_refs": ["古傳紫微斗數"]
+    },
+    {
+      "id": "comb-04-kong-jie-jia-ming",
+      "name": "空劫夾命",
+      "english_name": "Robbery Stars Sandwich Life Palace",
+      "category": "inauspicious",
+      "description": {
+        "zh": "空亡和劫煞夾著命宮。主虛耗、漂泊、物質不足。事業易有變動，財務需謹慎。",
+        "en": "Kong (Void) and Jie (Robbery) sandwich the Life Palace. Indicates loss, wandering, material insufficiency. Career prone to changes, finances need caution."
+      },
+      "patterns": [
+        "Kong + LifePalace + Jie",
+        "Kong + LifePalace + Kong",
+        "Jie + LifePalace + Jie"
+      ],
+      "interpretation": "財務和安定性受影響，需要穩健理財。易有意外損失。",
+      "remedies": "謹慎理財，避免投機，穩定工作，積累資本",
+      "severity": "高",
+      "school": "zhongzhou",
+      "source_refs": ["古傳紫微斗數"]
+    },
+    {
+      "id": "comb-05-tian-liang-zhao-yuan",
+      "name": "天梁朝垣",
+      "english_name": "Tian Liang Facing Court",
+      "category": "auspicious",
+      "description": {
+        "zh": "天梁星與官祿宮或身宮有關照。主貴氣，得人緣。若有朝垣格局更主聲望。",
+        "en": "Tian Liang star aspects Career or Body Palace. Indicates nobility and good relationships. If in Facing Court formation, especially indicates reputation."
+      },
+      "patterns": [
+        "TianLiang + Career Palace aspect",
+        "TianLiang + Body Palace aspect",
+        "TianLiang + facing Zi Wei or Tian Fu"
+      ],
+      "interpretation": "品德受重視，人緣佳，容易獲得幫助。適合從事管理或服務工作。",
+      "remedies": "發揮自身平衡優勢，既要主動也要傾聽他人",
+      "severity": "低",
+      "school": "zhongzhou",
+      "source_refs": ["王亭之-談星系列"]
+    },
+    {
+      "id": "comb-06-san-fang-hui-zhao",
+      "name": "三方會照",
+      "english_name": "Three-Way Convergence",
+      "category": "auspicious",
+      "description": {
+        "zh": "主星在三個方位同時出現（命、財、官三方）。力量集中，主事業或財運突出。",
+        "en": "Main stars appear in three positions simultaneously (Life, Wealth, Career). Concentrated power, indicates outstanding career or financial fortune."
+      },
+      "patterns": [
+        "MainStar in Life + Wealth + Career",
+        "ZiWei/TianFu/TianJi appearing in three palaces"
+      ],
+      "interpretation": "所涉及的領域運勢集中爆發。若為吉星則大吉，若為凶星則需謹慎。",
+      "remedies": "把握機遇，積極行動，充分發揮潛力",
+      "severity": "中",
+      "school": "zhongzhou",
+      "source_refs": ["古傳紫微斗數"]
+    },
+    {
+      "id": "comb-07-lu-hua-ke-ge",
+      "name": "祿化科格",
+      "english_name": "Wealth Transforms to Talent Pattern",
+      "category": "auspicious",
+      "description": {
+        "zh": "祿存或祿化與科星同宮。主名利雙收，聲譽和財富同時提升。",
+        "en": "Lu Cun or Lu transformation together with Ke star. Indicates both fame and wealth, reputation and financial gains increase simultaneously."
+      },
+      "patterns": [
+        "LuCun + KeStar in same palace",
+        "Lu transformation + KeStar in same palace"
+      ],
+      "interpretation": "事業和財務都能得到提升。名聲逐漸增高，財富也隨之增加。",
+      "remedies": "珍惜機遇，不驕不躁，持續精進",
+      "severity": "低",
+      "school": "zhongzhou",
+      "source_refs": ["王亭之-談星系列"]
+    },
+    {
+      "id": "comb-08-yi-ma-xing",
+      "name": "驛馬星",
+      "english_name": "Traveling Horse Star",
+      "category": "neutral",
+      "description": {
+        "zh": "驛馬星現於命宮或遷移宮。主遠行、遷移、變動。適合經常出差或經商。",
+        "en": "Traveling Horse star appears in Life or Travel Palace. Indicates travel, relocation, changes. Suitable for frequent business trips or commerce."
+      },
+      "patterns": [
+        "YiMa in LifePalace",
+        "YiMa in TravelPalace",
+        "YiMa + OffspringPalace"
+      ],
+      "interpretation": "生活變動較多，適應能力強。若能好好利用，可通過變動而獲利。",
+      "remedies": "主動適應變化，尋求機遇，可考慮從事流動性工作",
+      "severity": "低",
+      "school": "zhongzhou",
+      "source_refs": ["古傳紫微斗數"]
+    },
+    {
+      "id": "comb-09-liu-ji-ju-ju",
+      "name": "六吉聚集",
+      "english_name": "Six Auspicious Stars Gathered",
+      "category": "very_auspicious",
+      "description": {
+        "zh": "祿、權、科、左輔、右弼、魁鉞六顆吉星聚集。極為罕見，主大貴大富。",
+        "en": "Six auspicious stars (Lu, Quan, Ke, Left Assistant, Right Assistant, Wu Qu Excellence) gathered. Extremely rare, indicates great nobility and wealth."
+      },
+      "patterns": [
+        "LuCun + TianQuan + KeStar + ZuoFu + YouBi + Kui/Yue in same area"
+      ],
+      "interpretation": "運勢極佳，各方面都能順利發展。適合大展拳腳，創造輝煌成就。",
+      "remedies": "感恩機遇，謙虛待人，造福他人",
+      "severity": "很低",
+      "school": "zhongzhou",
+      "source_refs": ["古傳紫微斗數", "斗數秘訣"]
+    },
+    {
+      "id": "comb-10-xing-yue-jia-ming",
+      "name": "星月夾命",
+      "english_name": "Stellar Moon Sandwich Life",
+      "category": "mixed",
+      "description": {
+        "zh": "星系與月系夾著命宮。象徵陰陽平衡，主性格圓融，易得人緣。",
+        "en": "Star system and Moon system sandwich the Life Palace. Symbolizes yin-yang balance, indicates well-rounded personality and good relationships."
+      },
+      "patterns": [
+        "Stellar star + LifePalace + Lunar star",
+        "Sun + LifePalace + Moon"
+      ],
+      "interpretation": "性格較為平衡，既有主動性也有被動性。容易與各類人相處。",
+      "remedies": "發揮自身平衡優勢，既要主動也要傾聽他人",
+      "severity": "很低",
+      "school": "zhongzhou",
+      "source_refs": ["古傳紫微斗數"]
+    }
   ]
 }
