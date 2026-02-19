@@ -612,6 +612,60 @@ async function initDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_social_kpis_task ON social_kpi_definitions(task_id);
       CREATE INDEX IF NOT EXISTS idx_social_kpis_name ON social_kpi_definitions(kpi_name);
+
+      -- Content Development: Draft pool for posts not yet in calendar
+      CREATE TABLE IF NOT EXISTS social_content_drafts (
+        id SERIAL PRIMARY KEY,
+        draft_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        task_id VARCHAR(255) NOT NULL REFERENCES social_campaigns(task_id) ON DELETE CASCADE,
+        post_id VARCHAR(255),
+        platform VARCHAR(50),
+        format VARCHAR(50),
+        title VARCHAR(500),
+        pillar VARCHAR(100),
+        objective VARCHAR(255),
+        key_message TEXT,
+        copy_hook TEXT,
+        cta TEXT,
+        language VARCHAR(20),
+        visual_type VARCHAR(100),
+        caption TEXT,
+        hashtags JSONB DEFAULT '[]',
+        status VARCHAR(50) DEFAULT 'draft',
+        synced_to_calendar BOOLEAN DEFAULT FALSE,
+        calendar_post_id INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_drafts_task ON social_content_drafts(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_drafts_status ON social_content_drafts(status);
+      CREATE INDEX IF NOT EXISTS idx_social_drafts_synced ON social_content_drafts(synced_to_calendar);
+
+      -- Brand Portfolio: Products and Services with status tracking
+      CREATE TABLE IF NOT EXISTS brand_products_services (
+        id SERIAL PRIMARY KEY,
+        product_service_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        name VARCHAR(500) NOT NULL,
+        category VARCHAR(100),
+        description TEXT,
+        type VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'active',
+        launch_date DATE,
+        discontinue_date DATE,
+        portfolio_order INTEGER,
+        image_url TEXT,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_products_brand ON brand_products_services(brand_id);
+      CREATE INDEX IF NOT EXISTS idx_products_status ON brand_products_services(status);
+      CREATE INDEX IF NOT EXISTS idx_products_type ON brand_products_services(type);
+      CREATE INDEX IF NOT EXISTS idx_products_created ON brand_products_services(created_at DESC);
     `);
     console.log('✅ Database schema initialized (including CRM tables)');
 
@@ -2089,6 +2143,293 @@ async function getSocialKPIs(taskId) {
   }
 }
 
+// ── Content Development: Draft Management ────────────────────────────────────
+
+async function createContentDraft(taskId, draftData) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO social_content_drafts
+       (task_id, platform, format, title, pillar, objective, key_message, copy_hook, cta, language, visual_type, caption, hashtags, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       RETURNING draft_id, id`,
+      [
+        taskId, draftData.platform, draftData.format, draftData.title, draftData.pillar,
+        draftData.objective, draftData.keyMessage, draftData.copyHook, draftData.cta,
+        draftData.language, draftData.visualType, draftData.caption,
+        JSON.stringify(draftData.hashtags || []), 'draft'
+      ]
+    );
+    return { draft_id: result.rows[0].draft_id, id: result.rows[0].id };
+  } catch (error) {
+    console.error('Error creating content draft:', error);
+    throw error;
+  }
+}
+
+async function getContentDrafts(taskId, status = null) {
+  try {
+    let query = 'SELECT * FROM social_content_drafts WHERE task_id = $1';
+    const params = [taskId];
+
+    if (status) {
+      query += ' AND status = $2';
+      params.push(status);
+    }
+
+    query += ' ORDER BY updated_at DESC';
+    const result = await pool.query(query, params);
+
+    return result.rows.map(row => ({
+      draft_id: row.draft_id,
+      id: row.id,
+      platform: row.platform,
+      format: row.format,
+      title: row.title,
+      pillar: row.pillar,
+      objective: row.objective,
+      keyMessage: row.key_message,
+      copyHook: row.copy_hook,
+      cta: row.cta,
+      language: row.language,
+      visualType: row.visual_type,
+      caption: row.caption,
+      hashtags: row.hashtags,
+      status: row.status,
+      syncedToCalendar: row.synced_to_calendar,
+      calendarPostId: row.calendar_post_id,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching content drafts:', error);
+    throw error;
+  }
+}
+
+async function updateContentDraft(draftId, draftData) {
+  try {
+    const result = await pool.query(
+      `UPDATE social_content_drafts
+       SET platform = COALESCE($1, platform),
+           format = COALESCE($2, format),
+           title = COALESCE($3, title),
+           pillar = COALESCE($4, pillar),
+           objective = COALESCE($5, objective),
+           key_message = COALESCE($6, key_message),
+           copy_hook = COALESCE($7, copy_hook),
+           cta = COALESCE($8, cta),
+           language = COALESCE($9, language),
+           visual_type = COALESCE($10, visual_type),
+           caption = COALESCE($11, caption),
+           hashtags = COALESCE($12, hashtags),
+           status = COALESCE($13, status),
+           updated_at = NOW()
+       WHERE draft_id = $14
+       RETURNING *`,
+      [
+        draftData.platform, draftData.format, draftData.title, draftData.pillar,
+        draftData.objective, draftData.keyMessage, draftData.copyHook, draftData.cta,
+        draftData.language, draftData.visualType, draftData.caption,
+        draftData.hashtags ? JSON.stringify(draftData.hashtags) : null,
+        draftData.status, draftId
+      ]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error updating content draft:', error);
+    throw error;
+  }
+}
+
+async function deleteContentDraft(draftId) {
+  try {
+    await pool.query('DELETE FROM social_content_drafts WHERE draft_id = $1', [draftId]);
+    return true;
+  } catch (error) {
+    console.error('Error deleting content draft:', error);
+    throw error;
+  }
+}
+
+async function promoteContentDraftToCalendar(draftId, postDate) {
+  try {
+    const draft = await pool.query(
+      'SELECT * FROM social_content_drafts WHERE draft_id = $1',
+      [draftId]
+    );
+
+    if (draft.rows.length === 0) {
+      throw new Error('Draft not found');
+    }
+
+    const d = draft.rows[0];
+
+    // Insert into social_content_posts
+    const postResult = await pool.query(
+      `INSERT INTO social_content_posts
+       (task_id, post_date, platform, format, title, pillar, objective, key_message, copy_hook, cta, language, visual_type, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       RETURNING id`,
+      [
+        d.task_id, postDate, d.platform, d.format, d.title, d.pillar,
+        d.objective, d.key_message, d.copy_hook, d.cta, d.language, d.visual_type, 'Scheduled'
+      ]
+    );
+
+    // Update draft with calendar reference
+    await pool.query(
+      'UPDATE social_content_drafts SET synced_to_calendar = TRUE, calendar_post_id = $1, updated_at = NOW() WHERE draft_id = $2',
+      [postResult.rows[0].id, draftId]
+    );
+
+    return { calendarPostId: postResult.rows[0].id };
+  } catch (error) {
+    console.error('Error promoting draft to calendar:', error);
+    throw error;
+  }
+}
+
+// ── Content Calendar & Development Sync ───────────────────────────────────────
+
+async function syncContentCalendarAndDevelopment(taskId) {
+  try {
+    // Find orphaned calendar posts (no corresponding draft)
+    const orphanedPosts = await pool.query(
+      `SELECT id, title, platform FROM social_content_posts
+       WHERE task_id = $1 AND id NOT IN (SELECT calendar_post_id FROM social_content_drafts WHERE synced_to_calendar = TRUE)`,
+      [taskId]
+    );
+
+    // Find orphaned drafts (calendar was deleted)
+    const orphanedDrafts = await pool.query(
+      `SELECT draft_id, title FROM social_content_drafts
+       WHERE task_id = $1 AND synced_to_calendar = TRUE AND calendar_post_id NOT IN (SELECT id FROM social_content_posts)`,
+      [taskId]
+    );
+
+    return {
+      orphanedCalendarPosts: orphanedPosts.rows,
+      orphanedDrafts: orphanedDrafts.rows,
+      syncStatus: 'ok'
+    };
+  } catch (error) {
+    console.error('Error syncing calendar and development:', error);
+    throw error;
+  }
+}
+
+// ── Brand Products & Services Management ───────────────────────────────────────
+
+async function createProductService(brandId, productData) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO brand_products_services
+       (brand_id, name, category, description, type, status, launch_date, portfolio_order, image_url, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING product_service_id, id`,
+      [
+        brandId, productData.name, productData.category, productData.description,
+        productData.type, productData.status || 'active', productData.launchDate,
+        productData.portfolioOrder || 0, productData.imageUrl,
+        JSON.stringify(productData.metadata || {})
+      ]
+    );
+    return { product_service_id: result.rows[0].product_service_id, id: result.rows[0].id };
+  } catch (error) {
+    console.error('Error creating product/service:', error);
+    throw error;
+  }
+}
+
+async function getProductsServices(brandId, status = null) {
+  try {
+    let query = 'SELECT * FROM brand_products_services WHERE brand_id = $1';
+    const params = [brandId];
+
+    if (status) {
+      query += ' AND status = $2';
+      params.push(status);
+    }
+
+    query += ' ORDER BY portfolio_order ASC, created_at DESC';
+    const result = await pool.query(query, params);
+
+    return result.rows.map(row => ({
+      product_service_id: row.product_service_id,
+      id: row.id,
+      name: row.name,
+      category: row.category,
+      description: row.description,
+      type: row.type,
+      status: row.status,
+      launchDate: row.launch_date,
+      discontinueDate: row.discontinue_date,
+      imageUrl: row.image_url,
+      metadata: row.metadata,
+      createdAt: row.created_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching products/services:', error);
+    throw error;
+  }
+}
+
+async function updateProductServiceStatus(productServiceId, status, discontinueDate = null) {
+  try {
+    const result = await pool.query(
+      `UPDATE brand_products_services
+       SET status = $1, discontinue_date = COALESCE($2, discontinue_date), updated_at = NOW()
+       WHERE product_service_id = $3
+       RETURNING *`,
+      [status, discontinueDate, productServiceId]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error updating product/service status:', error);
+    throw error;
+  }
+}
+
+async function getProductServicePortfolio(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT name, type, status, launch_date, discontinue_date
+       FROM brand_products_services
+       WHERE brand_id = $1
+       ORDER BY status DESC, portfolio_order ASC, created_at DESC`,
+      [brandId]
+    );
+
+    const portfolio = {
+      active: [],
+      paused: [],
+      retired: [],
+    };
+
+    result.rows.forEach(row => {
+      const item = {
+        name: row.name,
+        type: row.type,
+        launchDate: row.launch_date,
+        discontinueDate: row.discontinue_date,
+      };
+
+      if (row.status === 'active') {
+        portfolio.active.push(item);
+      } else if (row.status === 'paused') {
+        portfolio.paused.push(item);
+      } else if (row.status === 'retired') {
+        portfolio.retired.push(item);
+      }
+    });
+
+    return portfolio;
+  } catch (error) {
+    console.error('Error fetching product portfolio:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -2176,4 +2517,17 @@ module.exports = {
   // KPI Definitions (for dashboard)
   saveSocialKPIs,
   getSocialKPIs,
+  // Content Development: Drafts
+  createContentDraft,
+  getContentDrafts,
+  updateContentDraft,
+  deleteContentDraft,
+  promoteContentDraftToCalendar,
+  // Content Sync
+  syncContentCalendarAndDevelopment,
+  // Brand Products & Services
+  createProductService,
+  getProductsServices,
+  updateProductServiceStatus,
+  getProductServicePortfolio,
 };
