@@ -1,26 +1,41 @@
 'use client';
 
+import Link from 'next/link';
+import { Header } from '../../components/Header';
+import { Footer } from '../../components/Footer';
+import { Breadcrumb } from '../../components/Breadcrumb';
+
 export default function CreativeProductionServicePage() {
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <a href="/vibe-demo/radiance" className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:opacity-80">
-            ← Back to Radiance
-          </a>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Creative & Production</h2>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
+      <Header />
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-16 px-6 max-w-4xl mx-auto">
+      <main id="main-content" className="flex-1 pt-20">
+        {/* Breadcrumb */}
+        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <Breadcrumb items={[
+              { label: 'Home', href: '/vibe-demo/radiance' },
+              { label: 'Services', href: '/vibe-demo/radiance/services' },
+              { label: 'Creative & Production' }
+            ]} />
+          </div>
+        </section>
+
+        {/* Hero Section */}
+        <section className="pt-16 pb-16 px-6 max-w-4xl mx-auto">
         <div className="space-y-6">
           <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
             Creative Design & Content Production
           </h1>
           <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
-            We understand the power of engaging, high-quality content to captivate your audience and drive business success. As your trusted content creation partner, we offer a comprehensive suite of services to elevate your brand's online presence and connect with your customers in meaningful ways.
+            Good creative doesn't decorate a campaign—it is the campaign. The right visual identity, the right words, the right film can change how people see your brand. Radiance brings design, photography, video and copywriting together under one roof, so every asset across your{' '}
+            <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">PR</Link>
+            {', '}
+            <Link href="/vibe-demo/radiance/services/events" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">events</Link>
+            {' and '}
+            <Link href="/vibe-demo/radiance/services/social-media" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">social activity</Link>
+            {' feels intentional and cohesive.'}
           </p>
           <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
             Creative production isn't an afterthought—it's integral to every campaign. Whether you're launching a product, running an event, building social presence or reshaping your brand identity, exceptional creative assets amplify your message and strengthen stakeholder connections. We integrate design, photography, video and copywriting so your communications feel cohesive and professional across all touchpoints.
@@ -219,7 +234,11 @@ export default function CreativeProductionServicePage() {
       <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">How brands work with us</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
-          Radiance applies creative production across diverse industries and campaign types. Often, we combine design and video with PR and social strategy to create fully integrated campaigns where every asset reinforces the core message.
+          Radiance applies creative production across diverse industries and campaign types. Often, we combine design and video with{' '}
+          <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">PR</Link>
+          {' and '}
+          <Link href="/vibe-demo/radiance/services/social-media" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">social strategy</Link>
+          {' to create fully integrated campaigns where every asset reinforces the core message.'}
         </p>
         <div className="space-y-8">
           {/* Use Case 1 */}
@@ -342,24 +361,19 @@ export default function CreativeProductionServicePage() {
             Whether you need a one-off project or ongoing creative support, our team is ready to craft assets that captivate your audience and drive results. Let's talk about your creative needs and explore how we can help you stand out in a crowded marketplace.
           </p>
           <div className="flex gap-4 flex-wrap">
-            <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+            <Link href="/vibe-demo/radiance/consultation" className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
               Start a creative project
-            </button>
-            <button className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
-              View our portfolio
-            </button>
+            </Link>
+            <Link href="/vibe-demo/radiance/case-studies" className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
+              See our work
+            </Link>
           </div>
         </div>
       </section>
 
-      <footer className="border-t border-slate-200 dark:border-slate-800 py-12 px-6 mt-16">
-        <div className="max-w-6xl mx-auto text-center text-sm text-slate-500 dark:text-slate-400">
-          <p>Radiance PR & Martech Limited | Hong Kong</p>
-          <p className="mt-2">
-            <a href="/vibe-demo/radiance" className="text-purple-600 dark:text-purple-400 hover:underline">Back to Radiance</a>
-          </p>
-        </div>
-      </footer>
+      </main>
+
+      <Footer />
     </div>
   );
 }

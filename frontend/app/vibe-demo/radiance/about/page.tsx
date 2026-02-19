@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Breadcrumb } from '../components/Breadcrumb';
@@ -40,7 +41,9 @@ export default function RadianceAboutPage() {
             Radiance was created as a one-stop integrated marketing communications agency in Hong Kong, built on a strong foundation in public relations, content creation, digital marketing and event management. From the outset, we recognised that fragmented communications—where PR, events and social media operated in silos—rarely delivered the impact our clients needed. We set out to change that by bringing all these disciplines under one roof, led by earned media strategy and backed by real execution expertise.
           </p>
           <p>
-            Over the years, our team has evolved beyond traditional PR and events into a genuinely hybrid model. Today we cover KOL marketing, creative design and digital production, while keeping earned media at the heart of our work. We've partnered with art galleries and cultural organisations, NGOs and government bodies, educational institutions, technology and fashion brands, hospitality groups, financial services firms, and consumer lifestyle brands. In every sector, we've learned that the most compelling campaigns blend strategic thinking with practical know-how—understanding not just what to say, but how to make it real through media relationships, event logistics, content calendars, and creative production.
+            Over the years, our team has evolved beyond traditional PR and events into a genuinely hybrid model. Today we cover KOL marketing, creative design and digital production, while keeping earned media at the heart of our work. We operate to the professional standards set by the{' '}
+            <a href="https://www.hkprca.org.hk/" target="_blank" rel="noopener noreferrer" className="text-purple-600 dark:text-purple-400 hover:underline">Hong Kong Public Relations Consultants Association (HKPRCA)</a>
+            {', which promotes best practice in communications across the industry. We\'ve partnered'} with art galleries and cultural organisations, NGOs and government bodies, educational institutions, technology and fashion brands, hospitality groups, financial services firms, and consumer lifestyle brands. In every sector, we've learned that the most compelling campaigns blend strategic thinking with practical know-how—understanding not just what to say, but how to make it real through media relationships, event logistics, content calendars, and creative production.
           </p>
           <p>
             Our mission is straightforward: to empower brands and organisations through innovative marketing and communication strategies that foster meaningful connections and drive impactful results. We aim to increase both online and offline presence, helping our clients build trust, foster robust stakeholder relationships, and effectively shape attitudes and behaviours in their markets.
@@ -52,12 +55,16 @@ export default function RadianceAboutPage() {
       <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">What we do</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
-          Radiance operates as one integrated team, not a collection of separate functions. Whether you need a press conference, a social content calendar, a KOL seeding strategy or a full brand campaign, we connect all the pieces so activities reinforce each other. Here's how we work across each discipline:
+          Radiance operates as one integrated team, not a collection of separate functions. Whether you need a press conference, a social content calendar, a{' '}
+          <Link href="/vibe-demo/radiance/services/kol-marketing" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">KOL seeding strategy</Link>
+          {' or a full brand campaign, we connect all the pieces so activities reinforce each other. Here\'s how we work across each discipline:'}
         </p>
         <div className="space-y-8">
           {/* PR */}
           <div>
-            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">Public Relations</h3>
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">
+              <Link href="/vibe-demo/radiance/services/public-relations" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Public Relations →</Link>
+            </h3>
             <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
               We develop strategic messaging and build relationships with journalists, editors and media outlets to secure earned coverage that reshapes perceptions and strengthens reputations. This includes press release drafting and localisation, media pitching, interview coordination and crisis monitoring. For us, PR isn't just about getting mentions—it's about using media to tell your story in a way that resonates with your target audience.
             </p>
@@ -65,7 +72,9 @@ export default function RadianceAboutPage() {
 
           {/* Events */}
           <div>
-            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">Event & Experience</h3>
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">
+              <Link href="/vibe-demo/radiance/services/events" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Event & Experience →</Link>
+            </h3>
             <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
               We plan and execute events end-to-end: product launches, shop openings, shopping mall promotions, charity events, road shows, stage performances, carnivals and entertainment activations. We handle everything from concept and logistics to on-site management and post-event reporting. Events are often where your message comes alive—we make sure every detail, from the run-down to guest experience, reinforces your objectives.
             </p>
@@ -73,7 +82,9 @@ export default function RadianceAboutPage() {
 
           {/* Social & Content */}
           <div>
-            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">Social Media & Content</h3>
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">
+              <Link href="/vibe-demo/radiance/services/social-media" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Social Media & Content →</Link>
+            </h3>
             <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
               We create engaging content for websites, blogs and social platforms, backed by tailored content strategies and ongoing optimisation based on performance data and audience insights. Whether you need always-on content, campaign-specific posts or long-form editorial, we ensure your voice stays consistent and your content drives the conversations that matter to your audience.
             </p>
@@ -81,7 +92,9 @@ export default function RadianceAboutPage() {
 
           {/* Creative & Production */}
           <div>
-            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">Creative & Production</h3>
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">
+              <Link href="/vibe-demo/radiance/services/creative-production" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Creative & Production →</Link>
+            </h3>
             <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
               We deliver graphic design, photography, video production and motion graphics that build strong visual identities and bring campaigns to life. Every creative asset is designed to serve your strategy, whether it's a launch film, social content, event collateral or brand guidelines that anchor your visual presence.
             </p>
@@ -203,12 +216,12 @@ export default function RadianceAboutPage() {
             Whether you're planning a campaign, launching an event, building a social strategy or navigating a communications challenge, we'd love to hear about your needs. Let's explore how Radiance can help you reach your audience, build trust and drive impact.
           </p>
           <div className="flex gap-4 flex-wrap">
-            <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+            <Link href="/vibe-demo/radiance/consultation" className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
               Discuss your brief
-            </button>
-            <button className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
-              Speak with our team
-            </button>
+            </Link>
+            <Link href="/vibe-demo/radiance/contact" className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
+              Get in touch
+            </Link>
           </div>
         </div>
       </section>

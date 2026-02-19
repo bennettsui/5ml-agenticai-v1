@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Breadcrumb } from '../components/Breadcrumb';
@@ -126,9 +127,9 @@ export default function TeamPage() {
           <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
             If you're passionate about PR, digital marketing, creative production or event management—and you want to work on meaningful campaigns for interesting brands and causes—we'd love to hear from you. We're always looking for talented people who care about quality, strategy and impact.
           </p>
-          <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+          <Link href="/vibe-demo/radiance/contact" className="inline-block px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
             View open roles
-          </button>
+          </Link>
         </section>
 
         {/* CTA */}
@@ -139,12 +140,12 @@ export default function TeamPage() {
               Book a 30-minute call with us. We'll listen to your challenge, introduce you to the team member who'd lead your project, and explore what's possible.
             </p>
             <div className="flex gap-4 flex-wrap">
-              <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+              <Link href="/vibe-demo/radiance/consultation" className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
                 Schedule a call
-              </button>
-              <button className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
-                Learn about our work
-              </button>
+              </Link>
+              <Link href="/vibe-demo/radiance/case-studies" className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
+                See our work
+              </Link>
             </div>
           </div>
         </section>
