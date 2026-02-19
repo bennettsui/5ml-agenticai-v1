@@ -2120,9 +2120,53 @@ app.post('/api/social/chat', async (req, res) => {
     // Triggered when the caller provides a task_id (new Sarah chat panel).
     // Module-specific pages that don't send task_id fall through to legacy path.
     if (task_id) {
-      const { runSarah } = require('./agents/social/sarahOrchestrator');
       const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
       const userInput = lastUserMsg?.content || '';
+
+      // Detect research-related requests (bypass orchestrator for simpler handling)
+      const isResearchRequest = /research|competitor|business overview|mission|audience segment|positioning/i.test(userInput);
+
+      if (isResearchRequest && brand_id) {
+        // Use legacy path for research requests (simpler LLM call instead of orchestrator)
+        // This avoids the orchestrator workflow which is designed for strategy→content→media
+        const ragContext = ragService.getContext(userInput, 'company', 3) || '';
+        const systemPrompt = `You are **Sarah**, the Social Media Director helping research the brand.
+When asked about brand research, competitive analysis, or audience insights, provide structured, actionable insights.
+${brand_name ? `Brand: ${brand_name}` : ''}
+
+Format your response clearly with sections for:
+- Business Overview
+- Mission/Vision
+- Competitors Analysis
+- Audience Segments
+- Product/Service Overview
+
+Be specific, data-driven, and actionable.
+${ragContext ? `\n${ragContext}` : ''}`;
+
+        const deepseek = require('./services/deepseekService');
+        try {
+          const result = deepseek.isAvailable()
+            ? await deepseek.chat(
+              [{ role: 'system', content: systemPrompt }, ...messages],
+              { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+            )
+            : await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+
+          return res.json({
+            message: result.content || result.text,
+            model: result.model || 'research-analyzer',
+            node: 'research_analyzer',
+            status: 'COMPLETED'
+          });
+        } catch (err) {
+          console.error('Research analysis error:', err);
+          return res.status(500).json({ error: err.message });
+        }
+      }
+
+      // Run orchestrator for non-research requests
+      const { runSarah } = require('./agents/social/sarahOrchestrator');
 
       const brandContext = {
         brand_name:   brand_name || null,
@@ -2131,28 +2175,44 @@ app.post('/api/social/chat', async (req, res) => {
         project_id:   project_id || null,
       };
 
-      const { state, nodeName, output } = await runSarah({
-        taskId:       task_id,
-        userInput,
-        brandContext,
-        brandId:      brand_id || null,
-        projectId:    project_id || null,
-      });
+      try {
+        const { state, nodeName, output } = await runSarah({
+          taskId:       task_id,
+          userInput,
+          brandContext,
+          brandId:      brand_id || null,
+          projectId:    project_id || null,
+        });
 
-      // Model label for UI indicator
-      const REFLECT_NODES = new Set(['strategy_reflect', 'content_reflect', 'media_reflect']);
-      const modelLabel = REFLECT_NODES.has(nodeName)
-        ? 'DeepSeek Reasoner (reflection)'
-        : 'DeepSeek Chat (generation)';
+        // Check if state is valid
+        if (!state || !nodeName) {
+          return res.status(400).json({
+            error: 'Invalid orchestrator state',
+            message: 'The orchestrator failed to generate a valid response.'
+          });
+        }
 
-      return res.json({
-        message:   output,
-        model:     modelLabel,
-        node:      nodeName,
-        status:    state.status,
-        next_step: state.next_step,
-        artefacts: Object.keys(state.artefacts),
-      });
+        // Model label for UI indicator
+        const REFLECT_NODES = new Set(['strategy_reflect', 'content_reflect', 'media_reflect']);
+        const modelLabel = REFLECT_NODES.has(nodeName)
+          ? 'DeepSeek Reasoner (reflection)'
+          : 'DeepSeek Chat (generation)';
+
+        return res.json({
+          message:   output,
+          model:     modelLabel,
+          node:      nodeName,
+          status:    state.status,
+          next_step: state.next_step,
+          artefacts: Object.keys(state.artefacts),
+        });
+      } catch (orchestratorErr) {
+        console.error('Sarah orchestrator error:', orchestratorErr.message);
+        return res.status(500).json({
+          error: 'Orchestrator error',
+          message: orchestratorErr.message || 'Failed to process request'
+        });
+      }
     }
     // ── Legacy path (module pages: strategy, content-dev, calendar, etc.) ────
 
