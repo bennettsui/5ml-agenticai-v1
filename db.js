@@ -508,6 +508,20 @@ async function initDatabase() {
       ADD COLUMN IF NOT EXISTS llm_enhancements JSONB,
       ADD COLUMN IF NOT EXISTS conversation_count INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS last_chat_at TIMESTAMP;
+
+      CREATE TABLE IF NOT EXISTS social_states (
+        id SERIAL PRIMARY KEY,
+        task_id VARCHAR(255) UNIQUE NOT NULL,
+        brand_id VARCHAR(255),
+        project_id VARCHAR(255),
+        state JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_states_task ON social_states(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_states_brand ON social_states(brand_id);
+      CREATE INDEX IF NOT EXISTS idx_social_states_project ON social_states(project_id);
     `);
     console.log('✅ Database schema initialized (including CRM tables)');
 
@@ -1732,6 +1746,45 @@ async function getInsights(chartId) {
   }
 }
 
+// ── Social State (Sarah Orchestrator) ──────────────────────────────────────
+
+async function getSocialState(taskId) {
+  try {
+    const result = await pool.query(
+      'SELECT state FROM social_states WHERE task_id = $1',
+      [taskId]
+    );
+    return result.rows[0]?.state || null;
+  } catch (error) {
+    console.error('Error fetching social state:', error);
+    throw error;
+  }
+}
+
+async function upsertSocialState(taskId, state, brandId = null, projectId = null) {
+  try {
+    await pool.query(
+      `INSERT INTO social_states (task_id, brand_id, project_id, state, updated_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (task_id) DO UPDATE
+         SET state = $4, updated_at = NOW()`,
+      [taskId, brandId, projectId, JSON.stringify(state)]
+    );
+  } catch (error) {
+    console.error('Error upserting social state:', error);
+    throw error;
+  }
+}
+
+async function deleteSocialState(taskId) {
+  try {
+    await pool.query('DELETE FROM social_states WHERE task_id = $1', [taskId]);
+  } catch (error) {
+    console.error('Error deleting social state:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -1801,4 +1854,8 @@ module.exports = {
   // Ziwei Step 6 (Insights)
   saveInsights,
   getInsights,
+  // Social Orchestrator State
+  getSocialState,
+  upsertSocialState,
+  deleteSocialState,
 };

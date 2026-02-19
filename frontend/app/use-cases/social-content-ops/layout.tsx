@@ -7,7 +7,7 @@ import {
   DollarSign, Users, BarChart3, ChevronDown, Building2, FolderKanban, Loader2,
   TrendingUp, Activity,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { BrandProvider, useBrandProject } from '@/lib/brand-context';
 import AiChatAssistant, { type AiChatConfig } from '@/components/AiChatAssistant';
 
@@ -222,6 +222,14 @@ function SocialContentOpsInner({ children }: { children: React.ReactNode }) {
 
   // Inject brand/project + page context into chatbot
   const currentModule = MODULE_MAP[pathname] || 'Social Content Ops';
+
+  // Stable task_id per brand+project combo (enables Sarah orchestrator state)
+  const taskId = useMemo(() => {
+    const brandKey = selectedBrand?.id ?? 'no-brand';
+    const projectKey = selectedProject?.id ?? 'no-project';
+    return `sarah-${brandKey}-${projectKey}`;
+  }, [selectedBrand?.id, selectedProject?.id]);
+
   const enrichedConfig: AiChatConfig = {
     ...chatConfig,
     suggestedQuestions: MODULE_QUESTIONS[currentModule] || MODULE_QUESTIONS['Overview'],
@@ -232,6 +240,19 @@ function SocialContentOpsInner({ children }: { children: React.ReactNode }) {
       project_name: selectedProject?.name,
       current_page: pathname,
       current_module: currentModule,
+      task_id: taskId,
+    },
+    // Show orchestrator node + status in model label
+    parseResponse: (data) => {
+      const d = data as Record<string, unknown>;
+      const message = (d.message as string) || '';
+      const model = (d.model as string) || '';
+      const node = (d.node as string) || '';
+      const status = (d.status as string) || '';
+      const nodeLabel = node && node !== 'done'
+        ? `${model} · step: ${node.replace(/_/g, ' ')}${status ? ` [${status}]` : ''}`
+        : model;
+      return { message, model: nodeLabel };
     },
   };
 
