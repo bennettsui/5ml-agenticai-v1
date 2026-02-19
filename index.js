@@ -2710,6 +2710,173 @@ app.delete('/api/research/:brandId/products/:productId', async (req, res) => {
 });
 
 // ==========================================
+// Social Content Ops: Strategy
+// ==========================================
+
+// POST /api/social/strategy/:brandId — save strategy
+app.post('/api/social/strategy/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, objectives, targetAudiences, channelMix, contentPillars, postingCadence, mediaApproach, kpis, assumptions, risks } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_strategy (brand_id, project_id, objectives, target_audiences, channel_mix, content_pillars, posting_cadence, media_approach, kpis, assumptions, risks)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (brand_id) DO UPDATE SET
+         objectives = $3, target_audiences = $4, channel_mix = $5, content_pillars = $6,
+         posting_cadence = $7, media_approach = $8, kpis = $9, assumptions = $10, risks = $11,
+         updated_at = NOW()`,
+      [brandId, projectId, objectives, targetAudiences, channelMix, contentPillars, postingCadence, mediaApproach, kpis, assumptions, risks]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/strategy/:brandId — get strategy
+app.get('/api/social/strategy/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_strategy WHERE brand_id = $1', [brandId]);
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Interactive Content
+// ==========================================
+
+// POST /api/social/interactive/:brandId — save interactive content
+app.post('/api/social/interactive/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, title, contentType, description, platforms, engagementGoal, expectedMetrics, launchDate } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_interactive_content (brand_id, project_id, title, content_type, description, platforms, engagement_goal, expected_metrics, launch_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [brandId, projectId, title, contentType, description, platforms, engagementGoal, expectedMetrics, launchDate]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/interactive/:brandId — list interactive content
+app.get('/api/social/interactive/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_interactive_content WHERE brand_id = $1 ORDER BY created_at DESC', [brandId]);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Trend Research
+// ==========================================
+
+// POST /api/social/trends/:brandId — save trend research
+app.post('/api/social/trends/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, trendName, category, description, platforms, contentIdeas, launchIdeas, relevanceScore } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_trend_research (brand_id, project_id, trend_name, category, description, platforms, content_ideas, launch_ideas, relevance_score)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [brandId, projectId, trendName, category, description, platforms, contentIdeas, launchIdeas, relevanceScore]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/trends/:brandId — list trends
+app.get('/api/social/trends/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_trend_research WHERE brand_id = $1 ORDER BY relevance_score DESC, created_at DESC', [brandId]);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Social Monitoring
+// ==========================================
+
+// POST /api/social/monitoring/:brandId — save monitoring data
+app.post('/api/social/monitoring/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, platform, keyword, sentimentTrend, engagementRate, mentionCount, topMentions, actionItems } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_monitoring (brand_id, project_id, platform, keyword, sentiment_trend, engagement_rate, mention_count, top_mentions, action_items)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [brandId, projectId, platform, keyword, sentimentTrend, engagementRate, mentionCount, topMentions, actionItems]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/monitoring/:brandId — get monitoring data
+app.get('/api/social/monitoring/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_monitoring WHERE brand_id = $1 ORDER BY created_at DESC LIMIT 10', [brandId]);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Community Management
+// ==========================================
+
+// POST /api/social/community/:brandId — save community management guidelines
+app.post('/api/social/community/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, platform, contentGuideline, responseTemplates, escalationRules, moderationPolicies, engagementStrategies, faqContent } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_community_management (brand_id, project_id, platform, content_guideline, response_templates, escalation_rules, moderation_policies, engagement_strategies, faq_content)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (brand_id) DO UPDATE SET
+         platform = $3, content_guideline = $4, response_templates = $5, escalation_rules = $6,
+         moderation_policies = $7, engagement_strategies = $8, faq_content = $9, updated_at = NOW()`,
+      [brandId, projectId, platform, contentGuideline, responseTemplates, escalationRules, moderationPolicies, engagementStrategies, faqContent]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/community/:brandId — get community management data
+app.get('/api/social/community/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_community_management WHERE brand_id = $1', [brandId]);
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // Use Case Routes
 // ==========================================
 
