@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, ChevronDown, TrendingUp, Heart, Briefcase, Activity } from 'lucide-react';
+import { Loader2, ChevronDown, TrendingUp, Heart, Briefcase, Activity, Eye, EyeOff } from 'lucide-react';
+import { ZiweiChartGrid } from './ZiweiChartGrid';
 import { ZiweiChartCanvas } from './ZiweiChartCanvas';
 
 interface SavedChart {
@@ -25,6 +26,7 @@ export default function ZiweiChartAnalysis() {
   const [error, setError] = useState<string | null>(null);
   const [activeDimension, setActiveDimension] = useState<LifeDimension>('career');
   const [expandedPalaces, setExpandedPalaces] = useState<Record<string, boolean>>({});
+  const [chartViewMode, setChartViewMode] = useState<'grid' | 'circular'>('grid');
 
   // Load saved charts on mount
   useEffect(() => {
@@ -139,13 +141,51 @@ export default function ZiweiChartAnalysis() {
       )}
 
       {selectedChart && !analysisLoading && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Chart Visualization (Left) */}
-          <div className="lg:col-span-1 rounded-lg border border-slate-700/50 bg-slate-800/60 p-4">
-            <h3 className="text-sm font-semibold text-white mb-4">命盤 (Birth Chart)</h3>
+        <div className="space-y-6">
+          {/* Chart View Mode Toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setChartViewMode('grid')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                chartViewMode === 'grid'
+                  ? 'bg-amber-600/80 text-white'
+                  : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Grid View
+            </button>
+            <button
+              onClick={() => setChartViewMode('circular')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                chartViewMode === 'circular'
+                  ? 'bg-amber-600/80 text-white'
+                  : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Circular View
+            </button>
+          </div>
 
-            {selectedChart?.base_chart && (
-              <div className="overflow-auto max-h-[600px]">
+          {/* Grid View (Primary) */}
+          {chartViewMode === 'grid' && selectedChart?.base_chart && (
+            <ZiweiChartGrid
+              houses={selectedChart.base_chart.palaces || []}
+              lifeHouseIndex={0}
+              personName={selectedChart.name || 'Unknown'}
+              birthDate={`${selectedChart.birth_info?.lunarYear}/${selectedChart.birth_info?.lunarMonth}/${selectedChart.birth_info?.lunarDay}`}
+              hourBranch={selectedChart.birth_info?.hourBranch || ''}
+              gender={selectedChart.birth_info?.gender || ''}
+              fiveElementBureau="Unknown"
+            />
+          )}
+
+          {/* Circular View (Development) */}
+          {chartViewMode === 'circular' && selectedChart?.base_chart && (
+            <div className="rounded-lg border border-slate-700/50 bg-slate-800/60 p-6">
+              <h3 className="text-sm font-semibold text-white mb-4">命盤 Circular View (Development)</h3>
+              <div className="flex justify-center overflow-auto max-h-[600px]">
                 <ZiweiChartCanvas
                   houses={selectedChart.base_chart.palaces || []}
                   lifeHouseIndex={0}
@@ -157,20 +197,12 @@ export default function ZiweiChartAnalysis() {
                   starCount={0}
                 />
               </div>
-            )}
-
-            <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-2">
-              <div className="text-xs">
-                <p className="text-slate-500">Name: <span className="text-white">{selectedChart.name}</span></p>
-                <p className="text-slate-500">Gender: <span className="text-white">{selectedChart.birth_info?.gender}</span></p>
-                <p className="text-slate-500">Birth: <span className="text-white">{selectedChart.birth_info?.lunarYear}/{selectedChart.birth_info?.lunarMonth}/{selectedChart.birth_info?.lunarDay}</span></p>
-                <p className="text-slate-500">Hour: <span className="text-white">{selectedChart.birth_info?.hourBranch}時</span></p>
-              </div>
+              <p className="text-xs text-slate-400 mt-4">⚡ This circular view is for future development and comparison with the grid layout.</p>
             </div>
-          </div>
+          )}
 
-          {/* Analysis (Right) */}
-          <div className="lg:col-span-2 space-y-4">
+          {/* Analysis */}
+          <div className="space-y-4">
             {/* Life Dimension Tabs */}
             <div className="rounded-lg border border-slate-700/50 bg-slate-800/60 p-4">
               <h3 className="text-sm font-semibold text-white mb-4">Life Dimension Analysis</h3>
