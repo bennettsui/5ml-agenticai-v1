@@ -2099,17 +2099,9 @@ Be concise and actionable. Use bullet points for lists.`;
       { role: 'user', content: message },
     ];
 
-    // Try MiniMax first (default for textual conversation), then DeepSeek, then Claude
-    const minimax = require('./services/minimaxService');
+    // Try DeepSeek first, fall back to Claude
     const deepseek = require('./services/deepseekService');
     const llm = require('./lib/llm');
-    if (minimax.isAvailable()) {
-      const result = await minimax.chat(
-        [{ role: 'system', content: systemPrompt }, ...messages],
-        { maxTokens: 2000, temperature: 0.7 }
-      );
-      return res.json({ data: { response: result.content, model: result.model || 'MiniMax-Text-01' } });
-    }
     if (deepseek.isAvailable()) {
       const result = await deepseek.chat(
         [{ role: 'system', content: systemPrompt }, ...messages],
@@ -2164,24 +2156,15 @@ Format your response clearly with sections for:
 Be specific, data-driven, and actionable.
 ${ragContext ? `\n${ragContext}` : ''}`;
 
-        const minimax = require('./services/minimaxService');
         const deepseek = require('./services/deepseekService');
         const llm = require('./lib/llm');
         try {
-          let result;
-          if (minimax.isAvailable()) {
-            result = await minimax.chat(
-              [{ role: 'system', content: systemPrompt }, ...messages],
-              { maxTokens: 2000, temperature: 0.7 }
-            );
-          } else if (deepseek.isAvailable()) {
-            result = await deepseek.chat(
+          const result = deepseek.isAvailable()
+            ? await deepseek.chat(
               [{ role: 'system', content: systemPrompt }, ...messages],
               { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
-            );
-          } else {
-            result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
-          }
+            )
+            : await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
 
           return res.json({
             message: result.content || result.text,
@@ -2364,17 +2347,9 @@ Support: 繁體中文, 粵語口語, English, 簡體中文
 
 Be concise, actionable, and opinionated. You're the expert — share your professional perspective. Use bullet points for lists. Flag issues proactively.`;
 
-    // Try MiniMax first (default for textual conversation), then DeepSeek, then Claude
-    const minimax = require('./services/minimaxService');
+    // Try DeepSeek first, fall back to Claude
     const deepseek = require('./services/deepseekService');
     const llm = require('./lib/llm');
-    if (minimax.isAvailable()) {
-      const result = await minimax.chat(
-        [{ role: 'system', content: systemPrompt }, ...messages],
-        { maxTokens: 2000, temperature: 0.7 }
-      );
-      return res.json({ message: result.content, model: result.model || 'MiniMax-Text-01' });
-    }
     if (deepseek.isAvailable()) {
       const result = await deepseek.chat(
         [{ role: 'system', content: systemPrompt }, ...messages],
@@ -2925,25 +2900,10 @@ app.post('/api/workflow-chat', async (req, res) => {
       companyRag ? `\n${companyRag}` : '',
     ].join('\n');
 
-    // Try MiniMax first (default for textual conversation), then DeepSeek, then Claude
-    const minimax = require('./services/minimaxService');
+    // Try DeepSeek first, fall back to Claude
     const deepseek = require('./services/deepseekService');
     const llm = require('./lib/llm');
     let result;
-
-    if (minimax.isAvailable()) {
-      result = await minimax.chat(
-        [{ role: 'system', content: systemPrompt }, ...messages],
-        { maxTokens: 2000, temperature: 0.7 }
-      );
-      const parsed = parseWorkflowUpdates(result.content);
-      return res.json({
-        message: parsed.message,
-        workflow_updates: parsed.updates,
-        model: result.model || 'MiniMax-Text-01',
-        rag_used: !!ragContext,
-      });
-    }
 
     if (deepseek.isAvailable()) {
       result = await deepseek.chat(
@@ -3003,17 +2963,9 @@ Your capabilities:
 
 Be concise, specific, and reference actual platform data. Use bullet points for lists.`;
 
-    // Try MiniMax first (default for textual conversation), then DeepSeek, then Claude
-    const minimax = require('./services/minimaxService');
+    // Try DeepSeek first, fall back to Claude
     const deepseek = require('./services/deepseekService');
     const llm = require('./lib/llm');
-    if (minimax.isAvailable()) {
-      const result = await minimax.chat(
-        [{ role: 'system', content: systemPrompt }, ...messages],
-        { maxTokens: 2000, temperature: 0.7 }
-      );
-      return res.json({ message: result.content, model: result.model || 'MiniMax-Text-01' });
-    }
     if (deepseek.isAvailable()) {
       const result = await deepseek.chat(
         [{ role: 'system', content: systemPrompt }, ...messages],
