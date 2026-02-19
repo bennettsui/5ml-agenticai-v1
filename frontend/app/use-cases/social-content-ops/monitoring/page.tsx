@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Activity, AlertCircle, Loader2, Sparkles, TrendingUp, TrendingDown,
   Bell, Mail, MessageSquare, Zap, AlertTriangle, Eye, Heart,
   MessageCircle, Share2, ChevronDown, ChevronUp, Plus, Trash2,
-  Save, X, Settings, Clock, ThumbsUp, ThumbsDown, Minus,
+  Save, X, Settings, Clock, ThumbsUp, ThumbsDown, Minus, Send, CheckCircle,
 } from 'lucide-react';
 import { useBrandProject } from '@/lib/brand-context';
 
@@ -133,7 +133,24 @@ export default function SocialMonitoringPage() {
     dailySummary: true,
     dailySummaryTime: '09:00',
   });
+  const [emailSaved, setEmailSaved] = useState(false);
   const [generating, setGenerating] = useState(false);
+
+  // Load saved email settings from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('social_monitoring_email');
+      if (saved) setEmailSettings(JSON.parse(saved));
+    } catch { /* ignore */ }
+  }, []);
+
+  const saveEmailSettings = useCallback(() => {
+    try {
+      localStorage.setItem('social_monitoring_email', JSON.stringify(emailSettings));
+      setEmailSaved(true);
+      setTimeout(() => setEmailSaved(false), 3000);
+    } catch { /* ignore */ }
+  }, [emailSettings]);
   const [filterSeverity, setFilterSeverity] = useState<AlertSeverity | 'all'>('all');
 
   // Rule form
@@ -621,10 +638,18 @@ Be specific and actionable.`,
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
+              {emailSaved && (
+                <span className="flex items-center gap-1 text-[10px] text-emerald-400 mr-auto">
+                  <CheckCircle className="w-3 h-3" /> Settings saved
+                </span>
+              )}
               <button className="px-3 py-1.5 text-xs rounded-lg border border-slate-700/30 text-slate-400 hover:text-white flex items-center gap-1 transition-colors">
                 <Send className="w-3 h-3" /> Send Test Email
               </button>
-              <button className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
+              <button
+                onClick={saveEmailSettings}
+                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium flex items-center gap-1 transition-colors"
+              >
                 <Save className="w-3 h-3" /> Save Settings
               </button>
             </div>
