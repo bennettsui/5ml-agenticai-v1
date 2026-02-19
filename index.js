@@ -375,6 +375,182 @@ app.get('/api/ziwei/search', (req, res) => {
 });
 
 // ==========================================
+// KNOWLEDGE BASE API ENDPOINTS
+// ==========================================
+
+/**
+ * Get knowledge base statistics from JSON files
+ */
+app.get('/api/ziwei/knowledge/stats', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    // Load all knowledge base files
+    const kbPath = path.join(__dirname, 'data');
+    const files = {
+      curriculum: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8')),
+      combinations: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8')),
+      palaces: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-12-palaces.json'), 'utf8')),
+      sources: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-combinations-sources.json'), 'utf8'))
+    };
+
+    // Calculate stats
+    const stats = {
+      totalConcepts: Object.keys(files.curriculum.level_1_foundations?.core_topics || {}).length,
+      totalCombinations: Object.keys(files.combinations?.combinations || {}).length,
+      totalPalaces: Object.keys(files.palaces?.palaces || {}).length,
+      totalSources: Object.keys(files.sources?.sources || {}).length,
+      curriculumLevels: 6,
+      lastUpdated: new Date().toISOString(),
+      knowledgeFiles: {
+        curriculum: files.curriculum.title,
+        combinations: files.combinations.title || 'Ziwei Star Combinations',
+        palaces: files.palaces.title || 'Ziwei 12 Palaces',
+        sources: files.sources.title || 'Knowledge Sources'
+      }
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get all knowledge base content
+ */
+app.get('/api/ziwei/knowledge/all', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    const kbPath = path.join(__dirname, 'data');
+    const knowledge = {
+      curriculum: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8')),
+      combinations: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8')),
+      palaces: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-12-palaces.json'), 'utf8')),
+      learning: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-learning-guide.json'), 'utf8')),
+      sources: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-combinations-sources.json'), 'utf8'))
+    };
+
+    res.json({
+      success: true,
+      data: knowledge
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get curriculum by level
+ */
+app.get('/api/ziwei/knowledge/curriculum/:level', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const level = `level_${req.params.level}`;
+
+    const kbPath = path.join(__dirname, 'data');
+    const curriculum = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8'));
+
+    if (!curriculum[level]) {
+      return res.status(404).json({ success: false, error: `Level ${req.params.level} not found` });
+    }
+
+    res.json({
+      success: true,
+      level: req.params.level,
+      data: curriculum[level]
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get combinations by category
+ */
+app.get('/api/ziwei/knowledge/combinations/:category', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    const kbPath = path.join(__dirname, 'data');
+    const combinations = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8'));
+
+    const category = req.params.category;
+    const results = combinations.combinations.filter(c => c.category === category);
+
+    res.json({
+      success: true,
+      category,
+      count: results.length,
+      data: results
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Search knowledge base
+ */
+app.get('/api/ziwei/knowledge/search', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const query = (req.query.q || '').toLowerCase();
+
+    if (!query) {
+      return res.status(400).json({ success: false, error: 'Query parameter "q" required' });
+    }
+
+    const kbPath = path.join(__dirname, 'data');
+    const curriculum = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8'));
+    const combinations = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8'));
+
+    const results = {
+      curriculum_matches: [],
+      combination_matches: []
+    };
+
+    // Search curriculum
+    Object.entries(curriculum).forEach(([level, content]) => {
+      if (typeof content === 'object' && content !== null) {
+        const str = JSON.stringify(content).toLowerCase();
+        if (str.includes(query)) {
+          results.curriculum_matches.push({
+            level,
+            title: content.name || level
+          });
+        }
+      }
+    });
+
+    // Search combinations
+    if (combinations.combinations) {
+      results.combination_matches = combinations.combinations.filter(c =>
+        JSON.stringify(c).toLowerCase().includes(query)
+      );
+    }
+
+    res.json({
+      success: true,
+      query,
+      total_results: results.curriculum_matches.length + results.combination_matches.length,
+      data: results
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
 // Main Analysis Endpoint
 // ==========================================
 
