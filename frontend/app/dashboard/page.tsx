@@ -12,6 +12,7 @@ import KnowledgeBase from '@/components/KnowledgeBase';
 import CostAnalysis from '@/components/CostAnalysis';
 import ZiweiChat from '@/components/ZiweiChat';
 import MediaGenerationWorkflow from '@/components/MediaGenerationWorkflow';
+import MultimediaLibrary from '@/components/MultimediaLibrary';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
@@ -367,6 +368,35 @@ const TYPE_LABELS: Record<ChatType, { label: string; color: string }> = {
 };
 
 // ---------------------------------------------------------------------------
+// Media Tab — Workflow + Library sub-tabs
+// ---------------------------------------------------------------------------
+
+function MediaTab() {
+  const [sub, setSub] = useState<'workflow' | 'library'>('workflow');
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 border-b border-slate-700/40 pb-0">
+        {(['workflow', 'library'] as const).map(s => (
+          <button
+            key={s}
+            onClick={() => setSub(s)}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px capitalize ${
+              sub === s
+                ? 'border-rose-500 text-rose-400'
+                : 'border-transparent text-slate-400 hover:text-white'
+            }`}
+          >
+            {s === 'workflow' ? '🎨 Generation Workflow' : '📚 Multimedia Library'}
+          </button>
+        ))}
+      </div>
+      {sub === 'workflow' && <MediaGenerationWorkflow />}
+      {sub === 'library' && <MultimediaLibrary />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard Page
 // ---------------------------------------------------------------------------
 
@@ -650,7 +680,7 @@ export default function Dashboard() {
         {activeTab === 'scheduling' && <ScheduledJobs />}
         {activeTab === 'knowledge' && <KnowledgeBase />}
         {activeTab === 'costs' && <CostAnalysis />}
-        {activeTab === 'media' && <MediaGenerationWorkflow />}
+        {activeTab === 'media' && <MediaTab />}
         {activeTab === 'workflows' && (
           <div className="bg-[#1a1b2e]">
             <AgenticWorkflows />
