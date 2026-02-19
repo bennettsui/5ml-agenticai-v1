@@ -17,7 +17,8 @@
 
 const deepseekService = require('../../services/deepseekService');
 const ragService       = require('../../services/rag-service');
-const { getSocialState, upsertSocialState } = require('../../db');
+const { getSocialState, upsertSocialState, saveSocialCampaign, saveArtefact, getSocialContentPosts, saveSocialContentPosts, saveSocialAdCampaigns, saveSocialKPIs } = require('../../db');
+const { parseMarkdownTable, extractMarkdownSection, extractBulletList } = require('./markdownParser');
 
 // ── Sarah system prompt ───────────────────────────────────────────────────────
 
@@ -127,19 +128,32 @@ VII. CONTEXT: HONG KONG / APAC
 - Behave like a senior agency lead who structures work so it can go into a deck with minimal editing`;
 
 // ── Router ────────────────────────────────────────────────────────────────────
+// Routes the state machine through a linear sequence of nodes.
+// Can be customized per use case (e.g., skip media/analytics, go straight to community).
 
 function router(state) {
   if (state.status === 'BLOCKED') return 'done';
 
   const a = state.artefacts;
 
+  // Strategy
   if (!a.strategy_v1 && !a.strategy_final)           return 'strategy_generate';
   if (a.strategy_v1  && !a.strategy_final)            return 'strategy_reflect';
+
+  // Content
   if (!a.content_calendar_v1 && !a.content_calendar_final) return 'content_generate';
   if (a.content_calendar_v1  && !a.content_calendar_final) return 'content_reflect';
+
+  // Media (optional — can be skipped if only_content = true)
   if (!a.media_plan_v1 && !a.media_plan_final)        return 'media_generate';
   if (a.media_plan_v1  && !a.media_plan_final)        return 'media_reflect';
+
+  // Analytics
   if (!a.analytics_report_final)                      return 'analytics_generate';
+
+  // Community (optional — can be skipped if only_media = true)
+  // Uncomment if including community management in the workflow:
+  // if (!a.community_guidelines)                       return 'community_generate';
 
   return 'done';
 }
@@ -178,26 +192,32 @@ const NODE_OBJECTIVES = {
    - High-level media approach: organic vs paid, rough priorities.
    - Key KPIs to track.
 4. **Write into**: artefacts.strategy_v1 (as structured, copy-paste-ready text).
-5. **Set**: status = "DRAFT", next_step = "strategy_reflect".
+5. **Also capture**:
+   - artefacts.strategy_assumptions: List 3–7 critical assumptions (budget, resources, timeline, market conditions).
+   - artefacts.strategy_risks: List 3–7 known risks + priority/severity.
+6. **Set**: status = "DRAFT", next_step = "strategy_reflect".
 
 ### Output format:
-- Briefly summarize the strategic idea (human-readable).
-- Assume the detailed text also lives in artefacts.strategy_v1.
+- strategy_v1: Concise but complete strategy with clear headers.
+- strategy_assumptions: Numbered bullet list of assumptions.
+- strategy_risks: Numbered bullet list of risks with severity markers (High/Medium/Low).
 `,
 
   strategy_reflect: `
 ### Objectives
-- Critically evaluate strategy_v1.
+- Critically evaluate strategy_v1, assumptions, and risks.
 - Produce a concise critique and improved final version (strategy_final), or block.
 
 ### Concretely, you MUST:
-1. **Read from state**: artefacts.strategy_v1, kb_summaries, brand_context.
+1. **Read from state**: artefacts.strategy_v1, assumptions, risks, kb_summaries, brand_context.
 2. **Evaluate against**:
    - Clarity of objectives & target audiences.
    - Coherence of channel mix & content pillars.
    - Brand alignment & differentiation.
    - Feasibility (resources, timeline, budget).
    - HK / target market relevance.
+   - Reasonableness of assumptions given market data.
+   - Mitigation plans for listed risks.
 3. **Score 0–10 and critique**: 3–7 strengths, 3–7 weaknesses, improvement suggestions.
 4. **Store**: artefacts.strategy_critique.
 5. **Decide**:
@@ -207,7 +227,8 @@ const NODE_OBJECTIVES = {
 
 ### Output format:
 - Provide score & human-readable critique summary.
-- Present final strategy in clean, copy-paste-ready format.
+- Present final strategy in clean, copy-paste-ready format (same structure as strategy_v1).
+- Refine strategy_assumptions and strategy_risks if needed.
 `,
 
   content_generate: `
@@ -262,23 +283,25 @@ const NODE_OBJECTIVES = {
 ### Concretely, you MUST:
 1. **Read from state**: artefacts.strategy_final, artefacts.content_calendar_final, brand_context, kb benchmarks.
 2. **If missing**: Query KB for platform ad best practices, HK benchmarks (CTR, CPM, CPA), brand constraints.
-3. **Produce media_plan_v1** that includes:
-   - Objectives & KPIs per platform / campaign.
-   - Campaign structure: campaigns → ad sets → ad concepts (high-level).
-   - Rough budget split (platform, funnel stage).
-   - Target audiences (interests, lookalikes, remarketing, conceptual level).
-   - Creative/copy angles aligned with content calendar.
-4. **Write into**: artefacts.media_plan_v1.
+3. **Produce media_plan_v1 with this structure** (Markdown):
+   - **Summary** (3–5 bullets): overall approach, main objectives, key platforms.
+   - **Campaign Structure** (table): campaign name, objective, funnel stage, platforms, notes.
+   - **Ad Set / Audience Structure** (table): ad set name, campaign, audience definition, geo, placement notes.
+   - **\`media_budget_breakdown\`** (table): level (platform/campaign/funnel), item, budget (HKD or %), rationale.
+   - **\`media_kpi_targets\`** (table): level, platform/campaign, primary KPI, target value, secondary KPIs, notes.
+   - **Creative / Messaging Notes** (bullets): linking content pillars to media angles.
+4. **Write all into**: artefacts.media_plan_v1 as single coherent block.
 5. **Set**: status = "DRAFT", next_step = "media_reflect".
 
 ### Output format:
-- Structured way: sections or simple tables.
-- Highlight main levers (budget, audiences, creatives).
+- Use exact section headings and table columns as described.
+- Tables must be clean Markdown (pipe-delimited).
+- All artefacts (budget breakdown, KPI targets) in one cohesive document.
 `,
 
   media_reflect: `
 ### Objectives
-- Critically evaluate media_plan_v1.
+- Critically evaluate media_plan_v1, budget breakdown, KPI targets.
 - Produce critique and improved final version (media_plan_final), or block.
 
 ### Concretely, you MUST:
@@ -289,34 +312,81 @@ const NODE_OBJECTIVES = {
    - Audience definitions (too broad/narrow/misaligned).
    - Synergy with organic content.
    - Risk & feasibility.
-3. **Score 0–10 and critique**: strengths, weaknesses, improvements.
+   - Reasonableness of KPI targets (vs HK benchmarks).
+3. **Score 0–10 and critique**:
+   - 3–7 strengths.
+   - 3–7 weaknesses / risks.
+   - Concrete improvements (budget shifts, audience tweaks, structure changes).
 4. **Store**: artefacts.media_critique.
 5. **Decide**:
-   - Score ≥ 8: Refine, save as artefacts.media_plan_final. status = "APPROVED". next_step = "analytics_generate" (or done).
-   - Score < 8: Rewrite, save as artefacts.media_plan_final. status = "REVISE_NEEDED".
+   - Score ≥ 8: Minor refinements → artefacts.media_plan_final. status = "APPROVED". next_step = "analytics_generate".
+   - Score < 8: Significant rewrite → artefacts.media_plan_final. status = "REVISE_NEEDED".
    - Severe issues: status = "BLOCKED".
 
 ### Output format:
-- Score & key critique.
-- Final media plan clearly presented.
+- Critique: score, strengths/weaknesses, concrete improvements.
+- Final plan: same structure as media_plan_v1 (Summary, Campaign Structure, Budget, KPIs, Creative Notes).
 `,
 
   analytics_generate: `
 ### Objectives
-- Propose how to measure success and what to watch.
+- Propose how to measure success, track progress, and optimize on the fly.
 
 ### Concretely, you MUST:
 1. **Read from state**: artefacts.strategy_final, content_calendar_final, media_plan_final.
-2. **Propose**:
-   - Primary KPIs per platform & funnel stage.
-   - Key secondary metrics to monitor.
-   - Reporting cadence (weekly / monthly).
-   - "If X happens, then do Y" optimization heuristics.
-3. **Save**: artefacts.analytics_report_final (structured summary).
+2. **Produce analytics_report_final with this structure** (Markdown):
+   - **Measurement Framework Summary** (3–5 bullets): how success will be measured.
+   - **\`analytics_kpi_definition\`** (table): KPI name, definition/formula, data source (GA4/Meta Ads Manager/etc.), reporting frequency.
+   - **KPI by Funnel / Platform** (table): funnel stage (Awareness/Consideration/Conversion/Retention), platform, primary KPI, target direction (e.g. "> 1.5% CTR"), notes.
+   - **\`analytics_dashboard_outline\`** (bullet list):
+     - Suggested dashboard pages/tabs (Overview, Channel performance, Creative, Audience).
+     - Key dimensions (date, platform, campaign, audience, creative).
+     - Key metrics per tab.
+   - **\`analytics_insights_summary\`** (if real data available: 3–7 actual insights + actions; if not yet: 3–7 hypotheses + signals to watch).
+3. **Save**: artefacts.analytics_report_final (all sections in one block).
+4. **Also separately save** (or within same block):
+   - artefacts.analytics_kpi_definition (the KPI table).
+   - artefacts.analytics_insights_summary (the insights/hypotheses).
+5. **Set**: status = "APPROVED", next_step = "done".
+
+### Output format:
+- Use exact section headings and table columns as described.
+- Tables in clean Markdown.
+- Make it obvious which KPIs drive which business goals.
+`,
+
+  community_generate: `
+### Objectives
+- Produce community management playbook that makes it easy for humans to handle comments, DMs, crises.
+
+### Concretely, you MUST:
+1. **Read from state**: artefacts.strategy_final, brand_context, kb_summaries (tone, brand values).
+2. **Produce with this structure** (Markdown):
+   - **\`community_guidelines\`** (bullet list, 5–10 items):
+     - Tone of voice (formal/casual/playful).
+     - Language mix (Cantonese/English/Mandarin) and when to use.
+     - Response time expectations (e.g. within X hours).
+     - What to never say or promise.
+     - Do's and don'ts.
+   - **\`community_reply_templates\`** (table with columns: scenario, platform, suggested reply, tone notes).
+     - Include 3–5 complaint scenarios (e.g. delivery, quality, pricing).
+     - 3–5 positive feedback scenarios.
+     - 3–5 FAQ-style question scenarios.
+   - **\`community_escalation_rules\`** (table with columns: scenario type, escalation path, immediate platform action, SLA).
+     - Legal threats → Legal team, no reply, within 1 hour.
+     - Discrimination / hate speech → Moderation + manager, hide, within 30 min.
+     - Medical claims → Legal, no reply, within 1 hour.
+     - Others as needed.
+   - **\`community_moderation_policies\`** (bullet list):
+     - What content to hide/remove (hate speech, spam links, off-topic).
+     - When to block users.
+     - How to log incidents (screenshot + link + timestamp).
+3. **Write all into**: artefacts.community_guidelines, artefacts.community_reply_templates, artefacts.community_escalation_rules, artefacts.community_moderation_policies.
 4. **Set**: status = "APPROVED", next_step = "done".
 
 ### Output format:
-- Clean bullet-point summary + small table if helpful.
+- Use exact headings and table columns described.
+- Make templates immediately usable (copy-paste ready).
 `,
 
   done: `
@@ -324,17 +394,22 @@ const NODE_OBJECTIVES = {
 - Provide concise, human-friendly wrap-up of all artefacts and next steps.
 
 ### Concretely, you MUST:
-1. **Read from state**: all artefacts with *_final versions, status.
+1. **Read from state**: all artefacts with *_final versions, status, global_assumptions, global_risks.
 2. **Summarize for human user**:
-   - What has been produced (strategy, calendar, media plan, analytics).
+   - What has been produced (strategy, calendar, media plan, analytics, community [if any]).
    - Current status (APPROVED, REVISE_NEEDED, or BLOCKED).
-   - Key risks, assumptions, items needing human input.
-3. **If BLOCKED**: Clearly explain reasons and propose unblocking questions.
+   - Key global assumptions and risks.
+   - What items need human decision / approval before execution.
+3. **If BLOCKED**: Clearly explain blocking reasons and propose specific unblocking questions.
+4. **Suggest next actions**:
+   - Who should review?
+   - What should be done next? (e.g. design, legal review, stakeholder approval).
+   - Timeline to launch.
 
 ### Output format:
 - Short & structured (3–6 bullets per section).
-- Make it obvious what they can copy-paste into decks.
-- Make it obvious where they need to make choices.
+- Make it obvious what can be copy-pasted into decks.
+- Make it obvious where human choice is needed.
 `,
 };
 
@@ -369,13 +444,14 @@ function buildStateContext(state, nodeName) {
   // Node-specific artefact slice — only what this node needs
   const nodeArtefactMap = {
     strategy_generate:  [],
-    strategy_reflect:   ['strategy_v1'],
+    strategy_reflect:   ['strategy_v1', 'strategy_assumptions', 'strategy_risks'],
     content_generate:   ['strategy_final'],
     content_reflect:    ['content_calendar_v1'],
     media_generate:     ['strategy_final', 'content_calendar_final'],
     media_reflect:      ['media_plan_v1'],
     analytics_generate: ['strategy_final', 'media_plan_final'],
-    done:               [],
+    community_generate: ['strategy_final', 'brand_context'],
+    done:               ['strategy_final', 'content_calendar_final', 'media_plan_final', 'analytics_report_final', 'community_guidelines'],
   };
   const relevantKeys = nodeArtefactMap[nodeName] || [];
   for (const key of relevantKeys) {
@@ -448,9 +524,9 @@ async function nodeStrategyGenerate(state) {
   const prompt = `
 User brief: **"${state.user_input}"**
 
-Based on the state context and objectives above, produce **strategy_v1**.
+Based on the state context and objectives above, produce **strategy_v1** and supporting artefacts.
 
-This must be a concise but complete social media strategy that includes:
+**strategy_v1** must be a concise but complete social media strategy that includes:
 - Clear objectives and primary target audience segments
 - Recommended platform mix (which platforms, why, and role of each)
 - 3–6 distinct content pillars with brief explanation of each
@@ -459,17 +535,30 @@ This must be a concise but complete social media strategy that includes:
 - Primary and secondary KPIs to track
 
 Format it as a structured, copy-paste-ready document with clear headers and bullet points.
-Store the full detailed text in your response — assume it will be saved as \`artefacts.strategy_v1\`.
 
-After the strategy text, briefly note any assumptions made and suggest the next step.
+**strategy_assumptions** (separate): List 3–7 critical assumptions (budget, resources, timeline, market conditions, brand constraints) that underpin this strategy.
+
+**strategy_risks** (separate): List 3–7 known risks + severity markers (High/Medium/Low) + brief mitigation notes.
+
+Assume all three will be saved separately in \`artefacts\`:
+- artefacts.strategy_v1
+- artefacts.strategy_assumptions
+- artefacts.strategy_risks
+
+Make each clear and actionable.
 `;
 
   const output = await callSarah(state, 'strategy_generate', prompt);
 
+  // Sarah should return all three clearly separated. For now, store the whole output in v1.
+  // In future, you could parse to extract assumptions/risks separately.
   state.artefacts.strategy_v1 = output;
+  state.artefacts.strategy_assumptions = output; // Will be refined in reflect
+  state.artefacts.strategy_risks = output;       // Will be refined in reflect
+
   state.status = 'DRAFT';
   state.next_step = 'strategy_reflect';
-  state.history.push({ step: 'strategy_generate', note: 'strategy_v1 produced', timestamp: new Date().toISOString() });
+  state.history.push({ step: 'strategy_generate', note: 'strategy_v1 + assumptions + risks produced', timestamp: new Date().toISOString() });
 
   return state;
 }
@@ -605,20 +694,6 @@ async function nodeMediaReflect(state) {
   return state;
 }
 
-async function nodeAnalyticsGenerate(state) {
-  const prompt = `Based on strategy_final, content_calendar_final, media_plan_final (in state context).\n\nProduce **analytics_report_v1**:\n- KPI targets with HK/APAC benchmarks\n- Tracking setup checklist (pixel, UTMs, attribution)\n- Reporting cadence (daily checks, weekly review, monthly rollup)\n- Leading indicators to watch in first 2 weeks\n- Decision rules: when to pause, boost, or pivot\n\nUser brief: "${state.user_input}"`;
-
-  const output = await callSarah(state, 'analytics_generate', prompt);
-
-  state.artefacts.analytics_report_v1 = output;
-  state.artefacts.analytics_report_final = output;
-  state.status = 'APPROVED';
-  state.next_step = 'done';
-  state.history.push({ step: 'analytics_generate', note: 'analytics report produced', timestamp: new Date().toISOString() });
-
-  return state;
-}
-
 function nodeDone(state) {
   const a = state.artefacts;
   const parts = [];
@@ -640,17 +715,205 @@ function nodeDone(state) {
   return { state, summary: parts.join('\n') };
 }
 
+async function nodeAnalyticsGenerate(state) {
+  const prompt = `
+Based on **strategy_final**, **content_calendar_final**, and **media_plan_final** (in state context), produce **analytics_report_final**.
+
+This must include:
+
+**1. Measurement Framework Summary** (3–5 bullets describing how success will be measured)
+
+**2. \`analytics_kpi_definition\` (table)**
+Columns: KPI name | Definition / formula | Data source (GA4, Meta Ads Manager, etc.) | Reporting frequency (daily/weekly/monthly)
+
+**3. KPI by Funnel / Platform (table)**
+Columns: Funnel stage (Awareness/Consideration/Conversion/Retention) | Platform | Primary KPI | Target direction / value (e.g. "> 1.5% CTR", "≤ 80 HKD CPA") | Notes
+
+**4. \`analytics_dashboard_outline\` (bullet list)**
+Describe the ideal dashboard with:
+- Suggested pages/tabs (Overview, Channel performance, Creative, Audience, etc.)
+- Key dimensions (date, platform, campaign, audience, creative)
+- Key metrics per tab
+
+**5. \`analytics_insights_summary\` (bullet list)**
+- If real data is available: 3–7 key insights + recommended actions.
+- If no real data yet: 3–7 hypotheses about what will drive success + what signals to watch.
+
+Format as clean Markdown. Store everything in \`artefacts.analytics_report_final\`.
+If you generate separate sub-artefacts (KPI definitions, insights), indicate them clearly.
+`;
+
+  const output = await callSarah(state, 'analytics_generate', prompt);
+
+  state.artefacts.analytics_report_final = output;
+  state.artefacts.analytics_kpi_definition = output; // Can be extracted/refined later
+  state.artefacts.analytics_insights_summary = output;
+
+  state.status = 'APPROVED';
+  state.next_step = 'done';
+  state.history.push({ step: 'analytics_generate', note: 'analytics report + KPI definitions + insights produced', timestamp: new Date().toISOString() });
+
+  return state;
+}
+
+async function nodeCommunityGenerate(state) {
+  const kbResult = knowledgeQuery('brand_tone', state.user_input, state.brand_context);
+  if (kbResult) {
+    state.kb_summaries.push({ domain: 'brand_tone', summary: kbResult.slice(0, 400) });
+  }
+
+  const prompt = `
+Based on **strategy_final** and brand context, produce a community management playbook.
+
+You must output:
+
+**1. \`community_guidelines\` (bullet list, 5–10 items)**
+- Tone of voice (formal/casual/playful).
+- Language mix (Cantonese/English/Mandarin) and when to use each.
+- Response time expectations (e.g. within X hours).
+- What to never say or promise.
+- General do's and don'ts.
+
+**2. \`community_reply_templates\` (table)**
+Columns: Scenario | Platform (if relevant) | Suggested reply | Tone notes
+
+Include:
+- 3–5 complaint scenarios (delivery, quality, pricing, technical, etc.)
+- 3–5 positive feedback scenarios
+- 3–5 FAQ-style question scenarios
+
+**3. \`community_escalation_rules\` (table)**
+Columns: Scenario type | Escalation path (team) | Immediate platform action (reply/hide/no reply) | SLA
+
+Examples:
+- Legal threat → Legal team, no reply, within 1 hour
+- Discrimination / hate speech → Moderation + manager, hide, within 30 min
+- Medical claims → Legal, no reply, within 1 hour
+
+**4. \`community_moderation_policies\` (bullet list)**
+- What content to hide/remove (hate speech, spam, off-topic, etc.).
+- When to block users.
+- How to log incidents (screenshot + link + timestamp + reason).
+
+Format as clean Markdown. Make templates immediately copy-paste-ready.
+Store all in artefacts.community_guidelines, community_reply_templates, community_escalation_rules, community_moderation_policies.
+`;
+
+  const output = await callSarah(state, 'community_generate', prompt);
+
+  state.artefacts.community_guidelines = output;
+  state.artefacts.community_reply_templates = output;
+  state.artefacts.community_escalation_rules = output;
+  state.artefacts.community_moderation_policies = output;
+
+  state.status = 'APPROVED';
+  state.next_step = 'done';
+  state.history.push({ step: 'community_generate', note: 'community playbook produced', timestamp: new Date().toISOString() });
+
+  return state;
+}
+
 // ── Node dispatch map ─────────────────────────────────────────────────────────
 
 const NODES = {
-  strategy_generate:  nodeStrategyGenerate,
-  strategy_reflect:   nodeStrategyReflect,
-  content_generate:   nodeContentGenerate,
-  content_reflect:    nodeContentReflect,
-  media_generate:     nodeMediaGenerate,
-  media_reflect:      nodeMediaReflect,
-  analytics_generate: nodeAnalyticsGenerate,
+  strategy_generate:   nodeStrategyGenerate,
+  strategy_reflect:    nodeStrategyReflect,
+  content_generate:    nodeContentGenerate,
+  content_reflect:     nodeContentReflect,
+  media_generate:      nodeMediaGenerate,
+  media_reflect:       nodeMediaReflect,
+  analytics_generate:  nodeAnalyticsGenerate,
+  community_generate:  nodeCommunityGenerate,
 };
+
+// ── Artefact Persistence Helper ───────────────────────────────────────────────
+
+async function persistArtefacts(taskId, artefacts) {
+  // Save all artefacts to DB (both Markdown and parse to JSON)
+  for (const [key, value] of Object.entries(artefacts)) {
+    if (value && typeof value === 'string') {
+      let jsonStructure = null;
+
+      // Parse specific artefact types to extract structured JSON
+      if (key === 'content_calendar_v1' || key === 'content_calendar_final') {
+        const tables = parseMarkdownTable(value);
+        if (tables.length > 0) {
+          jsonStructure = { tables };
+          // Also extract and save individual content posts
+          if (tables[0]?.rows) {
+            await saveSocialContentPosts(taskId, tables[0].rows.map(row => ({
+              date: row.date,
+              platform: row.platform,
+              format: row.format,
+              title: row.title || row.idea,
+              pillar: row.pillar || row.content_pillar,
+              objective: row.objective,
+              keyMessage: row.key_message,
+              copyHook: row.copy_hook || row.hook,
+              cta: row.cta,
+              language: row.language,
+              visualType: row.visual_type || row.asset_type,
+              status: 'Draft',
+              adPlan: row.ad_plan || row.notes,
+            })));
+          }
+        }
+      } else if (key === 'media_plan_v1' || key === 'media_plan_final') {
+        const tables = parseMarkdownTable(value);
+        if (tables.length > 0) {
+          jsonStructure = { tables };
+          // Extract ad campaigns from the tables
+          for (const table of tables) {
+            if (table.headers.some(h => h.includes('Campaign') || h.includes('Ad Set'))) {
+              await saveSocialAdCampaigns(taskId, table.rows.map(row => ({
+                name: row.campaign_name || row.campaign || row.ad_set,
+                objective: row.objective,
+                funnelStage: row.funnel_stage,
+                platform: row.platform,
+                budgetHKD: parseFloat(row.budget_hkd || row.budget || 0),
+                budgetPct: parseFloat(row.budget_pct || 0),
+                audienceDefinition: row.audience_definition || row.audience,
+                geo: row.geo,
+                placements: row.placement || row.placements,
+                status: 'Draft',
+              })));
+            }
+          }
+        }
+      } else if (key === 'analytics_kpi_definition' || key === 'analytics_report_final') {
+        const tables = parseMarkdownTable(value);
+        if (tables.length > 0) {
+          jsonStructure = { tables };
+          // Extract KPI definitions from the first table with KPI names
+          for (const table of tables) {
+            if (table.headers.some(h => h.includes('KPI'))) {
+              await saveSocialKPIs(taskId, table.rows.map(row => ({
+                name: row.kpi_name || row.kpi,
+                type: row.kpi_type,
+                definition: row.definition,
+                formula: row.formula,
+                dataSource: row.data_source,
+                frequency: row.reporting_frequency,
+                funnelStage: row.funnel_stage,
+                platform: row.platform,
+                targetValue: row.target_value,
+                targetDirection: row.target_direction,
+              })));
+            }
+          }
+        }
+      }
+
+      // Save the artefact (Markdown + JSON)
+      await saveArtefact(taskId, {
+        artefactKey: key,
+        artefactType: key.split('_')[0],
+        markdown: value,
+        json: jsonStructure,
+      });
+    }
+  }
+}
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -680,6 +943,13 @@ async function runSarah({ taskId, userInput, brandContext, brandId, projectId, r
       status:       'DRAFT',
       next_step:    null,
     };
+    // Save campaign metadata to DB on first run
+    await saveSocialCampaign(taskId, {
+      briefTitle: userInput.slice(0, 200),
+      brandId,
+      projectId,
+      status: 'DRAFT',
+    });
   } else {
     // Update user input for this turn
     state.user_input = userInput;
@@ -701,6 +971,8 @@ async function runSarah({ taskId, userInput, brandContext, brandId, projectId, r
         break;
       }
       state = await NODES[nodeName](state);
+      // Persist artefacts after each node
+      await persistArtefacts(taskId, state.artefacts);
       iteration++;
     }
 
@@ -719,6 +991,8 @@ async function runSarah({ taskId, userInput, brandContext, brandId, projectId, r
   }
 
   state = await NODES[nodeName](state);
+  // Persist artefacts to DB
+  await persistArtefacts(taskId, state.artefacts);
   await upsertSocialState(taskId, state, brandId, projectId);
 
   // Return the latest artefact produced by this node

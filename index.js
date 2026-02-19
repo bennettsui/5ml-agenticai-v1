@@ -57,7 +57,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -2196,6 +2196,196 @@ app.delete('/api/social/state/:taskId', async (req, res) => {
     const { resetSarah } = require('./agents/social/sarahOrchestrator');
     await resetSarah(req.params.taskId);
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Sarah Orchestrator Artefact APIs ─────────────────────────────────────────
+
+// GET /api/social/artefacts/:taskId — retrieve all Markdown + JSON artefacts
+app.get('/api/social/artefacts/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const artefacts = await getAllArtefacts(taskId);
+    if (!artefacts || artefacts.length === 0) {
+      return res.status(404).json({ error: 'No artefacts found for this task_id' });
+    }
+    res.json({ data: artefacts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/content-posts/:taskId — retrieve formatted content calendar for RECENT_POSTS view
+app.get('/api/social/content-posts/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
+    const posts = await getSocialContentPosts(taskId, limit);
+    if (!posts || posts.length === 0) {
+      return res.status(404).json({ error: 'No content posts found for this task_id' });
+    }
+    res.json({ data: posts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/ad-campaigns/:taskId — retrieve media campaigns for AD_CAMPAIGNS view
+app.get('/api/social/ad-campaigns/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const campaigns = await getSocialAdCampaigns(taskId);
+    if (!campaigns || campaigns.length === 0) {
+      return res.status(404).json({ error: 'No ad campaigns found for this task_id' });
+    }
+    res.json({ data: campaigns });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/kpis/:taskId — retrieve KPI definitions for KPI_CARDS view
+app.get('/api/social/kpis/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const kpis = await getSocialKPIs(taskId);
+    if (!kpis || kpis.length === 0) {
+      return res.status(404).json({ error: 'No KPIs found for this task_id' });
+    }
+    res.json({ data: kpis });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Content Development: Draft Management ────────────────────────────────────
+
+// POST /api/social/drafts — create new draft post
+app.post('/api/social/drafts', async (req, res) => {
+  try {
+    const { taskId, platform, format, title, pillar, objective, keyMessage, copyHook, cta, language, visualType, caption, hashtags } = req.body;
+    if (!taskId || !platform || !format || !title) {
+      return res.status(400).json({ error: 'Missing required fields: taskId, platform, format, title' });
+    }
+    const result = await createContentDraft(taskId, req.body);
+    res.status(201).json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/drafts/:taskId — retrieve draft posts for a task
+app.get('/api/social/drafts/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const status = req.query.status || null;
+    const drafts = await getContentDrafts(taskId, status);
+    res.json({ data: drafts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/social/drafts/:draftId — update draft post
+app.put('/api/social/drafts/:draftId', async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    const result = await updateContentDraft(draftId, req.body);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/social/drafts/:draftId — delete draft post
+app.delete('/api/social/drafts/:draftId', async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    await deleteContentDraft(draftId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/social/drafts/:draftId/promote — promote draft to calendar
+app.post('/api/social/drafts/:draftId/promote', async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    const { postDate } = req.body;
+    if (!postDate) {
+      return res.status(400).json({ error: 'postDate is required' });
+    }
+    const result = await promoteContentDraftToCalendar(draftId, postDate);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/sync/:taskId — check sync status between calendar and development
+app.get('/api/social/sync/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const syncStatus = await syncContentCalendarAndDevelopment(taskId);
+    res.json({ data: syncStatus });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Brand Products & Services Management ─────────────────────────────────────
+
+// POST /api/brands/:brandId/products-services — create new product/service
+app.post('/api/brands/:brandId/products-services', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { name, category, description, type } = req.body;
+    if (!name || !brandId) {
+      return res.status(400).json({ error: 'Missing required fields: name, brandId' });
+    }
+    const result = await createProductService(brandId, req.body);
+    res.status(201).json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/brands/:brandId/products-services — list products/services for a brand
+app.get('/api/brands/:brandId/products-services', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const status = req.query.status || null;
+    const products = await getProductsServices(brandId, status);
+    res.json({ data: products });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/brands/:brandId/products-services/:productId/status — update product status
+app.put('/api/brands/:brandId/products-services/:productId/status', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { status, discontinueDate } = req.body;
+    if (!status || !['active', 'paused', 'retired'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be: active, paused, or retired' });
+    }
+    const result = await updateProductServiceStatus(productId, status, discontinueDate);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/brands/:brandId/portfolio — get full product portfolio by status
+app.get('/api/brands/:brandId/portfolio', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const portfolio = await getProductServicePortfolio(brandId);
+    res.json({ data: portfolio });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

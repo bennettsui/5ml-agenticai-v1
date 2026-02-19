@@ -522,6 +522,150 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_social_states_task ON social_states(task_id);
       CREATE INDEX IF NOT EXISTS idx_social_states_brand ON social_states(brand_id);
       CREATE INDEX IF NOT EXISTS idx_social_states_project ON social_states(project_id);
+
+      CREATE TABLE IF NOT EXISTS social_campaigns (
+        id SERIAL PRIMARY KEY,
+        task_id VARCHAR(255) UNIQUE NOT NULL REFERENCES social_states(task_id) ON DELETE CASCADE,
+        brand_id VARCHAR(255),
+        project_id VARCHAR(255),
+        brief_title VARCHAR(500),
+        status VARCHAR(50) DEFAULT 'DRAFT',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_campaigns_task ON social_campaigns(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_campaigns_brand ON social_campaigns(brand_id);
+
+      CREATE TABLE IF NOT EXISTS social_artefacts (
+        id SERIAL PRIMARY KEY,
+        task_id VARCHAR(255) NOT NULL REFERENCES social_campaigns(task_id) ON DELETE CASCADE,
+        artefact_key VARCHAR(255) NOT NULL,
+        artefact_type VARCHAR(50),
+        markdown_content TEXT,
+        json_structure JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(task_id, artefact_key)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_artefacts_task ON social_artefacts(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_artefacts_key ON social_artefacts(artefact_key);
+
+      CREATE TABLE IF NOT EXISTS social_content_posts (
+        id SERIAL PRIMARY KEY,
+        task_id VARCHAR(255) NOT NULL REFERENCES social_campaigns(task_id) ON DELETE CASCADE,
+        post_date DATE,
+        platform VARCHAR(50),
+        format VARCHAR(50),
+        title VARCHAR(500),
+        pillar VARCHAR(100),
+        objective VARCHAR(255),
+        key_message TEXT,
+        copy_hook TEXT,
+        cta TEXT,
+        language VARCHAR(20),
+        visual_type VARCHAR(100),
+        status VARCHAR(50) DEFAULT 'Draft',
+        ad_plan VARCHAR(255),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_posts_task ON social_content_posts(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_posts_date ON social_content_posts(post_date);
+      CREATE INDEX IF NOT EXISTS idx_social_posts_platform ON social_content_posts(platform);
+
+      CREATE TABLE IF NOT EXISTS social_ad_campaigns (
+        id SERIAL PRIMARY KEY,
+        task_id VARCHAR(255) NOT NULL REFERENCES social_campaigns(task_id) ON DELETE CASCADE,
+        campaign_name VARCHAR(500) NOT NULL,
+        objective VARCHAR(100),
+        funnel_stage VARCHAR(100),
+        platform VARCHAR(100),
+        budget_hkd NUMERIC(12,2),
+        budget_pct NUMERIC(5,2),
+        audience_definition TEXT,
+        geo VARCHAR(100),
+        placements TEXT,
+        status VARCHAR(50) DEFAULT 'Draft',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_ads_task ON social_ad_campaigns(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_ads_platform ON social_ad_campaigns(platform);
+
+      CREATE TABLE IF NOT EXISTS social_kpi_definitions (
+        id SERIAL PRIMARY KEY,
+        task_id VARCHAR(255) NOT NULL REFERENCES social_campaigns(task_id) ON DELETE CASCADE,
+        kpi_name VARCHAR(255) NOT NULL,
+        kpi_type VARCHAR(50),
+        definition TEXT,
+        formula TEXT,
+        data_source VARCHAR(255),
+        reporting_frequency VARCHAR(50),
+        funnel_stage VARCHAR(100),
+        platform VARCHAR(100),
+        target_value VARCHAR(100),
+        target_direction VARCHAR(50),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_kpis_task ON social_kpi_definitions(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_kpis_name ON social_kpi_definitions(kpi_name);
+
+      -- Content Development: Draft pool for posts not yet in calendar
+      CREATE TABLE IF NOT EXISTS social_content_drafts (
+        id SERIAL PRIMARY KEY,
+        draft_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        task_id VARCHAR(255) NOT NULL REFERENCES social_campaigns(task_id) ON DELETE CASCADE,
+        post_id VARCHAR(255),
+        platform VARCHAR(50),
+        format VARCHAR(50),
+        title VARCHAR(500),
+        pillar VARCHAR(100),
+        objective VARCHAR(255),
+        key_message TEXT,
+        copy_hook TEXT,
+        cta TEXT,
+        language VARCHAR(20),
+        visual_type VARCHAR(100),
+        caption TEXT,
+        hashtags JSONB DEFAULT '[]',
+        status VARCHAR(50) DEFAULT 'draft',
+        synced_to_calendar BOOLEAN DEFAULT FALSE,
+        calendar_post_id INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_drafts_task ON social_content_drafts(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_drafts_status ON social_content_drafts(status);
+      CREATE INDEX IF NOT EXISTS idx_social_drafts_synced ON social_content_drafts(synced_to_calendar);
+
+      -- Brand Portfolio: Products and Services with status tracking
+      CREATE TABLE IF NOT EXISTS brand_products_services (
+        id SERIAL PRIMARY KEY,
+        product_service_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        name VARCHAR(500) NOT NULL,
+        category VARCHAR(100),
+        description TEXT,
+        type VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'active',
+        launch_date DATE,
+        discontinue_date DATE,
+        portfolio_order INTEGER,
+        image_url TEXT,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_products_brand ON brand_products_services(brand_id);
+      CREATE INDEX IF NOT EXISTS idx_products_status ON brand_products_services(status);
+      CREATE INDEX IF NOT EXISTS idx_products_type ON brand_products_services(type);
+      CREATE INDEX IF NOT EXISTS idx_products_created ON brand_products_services(created_at DESC);
     `);
     console.log('✅ Database schema initialized (including CRM tables)');
 
@@ -1785,6 +1929,507 @@ async function deleteSocialState(taskId) {
   }
 }
 
+// ── Social Campaign & Artefact Storage ───────────────────────────────────────
+
+async function saveSocialCampaign(taskId, { briefTitle, brandId, projectId, status = 'DRAFT' }) {
+  try {
+    await pool.query(
+      `INSERT INTO social_campaigns (task_id, brand_id, project_id, brief_title, status)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (task_id) DO UPDATE
+         SET status = $5, updated_at = NOW()`,
+      [taskId, brandId, projectId, briefTitle, status]
+    );
+  } catch (error) {
+    console.error('Error saving social campaign:', error);
+    throw error;
+  }
+}
+
+async function saveArtefact(taskId, { artefactKey, artefactType, markdown, json = null }) {
+  try {
+    await pool.query(
+      `INSERT INTO social_artefacts (task_id, artefact_key, artefact_type, markdown_content, json_structure)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (task_id, artefact_key) DO UPDATE
+         SET markdown_content = $4, json_structure = $5, updated_at = NOW()`,
+      [taskId, artefactKey, artefactType, markdown, json ? JSON.stringify(json) : null]
+    );
+  } catch (error) {
+    console.error('Error saving artefact:', error);
+    throw error;
+  }
+}
+
+async function getArtefact(taskId, artefactKey) {
+  try {
+    const result = await pool.query(
+      `SELECT markdown_content, json_structure FROM social_artefacts
+       WHERE task_id = $1 AND artefact_key = $2`,
+      [taskId, artefactKey]
+    );
+    if (result.rows[0]) {
+      return {
+        markdown: result.rows[0].markdown_content,
+        json: result.rows[0].json_structure,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching artefact:', error);
+    throw error;
+  }
+}
+
+async function getAllArtefacts(taskId) {
+  try {
+    const result = await pool.query(
+      `SELECT artefact_key, artefact_type, markdown_content, json_structure
+       FROM social_artefacts WHERE task_id = $1 ORDER BY updated_at DESC`,
+      [taskId]
+    );
+    return result.rows.map(row => ({
+      key: row.artefact_key,
+      type: row.artefact_type,
+      markdown: row.markdown_content,
+      json: row.json_structure,
+    }));
+  } catch (error) {
+    console.error('Error fetching all artefacts:', error);
+    throw error;
+  }
+}
+
+// ── Content Calendar Storage (for frontend RECENT_POSTS view) ────────────────
+
+async function saveSocialContentPosts(taskId, posts) {
+  try {
+    for (const post of posts) {
+      await pool.query(
+        `INSERT INTO social_content_posts
+         (task_id, post_date, platform, format, title, pillar, objective, key_message, copy_hook, cta, language, visual_type, status, ad_plan)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          taskId, post.date, post.platform, post.format, post.title, post.pillar,
+          post.objective, post.keyMessage, post.copyHook, post.cta, post.language,
+          post.visualType, post.status || 'Draft', post.adPlan
+        ]
+      );
+    }
+  } catch (error) {
+    console.error('Error saving content posts:', error);
+    throw error;
+  }
+}
+
+async function getSocialContentPosts(taskId, limit = 50) {
+  try {
+    const result = await pool.query(
+      `SELECT post_date, platform, format, title, pillar, status, ad_plan
+       FROM social_content_posts WHERE task_id = $1
+       ORDER BY post_date ASC LIMIT $2`,
+      [taskId, limit]
+    );
+    return result.rows.map(row => ({
+      date: row.post_date?.toISOString().split('T')[0],
+      platform: row.platform,
+      format: row.format,
+      title: row.title,
+      pillar: row.pillar,
+      status: row.status,
+      adPlan: row.ad_plan,
+    }));
+  } catch (error) {
+    console.error('Error fetching content posts:', error);
+    throw error;
+  }
+}
+
+// ── Ad Campaigns Storage (for frontend AD_CAMPAIGNS view) ────────────────────
+
+async function saveSocialAdCampaigns(taskId, campaigns) {
+  try {
+    for (const campaign of campaigns) {
+      await pool.query(
+        `INSERT INTO social_ad_campaigns
+         (task_id, campaign_name, objective, funnel_stage, platform, budget_hkd, budget_pct, audience_definition, geo, placements, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          taskId, campaign.name, campaign.objective, campaign.funnelStage,
+          campaign.platform, campaign.budgetHKD, campaign.budgetPct,
+          campaign.audienceDefinition, campaign.geo, campaign.placements,
+          campaign.status || 'Draft'
+        ]
+      );
+    }
+  } catch (error) {
+    console.error('Error saving ad campaigns:', error);
+    throw error;
+  }
+}
+
+async function getSocialAdCampaigns(taskId) {
+  try {
+    const result = await pool.query(
+      `SELECT campaign_name, platform, budget_hkd, audience_definition, geo, status
+       FROM social_ad_campaigns WHERE task_id = $1 ORDER BY created_at DESC`,
+      [taskId]
+    );
+    return result.rows.map(row => ({
+      name: row.campaign_name,
+      platform: row.platform,
+      spend: row.budget_hkd ? `$${Math.round(row.budget_hkd)}` : 'N/A',
+      impressions: '—',
+      clicks: '—',
+      ctr: '—',
+      roas: '—',
+      status: row.status,
+    }));
+  } catch (error) {
+    console.error('Error fetching ad campaigns:', error);
+    throw error;
+  }
+}
+
+// ── KPI Definitions Storage (for frontend KPI_CARDS view) ────────────────────
+
+async function saveSocialKPIs(taskId, kpis) {
+  try {
+    for (const kpi of kpis) {
+      await pool.query(
+        `INSERT INTO social_kpi_definitions
+         (task_id, kpi_name, kpi_type, definition, formula, data_source, reporting_frequency, funnel_stage, platform, target_value, target_direction)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          taskId, kpi.name, kpi.type, kpi.definition, kpi.formula,
+          kpi.dataSource, kpi.frequency, kpi.funnelStage, kpi.platform,
+          kpi.targetValue, kpi.targetDirection
+        ]
+      );
+    }
+  } catch (error) {
+    console.error('Error saving KPIs:', error);
+    throw error;
+  }
+}
+
+async function getSocialKPIs(taskId) {
+  try {
+    const result = await pool.query(
+      `SELECT kpi_name, kpi_type, target_value FROM social_kpi_definitions
+       WHERE task_id = $1 ORDER BY created_at ASC`,
+      [taskId]
+    );
+    // Map to frontend KPI_CARDS format
+    const kpiMap = {
+      'Scheduled Posts': { value: '6', change: '+3 this week', icon: 'Calendar' },
+      'Impressions': { value: '533K', change: '+12% MoM', icon: 'Eye' },
+      'Clicks': { value: '9.3K', change: '+8% MoM', icon: 'MousePointer' },
+      'Ad Spend': { value: '$2,820', change: '67% of budget', icon: 'DollarSign' },
+    };
+
+    return result.rows.map(row => ({
+      label: row.kpi_name,
+      value: kpiMap[row.kpi_name]?.value || '—',
+      change: kpiMap[row.kpi_name]?.change || row.target_value || '—',
+      icon: kpiMap[row.kpi_name]?.icon || 'Target',
+    }));
+  } catch (error) {
+    console.error('Error fetching KPIs:', error);
+    throw error;
+  }
+}
+
+// ── Content Development: Draft Management ────────────────────────────────────
+
+async function createContentDraft(taskId, draftData) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO social_content_drafts
+       (task_id, platform, format, title, pillar, objective, key_message, copy_hook, cta, language, visual_type, caption, hashtags, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       RETURNING draft_id, id`,
+      [
+        taskId, draftData.platform, draftData.format, draftData.title, draftData.pillar,
+        draftData.objective, draftData.keyMessage, draftData.copyHook, draftData.cta,
+        draftData.language, draftData.visualType, draftData.caption,
+        JSON.stringify(draftData.hashtags || []), 'draft'
+      ]
+    );
+    return { draft_id: result.rows[0].draft_id, id: result.rows[0].id };
+  } catch (error) {
+    console.error('Error creating content draft:', error);
+    throw error;
+  }
+}
+
+async function getContentDrafts(taskId, status = null) {
+  try {
+    let query = 'SELECT * FROM social_content_drafts WHERE task_id = $1';
+    const params = [taskId];
+
+    if (status) {
+      query += ' AND status = $2';
+      params.push(status);
+    }
+
+    query += ' ORDER BY updated_at DESC';
+    const result = await pool.query(query, params);
+
+    return result.rows.map(row => ({
+      draft_id: row.draft_id,
+      id: row.id,
+      platform: row.platform,
+      format: row.format,
+      title: row.title,
+      pillar: row.pillar,
+      objective: row.objective,
+      keyMessage: row.key_message,
+      copyHook: row.copy_hook,
+      cta: row.cta,
+      language: row.language,
+      visualType: row.visual_type,
+      caption: row.caption,
+      hashtags: row.hashtags,
+      status: row.status,
+      syncedToCalendar: row.synced_to_calendar,
+      calendarPostId: row.calendar_post_id,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching content drafts:', error);
+    throw error;
+  }
+}
+
+async function updateContentDraft(draftId, draftData) {
+  try {
+    const result = await pool.query(
+      `UPDATE social_content_drafts
+       SET platform = COALESCE($1, platform),
+           format = COALESCE($2, format),
+           title = COALESCE($3, title),
+           pillar = COALESCE($4, pillar),
+           objective = COALESCE($5, objective),
+           key_message = COALESCE($6, key_message),
+           copy_hook = COALESCE($7, copy_hook),
+           cta = COALESCE($8, cta),
+           language = COALESCE($9, language),
+           visual_type = COALESCE($10, visual_type),
+           caption = COALESCE($11, caption),
+           hashtags = COALESCE($12, hashtags),
+           status = COALESCE($13, status),
+           updated_at = NOW()
+       WHERE draft_id = $14
+       RETURNING *`,
+      [
+        draftData.platform, draftData.format, draftData.title, draftData.pillar,
+        draftData.objective, draftData.keyMessage, draftData.copyHook, draftData.cta,
+        draftData.language, draftData.visualType, draftData.caption,
+        draftData.hashtags ? JSON.stringify(draftData.hashtags) : null,
+        draftData.status, draftId
+      ]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error updating content draft:', error);
+    throw error;
+  }
+}
+
+async function deleteContentDraft(draftId) {
+  try {
+    await pool.query('DELETE FROM social_content_drafts WHERE draft_id = $1', [draftId]);
+    return true;
+  } catch (error) {
+    console.error('Error deleting content draft:', error);
+    throw error;
+  }
+}
+
+async function promoteContentDraftToCalendar(draftId, postDate) {
+  try {
+    const draft = await pool.query(
+      'SELECT * FROM social_content_drafts WHERE draft_id = $1',
+      [draftId]
+    );
+
+    if (draft.rows.length === 0) {
+      throw new Error('Draft not found');
+    }
+
+    const d = draft.rows[0];
+
+    // Insert into social_content_posts
+    const postResult = await pool.query(
+      `INSERT INTO social_content_posts
+       (task_id, post_date, platform, format, title, pillar, objective, key_message, copy_hook, cta, language, visual_type, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       RETURNING id`,
+      [
+        d.task_id, postDate, d.platform, d.format, d.title, d.pillar,
+        d.objective, d.key_message, d.copy_hook, d.cta, d.language, d.visual_type, 'Scheduled'
+      ]
+    );
+
+    // Update draft with calendar reference
+    await pool.query(
+      'UPDATE social_content_drafts SET synced_to_calendar = TRUE, calendar_post_id = $1, updated_at = NOW() WHERE draft_id = $2',
+      [postResult.rows[0].id, draftId]
+    );
+
+    return { calendarPostId: postResult.rows[0].id };
+  } catch (error) {
+    console.error('Error promoting draft to calendar:', error);
+    throw error;
+  }
+}
+
+// ── Content Calendar & Development Sync ───────────────────────────────────────
+
+async function syncContentCalendarAndDevelopment(taskId) {
+  try {
+    // Find orphaned calendar posts (no corresponding draft)
+    const orphanedPosts = await pool.query(
+      `SELECT id, title, platform FROM social_content_posts
+       WHERE task_id = $1 AND id NOT IN (SELECT calendar_post_id FROM social_content_drafts WHERE synced_to_calendar = TRUE)`,
+      [taskId]
+    );
+
+    // Find orphaned drafts (calendar was deleted)
+    const orphanedDrafts = await pool.query(
+      `SELECT draft_id, title FROM social_content_drafts
+       WHERE task_id = $1 AND synced_to_calendar = TRUE AND calendar_post_id NOT IN (SELECT id FROM social_content_posts)`,
+      [taskId]
+    );
+
+    return {
+      orphanedCalendarPosts: orphanedPosts.rows,
+      orphanedDrafts: orphanedDrafts.rows,
+      syncStatus: 'ok'
+    };
+  } catch (error) {
+    console.error('Error syncing calendar and development:', error);
+    throw error;
+  }
+}
+
+// ── Brand Products & Services Management ───────────────────────────────────────
+
+async function createProductService(brandId, productData) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO brand_products_services
+       (brand_id, name, category, description, type, status, launch_date, portfolio_order, image_url, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING product_service_id, id`,
+      [
+        brandId, productData.name, productData.category, productData.description,
+        productData.type, productData.status || 'active', productData.launchDate,
+        productData.portfolioOrder || 0, productData.imageUrl,
+        JSON.stringify(productData.metadata || {})
+      ]
+    );
+    return { product_service_id: result.rows[0].product_service_id, id: result.rows[0].id };
+  } catch (error) {
+    console.error('Error creating product/service:', error);
+    throw error;
+  }
+}
+
+async function getProductsServices(brandId, status = null) {
+  try {
+    let query = 'SELECT * FROM brand_products_services WHERE brand_id = $1';
+    const params = [brandId];
+
+    if (status) {
+      query += ' AND status = $2';
+      params.push(status);
+    }
+
+    query += ' ORDER BY portfolio_order ASC, created_at DESC';
+    const result = await pool.query(query, params);
+
+    return result.rows.map(row => ({
+      product_service_id: row.product_service_id,
+      id: row.id,
+      name: row.name,
+      category: row.category,
+      description: row.description,
+      type: row.type,
+      status: row.status,
+      launchDate: row.launch_date,
+      discontinueDate: row.discontinue_date,
+      imageUrl: row.image_url,
+      metadata: row.metadata,
+      createdAt: row.created_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching products/services:', error);
+    throw error;
+  }
+}
+
+async function updateProductServiceStatus(productServiceId, status, discontinueDate = null) {
+  try {
+    const result = await pool.query(
+      `UPDATE brand_products_services
+       SET status = $1, discontinue_date = COALESCE($2, discontinue_date), updated_at = NOW()
+       WHERE product_service_id = $3
+       RETURNING *`,
+      [status, discontinueDate, productServiceId]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error updating product/service status:', error);
+    throw error;
+  }
+}
+
+async function getProductServicePortfolio(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT name, type, status, launch_date, discontinue_date
+       FROM brand_products_services
+       WHERE brand_id = $1
+       ORDER BY status DESC, portfolio_order ASC, created_at DESC`,
+      [brandId]
+    );
+
+    const portfolio = {
+      active: [],
+      paused: [],
+      retired: [],
+    };
+
+    result.rows.forEach(row => {
+      const item = {
+        name: row.name,
+        type: row.type,
+        launchDate: row.launch_date,
+        discontinueDate: row.discontinue_date,
+      };
+
+      if (row.status === 'active') {
+        portfolio.active.push(item);
+      } else if (row.status === 'paused') {
+        portfolio.paused.push(item);
+      } else if (row.status === 'retired') {
+        portfolio.retired.push(item);
+      }
+    });
+
+    return portfolio;
+  } catch (error) {
+    console.error('Error fetching product portfolio:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -1858,4 +2503,31 @@ module.exports = {
   getSocialState,
   upsertSocialState,
   deleteSocialState,
+  // Social Campaign & Artefacts
+  saveSocialCampaign,
+  saveArtefact,
+  getArtefact,
+  getAllArtefacts,
+  // Content Posts (for calendar view)
+  saveSocialContentPosts,
+  getSocialContentPosts,
+  // Ad Campaigns (for media buy view)
+  saveSocialAdCampaigns,
+  getSocialAdCampaigns,
+  // KPI Definitions (for dashboard)
+  saveSocialKPIs,
+  getSocialKPIs,
+  // Content Development: Drafts
+  createContentDraft,
+  getContentDrafts,
+  updateContentDraft,
+  deleteContentDraft,
+  promoteContentDraftToCalendar,
+  // Content Sync
+  syncContentCalendarAndDevelopment,
+  // Brand Products & Services
+  createProductService,
+  getProductsServices,
+  updateProductServiceStatus,
+  getProductServicePortfolio,
 };

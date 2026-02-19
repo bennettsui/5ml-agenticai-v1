@@ -315,7 +315,7 @@ function SocialContentOpsInner({ children }: { children: React.ReactNode }) {
 
       {/* Main + AI Chat */}
       <div className="flex-1 min-w-0 flex">
-        <main className="flex-1 min-w-0 overflow-auto">
+        <main className="flex-[0.65] min-w-0 overflow-auto">
           <div className="p-8">{children}</div>
         </main>
         <AiChatAssistant config={enrichedConfig} />
