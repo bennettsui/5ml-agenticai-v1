@@ -8,8 +8,6 @@ interface ChartInput {
   lunarMonth: number;
   lunarDay: number;
   hourBranch: string;
-  yearStem: string;
-  yearBranch: string;
   gender: string;
   name: string;
   placeOfBirth?: string;
@@ -30,8 +28,6 @@ export default function ZiweiAnalytics() {
     lunarMonth: 6,
     lunarDay: 15,
     hourBranch: '午',
-    yearStem: '庚',
-    yearBranch: '午',
     gender: '女',
     name: 'Sample Person',
     placeOfBirth: 'Hong Kong',
@@ -160,34 +156,6 @@ export default function ZiweiAnalytics() {
                   <option key={b} value={b}>{b}</option>
                 ))}
               </select>
-            </div>
-
-            {/* Year Stem & Branch */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-300 mb-2 block">Year Stem (天干)</label>
-                <select
-                  value={input.yearStem}
-                  onChange={(e) => setInput({...input, yearStem: e.target.value})}
-                  className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded text-white text-sm"
-                >
-                  {stems.map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-300 mb-2 block">Year Branch (地支)</label>
-                <select
-                  value={input.yearBranch}
-                  onChange={(e) => setInput({...input, yearBranch: e.target.value})}
-                  className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded text-white text-sm"
-                >
-                  {branches.map(b => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
-              </div>
             </div>
 
             {/* Calculate Button */}
