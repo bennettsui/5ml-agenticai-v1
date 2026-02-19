@@ -190,31 +190,35 @@ export default function RadiancePage() {
               {
                 title: 'Lung Fu Shan Conservation',
                 challenge: 'Build awareness for environmental education initiative',
-                result: '80+ earned media placements, featured in top-tier outlets'
+                result: '80+ earned media placements, featured in top-tier outlets',
+                href: '/vibe-demo/radiance/case-studies/lung-fu-shan'
               },
               {
-                title: 'Art & Cultural Launch',
-                challenge: 'Generate buzz for international exhibition in Hong Kong',
-                result: 'Record attendance, strong media coverage, sustained social engagement'
+                title: 'Venice Biennale 2025',
+                challenge: 'International PR for Hong Kong Architecture Exhibition',
+                result: 'Global media coverage for prestigious architecture biennial',
+                href: '/vibe-demo/radiance/case-studies/venice-biennale-hk'
               },
               {
-                title: 'Tech Company Entry',
-                challenge: 'Market entry for AI-powered platform in Asia',
-                result: '25+ launch day mentions, strong analyst coverage, 10K+ social reach'
+                title: 'Her Own Words Sport',
+                challenge: "Launch Hong Kong's first sportswear brand with 17 Asian sizing options",
+                result: '40+ media placements in Marie Claire, Elle, Cosmopolitan',
+                href: '/vibe-demo/radiance/case-studies/her-own-words-sport'
               }
             ].map((item, idx) => (
-              <div
+              <Link
                 key={idx}
-                className="p-8 bg-gradient-to-br from-purple-50 to-slate-50 dark:from-slate-800 dark:to-slate-900 border border-purple-200 dark:border-slate-700 rounded-lg hover:shadow-lg transition-all"
+                href={item.href}
+                className="group p-8 bg-gradient-to-br from-purple-50 to-slate-50 dark:from-slate-800 dark:to-slate-900 border border-purple-200 dark:border-slate-700 rounded-lg hover:shadow-lg hover:border-purple-400 dark:hover:border-purple-500 transition-all block"
               >
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">{item.title}</h3>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">{item.title}</h3>
                 <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
                   <span className="font-semibold">Challenge:</span> {item.challenge}
                 </p>
                 <p className="text-purple-600 dark:text-purple-400 font-semibold">
                   ✓ {item.result}
                 </p>
-              </div>
+              </Link>
             ))}
           </div>
 
