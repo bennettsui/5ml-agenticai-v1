@@ -12,7 +12,7 @@ export default function KOLMarketingServicePage() {
 
       <main id="main-content" className="flex-1 pt-20">
         {/* Breadcrumb */}
-        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+        <section className="py-6 px-6">
           <div className="max-w-6xl mx-auto">
             <Breadcrumb items={[
               { label: 'Home', href: '/vibe-demo/radiance' },
@@ -23,7 +23,7 @@ export default function KOLMarketingServicePage() {
         </section>
 
         {/* Hero Section */}
-        <section className="pt-16 pb-16 px-6 max-w-4xl mx-auto">
+        <section className="pt-16 pb-16 px-6 max-w-6xl mx-auto">
         <div className="space-y-6">
           <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
             KOL & Influencer Marketing
@@ -37,7 +37,7 @@ export default function KOLMarketingServicePage() {
       </section>
 
       {/* Why KOL Marketing */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Why KOL marketing matters</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
           People trust recommendations from creators they follow more than brand messaging. A YouTuber or Instagram influencer with engaged followers can introduce your product authentically to an audience that already respects their opinion. The right KOL partnerships extend reach, build credibility and create content that resonates with specific audience segments.
@@ -63,7 +63,7 @@ export default function KOLMarketingServicePage() {
       </section>
 
       {/* Our Network */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Our KOL network</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
           We maintain a database of over 3,000 KOLs spanning celebrities, YouTubers, top-tier influencers and micro-influencers with strong engagement and conversion. Our network covers categories such as beauty, gadgets, food, parenting, sport, arts, fashion and youth/Gen Z communities, allowing us to reach specific segments including high-spending consumers, professionals, young families and niche enthusiasts.
@@ -78,7 +78,7 @@ export default function KOLMarketingServicePage() {
       </section>
 
       {/* How We Work Together */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">How we can work together</h2>
         <div className="space-y-8">
           <div>
@@ -115,7 +115,7 @@ export default function KOLMarketingServicePage() {
       </section>
 
       {/* Services Scope */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Scope of services</h2>
         <div className="space-y-6">
           <div>
@@ -192,7 +192,7 @@ export default function KOLMarketingServicePage() {
       </section>
 
       {/* How We Work */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">How we work with you</h2>
         <div className="space-y-8">
           <div>
@@ -223,7 +223,7 @@ export default function KOLMarketingServicePage() {
       </section>
 
       {/* FAQ */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Frequently asked questions</h2>
         <div className="space-y-6">
           <div>
@@ -260,7 +260,7 @@ export default function KOLMarketingServicePage() {
       </section>
 
       {/* CTA */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8">
           <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Ready to amplify with the right KOLs?</h3>
           <p className="text-slate-700 dark:text-slate-300 mb-8 leading-relaxed">

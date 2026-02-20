@@ -129,7 +129,7 @@ export default function CaseStudiesPage() {
 
       <main className="flex-1 pt-20">
         {/* Breadcrumb */}
-        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+        <section className="py-6 px-6">
           <div className="max-w-6xl mx-auto">
             <Breadcrumb items={[
               { label: 'Home', href: '/vibe-demo/radiance' },
@@ -251,21 +251,25 @@ export default function CaseStudiesPage() {
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {[
-                { label: 'Architecture & City Planning', Icon: Building2 },
-                { label: 'Art & Culture', Icon: Palette },
-                { label: 'Beauty & Skincare', Icon: Sparkles },
-                { label: 'Consumer Products', Icon: ShoppingBag },
-                { label: 'Education', Icon: BookOpen },
-                { label: 'Environment & Conservation', Icon: Leaf },
-                { label: 'Fashion & Apparel', Icon: Shirt },
-                { label: 'Food & Hospitality', Icon: UtensilsCrossed },
-                { label: 'Home Appliances', Icon: Plug },
-                { label: 'Luxury Goods', Icon: Gem },
-                { label: 'Technology', Icon: Cpu },
-              ].map(({ label, Icon }) => (
-                <div key={label} className="flex items-center gap-3 p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-purple-200 dark:hover:border-purple-800 transition-colors">
-                  <Icon className="w-5 h-5 text-purple-500 dark:text-purple-400 flex-shrink-0 stroke-[1.5]" />
-                  <span className="text-slate-700 dark:text-slate-300 text-sm">{label}</span>
+                { label: 'Architecture & City Planning', Icon: Building2, photo: 'https://images.unsplash.com/photo-1486325212027-8081e485255e?auto=format&fit=crop&w=600&q=70' },
+                { label: 'Art & Culture', Icon: Palette, photo: 'https://images.unsplash.com/photo-1545987796-200677ee1011?auto=format&fit=crop&w=600&q=70' },
+                { label: 'Beauty & Skincare', Icon: Sparkles, photo: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=600&q=70' },
+                { label: 'Consumer Products', Icon: ShoppingBag, photo: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=70' },
+                { label: 'Education', Icon: BookOpen, photo: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=600&q=70' },
+                { label: 'Environment & Conservation', Icon: Leaf, photo: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=600&q=70' },
+                { label: 'Fashion & Apparel', Icon: Shirt, photo: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=600&q=70' },
+                { label: 'Food & Hospitality', Icon: UtensilsCrossed, photo: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=600&q=70' },
+                { label: 'Home Appliances', Icon: Plug, photo: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=600&q=70' },
+                { label: 'Luxury Goods', Icon: Gem, photo: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=70' },
+                { label: 'Technology', Icon: Cpu, photo: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=600&q=70' },
+              ].map(({ label, Icon, photo }) => (
+                <div key={label} className="group relative overflow-hidden rounded-lg aspect-[4/3]">
+                  <img src={photo} alt={label} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/30 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-4 flex items-center gap-3">
+                    <Icon className="w-4 h-4 text-white flex-shrink-0 stroke-[1.5] drop-shadow" />
+                    <span className="text-white text-sm font-medium leading-tight drop-shadow">{label}</span>
+                  </div>
                 </div>
               ))}
             </div>
