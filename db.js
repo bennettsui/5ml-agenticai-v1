@@ -925,11 +925,11 @@ async function initDatabase() {
       CREATE TABLE IF NOT EXISTS recruitai_leads (
         id SERIAL PRIMARY KEY,
         lead_id UUID UNIQUE DEFAULT gen_random_uuid(),
-        name VARCHAR(255),
-        email VARCHAR(255) NOT NULL,
-        phone VARCHAR(100),
-        company VARCHAR(255),
-        industry VARCHAR(100),
+        name TEXT,               -- TEXT: stores AES-256-GCM ciphertext (~140-340 chars)
+        email TEXT NOT NULL,     -- TEXT: encrypted; NOT NULL enforced at app layer
+        phone TEXT,              -- TEXT: encrypted (was VARCHAR(100) — too small for ciphertext)
+        company TEXT,            -- TEXT: encrypted
+        industry VARCHAR(100),   -- not PII; kept as VARCHAR for indexing
         headcount VARCHAR(50),
         message TEXT,
         source_page VARCHAR(255),
@@ -940,10 +940,15 @@ async function initDatabase() {
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
+      -- Widen PII columns to TEXT on existing deployments (idempotent on TEXT columns)
+      ALTER TABLE recruitai_leads ALTER COLUMN name    TYPE TEXT;
+      ALTER TABLE recruitai_leads ALTER COLUMN email   TYPE TEXT;
+      ALTER TABLE recruitai_leads ALTER COLUMN phone   TYPE TEXT;
+      ALTER TABLE recruitai_leads ALTER COLUMN company TYPE TEXT;
       -- Allow name to be null for chatbot-captured leads where name is unknown
       ALTER TABLE recruitai_leads ALTER COLUMN name DROP NOT NULL;
 
-      CREATE INDEX IF NOT EXISTS idx_recruitai_leads_email ON recruitai_leads(email);
+      -- email index is now on ciphertext — not searchable, kept for created_at range scans
       CREATE INDEX IF NOT EXISTS idx_recruitai_leads_industry ON recruitai_leads(industry);
       CREATE INDEX IF NOT EXISTS idx_recruitai_leads_created ON recruitai_leads(created_at DESC);
 
@@ -956,14 +961,19 @@ async function initDatabase() {
         source_page VARCHAR(255),
         turn_count INTEGER DEFAULT 0,
         contact_captured BOOLEAN DEFAULT FALSE,
-        captured_name VARCHAR(255),
-        captured_email VARCHAR(255),
-        captured_phone VARCHAR(255),
+        captured_name TEXT,      -- TEXT: stores AES-256-GCM ciphertext
+        captured_email TEXT,     -- TEXT: encrypted
+        captured_phone TEXT,     -- TEXT: encrypted
         summary TEXT,
         ip_address VARCHAR(100),
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      -- Widen captured PII columns on existing deployments
+      ALTER TABLE recruitai_chat_sessions ALTER COLUMN captured_name  TYPE TEXT;
+      ALTER TABLE recruitai_chat_sessions ALTER COLUMN captured_email TYPE TEXT;
+      ALTER TABLE recruitai_chat_sessions ALTER COLUMN captured_phone TYPE TEXT;
 
       CREATE INDEX IF NOT EXISTS idx_recruitai_sessions_visitor ON recruitai_chat_sessions(visitor_id);
       CREATE INDEX IF NOT EXISTS idx_recruitai_sessions_created ON recruitai_chat_sessions(created_at DESC);

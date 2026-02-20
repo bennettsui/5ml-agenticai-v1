@@ -353,9 +353,13 @@ export default function ModulePage({ config }: { config: ModuleConfig }) {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 px-4 bg-slate-900 text-center">
-        <p className="text-slate-500 text-sm mb-2">© 2026 RecruitAI Studio by 5 Miles Lab</p>
-        <Link href="/vibe-demo/recruitai" className="text-blue-400 hover:text-blue-300 text-sm">返回主頁 →</Link>
+      <footer className="py-8 px-4 bg-slate-900 text-center border-t border-slate-800">
+        <p className="text-slate-500 text-sm mb-3">© 2025 RecruitAI Studio by 5 Miles Lab</p>
+        <div className="flex justify-center gap-4 text-sm">
+          <Link href="/vibe-demo/recruitai" className="text-blue-400 hover:text-blue-300 transition">返回主頁</Link>
+          <Link href="/vibe-demo/recruitai/privacy-policy" className="text-slate-400 hover:text-slate-300 transition">私隱政策</Link>
+          <Link href="/vibe-demo/recruitai/terms" className="text-slate-400 hover:text-slate-300 transition">使用條款</Link>
+        </div>
       </footer>
     </div>
   );

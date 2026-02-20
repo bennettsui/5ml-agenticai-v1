@@ -10,12 +10,13 @@ import ScheduledJobs from '@/components/ScheduledJobs';
 import AgenticWorkflows from '@/components/AgenticWorkflows';
 import KnowledgeBase from '@/components/KnowledgeBase';
 import CostAnalysis from '@/components/CostAnalysis';
+import SecurityKB from '@/components/SecurityKB';
 import ZiweiChat from '@/components/ZiweiChat';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
   ChevronRight, Map, Zap, Send, Loader2, Sparkles, History,
-  Plus, Trash2, Clock, Monitor, TrendingUp,
+  Plus, Trash2, Clock, Monitor, TrendingUp, Shield,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -28,7 +29,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -373,7 +374,7 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
@@ -386,6 +387,7 @@ export default function Dashboard() {
     { id: 'costs', label: 'Cost Analysis', icon: DollarSign },
     { id: 'chat', label: 'Agent Chat', icon: MessageSquare },
     { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen },
+    { id: 'security', label: 'Security Audit', icon: Shield },
     { id: 'analytics', label: 'Analytics & API', icon: Wifi },
     { id: 'architecture', label: 'Architecture', icon: Layers },
   ];
@@ -647,6 +649,7 @@ export default function Dashboard() {
         )}
         {activeTab === 'scheduling' && <ScheduledJobs />}
         {activeTab === 'knowledge' && <KnowledgeBase />}
+        {activeTab === 'security' && <SecurityKB />}
         {activeTab === 'costs' && <CostAnalysis />}
         {activeTab === 'workflows' && (
           <div className="bg-[#1a1b2e]">

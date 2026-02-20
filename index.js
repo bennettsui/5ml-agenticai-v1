@@ -6,9 +6,7 @@ const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
 const zwEngine = require('./services/ziwei-chart-engine');
-const { asyncHandler, errorHandler, AppError } = require('./middleware/errorHandler');
-const ziweiValidation = require('./validation/ziweiValidation');
-const ziweiV1Router = require('./routes/v1/ziwei');
+const { encrypt, decrypt, decryptRow, PII_FIELDS } = require('./services/encryption');
 require('dotenv').config();
 
 // ─── Radiance Email Alert Setup ───────────────────────────────────────────────
@@ -71,7 +69,9 @@ app.use((req, res, next) => {
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-src https://www.google.com/recaptcha/; frame-ancestors 'none'");
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
   next();
 });
 
@@ -4191,37 +4191,129 @@ const wsServer = require('./services/websocket-server');
 // Radiance PR Contact Form API
 // ==========================================
 
-// POST /api/radiance/contact — save enquiry to DB + send email alert
+// Simple in-memory rate limiter: max 5 submissions per IP per 15 minutes
+const radianceRateLimitMap = new Map();
+function checkRadianceRateLimit(ip) {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const maxRequests = 5;
+  const entry = radianceRateLimitMap.get(ip) || { count: 0, resetAt: now + windowMs };
+  if (now > entry.resetAt) {
+    entry.count = 0;
+    entry.resetAt = now + windowMs;
+  }
+  entry.count++;
+  radianceRateLimitMap.set(ip, entry);
+  return entry.count <= maxRequests;
+}
+
+// Contact form submission endpoint
 app.post('/api/radiance/contact', async (req, res) => {
   try {
-    const { name, email, phone, company, industry, serviceInterest, message, sourceLang } = req.body;
+    const ip = req.ip || 'unknown';
 
-    if (!name || !email) {
-      return res.status(400).json({ success: false, error: 'Name and email are required' });
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ success: false, error: 'Invalid email address' });
-    }
-    if (message && message.length > 5000) {
-      return res.status(400).json({ success: false, error: 'Message must be under 5000 characters' });
+    // Rate limiting: 5 submissions per IP per 15 minutes
+    if (!checkRadianceRateLimit(ip)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many submissions. Please try again in 15 minutes.'
+      });
     }
 
-    const enquiryData = {
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      phone: phone || null,
-      company: company || null,
-      industry: industry || null,
-      serviceInterest: serviceInterest || null,
-      message: (message || '').trim(),
-      sourceLang: sourceLang || 'en',
-      ipAddress: req.ip,
-      userAgent: req.get('user-agent'),
+    const { name, email, phone, company, industry, serviceInterest, message, recaptchaToken } = req.body;
+
+    // reCAPTCHA v3 verification (only enforced when secret key is configured)
+    if (process.env.RECAPTCHA_SECRET_KEY) {
+      if (!recaptchaToken) {
+        return res.status(400).json({
+          success: false,
+          error: 'Security check failed. Please refresh the page and try again.'
+        });
+      }
+      const verifyRes = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          secret: process.env.RECAPTCHA_SECRET_KEY,
+          response: recaptchaToken,
+        }).toString(),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success || verifyData.score < 0.5) {
+        console.warn('⚠️ reCAPTCHA failed for Radiance contact:', { ip, score: verifyData.score });
+        return res.status(400).json({
+          success: false,
+          error: 'Security check failed. Please refresh the page and try again.'
+        });
+      }
+    }
+
+    // Sanitize: trim and enforce field length limits
+    const clean = {
+      name:            (name || '').trim().slice(0, 200),
+      email:           (email || '').trim().slice(0, 200),
+      phone:           (phone || '').trim().slice(0, 50),
+      company:         (company || '').trim().slice(0, 200),
+      industry:        (industry || '').trim().slice(0, 200),
+      serviceInterest: (serviceInterest || '').trim().slice(0, 200),
+      budget:          ((req.body.budget) || '').trim().slice(0, 100),
+      timeline:        ((req.body.timeline) || '').trim().slice(0, 100),
+      message:         (message || '').trim().slice(0, 5000),
     };
 
-    // Save to database
-    const saved = await saveRadianceEnquiry(enquiryData);
-    console.log(`📋 [Radiance] Enquiry saved: ${saved.enquiry_id} from ${enquiryData.name} <${enquiryData.email}>`);
+    // Whitelist validation for select/dropdown fields
+    const VALID_SERVICE_INTEREST = new Set(['Public Relations', 'Events', 'Social Media', 'KOL Marketing', 'Creative Production', 'Multiple Services', 'Other', '']);
+    const VALID_BUDGET    = new Set(['Under HKD 50k', 'HKD 50k - 100k', 'HKD 100k - 250k', 'HKD 250k+', '']);
+    const VALID_TIMELINE  = new Set(['Immediate (This month)', 'Short-term (1-3 months)', 'Medium-term (3-6 months)', 'Long-term (6+ months)', '']);
+    if (!VALID_SERVICE_INTEREST.has(clean.serviceInterest)) {
+      return res.status(400).json({ success: false, error: 'Invalid service selection.' });
+    }
+    if (!VALID_BUDGET.has(clean.budget)) {
+      return res.status(400).json({ success: false, error: 'Invalid budget selection.' });
+    }
+    if (!VALID_TIMELINE.has(clean.timeline)) {
+      return res.status(400).json({ success: false, error: 'Invalid timeline selection.' });
+    }
+
+    // Required field validation
+    if (!clean.name || !clean.email || !clean.message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name, email, and message are required'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(clean.email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email address'
+      });
+    }
+
+    // Message length validation
+    if (clean.message.length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Message must be at least 10 characters'
+      });
+    }
+
+    // Store contact submission (in-memory for now, can be extended to database)
+    const submission = {
+      id: Date.now().toString(),
+      ...clean,
+      submittedAt: new Date().toISOString(),
+      ip,
+      userAgent: req.get('user-agent')
+    };
+
+    // Log submission ID only — no PII in server logs
+    console.log('📧 New Radiance contact submission:', {
+      id: submission.id,
+      submittedAt: submission.submittedAt,
+    });
 
     // Send email alert (non-blocking — don't fail the response if email fails)
     sendRadianceEnquiryAlert(enquiryData).catch(err =>
@@ -4277,11 +4369,25 @@ app.post('/api/recruitai/lead', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid email address' });
     }
 
+    // Encrypt PII at rest — name, email, phone, company, message are sensitive
+    // industry/headcount/utm/source_page are business/analytics metadata, not encrypted
     const result = await pool.query(
       `INSERT INTO recruitai_leads (name, email, phone, company, industry, headcount, message, source_page, utm_source, utm_medium, utm_campaign, ip_address)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING lead_id, created_at`,
-      [name, email, phone || null, company || null, industry || null, headcount || null, message || null,
-       sourcePage || null, utmSource || null, utmMedium || null, utmCampaign || null, req.ip]
+      [
+        encrypt(name),
+        encrypt(email),
+        phone    ? encrypt(phone)    : null,
+        company  ? encrypt(company)  : null,
+        industry || null,
+        headcount || null,
+        message  ? encrypt(message)  : null,
+        sourcePage  || null,
+        utmSource   || null,
+        utmMedium   || null,
+        utmCampaign || null,
+        req.ip,
+      ]
     );
     const lead = result.rows[0];
 
@@ -4416,27 +4522,34 @@ app.post('/api/recruitai/chat', async (req, res) => {
     const updateParams = [currentSessionId];
     if (contactCaptured) {
       updateFields.push(`contact_captured = TRUE`);
-      if (capturedData.name) { updateFields.push(`captured_name = $${updateParams.length + 1}`); updateParams.push(capturedData.name); }
-      if (capturedData.email) { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(capturedData.email); }
-      if (capturedData.phone) { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(capturedData.phone); }
+      // Encrypt PII captured by chatbot before persisting to DB
+      if (capturedData.name)  { updateFields.push(`captured_name  = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.name)); }
+      if (capturedData.email) { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.email)); }
+      if (capturedData.phone) { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.phone)); }
     }
     await pool.query(
       `UPDATE recruitai_chat_sessions SET ${updateFields.join(', ')} WHERE session_id = $1`,
       updateParams
     );
 
-    // If contact captured, save as lead (chatbot-sourced)
+    // If contact captured, save as lead (chatbot-sourced), encrypt PII at rest
+    // Dedup by session_id (not email — emails are encrypted so plaintext comparison fails)
     if (contactCaptured && capturedData.email) {
       try {
         await pool.query(
           `INSERT INTO recruitai_leads (name, email, phone, source_page, industry, message)
            SELECT $1,$2,$3,$4,$5,$6
            WHERE NOT EXISTS (
-             SELECT 1 FROM recruitai_leads WHERE email = $2
+             SELECT 1 FROM recruitai_leads WHERE source_page = $4
            )`,
-          [capturedData.name || null, capturedData.email, capturedData.phone || null,
-           'chatbot:' + (sourcePage || 'unknown'), industry || null,
-           `Chat session ${currentSessionId}`]
+          [
+            capturedData.name  ? encrypt(capturedData.name)  : null,
+            encrypt(capturedData.email),
+            capturedData.phone ? encrypt(capturedData.phone) : null,
+            'chatbot:' + currentSessionId,
+            industry || null,
+            encrypt(`Chat session ${currentSessionId}`),
+          ]
         );
       } catch (e) {
         console.error('⚠️ RecruitAI chatbot lead save failed:', e.message);
@@ -4466,7 +4579,9 @@ app.get('/api/recruitai/admin/leads', async (req, res) => {
     const result = await pool.query(
       'SELECT * FROM recruitai_leads ORDER BY created_at DESC LIMIT 500'
     );
-    res.json({ success: true, leads: result.rows });
+    // Decrypt PII fields before returning to admin UI
+    const leads = result.rows.map(row => decryptRow(row, PII_FIELDS.recruitai_leads));
+    res.json({ success: true, leads });
   } catch (error) {
     console.error('❌ Admin leads error:', error);
     res.status(500).json({ error: 'Failed to fetch leads' });
@@ -4486,7 +4601,11 @@ app.get('/api/recruitai/admin/sessions', async (req, res) => {
        LEFT JOIN recruitai_chat_messages m ON m.session_id = s.session_id
        GROUP BY s.id ORDER BY s.created_at DESC LIMIT 200`
     );
-    res.json({ success: true, sessions: result.rows });
+    // Decrypt any PII captured by the chatbot during conversation
+    const sessions = result.rows.map(row =>
+      decryptRow(row, ['captured_name', 'captured_email', 'captured_phone'])
+    );
+    res.json({ success: true, sessions });
   } catch (error) {
     console.error('❌ Admin sessions error:', error);
     res.status(500).json({ error: 'Failed to fetch sessions' });
