@@ -4242,7 +4242,10 @@ const { calcBaseChart } = require('./services/ziwei-chart-engine');
 // POST /api/ziwei/calculate - Calculate a birth chart
 app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, asyncHandler(async (req, res) => {
   try {
-    const { lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch, gender, name } = req.body;
+    const {
+      lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch,
+      gender, name, placeOfBirth, timezone, calendarType
+    } = req.body;
 
     // Validate required fields
     if (!lunarYear || !lunarMonth || !lunarDay || !hourBranch || !yearStem || !yearBranch || !gender) {
@@ -4267,12 +4270,24 @@ app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, async
     if (process.env.DATABASE_URL) {
       try {
         const db = require('./db');
+        const birthInfo = {
+          lunarYear,
+          lunarMonth,
+          lunarDay,
+          hourBranch,
+          gender,
+          name: name || '',
+          placeOfBirth: placeOfBirth || '',
+          timezone: timezone || 'UTC',
+          calendarType: calendarType || 'lunar'
+        };
+
         const result = await db.query(
           `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
            VALUES ($1, $2, $3, $4) RETURNING id`,
           [
             name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
-            JSON.stringify({ lunarYear, lunarMonth, lunarDay, hourBranch, gender }),
+            JSON.stringify(birthInfo),
             JSON.stringify({ yearStem, yearBranch }),
             JSON.stringify(chart)
           ]
