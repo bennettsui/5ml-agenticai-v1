@@ -7,7 +7,7 @@ import {
   GitBranch, BookOpen, TrendingUp, Users, Shield, Radar,
   LayoutDashboard, Activity, Home, History, Wand2,
 } from 'lucide-react';
-import { ChartCalculator } from './chart-calculator';
+import ZiweiChartCalculatorWrapper from '@/components/ZiweiChartCalculatorWrapper';
 import ZiweiChartAnalysis from '@/components/ZiweiChartAnalysis';
 import ZiweiPredictions from '@/components/ZiweiPredictions';
 import ZiweiKnowledgeManagement from '@/components/ZiweiKnowledgeManagement';
@@ -107,7 +107,7 @@ export default function ZiweiPage() {
 
         {/* CHART CALCULATOR */}
         <section className="py-12 mb-12">
-          <ChartCalculator />
+          <ZiweiChartCalculatorWrapper />
         </section>
 
         {/* SYSTEM ARCHITECTURE */}
@@ -401,7 +401,7 @@ export default function ZiweiPage() {
         {/* ================================================================ */}
         {/* ZIWEI ANALYTICS TAB (GENERATOR)                                 */}
         {/* ================================================================ */}
-        {activeTab === 'analytics' && <ChartCalculator />}
+        {activeTab === 'analytics' && <ZiweiChartCalculatorWrapper />}
 
         {/* ================================================================ */}
         {/* ZIWEI ANALYSIS TAB                                              */}
