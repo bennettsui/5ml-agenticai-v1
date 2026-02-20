@@ -119,11 +119,12 @@ export function ChartCalculator() {
         });
       }
 
-      // Load the chart automatically - parse chart_data if it's a string
-      if (chartData.chart_data) {
-        const chartDataParsed = typeof chartData.chart_data === 'string'
-          ? JSON.parse(chartData.chart_data)
-          : chartData.chart_data;
+      // Load the chart automatically - parse base_chart or chart_data (both names used)
+      const actualChartData = chartData.base_chart || chartData.chart_data;
+      if (actualChartData) {
+        const chartDataParsed = typeof actualChartData === 'string'
+          ? JSON.parse(actualChartData)
+          : actualChartData;
         setChart(chartDataParsed);
         // Auto-generate interpretations
         await generateInterpretations(chartDataParsed, id);

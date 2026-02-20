@@ -82,18 +82,21 @@ export function ZiweiChartGrid({
   return (
     <div className="space-y-6">
       {/* Main Grid */}
-      <div className="rounded-lg border border-slate-700/50 bg-slate-800/60 p-6 overflow-auto">
+      <div className="rounded-xl bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-700/30 p-8 overflow-auto shadow-lg shadow-black/20">
         {/* Title */}
-        <h3 className="text-sm font-semibold text-white mb-4">命盤 (4×4 Grid Layout)</h3>
+        <h3 className="text-sm font-semibold text-white mb-6">命盤 (4×4 Grid Layout)</h3>
 
         {/* 4x4 Grid Container */}
-        <div className="grid gap-2" style={{gridTemplateColumns: 'repeat(4, 1fr)'}}>
+        <div className="grid gap-3" style={{gridTemplateColumns: 'repeat(4, 1fr)'}}>
           {grid.map((row, rowIdx) =>
             row.map((cell, colIdx) => {
               // Center cells
               if (cell === 'center') {
                 return (
-                  <div key={`center-${rowIdx}-${colIdx}`} className="aspect-square flex items-center justify-center rounded-lg border border-slate-700/50 bg-slate-900/80">
+                  <div
+                    key={`center-${rowIdx}-${colIdx}`}
+                    className="aspect-square flex items-center justify-center rounded-2xl bg-gradient-to-br from-slate-800/50 to-slate-900/30 shadow-md shadow-black/10 hover:shadow-lg hover:shadow-black/20 transition-all duration-300"
+                  >
                     <div className="text-center">
                       {rowIdx === 1 && colIdx === 1 && (
                         <>
@@ -123,43 +126,43 @@ export function ZiweiChartGrid({
                 return (
                   <div
                     key={`palace-${palace.index}`}
-                    className={`aspect-square rounded-lg border transition-colors cursor-pointer ${
+                    className={`aspect-square rounded-2xl transition-all duration-300 cursor-pointer overflow-hidden ${
                       isLifePalace
-                        ? 'border-amber-400 bg-amber-950/40'
-                        : 'border-slate-700/50 bg-slate-700/30 hover:bg-slate-700/50'
+                        ? 'bg-gradient-to-br from-amber-900/40 to-amber-950/30 shadow-lg shadow-amber-900/20 hover:shadow-xl hover:shadow-amber-900/30'
+                        : 'bg-gradient-to-br from-slate-700/30 to-slate-800/20 shadow-md shadow-black/10 hover:shadow-lg hover:shadow-slate-600/20'
                     }`}
                   >
                     {/* Palace content - expandable */}
                     <button
                       onClick={() => setExpandedPalace(expandedPalace === palace.index ? null : palace.index)}
-                      className="w-full h-full p-2 flex flex-col items-center justify-center text-center hover:bg-white/[0.02] rounded transition-colors"
+                      className="w-full h-full p-3 flex flex-col items-center justify-center text-center hover:bg-white/[0.03] transition-colors duration-200"
                     >
                       {/* Palace Name */}
-                      <div className={`text-xs font-bold ${isLifePalace ? 'text-amber-300' : 'text-slate-200'}`}>
+                      <div className={`text-xs font-bold ${isLifePalace ? 'text-amber-200' : 'text-slate-100'}`}>
                         {palace.name}
                       </div>
 
                       {/* Branch (Heavenly Stem) */}
-                      <div className="text-xs text-slate-400 mt-0.5">{palace.branch}</div>
+                      <div className="text-xs text-slate-400 mt-1">{palace.branch}</div>
 
                       {/* Major Stars (up to 2) */}
                       {palace.majorStars.length > 0 && (
-                        <div className="text-xs text-blue-400 mt-1 leading-tight">
+                        <div className="text-xs text-blue-300 mt-2 leading-tight">
                           {palace.majorStars.slice(0, 2).map((star) => (
                             <div key={star}>{star}</div>
                           ))}
-                          {palace.majorStars.length > 2 && <div className="text-slate-500">+{palace.majorStars.length - 2}</div>}
+                          {palace.majorStars.length > 2 && <div className="text-slate-500 text-xs mt-0.5">+{palace.majorStars.length - 2}</div>}
                         </div>
                       )}
 
                       {/* Transformations indicator */}
                       {palace.transformations.length > 0 && (
-                        <div className="text-xs text-amber-300 mt-1">四化</div>
+                        <div className="text-xs text-amber-300 mt-1.5 px-1.5 py-0.5 rounded-full bg-amber-900/30">四化</div>
                       )}
 
                       {/* Expand indicator */}
                       <ChevronDown
-                        className={`w-3 h-3 text-slate-500 mt-1 transition-transform ${
+                        className={`w-3 h-3 text-slate-500 mt-2 transition-transform duration-200 ${
                           expandedPalace === palace.index ? 'rotate-180' : ''
                         }`}
                       />
@@ -167,15 +170,15 @@ export function ZiweiChartGrid({
 
                     {/* Expanded detail view */}
                     {expandedPalace === palace.index && (
-                      <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-600/50 rounded-lg p-3 z-50 text-left text-xs space-y-1.5 w-56 shadow-lg">
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-gradient-to-br from-slate-900/95 to-slate-950/95 rounded-xl p-4 z-50 text-left text-xs space-y-2 w-56 shadow-xl shadow-black/50 border border-slate-700/30 backdrop-blur">
                         <div>
                           <span className="text-slate-500">All Stars:</span>
-                          <div className="text-slate-300">{palace.majorStars.join(', ') || 'None'}</div>
+                          <div className="text-slate-300 mt-1">{palace.majorStars.join(', ') || 'None'}</div>
                         </div>
                         {palace.transformations.length > 0 && (
                           <div>
                             <span className="text-slate-500">四化:</span>
-                            <div className="text-amber-300">{palace.transformations.join(', ')}</div>
+                            <div className="text-amber-300 mt-1">{palace.transformations.join(', ')}</div>
                           </div>
                         )}
                       </div>
@@ -194,32 +197,32 @@ export function ZiweiChartGrid({
       </div>
 
       {/* Legend */}
-      <div className="rounded-lg border border-slate-700/50 bg-slate-800/60 p-4">
-        <h4 className="text-xs font-semibold text-slate-300 mb-3">Legend</h4>
-        <div className="grid grid-cols-2 gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded border border-amber-400 bg-amber-950/40"></div>
+      <div className="rounded-xl bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/30 p-5 shadow-lg shadow-black/10">
+        <h4 className="text-xs font-semibold text-slate-300 mb-4">Legend</h4>
+        <div className="grid grid-cols-2 gap-4 text-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 rounded-lg bg-gradient-to-br from-amber-900/40 to-amber-950/30 shadow-sm shadow-amber-900/20"></div>
             <span className="text-slate-300">Life Palace (命宮)</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded border border-slate-600/50 bg-slate-700/30"></div>
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 rounded-lg bg-gradient-to-br from-slate-700/30 to-slate-800/20 shadow-sm shadow-black/10"></div>
             <span className="text-slate-400">Regular Palace</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-blue-400 text-xs">★ ★ ★</span>
+            <span className="text-blue-300 text-xs">★ ★</span>
             <span className="text-slate-400">Major Stars</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-amber-300 text-xs font-semibold">四化</span>
+            <span className="text-amber-300 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-900/30">四化</span>
             <span className="text-slate-400">Transformations</span>
           </div>
         </div>
       </div>
 
       {/* Info Box */}
-      <div className="rounded-lg border border-slate-700/50 bg-slate-800/60 p-4">
-        <p className="text-xs text-slate-400">
-          <strong>紫微斗數:</strong> The 12 palaces form the core of destiny analysis. Click any palace to see all stars and transformations in detail.
+      <div className="rounded-xl bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/30 p-5 shadow-lg shadow-black/10">
+        <p className="text-xs text-slate-400 leading-relaxed">
+          <strong className="text-slate-300">紫微斗數:</strong> The 12 palaces form the core of destiny analysis. Click any palace to see all stars and transformations in detail.
         </p>
       </div>
     </div>
