@@ -4448,11 +4448,11 @@ async function resolvePageAccessToken(pageId) {
   }
 
   const systemUserToken = process.env.META_SYSTEM_USER_TOKEN;
-  const userToken = process.env.META_USER_ACCESS_TOKEN;
+  const userToken = process.env.META_USER_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN;
   const baseToken = systemUserToken || userToken;
 
   if (!baseToken) {
-    throw new Error('META_PAGE_ACCESS_TOKEN or META_USER_ACCESS_TOKEN is required');
+    throw new Error('META_PAGE_ACCESS_TOKEN or META_ACCESS_TOKEN is required');
   }
 
   let resolvedUserToken = baseToken;
