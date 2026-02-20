@@ -76,7 +76,7 @@ function BrandDetailInner() {
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'projects' | 'feedback'>('projects');
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'feedback' | 'strategy' | 'identity'>('overview');
 
   const fetchData = useCallback(async () => {
     if (!brandId) return;
@@ -297,12 +297,46 @@ function BrandDetailInner() {
         </div>
       </div>
 
-      {/* Tabs: Projects / Feedback */}
+      {/* Tabs: Overview / Strategy / Identity / Projects / Feedback */}
       <div>
-        <div className="flex items-center gap-1 border-b border-slate-700/50 mb-4">
+        <div className="flex items-center gap-1 border-b border-slate-700/50 mb-4 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-[1px] whitespace-nowrap ${
+              activeTab === 'overview'
+                ? 'border-emerald-400 text-emerald-400'
+                : 'border-transparent text-slate-400 hover:text-white'
+            }`}
+          >
+            Overview
+          </button>
+          {brand && brand.client_profile?.strategy && (
+            <button
+              onClick={() => setActiveTab('strategy')}
+              className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-[1px] whitespace-nowrap ${
+                activeTab === 'strategy'
+                  ? 'border-emerald-400 text-emerald-400'
+                  : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+            >
+              Strategy
+            </button>
+          )}
+          {brand && (brand.client_profile?.voiceTone || brand.client_profile?.colorPalette) && (
+            <button
+              onClick={() => setActiveTab('identity')}
+              className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-[1px] whitespace-nowrap ${
+                activeTab === 'identity'
+                  ? 'border-emerald-400 text-emerald-400'
+                  : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+            >
+              Brand Identity
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('projects')}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-[1px] ${
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-[1px] whitespace-nowrap ${
               activeTab === 'projects'
                 ? 'border-emerald-400 text-emerald-400'
                 : 'border-transparent text-slate-400 hover:text-white'
@@ -315,7 +349,7 @@ function BrandDetailInner() {
           </button>
           <button
             onClick={() => setActiveTab('feedback')}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-[1px] ${
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-[1px] whitespace-nowrap ${
               activeTab === 'feedback'
                 ? 'border-emerald-400 text-emerald-400'
                 : 'border-transparent text-slate-400 hover:text-white'
@@ -364,6 +398,125 @@ function BrandDetailInner() {
         {syncResult && (
           <div className="mb-4 px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-xs text-slate-300">
             {syncResult}
+          </div>
+        )}
+
+        {/* Overview Tab */}
+        {activeTab === 'overview' && brand && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-4">
+                <p className="text-xs text-slate-400 mb-1">Status</p>
+                <p className="text-sm font-semibold text-white capitalize">{brand.status}</p>
+              </div>
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-4">
+                <p className="text-xs text-slate-400 mb-1">Health Score</p>
+                <p className="text-sm font-semibold text-white">{brand.health_score || '—'}/100</p>
+              </div>
+            </div>
+            {brand.legal_name && (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-4">
+                <p className="text-xs text-slate-400 mb-1">Legal Name</p>
+                <p className="text-sm font-semibold text-white">{brand.legal_name}</p>
+              </div>
+            )}
+            {brand.industry && brand.industry.length > 0 && (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-4">
+                <p className="text-xs text-slate-400 mb-2">Industries</p>
+                <div className="flex flex-wrap gap-2">
+                  {(Array.isArray(brand.industry) ? brand.industry : [brand.industry]).map((ind, i) => (
+                    <span key={i} className="px-2.5 py-1 bg-slate-700 text-slate-200 text-xs rounded-full">
+                      {typeof ind === 'string' ? ind : JSON.stringify(ind)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Strategy Tab */}
+        {activeTab === 'strategy' && brand && brand.client_profile?.strategy && (
+          <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-6">
+            <h3 className="text-sm font-semibold text-white mb-4">Content Strategy</h3>
+            <div className="text-xs text-slate-300 whitespace-pre-wrap max-h-96 overflow-y-auto">
+              {typeof brand.client_profile.strategy === 'string'
+                ? brand.client_profile.strategy
+                : JSON.stringify(brand.client_profile.strategy, null, 2)}
+            </div>
+          </div>
+        )}
+
+        {/* Brand Identity Tab */}
+        {activeTab === 'identity' && brand && (
+          <div className="space-y-4">
+            {brand.client_profile?.voiceTone && (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-4">
+                <p className="text-xs text-slate-400 mb-2">Brand Voice & Tone</p>
+                <p className="text-sm font-semibold text-white capitalize">{brand.client_profile.voiceTone.replace('-', ' ')}</p>
+              </div>
+            )}
+            {brand.client_profile?.brandPersonality && brand.client_profile.brandPersonality.length > 0 && (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-4">
+                <p className="text-xs text-slate-400 mb-2">Brand Personality</p>
+                <div className="flex flex-wrap gap-2">
+                  {brand.client_profile.brandPersonality.map((personality, i) => (
+                    <span key={i} className="px-2.5 py-1 bg-emerald-600/20 text-emerald-300 text-xs rounded-full">
+                      {personality}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {brand.client_profile?.visualStyle && (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-4">
+                <p className="text-xs text-slate-400 mb-2">Visual Aesthetic</p>
+                <p className="text-sm font-semibold text-white capitalize">{brand.client_profile.visualStyle.replace('-', ' ')}</p>
+              </div>
+            )}
+            {brand.client_profile?.colorPalette && (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-4">
+                <p className="text-xs text-slate-400 mb-3">Brand Colors</p>
+                <div className="flex gap-3">
+                  {brand.client_profile.colorPalette.primary && (
+                    <div className="flex flex-col items-center gap-1">
+                      <div
+                        className="w-12 h-12 rounded border border-slate-600"
+                        style={{ backgroundColor: brand.client_profile.colorPalette.primary }}
+                      />
+                      <p className="text-xs text-slate-400">Primary</p>
+                      <p className="text-xs font-mono text-slate-500">{brand.client_profile.colorPalette.primary}</p>
+                    </div>
+                  )}
+                  {brand.client_profile.colorPalette.secondary && (
+                    <div className="flex flex-col items-center gap-1">
+                      <div
+                        className="w-12 h-12 rounded border border-slate-600"
+                        style={{ backgroundColor: brand.client_profile.colorPalette.secondary }}
+                      />
+                      <p className="text-xs text-slate-400">Secondary</p>
+                      <p className="text-xs font-mono text-slate-500">{brand.client_profile.colorPalette.secondary}</p>
+                    </div>
+                  )}
+                  {brand.client_profile.colorPalette.accent && (
+                    <div className="flex flex-col items-center gap-1">
+                      <div
+                        className="w-12 h-12 rounded border border-slate-600"
+                        style={{ backgroundColor: brand.client_profile.colorPalette.accent }}
+                      />
+                      <p className="text-xs text-slate-400">Accent</p>
+                      <p className="text-xs font-mono text-slate-500">{brand.client_profile.colorPalette.accent}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {!brand.client_profile?.voiceTone && !brand.client_profile?.colorPalette && (
+              <div className="text-center py-8 text-slate-400">
+                <p className="text-sm">No brand identity data available</p>
+                <p className="text-xs mt-1">Add brand details in the setup wizard to see them here</p>
+              </div>
+            )}
           </div>
         )}
 

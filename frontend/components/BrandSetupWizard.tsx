@@ -6,6 +6,7 @@ import {
   type BusinessGoal,
 } from '@/lib/brand-setup-config';
 import { ChevronDown } from 'lucide-react';
+import BrandIdentityStep from './BrandIdentityStep';
 
 interface BrandSetupWizardProps {
   currentStep: string;
@@ -315,7 +316,7 @@ export default function BrandSetupWizard({
 
         <div className="mt-6 p-4 rounded-lg bg-slate-800/30 border border-slate-700/30">
           <p className="text-sm text-slate-300">
-            <span className="font-medium">Next Step:</span> We'll generate your complete content strategy including
+            <span className="font-medium">Next Step:</span> We'll ask about your brand identity, then generate your complete content strategy including
             pillars, KPI targets, and a sample calendar template.
           </p>
         </div>
@@ -323,7 +324,17 @@ export default function BrandSetupWizard({
     );
   }
 
-  // Step 5: Review
+  // Step 5: Brand Identity
+  if (currentStep === 'identity') {
+    return (
+      <BrandIdentityStep
+        formState={formState}
+        onUpdate={onUpdate}
+      />
+    );
+  }
+
+  // Step 6: Review
   if (currentStep === 'review') {
     return (
       <div className="space-y-6">
