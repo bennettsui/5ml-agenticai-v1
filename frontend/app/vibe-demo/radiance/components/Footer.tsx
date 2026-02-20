@@ -140,12 +140,12 @@ export function Footer() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-400">
             <p>&copy; {currentYear} Radiance PR & Martech Limited. All rights reserved.</p>
             <div className="flex gap-6">
-              <a href="#" className="hover:text-purple-400 transition">
-                Privacy Policy
-              </a>
-              <a href="#" className="hover:text-purple-400 transition">
-                Terms of Service
-              </a>
+              <Link href="/vibe-demo/radiance/privacy-policy" className="hover:text-purple-400 transition">
+                私隱政策
+              </Link>
+              <Link href="/vibe-demo/radiance/terms" className="hover:text-purple-400 transition">
+                使用條款
+              </Link>
             </div>
           </div>
         </div>

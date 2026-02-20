@@ -5,6 +5,7 @@ const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
 const zwEngine = require('./services/ziwei-chart-engine');
+const { encrypt, decrypt, decryptRow, PII_FIELDS } = require('./services/encryption');
 require('dotenv').config();
 
 const app = express();
@@ -3983,11 +3984,25 @@ app.post('/api/recruitai/lead', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid email address' });
     }
 
+    // Encrypt PII at rest — name, email, phone, company, message are sensitive
+    // industry/headcount/utm/source_page are business/analytics metadata, not encrypted
     const result = await pool.query(
       `INSERT INTO recruitai_leads (name, email, phone, company, industry, headcount, message, source_page, utm_source, utm_medium, utm_campaign, ip_address)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING lead_id, created_at`,
-      [name, email, phone || null, company || null, industry || null, headcount || null, message || null,
-       sourcePage || null, utmSource || null, utmMedium || null, utmCampaign || null, req.ip]
+      [
+        encrypt(name),
+        encrypt(email),
+        phone    ? encrypt(phone)    : null,
+        company  ? encrypt(company)  : null,
+        industry || null,
+        headcount || null,
+        message  ? encrypt(message)  : null,
+        sourcePage  || null,
+        utmSource   || null,
+        utmMedium   || null,
+        utmCampaign || null,
+        req.ip,
+      ]
     );
     const lead = result.rows[0];
 
@@ -4122,9 +4137,10 @@ app.post('/api/recruitai/chat', async (req, res) => {
     const updateParams = [currentSessionId];
     if (contactCaptured) {
       updateFields.push(`contact_captured = TRUE`);
-      if (capturedData.name) { updateFields.push(`captured_name = $${updateParams.length + 1}`); updateParams.push(capturedData.name); }
-      if (capturedData.email) { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(capturedData.email); }
-      if (capturedData.phone) { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(capturedData.phone); }
+      // Encrypt PII captured by chatbot before persisting to DB
+      if (capturedData.name)  { updateFields.push(`captured_name  = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.name)); }
+      if (capturedData.email) { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.email)); }
+      if (capturedData.phone) { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.phone)); }
     }
     await pool.query(
       `UPDATE recruitai_chat_sessions SET ${updateFields.join(', ')} WHERE session_id = $1`,
@@ -4172,7 +4188,9 @@ app.get('/api/recruitai/admin/leads', async (req, res) => {
     const result = await pool.query(
       'SELECT * FROM recruitai_leads ORDER BY created_at DESC LIMIT 500'
     );
-    res.json({ success: true, leads: result.rows });
+    // Decrypt PII fields before returning to admin UI
+    const leads = result.rows.map(row => decryptRow(row, PII_FIELDS.recruitai_leads));
+    res.json({ success: true, leads });
   } catch (error) {
     console.error('❌ Admin leads error:', error);
     res.status(500).json({ error: 'Failed to fetch leads' });
@@ -4192,7 +4210,11 @@ app.get('/api/recruitai/admin/sessions', async (req, res) => {
        LEFT JOIN recruitai_chat_messages m ON m.session_id = s.session_id
        GROUP BY s.id ORDER BY s.created_at DESC LIMIT 200`
     );
-    res.json({ success: true, sessions: result.rows });
+    // Decrypt any PII captured by the chatbot during conversation
+    const sessions = result.rows.map(row =>
+      decryptRow(row, ['captured_name', 'captured_email', 'captured_phone'])
+    );
+    res.json({ success: true, sessions });
   } catch (error) {
     console.error('❌ Admin sessions error:', error);
     res.status(500).json({ error: 'Failed to fetch sessions' });
