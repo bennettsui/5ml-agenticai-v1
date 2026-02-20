@@ -213,13 +213,20 @@ def calculateFiveElementBureau(lifeHouseStemBranch):
 
 def calculateZiweiPosition(lunarDay, fiveElementBureau):
     """
-    STEP 5A: Calculate Ziwei (紫微) position using Quotient-Remainder Method
+    STEP 5A: Calculate Ziwei (紫微) position using Odd/Even Difference Method
 
-    Formula:
-    1. remainder = lunarDay % fiveElementBureau (or bureau if remainder=0)
-    2. quotient = lunarDay // fiveElementBureau
-    3. base_position = ziweiPositionTable[bureau][remainder]
-    4. final_position_index = (base_index + quotient) % 12
+    ✅ CORRECT Formula (Verified via multiple examples):
+    1. quotient = ceil(lunarDay / fiveElementBureau)  - Find smallest multiplier level
+    2. multiplier = quotient * fiveElementBureau     - Get actual multiple
+    3. difference = multiplier - lunarDay             - Calculate difference
+    4. if difference is EVEN: finalNumber = quotient + difference
+       if difference is ODD:  finalNumber = quotient - difference
+    5. ziweiIndex = (finalNumber - 1) % 12
+    6. ziweiPosition = branchOrder[ziweiIndex]
+
+    Verified examples:
+    - Wood 3, Day 25: quotient=9, diff=2(even), final=11 → 子 ✓
+    - Fire 6, Day 7: quotient=2, diff=5(odd), final=-3 → 戌 ✓
 
     Args:
         lunarDay: Lunar day of birth (1-30)
@@ -228,21 +235,26 @@ def calculateZiweiPosition(lunarDay, fiveElementBureau):
     Returns:
         Ziwei branch string
     """
-    remainder = lunarDay % fiveElementBureau
-    if remainder == 0:
-        remainder = fiveElementBureau
+    import math
 
-    quotient = lunarDay // fiveElementBureau
+    # Step 1: Find smallest multiplier > lunarDay
+    quotient = math.ceil(lunarDay / fiveElementBureau)
+    multiplier = quotient * fiveElementBureau
 
-    # Get base position from lookup table
-    base_position = ziweiPositionTable[fiveElementBureau].get(remainder, "子")
-    base_index = branchToIndex(base_position)
+    # Step 2: Calculate difference
+    difference = multiplier - lunarDay
 
-    # Count forward by quotient steps
-    final_index = (base_index + quotient) % 12
-    final_position = indexToBranch(final_index)
+    # Step 3: Calculate final number based on odd/even difference
+    if difference % 2 == 0:  # EVEN difference
+        finalNumber = quotient + difference
+    else:  # ODD difference
+        finalNumber = quotient - difference
 
-    return final_position
+    # Step 4: Find Ziwei position (counting from 寅 at position 1)
+    ziwei_index = (finalNumber - 1) % 12
+    ziwei_position = indexToBranch(ziwei_index)
+
+    return ziwei_position
 
 def calculateTianfuPosition(ziweiPosition):
     """
