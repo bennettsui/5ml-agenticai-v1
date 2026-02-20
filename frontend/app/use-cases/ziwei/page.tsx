@@ -14,16 +14,17 @@ import ZiweiKnowledgeManagement from '@/components/ZiweiKnowledgeManagement';
 import ZiweiCelebrityValidation from '@/components/ZiweiCelebrityValidation';
 import ZiweiChartLibrary from '@/components/ZiweiChartLibrary';
 import ZiweiRuleManagement from '@/components/ZiweiRuleManagement';
+import ZiweiKnowledgeViewer from '@/components/ZiweiKnowledgeViewer';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import ZiweiTabErrorBoundary from '@/components/ZiweiTabErrorBoundary';
 
-type ZiweiTab = 'overview' | 'analytics' | 'analysis' | 'predictions' | 'knowledge' | 'celebrity' | 'charts' | 'rules';
+type ZiweiTab = 'overview' | 'analytics' | 'analysis' | 'predictions' | 'knowledge' | 'reference' | 'celebrity' | 'charts' | 'rules';
 
 export default function ZiweiPage() {
   const getInitialTab = (): ZiweiTab => {
     if (typeof window === 'undefined') return 'overview';
     const p = new URLSearchParams(window.location.search).get('tab') as ZiweiTab | null;
-    const valid: ZiweiTab[] = ['overview', 'analytics', 'analysis', 'predictions', 'knowledge', 'celebrity', 'charts', 'rules'];
+    const valid: ZiweiTab[] = ['overview', 'analytics', 'analysis', 'predictions', 'knowledge', 'reference', 'celebrity', 'charts', 'rules'];
     return p && valid.includes(p) ? p : 'overview';
   };
   const [activeTab, setActiveTab] = useState<ZiweiTab>(getInitialTab());
@@ -34,6 +35,7 @@ export default function ZiweiPage() {
     { id: 'analysis', label: '🔍 Analysis', icon: Brain },
     { id: 'predictions', label: '🔮 Predictions', icon: TrendingUp },
     { id: 'knowledge', label: '📚 Knowledge', icon: BookOpen },
+    { id: 'reference', label: '📖 Reference', icon: BookOpen },
     { id: 'celebrity', label: '⭐ Celebrity', icon: Sparkles },
     { id: 'charts', label: '📊 Charts', icon: History },
     { id: 'rules', label: '🧿 Rules', icon: Wand2 },
@@ -434,6 +436,15 @@ export default function ZiweiPage() {
         {activeTab === 'knowledge' && (
           <ZiweiTabErrorBoundary tabName="Knowledge">
             <ZiweiKnowledgeManagement />
+          </ZiweiTabErrorBoundary>
+        )}
+
+        {/* ================================================================ */}
+        {/* ZIWEI REFERENCE / KNOWLEDGE VIEWER TAB                           */}
+        {/* ================================================================ */}
+        {activeTab === 'reference' && (
+          <ZiweiTabErrorBoundary tabName="Reference">
+            <ZiweiKnowledgeViewer />
           </ZiweiTabErrorBoundary>
         )}
 
