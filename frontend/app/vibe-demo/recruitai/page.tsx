@@ -8,8 +8,6 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowRight,
-  Menu,
-  X,
   Zap,
   BarChart3,
   MessageSquare,
@@ -24,6 +22,7 @@ import {
   Trophy,
   Phone,
 } from 'lucide-react';
+import RecruitNav from './components/RecruitNav';
 
 const RecruitAICarnival = dynamic(
   () => import('./components/RecruitAICarnival'),
@@ -39,13 +38,6 @@ const RecruitAICarnival = dynamic(
 
 // ─── Data ───────────────────────────────────────────────────────────────────
 
-const NAV_LINKS = [
-  { label: '功能模組', href: '#modules' },
-  { label: '案例', href: '#cases' },
-  { label: '整合', href: '#integrations' },
-  { label: '價格', href: '#pricing' },
-  { label: '聯絡我們', href: '/vibe-demo/recruitai/contact' },
-];
 
 const STATS = [
   { value: '50+', label: '香港中小企信任我們', sub: 'Hong Kong SMEs' },
@@ -443,19 +435,11 @@ const INTEGRATIONS = [
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function RecruitAIPage() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [scrolled, setScrolled] = useState(false);
   const [activeAgent, setActiveAgent] = useState(0);
   const [activeCaseStudy, setActiveCaseStudy] = useState(0);
   const [expandedWorkflow, setExpandedWorkflow] = useState<number | null>(null);
   const heroRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 60);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   // Cycle through agents automatically
   useEffect(() => {
@@ -465,106 +449,12 @@ export default function RecruitAIPage() {
 
   const scrollTo = (id: string) => {
     document.getElementById(id.replace('#', ''))?.scrollIntoView({ behavior: 'smooth' });
-    setMobileMenuOpen(false);
   };
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
-      {/* ── Navigation ── */}
-      <nav
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          scrolled
-            ? 'bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl shadow-sm border-b border-slate-200/80 dark:border-slate-800/50'
-            : 'bg-transparent'
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
-                <Zap className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-bold text-lg text-slate-900 dark:text-white">
-                RecruitAI<span className="text-blue-600">Studio</span>
-              </span>
-              <span className="hidden sm:inline text-xs text-slate-400 ml-1">by 5ML</span>
-            </div>
+      <RecruitNav />
 
-            {/* Desktop Nav */}
-            <div className="hidden md:flex items-center gap-8">
-              {NAV_LINKS.map(link => (
-                link.href.startsWith('/') ? (
-                  <Link
-                    key={link.label}
-                    href={link.href}
-                    className="text-sm text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                ) : (
-                  <button
-                    key={link.label}
-                    onClick={() => scrollTo(link.href)}
-                    className="text-sm text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                  >
-                    {link.label}
-                  </button>
-                )
-              ))}
-            </div>
-
-            {/* CTA + Mobile Menu */}
-            <div className="flex items-center gap-3">
-              <Link
-                href="/vibe-demo/recruitai/consultation"
-                className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                免費諮詢
-                <ChevronRight className="w-4 h-4" />
-              </Link>
-              <button
-                className="md:hidden p-2 text-slate-600 dark:text-slate-400"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              >
-                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 py-4 space-y-3">
-            {NAV_LINKS.map(link => (
-              link.href.startsWith('/') ? (
-                <Link
-                  key={link.label}
-                  href={link.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block w-full text-left text-sm text-slate-700 dark:text-slate-300 py-2"
-                >
-                  {link.label}
-                </Link>
-              ) : (
-                <button
-                  key={link.label}
-                  onClick={() => scrollTo(link.href)}
-                  className="block w-full text-left text-sm text-slate-700 dark:text-slate-300 py-2"
-                >
-                  {link.label}
-                </button>
-              )
-            ))}
-            <Link
-              href="/vibe-demo/recruitai/consultation"
-              className="block mt-4 px-4 py-3 bg-blue-600 text-white text-sm font-medium rounded-lg text-center"
-            >
-              免費 30 分鐘諮詢
-            </Link>
-          </div>
-        )}
-      </nav>
 
       {/* ── Hero: 3D AI Carnival ── */}
       <section
@@ -784,10 +674,10 @@ export default function RecruitAIPage() {
               {
                 emoji: '📊', name: '業務分析', nameEn: 'Analytics',
                 href: '/vibe-demo/recruitai/modules/analytics',
-                tagline: '整合 NDN/Fimmick 全渠道數據，AI 洞察讓決策快 3 倍',
+                tagline: '整合全渠道廣告及業務數據，AI 洞察讓決策快 3 倍',
                 kpi: '實時', kpiLabel: '數據洞察',
-                features: ['全渠道 BI 儀表板實時更新', 'NDN / Fimmick 數據整合', 'AI 異常警報 5 分鐘內通知', '客戶流失風險提前 30 天預測'],
-                integrations: ['NDN Group', 'Fimmick', 'BigQuery', 'Looker Studio'],
+                features: ['全渠道 BI 儀表板實時更新', '多平台廣告數據整合', 'AI 異常警報 5 分鐘內通知', '客戶流失風險提前 30 天預測'],
+                integrations: ['Google Analytics', 'Meta Ads', 'BigQuery', 'Looker Studio'],
                 grad: 'from-slate-700 to-indigo-600',
               },
             ].map(mod => (

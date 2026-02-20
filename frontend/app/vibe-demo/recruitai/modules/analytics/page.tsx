@@ -8,7 +8,7 @@ const config: ModuleConfig = {
   moduleName: '業務分析',
   moduleNameEn: 'Analytics',
   tagline: 'AI 數據洞察：實時儀表板，讓數據自己說話',
-  subtagline: '整合 NDN、Fimmick、Google Analytics 及各業務系統，AI 每日自動分析，將數據轉化為可執行的商業洞察。',
+  subtagline: '整合 Google Analytics、多渠道廣告平台及各業務系統，AI 每日自動分析，將數據轉化為可執行的商業洞察。',
   heroGrad: 'from-slate-800 via-blue-900 to-indigo-700',
   kpis: [
     { value: '實時', label: '數據更新頻率' },
@@ -24,8 +24,8 @@ const config: ModuleConfig = {
     },
     {
       icon: '🔗',
-      title: 'NDN / Fimmick 數據整合',
-      desc: '直接對接 NDN Group 及 Fimmick 數字行銷平台，自動同步廣告效益及媒體數據。',
+      title: '廣告平台數據整合',
+      desc: '直接對接多個香港及國際數字廣告平台 API，自動同步廣告效益及媒體投放數據。',
     },
     {
       icon: '🧠',
@@ -51,9 +51,9 @@ const config: ModuleConfig = {
   useCases: [
     {
       title: '全渠道廣告效益歸因分析',
-      desc: '整合 Google、Facebook、NDN、Fimmick 廣告數據，清晰識別每分錢的回報',
+      desc: '整合 Google、Facebook 及多個廣告平台數據，清晰識別每分錢的回報',
       workflow: [
-        { icon: '🔌', title: '多平台數據接入', detail: '自動連接 Google Ads、Facebook Ads、NDN、Fimmick、Instagram 等平台 API，每日同步最新數據' },
+        { icon: '🔌', title: '多平台數據接入', detail: '自動連接 Google Ads、Facebook Ads、Instagram、LinkedIn 等平台 API，每日同步最新數據' },
         { icon: '🧮', title: '多觸點歸因計算', detail: 'AI 分析客戶轉換路徑，應用線性、時間衰減、數據驅動等歸因模型，識別真實貢獻' },
         { icon: '📊', title: '跨渠道 ROAS 計算', detail: '統一計算各渠道 ROAS、CPA、CPL，生成可比較的效益排行榜' },
         { icon: '💡', title: '預算優化建議', detail: 'AI 根據歸因結果，自動生成廣告預算調整建議，最大化整體 ROAS' },
@@ -96,7 +96,7 @@ const config: ModuleConfig = {
     },
   ],
   integrations: [
-    'NDN Group', 'Fimmick', 'Google Analytics 4', 'Google Ads',
+    'Google Analytics 4', 'Google Ads', 'Meta Ads',
     'Facebook Ads', 'Instagram Insights', 'Xero', 'Shopify',
     'HubSpot', 'Salesforce', 'BigQuery', 'Looker Studio',
     'Power BI', 'Tableau', 'Airtable',
