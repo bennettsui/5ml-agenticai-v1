@@ -12,7 +12,7 @@ export default function EventManagementServicePage() {
 
       <main id="main-content" className="flex-1 pt-20">
         {/* Breadcrumb */}
-        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+        <section className="py-6 px-6">
           <div className="max-w-6xl mx-auto">
             <Breadcrumb items={[
               { label: 'Home', href: '/vibe-demo/radiance' },
@@ -23,7 +23,7 @@ export default function EventManagementServicePage() {
         </section>
 
         {/* Hero Section */}
-        <section className="pt-16 pb-16 px-6 max-w-4xl mx-auto">
+        <section className="pt-16 pb-16 px-6 max-w-6xl mx-auto">
         <div className="space-y-6">
           <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
             Event & Experience Management
@@ -38,7 +38,7 @@ export default function EventManagementServicePage() {
       </section>
 
       {/* Why This Service Matters */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Why events still matter</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
           In an increasingly digital world, in-person events create unmatched opportunities for authentic engagement. Events generate media coverage, create social media moments, foster direct relationships with audiences and provide tangible proof points for your brand or cause. But only when they're properly conceived, executed and amplified through PR and social channels.
@@ -64,7 +64,7 @@ export default function EventManagementServicePage() {
       </section>
 
       {/* Our Approach */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Our approach to events & experience</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
           We treat every event as a strategic communication opportunity. Our planning integrates{' '}
@@ -116,7 +116,7 @@ export default function EventManagementServicePage() {
       </section>
 
       {/* Scope of Services */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Scope of services</h2>
         <div className="space-y-12">
           {/* Strategy & Planning */}
@@ -237,7 +237,7 @@ export default function EventManagementServicePage() {
       </section>
 
       {/* Examples of Work */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">How brands work with us</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
           Radiance has rich experience organizing a wide range of event formats, from intimate product showcases to large-scale community activations. We often combine event management with{' '}
@@ -293,7 +293,7 @@ export default function EventManagementServicePage() {
       </section>
 
       {/* How We Work Together */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">How we work with you</h2>
         <div className="space-y-8">
           <div>
@@ -324,7 +324,7 @@ export default function EventManagementServicePage() {
       </section>
 
       {/* FAQ */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Frequently asked questions</h2>
         <div className="space-y-6">
           <div>
@@ -379,7 +379,7 @@ export default function EventManagementServicePage() {
       </section>
 
       {/* CTA */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8">
           <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Ready to plan an impactful event?</h3>
           <p className="text-slate-700 dark:text-slate-300 mb-8 leading-relaxed">

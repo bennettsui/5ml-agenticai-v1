@@ -12,7 +12,7 @@ export default function SocialMediaServicePage() {
 
       <main id="main-content" className="flex-1 pt-20">
         {/* Breadcrumb */}
-        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+        <section className="py-6 px-6">
           <div className="max-w-6xl mx-auto">
             <Breadcrumb items={[
               { label: 'Home', href: '/vibe-demo/radiance' },
@@ -23,7 +23,7 @@ export default function SocialMediaServicePage() {
         </section>
 
         {/* Hero Section */}
-        <section className="pt-16 pb-16 px-6 max-w-4xl mx-auto">
+        <section className="pt-16 pb-16 px-6 max-w-6xl mx-auto">
         <div className="space-y-6">
           <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
             Social Media & Content Strategy
@@ -35,7 +35,7 @@ export default function SocialMediaServicePage() {
       </section>
 
       {/* Why Social Matters */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Why social media matters</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
           Social media isn't just about follower counts. It's about building a consistent presence where your audience expects you, creating content they actually want to engage with, and extending your reach through shares and conversations. When integrated with PR, events and KOL partnerships, social media becomes a powerful amplifier.
@@ -61,7 +61,7 @@ export default function SocialMediaServicePage() {
       </section>
 
       {/* Our Approach */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Our approach</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
           We don't treat social media as isolated posts. We start with your brand story, your audience and your business objectives, then develop a content strategy that works across platforms. We define the role each platform plays in your ecosystem, establish content themes that reflect your brand and audience interests, and build a calendar so publishing is consistent and purposeful. We create content adapted to each platform, manage community engagement and track performance so we can optimise over time.
@@ -101,7 +101,7 @@ export default function SocialMediaServicePage() {
       </section>
 
       {/* Integration */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Integrated with your broader strategy</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
           We do not treat social media as isolated posts. We align social activity with campaigns, launches, events and KOL programmes so that each touchpoint reinforces the others. When you launch a product, media coverage feeds into social content. When you host an event, social amplifies it. When you partner with influencers, social extends their reach. This integration is what creates momentum.
@@ -123,7 +123,7 @@ export default function SocialMediaServicePage() {
       </section>
 
       {/* Services Scope */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">What we provide</h2>
         <div className="space-y-8">
           <div>
@@ -181,7 +181,7 @@ export default function SocialMediaServicePage() {
       </section>
 
       {/* How We Work */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">How we work with you</h2>
         <div className="space-y-8">
           <div>
@@ -212,7 +212,7 @@ export default function SocialMediaServicePage() {
       </section>
 
       {/* FAQ */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Frequently asked questions</h2>
         <div className="space-y-6">
           <div>
@@ -249,7 +249,7 @@ export default function SocialMediaServicePage() {
       </section>
 
       {/* CTA */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8">
           <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Ready to strengthen your social presence?</h3>
           <p className="text-slate-700 dark:text-slate-300 mb-8 leading-relaxed">

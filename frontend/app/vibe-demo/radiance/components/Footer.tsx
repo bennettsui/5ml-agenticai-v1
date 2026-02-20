@@ -11,10 +11,7 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
           {/* Brand Column */}
           <div>
-            <RadianceLogo variant="text" size="md" className="mb-4" />
-            <p className="text-sm text-slate-400 mb-6 leading-relaxed">
-              Integrated PR, events, and digital marketing for Hong Kong brands.
-            </p>
+            <RadianceLogo variant="text" size="md" className="mb-6" />
             <a href="#" aria-label="Follow Radiance on Instagram" className="text-slate-400 hover:text-purple-400 transition inline-block">
               <span className="sr-only">Instagram</span>
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">

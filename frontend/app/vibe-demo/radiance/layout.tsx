@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
+import { LanguageProvider } from './components/LanguageProvider';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://5ml-agenticai-v1.fly.dev'),
   title: {
     template: '%s | Radiance PR & Marketing Hong Kong',
-    default: 'Radiance - Integrated PR & Marketing for Hong Kong Brands',
+    default: 'Radiance - PR & Marketing for Hong Kong Brands',
   },
   description:
     'Radiance PR & Marketing delivers integrated public relations, events, and digital strategy for Hong Kong brands. From earned media campaigns to product launches, we build real brand momentum.',
@@ -34,7 +35,7 @@ export const metadata: Metadata = {
     locale: 'en_HK',
     url: '/vibe-demo/radiance',
     siteName: 'Radiance PR & Marketing',
-    title: 'Radiance - Integrated PR & Marketing for Hong Kong Brands',
+    title: 'Radiance - PR & Marketing for Hong Kong Brands',
     description:
       'Radiance PR & Marketing delivers integrated public relations, events, and digital strategy for Hong Kong brands.',
     images: [
@@ -49,7 +50,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Radiance - Integrated PR & Marketing for Hong Kong Brands',
+    title: 'Radiance - PR & Marketing for Hong Kong Brands',
     description:
       'Radiance PR & Marketing delivers integrated PR, events, and digital marketing for Hong Kong brands.',
     creator: '@radiancehk',
@@ -86,19 +87,19 @@ export default function RadianceLayout({
             contactPoint: {
               '@type': 'ContactPoint',
               contactType: 'Customer Service',
-              email: 'hello@radiancehk.com',
-              telephone: '+852-XXXX-XXXX',
+              email: 'mandy@radiancehk.com',
               availableLanguage: ['en', 'zh-Hant'],
             },
             sameAs: [
-              'https://www.linkedin.com/company/radiance-pr',
               'https://www.instagram.com/radiancehk',
               'https://www.facebook.com/radiancehk',
             ],
           }),
         }}
       />
-      {children}
+      <LanguageProvider>
+        {children}
+      </LanguageProvider>
     </>
   );
 }

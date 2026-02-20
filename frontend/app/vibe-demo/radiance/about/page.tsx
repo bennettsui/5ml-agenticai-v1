@@ -13,9 +13,9 @@ export default function RadianceAboutPage() {
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
 
-      <main id="main-content" className="flex-1">
+      <main id="main-content" className="flex-1 pt-20">
         {/* Breadcrumb */}
-        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+        <section className="py-6 px-6">
           <div className="max-w-6xl mx-auto">
             <Breadcrumb items={[
               { label: lang === 'zh' ? '首頁' : 'Home', href: '/vibe-demo/radiance' },
@@ -25,7 +25,7 @@ export default function RadianceAboutPage() {
         </section>
 
       {/* Hero Intro */}
-      <section className="pt-32 pb-16 px-6 max-w-4xl mx-auto">
+      <section className="pt-32 pb-16 px-6 max-w-6xl mx-auto">
         <div className="space-y-6">
           <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
             {lang === 'zh' ? '關於Radiance' : 'About Radiance'}
@@ -39,7 +39,7 @@ export default function RadianceAboutPage() {
       </section>
 
       {/* Our Story */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
           {lang === 'zh' ? '我們的故事' : 'Our story'}
         </h2>
@@ -73,7 +73,7 @@ export default function RadianceAboutPage() {
       </section>
 
       {/* What We Do */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
           {lang === 'zh' ? '我們的服務' : 'What we do'}
         </h2>
@@ -164,7 +164,7 @@ export default function RadianceAboutPage() {
       </section>
 
       {/* How We Work */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
           {lang === 'zh' ? '我們如何與您合作' : 'How we work with you'}
         </h2>
@@ -213,7 +213,7 @@ export default function RadianceAboutPage() {
       </section>
 
       {/* Who We Work With */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
           {lang === 'zh' ? '我們的服務對象' : 'Who we work with'}
         </h2>
@@ -267,7 +267,7 @@ export default function RadianceAboutPage() {
       </section>
 
       {/* Values */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
           {lang === 'zh' ? '我們的信念' : 'What we believe'}
         </h2>
@@ -326,7 +326,7 @@ export default function RadianceAboutPage() {
       </section>
 
       {/* CTA */}
-      <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+      <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8">
           <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
             {lang === 'zh' ? '準備好攜手合作了嗎？' : 'Ready to work together?'}

@@ -140,9 +140,9 @@ export default function ContactPage() {
       <Header />
 
       <main id="main-content" className="flex-1 pt-20">
-        {/* Hero Section */}
-        <section className="py-24 px-6 border-b border-slate-200 dark:border-slate-800">
-          <div className="max-w-6xl mx-auto mb-8">
+        {/* Breadcrumb */}
+        <section className="py-6 px-6">
+          <div className="max-w-6xl mx-auto">
             <Breadcrumb items={[
               { label: lang === 'zh' ? '首頁' : 'Home', href: '/vibe-demo/radiance' },
               { label: lang === 'zh' ? '立即聯絡' : 'Get in Touch' }
