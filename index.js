@@ -4916,6 +4916,179 @@ app.post('/api/ziwei/evaluate-rules', async (req, res) => {
 });
 
 // ==========================================
+// Ziwei Palace & Star Knowledge Endpoints
+// ==========================================
+
+// GET /api/ziwei/palaces - Get all palaces
+app.get('/api/ziwei/palaces', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const palaces = await db.getAllZiweiPalaces();
+
+    res.json({
+      success: true,
+      count: palaces.length,
+      palaces: palaces.map(p => ({
+        id: p.id,
+        number: p.number,
+        chinese: p.chinese,
+        english: p.english,
+        meaning: p.meaning,
+        governs: p.governs,
+        positive_indicators: p.positive_indicators,
+        negative_indicators: p.negative_indicators
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Ziwei palaces error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/palaces/:id - Get specific palace
+app.get('/api/ziwei/palaces/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const palace = await db.getZiweiPalace(req.params.id);
+
+    if (!palace) {
+      return res.status(404).json({ error: 'Palace not found' });
+    }
+
+    res.json({
+      success: true,
+      palace: {
+        id: palace.id,
+        number: palace.number,
+        chinese: palace.chinese,
+        english: palace.english,
+        meaning: palace.meaning,
+        governs: palace.governs,
+        positive_indicators: palace.positive_indicators,
+        negative_indicators: palace.negative_indicators
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ziwei palace error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/stars - Get all stars
+app.get('/api/ziwei/stars', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const stars = await db.getAllZiweiStars();
+
+    res.json({
+      success: true,
+      count: stars.length,
+      stars: stars.map(s => ({
+        id: s.id,
+        number: s.number,
+        chinese: s.chinese,
+        english: s.english,
+        meaning: s.meaning,
+        element: s.element,
+        archetype: s.archetype,
+        general_nature: s.general_nature,
+        key_traits: s.key_traits
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Ziwei stars error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/stars/:id - Get specific star
+app.get('/api/ziwei/stars/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const star = await db.getZiweiStar(req.params.id);
+
+    if (!star) {
+      return res.status(404).json({ error: 'Star not found' });
+    }
+
+    res.json({
+      success: true,
+      star: {
+        id: star.id,
+        number: star.number,
+        chinese: star.chinese,
+        english: star.english,
+        meaning: star.meaning,
+        element: star.element,
+        archetype: star.archetype,
+        general_nature: star.general_nature,
+        key_traits: star.key_traits,
+        palace_meanings: star.palace_meanings
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ziwei star error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/palace-star-meanings/:palaceId/:starId - Get star meaning in specific palace
+app.get('/api/ziwei/palace-star-meanings/:palaceId/:starId', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const palace = await db.getZiweiPalace(req.params.palaceId);
+    const star = await db.getZiweiStar(req.params.starId);
+
+    if (!palace || !star) {
+      return res.status(404).json({ error: 'Palace or star not found' });
+    }
+
+    const meaning = star.palace_meanings?.[req.params.palaceId];
+
+    res.json({
+      success: true,
+      palace: {
+        id: palace.id,
+        chinese: palace.chinese,
+        english: palace.english
+      },
+      star: {
+        id: star.id,
+        chinese: star.chinese,
+        english: star.english
+      },
+      meaning: meaning || {
+        positive: 'Information not available',
+        negative: 'Information not available'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ziwei palace-star meanings error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;

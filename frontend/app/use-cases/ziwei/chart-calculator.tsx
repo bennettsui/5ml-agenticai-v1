@@ -96,29 +96,38 @@ export function ChartCalculator() {
       if (!response.ok) throw new Error('Failed to load chart');
 
       const data = await response.json();
-      setLoadedChartData(data);
+      const chartData = data.chart; // API wraps in 'chart' object
+      setLoadedChartData(chartData);
+
+      // Parse birth_info if it's a string (from database)
+      const birthInfo = typeof chartData.birth_info === 'string'
+        ? JSON.parse(chartData.birth_info)
+        : chartData.birth_info;
 
       // Pre-fill the form with the loaded chart data
-      if (data.birth_info) {
+      if (birthInfo) {
         setInput({
-          lunarYear: data.birth_info.lunarYear,
-          lunarMonth: data.birth_info.lunarMonth,
-          lunarDay: data.birth_info.lunarDay,
-          hourBranch: data.birth_info.hourBranch,
-          gender: data.birth_info.gender,
-          name: data.name || data.birth_info.name,
-          placeOfBirth: data.birth_info.placeOfBirth,
-          timezone: data.birth_info.timezone,
-          calendarType: data.birth_info.calendarType
+          lunarYear: birthInfo.lunarYear,
+          lunarMonth: birthInfo.lunarMonth,
+          lunarDay: birthInfo.lunarDay,
+          hourBranch: birthInfo.hourBranch,
+          gender: birthInfo.gender,
+          name: chartData.name || birthInfo.name,
+          placeOfBirth: birthInfo.placeOfBirth,
+          timezone: birthInfo.timezone,
+          calendarType: birthInfo.calendarType
         });
       }
 
-      // Load the chart automatically
-      if (data.chart_data) {
-        setChart(data.chart_data);
+      // Load the chart automatically - parse chart_data if it's a string
+      if (chartData.chart_data) {
+        const chartDataParsed = typeof chartData.chart_data === 'string'
+          ? JSON.parse(chartData.chart_data)
+          : chartData.chart_data;
+        setChart(chartDataParsed);
         // Auto-generate interpretations
-        await generateInterpretations(data.chart_data, id);
-        await evaluateRules(data.chart_data);
+        await generateInterpretations(chartDataParsed, id);
+        await evaluateRules(chartDataParsed);
       }
     } catch (err: any) {
       console.error('Error loading chart:', err);

@@ -921,8 +921,9 @@ async function initDatabase() {
 
     console.log('✅ Database schema initialized (including CRM tables)');
 
-    // Seed Ziwei interpretation rules
+    // Seed Ziwei knowledge
     await seedZiweiRules();
+    await seedZiweiPalacesAndStars();
   } catch (error) {
     console.error('❌ Database initialization error:', error.message);
     console.error('Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
@@ -1843,6 +1844,77 @@ async function seedZiweiRules() {
   }
 }
 
+async function seedZiweiPalacesAndStars() {
+  try {
+    const palacesAndStars = require('./knowledge/ziwei-palaces-stars-seed');
+
+    let palaceCount = 0;
+    let starCount = 0;
+
+    // Seed palaces
+    for (const palace of palacesAndStars.palaces) {
+      const existing = await pool.query(
+        `SELECT id FROM ziwei_palaces WHERE id = $1 LIMIT 1`,
+        [palace.id]
+      );
+
+      if (existing.rows.length === 0) {
+        await pool.query(
+          `INSERT INTO ziwei_palaces
+           (id, number, chinese, english, meaning, governs, positive_indicators, negative_indicators)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            palace.id,
+            palace.number,
+            palace.chinese,
+            palace.english,
+            palace.meaning,
+            JSON.stringify(palace.governs),
+            palace.positive_indicators,
+            palace.negative_indicators
+          ]
+        );
+        palaceCount++;
+      }
+    }
+
+    // Seed stars
+    for (const star of palacesAndStars.stars) {
+      const existing = await pool.query(
+        `SELECT id FROM ziwei_stars WHERE id = $1 LIMIT 1`,
+        [star.id]
+      );
+
+      if (existing.rows.length === 0) {
+        await pool.query(
+          `INSERT INTO ziwei_stars
+           (id, number, chinese, english, meaning, element, archetype, general_nature, key_traits, palace_meanings)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            star.id,
+            star.number,
+            star.chinese,
+            star.english,
+            star.meaning,
+            star.element,
+            star.archetype,
+            star.general_nature,
+            JSON.stringify(star.key_traits),
+            JSON.stringify(star.palace_meanings)
+          ]
+        );
+        starCount++;
+      }
+    }
+
+    console.log(`✅ Ziwei knowledge seeded: ${palaceCount} palaces, ${starCount} stars`);
+    return { palaceCount, starCount };
+  } catch (error) {
+    console.error('⚠️ Ziwei knowledge seeding error:', error.message);
+    return { palaceCount: 0, starCount: 0 };
+  }
+}
+
 async function getZiweiRules(filters = {}) {
   try {
     let query = `SELECT * FROM ziwei_interpretation_rules WHERE status = 'active'`;
@@ -1864,6 +1936,56 @@ async function getZiweiRules(filters = {}) {
     return result.rows;
   } catch (error) {
     console.error('Error fetching Ziwei rules:', error);
+    throw error;
+  }
+}
+
+async function getZiweiPalace(palaceId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_palaces WHERE id = $1`,
+      [palaceId]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching palace:', error);
+    throw error;
+  }
+}
+
+async function getAllZiweiPalaces() {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_palaces ORDER BY number ASC`
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching palaces:', error);
+    throw error;
+  }
+}
+
+async function getZiweiStar(starId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_stars WHERE id = $1`,
+      [starId]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching star:', error);
+    throw error;
+  }
+}
+
+async function getAllZiweiStars() {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_stars ORDER BY number ASC`
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching stars:', error);
     throw error;
   }
 }
@@ -3193,7 +3315,12 @@ module.exports = {
   getEdmById,
   // Ziwei Astrology
   seedZiweiRules,
+  seedZiweiPalacesAndStars,
   getZiweiRules,
+  getZiweiPalace,
+  getAllZiweiPalaces,
+  getZiweiStar,
+  getAllZiweiStars,
   saveZiweiRuleFeedback,
   updateZiweiRuleStatistics,
   // Ziwei Step 4-6 (LLM Enhancement)
