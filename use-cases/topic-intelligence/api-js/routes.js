@@ -4317,6 +4317,192 @@ function generateMockNews(limit = 20) {
 }
 
 /**
+ * GET /fb-ig-page-data
+ * Test endpoint to return Facebook Page + Instagram data
+ */
+router.get('/fb-ig-page-data', (req, res) => {
+  const adAccount = {
+    id: 'act_1249401425701453',
+    name: "Maxim's MX",
+    account_id: '1249401425701453',
+    account_status: 1,
+    currency: 'HKD',
+    business_name: '',
+  };
+
+  const response = {
+    timestamp: new Date().toISOString(),
+    ad_account: adAccount,
+    page: {
+      id: '118902334500221',
+      name: "Maxim's MX",
+      description: "Official page for Maxim's MX with product updates and promos.",
+      follower_count: 28634,
+      posts: [
+        {
+          id: '118902334500221_1092837450500221',
+          message: 'New seasonal menu is live. Try the spicy chicken wrap and tell us what you think.',
+          created_time: '2024-12-03T06:45:00Z',
+          permalink_url: 'https://www.facebook.com/118902334500221/posts/1092837450500221',
+          reactions: {
+            like: 312,
+            love: 48,
+            wow: 9,
+            haha: 4,
+            angry: 1,
+          },
+          comments: [
+            {
+              id: '1092837450500221_1000001',
+              from: 'Diana Li',
+              message: 'Tried it today, super good.',
+              created_time: '2024-12-03T08:05:00Z',
+            },
+            {
+              id: '1092837450500221_1000002',
+              from: 'Chris Wu',
+              message: 'Can we get a vegetarian option too?',
+              created_time: '2024-12-03T09:20:00Z',
+            },
+          ],
+          engagement: {
+            total_reactions: 374,
+            total_comments: 18,
+            total_shares: 7,
+          },
+        },
+        {
+          id: '118902334500221_1092837450500222',
+          message: 'Weekend bundle deal: buy 2 get 1 free from 2-4 PM.',
+          created_time: '2024-12-06T03:10:00Z',
+          permalink_url: 'https://www.facebook.com/118902334500221/posts/1092837450500222',
+          reactions: {
+            like: 201,
+            love: 22,
+            wow: 3,
+            haha: 2,
+            angry: 0,
+          },
+          comments: [
+            {
+              id: '1092837450500222_1000003',
+              from: 'Max Chan',
+              message: 'Perfect timing for the weekend.',
+              created_time: '2024-12-06T04:12:00Z',
+            },
+          ],
+          engagement: {
+            total_reactions: 228,
+            total_comments: 9,
+            total_shares: 5,
+          },
+        },
+      ],
+      engagement: {
+        total_posts: 2,
+        total_reactions: 602,
+        total_comments: 27,
+        total_shares: 12,
+        engagement_rate: 0.022,
+      },
+    },
+    instagram: {
+      connected: true,
+      profile: {
+        id: '17841406298451234',
+        username: 'maxims.mx',
+        followers_count: 48210,
+        media_count: 318,
+        profile_url: 'https://www.instagram.com/maxims.mx/',
+      },
+      posts: [
+        {
+          id: '18010724591234567',
+          caption: 'Weekend bundle deal. Swipe to see the full spread.',
+          timestamp: '2024-12-05T12:30:00Z',
+          media_url: 'https://example.com/ig/maxims-bundle.jpg',
+          like_count: 1240,
+          comment_count: 36,
+        },
+        {
+          id: '18010724591234568',
+          caption: 'Behind the scenes: prepping the spicy chicken wrap.',
+          timestamp: '2024-12-02T10:15:00Z',
+          media_url: 'https://example.com/ig/maxims-wrap.jpg',
+          like_count: 980,
+          comment_count: 28,
+        },
+      ],
+      engagement: {
+        total_posts: 2,
+        total_likes: 2220,
+        total_comments: 64,
+        engagement_rate: 0.047,
+      },
+    },
+    reporting: {
+      social_media_dashboards: [
+        {
+          id: 'dashboard-overview',
+          name: 'Social Media Overview',
+          metrics: ['followers', 'reach', 'engagement', 'top_posts'],
+          last_updated: '2024-12-06T10:00:00Z',
+        },
+        {
+          id: 'dashboard-content',
+          name: 'Content Performance',
+          metrics: ['post_frequency', 'avg_engagement', 'saves', 'shares'],
+          last_updated: '2024-12-06T10:00:00Z',
+        },
+      ],
+      weekly_report: {
+        period: '2024-12-01 to 2024-12-07',
+        highlights: [
+          'Facebook engagement rate up 8% week-over-week.',
+          'Instagram post saves increased on product content.',
+        ],
+        totals: {
+          impressions: 186420,
+          reach: 92430,
+          engagements: 5140,
+        },
+        top_posts: ['118902334500221_1092837450500221', '18010724591234567'],
+      },
+      monthly_report: {
+        period: '2024-11',
+        highlights: [
+          'Follower growth led by weekend campaign.',
+          'Video posts generated the highest reach.',
+        ],
+        totals: {
+          impressions: 742110,
+          reach: 385204,
+          engagements: 18840,
+        },
+      },
+      internal_analytics_tools: [
+        {
+          name: 'Engagement QA',
+          description: 'Internal tool for spotting reaction spikes and sentiment shifts.',
+        },
+        {
+          name: 'Creative Tracker',
+          description: 'Logs post creative variants and correlates with engagement.',
+        },
+      ],
+    },
+    page_access_token: {
+      source: process.env.META_PAGE_ACCESS_TOKEN ? 'env' : 'mock',
+      expires_at: null,
+      is_non_expiring: true,
+      note: 'Use a long-lived user token or system user to mint a Page token that does not expire.',
+    },
+  };
+
+  res.json(response);
+});
+
+/**
  * GET /debug/llm-status
  * Diagnostic endpoint to check LLM API key status
  */
