@@ -20,7 +20,9 @@ app.use((req, res, next) => {
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-src https://www.google.com/recaptcha/; frame-ancestors 'none'");
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
   next();
 });
 
@@ -3840,10 +3842,14 @@ app.post('/api/radiance/contact', async (req, res) => {
           error: 'Security check failed. Please refresh the page and try again.'
         });
       }
-      const verifyRes = await fetch(
-        `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${recaptchaToken}`,
-        { method: 'POST' }
-      );
+      const verifyRes = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          secret: process.env.RECAPTCHA_SECRET_KEY,
+          response: recaptchaToken,
+        }).toString(),
+      });
       const verifyData = await verifyRes.json();
       if (!verifyData.success || verifyData.score < 0.5) {
         console.warn('⚠️ reCAPTCHA failed for Radiance contact:', { ip, score: verifyData.score });
@@ -3856,16 +3862,32 @@ app.post('/api/radiance/contact', async (req, res) => {
 
     // Sanitize: trim and enforce field length limits
     const clean = {
-      name: (name || '').trim().slice(0, 200),
-      email: (email || '').trim().slice(0, 200),
-      phone: (phone || '').trim().slice(0, 50),
-      company: (company || '').trim().slice(0, 200),
-      industry: (industry || '').trim().slice(0, 200),
+      name:            (name || '').trim().slice(0, 200),
+      email:           (email || '').trim().slice(0, 200),
+      phone:           (phone || '').trim().slice(0, 50),
+      company:         (company || '').trim().slice(0, 200),
+      industry:        (industry || '').trim().slice(0, 200),
       serviceInterest: (serviceInterest || '').trim().slice(0, 200),
-      message: (message || '').trim().slice(0, 5000),
+      budget:          ((req.body.budget) || '').trim().slice(0, 100),
+      timeline:        ((req.body.timeline) || '').trim().slice(0, 100),
+      message:         (message || '').trim().slice(0, 5000),
     };
 
-    // Validation
+    // Whitelist validation for select/dropdown fields
+    const VALID_SERVICE_INTEREST = new Set(['Public Relations', 'Events', 'Social Media', 'KOL Marketing', 'Creative Production', 'Multiple Services', 'Other', '']);
+    const VALID_BUDGET    = new Set(['Under HKD 50k', 'HKD 50k - 100k', 'HKD 100k - 250k', 'HKD 250k+', '']);
+    const VALID_TIMELINE  = new Set(['Immediate (This month)', 'Short-term (1-3 months)', 'Medium-term (3-6 months)', 'Long-term (6+ months)', '']);
+    if (!VALID_SERVICE_INTEREST.has(clean.serviceInterest)) {
+      return res.status(400).json({ success: false, error: 'Invalid service selection.' });
+    }
+    if (!VALID_BUDGET.has(clean.budget)) {
+      return res.status(400).json({ success: false, error: 'Invalid budget selection.' });
+    }
+    if (!VALID_TIMELINE.has(clean.timeline)) {
+      return res.status(400).json({ success: false, error: 'Invalid timeline selection.' });
+    }
+
+    // Required field validation
     if (!clean.name || !clean.email || !clean.message) {
       return res.status(400).json({
         success: false,
@@ -3899,13 +3921,10 @@ app.post('/api/radiance/contact', async (req, res) => {
       userAgent: req.get('user-agent')
     };
 
-    // Log the submission
+    // Log submission ID only — no PII in server logs
     console.log('📧 New Radiance contact submission:', {
       id: submission.id,
-      name: submission.name,
-      email: submission.email,
-      company: submission.company,
-      submittedAt: submission.submittedAt
+      submittedAt: submission.submittedAt,
     });
 
     // TODO: Implement email notification to hello@radiancehk.com
