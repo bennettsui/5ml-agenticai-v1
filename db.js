@@ -3509,3 +3509,25 @@ module.exports = {
   unlinkContactFromProject,
   upsertMetaPageTokens,
 };
+
+async function saveRadianceEnquiry({ name, email, phone, company, industry, serviceInterest, message, sourceLang, ipAddress, userAgent }) {
+  const result = await pool.query(
+    `INSERT INTO radiance_enquiries
+      (name, email, phone, company, industry, service_interest, message, source_lang, ip_address, user_agent)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     RETURNING enquiry_id, created_at`,
+    [name, email, phone || null, company || null, industry || null, serviceInterest || null, message, sourceLang || 'en', ipAddress || null, userAgent || null]
+  );
+  return result.rows[0];
+}
+
+async function getRadianceEnquiries({ limit = 50, offset = 0 } = {}) {
+  const result = await pool.query(
+    `SELECT id, enquiry_id, name, email, phone, company, industry, service_interest, message, source_lang, status, created_at
+     FROM radiance_enquiries
+     ORDER BY created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  );
+  return result.rows;
+}
