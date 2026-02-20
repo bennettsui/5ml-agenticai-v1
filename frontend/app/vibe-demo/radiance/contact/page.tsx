@@ -1,9 +1,18 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Breadcrumb } from '../components/Breadcrumb';
+
+declare global {
+  interface Window {
+    grecaptcha?: {
+      ready: (cb: () => void) => void;
+      execute: (siteKey: string, options: { action: string }) => Promise<string>;
+    };
+  }
+}
 
 function CustomSelect({ name, value, onChange, options, placeholder, required }: {
   name: string; value: string;
@@ -45,6 +54,8 @@ function CustomSelect({ name, value, onChange, options, placeholder, required }:
   );
 }
 
+const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+
 export default function ContactPage() {
   const [formData, setFormData] = useState({
     name: '',
@@ -58,6 +69,26 @@ export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Load reCAPTCHA v3 script once
+  useEffect(() => {
+    if (!RECAPTCHA_SITE_KEY || document.getElementById('recaptcha-v3-script')) return;
+    const script = document.createElement('script');
+    script.id = 'recaptcha-v3-script';
+    script.src = `https://www.google.com/recaptcha/api.js?render=${RECAPTCHA_SITE_KEY}`;
+    script.async = true;
+    document.head.appendChild(script);
+  }, []);
+
+  const getRecaptchaToken = useCallback(async (): Promise<string> => {
+    if (!RECAPTCHA_SITE_KEY || !window.grecaptcha) return '';
+    return new Promise<string>(resolve => {
+      window.grecaptcha!.ready(async () => {
+        const token = await window.grecaptcha!.execute(RECAPTCHA_SITE_KEY, { action: 'contact' });
+        resolve(token);
+      });
+    });
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -86,12 +117,13 @@ export default function ContactPage() {
     setError('');
 
     try {
+      const recaptchaToken = await getRecaptchaToken();
       const response = await fetch('/api/radiance/contact', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, recaptchaToken }),
       });
 
       const data = await response.json();

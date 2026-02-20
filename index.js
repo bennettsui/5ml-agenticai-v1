@@ -3801,13 +3801,72 @@ const wsServer = require('./services/websocket-server');
 // Radiance PR Contact Form API
 // ==========================================
 
+// Simple in-memory rate limiter: max 5 submissions per IP per 15 minutes
+const radianceRateLimitMap = new Map();
+function checkRadianceRateLimit(ip) {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const maxRequests = 5;
+  const entry = radianceRateLimitMap.get(ip) || { count: 0, resetAt: now + windowMs };
+  if (now > entry.resetAt) {
+    entry.count = 0;
+    entry.resetAt = now + windowMs;
+  }
+  entry.count++;
+  radianceRateLimitMap.set(ip, entry);
+  return entry.count <= maxRequests;
+}
+
 // Contact form submission endpoint
 app.post('/api/radiance/contact', async (req, res) => {
   try {
-    const { name, email, phone, company, industry, serviceInterest, message } = req.body;
+    const ip = req.ip || 'unknown';
+
+    // Rate limiting: 5 submissions per IP per 15 minutes
+    if (!checkRadianceRateLimit(ip)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many submissions. Please try again in 15 minutes.'
+      });
+    }
+
+    const { name, email, phone, company, industry, serviceInterest, message, recaptchaToken } = req.body;
+
+    // reCAPTCHA v3 verification (only enforced when secret key is configured)
+    if (process.env.RECAPTCHA_SECRET_KEY) {
+      if (!recaptchaToken) {
+        return res.status(400).json({
+          success: false,
+          error: 'Security check failed. Please refresh the page and try again.'
+        });
+      }
+      const verifyRes = await fetch(
+        `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${recaptchaToken}`,
+        { method: 'POST' }
+      );
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success || verifyData.score < 0.5) {
+        console.warn('⚠️ reCAPTCHA failed for Radiance contact:', { ip, score: verifyData.score });
+        return res.status(400).json({
+          success: false,
+          error: 'Security check failed. Please refresh the page and try again.'
+        });
+      }
+    }
+
+    // Sanitize: trim and enforce field length limits
+    const clean = {
+      name: (name || '').trim().slice(0, 200),
+      email: (email || '').trim().slice(0, 200),
+      phone: (phone || '').trim().slice(0, 50),
+      company: (company || '').trim().slice(0, 200),
+      industry: (industry || '').trim().slice(0, 200),
+      serviceInterest: (serviceInterest || '').trim().slice(0, 200),
+      message: (message || '').trim().slice(0, 5000),
+    };
 
     // Validation
-    if (!name || !email || !message) {
+    if (!clean.name || !clean.email || !clean.message) {
       return res.status(400).json({
         success: false,
         error: 'Name, email, and message are required'
@@ -3816,7 +3875,7 @@ app.post('/api/radiance/contact', async (req, res) => {
 
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(clean.email)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid email address'
@@ -3824,25 +3883,19 @@ app.post('/api/radiance/contact', async (req, res) => {
     }
 
     // Message length validation
-    if (message.length < 10 || message.length > 5000) {
+    if (clean.message.length < 10) {
       return res.status(400).json({
         success: false,
-        error: 'Message must be between 10 and 5000 characters'
+        error: 'Message must be at least 10 characters'
       });
     }
 
     // Store contact submission (in-memory for now, can be extended to database)
     const submission = {
       id: Date.now().toString(),
-      name,
-      email,
-      phone: phone || '',
-      company: company || '',
-      industry: industry || '',
-      serviceInterest: serviceInterest || '',
-      message,
+      ...clean,
       submittedAt: new Date().toISOString(),
-      ip: req.ip,
+      ip,
       userAgent: req.get('user-agent')
     };
 
