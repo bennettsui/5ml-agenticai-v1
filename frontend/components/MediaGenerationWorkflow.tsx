@@ -31,11 +31,15 @@ interface PromptRecord {
       positive: string;
       negative: string;
       headline?: string;
-      ctaCopy?: string;
+      tagline?: string;
+      cta?: string;
+      bodyText?: string;
+      aspectRatio?: string;
       suggestedSampler?: string;
       suggestedCfg?: number;
       suggestedSteps?: number;
       styleTokens?: string[];
+      promptNotes?: string;
       notes?: string;
     };
     video?: { positive: string; negative: string; motionKeywords?: string[]; recommendedFrames?: number; recommendedFps?: number };
@@ -572,11 +576,19 @@ function PromptCard({ prompt, onApprove, onEdit }: {
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-3 text-[11px] text-slate-500">
+                  <div className="flex flex-wrap gap-3 text-[11px] text-slate-500">
+                    {img.aspectRatio    && <span>Ratio: <span className="text-slate-300">{img.aspectRatio}</span></span>}
                     {img.suggestedSampler && <span>Sampler: <span className="text-slate-300">{img.suggestedSampler}</span></span>}
                     {img.suggestedSteps   && <span>Steps: <span className="text-slate-300">{img.suggestedSteps}</span></span>}
                     {img.suggestedCfg    && <span>CFG: <span className="text-slate-300">{img.suggestedCfg}</span></span>}
                   </div>
+
+                  {/* Prompt notes */}
+                  {(img.promptNotes || img.notes) && (
+                    <p className="text-[11px] text-slate-500 italic border-l-2 border-slate-700 pl-2">
+                      {img.promptNotes || img.notes}
+                    </p>
+                  )}
 
                   {/* Ad copy fields */}
                   {(img.headline || img.tagline || img.cta || img.bodyText) && (
