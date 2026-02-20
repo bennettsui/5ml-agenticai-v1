@@ -144,18 +144,18 @@ export default function LeadGenPage() {
               Get a free strategy session with our team. We'll discuss your goals, audit your current positioning, and share concrete ideas to accelerate your growth through integrated PR, events, and digital.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors text-lg">
+              <a href="#contact-form" className="px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors text-lg inline-block text-center">
                 Schedule Free Session
-              </button>
-              <button className="px-8 py-4 border-2 border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400 font-semibold rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors text-lg">
+              </a>
+              <a href="#why-radiance" className="px-8 py-4 border-2 border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400 font-semibold rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors text-lg inline-block text-center">
                 Learn More
-              </button>
+              </a>
             </div>
           </div>
         </section>
 
         {/* Value Proposition */}
-        <section className="py-20 px-6">
+        <section id="why-radiance" className="py-20 px-6">
           <div className="max-w-6xl mx-auto">
             <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-16 text-center">
               Why Radiance?
@@ -257,7 +257,7 @@ export default function LeadGenPage() {
         </section>
 
         {/* Contact Form */}
-        <section className="py-20 px-6 bg-gradient-to-br from-purple-600 to-purple-700">
+        <section id="contact-form" className="py-20 px-6 bg-gradient-to-br from-purple-600 to-purple-700">
           <div className="max-w-2xl mx-auto">
             <h2 className="text-4xl font-bold text-white mb-4 text-center">
               Let's Talk
@@ -420,9 +420,9 @@ export default function LeadGenPage() {
             <p className="text-lg text-purple-100 mb-8">
               No commitment, no pressure. Just a conversation about what's possible for your brand.
             </p>
-            <button className="px-8 py-4 bg-white text-purple-600 font-bold rounded-lg hover:bg-purple-50 transition-colors text-lg">
+            <a href="#contact-form" className="px-8 py-4 bg-white text-purple-600 font-bold rounded-lg hover:bg-purple-50 transition-colors text-lg inline-block">
               Schedule Your Free Session
-            </button>
+            </a>
           </div>
         </section>
       </main>

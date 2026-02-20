@@ -3504,14 +3504,14 @@ app.post('/api/radiance/contact', async (req, res) => {
   try {
     const { name, email, phone, company, industry, serviceInterest, message, sourceLang } = req.body;
 
-    if (!name || !email || !message) {
-      return res.status(400).json({ success: false, error: 'Name, email, and message are required' });
+    if (!name || !email) {
+      return res.status(400).json({ success: false, error: 'Name and email are required' });
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ success: false, error: 'Invalid email address' });
     }
-    if (message.length < 5 || message.length > 5000) {
-      return res.status(400).json({ success: false, error: 'Message must be between 5 and 5000 characters' });
+    if (message && message.length > 5000) {
+      return res.status(400).json({ success: false, error: 'Message must be under 5000 characters' });
     }
 
     const enquiryData = {
@@ -3521,7 +3521,7 @@ app.post('/api/radiance/contact', async (req, res) => {
       company: company || null,
       industry: industry || null,
       serviceInterest: serviceInterest || null,
-      message: message.trim(),
+      message: (message || '').trim(),
       sourceLang: sourceLang || 'en',
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),

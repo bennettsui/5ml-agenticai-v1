@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import {
+  Building2, Palette, Sparkles, ShoppingBag, BookOpen,
+  Leaf, Shirt, UtensilsCrossed, Plug, Gem, Cpu
+} from 'lucide-react';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Breadcrumb } from '../components/Breadcrumb';
@@ -34,9 +38,7 @@ export default function CaseStudiesPage() {
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
-      prev.includes(tag)
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
+      prev.includes(tag) ? [] : [tag]
     );
   };
 
@@ -249,21 +251,21 @@ export default function CaseStudiesPage() {
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {[
-                'Architecture & City Planning',
-                'Art & Culture',
-                'Beauty & Skincare',
-                'Consumer Products',
-                'Education',
-                'Environment & Conservation',
-                'Fashion & Apparel',
-                'Food & Hospitality',
-                'Home Appliances',
-                'Luxury Goods',
-                'Technology'
-              ].map((industry) => (
-                <div key={industry} className="flex gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg">
-                  <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">✓</span>
-                  <span className="text-slate-700 dark:text-slate-300 text-sm">{industry}</span>
+                { label: 'Architecture & City Planning', Icon: Building2 },
+                { label: 'Art & Culture', Icon: Palette },
+                { label: 'Beauty & Skincare', Icon: Sparkles },
+                { label: 'Consumer Products', Icon: ShoppingBag },
+                { label: 'Education', Icon: BookOpen },
+                { label: 'Environment & Conservation', Icon: Leaf },
+                { label: 'Fashion & Apparel', Icon: Shirt },
+                { label: 'Food & Hospitality', Icon: UtensilsCrossed },
+                { label: 'Home Appliances', Icon: Plug },
+                { label: 'Luxury Goods', Icon: Gem },
+                { label: 'Technology', Icon: Cpu },
+              ].map(({ label, Icon }) => (
+                <div key={label} className="flex items-center gap-3 p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-purple-200 dark:hover:border-purple-800 transition-colors">
+                  <Icon className="w-5 h-5 text-purple-500 dark:text-purple-400 flex-shrink-0 stroke-[1.5]" />
+                  <span className="text-slate-700 dark:text-slate-300 text-sm">{label}</span>
                 </div>
               ))}
             </div>

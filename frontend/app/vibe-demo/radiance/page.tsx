@@ -29,9 +29,9 @@ export default function RadiancePage() {
           </div>
           <h1 className="text-7xl md:text-8xl font-bold mb-8 leading-tight text-slate-900 dark:text-white">
             {lang === 'zh' ? (
-              <>整合公關<br className="hidden md:block" />與市場推廣</>
+              <>讓您的品牌<br className="hidden md:block" />成為市場焦點</>
             ) : (
-              <>Integrated PR<br className="hidden md:block" />& Marketing</>
+              <>Make Your Brand<br className="hidden md:block" />Impossible to Ignore</>
             )}
           </h1>
           <p className="text-xl text-slate-600 dark:text-slate-400 mb-16 leading-relaxed max-w-2xl mx-auto font-light">
