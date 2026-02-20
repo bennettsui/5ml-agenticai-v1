@@ -1,12 +1,60 @@
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
 const zwEngine = require('./services/ziwei-chart-engine');
 const { encrypt, decrypt, decryptRow, PII_FIELDS } = require('./services/encryption');
 require('dotenv').config();
+
+// ─── Radiance Email Alert Setup ───────────────────────────────────────────────
+function createMailTransporter() {
+  if (!process.env.SMTP_HOST) return null;
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_PORT === '465',
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  });
+}
+
+async function sendRadianceEnquiryAlert(enquiry) {
+  const transporter = createMailTransporter();
+  if (!transporter) {
+    console.log('📧 [Radiance] SMTP not configured — enquiry logged to DB only.');
+    return;
+  }
+  const alertRecipients = 'mandy@radiancehk.com, bennet.tsui@5mileslab.com';
+  const subject = `[Radiance Enquiry] ${enquiry.name} (${enquiry.company || 'Individual'}) — ${enquiry.serviceInterest || 'General'}`;
+  const html = `<h2 style="font-family:sans-serif;">New Radiance Enquiry</h2>
+<table cellpadding="6" style="border-collapse:collapse;font-family:sans-serif;font-size:14px;">
+  <tr><td><b>Name</b></td><td>${enquiry.name}</td></tr>
+  <tr><td><b>Email</b></td><td><a href="mailto:${enquiry.email}">${enquiry.email}</a></td></tr>
+  <tr><td><b>Phone</b></td><td>${enquiry.phone || '—'}</td></tr>
+  <tr><td><b>Company</b></td><td>${enquiry.company || '—'}</td></tr>
+  <tr><td><b>Industry</b></td><td>${enquiry.industry || '—'}</td></tr>
+  <tr><td><b>Service Interest</b></td><td>${enquiry.serviceInterest || '—'}</td></tr>
+  <tr><td><b>Language</b></td><td>${enquiry.sourceLang === 'zh' ? '繁體中文' : 'English'}</td></tr>
+  <tr><td><b>Submitted</b></td><td>${new Date().toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong' })} HKT</td></tr>
+</table>
+<h3 style="font-family:sans-serif;">Message</h3>
+<p style="white-space:pre-wrap;background:#f5f5f5;padding:12px;border-radius:6px;font-family:sans-serif;">${enquiry.message}</p>
+<hr/><p style="color:#999;font-size:12px;font-family:sans-serif;">Radiance PR &amp; Martech — Enquiry System</p>`;
+  try {
+    await transporter.sendMail({
+      from: `"Radiance Enquiries" <${process.env.SMTP_USER}>`,
+      to: alertRecipients,
+      subject,
+      html,
+    });
+    console.log(`📧 [Radiance] Alert sent to ${alertRecipients}`);
+  } catch (mailErr) {
+    console.error('📧 [Radiance] Email send failed:', mailErr.message);
+  }
+}
+// ──────────────────────────────────────────────────────────────────────────────
 
 const app = express();
 const path = require('path');
@@ -61,7 +109,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar, createContact, getContactsByClient, getContact, updateContact, deleteContact, linkContactToProject, getProjectContacts, unlinkContactFromProject } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -247,6 +295,11 @@ async function testService(id) {
     return { id, name: svc.name, status: 'error', latencyMs: Date.now() - start, error: err.message };
   }
 }
+
+// ==========================================
+// API V1 ROUTES (Versioned with validation)
+// ==========================================
+app.use('/api/v1/ziwei', ziweiV1Router);
 
 app.get('/api/health/services', async (req, res) => {
   const results = [];
@@ -1445,6 +1498,68 @@ app.post('/api/brands', async (req, res) => {
   } catch (err) {
     console.error('Error creating brand:', err);
     res.status(500).json({ error: 'Failed to create brand' });
+  }
+});
+
+// POST /api/brands/setup-complete — Brand Setup → CRM sync
+// Auto-creates brand in CRM from setup wizard
+app.post('/api/brands/setup-complete', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  try {
+    const { brandName, industry, markets, voiceTone, brandPersonality, colorPalette, visualStyle, strategy } = req.body;
+
+    if (!brandName) {
+      return res.status(400).json({ error: 'Brand name is required' });
+    }
+
+    // 1. Check if brand already exists
+    const existing = await pool.query('SELECT id FROM crm_clients WHERE name = $1', [brandName]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Brand already exists' });
+    }
+
+    // 2. Create brand in CRM
+    const brandResult = await pool.query(
+      `INSERT INTO crm_clients (name, industry, region, status, health_score)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, name`,
+      [
+        brandName,
+        JSON.stringify(Array.isArray(industry) ? [industry] : (industry ? [industry] : [])),
+        JSON.stringify(markets || []),
+        'active', // Default to active when created from setup
+        75, // Default health score
+      ]
+    );
+
+    const crmBrandId = brandResult.rows[0].id;
+
+    // 3. Also save to social-content-ops brands table with full profile
+    await saveBrand(brandName, {
+      industry: industry,
+      brand_info: {
+        profile: {
+          brandName,
+          industry,
+          markets: markets || [],
+          voiceTone,
+          brandPersonality,
+          colorPalette,
+          visualStyle,
+        },
+        strategy: strategy,
+      },
+    });
+
+    res.json({
+      success: true,
+      brand_id: crmBrandId,
+      redirect: `/use-cases/crm/brands/detail?id=${crmBrandId}`,
+    });
+  } catch (err) {
+    console.error('Error in setup-complete:', err);
+    res.status(500).json({ error: 'Failed to create brand in CRM' });
   }
 });
 
@@ -2994,6 +3109,176 @@ app.delete('/api/research/:brandId/products/:productId', async (req, res) => {
 });
 
 // ==========================================
+// CRM Contacts (with LinkedIn + Research)
+// ==========================================
+
+// POST /api/crm/contacts/:clientId — create contact
+app.post('/api/crm/contacts/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const contact = await createContact(clientId, req.body);
+    res.json({ success: true, contact });
+  } catch (err) {
+    console.error('[POST /api/crm/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/contacts/:clientId — list client contacts
+app.get('/api/crm/contacts/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const contacts = await getContactsByClient(clientId);
+    res.json({ contacts });
+  } catch (err) {
+    console.error('[GET /api/crm/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/contacts/:clientId/:contactId — get contact details
+app.get('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const contact = await getContact(contactId);
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+    res.json(contact);
+  } catch (err) {
+    console.error('[GET /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/crm/contacts/:clientId/:contactId — update contact
+app.put('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const contact = await updateContact(contactId, req.body);
+    res.json({ success: true, contact });
+  } catch (err) {
+    console.error('[PUT /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/crm/contacts/:clientId/:contactId — delete contact
+app.delete('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    await deleteContact(contactId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/crm/contacts/:contactId/link-project — link contact to project
+app.post('/api/crm/contacts/:contactId/link-project', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { projectId, role } = req.body;
+    const link = await linkContactToProject(contactId, projectId, role);
+    res.json({ success: true, link });
+  } catch (err) {
+    console.error('[POST /api/crm/contacts/:id/link-project] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/projects/:projectId/contacts — get project contacts
+app.get('/api/crm/projects/:projectId/contacts', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const contacts = await getProjectContacts(projectId);
+    res.json({ contacts });
+  } catch (err) {
+    console.error('[GET /api/crm/projects/:id/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/crm/contacts/:contactId/unlink-project — unlink contact from project
+app.delete('/api/crm/contacts/:contactId/unlink-project/:projectId', async (req, res) => {
+  try {
+    const { contactId, projectId } = req.params;
+    await unlinkContactFromProject(contactId, projectId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/crm/contacts/:id/unlink-project/:projectId] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Contact Intelligence (LinkedIn + Research)
+// ==========================================
+
+// Lazy-load services
+let linkedinFetcher = null;
+let contactResearch = null;
+
+function getLinkedInFetcher() {
+  if (!linkedinFetcher) {
+    const LinkedInProfileFetcher = require('./services/linkedinProfileFetcher');
+    linkedinFetcher = new LinkedInProfileFetcher();
+  }
+  return linkedinFetcher;
+}
+
+function getContactResearchService() {
+  if (!contactResearch) {
+    const ContactResearchService = require('./services/contactResearchService');
+    contactResearch = new ContactResearchService();
+  }
+  return contactResearch;
+}
+
+// POST /api/linkedin/profile — fetch LinkedIn profile data
+app.post('/api/linkedin/profile', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'LinkedIn URL required' });
+
+    const fetcher = getLinkedInFetcher();
+    const profile = await fetcher.getProfileSummary(url);
+
+    res.json({ success: true, data: profile });
+  } catch (err) {
+    console.error('[POST /api/linkedin/profile] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/contacts/:contactId/research — conduct online research
+app.post('/api/contacts/:contactId/research', async (req, res) => {
+  try {
+    const { name, title, company, linkedinUrl } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name required' });
+
+    const researchService = getContactResearchService();
+    const research = await researchService.comprehensiveResearch(name, title, company, linkedinUrl);
+
+    // Update contact with research data
+    const contactId = req.params.contactId;
+    // Find contact's client ID - query all contacts
+    const contactResult = await pool.query('SELECT * FROM crm_contacts WHERE id = $1', [contactId]);
+    if (contactResult.rows[0]) {
+      const contact = contactResult.rows[0];
+      await updateContact(contactId, {
+        ...contact,
+        research_data: research,
+      });
+    }
+
+    res.json({ success: true, research });
+  } catch (err) {
+    console.error('[POST /api/contacts/:id/research] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // Social Content Ops: Strategy
 // ==========================================
 
@@ -3210,6 +3495,108 @@ app.get('/api/social/calendar/:brandId', async (req, res) => {
     res.json({ data });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/social/compliance/check — check content against brand profile
+app.post('/api/social/compliance/check', async (req, res) => {
+  try {
+    const { brand_id, copy, colors, brand_profile } = req.body;
+
+    if (!brand_id) {
+      return res.status(400).json({ error: 'brand_id is required' });
+    }
+
+    const { checkBrandCompliance } = require('./services/complianceChecker');
+    const complianceScore = await checkBrandCompliance(
+      brand_id,
+      { copy, colors },
+      brand_profile
+    );
+
+    res.json({
+      compliance: complianceScore,
+      can_proceed: complianceScore.can_proceed,
+      action: complianceScore.action,
+    });
+  } catch (err) {
+    console.error('Error checking compliance:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/brands/guidelines/upload — upload brand guidelines PDF/image
+app.post('/api/brands/guidelines/upload', async (req, res) => {
+  try {
+    const { brandId } = req.body;
+
+    if (!brandId) {
+      return res.status(400).json({ error: 'brandId is required' });
+    }
+
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const file = req.files.file;
+    const allowedMimes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+
+    if (!allowedMimes.includes(file.mimetype)) {
+      return res.status(400).json({ error: 'Invalid file type' });
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File too large (max 10MB)' });
+    }
+
+    // Store file path (in production, would use cloud storage like S3)
+    const fileName = `${brandId}-guidelines-${Date.now()}.${file.name.split('.').pop()}`;
+    const uploadDir = `${__dirname}/uploads/guidelines`;
+
+    // Create directory if it doesn't exist
+    const fs = require('fs');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const filePath = `${uploadDir}/${fileName}`;
+    await file.mv(filePath);
+
+    // Store URL in brand profile
+    const guidelineUrl = `/uploads/guidelines/${fileName}`;
+
+    res.json({
+      success: true,
+      url: guidelineUrl,
+      fileName: file.name,
+    });
+  } catch (err) {
+    console.error('Error uploading guidelines:', err);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// POST /api/brands/guidelines/delete — delete brand guidelines
+app.post('/api/brands/guidelines/delete', async (req, res) => {
+  try {
+    const { brandId, url } = req.body;
+
+    if (!url) {
+      return res.status(400).json({ error: 'url is required' });
+    }
+
+    // Delete file
+    const fs = require('fs');
+    const filePath = `${__dirname}${url}`;
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting guidelines:', err);
+    res.status(500).json({ error: 'Delete failed' });
   }
 });
 
@@ -3928,39 +4315,37 @@ app.post('/api/radiance/contact', async (req, res) => {
       submittedAt: submission.submittedAt,
     });
 
-    // TODO: Implement email notification to hello@radiancehk.com
-    // TODO: Implement database storage
-    // TODO: Implement automated response email to user
+    // Send email alert (non-blocking — don't fail the response if email fails)
+    sendRadianceEnquiryAlert(enquiryData).catch(err =>
+      console.error('📧 [Radiance] Alert email error:', err.message)
+    );
 
-    // Return success response
-    res.status(201).json({
-      success: true,
-      message: 'Thank you for your inquiry. We\'ll be in touch within 2 business days.',
-      submissionId: submission.id
-    });
+    const successMsg = sourceLang === 'zh'
+      ? '感謝您的查詢，我們將於兩個工作天內回覆您。'
+      : "Thank you for your enquiry. We'll be in touch within 2 business days.";
+
+    res.status(201).json({ success: true, message: successMsg, enquiryId: saved.enquiry_id });
 
   } catch (error) {
-    console.error('❌ Contact form submission error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to process contact form. Please try again later.'
-    });
+    console.error('❌ [Radiance] Contact form error:', error);
+    res.status(500).json({ success: false, error: 'Failed to process enquiry. Please try again.' });
   }
 });
 
-// Contact form submission history (for admin dashboard)
+// GET /api/radiance/contact/submissions — admin view of all enquiries
 app.get('/api/radiance/contact/submissions', async (req, res) => {
   try {
-    // This would typically check authentication and fetch from database
-    // For now, return a placeholder
-    res.status(501).json({
-      error: 'Not yet implemented - requires database integration'
-    });
+    const { password } = req.query;
+    if (password !== 'Radiance2026goodluck!') {
+      return res.status(401).json({ error: 'Unauthorised' });
+    }
+    const limit = Math.min(parseInt(req.query.limit || '50'), 200);
+    const offset = parseInt(req.query.offset || '0');
+    const submissions = await getRadianceEnquiries({ limit, offset });
+    res.json({ success: true, count: submissions.length, submissions });
   } catch (error) {
-    console.error('❌ Error fetching submissions:', error);
-    res.status(500).json({
-      error: 'Failed to fetch submissions'
-    });
+    console.error('❌ [Radiance] Submissions fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch submissions' });
   }
 });
 
@@ -4252,9 +4637,12 @@ app.get('/api/recruitai/admin/sessions/:sessionId/messages', async (req, res) =>
 const { calcBaseChart } = require('./services/ziwei-chart-engine');
 
 // POST /api/ziwei/calculate - Calculate a birth chart
-app.post('/api/ziwei/calculate', async (req, res) => {
+app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, asyncHandler(async (req, res) => {
   try {
-    const { lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch, gender, name } = req.body;
+    const {
+      lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch,
+      gender, name, placeOfBirth, timezone, calendarType
+    } = req.body;
 
     // Validate required fields
     if (!lunarYear || !lunarMonth || !lunarDay || !hourBranch || !yearStem || !yearBranch || !gender) {
@@ -4279,12 +4667,24 @@ app.post('/api/ziwei/calculate', async (req, res) => {
     if (process.env.DATABASE_URL) {
       try {
         const db = require('./db');
+        const birthInfo = {
+          lunarYear,
+          lunarMonth,
+          lunarDay,
+          hourBranch,
+          gender,
+          name: name || '',
+          placeOfBirth: placeOfBirth || '',
+          timezone: timezone || 'UTC',
+          calendarType: calendarType || 'lunar'
+        };
+
         const result = await db.query(
           `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
            VALUES ($1, $2, $3, $4) RETURNING id`,
           [
             name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
-            JSON.stringify({ lunarYear, lunarMonth, lunarDay, hourBranch, gender }),
+            JSON.stringify(birthInfo),
             JSON.stringify({ yearStem, yearBranch }),
             JSON.stringify(chart)
           ]
@@ -4307,7 +4707,7 @@ app.post('/api/ziwei/calculate', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // GET /api/ziwei/charts - List saved charts
 app.get('/api/ziwei/charts', async (req, res) => {
@@ -4368,7 +4768,7 @@ app.get('/api/ziwei/charts/:id', async (req, res) => {
 });
 
 // POST /api/ziwei/interpret - Generate interpretations for a chart
-app.post('/api/ziwei/interpret', async (req, res) => {
+app.post('/api/ziwei/interpret', ziweiValidation.validateChartInterpretation, asyncHandler(async (req, res) => {
   try {
     const { chart, chartId, consensusLevel = 'consensus' } = req.body;
 
@@ -4429,7 +4829,7 @@ app.post('/api/ziwei/interpret', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // ==========================================
 // Step 4: Enhanced Interpretation with DeepSeek LLM
@@ -4928,6 +5328,226 @@ app.post('/api/ziwei/evaluate-rules', async (req, res) => {
 });
 
 // ==========================================
+// Ziwei Palace & Star Knowledge Endpoints
+// ==========================================
+
+// GET /api/ziwei/palaces - Get all palaces
+app.get('/api/ziwei/palaces', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const palaces = await db.getAllZiweiPalaces();
+
+    res.json({
+      success: true,
+      count: palaces.length,
+      palaces: palaces.map(p => ({
+        id: p.id,
+        number: p.number,
+        chinese: p.chinese,
+        english: p.english,
+        meaning: p.meaning,
+        governs: p.governs,
+        positive_indicators: p.positive_indicators,
+        negative_indicators: p.negative_indicators
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Ziwei palaces error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/palaces/:id - Get specific palace
+app.get('/api/ziwei/palaces/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const palace = await db.getZiweiPalace(req.params.id);
+
+    if (!palace) {
+      return res.status(404).json({ error: 'Palace not found' });
+    }
+
+    res.json({
+      success: true,
+      palace: {
+        id: palace.id,
+        number: palace.number,
+        chinese: palace.chinese,
+        english: palace.english,
+        meaning: palace.meaning,
+        governs: palace.governs,
+        positive_indicators: palace.positive_indicators,
+        negative_indicators: palace.negative_indicators
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ziwei palace error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/stars - Get all stars
+app.get('/api/ziwei/stars', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const stars = await db.getAllZiweiStars();
+
+    res.json({
+      success: true,
+      count: stars.length,
+      stars: stars.map(s => ({
+        id: s.id,
+        number: s.number,
+        chinese: s.chinese,
+        english: s.english,
+        meaning: s.meaning,
+        element: s.element,
+        archetype: s.archetype,
+        general_nature: s.general_nature,
+        key_traits: s.key_traits
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Ziwei stars error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/stars/:id - Get specific star
+app.get('/api/ziwei/stars/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const star = await db.getZiweiStar(req.params.id);
+
+    if (!star) {
+      return res.status(404).json({ error: 'Star not found' });
+    }
+
+    res.json({
+      success: true,
+      star: {
+        id: star.id,
+        number: star.number,
+        chinese: star.chinese,
+        english: star.english,
+        meaning: star.meaning,
+        element: star.element,
+        archetype: star.archetype,
+        general_nature: star.general_nature,
+        key_traits: star.key_traits,
+        palace_meanings: star.palace_meanings
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ziwei star error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/palace-star-meanings/:palaceId/:starId - Get star meaning in specific palace (DB version)
+app.get('/api/ziwei/palace-star-meanings/:palaceId/:starId', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const palace = await db.getZiweiPalace(req.params.palaceId);
+    const star = await db.getZiweiStar(req.params.starId);
+
+    if (!palace || !star) {
+      return res.status(404).json({ error: 'Palace or star not found' });
+    }
+
+    const meaning = star.palace_meanings?.[req.params.palaceId];
+
+    res.json({
+      success: true,
+      palace: {
+        id: palace.id,
+        chinese: palace.chinese,
+        english: palace.english
+      },
+      star: {
+        id: star.id,
+        chinese: star.chinese,
+        english: star.english
+      },
+      meaning: meaning || {
+        positive: 'Information not available',
+        negative: 'Information not available'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ziwei palace-star meanings error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/star/:name/palaces - Get all 12 palace meanings for one star
+app.get('/api/ziwei/star/:name/palaces', (req, res) => {
+  try {
+    const zwEngine = require('./services/ziwei-chart-engine');
+    const result = zwEngine.getStarInAllPalaces(req.params.name);
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        error: `No palace data found for star '${req.params.name}'`,
+        note: 'Palace-specific meanings database is being compiled'
+      });
+    }
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/ziwei/star/:name/palace/:palace - Single star-palace combination
+app.get('/api/ziwei/star/:name/palace/:palace', (req, res) => {
+  try {
+    const zwEngine = require('./services/ziwei-chart-engine');
+    const result = zwEngine.getStarPalaceMeaning(req.params.name, req.params.palace);
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        error: `No data for '${req.params.name}' in palace '${req.params.palace}'`,
+        note: 'Palace-specific meanings database is being compiled'
+      });
+    }
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/ziwei/palace/:palace - All stars documented in a specific palace
+app.get('/api/ziwei/palace/:palace', (req, res) => {
+  try {
+    const zwEngine = require('./services/ziwei-chart-engine');
+    const result = zwEngine.getPalaceAllStars(req.params.palace);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
@@ -4936,6 +5556,9 @@ const server = http.createServer(app);
 
 // Initialize WebSocket server
 wsServer.initialize(server);
+
+// Global error handler middleware (must be last)
+app.use(errorHandler);
 
 server.listen(port, '0.0.0.0', async () => {
   console.log(`

@@ -5,7 +5,7 @@ import {
   Image, Film, Sparkles, FileText, CheckCircle2, Clock,
   ChevronRight, Plus, Trash2, Loader2, Copy, CheckCheck,
   Wand2, Play, Eye, Upload, AlertCircle, RefreshCw, Pencil, X, Save,
-  Zap, ImagePlus,
+  Zap, ImagePlus, ThumbsUp, ThumbsDown, MessageSquare,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -27,7 +27,21 @@ interface PromptRecord {
   status: 'draft' | 'approved' | 'archived';
   version: string;
   prompt_json: {
-    image?: { positive: string; negative: string; suggestedSampler?: string; suggestedCfg?: number; suggestedSteps?: number };
+    image?: {
+      positive: string;
+      negative: string;
+      headline?: string;
+      tagline?: string;
+      cta?: string;
+      bodyText?: string;
+      aspectRatio?: string;
+      suggestedSampler?: string;
+      suggestedCfg?: number;
+      suggestedSteps?: number;
+      styleTokens?: string[];
+      promptNotes?: string;
+      notes?: string;
+    };
     video?: { positive: string; negative: string; motionKeywords?: string[]; recommendedFrames?: number; recommendedFps?: number };
   };
   image_workflow_json: Record<string, unknown> | null;
@@ -70,6 +84,19 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── Image generation models ───────────────────────────────────────────────────
+
+const IMAGE_MODELS: { id: string; label: string; desc: string; tag?: string }[] = [
+  { id: 'flux',           label: 'FLUX',          desc: 'Photorealistic, general purpose', tag: 'free' },
+  { id: 'flux-realism',   label: 'FLUX Realism',  desc: 'Enhanced photorealism',           tag: 'free' },
+  { id: 'flux-anime',     label: 'FLUX Anime',    desc: 'Anime / illustrated style',       tag: 'free' },
+  { id: 'flux-3d',        label: 'FLUX 3D',       desc: '3D render style',                 tag: 'free' },
+  { id: 'turbo',          label: 'Turbo',         desc: 'Fastest generation (~5 s)',        tag: 'free' },
+  { id: 'dall-e-3',       label: 'DALL-E 3',      desc: 'Requires OPENAI_API_KEY',         tag: 'paid' },
+];
+
+const DEFAULT_MODEL = 'flux';
+
 // ─── Copy button ──────────────────────────────────────────────────────────────
 
 function CopyButton({ text }: { text: string }) {
@@ -86,7 +113,142 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-// ─── Prompt card ──────────────────────────────────────────────────────────────
+// ─── Asset card ───────────────────────────────────────────────────────────
+
+function AssetCard({ asset, onRunQc, onUpdateStatus }: {
+  asset: { id: number; type: string; url: string; status: string; qc_json?: { approved: boolean; overallScore?: number; revisionNotes?: string } };
+  onRunQc: () => void;
+  onUpdateStatus: (id: number, status: 'approved' | 'rejected', notes?: string) => Promise<void>;
+}) {
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [acting, setActing] = useState(false);
+
+  const isLocalImage = asset.type === 'image' && (asset.url.startsWith('/api/media/serve/') || asset.url.startsWith('http'));
+  const isApproved = asset.status === 'approved';
+  const isRejected = asset.status === 'rejected';
+
+  const approve = async () => {
+    setActing(true);
+    await onUpdateStatus(asset.id, 'approved');
+    setActing(false);
+  };
+
+  const reject = async () => {
+    setActing(true);
+    await onUpdateStatus(asset.id, 'rejected', rejectReason.trim() || undefined);
+    setActing(false);
+    setRejectOpen(false);
+    setRejectReason('');
+  };
+
+  return (
+    <div className={`rounded-xl border bg-slate-800/60 overflow-hidden ${isApproved ? 'border-emerald-500/30' : isRejected ? 'border-red-500/30' : 'border-slate-700/50'}`}>
+      <div className="flex gap-3 p-4">
+        {/* Thumbnail */}
+        {isLocalImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={asset.url}
+            alt="Asset thumbnail"
+            className="w-24 h-24 rounded-lg object-cover bg-slate-900 border border-slate-700/50 shrink-0"
+          />
+        ) : (
+          <div className="w-24 h-24 rounded-lg bg-slate-900 border border-slate-700/50 flex items-center justify-center shrink-0">
+            {asset.type === 'video' ? <Film className="w-6 h-6 text-rose-400" /> : <Image className="w-6 h-6 text-slate-600" />}
+          </div>
+        )}
+
+        {/* Info */}
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              {asset.type === 'video'
+                ? <Film className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                : <Image className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              }
+              <StatusBadge status={asset.status} />
+              {asset.qc_json?.overallScore != null && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${asset.qc_json.approved ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                  QC {asset.qc_json.overallScore}/10
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {!isApproved && !isRejected && (
+                <button
+                  onClick={onRunQc}
+                  className="text-[10px] px-2 py-1 rounded-lg bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30 transition-colors"
+                >
+                  Run QC
+                </button>
+              )}
+              {!isApproved && (
+                <button
+                  onClick={approve}
+                  disabled={acting}
+                  className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-colors disabled:opacity-50"
+                >
+                  {acting ? <Loader2 className="w-3 h-3 animate-spin" /> : <ThumbsUp className="w-3 h-3" />} Approve
+                </button>
+              )}
+              {!isRejected && (
+                <button
+                  onClick={() => setRejectOpen(v => !v)}
+                  className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 transition-colors"
+                >
+                  <ThumbsDown className="w-3 h-3" /> Reject
+                </button>
+              )}
+            </div>
+          </div>
+
+          {asset.qc_json?.revisionNotes && (
+            <p className="text-[11px] text-slate-400 italic">{asset.qc_json.revisionNotes}</p>
+          )}
+
+          {isApproved && (
+            <p className="text-[11px] text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Approved for delivery</p>
+          )}
+          {isRejected && (
+            <p className="text-[11px] text-red-400 flex items-center gap-1"><X className="w-3 h-3" /> Rejected</p>
+          )}
+        </div>
+      </div>
+
+      {/* Reject reason form */}
+      {rejectOpen && (
+        <div className="border-t border-slate-700/40 px-4 py-3 bg-red-500/5 space-y-2">
+          <p className="text-[11px] font-semibold text-red-400 flex items-center gap-1"><MessageSquare className="w-3 h-3" /> Rejection Reason</p>
+          <textarea
+            value={rejectReason}
+            onChange={e => setRejectReason(e.target.value)}
+            rows={2}
+            placeholder="Describe what needs to change (optional)…"
+            className="w-full bg-white/[0.03] border border-red-500/30 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-red-500/60 resize-none"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={reject}
+              disabled={acting}
+              className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 transition-colors disabled:opacity-50"
+            >
+              {acting ? <Loader2 className="w-3 h-3 animate-spin" /> : <ThumbsDown className="w-3 h-3" />} Confirm Reject
+            </button>
+            <button
+              onClick={() => { setRejectOpen(false); setRejectReason(''); }}
+              className="text-[10px] px-2.5 py-1 rounded-lg text-slate-500 border border-slate-700/30 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Prompt card ───────────────────────────────────────────────────────────────
 
 function PromptCard({ prompt, onApprove, onEdit }: {
   prompt: PromptRecord;
@@ -94,12 +256,18 @@ function PromptCard({ prompt, onApprove, onEdit }: {
   onEdit: (id: number, newPromptJson: PromptRecord['prompt_json']) => Promise<void>;
   projectId: number;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [generatingStep, setGeneratingStep] = useState('');
+  const [elapsed, setElapsed] = useState(0);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState('');
+  const [imgLoading, setImgLoading] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const img = prompt.prompt_json?.image;
   const vid = prompt.prompt_json?.video;
 
@@ -111,16 +279,75 @@ function PromptCard({ prompt, onApprove, onEdit }: {
   const handleGenerateImage = async () => {
     setGenerating(true);
     setGenerateError('');
+    setGeneratedImage(null);
+    setImgLoading(false);
+    setImgError(false);
+    setElapsed(0);
     setExpanded(true);
+
+    // Elapsed timer
+    const startMs = Date.now();
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startMs) / 1000));
+    }, 1000);
+
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+
     try {
-      const resp = await fetch(`/api/media/prompts/${prompt.id}/generate-image`, { method: 'POST' });
+      setGeneratingStep('Submitting to generation queue…');
+      const resp = await fetch(`/api/media/prompts/${prompt.id}/generate-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: selectedModel }),
+      });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Generation failed');
-      setGeneratedImage(data.imageUrl);
+
+      const { assetId } = data;
+      if (!assetId) throw new Error('No asset ID returned from server');
+
+      setGeneratingStep('AI model is rendering your image…');
+
+      // Poll asset status every 3 s until complete or error
+      await new Promise<void>((resolve, reject) => {
+        pollInterval = setInterval(async () => {
+          try {
+            const pr = await fetch(`/api/media/assets/${assetId}`);
+            const pd = await pr.json();
+            const asset = pd.asset;
+            if (!asset) { reject(new Error('Asset record not found')); return; }
+
+            if (asset.status === 'error') {
+              reject(new Error(asset.metadata_json?.error || 'Image generation failed on server'));
+              return;
+            }
+            if (asset.url && asset.status !== 'generating') {
+              setGeneratingStep('Downloading to server…');
+              setGeneratedImage(asset.url);
+              setImgLoading(true);
+              resolve();
+              return;
+            }
+
+            // Rotate step messages so user knows it's alive
+            const sec = Math.floor((Date.now() - startMs) / 1000);
+            if (sec < 20)       setGeneratingStep('AI model is rendering your image…');
+            else if (sec < 50)  setGeneratingStep('Still rendering — complex prompts take ~45 s…');
+            else                setGeneratingStep('Almost done — downloading result…');
+
+            if (sec > 180) { reject(new Error('Timed out after 3 minutes — try again')); }
+          } catch (pollErr) {
+            reject(pollErr);
+          }
+        }, 3000);
+      });
     } catch (err: unknown) {
       setGenerateError(err instanceof Error ? err.message : 'Generation failed');
     } finally {
+      clearInterval(timer);
+      if (pollInterval) clearInterval(pollInterval);
       setGenerating(false);
+      setGeneratingStep('');
     }
   };
 
@@ -176,18 +403,53 @@ function PromptCard({ prompt, onApprove, onEdit }: {
             </button>
           )}
           {!editMode && (
-            <button
-              onClick={handleGenerateImage}
-              disabled={generating}
-              className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors disabled:opacity-50"
-              title="Generate a preview image from this prompt"
-            >
-              {generating
-                ? <Loader2 className="w-3 h-3 animate-spin" />
-                : <Zap className="w-3 h-3" />
-              }
-              {generating ? 'Generating…' : 'Generate Image'}
-            </button>
+            <div className="relative flex items-center" onMouseDown={e => e.stopPropagation()}>
+              {/* Compound button: main action + model picker */}
+              <div className="flex items-stretch rounded-lg border border-violet-500/30 overflow-hidden">
+                <button
+                  onClick={handleGenerateImage}
+                  disabled={generating}
+                  className="flex items-center gap-1 text-[10px] px-2.5 py-1 bg-violet-600/20 text-violet-400 hover:bg-violet-600/30 transition-colors disabled:opacity-50"
+                >
+                  {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                  {generating ? 'Generating…' : 'Generate'}
+                </button>
+                <button
+                  onClick={() => setModelPickerOpen(v => !v)}
+                  disabled={generating}
+                  className="flex items-center px-1.5 border-l border-violet-500/30 bg-violet-600/10 text-violet-400 hover:bg-violet-600/30 transition-colors disabled:opacity-50"
+                  title="Choose model"
+                >
+                  <ChevronRight className={`w-3 h-3 transition-transform ${modelPickerOpen ? 'rotate-90' : ''}`} />
+                </button>
+              </div>
+
+              {/* Model picker dropdown */}
+              {modelPickerOpen && (
+                <div className="absolute top-full right-0 mt-1 w-56 bg-slate-800 border border-slate-700/60 rounded-xl shadow-xl z-30 overflow-hidden">
+                  <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Image Model</p>
+                  {IMAGE_MODELS.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setSelectedModel(m.id); setModelPickerOpen(false); }}
+                      className={`w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-white/[0.04] transition-colors ${selectedModel === m.id ? 'bg-violet-500/10' : ''}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-xs font-medium ${selectedModel === m.id ? 'text-violet-300' : 'text-slate-200'}`}>{m.label}</span>
+                          <span className={`text-[9px] px-1.5 py-px rounded-full ${m.tag === 'paid' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}`}>{m.tag}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{m.desc}</p>
+                      </div>
+                      {selectedModel === m.id && <span className="text-violet-400 text-xs mt-0.5">✓</span>}
+                    </button>
+                  ))}
+                  <p className="px-3 py-2 text-[10px] text-slate-600 border-t border-slate-700/40">
+                    Using: <span className="text-slate-400">{IMAGE_MODELS.find(m => m.id === selectedModel)?.label}</span>
+                  </p>
+                </div>
+              )}
+            </div>
           )}
           {!editMode ? (
             <button
@@ -222,6 +484,37 @@ function PromptCard({ prompt, onApprove, onEdit }: {
           </button>
         </div>
       </div>
+
+      {/* ── Always-visible: progress + error (outside collapsed body) ── */}
+      {generating && (
+        <div className="border-t border-violet-500/10 px-4 py-4 space-y-3 bg-slate-900/50">
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-4 h-4 text-violet-400 animate-spin shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-white font-medium">{generatingStep || 'Starting generation…'}</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Elapsed: <span className="text-slate-300 font-mono">{elapsed}s</span>
+                <span className="mx-2 text-slate-700">·</span>
+                <span className="text-violet-300">{IMAGE_MODELS.find(m => m.id === selectedModel)?.label || selectedModel}</span>
+              </p>
+            </div>
+          </div>
+          <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-violet-600 to-rose-500 rounded-full transition-all duration-1000"
+              style={{ width: `${Math.min(95, 5 + (elapsed / 90) * 90)}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-slate-600">Downloading from Pollinations.ai server-side — auto-updates when ready</p>
+        </div>
+      )}
+
+      {generateError && !generating && (
+        <div className="border-t border-red-500/20 px-4 py-3 flex items-start gap-2 bg-red-500/5 text-red-400 text-xs">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>{generateError}</span>
+        </div>
+      )}
 
       {/* Expanded body */}
       {expanded && (
@@ -283,11 +576,60 @@ function PromptCard({ prompt, onApprove, onEdit }: {
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-3 text-[11px] text-slate-500">
+                  <div className="flex flex-wrap gap-3 text-[11px] text-slate-500">
+                    {img.aspectRatio    && <span>Ratio: <span className="text-slate-300">{img.aspectRatio}</span></span>}
                     {img.suggestedSampler && <span>Sampler: <span className="text-slate-300">{img.suggestedSampler}</span></span>}
                     {img.suggestedSteps   && <span>Steps: <span className="text-slate-300">{img.suggestedSteps}</span></span>}
                     {img.suggestedCfg    && <span>CFG: <span className="text-slate-300">{img.suggestedCfg}</span></span>}
                   </div>
+
+                  {/* Prompt notes */}
+                  {(img.promptNotes || img.notes) && (
+                    <p className="text-[11px] text-slate-500 italic border-l-2 border-slate-700 pl-2">
+                      {img.promptNotes || img.notes}
+                    </p>
+                  )}
+
+                  {/* Ad copy fields */}
+                  {(img.headline || img.tagline || img.cta || img.bodyText) && (
+                    <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-3 space-y-2">
+                      <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Ad Copy</p>
+                      {img.headline && (
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] text-slate-500">Headline</p>
+                            <p className="text-sm font-bold text-white">{img.headline}</p>
+                          </div>
+                          <CopyButton text={img.headline} />
+                        </div>
+                      )}
+                      {img.tagline && (
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] text-slate-500">Tagline</p>
+                            <p className="text-xs text-slate-300 italic">{img.tagline}</p>
+                          </div>
+                          <CopyButton text={img.tagline} />
+                        </div>
+                      )}
+                      {img.bodyText && (
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] text-slate-500">Body</p>
+                            <p className="text-xs text-slate-300">{img.bodyText}</p>
+                          </div>
+                          <CopyButton text={img.bodyText} />
+                        </div>
+                      )}
+                      {img.cta && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-500">CTA:</span>
+                          <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">{img.cta}</span>
+                          <CopyButton text={img.cta} />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -318,36 +660,53 @@ function PromptCard({ prompt, onApprove, onEdit }: {
             </>
           )}
 
-          {/* Generated image preview */}
-          {generateError && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {generateError}
-            </div>
-          )}
           {generatedImage && (
             <div className="space-y-2">
               <p className="text-[11px] font-semibold text-violet-400 uppercase tracking-wider flex items-center gap-1">
                 <Zap className="w-3 h-3" /> Generated Preview
               </p>
-              {generatedImage.startsWith('data:') || generatedImage.startsWith('http') ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={generatedImage}
-                  alt="Generated preview"
-                  className="w-full rounded-lg border border-slate-700/50 max-h-80 object-contain bg-slate-900"
-                />
-              ) : null}
-              <div className="flex gap-2">
+
+              {imgLoading && !imgError && (
+                <div className="w-full h-48 rounded-lg bg-slate-900 border border-slate-700/50 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
+                  <p className="text-xs text-slate-500">Loading image…</p>
+                </div>
+              )}
+
+              {imgError && (
+                <div className="w-full h-24 rounded-lg bg-red-500/5 border border-red-500/20 flex items-center justify-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400" />
+                  <p className="text-xs text-red-400">Failed to load image — try regenerating</p>
+                </div>
+              )}
+
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={generatedImage}
+                alt="Generated preview"
+                className={`w-full rounded-lg border border-slate-700/50 max-h-80 object-contain bg-slate-900 ${imgLoading || imgError ? 'hidden' : ''}`}
+                onLoad={() => setImgLoading(false)}
+                onError={() => { setImgLoading(false); setImgError(true); }}
+              />
+
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={handleGenerateImage}
+                  disabled={generating}
+                  className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className="w-3 h-3" /> Regenerate
+                </button>
                 <a
                   href={generatedImage}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors"
+                  className="text-[10px] px-2.5 py-1 rounded-lg bg-slate-700/40 text-slate-400 border border-slate-700/30 hover:text-white transition-colors"
                 >
                   Open full size
                 </a>
                 <button
-                  onClick={() => setGeneratedImage(null)}
+                  onClick={() => { setGeneratedImage(null); setImgLoading(false); setImgError(false); }}
                   className="text-[10px] px-2.5 py-1 rounded-lg text-slate-500 border border-slate-700/30 hover:text-white transition-colors"
                 >
                   Clear
@@ -384,6 +743,32 @@ function PromptCard({ prompt, onApprove, onEdit }: {
   );
 }
 
+// ─── Operation progress banner ────────────────────────────────────────────────
+
+function OperationProgress({ step, elapsed }: { step: string; elapsed: number }) {
+  return (
+    <div className="rounded-xl bg-slate-900 border border-purple-500/20 p-4 space-y-3">
+      <div className="flex items-center gap-3">
+        <Loader2 className="w-4 h-4 text-purple-400 animate-spin shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-white font-medium truncate">{step}</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Elapsed: <span className="text-slate-300 font-mono">{elapsed}s</span>
+            <span className="mx-2 text-slate-700">·</span>
+            <span className="text-slate-500">AI processing — page updates automatically</span>
+          </p>
+        </div>
+      </div>
+      <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-purple-600 to-rose-500 rounded-full transition-all duration-1000"
+          style={{ width: `${Math.min(93, 3 + (elapsed / 60) * 90)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MediaGenerationWorkflow() {
@@ -410,6 +795,10 @@ export default function MediaGenerationWorkflow() {
   // Prompt generation
   const [promptsGenerating, setPromptsGenerating] = useState(false);
 
+  // Live operation progress (brief translation + prompt generation)
+  const [operationStep, setOperationStep] = useState('');
+  const [operationElapsed, setOperationElapsed] = useState(0);
+
   // Manual prompt form
   const [showManualForm, setShowManualForm] = useState(false);
   const [manualForm, setManualForm] = useState({
@@ -429,6 +818,59 @@ export default function MediaGenerationWorkflow() {
 
   const [error, setError] = useState('');
 
+  // ── Quick test panel ──────────────────────────────────────────────────────
+  const [showQuickTest, setShowQuickTest] = useState(false);
+  const [qtPrompt, setQtPrompt]     = useState('A professional product photograph of a premium glass perfume bottle sitting on white marble, soft studio diffused lighting from above, shallow depth of field with subtle bokeh background, warm neutral color palette, commercial advertising photography aesthetic');
+  const [qtModel, setQtModel]       = useState('flux');
+  const [qtRunning, setQtRunning]   = useState(false);
+  const [qtStep, setQtStep]         = useState('');
+  const [qtElapsed, setQtElapsed]   = useState(0);
+  const [qtImageUrl, setQtImageUrl] = useState<string | null>(null);
+  const [qtError, setQtError]       = useState('');
+
+  const runQuickTest = async () => {
+    setQtRunning(true);
+    setQtError('');
+    setQtImageUrl(null);
+    setQtElapsed(0);
+    const startMs = Date.now();
+    const timer = setInterval(() => setQtElapsed(Math.floor((Date.now() - startMs) / 1000)), 1000);
+    try {
+      setQtStep('Sending request to server…');
+      const params = new URLSearchParams({ prompt: qtPrompt, model: qtModel });
+      const resp = await fetch(`/api/media/quick-test?${params}`);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Request failed');
+      const { jobId } = data;
+      if (!jobId) throw new Error('No jobId returned — server may need restart');
+
+      setQtStep('Downloading from Pollinations.ai (20–60 s)…');
+      await new Promise<void>((resolve, reject) => {
+        const poll = setInterval(async () => {
+          try {
+            const sr = await fetch(`/api/media/quick-test/status/${jobId}`);
+            const sd = await sr.json();
+            const sec = Math.floor((Date.now() - startMs) / 1000);
+            if (sd.status === 'done' && sd.url) { clearInterval(poll); setQtImageUrl(sd.url); resolve(); }
+            else if (sd.status === 'error')      { clearInterval(poll); reject(new Error(sd.error || 'Generation failed')); }
+            else {
+              if (sec < 25)      setQtStep('AI is rendering…');
+              else if (sec < 55) setQtStep('Still rendering — almost there…');
+              else               setQtStep('Finalising download…');
+              if (sec > 180) { clearInterval(poll); reject(new Error('Timed out after 3 min')); }
+            }
+          } catch (pe) { clearInterval(poll); reject(pe); }
+        }, 3000);
+      });
+    } catch (err: unknown) {
+      setQtError(err instanceof Error ? err.message : 'Test failed');
+    } finally {
+      clearInterval(timer);
+      setQtRunning(false);
+      setQtStep('');
+    }
+  };
+
   // ── Load project list ────────────────────────────────────────────────────
   const loadProjects = async () => {
     setProjectsLoading(true);
@@ -437,8 +879,13 @@ export default function MediaGenerationWorkflow() {
       const resp = await fetch('/api/media/projects');
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Failed to load projects');
-      setProjects(data.projects || []);
+      const list: MediaProject[] = data.projects || [];
+      setProjects(list);
       setProjectsLoaded(true);
+      // Auto-select the most recent project so the user can start immediately
+      if (list.length > 0 && !selectedProject) {
+        await selectProject(list[0].id);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -456,7 +903,14 @@ export default function MediaGenerationWorkflow() {
       if (!resp.ok) throw new Error(data.error || 'Failed to load project');
       setSelectedProject(data);
       setBriefText(data.project.brief_text || '');
-      setActivePane(data.project.brief_text ? 'prompts' : 'brief');
+      // Navigate to the most relevant pane
+      if (data.prompts && data.prompts.length > 0) {
+        setActivePane('prompts');
+      } else if (data.project.brief_text) {
+        setActivePane('prompts');
+      } else {
+        setActivePane('brief');
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -487,11 +941,49 @@ export default function MediaGenerationWorkflow() {
     }
   };
 
+  // ── Shared polling helper — polls project status until done ─────────────
+  const STEP_LABELS: Record<string, string> = {
+    translating_brief:    'Translating brief with AI…',
+    building_style_guide: 'Building visual style guide…',
+    prompt_design:        'Brief processed — ready',
+    generating_prompts:   'Generating prompts for each deliverable…',
+    prompts_ready:        'Done!',
+    error:                'An error occurred — check your brief and retry',
+  };
+  const DONE_STATUSES = new Set(['prompt_design', 'prompts_ready', 'error', 'in_review', 'approved']);
+
+  const pollUntilDone = (projectId: number, startMs: number): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const timerHandle = setInterval(() => setOperationElapsed(Math.floor((Date.now() - startMs) / 1000)), 1000);
+      const poll = setInterval(async () => {
+        try {
+          const pr = await fetch(`/api/media/projects/${projectId}`);
+          const pd = await pr.json();
+          const status: string = pd.project?.status || '';
+          setOperationStep(STEP_LABELS[status] || `Processing… (${status})`);
+          if (DONE_STATUSES.has(status)) {
+            clearInterval(poll);
+            clearInterval(timerHandle);
+            if (status === 'error') reject(new Error('Processing failed — check your brief and try again'));
+            else resolve();
+          }
+          if (Date.now() - startMs > 180000) {
+            clearInterval(poll);
+            clearInterval(timerHandle);
+            reject(new Error('Timed out after 3 minutes'));
+          }
+        } catch { /* keep polling */ }
+      }, 2000);
+    });
+
   // ── Submit brief ──────────────────────────────────────────────────────────
   const submitBrief = async () => {
     if (!selectedProject || !briefText.trim()) return;
     setBriefLoading(true);
     setBriefError('');
+    setOperationStep('Submitting brief…');
+    setOperationElapsed(0);
+    const startMs = Date.now();
     try {
       const resp = await fetch(`/api/media/projects/${selectedProject.project.id}/brief`, {
         method: 'POST',
@@ -500,12 +992,16 @@ export default function MediaGenerationWorkflow() {
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error);
+      setOperationStep('Translating brief with AI…');
+      await pollUntilDone(selectedProject.project.id, startMs);
       await selectProject(selectedProject.project.id);
       setActivePane('prompts');
     } catch (err: unknown) {
       setBriefError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setBriefLoading(false);
+      setOperationStep('');
+      setOperationElapsed(0);
     }
   };
 
@@ -514,6 +1010,9 @@ export default function MediaGenerationWorkflow() {
     if (!selectedProject) return;
     setPromptsGenerating(true);
     setError('');
+    setOperationStep('Queuing prompt generation…');
+    setOperationElapsed(0);
+    const startMs = Date.now();
     try {
       const resp = await fetch(`/api/media/projects/${selectedProject.project.id}/generate-prompts`, {
         method: 'POST',
@@ -521,11 +1020,15 @@ export default function MediaGenerationWorkflow() {
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error);
+      setOperationStep('Generating prompts for each deliverable…');
+      await pollUntilDone(selectedProject.project.id, startMs);
       await selectProject(selectedProject.project.id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setPromptsGenerating(false);
+      setOperationStep('');
+      setOperationElapsed(0);
     }
   };
 
@@ -656,6 +1159,19 @@ export default function MediaGenerationWorkflow() {
     } catch { /* silent */ }
   };
 
+  // ── Approve / reject asset ────────────────────────────────────────────────
+  const updateAssetStatus = async (assetId: number, status: 'approved' | 'rejected', revisionNotes?: string) => {
+    if (!selectedProject) return;
+    try {
+      await fetch(`/api/media/assets/${assetId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, revisionNotes }),
+      });
+      await selectProject(selectedProject.project.id);
+    } catch { /* silent */ }
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
@@ -690,6 +1206,13 @@ export default function MediaGenerationWorkflow() {
             </button>
           )}
           <button
+            onClick={() => setShowQuickTest(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors text-sm ${showQuickTest ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30' : 'bg-slate-700/40 text-slate-400 border-slate-600/40 hover:text-white'}`}
+            title="Quick test: generate one image without a project"
+          >
+            🧪 Test
+          </button>
+          <button
             onClick={() => setShowCreateForm(v => !v)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-colors text-sm"
           >
@@ -697,6 +1220,116 @@ export default function MediaGenerationWorkflow() {
           </button>
         </div>
       </div>
+
+      {/* ── Quick Test Panel ─────────────────────────────────────────────── */}
+      {showQuickTest && (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-emerald-400 flex items-center gap-2">
+              🧪 Quick Image Generation Test
+            </p>
+            <p className="text-[11px] text-slate-500">No project needed — tests the full pipeline directly</p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Test Prompt</label>
+            <textarea
+              value={qtPrompt}
+              onChange={e => setQtPrompt(e.target.value)}
+              rows={2}
+              disabled={qtRunning}
+              className="w-full bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/50 resize-none disabled:opacity-50"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] text-slate-400">Model:</label>
+              <select
+                value={qtModel}
+                onChange={e => setQtModel(e.target.value)}
+                disabled={qtRunning}
+                className="bg-white/[0.04] border border-slate-700/50 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none disabled:opacity-50"
+              >
+                {IMAGE_MODELS.filter(m => m.id !== 'dall-e-3').map(m => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={runQuickTest}
+              disabled={qtRunning || !qtPrompt.trim()}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {qtRunning
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Testing… {qtElapsed}s</>
+                : <>🧪 Run Test</>
+              }
+            </button>
+            {(qtImageUrl || qtError) && !qtRunning && (
+              <button onClick={() => { setQtImageUrl(null); setQtError(''); }} className="text-xs text-slate-500 hover:text-white transition-colors">
+                Reset
+              </button>
+            )}
+          </div>
+
+          {/* Progress */}
+          {qtRunning && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin shrink-0" />
+                <p className="text-sm text-slate-300">{qtStep}</p>
+                <span className="text-xs text-slate-500 font-mono ml-auto">{qtElapsed}s</span>
+              </div>
+              <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-1000"
+                  style={{ width: `${Math.min(95, 5 + (qtElapsed / 60) * 90)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {qtError && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Test failed</p>
+                <p className="text-xs mt-0.5 text-red-300">{qtError}</p>
+                <p className="text-[11px] mt-1 text-slate-500">
+                  {/pollinations|5[02][024]|530|429|timeout|timed out|unreachable|dns|connectivity|attempts/i.test(qtError)
+                    ? 'All Pollinations models share the same origin — if one fails, all fail. This is an external infrastructure issue; switching models will not help. Try again in a few minutes.'
+                    : /403|content filter|refused/i.test(qtError)
+                    ? 'The prompt was blocked by Pollinations.ai content filters. Try rephrasing or removing sensitive terms.'
+                    : /server|restart|jobId/i.test(qtError)
+                    ? 'Check: is the backend server running?'
+                    : 'Check: is the server running? Does the uploads/media directory exist?'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Result */}
+          {qtImageUrl && !qtRunning && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Pipeline working — image generated successfully
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qtImageUrl}
+                alt="Quick test result"
+                className="w-full max-h-64 object-contain rounded-lg border border-emerald-500/20 bg-slate-900"
+              />
+              <div className="flex gap-2 text-[11px] text-slate-500">
+                <span>URL: <span className="text-slate-300 font-mono">{qtImageUrl}</span></span>
+                <a href={qtImageUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 ml-auto">Open full size ↗</a>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
@@ -802,18 +1435,44 @@ export default function MediaGenerationWorkflow() {
           {!projectLoading && selectedProject && (
             <div className="space-y-4">
               {/* Project header */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-white">{selectedProject.project.name}</h3>
-                  {selectedProject.project.client && (
-                    <p className="text-sm text-slate-400">{selectedProject.project.client}</p>
-                  )}
-                </div>
-                <StatusBadge status={selectedProject.project.status} />
+              <div>
+                <h3 className="text-lg font-bold text-white">{selectedProject.project.name}</h3>
+                {selectedProject.project.client && (
+                  <p className="text-sm text-slate-400">{selectedProject.project.client}</p>
+                )}
               </div>
 
-              {/* Pane tabs */}
-              <div className="flex gap-1 border-b border-slate-700/40 pb-0">
+              {/* Step progress + pane tabs */}
+              <div className="space-y-2">
+                {/* Step indicator */}
+                <div className="flex items-center gap-1 text-[11px]">
+                  {[
+                    { key: 'brief',   label: '1 · Brief',   done: !!selectedProject.project.brief_spec_json },
+                    { key: 'prompts', label: '2 · Prompts',  done: selectedProject.prompts.length > 0 },
+                    { key: 'assets',  label: '3 · Generate', done: selectedProject.assets.length > 0 },
+                  ].map((step, i) => (
+                    <div key={step.key} className="flex items-center gap-1">
+                      {i > 0 && <div className="w-4 h-px bg-slate-700" />}
+                      <button
+                        onClick={() => setActivePane(step.key as 'brief' | 'prompts' | 'assets')}
+                        className={`px-2.5 py-0.5 rounded-full border transition-colors ${
+                          activePane === step.key
+                            ? 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                            : step.done
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                            : 'bg-white/[0.02] border-slate-700/40 text-slate-500'
+                        }`}
+                      >
+                        {step.done && activePane !== step.key && '✓ '}{step.label}
+                      </button>
+                    </div>
+                  ))}
+                  <div className="ml-auto">
+                    <StatusBadge status={selectedProject.project.status} />
+                  </div>
+                </div>
+
+                <div className="flex gap-1 border-b border-slate-700/40 pb-0">
                 {(['brief', 'prompts', 'assets'] as const).map(pane => (
                   <button
                     key={pane}
@@ -829,7 +1488,8 @@ export default function MediaGenerationWorkflow() {
                     {pane === 'assets'  && <span className="flex items-center gap-1.5"><Eye className="w-3.5 h-3.5" />Assets{selectedProject.assets.length > 0 && ` (${selectedProject.assets.length})`}</span>}
                   </button>
                 ))}
-              </div>
+                </div>
+              </div>{/* /step progress + pane tabs */}
 
               {/* ── Brief pane ─────────────────────────────────────────── */}
               {activePane === 'brief' && (
@@ -895,10 +1555,13 @@ Mood: Aspirational, high-energy summer.`}
                       className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
                     >
                       {briefLoading
-                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Translating Brief…</>
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Working…</>
                         : <><Sparkles className="w-4 h-4" /> Translate Brief & Build Style Guide</>
                       }
                     </button>
+                    {briefLoading && operationStep && (
+                      <OperationProgress step={operationStep} elapsed={operationElapsed} />
+                    )}
                   </div>
 
                   {/* Show parsed spec if exists */}
@@ -918,11 +1581,30 @@ Mood: Aspirational, high-energy summer.`}
               {/* ── Prompts pane ──────────────────────────────────────── */}
               {activePane === 'prompts' && (
                 <div className="space-y-4">
+                  {/* Next-step banner when prompts exist */}
+                  {selectedProject.prompts.length > 0 && (
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-violet-500/10 border border-violet-500/30">
+                      <Zap className="w-4 h-4 text-violet-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-violet-300">
+                          {selectedProject.prompts.length} prompt{selectedProject.prompts.length !== 1 ? 's' : ''} ready
+                        </p>
+                        <p className="text-xs text-violet-400/70">Expand any card below and click <strong>Generate Image</strong> to create a preview</p>
+                      </div>
+                      <button
+                        onClick={() => setActivePane('assets')}
+                        className="text-[11px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors whitespace-nowrap"
+                      >
+                        View Assets →
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <p className="text-sm text-slate-300">
                       {selectedProject.prompts.length === 0
                         ? 'No prompts yet — generate from brief or write manually.'
-                        : `${selectedProject.prompts.length} prompt set${selectedProject.prompts.length !== 1 ? 's' : ''} · ${selectedProject.prompts.filter(p => p.status === 'approved').length} approved`
+                        : `${selectedProject.prompts.filter(p => p.status === 'approved').length} of ${selectedProject.prompts.length} approved`
                       }
                     </p>
                     <div className="flex items-center gap-2">
@@ -939,11 +1621,14 @@ Mood: Aspirational, high-energy summer.`}
                         title={!selectedProject.project.brief_spec_json ? 'Submit a brief first to use AI generation' : ''}
                       >
                         {promptsGenerating
-                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
+                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Working…</>
                           : <><Wand2 className="w-3.5 h-3.5" /> Generate with AI</>
                         }
                       </button>
                     </div>
+                    {promptsGenerating && operationStep && (
+                      <OperationProgress step={operationStep} elapsed={operationElapsed} />
+                    )}
                   </div>
 
                   {!selectedProject.project.brief_spec_json && !showManualForm && (
@@ -1080,80 +1765,57 @@ Mood: Aspirational, high-energy summer.`}
               {/* ── Assets pane ───────────────────────────────────────── */}
               {activePane === 'assets' && (
                 <div className="space-y-4">
-                  {/* Register asset form */}
-                  <div className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-4 space-y-3">
-                    <p className="text-sm font-semibold text-white flex items-center gap-2">
-                      <Upload className="w-4 h-4 text-slate-400" /> Register GPU Output
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      After generating in ComfyUI / AnimateDiff, register the asset URL here for QC and tracking.
-                    </p>
-                    <div className="flex gap-3">
-                      <select
-                        value={assetForm.type}
-                        onChange={e => setAssetForm(f => ({ ...f, type: e.target.value }))}
-                        className="bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500/50"
-                      >
-                        <option value="image">Image</option>
-                        <option value="video">Video</option>
-                      </select>
-                      <input
-                        value={assetForm.url}
-                        onChange={e => setAssetForm(f => ({ ...f, url: e.target.value }))}
-                        placeholder="https://… or /outputs/filename.png"
-                        className="flex-1 bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500/50"
-                      />
-                      <button
-                        onClick={registerAsset}
-                        disabled={assetLoading || !assetForm.url.trim()}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 transition-colors text-sm disabled:opacity-50"
-                      >
-                        {assetLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                        Add
-                      </button>
+                  {/* Add external asset form (for video / GPU outputs) */}
+                  <details className="rounded-xl border border-slate-700/40 bg-white/[0.02] overflow-hidden">
+                    <summary className="px-4 py-3 text-xs text-slate-400 cursor-pointer hover:text-white transition-colors flex items-center gap-2 select-none">
+                      <Upload className="w-3.5 h-3.5" /> Add External Asset (ComfyUI / AnimateDiff output)
+                    </summary>
+                    <div className="px-4 pb-4 pt-2 space-y-3 border-t border-slate-700/30">
+                      <p className="text-[11px] text-slate-500">
+                        Paste the URL of a video or image you generated externally in ComfyUI / AnimateDiff.
+                      </p>
+                      <div className="flex gap-3">
+                        <select
+                          value={assetForm.type}
+                          onChange={e => setAssetForm(f => ({ ...f, type: e.target.value }))}
+                          className="bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500/50"
+                        >
+                          <option value="image">Image</option>
+                          <option value="video">Video</option>
+                        </select>
+                        <input
+                          value={assetForm.url}
+                          onChange={e => setAssetForm(f => ({ ...f, url: e.target.value }))}
+                          placeholder="https://… or /outputs/filename.png"
+                          className="flex-1 bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500/50"
+                        />
+                        <button
+                          onClick={registerAsset}
+                          disabled={assetLoading || !assetForm.url.trim()}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 transition-colors text-sm disabled:opacity-50"
+                        >
+                          {assetLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                          Add
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  </details>
 
                   {/* Asset list */}
                   {selectedProject.assets.length === 0 ? (
                     <div className="rounded-xl border border-slate-700/40 bg-white/[0.02] p-8 text-center">
-                      <Image className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                      <p className="text-sm text-slate-500">No assets registered yet</p>
+                      <ImagePlus className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                      <p className="text-sm text-slate-500">No assets yet — generate images from the Prompts tab</p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {selectedProject.assets.map(asset => (
-                        <div key={asset.id} className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-2 min-w-0">
-                              {asset.type === 'video'
-                                ? <Film className="w-4 h-4 text-rose-400 shrink-0" />
-                                : <Image className="w-4 h-4 text-blue-400 shrink-0" />
-                              }
-                              <div className="min-w-0">
-                                <p className="text-xs text-slate-300 truncate">{asset.url}</p>
-                                {asset.qc_json && (
-                                  <p className={`text-[11px] mt-0.5 ${asset.qc_json.approved ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {asset.qc_json.approved ? '✓ Approved' : '✗ Needs revision'}
-                                    {asset.qc_json.overallScore != null && ` · Score: ${asset.qc_json.overallScore}/10`}
-                                  </p>
-                                )}
-                                {asset.qc_json?.revisionNotes && (
-                                  <p className="text-[11px] text-slate-500 mt-0.5">{asset.qc_json.revisionNotes}</p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <StatusBadge status={asset.status} />
-                              <button
-                                onClick={() => runAssetQc(asset.id)}
-                                className="text-[10px] px-2 py-1 rounded-lg bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30 transition-colors"
-                              >
-                                Run QC
-                              </button>
-                            </div>
-                          </div>
-                        </div>
+                        <AssetCard
+                          key={asset.id}
+                          asset={asset}
+                          onRunQc={() => runAssetQc(asset.id)}
+                          onUpdateStatus={updateAssetStatus}
+                        />
                       ))}
                     </div>
                   )}

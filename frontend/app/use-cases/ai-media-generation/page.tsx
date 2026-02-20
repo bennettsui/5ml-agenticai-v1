@@ -30,10 +30,10 @@ const chatConfig: AiChatConfig = {
 
 export default function AiMediaGenerationPage() {
   const getInitialTab = (): MediaTab => {
-    if (typeof window === 'undefined') return 'overview';
+    if (typeof window === 'undefined') return 'workflow';
     const p = new URLSearchParams(window.location.search).get('tab') as MediaTab | null;
     const valid: MediaTab[] = ['overview', 'workflow', 'library'];
-    return p && valid.includes(p) ? p : 'overview';
+    return p && valid.includes(p) ? p : 'workflow';
   };
   const [activeTab, setActiveTab] = useState<MediaTab>(getInitialTab);
   const [chatOpen, setChatOpen] = useState(false);
@@ -45,9 +45,9 @@ export default function AiMediaGenerationPage() {
   };
 
   const tabs: { id: MediaTab; label: string; icon: typeof Activity }[] = [
-    { id: 'overview',  label: 'Overview',             icon: Activity  },
-    { id: 'workflow',  label: '🎨 Generation Workflow', icon: Wand2    },
-    { id: 'library',   label: '📚 Multimedia Library',  icon: Library  },
+    { id: 'workflow',  label: '🎨 Generate',         icon: Wand2    },
+    { id: 'library',   label: '📚 Asset Library',    icon: Library  },
+    { id: 'overview',  label: 'About',               icon: Activity },
   ];
 
   return (

@@ -211,7 +211,7 @@ export default function ConsultationPage() {
       <main id="main-content" className="flex-1 pt-20">
 
         {/* Breadcrumb */}
-        <section className="py-6 px-6 border-b border-slate-100 dark:border-slate-800">
+        <section className="py-3 px-6 border-b border-slate-100 dark:border-slate-800">
           <div className="max-w-6xl mx-auto">
             <Breadcrumb items={[
               { label: 'Home', href: '/vibe-demo/radiance' },
@@ -416,10 +416,10 @@ export default function ConsultationPage() {
                     </div>
 
                     <div>
-                      <label htmlFor="consult-message" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Goals or challenge *</label>
+                      <label htmlFor="consult-message" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Goals or challenge</label>
                       <textarea
                         id="consult-message"
-                        name="message" value={formData.message} onChange={handleChange} required rows={4}
+                        name="message" value={formData.message} onChange={handleChange} rows={4}
                         placeholder="What are you looking to achieve? Any specific challenges we should know about?"
                         className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 text-sm"
                       />
@@ -468,8 +468,8 @@ export default function ConsultationPage() {
           <div className="max-w-6xl mx-auto text-center">
             <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
               Prefer email? Reach us at{' '}
-              <a href="mailto:hello@radiancehk.com" className="text-purple-600 dark:text-purple-400 hover:underline">
-                hello@radiancehk.com
+              <a href="mailto:mandy@radiancehk.com" className="text-purple-600 dark:text-purple-400 hover:underline">
+                mandy@radiancehk.com
               </a>
             </p>
             <Link href="/vibe-demo/radiance" className="text-sm text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">

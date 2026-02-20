@@ -41,6 +41,8 @@ COPY swagger.js .
 COPY agents/ ./agents/
 COPY lib/ ./lib/
 COPY routes/ ./routes/
+COPY middleware/ ./middleware/
+COPY validation/ ./validation/
 COPY services/ ./services/
 COPY utils/ ./utils/
 COPY tools/ ./tools/
@@ -48,6 +50,7 @@ COPY public/ ./public/
 COPY knowledge/ ./knowledge/
 COPY infrastructure/ ./infrastructure/
 COPY use-cases/ ./use-cases/
+COPY data/ ./data/
 
 # Compile TypeScript files
 RUN npx tsc --project tsconfig.json || echo "TypeScript compilation warnings (non-critical)"
