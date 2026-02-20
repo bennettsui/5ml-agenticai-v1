@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Send, CheckCircle, Mail, Phone, MessageCircle, MapPin, Clock } from 'lucide-react';
+import { Send, CheckCircle, Mail, MapPin } from 'lucide-react';
 import RecruitNav from '../components/RecruitNav';
 
 const API_BASE = (() => {
@@ -19,7 +19,6 @@ export default function ContactPage() {
   const [form, setForm] = useState({
     name: '',
     email: '',
-    phone: '',
     company: '',
     headcount: '',
     industry: '',
@@ -83,25 +82,13 @@ export default function ContactPage() {
                       {
                         icon: Mail,
                         label: '電郵',
-                        value: 'hello@recruitaistudio.hk',
-                        href: 'mailto:hello@recruitaistudio.hk',
-                      },
-                      {
-                        icon: MessageCircle,
-                        label: 'WhatsApp',
-                        value: '+852 3700 0000',
-                        href: 'https://wa.me/85237000000',
-                      },
-                      {
-                        icon: Phone,
-                        label: '電話',
-                        value: '+852 3700 0000',
-                        href: 'tel:+85237000000',
+                        value: 'bennet.tsui@recruitaistudio.hk',
+                        href: 'mailto:bennet.tsui@recruitaistudio.hk',
                       },
                       {
                         icon: MapPin,
                         label: '地址',
-                        value: '香港九龍灣宏照道38號企業廣場一期',
+                        value: '香港將軍澳151-153號廣生行中心17樓10-11室',
                         href: undefined,
                       },
                     ].map(({ icon: Icon, label, value, href }) => (
@@ -119,33 +106,6 @@ export default function ContactPage() {
                         </div>
                       </div>
                     ))}
-                  </div>
-                </div>
-
-                {/* Office Hours */}
-                <div className="bg-slate-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Clock className="w-5 h-5 text-blue-600" />
-                    <h3 className="font-bold text-slate-900">辦公時間</h3>
-                  </div>
-                  <div className="space-y-2 text-sm text-slate-600">
-                    <div className="flex justify-between">
-                      <span>週一至週五</span>
-                      <span className="font-medium">9:00 – 18:00</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>週六</span>
-                      <span className="font-medium">10:00 – 14:00</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>週日及公眾假期</span>
-                      <span>休息</span>
-                    </div>
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-slate-200">
-                    <p className="text-xs text-slate-500">
-                      ✅ Nora AI 顧問 24/7 隨時回覆基本查詢
-                    </p>
                   </div>
                 </div>
 
@@ -176,7 +136,7 @@ export default function ContactPage() {
                         <CheckCircle className="w-10 h-10 text-emerald-600" />
                       </div>
                       <h3 className="text-2xl font-bold text-slate-900 mb-2">收到您的查詢！</h3>
-                      <p className="text-slate-500 mb-6">我們會在 1 個工作天內與您聯絡，或您可以隨時 WhatsApp 我們。</p>
+                      <p className="text-slate-500 mb-6">我們會在 1 個工作天內與您聯絡。</p>
                       <Link href="/vibe-demo/recruitai"
                         className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors">
                         返回主頁
@@ -213,26 +173,15 @@ export default function ContactPage() {
                           </div>
                         </div>
 
-                        {/* Phone + Company */}
-                        <div className="grid sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">WhatsApp / 電話</label>
-                            <input
-                              value={form.phone}
-                              onChange={e => set('phone', e.target.value)}
-                              placeholder="+852 XXXX XXXX"
-                              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white text-sm"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">公司名稱</label>
-                            <input
-                              value={form.company}
-                              onChange={e => set('company', e.target.value)}
-                              placeholder="ABC 有限公司"
-                              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white text-sm"
-                            />
-                          </div>
+                        {/* Company */}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">公司名稱</label>
+                          <input
+                            value={form.company}
+                            onChange={e => set('company', e.target.value)}
+                            placeholder="ABC 有限公司"
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white text-sm"
+                          />
                         </div>
 
                         {/* Industry + Headcount */}
@@ -301,7 +250,7 @@ export default function ContactPage() {
                         </div>
 
                         {status === 'error' && (
-                          <p className="text-red-600 text-sm">提交出現問題，請稍後重試或直接 WhatsApp 我們。</p>
+                          <p className="text-red-600 text-sm">提交出現問題，請稍後重試或直接電郵聯絡我們。</p>
                         )}
 
                         <button
