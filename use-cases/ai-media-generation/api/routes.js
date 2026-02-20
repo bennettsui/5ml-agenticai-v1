@@ -663,7 +663,7 @@ router.post('/prompts/:id/generate-image', async (req, res) => {
           const seed = Math.floor(Math.random() * 2147483647);
           const encodedPrompt = encodeURIComponent(positivePrompt.substring(0, 800));
           const { width, height } = aspectRatioDimensions(pj.image?.aspectRatio);
-          const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${pollinationsModel}&nologo=true&seed=${seed}&enhance=true`;
+          const pollinationsUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?width=${width}&height=${height}&model=${pollinationsModel}&nologo=true&seed=${seed}`;
           const filename = `media_${record.project_id}_p${record.id}_${seed}.jpg`;
           await downloadAndSaveImage(pollinationsUrl, path.join(UPLOADS_DIR, filename));
           imageUrl = `/api/media/serve/${filename}`;
@@ -711,7 +711,7 @@ router.get('/quick-test', (req, res) => {
       const seed = Math.floor(Math.random() * 2147483647);
       const encoded = encodeURIComponent(prompt.substring(0, 800));
       const { width, height } = aspectRatioDimensions(ratio);
-      const pollinationsUrl = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&model=${model}&nologo=true&seed=${seed}&enhance=true`;
+      const pollinationsUrl = `https://gen.pollinations.ai/image/${encoded}?width=${width}&height=${height}&model=${model}&nologo=true&seed=${seed}`;
       await downloadAndSaveImage(pollinationsUrl, path.join(UPLOADS_DIR, `${jobId}.jpg`));
       quickTestJobs.set(jobId, { ...quickTestJobs.get(jobId), status: 'done', url: `/api/media/serve/${jobId}.jpg` });
     } catch (err) {
