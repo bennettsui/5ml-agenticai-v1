@@ -527,7 +527,30 @@ Return ONLY JSON with this schema (no markdown, no explanation):
 
 // ─── Background image download helper ────────────────────────────────────────
 async function downloadAndSaveImage(url, destPath) {
-  const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 90000 });
+  let resp;
+  try {
+    resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 90000 });
+  } catch (err) {
+    // Translate axios HTTP errors into friendlier messages so the UI can show
+    // actionable context rather than a raw "Request failed with status code N"
+    const status = err?.response?.status;
+    if (status) {
+      const hints = {
+        403: 'Pollinations.ai refused the request (403 Forbidden) — the prompt may have been blocked by content filters',
+        429: 'Pollinations.ai rate limit reached (429) — wait a moment and try again',
+        500: 'Pollinations.ai returned a server error (500) — their service may be temporarily down',
+        530: 'Pollinations.ai is unreachable (530) — Cloudflare DNS/origin error; their service may be down',
+      };
+      throw new Error(hints[status] || `Pollinations.ai returned HTTP ${status} — external API error`);
+    }
+    if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
+      throw new Error('Request to Pollinations.ai timed out — their service may be slow or unavailable');
+    }
+    if (err.code === 'ENOTFOUND' || err.code === 'EAI_AGAIN') {
+      throw new Error('Cannot reach Pollinations.ai — check internet connectivity or DNS');
+    }
+    throw err;
+  }
   fs.writeFileSync(destPath, resp.data);
 }
 
