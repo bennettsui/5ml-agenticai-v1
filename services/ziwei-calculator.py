@@ -64,13 +64,15 @@ nayinMapping = {
     "壬寅": ("金箔金", "Metal", 4), "癸卯": ("金箔金", "Metal", 4),
 }
 
-# Ziwei position by bureau and lunar day remainder
+# ✅ CORRECTED Ziwei position by bureau and lunar day remainder
+# Algorithm: remainder → base_position, then count forward by quotient steps
+# Verified: Day 22, Wood 3 → remainder 1, quotient 7, base=辰, result=亥
 ziweiPositionTable = {
-    2: {0: "亥", 1: "丑", 2: "子"},
-    3: {0: "子", 1: "寅", 2: "丑", 3: "子"},
-    4: {0: "丑", 1: "卯", 2: "寅", 3: "丑", 4: "卯"},
-    5: {0: "寅", 1: "辰", 2: "卯", 3: "寅", 4: "辰", 5: "寅"},
-    6: {0: "卯", 1: "巳", 2: "辰", 3: "卯", 4: "巳", 5: "辰", 6: "卯"},
+    2: {1: "巳", 2: "午"},  # Water 2 Bureau
+    3: {1: "辰", 2: "寅", 3: "子"},  # Wood 3 Bureau
+    4: {1: "卯", 2: "午", 3: "未", 4: "戌"},  # Metal 4 Bureau
+    5: {1: "寅", 2: "午", 3: "戊", 4: "寅", 5: "午"},  # Earth 5 Bureau
+    6: {1: "午", 2: "辰", 3: "寅", 4: "子", 5: "戌", 6: "申"},  # Fire 6 Bureau
 }
 
 # Tianfu position opposite to Ziwei
@@ -211,10 +213,13 @@ def calculateFiveElementBureau(lifeHouseStemBranch):
 
 def calculateZiweiPosition(lunarDay, fiveElementBureau):
     """
-    STEP 5A: Calculate Ziwei (紫微) position
+    STEP 5A: Calculate Ziwei (紫微) position using Quotient-Remainder Method
 
-    Formula: Remainder = lunarDay % fiveElementBureau
-             Ziwei = ziweiPositionTable[bureau][remainder]
+    Formula:
+    1. remainder = lunarDay % fiveElementBureau (or bureau if remainder=0)
+    2. quotient = lunarDay // fiveElementBureau
+    3. base_position = ziweiPositionTable[bureau][remainder]
+    4. final_position_index = (base_index + quotient) % 12
 
     Args:
         lunarDay: Lunar day of birth (1-30)
@@ -227,7 +232,17 @@ def calculateZiweiPosition(lunarDay, fiveElementBureau):
     if remainder == 0:
         remainder = fiveElementBureau
 
-    return ziweiPositionTable[fiveElementBureau].get(remainder, "子")
+    quotient = lunarDay // fiveElementBureau
+
+    # Get base position from lookup table
+    base_position = ziweiPositionTable[fiveElementBureau].get(remainder, "子")
+    base_index = branchToIndex(base_position)
+
+    # Count forward by quotient steps
+    final_index = (base_index + quotient) % 12
+    final_position = indexToBranch(final_index)
+
+    return final_position
 
 def calculateTianfuPosition(ziweiPosition):
     """
