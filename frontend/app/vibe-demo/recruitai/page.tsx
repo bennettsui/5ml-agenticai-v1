@@ -263,9 +263,9 @@ const TESTIMONIALS = [
   {
     quote:
       '在使用 RecruitAIStudio 後，我們的客戶回應時間減少了 65%，客戶滿意度大幅提升。更驚喜的是，我們的前台人員可以花更多時間在高價值服務上，而非處理重複性查詢。',
-    name: '張明',
+    name: '張先生',
     role: '總經理',
-    company: '泓信國際貿易',
+    company: '本地貿易公司',
     industry: '貿易 · 20 名員工',
     avatar: '張',
     rating: 5,
@@ -274,9 +274,9 @@ const TESTIMONIALS = [
   {
     quote:
       '最大的優勢是無需技術團隊，3 天內就能上線使用。我們的發票處理從每週花費 12 小時，降到現在自動完成，會計同事非常感謝這個改變。',
-    name: '陳婉玲',
+    name: '陳女士',
     role: '創辦人',
-    company: 'Belle Boutique',
+    company: '本地零售精品店',
     industry: '零售 · 8 名員工',
     avatar: '陳',
     rating: 5,
@@ -285,9 +285,9 @@ const TESTIMONIALS = [
   {
     quote:
       'AI 商業智能代理幫助我們發掘了 200+ 個潛在客戶線索，並清楚分析哪些服務最有利潤。業績在 3 個月內增長了 3 倍，ROI 遠超預期。',
-    name: '李志強',
+    name: '李先生',
     role: '創辦人兼 CEO',
-    company: 'TechLink Solutions',
+    company: '中環 IT 服務商',
     industry: 'IT 服務 · 12 名員工',
     avatar: '李',
     rating: 5,
@@ -351,9 +351,9 @@ const AGENT_WORKFLOWS: Record<string, { icon: string; step: string }[]> = {
 const CASE_STUDIES = [
   {
     id: 'retail',
-    company: 'Belle Boutique',
+    company: '本地零售精品店',
     industry: '零售 · 8 名員工 · 深水埗',
-    logo: 'BB',
+    logo: '零',
     logoGrad: 'from-pink-500 to-rose-600',
     agents: ['發票處理代理', '客戶服務代理'],
     agentColors: ['bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300', 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'],
@@ -365,7 +365,7 @@ const CASE_STUDIES = [
       { metric: '+25%', label: '3 個月業績增長', up: true },
     ],
     quote: '現在我終於可以專注做買手，而不是每天對帳。AI 幫我省了一個兼職會計的薪水，而且再沒有漏單了。',
-    author: '陳婉玲',
+    author: '陳女士',
     role: '創辦人',
     highlight: '月省 HK$12,000 人力成本',
     highlightBg: 'bg-emerald-50 dark:bg-emerald-950/30',
@@ -374,9 +374,9 @@ const CASE_STUDIES = [
   },
   {
     id: 'fnb',
-    company: '好味樓餐飲集團',
+    company: '本地連鎖餐廳集團',
     industry: '餐飲 F&B · 15 名員工 · 3 間分店',
-    logo: '好',
+    logo: '食',
     logoGrad: 'from-red-500 to-orange-600',
     agents: ['客戶服務代理', '發票處理代理', '商業智能代理'],
     agentColors: [
@@ -392,7 +392,7 @@ const CASE_STUDIES = [
       { metric: '3 個', label: '高利潤菜式被發現，即時調整推廣', up: true },
     ],
     quote: '以前月底對帳要花 2 天，現在 AI 每週出報告。我第一次知道原來燒鵝比龍蝦賺錢，當月就調整了菜單。',
-    author: '王大廚',
+    author: '王先生',
     role: '創辦人',
     highlight: '首月找到 HK$8 萬隱藏成本',
     highlightBg: 'bg-red-50 dark:bg-red-950/30',
@@ -401,9 +401,9 @@ const CASE_STUDIES = [
   },
   {
     id: 'it',
-    company: 'TechLink Solutions',
+    company: '中環 IT 服務商',
     industry: 'IT 服務 · 12 名員工 · 中環',
-    logo: 'TL',
+    logo: 'IT',
     logoGrad: 'from-blue-500 to-violet-600',
     agents: ['商業智能代理', '客戶服務代理'],
     agentColors: [
@@ -418,7 +418,7 @@ const CASE_STUDIES = [
       { metric: '+300%', label: '3 個月業績增長', up: true },
     ],
     quote: 'BI 代理發現了我們一直忽略的舊客戶升級機會，第一個月回本，ROI 達到 450%。這是我做過最值得的投資。',
-    author: '李志強',
+    author: '李先生',
     role: '創辦人兼 CEO',
     highlight: '首月 ROI 達 450%',
     highlightBg: 'bg-blue-50 dark:bg-blue-950/30',

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import RecruitChatbot from './components/RecruitChatbot';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://5ml-agenticai-v1.fly.dev'),
@@ -99,6 +100,7 @@ export default function RecruitAILayout({
         }}
       />
       {children}
+      <RecruitChatbot />
     </>
   );
 }
