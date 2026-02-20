@@ -14,31 +14,48 @@ class PromptEngineerAgent {
 
   // ── Image prompt ──────────────────────────────────────────────────────────
   async buildImagePrompt(spec) {
-    const systemPrompt = `You are a Stable Diffusion / SDXL prompt engineer for an AI creative agency.
-Build high-quality prompts following this structure:
+    const systemPrompt = `You are a Stable Diffusion / SDXL prompt engineer AND an advertising copywriter for an AI creative agency.
+Build high-quality image generation prompts AND ad copy for each deliverable.
+
+Image prompt rules:
   POSITIVE: [subject], [style/medium], [camera/framing], [lighting], [mood], [post-processing tags]
   NEGATIVE: [artifacts to avoid], [brand-excluded elements], [quality failures]
-
-Rules:
 - SDXL responds best to natural descriptive language, not comma-separated keyword dumps.
-- Include quality boosters: "highly detailed, sharp focus, 8k, professional photography" only when appropriate to the style.
+- Include quality boosters: "highly detailed, sharp focus, 8k, professional photography" only when appropriate.
 - Lighting vocabulary: "golden hour", "studio softbox", "neon rim light", "overcast diffused".
 - Camera vocabulary: "shot on Sony A7R IV", "35mm lens", "shallow depth of field", "bird's eye view".
 - Negative prompt must always include: "worst quality, low quality, blurry, deformed, watermark, text, signature".
-- Return ONLY JSON — no explanation, no markdown.
+
+Ad copy rules:
+- headline: short punchy headline (max 8 words) matching the brand tone from the spec.
+- tagline: optional brand tagline or sub-headline (max 12 words).
+- cta: call-to-action text (e.g. "Shop Now", "Learn More", "Book Today").
+- bodyText: 1–2 sentence ad body copy (max 30 words) that supports the headline.
+
+Return ONLY JSON — no explanation, no markdown.
 
 Schema:
 {
-  "positive": "string",
-  "negative": "string",
+  "positive": "string — detailed visual description for image generation",
+  "negative": "string — artifacts and elements to avoid",
+  "headline": "string (optional) — short headline/title to overlay on image (max 10 words)",
+  "ctaCopy": "string (optional) — call-to-action text for image (max 5 words, e.g. 'Learn More', 'Shop Now', 'Discover')",
   "styleTokens": ["string — short reusable tags for this style"],
   "suggestedSampler": "string",
   "suggestedCfg": number,
   "suggestedSteps": number,
+  "headline": "string",
+  "tagline": "string",
+  "cta": "string",
+  "bodyText": "string",
   "notes": "string"
 }`;
 
-    const userContent = `Generate an image prompt for this deliverable spec:\n${JSON.stringify(spec, null, 2)}`;
+    const userContent = `Generate an image prompt for this deliverable spec:\n${JSON.stringify(spec, null, 2)}
+
+IMPORTANT: If the spec includes headline, tagline, or call-to-action copy, generate appropriate "headline" and "ctaCopy" values (optional fields).
+Headline should be short enough to fit on the generated image.
+CTA copy should be a brief action phrase.`;
     return await this._callLLM(systemPrompt, userContent);
   }
 
@@ -91,29 +108,24 @@ Schema:
   // ─── Internal LLM call ────────────────────────────────────────────────────
   async _callLLM(systemPrompt, userContent) {
     const messages = [{ role: 'user', content: userContent }];
-    try {
-      let rawJson;
-      if (shouldUseDeepSeek('deepseek')) {
-        const resp = await deepseekService.chat([
-          { role: 'system', content: systemPrompt },
-          ...messages,
-        ]);
-        rawJson = resp.content;
-      } else {
-        const resp = await this.anthropic.messages.create({
-          model: getClaudeModel('haiku'),
-          max_tokens: 1024,
-          system: systemPrompt,
-          messages,
-        });
-        rawJson = resp.content[0].text;
-      }
-      const cleaned = rawJson.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      return JSON.parse(cleaned);
-    } catch (err) {
-      console.error(`[${this.name}] Prompt generation failed:`, err.message);
-      return { positive: '', negative: 'worst quality, low quality', notes: `Error: ${err.message}` };
+    let rawJson;
+    if (shouldUseDeepSeek('deepseek')) {
+      const resp = await deepseekService.chat([
+        { role: 'system', content: systemPrompt },
+        ...messages,
+      ]);
+      rawJson = resp.content;
+    } else {
+      const resp = await this.anthropic.messages.create({
+        model: getClaudeModel('haiku'),
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages,
+      });
+      rawJson = resp.content[0].text;
     }
+    const cleaned = rawJson.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    return JSON.parse(cleaned);
   }
 }
 

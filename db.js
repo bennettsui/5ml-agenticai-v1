@@ -348,6 +348,38 @@ async function initDatabase() {
         updated_at TIMESTAMP DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS crm_contacts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID REFERENCES crm_clients(id) ON DELETE CASCADE,
+        name VARCHAR(300) NOT NULL,
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        title VARCHAR(200),
+        department VARCHAR(100),
+        linkedin_url VARCHAR(500),
+        linkedin_data JSONB DEFAULT '{}',
+        research_data JSONB DEFAULT '{}',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_client ON crm_contacts(client_id);
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_email ON crm_contacts(email);
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_linkedin ON crm_contacts(linkedin_url);
+
+      CREATE TABLE IF NOT EXISTS crm_contact_project_links (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        contact_id UUID REFERENCES crm_contacts(id) ON DELETE CASCADE,
+        project_id UUID REFERENCES crm_projects(id) ON DELETE CASCADE,
+        role VARCHAR(100),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_contact_project_links_contact ON crm_contact_project_links(contact_id);
+      CREATE INDEX IF NOT EXISTS idx_crm_contact_project_links_project ON crm_contact_project_links(project_id);
+
       -- ==========================================
       -- Ziwei Astrology Tables (中州派紫微斗數)
       -- ==========================================
@@ -886,31 +918,70 @@ async function initDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_community_brand ON social_community_management(brand_id);
 
-      CREATE TABLE IF NOT EXISTS radiance_enquiries (
+      -- ==========================================
+      -- RecruitAI Studio Lead Capture & Chatbot
+      -- ==========================================
+
+      CREATE TABLE IF NOT EXISTS recruitai_leads (
         id SERIAL PRIMARY KEY,
-        enquiry_id UUID DEFAULT gen_random_uuid(),
+        lead_id UUID UNIQUE DEFAULT gen_random_uuid(),
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255) NOT NULL,
         phone VARCHAR(100),
         company VARCHAR(255),
-        industry VARCHAR(255),
-        service_interest VARCHAR(255),
-        message TEXT NOT NULL,
-        source_lang VARCHAR(10) DEFAULT 'en',
-        status VARCHAR(50) DEFAULT 'new',
-        created_at TIMESTAMPTZ DEFAULT NOW(),
+        industry VARCHAR(100),
+        headcount VARCHAR(50),
+        message TEXT,
+        source_page VARCHAR(255),
+        utm_source VARCHAR(100),
+        utm_medium VARCHAR(100),
+        utm_campaign VARCHAR(100),
         ip_address VARCHAR(100),
-        user_agent TEXT
+        created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_radiance_enquiries_email ON radiance_enquiries(email);
-      CREATE INDEX IF NOT EXISTS idx_radiance_enquiries_created ON radiance_enquiries(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_recruitai_leads_email ON recruitai_leads(email);
+      CREATE INDEX IF NOT EXISTS idx_recruitai_leads_industry ON recruitai_leads(industry);
+      CREATE INDEX IF NOT EXISTS idx_recruitai_leads_created ON recruitai_leads(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS recruitai_chat_sessions (
+        id SERIAL PRIMARY KEY,
+        session_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        visitor_id VARCHAR(255),
+        lead_id UUID REFERENCES recruitai_leads(lead_id) ON DELETE SET NULL,
+        industry VARCHAR(100),
+        source_page VARCHAR(255),
+        turn_count INTEGER DEFAULT 0,
+        contact_captured BOOLEAN DEFAULT FALSE,
+        captured_name VARCHAR(255),
+        captured_email VARCHAR(255),
+        captured_phone VARCHAR(255),
+        summary TEXT,
+        ip_address VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_recruitai_sessions_visitor ON recruitai_chat_sessions(visitor_id);
+      CREATE INDEX IF NOT EXISTS idx_recruitai_sessions_created ON recruitai_chat_sessions(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS recruitai_chat_messages (
+        id SERIAL PRIMARY KEY,
+        session_id UUID NOT NULL REFERENCES recruitai_chat_sessions(session_id) ON DELETE CASCADE,
+        role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant')),
+        content TEXT NOT NULL,
+        turn_number INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_recruitai_messages_session ON recruitai_chat_messages(session_id);
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');
 
-    // Seed Ziwei interpretation rules
+    // Seed Ziwei knowledge
     await seedZiweiRules();
+    await seedZiweiPalacesAndStars();
   } catch (error) {
     console.error('❌ Database initialization error:', error.message);
     console.error('Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
@@ -1831,6 +1902,77 @@ async function seedZiweiRules() {
   }
 }
 
+async function seedZiweiPalacesAndStars() {
+  try {
+    const palacesAndStars = require('./knowledge/ziwei-palaces-stars-seed');
+
+    let palaceCount = 0;
+    let starCount = 0;
+
+    // Seed palaces
+    for (const palace of palacesAndStars.palaces) {
+      const existing = await pool.query(
+        `SELECT id FROM ziwei_palaces WHERE id = $1 LIMIT 1`,
+        [palace.id]
+      );
+
+      if (existing.rows.length === 0) {
+        await pool.query(
+          `INSERT INTO ziwei_palaces
+           (id, number, chinese, english, meaning, governs, positive_indicators, negative_indicators)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            palace.id,
+            palace.number,
+            palace.chinese,
+            palace.english,
+            palace.meaning,
+            JSON.stringify(palace.governs),
+            palace.positive_indicators,
+            palace.negative_indicators
+          ]
+        );
+        palaceCount++;
+      }
+    }
+
+    // Seed stars
+    for (const star of palacesAndStars.stars) {
+      const existing = await pool.query(
+        `SELECT id FROM ziwei_stars WHERE id = $1 LIMIT 1`,
+        [star.id]
+      );
+
+      if (existing.rows.length === 0) {
+        await pool.query(
+          `INSERT INTO ziwei_stars
+           (id, number, chinese, english, meaning, element, archetype, general_nature, key_traits, palace_meanings)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            star.id,
+            star.number,
+            star.chinese,
+            star.english,
+            star.meaning,
+            star.element,
+            star.archetype,
+            star.general_nature,
+            JSON.stringify(star.key_traits),
+            JSON.stringify(star.palace_meanings)
+          ]
+        );
+        starCount++;
+      }
+    }
+
+    console.log(`✅ Ziwei knowledge seeded: ${palaceCount} palaces, ${starCount} stars`);
+    return { palaceCount, starCount };
+  } catch (error) {
+    console.error('⚠️ Ziwei knowledge seeding error:', error.message);
+    return { palaceCount: 0, starCount: 0 };
+  }
+}
+
 async function getZiweiRules(filters = {}) {
   try {
     let query = `SELECT * FROM ziwei_interpretation_rules WHERE status = 'active'`;
@@ -1852,6 +1994,56 @@ async function getZiweiRules(filters = {}) {
     return result.rows;
   } catch (error) {
     console.error('Error fetching Ziwei rules:', error);
+    throw error;
+  }
+}
+
+async function getZiweiPalace(palaceId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_palaces WHERE id = $1`,
+      [palaceId]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching palace:', error);
+    throw error;
+  }
+}
+
+async function getAllZiweiPalaces() {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_palaces ORDER BY number ASC`
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching palaces:', error);
+    throw error;
+  }
+}
+
+async function getZiweiStar(starId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_stars WHERE id = $1`,
+      [starId]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching star:', error);
+    throw error;
+  }
+}
+
+async function getAllZiweiStars() {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_stars ORDER BY number ASC`
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching stars:', error);
     throw error;
   }
 }
@@ -2973,6 +3165,213 @@ async function getSocialCalendar(brandId) {
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// CRM Contacts
+// ──────────────────────────────────────────────────────────────────────
+
+async function createContact(clientId, contactData) {
+  try {
+    const {
+      name,
+      email,
+      phone,
+      title,
+      department,
+      linkedin_url,
+      linkedin_data,
+      research_data,
+      notes,
+    } = contactData;
+
+    const result = await pool.query(
+      `INSERT INTO crm_contacts (client_id, name, email, phone, title, department, linkedin_url, linkedin_data, research_data, notes, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+       RETURNING *`,
+      [
+        clientId,
+        name,
+        email || null,
+        phone || null,
+        title || null,
+        department || null,
+        linkedin_url || null,
+        JSON.stringify(linkedin_data || {}),
+        JSON.stringify(research_data || {}),
+        notes || null,
+      ]
+    );
+    return result.rows[0];
+  } catch (err) {
+    console.error('[createContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function getContactsByClient(clientId) {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM crm_contacts WHERE client_id = $1 ORDER BY created_at DESC',
+      [clientId]
+    );
+    return result.rows;
+  } catch (err) {
+    console.error('[getContactsByClient] error:', err.message);
+    throw err;
+  }
+}
+
+async function getContact(contactId) {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM crm_contacts WHERE id = $1',
+      [contactId]
+    );
+    return result.rows[0] || null;
+  } catch (err) {
+    console.error('[getContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function updateContact(contactId, contactData) {
+  try {
+    const {
+      name,
+      email,
+      phone,
+      title,
+      department,
+      linkedin_url,
+      linkedin_data,
+      research_data,
+      notes,
+    } = contactData;
+
+    const result = await pool.query(
+      `UPDATE crm_contacts
+       SET name = COALESCE($1, name),
+           email = COALESCE($2, email),
+           phone = COALESCE($3, phone),
+           title = COALESCE($4, title),
+           department = COALESCE($5, department),
+           linkedin_url = COALESCE($6, linkedin_url),
+           linkedin_data = COALESCE($7, linkedin_data),
+           research_data = COALESCE($8, research_data),
+           notes = COALESCE($9, notes),
+           updated_at = NOW()
+       WHERE id = $10
+       RETURNING *`,
+      [name, email, phone, title, department, linkedin_url, linkedin_data ? JSON.stringify(linkedin_data) : null, research_data ? JSON.stringify(research_data) : null, notes, contactId]
+    );
+    return result.rows[0] || null;
+  } catch (err) {
+    console.error('[updateContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function deleteContact(contactId) {
+  try {
+    await pool.query('DELETE FROM crm_contacts WHERE id = $1', [contactId]);
+  } catch (err) {
+    console.error('[deleteContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function linkContactToProject(contactId, projectId, role = null) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO crm_contact_project_links (contact_id, project_id, role, created_at, updated_at)
+       VALUES ($1, $2, $3, NOW(), NOW())
+       ON CONFLICT (contact_id, project_id) DO UPDATE SET role = $3, updated_at = NOW()
+       RETURNING *`,
+      [contactId, projectId, role || null]
+    );
+    return result.rows[0];
+  } catch (err) {
+    console.error('[linkContactToProject] error:', err.message);
+    throw err;
+  }
+}
+
+async function getProjectContacts(projectId) {
+  try {
+    const result = await pool.query(
+      `SELECT c.*, l.role FROM crm_contacts c
+       JOIN crm_contact_project_links l ON c.id = l.contact_id
+       WHERE l.project_id = $1
+       ORDER BY c.name ASC`,
+      [projectId]
+    );
+    return result.rows;
+  } catch (err) {
+    console.error('[getProjectContacts] error:', err.message);
+    throw err;
+  }
+}
+
+async function unlinkContactFromProject(contactId, projectId) {
+  try {
+    await pool.query(
+      'DELETE FROM crm_contact_project_links WHERE contact_id = $1 AND project_id = $2',
+      [contactId, projectId]
+    );
+  } catch (err) {
+    console.error('[unlinkContactFromProject] error:', err.message);
+    throw err;
+  }
+}
+
+// ── Meta Page Tokens ───────────────────────────────────────────────────────
+
+let metaPageTokensTableReady = false;
+
+async function ensureMetaPageTokensTable() {
+  if (metaPageTokensTableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS meta_page_tokens (
+      id SERIAL PRIMARY KEY,
+      page_id VARCHAR(64) UNIQUE NOT NULL,
+      page_name VARCHAR(255),
+      access_token TEXT NOT NULL,
+      token_source VARCHAR(100),
+      fetched_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  metaPageTokensTableReady = true;
+}
+
+async function upsertMetaPageTokens(pages, tokenSource = null) {
+  try {
+    if (!Array.isArray(pages) || pages.length === 0) return 0;
+    await ensureMetaPageTokensTable();
+
+    let count = 0;
+    for (const page of pages) {
+      if (!page || !page.id || !page.access_token) continue;
+      await pool.query(
+        `INSERT INTO meta_page_tokens (page_id, page_name, access_token, token_source, fetched_at, updated_at)
+         VALUES ($1, $2, $3, $4, NOW(), NOW())
+         ON CONFLICT (page_id) DO UPDATE
+           SET page_name = EXCLUDED.page_name,
+               access_token = EXCLUDED.access_token,
+               token_source = EXCLUDED.token_source,
+               fetched_at = NOW(),
+               updated_at = NOW()`,
+        [page.id, page.name || null, page.access_token, tokenSource]
+      );
+      count += 1;
+    }
+
+    return count;
+  } catch (err) {
+    console.error('[upsertMetaPageTokens] error:', err.message);
+    throw err;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -3023,7 +3422,12 @@ module.exports = {
   getEdmById,
   // Ziwei Astrology
   seedZiweiRules,
+  seedZiweiPalacesAndStars,
   getZiweiRules,
+  getZiweiPalace,
+  getAllZiweiPalaces,
+  getZiweiStar,
+  getAllZiweiStars,
   saveZiweiRuleFeedback,
   updateZiweiRuleStatistics,
   // Ziwei Step 4-6 (LLM Enhancement)
@@ -3094,9 +3498,16 @@ module.exports = {
   getSocialInteractive,
   saveSocialCalendar,
   getSocialCalendar,
-  // Radiance Enquiries
-  saveRadianceEnquiry,
-  getRadianceEnquiries,
+  // CRM Contacts
+  createContact,
+  getContactsByClient,
+  getContact,
+  updateContact,
+  deleteContact,
+  linkContactToProject,
+  getProjectContacts,
+  unlinkContactFromProject,
+  upsertMetaPageTokens,
 };
 
 async function saveRadianceEnquiry({ name, email, phone, company, industry, serviceInterest, message, sourceLang, ipAddress, userAgent }) {

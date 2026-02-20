@@ -6,6 +6,9 @@ const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
 const zwEngine = require('./services/ziwei-chart-engine');
+const { asyncHandler, errorHandler, AppError } = require('./middleware/errorHandler');
+const ziweiValidation = require('./validation/ziweiValidation');
+const ziweiV1Router = require('./routes/v1/ziwei');
 require('dotenv').config();
 
 // ─── Radiance Email Alert Setup ───────────────────────────────────────────────
@@ -106,7 +109,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar, saveRadianceEnquiry, getRadianceEnquiries } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar, createContact, getContactsByClient, getContact, updateContact, deleteContact, linkContactToProject, getProjectContacts, unlinkContactFromProject } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -293,6 +296,11 @@ async function testService(id) {
   }
 }
 
+// ==========================================
+// API V1 ROUTES (Versioned with validation)
+// ==========================================
+app.use('/api/v1/ziwei', ziweiV1Router);
+
 app.get('/api/health/services', async (req, res) => {
   const results = [];
   for (const id of Object.keys(SERVICE_TESTS)) {
@@ -428,6 +436,182 @@ app.get('/api/ziwei/search', (req, res) => {
       keyword,
       count,
       results
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// KNOWLEDGE BASE API ENDPOINTS
+// ==========================================
+
+/**
+ * Get knowledge base statistics from JSON files
+ */
+app.get('/api/ziwei/knowledge/stats', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    // Load all knowledge base files
+    const kbPath = path.join(__dirname, 'data');
+    const files = {
+      curriculum: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8')),
+      combinations: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8')),
+      palaces: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-12-palaces.json'), 'utf8')),
+      sources: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-combinations-sources.json'), 'utf8'))
+    };
+
+    // Calculate stats
+    const stats = {
+      totalConcepts: Object.keys(files.curriculum.level_1_foundations?.core_topics || {}).length,
+      totalCombinations: Object.keys(files.combinations?.combinations || {}).length,
+      totalPalaces: Object.keys(files.palaces?.palaces || {}).length,
+      totalSources: Object.keys(files.sources?.sources || {}).length,
+      curriculumLevels: 6,
+      lastUpdated: new Date().toISOString(),
+      knowledgeFiles: {
+        curriculum: files.curriculum.title,
+        combinations: files.combinations.title || 'Ziwei Star Combinations',
+        palaces: files.palaces.title || 'Ziwei 12 Palaces',
+        sources: files.sources.title || 'Knowledge Sources'
+      }
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get all knowledge base content
+ */
+app.get('/api/ziwei/knowledge/all', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    const kbPath = path.join(__dirname, 'data');
+    const knowledge = {
+      curriculum: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8')),
+      combinations: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8')),
+      palaces: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-12-palaces.json'), 'utf8')),
+      learning: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-learning-guide.json'), 'utf8')),
+      sources: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-combinations-sources.json'), 'utf8'))
+    };
+
+    res.json({
+      success: true,
+      data: knowledge
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get curriculum by level
+ */
+app.get('/api/ziwei/knowledge/curriculum/:level', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const level = `level_${req.params.level}`;
+
+    const kbPath = path.join(__dirname, 'data');
+    const curriculum = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8'));
+
+    if (!curriculum[level]) {
+      return res.status(404).json({ success: false, error: `Level ${req.params.level} not found` });
+    }
+
+    res.json({
+      success: true,
+      level: req.params.level,
+      data: curriculum[level]
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get combinations by category
+ */
+app.get('/api/ziwei/knowledge/combinations/:category', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    const kbPath = path.join(__dirname, 'data');
+    const combinations = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8'));
+
+    const category = req.params.category;
+    const results = combinations.combinations.filter(c => c.category === category);
+
+    res.json({
+      success: true,
+      category,
+      count: results.length,
+      data: results
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Search knowledge base
+ */
+app.get('/api/ziwei/knowledge/search', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const query = (req.query.q || '').toLowerCase();
+
+    if (!query) {
+      return res.status(400).json({ success: false, error: 'Query parameter "q" required' });
+    }
+
+    const kbPath = path.join(__dirname, 'data');
+    const curriculum = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8'));
+    const combinations = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8'));
+
+    const results = {
+      curriculum_matches: [],
+      combination_matches: []
+    };
+
+    // Search curriculum
+    Object.entries(curriculum).forEach(([level, content]) => {
+      if (typeof content === 'object' && content !== null) {
+        const str = JSON.stringify(content).toLowerCase();
+        if (str.includes(query)) {
+          results.curriculum_matches.push({
+            level,
+            title: content.name || level
+          });
+        }
+      }
+    });
+
+    // Search combinations
+    if (combinations.combinations) {
+      results.combination_matches = combinations.combinations.filter(c =>
+        JSON.stringify(c).toLowerCase().includes(query)
+      );
+    }
+
+    res.json({
+      success: true,
+      query,
+      total_results: results.curriculum_matches.length + results.combination_matches.length,
+      data: results
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -1314,6 +1498,68 @@ app.post('/api/brands', async (req, res) => {
   } catch (err) {
     console.error('Error creating brand:', err);
     res.status(500).json({ error: 'Failed to create brand' });
+  }
+});
+
+// POST /api/brands/setup-complete — Brand Setup → CRM sync
+// Auto-creates brand in CRM from setup wizard
+app.post('/api/brands/setup-complete', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  try {
+    const { brandName, industry, markets, voiceTone, brandPersonality, colorPalette, visualStyle, strategy } = req.body;
+
+    if (!brandName) {
+      return res.status(400).json({ error: 'Brand name is required' });
+    }
+
+    // 1. Check if brand already exists
+    const existing = await pool.query('SELECT id FROM crm_clients WHERE name = $1', [brandName]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Brand already exists' });
+    }
+
+    // 2. Create brand in CRM
+    const brandResult = await pool.query(
+      `INSERT INTO crm_clients (name, industry, region, status, health_score)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, name`,
+      [
+        brandName,
+        JSON.stringify(Array.isArray(industry) ? [industry] : (industry ? [industry] : [])),
+        JSON.stringify(markets || []),
+        'active', // Default to active when created from setup
+        75, // Default health score
+      ]
+    );
+
+    const crmBrandId = brandResult.rows[0].id;
+
+    // 3. Also save to social-content-ops brands table with full profile
+    await saveBrand(brandName, {
+      industry: industry,
+      brand_info: {
+        profile: {
+          brandName,
+          industry,
+          markets: markets || [],
+          voiceTone,
+          brandPersonality,
+          colorPalette,
+          visualStyle,
+        },
+        strategy: strategy,
+      },
+    });
+
+    res.json({
+      success: true,
+      brand_id: crmBrandId,
+      redirect: `/use-cases/crm/brands/detail?id=${crmBrandId}`,
+    });
+  } catch (err) {
+    console.error('Error in setup-complete:', err);
+    res.status(500).json({ error: 'Failed to create brand in CRM' });
   }
 });
 
@@ -2245,12 +2491,18 @@ app.post('/api/social/chat', async (req, res) => {
 When asked about brand research, competitive analysis, or audience insights, provide structured, actionable insights.
 ${brand_name ? `Brand: ${brand_name}` : ''}
 
-Format your response clearly with sections for:
-- Business Overview
-- Mission/Vision
-- Competitors Analysis
-- Audience Segments
-- Product/Service Overview
+Return ONLY valid JSON with this exact structure:
+{
+  "businessOverview": "Brand positioning, market fit, and unique value proposition",
+  "mission": "Company mission and core values",
+  "competitors": [
+    { "name": "Competitor Name", "strengths": "What they do well", "weaknesses": "Where they fall short", "threat_level": "High|Medium|Low" }
+  ],
+  "audienceSegments": [
+    { "name": "Segment Name", "size": "Market size estimate", "pain_points": "Key problems", "preferences": "What they value" }
+  ],
+  "products": "Overview of key products/services and market positioning"
+}
 
 Be specific, data-driven, and actionable.
 ${ragContext ? `\n${ragContext}` : ''}`;
@@ -2265,8 +2517,56 @@ ${ragContext ? `\n${ragContext}` : ''}`;
             )
             : await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
 
+          const responseText = result.content || result.text;
+          let researchData = null;
+
+          // Try to parse JSON from response
+          try {
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              researchData = JSON.parse(jsonMatch[0]);
+            }
+          } catch { }
+
+          // If parsed successfully, persist to database
+          if (researchData) {
+            try {
+              // Save business overview
+              if (researchData.businessOverview || researchData.mission) {
+                await saveResearchBusiness(brand_id, {
+                  business_overview: researchData.businessOverview || '',
+                  mission: researchData.mission || ''
+                });
+              }
+
+              // Save competitors
+              if (researchData.competitors && researchData.competitors.length > 0) {
+                await saveResearchCompetitors(brand_id, researchData.competitors);
+              }
+
+              // Save audience and segments
+              if (researchData.audienceSegments) {
+                const audienceResult = await saveResearchAudience(brand_id, {
+                  positioning: researchData.audienceSegments[0]?.preferences || ''
+                });
+                if (researchData.audienceSegments.length > 0) {
+                  await saveResearchSegments(audienceResult.audience_id, researchData.audienceSegments);
+                }
+              }
+
+              // Save products
+              if (researchData.products) {
+                await saveResearchProducts(brand_id, researchData.products);
+              }
+            } catch (persistErr) {
+              console.error('Error persisting research data:', persistErr);
+              // Don't fail the response if persistence fails - still return the data
+            }
+          }
+
           return res.json({
-            message: result.content || result.text,
+            message: responseText,
+            data: researchData || null,
             model: result.model || 'research-analyzer',
             node: 'research_analyzer',
             status: 'COMPLETED'
@@ -2809,6 +3109,176 @@ app.delete('/api/research/:brandId/products/:productId', async (req, res) => {
 });
 
 // ==========================================
+// CRM Contacts (with LinkedIn + Research)
+// ==========================================
+
+// POST /api/crm/contacts/:clientId — create contact
+app.post('/api/crm/contacts/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const contact = await createContact(clientId, req.body);
+    res.json({ success: true, contact });
+  } catch (err) {
+    console.error('[POST /api/crm/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/contacts/:clientId — list client contacts
+app.get('/api/crm/contacts/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const contacts = await getContactsByClient(clientId);
+    res.json({ contacts });
+  } catch (err) {
+    console.error('[GET /api/crm/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/contacts/:clientId/:contactId — get contact details
+app.get('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const contact = await getContact(contactId);
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+    res.json(contact);
+  } catch (err) {
+    console.error('[GET /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/crm/contacts/:clientId/:contactId — update contact
+app.put('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const contact = await updateContact(contactId, req.body);
+    res.json({ success: true, contact });
+  } catch (err) {
+    console.error('[PUT /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/crm/contacts/:clientId/:contactId — delete contact
+app.delete('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    await deleteContact(contactId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/crm/contacts/:contactId/link-project — link contact to project
+app.post('/api/crm/contacts/:contactId/link-project', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { projectId, role } = req.body;
+    const link = await linkContactToProject(contactId, projectId, role);
+    res.json({ success: true, link });
+  } catch (err) {
+    console.error('[POST /api/crm/contacts/:id/link-project] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/projects/:projectId/contacts — get project contacts
+app.get('/api/crm/projects/:projectId/contacts', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const contacts = await getProjectContacts(projectId);
+    res.json({ contacts });
+  } catch (err) {
+    console.error('[GET /api/crm/projects/:id/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/crm/contacts/:contactId/unlink-project — unlink contact from project
+app.delete('/api/crm/contacts/:contactId/unlink-project/:projectId', async (req, res) => {
+  try {
+    const { contactId, projectId } = req.params;
+    await unlinkContactFromProject(contactId, projectId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/crm/contacts/:id/unlink-project/:projectId] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Contact Intelligence (LinkedIn + Research)
+// ==========================================
+
+// Lazy-load services
+let linkedinFetcher = null;
+let contactResearch = null;
+
+function getLinkedInFetcher() {
+  if (!linkedinFetcher) {
+    const LinkedInProfileFetcher = require('./services/linkedinProfileFetcher');
+    linkedinFetcher = new LinkedInProfileFetcher();
+  }
+  return linkedinFetcher;
+}
+
+function getContactResearchService() {
+  if (!contactResearch) {
+    const ContactResearchService = require('./services/contactResearchService');
+    contactResearch = new ContactResearchService();
+  }
+  return contactResearch;
+}
+
+// POST /api/linkedin/profile — fetch LinkedIn profile data
+app.post('/api/linkedin/profile', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'LinkedIn URL required' });
+
+    const fetcher = getLinkedInFetcher();
+    const profile = await fetcher.getProfileSummary(url);
+
+    res.json({ success: true, data: profile });
+  } catch (err) {
+    console.error('[POST /api/linkedin/profile] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/contacts/:contactId/research — conduct online research
+app.post('/api/contacts/:contactId/research', async (req, res) => {
+  try {
+    const { name, title, company, linkedinUrl } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name required' });
+
+    const researchService = getContactResearchService();
+    const research = await researchService.comprehensiveResearch(name, title, company, linkedinUrl);
+
+    // Update contact with research data
+    const contactId = req.params.contactId;
+    // Find contact's client ID - query all contacts
+    const contactResult = await pool.query('SELECT * FROM crm_contacts WHERE id = $1', [contactId]);
+    if (contactResult.rows[0]) {
+      const contact = contactResult.rows[0];
+      await updateContact(contactId, {
+        ...contact,
+        research_data: research,
+      });
+    }
+
+    res.json({ success: true, research });
+  } catch (err) {
+    console.error('[POST /api/contacts/:id/research] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // Social Content Ops: Strategy
 // ==========================================
 
@@ -3028,6 +3498,108 @@ app.get('/api/social/calendar/:brandId', async (req, res) => {
   }
 });
 
+// POST /api/social/compliance/check — check content against brand profile
+app.post('/api/social/compliance/check', async (req, res) => {
+  try {
+    const { brand_id, copy, colors, brand_profile } = req.body;
+
+    if (!brand_id) {
+      return res.status(400).json({ error: 'brand_id is required' });
+    }
+
+    const { checkBrandCompliance } = require('./services/complianceChecker');
+    const complianceScore = await checkBrandCompliance(
+      brand_id,
+      { copy, colors },
+      brand_profile
+    );
+
+    res.json({
+      compliance: complianceScore,
+      can_proceed: complianceScore.can_proceed,
+      action: complianceScore.action,
+    });
+  } catch (err) {
+    console.error('Error checking compliance:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/brands/guidelines/upload — upload brand guidelines PDF/image
+app.post('/api/brands/guidelines/upload', async (req, res) => {
+  try {
+    const { brandId } = req.body;
+
+    if (!brandId) {
+      return res.status(400).json({ error: 'brandId is required' });
+    }
+
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const file = req.files.file;
+    const allowedMimes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+
+    if (!allowedMimes.includes(file.mimetype)) {
+      return res.status(400).json({ error: 'Invalid file type' });
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File too large (max 10MB)' });
+    }
+
+    // Store file path (in production, would use cloud storage like S3)
+    const fileName = `${brandId}-guidelines-${Date.now()}.${file.name.split('.').pop()}`;
+    const uploadDir = `${__dirname}/uploads/guidelines`;
+
+    // Create directory if it doesn't exist
+    const fs = require('fs');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const filePath = `${uploadDir}/${fileName}`;
+    await file.mv(filePath);
+
+    // Store URL in brand profile
+    const guidelineUrl = `/uploads/guidelines/${fileName}`;
+
+    res.json({
+      success: true,
+      url: guidelineUrl,
+      fileName: file.name,
+    });
+  } catch (err) {
+    console.error('Error uploading guidelines:', err);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// POST /api/brands/guidelines/delete — delete brand guidelines
+app.post('/api/brands/guidelines/delete', async (req, res) => {
+  try {
+    const { brandId, url } = req.body;
+
+    if (!url) {
+      return res.status(400).json({ error: 'url is required' });
+    }
+
+    // Delete file
+    const fs = require('fs');
+    const filePath = `${__dirname}${url}`;
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting guidelines:', err);
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
 // ==========================================
 // Use Case Routes
 // ==========================================
@@ -3135,7 +3707,50 @@ app.get('/api/scheduled-jobs', (req, res) => {
 const ragService = require('./services/rag-service');
 
 const WORKFLOW_SYSTEM_PROMPTS = {
-  assistant: `You are an AI Workflow Architect assistant helping the user understand and modify agent orchestration workflows.
+  assistant: `You are WorkflowArchitectOrchestrator, the top-level orchestrator for AI agent workflow design at 5ML.
+
+Your responsibilities:
+- Be the only agent that talks directly to the user.
+- Understand workflow goals, constraints, and performance targets.
+- Decompose design work into clear subtasks (mapping, optimisation, cost modelling, risk review).
+- Decide which internal analytical lenses to apply and in what order.
+- Maintain awareness of the current workflow state (nodes, edges, pattern, triggers).
+- Critically evaluate proposed changes and stop when quality or safety is insufficient.
+
+==================================================
+I. ROLE & SCOPE
+==================================================
+You operate in the AI agent workflow design domain. Examples of tasks:
+- Design or redesign a multi-agent orchestration pipeline
+- Add, remove, or reconfigure agent nodes and connections
+- Analyse trade-offs between sequential, parallel, and fan-out patterns
+- Estimate cost and latency targets for a given workflow
+
+You MUST:
+- Stay within the workflow architecture domain.
+- Ask clarifying questions when the design intent is ambiguous.
+- Prefer incremental changes over wholesale redesigns unless the user asks.
+
+IMPORTANT: Only activate the analytical lens needed for the current request.
+If the user asks to just rename a node, do that — don't redesign the whole pipeline.
+
+==================================================
+II. INTERNAL ROLES / SPECIALISTS
+==================================================
+Internally, you apply these analytical lenses:
+- Architecture Analyst — maps agent relationships, data flows, and orchestration patterns (fan-out, pipeline, circuit breaker)
+- Cost Optimiser — assesses model routing (DeepSeek / Haiku / Sonnet / Perplexity), token budgets, and per-run cost targets
+- Performance Reviewer — identifies bottlenecks, latency hotspots, and parallelisation opportunities
+- Risk Assessor — finds single points of failure, rejection loop risks, compliance gaps, and edge cases
+
+You do NOT name these lenses to the user.
+
+==================================================
+III. KNOWLEDGE BASE & STATE
+==================================================
+You have access to:
+- KB: 5ML model routing guide (DeepSeek for strategy/coordination, Haiku for research/compliance, Sonnet for creative, Perplexity for competitive intel), orchestration patterns, cost benchmarks
+- State: current workflow nodes, edges, pattern, trigger, and metadata (provided as JSON context with each message)
 
 Architecture context — The CSO Marketing Agents use an event-driven parallel pipeline:
 - Input Validator → CSO Orchestrator → Budget Optimizer (entry chain)
@@ -3145,16 +3760,39 @@ Architecture context — The CSO Marketing Agents use an event-driven parallel p
 - Multi-Channel → Compliance Agent → Sentinel Agent (quality gate)
 - Sentinel has a CIRCUIT BREAKER: max 2 rejection loops back to CSO
 - Performance Tracker monitors KPIs after approval
-- Model routing: DeepSeek for strategy/coordination, Haiku for research/compliance, Sonnet for creative, Perplexity for competitive intel
-- Target: <$1.50/campaign, >90% first-pass approval, <2min end-to-end
+- Targets: <$1.50/campaign, >90% first-pass approval, <2min end-to-end
 
-Your capabilities:
-1. Explain how agents work together in the current workflow
-2. Suggest improvements to agent roles, connections, and orchestration patterns
-3. Modify the workflow when the user requests changes (update agent names/roles, add/remove edges)
-4. Discuss trade-offs between different orchestration approaches
+==================================================
+IV. TASK FLOW & STATUS
+==================================================
+Each workflow task has a status:
+- DRAFT — initial design, not yet validated
+- UNDER_REVIEW — being critiqued for quality or cost
+- REVISE_NEEDED — issues found; improvements recommended
+- APPROVED — ready to implement / hand off
+- BLOCKED — cannot safely proceed without human input
 
-When the user asks to MODIFY the workflow, include a JSON block at the end of your response in this exact format:
+==================================================
+V. EVALUATION, CRITIQUE, AND STOP CONDITIONS
+==================================================
+For proposed workflow changes or new designs:
+1) Draft — produce based on user request and current state
+2) Self-evaluate — score 0–10; note architectural strengths, weaknesses, cost risks
+3) Improve or stop:
+   - Score ≥ 8 → apply minor refinements, mark approved
+   - Score < 8 → use critique to produce a better version
+   - Safety / compliance / obviously broken design → mark BLOCKED
+
+==================================================
+VI. OUTPUT STRUCTURE & WORKFLOW UPDATES
+==================================================
+For each response:
+1) Quick summary (2–5 bullets: what you did, key decisions)
+2) Reasoning / rationale (why this approach; key trade-offs)
+3) Artefacts (updated workflow description, cost table, or design diagram in text)
+4) Risks, assumptions, and next steps
+
+When the user asks to MODIFY the workflow, append a JSON block in this exact format:
 [WORKFLOW_UPDATE]
 [{"action":"update_node","node_id":"agent-id","name":"New Name","role":"New Role"}]
 [/WORKFLOW_UPDATE]
@@ -3166,27 +3804,81 @@ Available actions:
 - remove_edge: Remove a connection. Fields: from, to
 - update_meta: Update workflow metadata. Fields: pattern (optional), patternDesc (optional), trigger (optional)
 
-Always reference nodes by their id. Only include the JSON block when making actual changes, not when just explaining.
-Be concise but thorough. Focus on practical, actionable advice.`,
+Always reference nodes by their id. Only include the JSON block when making actual changes, not when explaining.`,
 
-  business_analyst: `You are a critical Business Analyst reviewing AI agent orchestration workflows. Your role is to challenge, question, and improve.
+  business_analyst: `You are WorkflowCriticOrchestrator, a rigorous Business Analyst orchestrating the quality review of AI agent workflows at 5ML.
 
-Your approach:
-1. QUESTION assumptions — why does this agent exist? Is it justified?
-2. IDENTIFY bottlenecks — where are single points of failure?
-3. CHALLENGE the user — if they propose something, play devil's advocate
-4. ASSESS ROI — what is the cost vs value of each agent?
-5. FIND edge cases — what happens when things go wrong?
-6. CRITIQUE both the workflow design AND the user's understanding
+Your responsibilities:
+- Be the only agent that talks directly to the user.
+- Challenge assumptions, probe for weaknesses, and demand justification.
+- Decompose your critique into: ROI analysis, risk identification, bottleneck mapping, and edge-case stress-testing.
+- Update workflow state only when improvements are clearly justified.
+- Stop and block when you detect serious architectural, cost, or safety issues.
 
-Be direct and analytical. Don't just agree — push back constructively. Use specific metrics and frameworks when possible.
+==================================================
+I. ROLE & SCOPE
+==================================================
+You operate in the AI agent workflow quality-review domain. Examples of tasks:
+- Audit an existing workflow for unjustified agents or missing safeguards
+- Challenge a proposed design with devil's advocate analysis
+- Produce a cost–benefit breakdown of every agent node
+- Identify where the circuit breaker or compliance gate is missing or too weak
 
-When you believe modifications would improve the workflow, include a JSON block:
+You MUST:
+- Never simply agree — always pressure-test.
+- Ask "why does this agent exist?" before accepting any node.
+- Quantify risks and costs wherever possible.
+
+==================================================
+II. INTERNAL ROLES / SPECIALISTS
+==================================================
+Internally you apply these critical lenses:
+- ROI Auditor — cost per agent node, token budget, value delivered vs. cost
+- Risk Mapper — single points of failure, infinite loops, missing guards
+- Bottleneck Detector — sequential chains that should be parallelised; agents adding latency without value
+- Assumption Challenger — unstated dependencies, optimistic token estimates, missing edge cases
+
+You do NOT name these lenses to the user.
+
+==================================================
+III. KNOWLEDGE BASE & STATE
+==================================================
+You have access to:
+- KB: 5ML cost benchmarks (DeepSeek $0.14/$0.28, Haiku $0.25/$1.25, Sonnet $3/$15, Perplexity $3/$15 per 1M tokens), target <$1.50/campaign
+- State: current workflow nodes, edges, pattern, and metadata
+
+==================================================
+IV. TASK FLOW & STATUS
+==================================================
+- DRAFT — under initial review
+- UNDER_REVIEW — actively being critiqued
+- REVISE_NEEDED — clear problems found; specific fixes recommended
+- APPROVED — passes all quality gates
+- BLOCKED — serious issue requires human decision before proceeding
+
+==================================================
+V. EVALUATION, CRITIQUE, AND STOP CONDITIONS
+==================================================
+For every workflow or change proposed:
+1) Audit — systematically check each agent: purpose, cost, failure mode
+2) Score 0–10 across: necessity, cost-efficiency, resilience, correctness
+3) If score < 7 → produce specific, actionable improvement recommendations
+4) If score < 5 or serious safety/compliance gap → mark BLOCKED
+
+==================================================
+VI. OUTPUT STRUCTURE & WORKFLOW UPDATES
+==================================================
+1) Quick summary (2–5 bullets: what you reviewed, main findings)
+2) Critique (direct, specific — score each dimension)
+3) Recommended changes (concrete, prioritised)
+4) Risks and blockers
+
+When improvements justify a workflow modification:
 [WORKFLOW_UPDATE]
 [{"action":"update_node","node_id":"agent-id","role":"Improved role description"}]
 [/WORKFLOW_UPDATE]
 
-Your goal is to make both the human and the AI agents better through rigorous analysis.`
+Be direct. Don't soften criticism. Your goal is a better workflow, not a comfortable conversation.`
 };
 
 function parseWorkflowUpdates(text) {
@@ -3566,15 +4258,256 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
 });
 
 // ==========================================
+// RecruitAI Studio API
+// ==========================================
+
+const { Resend } = require('resend');
+const resendClient = new Resend(process.env.RESEND_API_KEY);
+
+// POST /api/recruitai/lead — save lead + send email alert
+app.post('/api/recruitai/lead', async (req, res) => {
+  try {
+    const { name, email, phone, company, industry, headcount, message, sourcePage, utmSource, utmMedium, utmCampaign } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({ success: false, error: 'Name and email are required' });
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ success: false, error: 'Invalid email address' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO recruitai_leads (name, email, phone, company, industry, headcount, message, source_page, utm_source, utm_medium, utm_campaign, ip_address)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING lead_id, created_at`,
+      [name, email, phone || null, company || null, industry || null, headcount || null, message || null,
+       sourcePage || null, utmSource || null, utmMedium || null, utmCampaign || null, req.ip]
+    );
+    const lead = result.rows[0];
+
+    // Send email alert via Resend
+    if (process.env.RESEND_API_KEY) {
+      try {
+        await resendClient.emails.send({
+          from: 'RecruitAI Studio <noreply@5mileslab.com>',
+          to: 'bennet.tsui@5mileslab.com',
+          subject: `🎯 New RecruitAI Lead: ${name} — ${company || industry || 'Unknown'}`,
+          html: `
+            <h2>New Lead from RecruitAI Studio</h2>
+            <table style="border-collapse:collapse;width:100%;font-family:sans-serif">
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Name</td><td style="padding:8px;border:1px solid #ddd">${name}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Email</td><td style="padding:8px;border:1px solid #ddd">${email}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Phone</td><td style="padding:8px;border:1px solid #ddd">${phone || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Company</td><td style="padding:8px;border:1px solid #ddd">${company || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Industry</td><td style="padding:8px;border:1px solid #ddd">${industry || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Headcount</td><td style="padding:8px;border:1px solid #ddd">${headcount || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Message</td><td style="padding:8px;border:1px solid #ddd">${message || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Source</td><td style="padding:8px;border:1px solid #ddd">${sourcePage || '—'} | ${utmSource || ''}/${utmMedium || ''}/${utmCampaign || ''}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Time</td><td style="padding:8px;border:1px solid #ddd">${new Date().toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong' })}</td></tr>
+            </table>
+          `,
+        });
+      } catch (emailErr) {
+        console.warn('⚠️ RecruitAI email alert failed:', emailErr.message);
+      }
+    }
+
+    res.status(201).json({ success: true, leadId: lead.lead_id });
+  } catch (error) {
+    console.error('❌ RecruitAI lead error:', error);
+    res.status(500).json({ success: false, error: 'Failed to save lead' });
+  }
+});
+
+// POST /api/recruitai/chat — DeepSeek chatbot with session management
+app.post('/api/recruitai/chat', async (req, res) => {
+  try {
+    const { sessionId, visitorId, message, history = [], industry, sourcePage } = req.body;
+
+    if (!message) return res.status(400).json({ success: false, error: 'Message required' });
+
+    // Get or create session
+    let currentSessionId = sessionId;
+    if (!currentSessionId) {
+      const newSession = await pool.query(
+        `INSERT INTO recruitai_chat_sessions (visitor_id, industry, source_page, ip_address)
+         VALUES ($1,$2,$3,$4) RETURNING session_id`,
+        [visitorId || null, industry || null, sourcePage || null, req.ip]
+      );
+      currentSessionId = newSession.rows[0].session_id;
+    }
+
+    // Count turns
+    const turnResult = await pool.query(
+      'SELECT turn_count FROM recruitai_chat_sessions WHERE session_id=$1',
+      [currentSessionId]
+    );
+    const turnCount = turnResult.rows[0]?.turn_count || 0;
+
+    // Build DeepSeek messages
+    const systemPrompt = `你是 RecruitAI Studio 的 AI 銷售顧問，專門協助香港中小企業了解 AI 招聘自動化解決方案。
+
+你的目標：
+1. 了解對方的業務需求和痛點（招聘、HR、自動化等）
+2. 簡短介紹我們如何用 AI 解決他們的問題
+3. 在 20 輪對話內自然地收集聯絡資料（姓名、電郵、電話/WhatsApp）
+
+對話風格：
+- 回答簡短直接，最多 3 句話
+- 用繁體中文，語氣友好專業
+- 主動提問了解需求
+- 當對方表現興趣時，引導提供聯絡資料
+
+目前是第 ${turnCount + 1} 輪對話。${turnCount >= 15 ? '請積極邀請對方留下聯絡方式，以便安排免費諮詢。' : ''}
+
+當收集到聯絡資料時，在回應末尾加上：
+[CONTACT_CAPTURED: name=姓名, email=電郵, phone=電話]`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-10), // Keep last 10 turns for context
+      { role: 'user', content: message }
+    ];
+
+    const response = await deepseekService.chat(messages, {
+      model: 'deepseek-chat',
+      maxTokens: 300,
+      temperature: 0.8,
+    });
+
+    let replyContent = response.content;
+    let contactCaptured = false;
+    let capturedData = {};
+
+    // Parse contact capture marker
+    const captureMatch = replyContent.match(/\[CONTACT_CAPTURED:([^\]]+)\]/);
+    if (captureMatch) {
+      contactCaptured = true;
+      const parts = captureMatch[1].split(',');
+      parts.forEach(p => {
+        const [k, v] = p.split('=');
+        if (k && v) capturedData[k.trim()] = v.trim();
+      });
+      replyContent = replyContent.replace(/\[CONTACT_CAPTURED:[^\]]+\]/, '').trim();
+    }
+
+    // Save messages to DB
+    await pool.query(
+      `INSERT INTO recruitai_chat_messages (session_id, role, content, turn_number) VALUES ($1,'user',$2,$3)`,
+      [currentSessionId, message, turnCount + 1]
+    );
+    await pool.query(
+      `INSERT INTO recruitai_chat_messages (session_id, role, content, turn_number) VALUES ($1,'assistant',$2,$3)`,
+      [currentSessionId, replyContent, turnCount + 1]
+    );
+
+    // Update session
+    const updateFields = ['turn_count = turn_count + 1', 'updated_at = NOW()'];
+    const updateParams = [currentSessionId];
+    if (contactCaptured) {
+      updateFields.push(`contact_captured = TRUE`);
+      if (capturedData.name) { updateFields.push(`captured_name = $${updateParams.length + 1}`); updateParams.push(capturedData.name); }
+      if (capturedData.email) { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(capturedData.email); }
+      if (capturedData.phone) { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(capturedData.phone); }
+    }
+    await pool.query(
+      `UPDATE recruitai_chat_sessions SET ${updateFields.join(', ')} WHERE session_id = $1`,
+      updateParams
+    );
+
+    // If contact captured, also save as lead
+    if (contactCaptured && capturedData.email) {
+      try {
+        await pool.query(
+          `INSERT INTO recruitai_leads (name, email, phone, source_page, industry, message)
+           VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (email) DO NOTHING`,
+          [capturedData.name || null, capturedData.email, capturedData.phone || null,
+           'chatbot:' + (sourcePage || 'unknown'), industry || null, `From chatbot session ${currentSessionId}`]
+        );
+      } catch (e) { /* ignore duplicate */ }
+    }
+
+    res.json({
+      success: true,
+      reply: replyContent,
+      sessionId: currentSessionId,
+      turnCount: turnCount + 1,
+      contactCaptured,
+    });
+  } catch (error) {
+    console.error('❌ RecruitAI chat error:', error);
+    res.status(500).json({ success: false, error: 'Chat service unavailable' });
+  }
+});
+
+// GET /api/recruitai/admin/leads — list all leads (password-protected)
+app.get('/api/recruitai/admin/leads', async (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const result = await pool.query(
+      'SELECT * FROM recruitai_leads ORDER BY created_at DESC LIMIT 500'
+    );
+    res.json({ success: true, leads: result.rows });
+  } catch (error) {
+    console.error('❌ Admin leads error:', error);
+    res.status(500).json({ error: 'Failed to fetch leads' });
+  }
+});
+
+// GET /api/recruitai/admin/sessions — list all chat sessions
+app.get('/api/recruitai/admin/sessions', async (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT s.*, COUNT(m.id) as message_count
+       FROM recruitai_chat_sessions s
+       LEFT JOIN recruitai_chat_messages m ON m.session_id = s.session_id
+       GROUP BY s.id ORDER BY s.created_at DESC LIMIT 200`
+    );
+    res.json({ success: true, sessions: result.rows });
+  } catch (error) {
+    console.error('❌ Admin sessions error:', error);
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+// GET /api/recruitai/admin/sessions/:sessionId/messages
+app.get('/api/recruitai/admin/sessions/:sessionId/messages', async (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const result = await pool.query(
+      'SELECT * FROM recruitai_chat_messages WHERE session_id=$1 ORDER BY created_at ASC',
+      [req.params.sessionId]
+    );
+    res.json({ success: true, messages: result.rows });
+  } catch (error) {
+    console.error('❌ Admin messages error:', error);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// ==========================================
 // Ziwei Astrology API
 // ==========================================
 
 const { calcBaseChart } = require('./services/ziwei-chart-engine');
 
 // POST /api/ziwei/calculate - Calculate a birth chart
-app.post('/api/ziwei/calculate', async (req, res) => {
+app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, asyncHandler(async (req, res) => {
   try {
-    const { lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch, gender, name } = req.body;
+    const {
+      lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch,
+      gender, name, placeOfBirth, timezone, calendarType
+    } = req.body;
 
     // Validate required fields
     if (!lunarYear || !lunarMonth || !lunarDay || !hourBranch || !yearStem || !yearBranch || !gender) {
@@ -3599,12 +4532,24 @@ app.post('/api/ziwei/calculate', async (req, res) => {
     if (process.env.DATABASE_URL) {
       try {
         const db = require('./db');
+        const birthInfo = {
+          lunarYear,
+          lunarMonth,
+          lunarDay,
+          hourBranch,
+          gender,
+          name: name || '',
+          placeOfBirth: placeOfBirth || '',
+          timezone: timezone || 'UTC',
+          calendarType: calendarType || 'lunar'
+        };
+
         const result = await db.query(
           `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
            VALUES ($1, $2, $3, $4) RETURNING id`,
           [
             name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
-            JSON.stringify({ lunarYear, lunarMonth, lunarDay, hourBranch, gender }),
+            JSON.stringify(birthInfo),
             JSON.stringify({ yearStem, yearBranch }),
             JSON.stringify(chart)
           ]
@@ -3627,7 +4572,7 @@ app.post('/api/ziwei/calculate', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // GET /api/ziwei/charts - List saved charts
 app.get('/api/ziwei/charts', async (req, res) => {
@@ -3688,7 +4633,7 @@ app.get('/api/ziwei/charts/:id', async (req, res) => {
 });
 
 // POST /api/ziwei/interpret - Generate interpretations for a chart
-app.post('/api/ziwei/interpret', async (req, res) => {
+app.post('/api/ziwei/interpret', ziweiValidation.validateChartInterpretation, asyncHandler(async (req, res) => {
   try {
     const { chart, chartId, consensusLevel = 'consensus' } = req.body;
 
@@ -3749,7 +4694,7 @@ app.post('/api/ziwei/interpret', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // ==========================================
 // Step 4: Enhanced Interpretation with DeepSeek LLM
@@ -4248,6 +5193,179 @@ app.post('/api/ziwei/evaluate-rules', async (req, res) => {
 });
 
 // ==========================================
+// Ziwei Palace & Star Knowledge Endpoints
+// ==========================================
+
+// GET /api/ziwei/palaces - Get all palaces
+app.get('/api/ziwei/palaces', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const palaces = await db.getAllZiweiPalaces();
+
+    res.json({
+      success: true,
+      count: palaces.length,
+      palaces: palaces.map(p => ({
+        id: p.id,
+        number: p.number,
+        chinese: p.chinese,
+        english: p.english,
+        meaning: p.meaning,
+        governs: p.governs,
+        positive_indicators: p.positive_indicators,
+        negative_indicators: p.negative_indicators
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Ziwei palaces error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/palaces/:id - Get specific palace
+app.get('/api/ziwei/palaces/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const palace = await db.getZiweiPalace(req.params.id);
+
+    if (!palace) {
+      return res.status(404).json({ error: 'Palace not found' });
+    }
+
+    res.json({
+      success: true,
+      palace: {
+        id: palace.id,
+        number: palace.number,
+        chinese: palace.chinese,
+        english: palace.english,
+        meaning: palace.meaning,
+        governs: palace.governs,
+        positive_indicators: palace.positive_indicators,
+        negative_indicators: palace.negative_indicators
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ziwei palace error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/stars - Get all stars
+app.get('/api/ziwei/stars', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const stars = await db.getAllZiweiStars();
+
+    res.json({
+      success: true,
+      count: stars.length,
+      stars: stars.map(s => ({
+        id: s.id,
+        number: s.number,
+        chinese: s.chinese,
+        english: s.english,
+        meaning: s.meaning,
+        element: s.element,
+        archetype: s.archetype,
+        general_nature: s.general_nature,
+        key_traits: s.key_traits
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Ziwei stars error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/stars/:id - Get specific star
+app.get('/api/ziwei/stars/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const star = await db.getZiweiStar(req.params.id);
+
+    if (!star) {
+      return res.status(404).json({ error: 'Star not found' });
+    }
+
+    res.json({
+      success: true,
+      star: {
+        id: star.id,
+        number: star.number,
+        chinese: star.chinese,
+        english: star.english,
+        meaning: star.meaning,
+        element: star.element,
+        archetype: star.archetype,
+        general_nature: star.general_nature,
+        key_traits: star.key_traits,
+        palace_meanings: star.palace_meanings
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ziwei star error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/palace-star-meanings/:palaceId/:starId - Get star meaning in specific palace
+app.get('/api/ziwei/palace-star-meanings/:palaceId/:starId', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const palace = await db.getZiweiPalace(req.params.palaceId);
+    const star = await db.getZiweiStar(req.params.starId);
+
+    if (!palace || !star) {
+      return res.status(404).json({ error: 'Palace or star not found' });
+    }
+
+    const meaning = star.palace_meanings?.[req.params.palaceId];
+
+    res.json({
+      success: true,
+      palace: {
+        id: palace.id,
+        chinese: palace.chinese,
+        english: palace.english
+      },
+      star: {
+        id: star.id,
+        chinese: star.chinese,
+        english: star.english
+      },
+      meaning: meaning || {
+        positive: 'Information not available',
+        negative: 'Information not available'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ziwei palace-star meanings error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
@@ -4256,6 +5374,9 @@ const server = http.createServer(app);
 
 // Initialize WebSocket server
 wsServer.initialize(server);
+
+// Global error handler middleware (must be last)
+app.use(errorHandler);
 
 server.listen(port, '0.0.0.0', async () => {
   console.log(`

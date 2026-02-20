@@ -3,8 +3,15 @@
 
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk').default;
+const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
 const { pool } = require('../../../db');
 const MediaGenerationOrchestrator = require('../agents/orchestrator');
+
+// ─── Uploads directory ────────────────────────────────────────────────────────
+const UPLOADS_DIR = path.join(__dirname, '..', '..', '..', 'uploads', 'media');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const router = express.Router();
 
@@ -141,24 +148,56 @@ router.delete('/projects/:id', async (req, res) => {
   }
 });
 
-// POST /api/media/projects/:id/brief — submit brief → translate → style guide
+// POST /api/media/projects/:id/brief — submit brief (async: responds immediately, processes in background)
 router.post('/projects/:id/brief', async (req, res) => {
+  const projectId = parseInt(req.params.id, 10);
   try {
     const { brief } = req.body;
     if (!brief) return res.status(400).json({ error: '"brief" is required' });
-    const result = await getOrchestrator().submitBrief(parseInt(req.params.id, 10), brief);
-    res.json({ success: true, ...result });
+    // Mark as in-progress BEFORE responding so client poll doesn't see stale "done" status
+    await pool.query(
+      `UPDATE media_projects SET status = 'translating_brief', brief_text = $1, updated_at = NOW() WHERE id = $2`,
+      [brief, projectId]
+    );
+    res.json({ success: true, status: 'processing' });
+    setImmediate(async () => {
+      try {
+        await getOrchestrator().submitBrief(projectId, brief);
+      } catch (err) {
+        console.error('[MediaGeneration] submitBrief background error:', err.message);
+        await pool.query(
+          `UPDATE media_projects SET status = 'error', updated_at = NOW() WHERE id = $1`,
+          [projectId]
+        ).catch(() => {});
+      }
+    });
   } catch (err) {
     console.error('[MediaGeneration] submitBrief error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/media/projects/:id/generate-prompts — generate all prompts + workflow configs
+// POST /api/media/projects/:id/generate-prompts — generate prompts (async: responds immediately)
 router.post('/projects/:id/generate-prompts', async (req, res) => {
+  const projectId = parseInt(req.params.id, 10);
   try {
-    const results = await getOrchestrator().generatePrompts(parseInt(req.params.id, 10));
-    res.json({ success: true, results });
+    // Mark as in-progress before responding to avoid stale-status race
+    await pool.query(
+      `UPDATE media_projects SET status = 'generating_prompts', updated_at = NOW() WHERE id = $1`,
+      [projectId]
+    );
+    res.json({ success: true, status: 'processing' });
+    setImmediate(async () => {
+      try {
+        await getOrchestrator().generatePrompts(projectId);
+      } catch (err) {
+        console.error('[MediaGeneration] generatePrompts background error:', err.message);
+        await pool.query(
+          `UPDATE media_projects SET status = 'error', updated_at = NOW() WHERE id = $1`,
+          [projectId]
+        ).catch(() => {});
+      }
+    });
   } catch (err) {
     console.error('[MediaGeneration] generatePrompts error:', err);
     res.status(500).json({ error: err.message });
@@ -226,6 +265,45 @@ router.patch('/prompts/:id/approve', async (req, res) => {
       [req.params.id]
     );
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/media/prompts/:id — update prompt content (manual edit)
+router.patch('/prompts/:id', async (req, res) => {
+  try {
+    const { prompt_json, status } = req.body;
+    const fields = [];
+    const params = [];
+    if (prompt_json !== undefined) { fields.push(`prompt_json = $${params.length + 1}`); params.push(JSON.stringify(prompt_json)); }
+    if (status !== undefined)      { fields.push(`status = $${params.length + 1}`);      params.push(status); }
+    if (!fields.length) return res.status(400).json({ error: 'No fields to update' });
+    fields.push(`updated_at = NOW()`);
+    params.push(req.params.id);
+    await pool.query(
+      `UPDATE media_prompts SET ${fields.join(', ')} WHERE id = $${params.length}`,
+      params
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/media/projects/:id/prompts — create a manual prompt
+router.post('/projects/:id/prompts', async (req, res) => {
+  try {
+    const { deliverable_type = 'image', format = 'custom', prompt_json } = req.body;
+    if (!prompt_json) return res.status(400).json({ error: '"prompt_json" is required' });
+    const result = await pool.query(
+      `INSERT INTO media_prompts
+         (project_id, deliverable_type, format, prompt_json, status, version, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'draft', 'v1.0-manual', NOW(), NOW())
+       RETURNING *`,
+      [req.params.id, deliverable_type, format, JSON.stringify(prompt_json)]
+    );
+    res.json({ success: true, prompt: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -390,6 +468,180 @@ router.get('/projects/:id/performance-insights', async (req, res) => {
   try {
     const insights = await getOrchestrator().assetLibrarian.analysePerformance(parseInt(req.params.id, 10));
     res.json({ insights });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/media/chat — conversational orchestrator (template-driven system prompt)
+router.post('/chat', async (req, res) => {
+  try {
+    const { messages, projectId } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: '"messages" array is required' });
+    }
+    const result = await getOrchestrator().chat(messages, projectId || null);
+    res.json(result);
+  } catch (err) {
+    console.error('[MediaGeneration] chat error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/media/prompt-assist — AI expands a plain description into a full SD prompt
+router.post('/prompt-assist', async (req, res) => {
+  try {
+    const { description, type = 'image', style, format } = req.body;
+    if (!description) return res.status(400).json({ error: '"description" is required' });
+
+    const orch = getOrchestrator();
+    const systemPrompt = `You are a Stable Diffusion / SDXL prompt engineer.
+Given a plain-English description, produce a detailed, optimised prompt.
+Return ONLY JSON with this schema (no markdown, no explanation):
+{
+  "positive": "full detailed SD positive prompt",
+  "negative": "negative prompt (always include: worst quality, low quality, blurry, deformed, watermark, text, signature)",
+  "suggestedSampler": "DPM++ 2M Karras",
+  "suggestedCfg": 7,
+  "suggestedSteps": 25
+}`;
+    const userContent = `Create an SD prompt for: "${description}"${style ? `\nStyle: ${style}` : ''}${format ? `\nFormat: ${format}` : ''}${type === 'video' ? '\nThis is for video/AnimateDiff — add motion descriptors at the end of the positive prompt.' : ''}`;
+
+    const resp = await orch.anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      messages: [{ role: 'user', content: userContent }],
+      system: systemPrompt,
+    });
+
+    const text = resp.content[0]?.text || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AI did not return a valid prompt JSON');
+    const result = JSON.parse(jsonMatch[0]);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[MediaGeneration] prompt-assist error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Background image download helper ────────────────────────────────────────
+async function downloadAndSaveImage(url, destPath) {
+  const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 90000 });
+  fs.writeFileSync(destPath, resp.data);
+}
+
+// Available Pollinations models
+const POLLINATIONS_MODELS = new Set(['flux', 'flux-realism', 'flux-anime', 'flux-3d', 'turbo']);
+
+// GET /api/media/assets/:id — fetch single asset (for polling generation status)
+router.get('/assets/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM media_assets WHERE id = $1', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Asset not found' });
+    res.json({ asset: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/media/prompts/:id/generate-image — kick off async image generation
+// Returns immediately with assetId; client polls GET /api/media/assets/:id for status
+router.post('/prompts/:id/generate-image', async (req, res) => {
+  try {
+    const promptResult = await pool.query(
+      'SELECT * FROM media_prompts WHERE id = $1',
+      [req.params.id]
+    );
+    const record = promptResult.rows[0];
+    if (!record) return res.status(404).json({ error: 'Prompt not found' });
+
+    // Support both top-level prompt_json.positive and nested image/video structures
+    const pj = record.prompt_json || {};
+    const positivePrompt = pj.image?.positive || pj.video?.positive || pj.positive;
+    if (!positivePrompt) return res.status(400).json({ error: 'No positive prompt found on this record' });
+
+    const requestedModel = req.body?.model || 'flux';
+
+    // ── Create placeholder asset immediately (status = generating) ─────────────
+    const placeholder = await pool.query(
+      `INSERT INTO media_assets
+         (project_id, prompt_id, type, url, metadata_json, status, created_at)
+       VALUES ($1, $2, 'image', NULL, $3, 'generating', NOW())
+       RETURNING id`,
+      [record.project_id, record.id, JSON.stringify({ generator: requestedModel, auto: true })]
+    );
+    const assetId = placeholder.rows[0].id;
+
+    // Respond immediately so the client can start polling
+    res.json({ success: true, assetId, status: 'generating' });
+
+    // ── Background: download image and update asset ────────────────────────────
+    setImmediate(async () => {
+      try {
+        let imageUrl;
+
+        if (requestedModel === 'dall-e-3') {
+          if (!process.env.OPENAI_API_KEY) throw new Error('DALL-E 3 requires OPENAI_API_KEY');
+          const dalleResp = await axios.post(
+            'https://api.openai.com/v1/images/generations',
+            { model: 'dall-e-3', prompt: positivePrompt.substring(0, 4000), n: 1, size: '1024x1024', response_format: 'url' },
+            { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 60000 }
+          );
+          const dalleUrl = dalleResp.data?.data?.[0]?.url;
+          if (!dalleUrl) throw new Error('DALL-E did not return an image URL');
+          const filename = `media_${record.project_id}_p${record.id}_dalle_${Date.now()}.jpg`;
+          await downloadAndSaveImage(dalleUrl, path.join(UPLOADS_DIR, filename));
+          imageUrl = `/api/media/serve/${filename}`;
+        } else {
+          const pollinationsModel = POLLINATIONS_MODELS.has(requestedModel) ? requestedModel : 'flux';
+          const seed = Math.floor(Math.random() * 2147483647);
+          const encodedPrompt = encodeURIComponent(positivePrompt.substring(0, 800));
+          const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=${pollinationsModel}&nologo=true&seed=${seed}`;
+          const filename = `media_${record.project_id}_p${record.id}_${seed}.jpg`;
+          await downloadAndSaveImage(pollinationsUrl, path.join(UPLOADS_DIR, filename));
+          imageUrl = `/api/media/serve/${filename}`;
+        }
+
+        // Update asset with the final URL
+        await pool.query(
+          `UPDATE media_assets SET url = $1, status = 'pending_review', updated_at = NOW() WHERE id = $2`,
+          [imageUrl, assetId]
+        );
+      } catch (bgErr) {
+        console.error('[MediaGeneration] background image download error:', bgErr.message);
+        await pool.query(
+          `UPDATE media_assets SET status = 'error', metadata_json = metadata_json || $1::jsonb, updated_at = NOW() WHERE id = $2`,
+          [JSON.stringify({ error: bgErr.message }), assetId]
+        ).catch(() => {});
+      }
+    });
+  } catch (err) {
+    console.error('[MediaGeneration] generate-image error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/media/serve/:filename — serve a locally-saved generated image
+router.get('/serve/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename); // prevent directory traversal
+  const filePath = path.join(UPLOADS_DIR, filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Image not found' });
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile(filePath);
+});
+
+// PATCH /api/media/assets/:id/status — update asset status (approve / reject / reset)
+router.patch('/assets/:id/status', async (req, res) => {
+  try {
+    const { status, revisionNotes } = req.body;
+    const allowed = ['approved', 'rejected', 'pending_review', 'needs_revision'];
+    if (!allowed.includes(status)) return res.status(400).json({ error: `status must be one of: ${allowed.join(', ')}` });
+    await pool.query(
+      `UPDATE media_assets SET status = $1, qc_json = COALESCE(qc_json, '{}'::jsonb) || $2::jsonb, updated_at = NOW() WHERE id = $3`,
+      [status, JSON.stringify({ approved: status === 'approved', revisionNotes: revisionNotes || null }), req.params.id]
+    );
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

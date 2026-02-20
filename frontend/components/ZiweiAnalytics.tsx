@@ -24,14 +24,14 @@ function calculateAge(year: number): number {
 
 export default function ZiweiAnalytics() {
   const [input, setInput] = useState<ChartInput>({
-    lunarYear: 1990,
-    lunarMonth: 6,
-    lunarDay: 15,
-    hourBranch: '午',
-    gender: '女',
-    name: 'Sample Person',
-    placeOfBirth: 'Hong Kong',
-    timezone: 'Asia/Hong_Kong',
+    lunarYear: new Date().getFullYear(),
+    lunarMonth: 1,
+    lunarDay: 1,
+    hourBranch: '子',
+    gender: '男',
+    name: '',
+    placeOfBirth: '',
+    timezone: 'UTC',
     calendarType: 'lunar'
   });
 

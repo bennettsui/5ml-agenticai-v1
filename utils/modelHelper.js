@@ -9,8 +9,8 @@ const deepseekService = require('../services/deepseekService');
 // Map frontend model selection to actual model names
 const MODEL_MAP = {
   'deepseek': 'deepseek-reasoner',
-  'haiku': 'claude-3-haiku-20240307',
-  'sonnet': 'claude-3-5-sonnet-20240620',
+  'haiku':    'claude-haiku-4-5-20251001',
+  'sonnet':   'claude-sonnet-4-5-20250929',
   'perplexity': 'sonar-pro'
 };
 
@@ -32,9 +32,9 @@ function shouldUseDeepSeek(modelSelection) {
 
 function getModelDisplayName(modelSelection) {
   const names = {
-    'deepseek': 'DeepSeek R1',
-    'haiku': 'Claude 3 Haiku',
-    'sonnet': 'Claude 3.5 Sonnet',
+    'deepseek':   'DeepSeek R1',
+    'haiku':      'Claude Haiku 4.5',
+    'sonnet':     'Claude Sonnet 4.5',
     'perplexity': 'Perplexity Sonar Pro'
   };
   return names[modelSelection] || 'DeepSeek R1';
