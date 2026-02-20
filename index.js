@@ -3272,6 +3272,108 @@ app.get('/api/social/calendar/:brandId', async (req, res) => {
   }
 });
 
+// POST /api/social/compliance/check — check content against brand profile
+app.post('/api/social/compliance/check', async (req, res) => {
+  try {
+    const { brand_id, copy, colors, brand_profile } = req.body;
+
+    if (!brand_id) {
+      return res.status(400).json({ error: 'brand_id is required' });
+    }
+
+    const { checkBrandCompliance } = require('./services/complianceChecker');
+    const complianceScore = await checkBrandCompliance(
+      brand_id,
+      { copy, colors },
+      brand_profile
+    );
+
+    res.json({
+      compliance: complianceScore,
+      can_proceed: complianceScore.can_proceed,
+      action: complianceScore.action,
+    });
+  } catch (err) {
+    console.error('Error checking compliance:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/brands/guidelines/upload — upload brand guidelines PDF/image
+app.post('/api/brands/guidelines/upload', async (req, res) => {
+  try {
+    const { brandId } = req.body;
+
+    if (!brandId) {
+      return res.status(400).json({ error: 'brandId is required' });
+    }
+
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const file = req.files.file;
+    const allowedMimes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+
+    if (!allowedMimes.includes(file.mimetype)) {
+      return res.status(400).json({ error: 'Invalid file type' });
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File too large (max 10MB)' });
+    }
+
+    // Store file path (in production, would use cloud storage like S3)
+    const fileName = `${brandId}-guidelines-${Date.now()}.${file.name.split('.').pop()}`;
+    const uploadDir = `${__dirname}/uploads/guidelines`;
+
+    // Create directory if it doesn't exist
+    const fs = require('fs');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const filePath = `${uploadDir}/${fileName}`;
+    await file.mv(filePath);
+
+    // Store URL in brand profile
+    const guidelineUrl = `/uploads/guidelines/${fileName}`;
+
+    res.json({
+      success: true,
+      url: guidelineUrl,
+      fileName: file.name,
+    });
+  } catch (err) {
+    console.error('Error uploading guidelines:', err);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// POST /api/brands/guidelines/delete — delete brand guidelines
+app.post('/api/brands/guidelines/delete', async (req, res) => {
+  try {
+    const { brandId, url } = req.body;
+
+    if (!url) {
+      return res.status(400).json({ error: 'url is required' });
+    }
+
+    // Delete file
+    const fs = require('fs');
+    const filePath = `${__dirname}${url}`;
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting guidelines:', err);
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
 // ==========================================
 // Use Case Routes
 // ==========================================
