@@ -4,8 +4,14 @@
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk').default;
 const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
 const { pool } = require('../../../db');
 const MediaGenerationOrchestrator = require('../agents/orchestrator');
+
+// ─── Uploads directory ────────────────────────────────────────────────────────
+const UPLOADS_DIR = path.join(__dirname, '..', '..', '..', 'uploads', 'media');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const router = express.Router();
 
@@ -516,26 +522,65 @@ router.post('/prompts/:id/generate-image', async (req, res) => {
         { model: 'dall-e-3', prompt: positivePrompt.substring(0, 4000), n: 1, size: '1024x1024', response_format: 'url' },
         { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 60000 }
       );
-      const imageUrl = dalleResp.data?.data?.[0]?.url;
-      if (!imageUrl) throw new Error('DALL-E did not return an image URL');
-      await getOrchestrator().registerAsset(record.project_id, {
+      const dalleUrl = dalleResp.data?.data?.[0]?.url;
+      if (!dalleUrl) throw new Error('DALL-E did not return an image URL');
+      // Download and save locally
+      const dalleImg = await axios.get(dalleUrl, { responseType: 'arraybuffer', timeout: 60000 });
+      const dalleSeed = Date.now();
+      const dalleFilename = `media_${record.project_id}_p${record.id}_dalle_${dalleSeed}.jpg`;
+      fs.writeFileSync(path.join(UPLOADS_DIR, dalleFilename), dalleImg.data);
+      const imageUrl = `/api/media/serve/${dalleFilename}`;
+      const asset = await getOrchestrator().registerAsset(record.project_id, {
         promptId: record.id, type: 'image', url: imageUrl, metadata: { generator: 'dall-e-3', auto: true },
       });
-      return res.json({ success: true, imageUrl, provider: 'dall-e-3' });
+      return res.json({ success: true, imageUrl, assetId: asset?.id, provider: 'dall-e-3' });
     }
 
-    // ── Pollinations.ai (free, no key) ────────────────────────────────────────
+    // ── Pollinations.ai (free, no key) — download server-side ────────────────
     const pollinationsModel = POLLINATIONS_MODELS.has(requestedModel) ? requestedModel : 'flux';
-    const encodedPrompt = encodeURIComponent(positivePrompt.substring(0, 1000));
+    const encodedPrompt = encodeURIComponent(positivePrompt.substring(0, 800));
     const seed = Math.floor(Math.random() * 2147483647);
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=${pollinationsModel}&nologo=true&seed=${seed}`;
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=${pollinationsModel}&nologo=true&seed=${seed}`;
 
-    await getOrchestrator().registerAsset(record.project_id, {
-      promptId: record.id, type: 'image', url: imageUrl, metadata: { generator: `pollinations-${pollinationsModel}`, auto: true },
+    // Download image server-side (avoids CORS / browser timeout issues)
+    const imgResp = await axios.get(pollinationsUrl, { responseType: 'arraybuffer', timeout: 90000 });
+    const ext = 'jpg';
+    const filename = `media_${record.project_id}_p${record.id}_${seed}.${ext}`;
+    const localPath = path.join(UPLOADS_DIR, filename);
+    fs.writeFileSync(localPath, imgResp.data);
+
+    const asset = await getOrchestrator().registerAsset(record.project_id, {
+      promptId: record.id, type: 'image', url: `/api/media/serve/${filename}`, metadata: { generator: `pollinations-${pollinationsModel}`, auto: true, seed },
     });
-    res.json({ success: true, imageUrl, provider: `pollinations-${pollinationsModel}` });
+    const imageUrl = `/api/media/serve/${filename}`;
+    res.json({ success: true, imageUrl, assetId: asset?.id, provider: `pollinations-${pollinationsModel}` });
   } catch (err) {
     console.error('[MediaGeneration] generate-image error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/media/serve/:filename — serve a locally-saved generated image
+router.get('/serve/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename); // prevent directory traversal
+  const filePath = path.join(UPLOADS_DIR, filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Image not found' });
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile(filePath);
+});
+
+// PATCH /api/media/assets/:id/status — update asset status (approve / reject / reset)
+router.patch('/assets/:id/status', async (req, res) => {
+  try {
+    const { status, revisionNotes } = req.body;
+    const allowed = ['approved', 'rejected', 'pending_review', 'needs_revision'];
+    if (!allowed.includes(status)) return res.status(400).json({ error: `status must be one of: ${allowed.join(', ')}` });
+    await pool.query(
+      `UPDATE media_assets SET status = $1, qc_json = COALESCE(qc_json, '{}'::jsonb) || $2::jsonb, updated_at = NOW() WHERE id = $3`,
+      [status, JSON.stringify({ approved: status === 'approved', revisionNotes: revisionNotes || null }), req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
