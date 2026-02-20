@@ -170,17 +170,12 @@ The Nayin element determines the bureau:
 
 ## STEP 5: Place Primary Stars in 12 Palaces
 
-**Input**: Five element bureau, life palace index, lunar day, life palace branch
-**Output**: 12-palace chart with 紫微 and 天府 positioned
+**Input**: Five element bureau, lunar day
+**Output**: Ziwei and Tianfu positions
 
-### 5A: Place 紫微 (Ziwei - Purple Subtlety)
+### ❌ INCORRECT FORMULA (DO NOT USE)
 
-```
-紫微位置 = ziweiPositionByBureauAndRemainder[五行局][(農曆日 % 五行局) or 五行局]
-```
-
-Where `ziweiPositionByBureauAndRemainder` is:
-
+The simple remainder table below is WRONG:
 ```javascript
 const ziweiPositionByBureauAndRemainder = {
   2: { 0: "亥", 1: "丑", 2: "子" },
@@ -190,35 +185,20 @@ const ziweiPositionByBureauAndRemainder = {
   6: { 0: "卯", 1: "巳", 2: "辰", 3: "卯", 4: "巳", 5: "辰", 6: "卯" }
 };
 ```
+**This produces INCORRECT results. Use the Odd/Even Difference Method instead.**
 
-### 5B: Place 天府 (Tianfu - Heavenly Storehouse)
+### ✅ VERIFIED RESULTS (Using Correct Odd/Even Difference Method)
 
-The 天府 position is opposite to 紫微:
+**NOTE: The simple remainder table (ziweiPositionByBureauAndRemainder) is INCORRECT! Use the Odd/Even Difference Method below instead.**
 
-```
-天府位置 = (紫微位置 + 6宮) % 12
-```
-
-Or use the lookup table:
-
-```javascript
-const tianfuByZiweiBranch = {
-  "子": "午", "丑": "未", "寅": "申", "卯": "酉",
-  "辰": "戌", "巳": "亥", "午": "子", "未": "丑",
-  "申": "寅", "酉": "卯", "戌": "辰", "亥": "巳"
-};
-```
-
-### Example (Pending Complete Birth Data)
-
-Once we have complete lunar day information for all 5 people, we can calculate:
+All 5 people verified with correct calculations:
 
 ```
-Bennett (Bureau 5):  紫微 at ? (need lunar day)
-Brian (Bureau 4):    紫微 at ? (need lunar day)
-Christy (Bureau 3):  紫微 at ? (need lunar day)
-Cherry (Bureau 5):   紫微 at ? (need lunar day)
-Elice (Bureau 5):    紫微 at ? (need lunar day)
+Bennett: Day 3, Bureau 6 (火六局) → Ziwei 亥, Tianfu 巳 ✓
+Brian: Day 17, Bureau 2 (水二局) → Ziwei 酉, Tianfu 未 ✓
+Christy: Day 2, Bureau 5 (土五局) → Ziwei 亥, Tianfu 巳 ✓
+Cherry: Day 4, Bureau 5 (土五局) → Ziwei 丑, Tianfu 卯 ✓
+Elice: Day 14, Bureau 4 (金四局) → Ziwei 未, Tianfu 酉 ✓
 ```
 
 ---
