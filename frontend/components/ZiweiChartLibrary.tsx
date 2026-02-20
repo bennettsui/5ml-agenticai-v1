@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, Trash2, Eye, Download } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Loader2, Trash2, Eye, Download, ArrowRight } from 'lucide-react';
 
 interface SavedChart {
   id: string;
@@ -12,6 +13,7 @@ interface SavedChart {
 }
 
 export default function ZiweiChartLibrary() {
+  const router = useRouter();
   const [charts, setCharts] = useState<SavedChart[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +39,8 @@ export default function ZiweiChartLibrary() {
   };
 
   const viewChart = (chartId: string) => {
-    // Navigate to view the chart details
-    window.location.href = `/use-cases/ziwei?tab=analysis&chartId=${chartId}`;
+    // Navigate to the analytics/generator tab with chart ID
+    router.push(`/use-cases/ziwei?tab=analytics&chartId=${chartId}`);
   };
 
   const exportChart = async (chart: SavedChart) => {
@@ -147,21 +149,22 @@ export default function ZiweiChartLibrary() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => viewChart(chart.id)}
-                    className="flex-1 px-2 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1"
+                    className="flex-1 px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
                   >
-                    <Eye className="w-3 h-3" />
-                    View
+                    <ArrowRight className="w-3 h-3" />
+                    View Details
                   </button>
                   <button
                     onClick={() => exportChart(chart)}
-                    className="flex-1 px-2 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1"
+                    className="px-2 py-2 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium transition-colors"
+                    title="Export as JSON"
                   >
                     <Download className="w-3 h-3" />
-                    Export
                   </button>
                   <button
                     onClick={() => deleteChart(chart.id)}
-                    className="px-2 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded text-xs font-medium transition-colors"
+                    className="px-2 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded text-xs font-medium transition-colors"
+                    title="Delete chart"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>

@@ -48,6 +48,7 @@ COPY public/ ./public/
 COPY knowledge/ ./knowledge/
 COPY infrastructure/ ./infrastructure/
 COPY use-cases/ ./use-cases/
+COPY data/ ./data/
 
 # Compile TypeScript files
 RUN npx tsc --project tsconfig.json || echo "TypeScript compilation warnings (non-critical)"
