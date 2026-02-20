@@ -2,7 +2,7 @@
 
 **Purpose**: Track all locked, verified algorithms and prevent unauthorized changes.
 
-**Last Updated**: 2026-02-20
+**Last Updated**: 2026-02-20 (STEP 4.5 added & locked)
 
 ---
 
@@ -38,6 +38,20 @@
 - **Test Cases**: All 5 people ✓
 - **Bureau Mapping**: 2(水)/3(木)/4(金)/5(土)/6(火)
 - **Sources**: 60 Jiazi Nayin table
+- **Change Approval Required**: YES
+
+### STEP 4.5: All 12 Palace Stems (12宮天干排列)
+- **Status**: ✅ LOCKED - Verified Correct
+- **Method**: Start from 寅 position using 五虎遁, count forward through 10-stem cycle
+- **Key Principle**: Each stem appears exactly 2x in 12-palace cycle (10 stems ÷ 12 branches)
+- **Verified Date**: 2026-02-20
+- **Test Cases**: All 5 people ✓
+  - Bennett: 寅(丙)→卯(丁)→辰(戊)→...→丑(丁) ✓
+  - Brian: 寅(庚)→卯(辛)→辰(壬)→...→丑(辛) ✓
+  - Christy: 寅(丙)→卯(丁)→辰(戊)→...→丑(丁) ✓
+  - Cherry: 寅(戊)→卯(己)→辰(庚)→...→丑(己) ✓
+  - Elice: 寅(壬)→卯(癸)→辰(甲)→...→丑(癸) ✓
+- **Sources**: 星林學苑, 紫微斗數排盤教學, iztro methodology
 - **Change Approval Required**: YES
 
 ### STEP 5A: Ziwei (紫微) Placement
@@ -114,7 +128,7 @@ To request changes to ANY locked algorithm:
 ## 🚫 Do NOT Change Without Approval:
 
 The following files contain locked algorithm sections:
-- `knowledge/schema/ZIWEI_ALGORITHM.md` (STEP 1-5)
+- `knowledge/schema/ZIWEI_ALGORITHM.md` (STEP 1-5, STEP 4.5)
 - `knowledge/schema/ZIWEI_IMPLEMENTATION_LOG.md` (this file)
 
 Any commits modifying these sections without user approval will be blocked.
