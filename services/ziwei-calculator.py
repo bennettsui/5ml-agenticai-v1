@@ -75,11 +75,21 @@ ziweiPositionTable = {
     6: {1: "午", 2: "辰", 3: "寅", 4: "子", 5: "戌", 6: "申"},  # Fire 6 Bureau
 }
 
-# Tianfu position opposite to Ziwei
-tianfuOpposite = {
-    "子": "午", "丑": "未", "寅": "申", "卯": "酉",
-    "辰": "戌", "巳": "亥", "午": "子", "未": "丑",
-    "申": "寅", "酉": "卯", "戌": "辰", "亥": "巳"
+# ✅ CORRECT Tianfu mapping - FIXED relationship with Ziwei (NOT just opposite!)
+# Mnemonic: "天府南斗令，常對紫微宮，丑卯相更迭，未酉互為根。往來午與戌，蹀躞子和辰，已亥交馳騁，同位在寅申"
+tianfuMapping = {
+    "寅": "寅",  # 同位在寅申 (same palace)
+    "卯": "丑",  # 丑卯相更迭 (swap)
+    "辰": "子",  # 蹀躞子和辰 (swap)
+    "巳": "亥",  # 已亥交馳騁 (opposite)
+    "午": "戌",  # 往來午與戌 (swap)
+    "未": "酉",  # 未酉互為根 (swap)
+    "申": "申",  # 同位在寅申 (same palace)
+    "酉": "未",  # 未酉互為根 (swap)
+    "戌": "午",  # 往來午與戌 (swap)
+    "亥": "巳",  # 已亥交馳騁 (opposite)
+    "子": "辰",  # 蹀躞子和辰 (swap)
+    "丑": "卯",  # 丑卯相更迭 (swap)
 }
 
 # Major star offsets from Ziwei
@@ -213,13 +223,20 @@ def calculateFiveElementBureau(lifeHouseStemBranch):
 
 def calculateZiweiPosition(lunarDay, fiveElementBureau):
     """
-    STEP 5A: Calculate Ziwei (紫微) position using Quotient-Remainder Method
+    STEP 5A: Calculate Ziwei (紫微) position using Odd/Even Difference Method
 
-    Formula:
-    1. remainder = lunarDay % fiveElementBureau (or bureau if remainder=0)
-    2. quotient = lunarDay // fiveElementBureau
-    3. base_position = ziweiPositionTable[bureau][remainder]
-    4. final_position_index = (base_index + quotient) % 12
+    ✅ CORRECT Formula (Verified via multiple examples):
+    1. quotient = ceil(lunarDay / fiveElementBureau)  - Find smallest multiplier level
+    2. multiplier = quotient * fiveElementBureau     - Get actual multiple
+    3. difference = multiplier - lunarDay             - Calculate difference
+    4. if difference is EVEN: finalNumber = quotient + difference
+       if difference is ODD:  finalNumber = quotient - difference
+    5. ziweiIndex = (finalNumber - 1) % 12
+    6. ziweiPosition = branchOrder[ziweiIndex]
+
+    Verified examples:
+    - Wood 3, Day 25: quotient=9, diff=2(even), final=11 → 子 ✓
+    - Fire 6, Day 7: quotient=2, diff=5(odd), final=-3 → 戌 ✓
 
     Args:
         lunarDay: Lunar day of birth (1-30)
@@ -228,27 +245,43 @@ def calculateZiweiPosition(lunarDay, fiveElementBureau):
     Returns:
         Ziwei branch string
     """
-    remainder = lunarDay % fiveElementBureau
-    if remainder == 0:
-        remainder = fiveElementBureau
+    import math
 
-    quotient = lunarDay // fiveElementBureau
+    # Step 1: Find smallest multiplier > lunarDay
+    quotient = math.ceil(lunarDay / fiveElementBureau)
+    multiplier = quotient * fiveElementBureau
 
-    # Get base position from lookup table
-    base_position = ziweiPositionTable[fiveElementBureau].get(remainder, "子")
-    base_index = branchToIndex(base_position)
+    # Step 2: Calculate difference
+    difference = multiplier - lunarDay
 
-    # Count forward by quotient steps
-    final_index = (base_index + quotient) % 12
-    final_position = indexToBranch(final_index)
+    # Step 3: Calculate final number based on odd/even difference
+    if difference % 2 == 0:  # EVEN difference
+        finalNumber = quotient + difference
+    else:  # ODD difference
+        finalNumber = quotient - difference
 
-    return final_position
+    # Step 4: Find Ziwei position (counting from 寅 at position 1)
+    ziwei_index = (finalNumber - 1) % 12
+    ziwei_position = indexToBranch(ziwei_index)
+
+    return ziwei_position
 
 def calculateTianfuPosition(ziweiPosition):
     """
-    STEP 5B: Calculate Tianfu (天府) position
+    STEP 5B: Calculate Tianfu (天府) position using FIXED mapping
 
-    Tianfu is directly opposite to Ziwei (6 palaces away)
+    ✅ IMPORTANT: Tianfu has a FIXED relationship with Ziwei (NOT just opposite!)
+
+    Uses mnemonic: "天府南斗令，常對紫微宮，丑卯相更迭，未酉互為根。
+                   往來午與戌，蹀躞子和辰，已亥交馳騁，同位在寅申"
+
+    Mapping rules:
+    - 寅/申: Same palace (同位)
+    - 丑↔卯: Swap (相更迭)
+    - 子↔辰: Swap (蹀躞)
+    - 巳↔亥: Opposite (交馳騁)
+    - 午↔戌: Swap (往來)
+    - 未↔酉: Swap (互為根)
 
     Args:
         ziweiPosition: Ziwei branch (from Step 5A)
@@ -256,7 +289,7 @@ def calculateTianfuPosition(ziweiPosition):
     Returns:
         Tianfu branch string
     """
-    return tianfuOpposite[ziweiPosition]
+    return tianfuMapping[ziweiPosition]
 
 # ============================================================================
 # STEP 6: Place Major Stars (十四主星)

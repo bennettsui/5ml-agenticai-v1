@@ -119,11 +119,11 @@ lifeHouseStemBranch = lifeHouseStem + lifeHouseBranch
 
 | Person | 命宮 | 命宮干 | 命宮干支 |
 |--------|------|--------|---------|
-| Bennett | 寅 | 戊 | **戊寅** |
-| Brian | 辰 | 庚 | **庚辰** |
-| Christy | 未 | 癸 | **癸未** |
+| Bennett | 寅 | 丙 | **丙寅** |
+| Brian | 辰 | 壬 | **壬辰** |
+| Christy | 未 | 辛 | **辛未** |
 | Cherry | 卯 | 己 | **己卯** |
-| Elice | 亥 | 丁 | **丁亥** |
+| Elice | 亥 | 辛 | **辛亥** |
 
 ---
 
@@ -138,11 +138,11 @@ First, map the life palace stem-branch to its Nayin element using the **60 Jiazi
 
 | 命宮干支 | Nayin Element | Chinese Name |
 |---------|---------------|--------------|
-| 戊寅 | Earth | 城頭土 (City Wall Earth) |
-| 庚辰 | Metal | 白蠟金 (White Wax Metal) |
-| 癸未 | Wood | 楊柳木 (Willow Wood) |
+| 丙寅 | Fire | 爐中火 (Furnace Fire) |
+| 壬辰 | Water | 長流水 (Flowing Water) |
+| 辛未 | Earth | 路旁土 (Roadside Earth) |
 | 己卯 | Earth | 城頭土 (City Wall Earth) |
-| 丁亥 | Earth | 屋上土 (Rooftop Earth) |
+| 辛亥 | Metal | 鈎釧金 (Hook-Ring Metal) |
 
 ### Nayin Element to Bureau Mapping
 
@@ -160,11 +160,11 @@ The Nayin element determines the bureau:
 
 | Person | 命宮干支 | Nayin | Bureau | Number |
 |--------|---------|-------|--------|--------|
-| Bennett | 戊寅 | 城頭土 | 土五局 | **5** |
-| Brian | 庚辰 | 白蠟金 | 金四局 | **4** ✓ |
-| Christy | 癸未 | 楊柳木 | 木三局 | **3** ✓ |
-| Cherry | 己卯 | 城頭土 | 土五局 | **5** |
-| Elice | 丁亥 | 屋上土 | 土五局 | **5** |
+| Bennett | 丙寅 | 爐中火 | 火六局 | **6** ✓ |
+| Brian | 壬辰 | 長流水 | 水二局 | **2** ✓ |
+| Christy | 辛未 | 路旁土 | 土五局 | **5** ✓ |
+| Cherry | 己卯 | 城頭土 | 土五局 | **5** ✓ |
+| Elice | 辛亥 | 鈎釧金 | 金四局 | **4** ✓ |
 
 ---
 
@@ -275,63 +275,114 @@ Elice (Bureau 5):    紫微 at ? (need lunar day)
 **Input**: Five element bureau, lunar day
 **Output**: Ziwei and Tianfu positions
 
-### ✅ CORRECTED ALGORITHM: Quotient-Remainder Method (Verified via Python)
+### ✅ CORRECTED ALGORITHM: Odd/Even Difference Method (Verified via Python)
 
-**Formula:**
-
-```python
-# Step 1: Calculate remainder and quotient
-remainder = lunarDay % fiveElementBureau
-if remainder == 0:
-    remainder = fiveElementBureau
-quotient = lunarDay // fiveElementBureau
-
-# Step 2: Look up base position from table
-basePosition = ziweiPositionTable[fiveElementBureau][remainder]
-baseIndex = branchOrder.index(basePosition)
-
-# Step 3: Count forward by quotient steps
-finalIndex = (baseIndex + quotient) % 12
-ziweiPosition = branchOrder[finalIndex]
-
-# Step 4: Calculate Tianfu (opposite, 6 palaces away)
-tianfuIndex = (ziweiIndex + 6) % 12
-tianfuPosition = branchOrder[tianfuIndex]
-```
-
-**Ziwei Position Lookup Table (CORRECTED):**
+**CORRECT Formula** (from authoritative sources):
 
 ```python
-# Base positions for each remainder in each five element bureau
-ziweiPositionTable = {
-    2: {1: "巳", 2: "午"},  # Water 2 Bureau
-    3: {1: "辰", 2: "寅", 3: "子"},  # Wood 3 Bureau
-    4: {1: "卯", 2: "午", 3: "未", 4: "戌"},  # Metal 4 Bureau
-    5: {1: "寅", 2: "午", 3: "戊", 4: "寅", 5: "午"},  # Earth 5 Bureau
-    6: {1: "午", 2: "辰", 3: "寅", 4: "子", 5: "戌", 6: "申"},  # Fire 6 Bureau
+import math
+
+# Step 1: Find smallest multiplier of bureau that is GREATER than lunar day
+quotient = math.ceil(lunarDay / fiveElementBureau)
+multiplier = quotient * fiveElementBureau
+
+# Step 2: Calculate difference
+difference = multiplier - lunarDay
+
+# Step 3: Calculate final number based on odd/even difference
+if difference % 2 == 0:  # EVEN difference
+    finalNumber = quotient + difference
+else:  # ODD difference
+    finalNumber = quotient - difference
+
+# Step 4: Find Ziwei position
+# Count from 寅 (starting at 1) to finalNumber position
+ziweiIndex = (finalNumber - 1) % 12
+ziweiPosition = branchOrder[ziweiIndex]
+
+# Step 5: Find Tianfu using FIXED mapping (NOT just opposite!)
+# Mnemonic: "天府南斗令，常對紫微宮，丑卯相更迭，未酉互為根。往來午與戌，蹀躞子和辰，已亥交馳騁，同位在寅申"
+# Meaning: Ziwei-Tianfu have fixed pairings, not always opposite
+
+tianfuMapping = {
+    "寅": "寅",  # 同位在寅申 (same palace)
+    "卯": "丑",  # 丑卯相更迭 (swap)
+    "辰": "子",  # 蹀躞子和辰 (swap)
+    "巳": "亥",  # 已亥交馳騁 (opposite)
+    "午": "戌",  # 往來午與戌 (swap)
+    "未": "酉",  # 未酉互為根 (swap)
+    "申": "申",  # 同位在寅申 (same palace)
+    "酉": "未",  # 未酉互為根 (swap)
+    "戌": "午",  # 往來午與戌 (swap)
+    "亥": "巳",  # 已亥交馳騁 (opposite)
+    "子": "辰",  # 蹀躞子和辰 (swap)
+    "丑": "卯",  # 丑卯相更迭 (swap)
 }
 
-branchOrder = ["寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥", "子", "丑"]
+tianfuPosition = tianfuMapping[ziweiPosition]
 ```
 
-**Verified Example:**
-- Day 22, Wood 3: remainder=1, quotient=7, base=辰, final=亥 ✓
+**Key Points:**
+- quotient = ceil(day ÷ bureau) - find the "倍數" (multiplier level)
+- difference = multiplier - day - can be odd or even
+- If EVEN: finalNumber = quotient + difference
+- If ODD: finalNumber = quotient - difference (can be negative!)
+- Position counting: starts at 1 from 寅, so index = (finalNumber - 1) % 12
+
+### ✅ Verified Examples
+
+**Example 1: Wood 3 (木三局), Day 25**
+```
+quotient = ceil(25 ÷ 3) = 9
+multiplier = 9 × 3 = 27
+difference = 27 - 25 = 2 (EVEN)
+finalNumber = 9 + 2 = 11
+ziweiIndex = (11 - 1) % 12 = 10 → 子 ✓
+```
+
+**Example 2: Fire 6 (火六局), Day 7**
+```
+quotient = ceil(7 ÷ 6) = 2
+multiplier = 2 × 6 = 12
+difference = 12 - 7 = 5 (ODD)
+finalNumber = 2 - 5 = -3
+ziweiIndex = (-3 - 1) % 12 = 8 → 戌 ✓
+```
 
 ### ✅ Calculated Results (All 5 People)
 
-| Person | Day | Bureau | Remainder | Quotient | Ziwei | Tianfu |
-|--------|-----|--------|-----------|----------|-------|--------|
-| Bennett | 3 | 火六(6) | 3 | 0 | **寅** | **申** |
-| Brian | 17 | 水二(2) | 1 | 8 | **丑** | **未** ✓ |
-| Christy | 2 | 土五(5) | 2 | 0 | **午** | **子** |
-| Cherry | 4 | 土五(5) | 4 | 0 | **寅** | **申** |
-| Elice | 14 | 金四(4) | 2 | 3 | **酉** | **卯** |
+| Person | Day | Bureau | Quotient | Multiplier | Difference | Type | Final# | Ziwei | Tianfu |
+|--------|-----|--------|----------|-----------|-----------|------|--------|-------|--------|
+| Bennett | 3 | 火六(6) | 1 | 6 | 3 | ODD | -2 | **亥** | **巳** ✓ |
+| Brian | 17 | 水二(2) | 9 | 18 | 1 | ODD | 8 | **酉** | **未** ✓ |
+| Christy | 2 | 土五(5) | 1 | 5 | 3 | ODD | -2 | **亥** | **巳** ✓ |
+| Cherry | 4 | 土五(5) | 1 | 5 | 1 | ODD | 0 | **丑** | **卯** ✓ |
+| Elice | 14 | 金四(4) | 4 | 16 | 2 | EVEN | 6 | **未** | **酉** ✓ |
+
+### ✅ FIXED TIANFU MAPPING (Key Discovery!)
+
+Tianfu position is **NOT** simply opposite to Ziwei! Uses fixed mnemonic:
+
+```
+天府南斗令，常對紫微宮
+丑卯相更迭，未酉互為根
+往來午與戌，蹀躞子和辰
+已亥交馳騁，同位在寅申
+```
+
+**Translation**:
+- 寅/申: Same palace (同位)
+- 丑↔卯: Swap (相更迭)
+- 子↔辰: Swap (蹀躞)
+- 巳↔亥: Opposite (交馳騁)
+- 午↔戌: Swap (往來)
+- 未↔酉: Swap (互為根)
 
 ### ✅ FORMULA VERIFIED
 
-- Algorithm sourced from: [Ziwei Doushu official method](https://hungjc.com/index.php/hungjc-2/hungjc-5/)
-- Tested against multiple online examples
-- Brian's Tianfu position matches user's expected value ✓
+- Ziwei algorithm: [紫微斗數排盤教學](https://sweeteason.pixnet.net/blog/post/43186747)
+- Tianfu mapping: [星林 學苑](https://www.108s.tw/article/info/91)
+- All 5 people verified ✓
 
-**Status**: Algorithm complete and tested. Ready for code update.
+**Status**: Both Ziwei and Tianfu algorithms complete and tested.
 **Last Checked**: 2026-02-20
