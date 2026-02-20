@@ -80,7 +80,7 @@ export default function ConsultationPage() {
             <strong className="text-white">{form.email}</strong>{' '}
             或{' '}
             <strong className="text-white">{form.phone}</strong>{' '}
-            聯絡您，安排免費 15 分鐘諮詢。
+            聯絡您，安排免費 30 分鐘諮詢。
           </p>
           <div className="bg-white/10 rounded-2xl p-5 mb-6 text-left space-y-3">
             <h3 className="text-white font-semibold text-sm uppercase tracking-wide mb-4">
@@ -158,7 +158,7 @@ export default function ConsultationPage() {
                 免費諮詢
               </div>
               <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-2">
-                預約您的免費<br />15 分鐘 AI 諮詢
+                預約您的免費<br />30 分鐘 AI 諮詢
               </h1>
               <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                 與我們的 AI 專家深入了解您的業務需求，量身定制最適合您的自動化方案。
@@ -189,7 +189,7 @@ export default function ConsultationPage() {
             <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/40 rounded-xl p-4 mb-6">
               <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
               <div>
-                <div className="text-sm font-bold text-blue-800 dark:text-blue-200">15 分鐘 · 完全免費</div>
+                <div className="text-sm font-bold text-blue-800 dark:text-blue-200">30 分鐘 · 完全免費</div>
                 <div className="text-xs text-blue-600 dark:text-blue-400">無需信用卡 · 無義務承諾</div>
               </div>
             </div>
@@ -200,7 +200,7 @@ export default function ConsultationPage() {
                 {[...Array(5)].map((_, i) => <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />)}
               </div>
               <p className="text-xs text-slate-600 dark:text-slate-400 italic leading-relaxed mb-3">
-                "諮詢非常有效率，15 分鐘內就清楚了解我們需要哪些 AI 代理，沒有任何廢話。"
+                "諮詢非常有效率，30 分鐘內就清楚了解我們需要哪些 AI 代理，沒有任何廢話。"
               </p>
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">陳</div>
@@ -516,7 +516,7 @@ export default function ConsultationPage() {
                 <Shield className="w-3.5 h-3.5 text-emerald-500" />資料保密
               </span>
               <span className="flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-emerald-500" />15 分鐘完成
+                <Clock className="w-3.5 h-3.5 text-emerald-500" />30 分鐘完成
               </span>
             </div>
           </div>

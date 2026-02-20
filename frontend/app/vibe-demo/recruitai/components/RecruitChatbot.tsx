@@ -69,7 +69,7 @@ export default function RecruitChatbot() {
       setHasGreeted(true);
       const greeting: Message = {
         role: 'assistant',
-        content: '你好！我係 Nora 👋\n\nRecruitAI Studio 的 AI 顧問，專幫香港中小企搵出最適合的 AI 自動化方案。\n\n你哋係做咩行業？有冇啲日常流程覺得好費時或者好想自動化？話俾我知，我幫你分析下 💡',
+        content: '你好呀！我係 Nora 👋✨\n\n我係 RecruitAI Studio 嘅 AI 顧問，專幫香港中小企用 AI 省時省力、提升業績 🚀\n\n好多客都係從廣告、客服或者後台行政開始自動化，效果好驚喜 😄\n\n你哋主要做咩業務呀？有冇啲日常嘢覺得「呢個如果可以唔係人手做就好喇」？話俾我知！',
       };
       setMessages([greeting]);
     }
@@ -232,9 +232,9 @@ export default function RecruitChatbot() {
           </div>
 
           {/* Turn indicator */}
-          {turnCount > 15 && (
-            <div className="px-4 py-2 bg-amber-50 border-t border-amber-100 text-xs text-amber-700 text-center">
-              💡 如想了解詳情，歡迎留下聯絡方式，我們安排免費諮詢
+          {turnCount > 8 && (
+            <div className="px-4 py-2 bg-blue-50 border-t border-blue-100 text-xs text-blue-700 text-center">
+              💡 有興趣？留下聯絡，安排免費 30 分鐘 AI 評估 😊
             </div>
           )}
 
