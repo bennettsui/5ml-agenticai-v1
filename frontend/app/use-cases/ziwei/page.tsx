@@ -7,13 +7,15 @@ import {
   GitBranch, BookOpen, TrendingUp, Users, Shield, Radar,
   LayoutDashboard, Activity, Home, History, Wand2,
 } from 'lucide-react';
-import { ChartCalculator } from './chart-calculator';
+import ZiweiChartCalculatorWrapper from '@/components/ZiweiChartCalculatorWrapper';
 import ZiweiChartAnalysis from '@/components/ZiweiChartAnalysis';
 import ZiweiPredictions from '@/components/ZiweiPredictions';
 import ZiweiKnowledgeManagement from '@/components/ZiweiKnowledgeManagement';
 import ZiweiCelebrityValidation from '@/components/ZiweiCelebrityValidation';
 import ZiweiChartLibrary from '@/components/ZiweiChartLibrary';
 import ZiweiRuleManagement from '@/components/ZiweiRuleManagement';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import ZiweiTabErrorBoundary from '@/components/ZiweiTabErrorBoundary';
 
 type ZiweiTab = 'overview' | 'analytics' | 'analysis' | 'predictions' | 'knowledge' | 'celebrity' | 'charts' | 'rules';
 
@@ -38,7 +40,8 @@ export default function ZiweiPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
       {/* HEADER */}
       <header className="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
@@ -107,7 +110,7 @@ export default function ZiweiPage() {
 
         {/* CHART CALCULATOR */}
         <section className="py-12 mb-12">
-          <ChartCalculator />
+          <ZiweiChartCalculatorWrapper />
         </section>
 
         {/* SYSTEM ARCHITECTURE */}
@@ -401,37 +404,65 @@ export default function ZiweiPage() {
         {/* ================================================================ */}
         {/* ZIWEI ANALYTICS TAB (GENERATOR)                                 */}
         {/* ================================================================ */}
-        {activeTab === 'analytics' && <ChartCalculator />}
+        {activeTab === 'analytics' && (
+          <ZiweiTabErrorBoundary tabName="Analytics">
+            <ZiweiChartCalculatorWrapper />
+          </ZiweiTabErrorBoundary>
+        )}
 
         {/* ================================================================ */}
         {/* ZIWEI ANALYSIS TAB                                              */}
         {/* ================================================================ */}
-        {activeTab === 'analysis' && <ZiweiChartAnalysis />}
+        {activeTab === 'analysis' && (
+          <ZiweiTabErrorBoundary tabName="Analysis">
+            <ZiweiChartAnalysis />
+          </ZiweiTabErrorBoundary>
+        )}
 
         {/* ================================================================ */}
         {/* ZIWEI PREDICTIONS TAB                                           */}
         {/* ================================================================ */}
-        {activeTab === 'predictions' && <ZiweiPredictions />}
+        {activeTab === 'predictions' && (
+          <ZiweiTabErrorBoundary tabName="Predictions">
+            <ZiweiPredictions />
+          </ZiweiTabErrorBoundary>
+        )}
 
         {/* ================================================================ */}
         {/* ZIWEI KNOWLEDGE MANAGEMENT TAB                                  */}
         {/* ================================================================ */}
-        {activeTab === 'knowledge' && <ZiweiKnowledgeManagement />}
+        {activeTab === 'knowledge' && (
+          <ZiweiTabErrorBoundary tabName="Knowledge">
+            <ZiweiKnowledgeManagement />
+          </ZiweiTabErrorBoundary>
+        )}
 
         {/* ================================================================ */}
         {/* ZIWEI CELEBRITY VALIDATION TAB                                  */}
         {/* ================================================================ */}
-        {activeTab === 'celebrity' && <ZiweiCelebrityValidation />}
+        {activeTab === 'celebrity' && (
+          <ZiweiTabErrorBoundary tabName="Celebrity">
+            <ZiweiCelebrityValidation />
+          </ZiweiTabErrorBoundary>
+        )}
 
         {/* ================================================================ */}
         {/* ZIWEI CHARTS TAB                                                */}
         {/* ================================================================ */}
-        {activeTab === 'charts' && <ZiweiChartLibrary />}
+        {activeTab === 'charts' && (
+          <ZiweiTabErrorBoundary tabName="Charts">
+            <ZiweiChartLibrary />
+          </ZiweiTabErrorBoundary>
+        )}
 
         {/* ================================================================ */}
         {/* ZIWEI RULES MANAGEMENT TAB                                     */}
         {/* ================================================================ */}
-        {activeTab === 'rules' && <ZiweiRuleManagement />}
+        {activeTab === 'rules' && (
+          <ZiweiTabErrorBoundary tabName="Rules">
+            <ZiweiRuleManagement />
+          </ZiweiTabErrorBoundary>
+        )}
       </main>
 
       {/* FOOTER */}
@@ -444,5 +475,6 @@ export default function ZiweiPage() {
         </div>
       </footer>
     </div>
+    </ErrorBoundary>
   );
 }

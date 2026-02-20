@@ -97,29 +97,24 @@ Schema:
   // ─── Internal LLM call ────────────────────────────────────────────────────
   async _callLLM(systemPrompt, userContent) {
     const messages = [{ role: 'user', content: userContent }];
-    try {
-      let rawJson;
-      if (shouldUseDeepSeek('deepseek')) {
-        const resp = await deepseekService.chat([
-          { role: 'system', content: systemPrompt },
-          ...messages,
-        ]);
-        rawJson = resp.content;
-      } else {
-        const resp = await this.anthropic.messages.create({
-          model: getClaudeModel('haiku'),
-          max_tokens: 1024,
-          system: systemPrompt,
-          messages,
-        });
-        rawJson = resp.content[0].text;
-      }
-      const cleaned = rawJson.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      return JSON.parse(cleaned);
-    } catch (err) {
-      console.error(`[${this.name}] Prompt generation failed:`, err.message);
-      return { positive: '', negative: 'worst quality, low quality', notes: `Error: ${err.message}` };
+    let rawJson;
+    if (shouldUseDeepSeek('deepseek')) {
+      const resp = await deepseekService.chat([
+        { role: 'system', content: systemPrompt },
+        ...messages,
+      ]);
+      rawJson = resp.content;
+    } else {
+      const resp = await this.anthropic.messages.create({
+        model: getClaudeModel('haiku'),
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages,
+      });
+      rawJson = resp.content[0].text;
     }
+    const cleaned = rawJson.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    return JSON.parse(cleaned);
   }
 }
 

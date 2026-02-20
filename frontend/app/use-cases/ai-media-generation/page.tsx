@@ -9,29 +9,52 @@ import {
 } from 'lucide-react';
 import MediaGenerationWorkflow from '@/components/MediaGenerationWorkflow';
 import MultimediaLibrary from '@/components/MultimediaLibrary';
+import AiChatAssistant, { type AiChatConfig } from '@/components/AiChatAssistant';
 
 type MediaTab = 'overview' | 'workflow' | 'library';
 
+const chatConfig: AiChatConfig = {
+  endpoint: '/api/media/chat',
+  useCaseId: 'ai-media-generation',
+  chatType: 'media',
+  title: 'Sarah — Media Director',
+  accent: 'rose',
+  suggestedQuestions: [
+    'How do I write a good SDXL prompt?',
+    'What settings work best for product photography?',
+    'How should I structure a creative brief?',
+    'What motion keywords work best for AnimateDiff?',
+    'Explain the 8-agent pipeline workflow',
+  ],
+};
+
 export default function AiMediaGenerationPage() {
   const getInitialTab = (): MediaTab => {
-    if (typeof window === 'undefined') return 'overview';
+    if (typeof window === 'undefined') return 'workflow';
     const p = new URLSearchParams(window.location.search).get('tab') as MediaTab | null;
     const valid: MediaTab[] = ['overview', 'workflow', 'library'];
-    return p && valid.includes(p) ? p : 'overview';
+    return p && valid.includes(p) ? p : 'workflow';
   };
   const [activeTab, setActiveTab] = useState<MediaTab>(getInitialTab);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  const enrichedChatConfig: AiChatConfig = {
+    ...chatConfig,
+    extraContext: { current_tab: activeTab },
+    onOpenChange: setChatOpen,
+  };
 
   const tabs: { id: MediaTab; label: string; icon: typeof Activity }[] = [
-    { id: 'overview',  label: 'Overview',             icon: Activity  },
-    { id: 'workflow',  label: '🎨 Generation Workflow', icon: Wand2    },
-    { id: 'library',   label: '📚 Multimedia Library',  icon: Library  },
+    { id: 'workflow',  label: '🎨 Generate',         icon: Wand2    },
+    { id: 'library',   label: '📚 Asset Library',    icon: Library  },
+    { id: 'overview',  label: 'About',               icon: Activity },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
+    <div className="h-screen overflow-hidden flex flex-col bg-gradient-to-br from-slate-900 to-slate-800">
 
       {/* HEADER */}
-      <header className="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-40">
+      <header className="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-sm z-40 flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/" className="text-slate-400 hover:text-white transition-colors mr-1">
@@ -54,32 +77,37 @@ export default function AiMediaGenerationPage() {
         </div>
       </header>
 
-      {/* TAB NAVIGATION */}
-      <nav className="bg-slate-800 border-b border-slate-700 sticky top-[65px] z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-6 overflow-x-auto">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-1 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? 'border-rose-500 text-rose-400'
-                      : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-500'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </nav>
+      {/* MAIN ROW: content + chat */}
+      <div className="flex flex-1 min-h-0">
+        <div className={`${chatOpen ? 'flex-[0.65]' : 'flex-1'} flex flex-col min-w-0 transition-all`}>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* TAB NAVIGATION */}
+          <nav className="bg-slate-800 border-b border-slate-700 z-30 flex-shrink-0">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex space-x-6 overflow-x-auto">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex items-center gap-1.5 px-1 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                        activeTab === tab.id
+                          ? 'border-rose-500 text-rose-400'
+                          : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-500'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </nav>
+
+          <main className="flex-1 overflow-auto">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
         {/* ================================================================ */}
         {/* OVERVIEW TAB                                                     */}
@@ -246,15 +274,22 @@ export default function AiMediaGenerationPage() {
         {/* ================================================================ */}
         {activeTab === 'library' && <MultimediaLibrary />}
 
-      </main>
+            </div>{/* /max-w-7xl */}
 
-      {/* FOOTER */}
-      <footer className="border-t border-slate-700/50 bg-slate-900/50 mt-20 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center text-xs text-slate-500">
-          <p>AI Media Generation · MediaChannel · ComfyUI + AnimateDiff + SVD pipeline</p>
-          <p className="mt-2">Self-hosted GPU · LLM cost ~$0.66/month · GPU electricity only</p>
-        </div>
-      </footer>
+            {/* FOOTER */}
+            <footer className="border-t border-slate-700/50 bg-slate-900/50 py-8">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center text-xs text-slate-500">
+                <p>AI Media Generation · MediaChannel · ComfyUI + AnimateDiff + SVD pipeline</p>
+                <p className="mt-2">Self-hosted GPU · LLM cost ~$0.66/month · GPU electricity only</p>
+              </div>
+            </footer>
+          </main>
+
+        </div>{/* /left column */}
+
+        <AiChatAssistant config={enrichedChatConfig} />
+
+      </div>{/* /flex row */}
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { useState } from 'react';
 import {
   Image, Film, Sparkles, FileText, CheckCircle2, Clock,
   ChevronRight, Plus, Trash2, Loader2, Copy, CheckCheck,
-  Wand2, Play, Eye, Upload, AlertCircle, RefreshCw,
+  Wand2, Play, Eye, Upload, AlertCircle, RefreshCw, Pencil, X, Save,
+  Zap, ImagePlus,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -97,14 +98,67 @@ function CopyButton({ text }: { text: string }) {
 
 // ─── Prompt card ──────────────────────────────────────────────────────────────
 
-function PromptCard({ prompt, onApprove, projectId }: {
+function PromptCard({ prompt, onApprove, onEdit }: {
   prompt: PromptRecord;
   onApprove: (id: number) => void;
+  onEdit: (id: number, newPromptJson: PromptRecord['prompt_json']) => Promise<void>;
   projectId: number;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState('');
+  const [imgLoading, setImgLoading] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const img = prompt.prompt_json?.image;
   const vid = prompt.prompt_json?.video;
+
+  // Editable state
+  const [editPos, setEditPos] = useState(img?.positive || '');
+  const [editNeg, setEditNeg] = useState(img?.negative || '');
+  const [editVidPos, setEditVidPos] = useState(vid?.positive || '');
+
+  const handleGenerateImage = async () => {
+    setGenerating(true);
+    setGenerateError('');
+    setExpanded(true);
+    try {
+      const resp = await fetch(`/api/media/prompts/${prompt.id}/generate-image`, { method: 'POST' });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Generation failed');
+      setGeneratedImage(data.imageUrl);
+      setImgLoading(true);
+      setImgError(false);
+    } catch (err: unknown) {
+      setGenerateError(err instanceof Error ? err.message : 'Generation failed');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const newJson: PromptRecord['prompt_json'] = {};
+    if (img) {
+      newJson.image = { ...img, positive: editPos, negative: editNeg };
+    }
+    if (vid) {
+      newJson.video = { ...vid, positive: editVidPos };
+    }
+    await onEdit(prompt.id, newJson);
+    setSaving(false);
+    setEditMode(false);
+  };
+
+  const enterEdit = () => {
+    setEditPos(img?.positive || '');
+    setEditNeg(img?.negative || '');
+    setEditVidPos(vid?.positive || '');
+    setEditMode(true);
+    setExpanded(true);
+  };
 
   return (
     <div className="rounded-xl border border-slate-700/50 bg-slate-800/60 overflow-hidden">
@@ -127,13 +181,52 @@ function PromptCard({ prompt, onApprove, projectId }: {
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {prompt.status === 'draft' && (
+          {prompt.status === 'draft' && !editMode && (
             <button
               onClick={() => onApprove(prompt.id)}
               className="text-[10px] px-2.5 py-1 rounded-lg bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-colors"
             >
               Approve
             </button>
+          )}
+          {!editMode && (
+            <button
+              onClick={handleGenerateImage}
+              disabled={generating}
+              className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors disabled:opacity-50"
+              title="Generate a preview image from this prompt"
+            >
+              {generating
+                ? <Loader2 className="w-3 h-3 animate-spin" />
+                : <Zap className="w-3 h-3" />
+              }
+              {generating ? 'Generating…' : 'Generate Image'}
+            </button>
+          )}
+          {!editMode ? (
+            <button
+              onClick={enterEdit}
+              className="p-1.5 text-slate-500 hover:text-amber-400 transition-colors"
+              title="Edit prompt"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-colors disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
+              </button>
+              <button
+                onClick={() => setEditMode(false)}
+                className="p-1.5 text-slate-500 hover:text-white transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </>
           )}
           <button
             onClick={() => setExpanded(v => !v)}
@@ -147,75 +240,149 @@ function PromptCard({ prompt, onApprove, projectId }: {
       {/* Expanded body */}
       {expanded && (
         <div className="p-4 space-y-4">
-          {img && (
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Image Prompt</p>
-              <div className="rounded-lg bg-white/[0.02] border border-slate-700/40 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-xs text-green-300 leading-relaxed flex-1">✓ {img.positive}</p>
-                  <CopyButton text={img.positive} />
-                </div>
-                {img.negative && (
-                  <div className="flex items-start justify-between gap-2 mt-2 pt-2 border-t border-slate-700/30">
-                    <p className="text-xs text-red-400/80 leading-relaxed flex-1">✗ {img.negative}</p>
-                    <CopyButton text={img.negative} />
+          {/* Edit mode */}
+          {editMode ? (
+            <div className="space-y-3">
+              {img !== undefined && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-green-400 uppercase tracking-wider">✓ Positive Prompt</label>
+                    <textarea
+                      value={editPos}
+                      onChange={e => setEditPos(e.target.value)}
+                      rows={4}
+                      className="w-full bg-white/[0.03] border border-green-500/30 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-green-500/60 resize-y leading-relaxed"
+                      placeholder="Describe the image you want to generate..."
+                    />
                   </div>
-                )}
-              </div>
-              <div className="flex gap-3 text-[11px] text-slate-500">
-                {img.suggestedSampler && <span>Sampler: <span className="text-slate-300">{img.suggestedSampler}</span></span>}
-                {img.suggestedSteps   && <span>Steps: <span className="text-slate-300">{img.suggestedSteps}</span></span>}
-                {img.suggestedCfg    && <span>CFG: <span className="text-slate-300">{img.suggestedCfg}</span></span>}
-              </div>
-
-              {/* Headline & CTA Copy (optional) */}
-              {(img.headline || img.ctaCopy) && (
-                <div className="mt-3 space-y-2 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
-                  <p className="text-[10px] font-semibold text-blue-300 uppercase tracking-wide">Text Overlay</p>
-                  {img.headline && (
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="text-xs">
-                        <p className="text-blue-400/80">📝 Headline:</p>
-                        <p className="text-blue-300 font-medium mt-0.5">{img.headline}</p>
-                      </div>
-                      <CopyButton text={img.headline} />
-                    </div>
-                  )}
-                  {img.ctaCopy && (
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="text-xs">
-                        <p className="text-blue-400/80">🎯 CTA Copy:</p>
-                        <p className="text-blue-300 font-medium mt-0.5">{img.ctaCopy}</p>
-                      </div>
-                      <CopyButton text={img.ctaCopy} />
-                    </div>
-                  )}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-red-400 uppercase tracking-wider">✗ Negative Prompt</label>
+                    <textarea
+                      value={editNeg}
+                      onChange={e => setEditNeg(e.target.value)}
+                      rows={2}
+                      className="w-full bg-white/[0.03] border border-red-500/30 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-red-500/60 resize-y leading-relaxed"
+                      placeholder="worst quality, low quality, blurry..."
+                    />
+                  </div>
+                </>
+              )}
+              {vid !== undefined && (
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-rose-400 uppercase tracking-wider">✓ Video Prompt</label>
+                  <textarea
+                    value={editVidPos}
+                    onChange={e => setEditVidPos(e.target.value)}
+                    rows={3}
+                    className="w-full bg-white/[0.03] border border-rose-500/30 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-rose-500/60 resize-y leading-relaxed"
+                    placeholder="Video motion prompt..."
+                  />
                 </div>
               )}
             </div>
+          ) : (
+            <>
+              {img && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Image Prompt</p>
+                  <div className="rounded-lg bg-white/[0.02] border border-slate-700/40 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs text-green-300 leading-relaxed flex-1">✓ {img.positive}</p>
+                      <CopyButton text={img.positive} />
+                    </div>
+                    {img.negative && (
+                      <div className="flex items-start justify-between gap-2 mt-2 pt-2 border-t border-slate-700/30">
+                        <p className="text-xs text-red-400/80 leading-relaxed flex-1">✗ {img.negative}</p>
+                        <CopyButton text={img.negative} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-3 text-[11px] text-slate-500">
+                    {img.suggestedSampler && <span>Sampler: <span className="text-slate-300">{img.suggestedSampler}</span></span>}
+                    {img.suggestedSteps   && <span>Steps: <span className="text-slate-300">{img.suggestedSteps}</span></span>}
+                    {img.suggestedCfg    && <span>CFG: <span className="text-slate-300">{img.suggestedCfg}</span></span>}
+                  </div>
+                </div>
+              )}
+
+              {vid && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Video Prompt (AnimateDiff / SVD)</p>
+                  <div className="rounded-lg bg-white/[0.02] border border-slate-700/40 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs text-rose-300 leading-relaxed flex-1">✓ {vid.positive}</p>
+                      <CopyButton text={vid.positive} />
+                    </div>
+                  </div>
+                  {vid.motionKeywords?.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {vid.motionKeywords.map((kw, i) => (
+                        <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                          {kw}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="flex gap-3 text-[11px] text-slate-500">
+                    {vid.recommendedFrames && <span>Frames: <span className="text-slate-300">{vid.recommendedFrames}</span></span>}
+                    {vid.recommendedFps    && <span>FPS: <span className="text-slate-300">{vid.recommendedFps}</span></span>}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
-          {vid && (
+          {/* Generated image preview */}
+          {generateError && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {generateError}
+            </div>
+          )}
+          {generatedImage && (
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Video Prompt (AnimateDiff / SVD)</p>
-              <div className="rounded-lg bg-white/[0.02] border border-slate-700/40 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-xs text-rose-300 leading-relaxed flex-1">✓ {vid.positive}</p>
-                  <CopyButton text={vid.positive} />
+              <p className="text-[11px] font-semibold text-violet-400 uppercase tracking-wider flex items-center gap-1">
+                <Zap className="w-3 h-3" /> Generated Preview
+              </p>
+
+              {/* Loading skeleton while Pollinations generates the image */}
+              {imgLoading && !imgError && (
+                <div className="w-full h-48 rounded-lg bg-slate-900 border border-slate-700/50 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
+                  <p className="text-xs text-slate-500">Generating image… (15–30 s)</p>
                 </div>
-              </div>
-              {vid.motionKeywords?.length ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {vid.motionKeywords.map((kw, i) => (
-                    <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                      {kw}
-                    </span>
-                  ))}
+              )}
+
+              {imgError && (
+                <div className="w-full h-24 rounded-lg bg-red-500/5 border border-red-500/20 flex items-center justify-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400" />
+                  <p className="text-xs text-red-400">Failed to load image</p>
                 </div>
-              ) : null}
-              <div className="flex gap-3 text-[11px] text-slate-500">
-                {vid.recommendedFrames && <span>Frames: <span className="text-slate-300">{vid.recommendedFrames}</span></span>}
-                {vid.recommendedFps    && <span>FPS: <span className="text-slate-300">{vid.recommendedFps}</span></span>}
+              )}
+
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={generatedImage}
+                alt="Generated preview"
+                className={`w-full rounded-lg border border-slate-700/50 max-h-80 object-contain bg-slate-900 ${imgLoading || imgError ? 'hidden' : ''}`}
+                onLoad={() => setImgLoading(false)}
+                onError={() => { setImgLoading(false); setImgError(true); }}
+              />
+
+              <div className="flex gap-2">
+                <a
+                  href={generatedImage}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors"
+                >
+                  Open full size
+                </a>
+                <button
+                  onClick={() => { setGeneratedImage(null); setImgLoading(false); setImgError(false); }}
+                  className="text-[10px] px-2.5 py-1 rounded-lg text-slate-500 border border-slate-700/30 hover:text-white transition-colors"
+                >
+                  Clear
+                </button>
               </div>
             </div>
           )}
@@ -287,6 +454,19 @@ export default function MediaGenerationWorkflow() {
   // Prompt generation
   const [promptsGenerating, setPromptsGenerating] = useState(false);
 
+  // Manual prompt form
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualForm, setManualForm] = useState({
+    deliverable_type: 'image' as 'image' | 'video',
+    format: 'instagram_post',
+    positive: '',
+    negative: 'worst quality, low quality, blurry, deformed, watermark, text, signature',
+    vidPositive: '',
+  });
+  const [manualSaving, setManualSaving] = useState(false);
+  const [aiAssistDesc, setAiAssistDesc] = useState('');
+  const [aiAssisting, setAiAssisting] = useState(false);
+
   // Register asset form
   const [assetForm, setAssetForm] = useState({ type: 'image', url: '' });
   const [assetLoading, setAssetLoading] = useState(false);
@@ -301,8 +481,13 @@ export default function MediaGenerationWorkflow() {
       const resp = await fetch('/api/media/projects');
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Failed to load projects');
-      setProjects(data.projects || []);
+      const list: MediaProject[] = data.projects || [];
+      setProjects(list);
       setProjectsLoaded(true);
+      // Auto-select the most recent project so the user can start immediately
+      if (list.length > 0 && !selectedProject) {
+        await selectProject(list[0].id);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -320,7 +505,14 @@ export default function MediaGenerationWorkflow() {
       if (!resp.ok) throw new Error(data.error || 'Failed to load project');
       setSelectedProject(data);
       setBriefText(data.project.brief_text || '');
-      setActivePane(data.project.brief_text ? 'prompts' : 'brief');
+      // Navigate to the most relevant pane
+      if (data.prompts && data.prompts.length > 0) {
+        setActivePane('prompts');
+      } else if (data.project.brief_text) {
+        setActivePane('prompts');
+      } else {
+        setActivePane('brief');
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -400,6 +592,90 @@ export default function MediaGenerationWorkflow() {
       await fetch(`/api/media/prompts/${promptId}/approve`, { method: 'PATCH' });
       await selectProject(selectedProject.project.id);
     } catch { /* silent */ }
+  };
+
+  // ── Edit prompt ───────────────────────────────────────────────────────────
+  const editPrompt = async (promptId: number, newPromptJson: PromptRecord['prompt_json']) => {
+    if (!selectedProject) return;
+    try {
+      await fetch(`/api/media/prompts/${promptId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt_json: newPromptJson }),
+      });
+      await selectProject(selectedProject.project.id);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save prompt');
+    }
+  };
+
+  // ── AI prompt assist ─────────────────────────────────────────────────────
+  const runAiAssist = async () => {
+    if (!aiAssistDesc.trim()) return;
+    setAiAssisting(true);
+    setError('');
+    try {
+      const resp = await fetch('/api/media/prompt-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: aiAssistDesc,
+          type: manualForm.deliverable_type,
+          format: manualForm.format,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'AI assist failed');
+      setManualForm(f => ({
+        ...f,
+        positive: data.positive || f.positive,
+        negative: data.negative || f.negative,
+      }));
+      if (manualForm.deliverable_type === 'video' && data.positive) {
+        setManualForm(f => ({ ...f, vidPositive: data.positive }));
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'AI assist failed');
+    } finally {
+      setAiAssisting(false);
+    }
+  };
+
+  // ── Create manual prompt ──────────────────────────────────────────────────
+  const createManualPrompt = async () => {
+    if (!selectedProject || !manualForm.positive.trim()) return;
+    setManualSaving(true);
+    try {
+      const promptJson: PromptRecord['prompt_json'] = {};
+      if (manualForm.deliverable_type === 'image' || manualForm.deliverable_type === 'video') {
+        promptJson.image = { positive: manualForm.positive, negative: manualForm.negative };
+      }
+      if (manualForm.deliverable_type === 'video' && manualForm.vidPositive.trim()) {
+        promptJson.video = { positive: manualForm.vidPositive, negative: '' };
+      }
+      await fetch(`/api/media/projects/${selectedProject.project.id}/prompts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deliverable_type: manualForm.deliverable_type,
+          format: manualForm.format,
+          prompt_json: promptJson,
+        }),
+      });
+      setManualForm({
+        deliverable_type: 'image',
+        format: 'instagram_post',
+        positive: '',
+        negative: 'worst quality, low quality, blurry, deformed, watermark, text, signature',
+        vidPositive: '',
+      });
+      setShowManualForm(false);
+      await selectProject(selectedProject.project.id);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create prompt');
+    } finally {
+      setManualSaving(false);
+    }
   };
 
   // ── Register asset ────────────────────────────────────────────────────────
@@ -582,18 +858,44 @@ export default function MediaGenerationWorkflow() {
           {!projectLoading && selectedProject && (
             <div className="space-y-4">
               {/* Project header */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-white">{selectedProject.project.name}</h3>
-                  {selectedProject.project.client && (
-                    <p className="text-sm text-slate-400">{selectedProject.project.client}</p>
-                  )}
-                </div>
-                <StatusBadge status={selectedProject.project.status} />
+              <div>
+                <h3 className="text-lg font-bold text-white">{selectedProject.project.name}</h3>
+                {selectedProject.project.client && (
+                  <p className="text-sm text-slate-400">{selectedProject.project.client}</p>
+                )}
               </div>
 
-              {/* Pane tabs */}
-              <div className="flex gap-1 border-b border-slate-700/40 pb-0">
+              {/* Step progress + pane tabs */}
+              <div className="space-y-2">
+                {/* Step indicator */}
+                <div className="flex items-center gap-1 text-[11px]">
+                  {[
+                    { key: 'brief',   label: '1 · Brief',   done: !!selectedProject.project.brief_spec_json },
+                    { key: 'prompts', label: '2 · Prompts',  done: selectedProject.prompts.length > 0 },
+                    { key: 'assets',  label: '3 · Generate', done: selectedProject.assets.length > 0 },
+                  ].map((step, i) => (
+                    <div key={step.key} className="flex items-center gap-1">
+                      {i > 0 && <div className="w-4 h-px bg-slate-700" />}
+                      <button
+                        onClick={() => setActivePane(step.key as 'brief' | 'prompts' | 'assets')}
+                        className={`px-2.5 py-0.5 rounded-full border transition-colors ${
+                          activePane === step.key
+                            ? 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                            : step.done
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                            : 'bg-white/[0.02] border-slate-700/40 text-slate-500'
+                        }`}
+                      >
+                        {step.done && activePane !== step.key && '✓ '}{step.label}
+                      </button>
+                    </div>
+                  ))}
+                  <div className="ml-auto">
+                    <StatusBadge status={selectedProject.project.status} />
+                  </div>
+                </div>
+
+                <div className="flex gap-1 border-b border-slate-700/40 pb-0">
                 {(['brief', 'prompts', 'assets'] as const).map(pane => (
                   <button
                     key={pane}
@@ -609,7 +911,8 @@ export default function MediaGenerationWorkflow() {
                     {pane === 'assets'  && <span className="flex items-center gap-1.5"><Eye className="w-3.5 h-3.5" />Assets{selectedProject.assets.length > 0 && ` (${selectedProject.assets.length})`}</span>}
                   </button>
                 ))}
-              </div>
+                </div>
+              </div>{/* /step progress + pane tabs */}
 
               {/* ── Brief pane ─────────────────────────────────────────── */}
               {activePane === 'brief' && (
@@ -698,31 +1001,167 @@ Mood: Aspirational, high-energy summer.`}
               {/* ── Prompts pane ──────────────────────────────────────── */}
               {activePane === 'prompts' && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-slate-300">
-                        {selectedProject.prompts.length === 0
-                          ? 'No prompts yet — generate from the translated brief.'
-                          : `${selectedProject.prompts.length} prompt set${selectedProject.prompts.length !== 1 ? 's' : ''} · ${selectedProject.prompts.filter(p => p.status === 'approved').length} approved`
-                        }
-                      </p>
+                  {/* Next-step banner when prompts exist */}
+                  {selectedProject.prompts.length > 0 && (
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-violet-500/10 border border-violet-500/30">
+                      <Zap className="w-4 h-4 text-violet-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-violet-300">
+                          {selectedProject.prompts.length} prompt{selectedProject.prompts.length !== 1 ? 's' : ''} ready
+                        </p>
+                        <p className="text-xs text-violet-400/70">Expand any card below and click <strong>Generate Image</strong> to create a preview</p>
+                      </div>
+                      <button
+                        onClick={() => setActivePane('assets')}
+                        className="text-[11px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors whitespace-nowrap"
+                      >
+                        View Assets →
+                      </button>
                     </div>
-                    <button
-                      onClick={generatePrompts}
-                      disabled={promptsGenerating || !selectedProject.project.brief_spec_json}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30 transition-colors text-sm disabled:opacity-50"
-                      title={!selectedProject.project.brief_spec_json ? 'Submit a brief first' : ''}
-                    >
-                      {promptsGenerating
-                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
-                        : <><Wand2 className="w-3.5 h-3.5" /> Generate Prompts</>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-sm text-slate-300">
+                      {selectedProject.prompts.length === 0
+                        ? 'No prompts yet — generate from brief or write manually.'
+                        : `${selectedProject.prompts.filter(p => p.status === 'approved').length} of ${selectedProject.prompts.length} approved`
                       }
-                    </button>
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowManualForm(v => !v)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 border border-slate-600/50 hover:bg-slate-700 transition-colors text-sm"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Write Manually
+                      </button>
+                      <button
+                        onClick={generatePrompts}
+                        disabled={promptsGenerating || !selectedProject.project.brief_spec_json}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30 transition-colors text-sm disabled:opacity-50"
+                        title={!selectedProject.project.brief_spec_json ? 'Submit a brief first to use AI generation' : ''}
+                      >
+                        {promptsGenerating
+                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
+                          : <><Wand2 className="w-3.5 h-3.5" /> Generate with AI</>
+                        }
+                      </button>
+                    </div>
                   </div>
 
-                  {!selectedProject.project.brief_spec_json && (
+                  {!selectedProject.project.brief_spec_json && !showManualForm && (
                     <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4 text-sm text-yellow-400">
-                      Submit and translate a brief first before generating prompts.
+                      No brief translated yet. You can <button onClick={() => setShowManualForm(true)} className="underline hover:text-yellow-300">write prompts manually</button>, or go to the Brief tab to submit a brief first.
+                    </div>
+                  )}
+
+                  {/* Manual prompt form */}
+                  {showManualForm && (
+                    <div className="rounded-xl border border-slate-600/50 bg-slate-800/60 p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-white flex items-center gap-2">
+                          <Pencil className="w-4 h-4 text-slate-400" /> Write Prompt Manually
+                        </p>
+                        <button onClick={() => setShowManualForm(false)} className="p-1 text-slate-500 hover:text-white transition-colors">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-slate-400 mb-1 block">Type</label>
+                          <select
+                            value={manualForm.deliverable_type}
+                            onChange={e => setManualForm(f => ({ ...f, deliverable_type: e.target.value as 'image' | 'video' }))}
+                            className="w-full bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500/50"
+                          >
+                            <option value="image">Image</option>
+                            <option value="video">Video</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-400 mb-1 block">Format</label>
+                          <select
+                            value={manualForm.format}
+                            onChange={e => setManualForm(f => ({ ...f, format: e.target.value }))}
+                            className="w-full bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500/50"
+                          >
+                            <option value="instagram_post">Instagram Post</option>
+                            <option value="instagram_story">Instagram Story</option>
+                            <option value="tiktok">TikTok</option>
+                            <option value="youtube_shorts">YouTube Shorts</option>
+                            <option value="key_visual">Key Visual</option>
+                            <option value="product_video">Product Video</option>
+                            <option value="custom">Custom</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* AI Prompt Assist */}
+                      <div className="rounded-lg bg-violet-500/5 border border-violet-500/20 p-3 space-y-2">
+                        <p className="text-[11px] font-semibold text-violet-400 flex items-center gap-1.5">
+                          <Zap className="w-3 h-3" /> AI Prompt Generator
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            value={aiAssistDesc}
+                            onChange={e => setAiAssistDesc(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runAiAssist(); } }}
+                            placeholder="Describe what you want, e.g. 'product shot of running shoes on white background'"
+                            className="flex-1 bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-violet-500/50"
+                          />
+                          <button
+                            onClick={runAiAssist}
+                            disabled={aiAssisting || !aiAssistDesc.trim()}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors text-sm disabled:opacity-50 whitespace-nowrap"
+                          >
+                            {aiAssisting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                            {aiAssisting ? 'Writing…' : 'Write Prompt'}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-600">AI will fill in the positive and negative prompts below</p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-green-400 uppercase tracking-wider">✓ Positive Prompt *</label>
+                        <textarea
+                          value={manualForm.positive}
+                          onChange={e => setManualForm(f => ({ ...f, positive: e.target.value }))}
+                          rows={4}
+                          placeholder="Describe what you want to generate: subject, style, lighting, camera, mood..."
+                          className="w-full bg-white/[0.03] border border-green-500/30 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-green-500/60 resize-y leading-relaxed"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-red-400 uppercase tracking-wider">✗ Negative Prompt</label>
+                        <textarea
+                          value={manualForm.negative}
+                          onChange={e => setManualForm(f => ({ ...f, negative: e.target.value }))}
+                          rows={2}
+                          className="w-full bg-white/[0.03] border border-red-500/30 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-red-500/60 resize-y leading-relaxed"
+                        />
+                      </div>
+
+                      {manualForm.deliverable_type === 'video' && (
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-rose-400 uppercase tracking-wider">✓ Video Motion Prompt</label>
+                          <textarea
+                            value={manualForm.vidPositive}
+                            onChange={e => setManualForm(f => ({ ...f, vidPositive: e.target.value }))}
+                            rows={2}
+                            placeholder="slow dolly in, gentle pan left, subtle breathing motion..."
+                            className="w-full bg-white/[0.03] border border-rose-500/30 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-rose-500/60 resize-y leading-relaxed"
+                          />
+                        </div>
+                      )}
+
+                      <button
+                        onClick={createManualPrompt}
+                        disabled={manualSaving || !manualForm.positive.trim()}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                      >
+                        {manualSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : <><Save className="w-4 h-4" /> Save Prompt</>}
+                      </button>
                     </div>
                   )}
 
@@ -732,6 +1171,7 @@ Mood: Aspirational, high-energy summer.`}
                         key={p.id}
                         prompt={p}
                         onApprove={approvePrompt}
+                        onEdit={editPrompt}
                         projectId={selectedProject.project.id}
                       />
                     ))}
