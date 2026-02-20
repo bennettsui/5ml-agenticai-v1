@@ -30,7 +30,7 @@ export default function AgenticWorkflowsPage() {
         </div>
       </header>
 
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="w-full px-0 py-0">
         <AgenticWorkflows />
       </main>
     </div>
