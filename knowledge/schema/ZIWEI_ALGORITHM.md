@@ -300,9 +300,26 @@ else:  # ODD difference
 ziweiIndex = (finalNumber - 1) % 12
 ziweiPosition = branchOrder[ziweiIndex]
 
-# Step 5: Find Tianfu (opposite, 6 palaces away)
-tianfuIndex = (ziweiIndex + 6) % 12
-tianfuPosition = branchOrder[tianfuIndex]
+# Step 5: Find Tianfu using FIXED mapping (NOT just opposite!)
+# Mnemonic: "天府南斗令，常對紫微宮，丑卯相更迭，未酉互為根。往來午與戌，蹀躞子和辰，已亥交馳騁，同位在寅申"
+# Meaning: Ziwei-Tianfu have fixed pairings, not always opposite
+
+tianfuMapping = {
+    "寅": "寅",  # 同位在寅申 (same palace)
+    "卯": "丑",  # 丑卯相更迭 (swap)
+    "辰": "子",  # 蹀躞子和辰 (swap)
+    "巳": "亥",  # 已亥交馳騁 (opposite)
+    "午": "戌",  # 往來午與戌 (swap)
+    "未": "酉",  # 未酉互為根 (swap)
+    "申": "申",  # 同位在寅申 (same palace)
+    "酉": "未",  # 未酉互為根 (swap)
+    "戌": "午",  # 往來午與戌 (swap)
+    "亥": "巳",  # 已亥交馳騁 (opposite)
+    "子": "辰",  # 蹀躞子和辰 (swap)
+    "丑": "卯",  # 丑卯相更迭 (swap)
+}
+
+tianfuPosition = tianfuMapping[ziweiPosition]
 ```
 
 **Key Points:**
@@ -336,17 +353,36 @@ ziweiIndex = (-3 - 1) % 12 = 8 → 戌 ✓
 
 | Person | Day | Bureau | Quotient | Multiplier | Difference | Type | Final# | Ziwei | Tianfu |
 |--------|-----|--------|----------|-----------|-----------|------|--------|-------|--------|
-| Bennett | 3 | 火六(6) | 1 | 6 | 3 | ODD | -2 | **亥** | **巳** |
-| Brian | 17 | 水二(2) | 9 | 18 | 1 | ODD | 8 | **酉** | **卯** |
-| Christy | 2 | 土五(5) | 1 | 5 | 3 | ODD | -2 | **亥** | **巳** |
-| Cherry | 4 | 土五(5) | 1 | 5 | 1 | ODD | 0 | **丑** | **未** |
-| Elice | 14 | 金四(4) | 4 | 16 | 2 | EVEN | 6 | **未** | **丑** |
+| Bennett | 3 | 火六(6) | 1 | 6 | 3 | ODD | -2 | **亥** | **巳** ✓ |
+| Brian | 17 | 水二(2) | 9 | 18 | 1 | ODD | 8 | **酉** | **未** ✓ |
+| Christy | 2 | 土五(5) | 1 | 5 | 3 | ODD | -2 | **亥** | **巳** ✓ |
+| Cherry | 4 | 土五(5) | 1 | 5 | 1 | ODD | 0 | **丑** | **卯** ✓ |
+| Elice | 14 | 金四(4) | 4 | 16 | 2 | EVEN | 6 | **未** | **酉** ✓ |
+
+### ✅ FIXED TIANFU MAPPING (Key Discovery!)
+
+Tianfu position is **NOT** simply opposite to Ziwei! Uses fixed mnemonic:
+
+```
+天府南斗令，常對紫微宮
+丑卯相更迭，未酉互為根
+往來午與戌，蹀躞子和辰
+已亥交馳騁，同位在寅申
+```
+
+**Translation**:
+- 寅/申: Same palace (同位)
+- 丑↔卯: Swap (相更迭)
+- 子↔辰: Swap (蹀躞)
+- 巳↔亥: Opposite (交馳騁)
+- 午↔戌: Swap (往來)
+- 未↔酉: Swap (互為根)
 
 ### ✅ FORMULA VERIFIED
 
-- Algorithm sourced from: [紫微斗數排盤教學](https://sweeteason.pixnet.net/blog/post/43186747)
-- Tested against multiple examples: both examples verified ✓
-- Key difference from previous: Uses odd/even difference logic, NOT quotient-remainder
+- Ziwei algorithm: [紫微斗數排盤教學](https://sweeteason.pixnet.net/blog/post/43186747)
+- Tianfu mapping: [星林 學苑](https://www.108s.tw/article/info/91)
+- All 5 people verified ✓
 
-**Status**: Algorithm complete and tested. Code updated.
+**Status**: Both Ziwei and Tianfu algorithms complete and tested.
 **Last Checked**: 2026-02-20

@@ -75,11 +75,21 @@ ziweiPositionTable = {
     6: {1: "午", 2: "辰", 3: "寅", 4: "子", 5: "戌", 6: "申"},  # Fire 6 Bureau
 }
 
-# Tianfu position opposite to Ziwei
-tianfuOpposite = {
-    "子": "午", "丑": "未", "寅": "申", "卯": "酉",
-    "辰": "戌", "巳": "亥", "午": "子", "未": "丑",
-    "申": "寅", "酉": "卯", "戌": "辰", "亥": "巳"
+# ✅ CORRECT Tianfu mapping - FIXED relationship with Ziwei (NOT just opposite!)
+# Mnemonic: "天府南斗令，常對紫微宮，丑卯相更迭，未酉互為根。往來午與戌，蹀躞子和辰，已亥交馳騁，同位在寅申"
+tianfuMapping = {
+    "寅": "寅",  # 同位在寅申 (same palace)
+    "卯": "丑",  # 丑卯相更迭 (swap)
+    "辰": "子",  # 蹀躞子和辰 (swap)
+    "巳": "亥",  # 已亥交馳騁 (opposite)
+    "午": "戌",  # 往來午與戌 (swap)
+    "未": "酉",  # 未酉互為根 (swap)
+    "申": "申",  # 同位在寅申 (same palace)
+    "酉": "未",  # 未酉互為根 (swap)
+    "戌": "午",  # 往來午與戌 (swap)
+    "亥": "巳",  # 已亥交馳騁 (opposite)
+    "子": "辰",  # 蹀躞子和辰 (swap)
+    "丑": "卯",  # 丑卯相更迭 (swap)
 }
 
 # Major star offsets from Ziwei
@@ -258,9 +268,20 @@ def calculateZiweiPosition(lunarDay, fiveElementBureau):
 
 def calculateTianfuPosition(ziweiPosition):
     """
-    STEP 5B: Calculate Tianfu (天府) position
+    STEP 5B: Calculate Tianfu (天府) position using FIXED mapping
 
-    Tianfu is directly opposite to Ziwei (6 palaces away)
+    ✅ IMPORTANT: Tianfu has a FIXED relationship with Ziwei (NOT just opposite!)
+
+    Uses mnemonic: "天府南斗令，常對紫微宮，丑卯相更迭，未酉互為根。
+                   往來午與戌，蹀躞子和辰，已亥交馳騁，同位在寅申"
+
+    Mapping rules:
+    - 寅/申: Same palace (同位)
+    - 丑↔卯: Swap (相更迭)
+    - 子↔辰: Swap (蹀躞)
+    - 巳↔亥: Opposite (交馳騁)
+    - 午↔戌: Swap (往來)
+    - 未↔酉: Swap (互為根)
 
     Args:
         ziweiPosition: Ziwei branch (from Step 5A)
@@ -268,7 +289,7 @@ def calculateTianfuPosition(ziweiPosition):
     Returns:
         Tianfu branch string
     """
-    return tianfuOpposite[ziweiPosition]
+    return tianfuMapping[ziweiPosition]
 
 # ============================================================================
 # STEP 6: Place Major Stars (十四主星)
