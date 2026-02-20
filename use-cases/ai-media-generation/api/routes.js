@@ -526,32 +526,55 @@ Return ONLY JSON with this schema (no markdown, no explanation):
 });
 
 // ─── Background image download helper ────────────────────────────────────────
+// Retries up to 2 extra times (3 total) for transient 5xx / timeout errors.
 async function downloadAndSaveImage(url, destPath) {
-  let resp;
-  try {
-    resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 90000 });
-  } catch (err) {
-    // Translate axios HTTP errors into friendlier messages so the UI can show
-    // actionable context rather than a raw "Request failed with status code N"
-    const status = err?.response?.status;
-    if (status) {
-      const hints = {
-        403: 'Pollinations.ai refused the request (403 Forbidden) — the prompt may have been blocked by content filters',
-        429: 'Pollinations.ai rate limit reached (429) — wait a moment and try again',
-        500: 'Pollinations.ai returned a server error (500) — their service may be temporarily down',
-        530: 'Pollinations.ai is unreachable (530) — Cloudflare DNS/origin error; their service may be down',
-      };
-      throw new Error(hints[status] || `Pollinations.ai returned HTTP ${status} — external API error`);
+  const RETRYABLE = new Set([500, 502, 503, 504, 520, 524, 530]);
+  const MAX_ATTEMPTS = 3;
+
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 90000 });
+      fs.writeFileSync(destPath, resp.data);
+      return; // success
+    } catch (err) {
+      const status = err?.response?.status;
+
+      // Translate known error codes into friendly messages
+      if (status && !RETRYABLE.has(status)) {
+        // Non-retryable HTTP error — fail immediately
+        const hints = {
+          403: 'Pollinations.ai refused the request (403 Forbidden) — the prompt may have been blocked by content filters',
+          429: 'Pollinations.ai rate limit reached (429) — wait a moment and try again',
+        };
+        throw new Error(hints[status] || `Pollinations.ai returned HTTP ${status} — external API error`);
+      }
+
+      if (err.code === 'ENOTFOUND' || err.code === 'EAI_AGAIN') {
+        throw new Error('Cannot reach Pollinations.ai — check internet connectivity or DNS');
+      }
+
+      lastErr = err;
+
+      if (attempt < MAX_ATTEMPTS) {
+        const delayMs = attempt * 6000; // 6 s, then 12 s
+        const statusStr = status ? ` (HTTP ${status})` : (err.code ? ` (${err.code})` : '');
+        console.warn(`[MediaGeneration] Pollinations attempt ${attempt} failed${statusStr}, retrying in ${delayMs / 1000}s…`);
+        await new Promise(r => setTimeout(r, delayMs));
+      }
     }
-    if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
-      throw new Error('Request to Pollinations.ai timed out — their service may be slow or unavailable');
-    }
-    if (err.code === 'ENOTFOUND' || err.code === 'EAI_AGAIN') {
-      throw new Error('Cannot reach Pollinations.ai — check internet connectivity or DNS');
-    }
-    throw err;
   }
-  fs.writeFileSync(destPath, resp.data);
+
+  // All attempts exhausted — produce a clear final error
+  const status = lastErr?.response?.status;
+  const timeoutCodes = new Set(['ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET']);
+  if (status) {
+    throw new Error(`Pollinations.ai returned HTTP ${status} after ${MAX_ATTEMPTS} attempts — their service appears to be down`);
+  }
+  if (timeoutCodes.has(lastErr?.code)) {
+    throw new Error(`Request to Pollinations.ai timed out after ${MAX_ATTEMPTS} attempts — their service may be slow or unavailable`);
+  }
+  throw lastErr;
 }
 
 // Available Pollinations models
