@@ -100,6 +100,8 @@ function PromptCard({ prompt, onApprove, onEdit }: {
   const [generating, setGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState('');
+  const [imgLoading, setImgLoading] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const img = prompt.prompt_json?.image;
   const vid = prompt.prompt_json?.video;
 
@@ -117,6 +119,8 @@ function PromptCard({ prompt, onApprove, onEdit }: {
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Generation failed');
       setGeneratedImage(data.imageUrl);
+      setImgLoading(true);
+      setImgError(false);
     } catch (err: unknown) {
       setGenerateError(err instanceof Error ? err.message : 'Generation failed');
     } finally {
@@ -329,14 +333,31 @@ function PromptCard({ prompt, onApprove, onEdit }: {
               <p className="text-[11px] font-semibold text-violet-400 uppercase tracking-wider flex items-center gap-1">
                 <Zap className="w-3 h-3" /> Generated Preview
               </p>
-              {generatedImage.startsWith('data:') || generatedImage.startsWith('http') ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={generatedImage}
-                  alt="Generated preview"
-                  className="w-full rounded-lg border border-slate-700/50 max-h-80 object-contain bg-slate-900"
-                />
-              ) : null}
+
+              {/* Loading skeleton while Pollinations generates the image */}
+              {imgLoading && !imgError && (
+                <div className="w-full h-48 rounded-lg bg-slate-900 border border-slate-700/50 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
+                  <p className="text-xs text-slate-500">Generating image… (15–30 s)</p>
+                </div>
+              )}
+
+              {imgError && (
+                <div className="w-full h-24 rounded-lg bg-red-500/5 border border-red-500/20 flex items-center justify-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400" />
+                  <p className="text-xs text-red-400">Failed to load image</p>
+                </div>
+              )}
+
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={generatedImage}
+                alt="Generated preview"
+                className={`w-full rounded-lg border border-slate-700/50 max-h-80 object-contain bg-slate-900 ${imgLoading || imgError ? 'hidden' : ''}`}
+                onLoad={() => setImgLoading(false)}
+                onError={() => { setImgLoading(false); setImgError(true); }}
+              />
+
               <div className="flex gap-2">
                 <a
                   href={generatedImage}
@@ -347,7 +368,7 @@ function PromptCard({ prompt, onApprove, onEdit }: {
                   Open full size
                 </a>
                 <button
-                  onClick={() => setGeneratedImage(null)}
+                  onClick={() => { setGeneratedImage(null); setImgLoading(false); setImgError(false); }}
                   className="text-[10px] px-2.5 py-1 rounded-lg text-slate-500 border border-slate-700/30 hover:text-white transition-colors"
                 >
                   Clear

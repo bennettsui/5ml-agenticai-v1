@@ -532,26 +532,20 @@ router.post('/prompts/:id/generate-image', async (req, res) => {
       return res.json({ success: true, imageUrl, asset, provider: 'dall-e-3' });
     }
 
-    // Fallback: HuggingFace free inference (SDXL-Turbo — no token needed for limited use)
-    const hfResp = await axios.post(
-      'https://api-inference.huggingface.co/models/stabilityai/sdxl-turbo',
-      { inputs: positivePrompt.substring(0, 500) },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        responseType: 'arraybuffer',
-        timeout: 60000,
-      }
-    );
-    if (!hfResp.data || hfResp.data.byteLength < 1000) {
-      throw new Error('Image generation failed — configure OPENAI_API_KEY for DALL-E, or run ComfyUI locally.');
-    }
-    const b64 = Buffer.from(hfResp.data).toString('base64');
-    const dataUrl = `data:image/jpeg;base64,${b64}`;
-    res.json({ success: true, imageUrl: dataUrl, provider: 'huggingface-sdxl-turbo' });
+    // Fallback: Pollinations.ai — free, no API key, FLUX model
+    const encodedPrompt = encodeURIComponent(positivePrompt.substring(0, 1000));
+    const seed = Math.floor(Math.random() * 2147483647);
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true&seed=${seed}`;
+
+    // Register as asset so it shows up in the Assets pane
+    await getOrchestrator().registerAsset(record.project_id, {
+      promptId: record.id,
+      type: 'image',
+      url: imageUrl,
+      metadata: { generator: 'pollinations-flux', auto: true },
+    });
+    res.json({ success: true, imageUrl, provider: 'pollinations-flux' });
   } catch (err) {
-    if (err.response?.status === 503) {
-      return res.status(503).json({ error: 'Image model is loading (HuggingFace cold start). Try again in 20s, or configure OPENAI_API_KEY for DALL-E.' });
-    }
     console.error('[MediaGeneration] generate-image error:', err.message);
     res.status(500).json({ error: err.message });
   }
