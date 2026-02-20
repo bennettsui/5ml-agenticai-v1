@@ -5,7 +5,7 @@ import { Sparkles, Loader, Brain, ChevronDown } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { ZiweiCustomSelect } from '@/components/ZiweiCustomSelect';
 import { ZiweiTimeSelector } from '@/components/ZiweiTimeSelector';
-import { ZiweiChartCanvas } from '@/components/ZiweiChartCanvas';
+import { ZiweiChartGrid } from '@/components/ZiweiChartGrid';
 import ZiweiChartSummary from '@/components/ZiweiChartSummary';
 
 interface ChartInput {
@@ -59,14 +59,14 @@ export function ChartCalculator() {
   const chartId = searchParams?.get('chartId');
 
   const [input, setInput] = useState<ChartInput>({
-    lunarYear: 1990,
-    lunarMonth: 6,
-    lunarDay: 15,
-    hourBranch: '午',
-    gender: '女',
-    name: 'Sample',
-    placeOfBirth: 'Hong Kong',
-    timezone: 'Asia/Hong_Kong',
+    lunarYear: new Date().getFullYear(),
+    lunarMonth: 1,
+    lunarDay: 1,
+    hourBranch: '子',
+    gender: '男',
+    name: '',
+    placeOfBirth: '',
+    timezone: 'UTC',
     calendarType: 'lunar'
   });
 
@@ -420,9 +420,9 @@ export function ChartCalculator() {
         <div className="rounded-xl border border-slate-700/50 bg-slate-900/80 p-8">
           <h3 className="text-xl font-bold text-white mb-8">命盤 Birth Chart (紫微斗數排盤)</h3>
 
-          {/* Canvas Chart Display */}
-          <div className="bg-slate-800/50 rounded-lg p-8 border border-slate-700/30 flex flex-col items-center">
-            <ZiweiChartCanvas
+          {/* Grid Chart Display */}
+          <div className="bg-slate-800/50 rounded-lg p-8 border border-slate-700/30 overflow-x-auto">
+            <ZiweiChartGrid
               houses={chart.houses}
               lifeHouseIndex={chart.lifeHouseIndex}
               personName={input.name}
@@ -430,7 +430,6 @@ export function ChartCalculator() {
               hourBranch={input.hourBranch}
               gender={input.gender}
               fiveElementBureau={chart.fiveElementBureau}
-              starCount={Object.keys(chart.starPositions).length}
             />
           </div>
 
