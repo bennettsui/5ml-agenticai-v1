@@ -40,11 +40,11 @@ const RecruitAICarnival = dynamic(
 // ─── Data ───────────────────────────────────────────────────────────────────
 
 const NAV_LINKS = [
-  { label: '功能', href: '#agents' },
+  { label: '功能模組', href: '#modules' },
   { label: '案例', href: '#cases' },
   { label: '整合', href: '#integrations' },
   { label: '價格', href: '#pricing' },
-  { label: '常見問題', href: '#faq' },
+  { label: '聯絡我們', href: '/vibe-demo/recruitai/contact' },
 ];
 
 const STATS = [
@@ -139,7 +139,7 @@ const STEPS = [
     color: 'text-blue-600 dark:text-blue-400',
     bg: 'bg-blue-50 dark:bg-blue-950/40',
     border: 'border-blue-200 dark:border-blue-800/40',
-    title: '免費 15 分鐘諮詢',
+    title: '免費 30 分鐘諮詢',
     desc: '與我們的 AI 顧問深入了解您的業務痛點，量身定制自動化方向。完全免費，無任何義務。',
     badge: '免費',
     badgeBg: 'bg-blue-100 dark:bg-blue-900/40',
@@ -494,13 +494,23 @@ export default function RecruitAIPage() {
             {/* Desktop Nav */}
             <div className="hidden md:flex items-center gap-8">
               {NAV_LINKS.map(link => (
-                <button
-                  key={link.label}
-                  onClick={() => scrollTo(link.href)}
-                  className="text-sm text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                >
-                  {link.label}
-                </button>
+                link.href.startsWith('/') ? (
+                  <Link
+                    key={link.label}
+                    href={link.href}
+                    className="text-sm text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                ) : (
+                  <button
+                    key={link.label}
+                    onClick={() => scrollTo(link.href)}
+                    className="text-sm text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  >
+                    {link.label}
+                  </button>
+                )
               ))}
             </div>
 
@@ -527,19 +537,30 @@ export default function RecruitAIPage() {
         {mobileMenuOpen && (
           <div className="md:hidden bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 py-4 space-y-3">
             {NAV_LINKS.map(link => (
-              <button
-                key={link.label}
-                onClick={() => scrollTo(link.href)}
-                className="block w-full text-left text-sm text-slate-700 dark:text-slate-300 py-2"
-              >
-                {link.label}
-              </button>
+              link.href.startsWith('/') ? (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block w-full text-left text-sm text-slate-700 dark:text-slate-300 py-2"
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <button
+                  key={link.label}
+                  onClick={() => scrollTo(link.href)}
+                  className="block w-full text-left text-sm text-slate-700 dark:text-slate-300 py-2"
+                >
+                  {link.label}
+                </button>
+              )
             ))}
             <Link
               href="/vibe-demo/recruitai/consultation"
               className="block mt-4 px-4 py-3 bg-blue-600 text-white text-sm font-medium rounded-lg text-center"
             >
-              免費 15 分鐘諮詢
+              免費 30 分鐘諮詢
             </Link>
           </div>
         )}
@@ -574,7 +595,7 @@ export default function RecruitAIPage() {
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-base transition-all duration-200 shadow-lg shadow-blue-900/40"
               >
                 <Phone className="w-4 h-4" />
-                免費 15 分鐘諮詢
+                免費 30 分鐘諮詢
               </Link>
               <button
                 type="button"
@@ -692,112 +713,148 @@ export default function RecruitAIPage() {
         </div>
       </section>
 
-      {/* ── AI Agents ── */}
-      <section id="agents" className="py-24 px-4 bg-slate-50/50 dark:bg-white/[0.02]">
-        <div className="max-w-6xl mx-auto">
+      {/* ── 5 Module Cards ── */}
+      <section id="modules" className="py-28 px-4 bg-white dark:bg-slate-950">
+        <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
-              三大 AI 代理，解決您的業務痛點
+            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-4">5 大功能模組</p>
+            <h2 className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white mb-6 leading-tight">
+              AI 代理為您的業務
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600">
+                全方位打工
+              </span>
             </h2>
-            <p className="text-slate-500 dark:text-slate-400 text-lg max-w-2xl mx-auto">
-              每個代理專注於一個核心業務領域，一起工作形成強大的自動化生態系統
+            <p className="text-slate-500 dark:text-slate-400 text-xl max-w-3xl mx-auto leading-relaxed">
+              5 個 AI 模組覆蓋業務全流程，每個模組均可獨立部署。
+              <strong className="text-slate-700 dark:text-slate-300"> 一週內上線，一個月內見成效。</strong>
             </p>
+            <div className="flex flex-wrap justify-center gap-10 mt-10">
+              {[
+                { v: '1 週', l: '部署上線' },
+                { v: '30–50%', l: '人力節省' },
+                { v: '3x+', l: 'ROAS 提升' },
+                { v: '200+', l: 'AI 代理可用' },
+              ].map(k => (
+                <div key={k.l} className="text-center">
+                  <div className="text-2xl font-black text-blue-600 dark:text-blue-400">{k.v}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{k.l}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Agent Tabs */}
-          <div className="flex justify-center gap-2 mb-10">
-            {AGENTS.map((agent, idx) => (
-              <button
-                key={agent.id}
-                onClick={() => setActiveAgent(idx)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  activeAgent === idx
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50 hover:border-blue-300 dark:hover:border-blue-700'
-                }`}
+          <div className="space-y-4">
+            {[
+              {
+                emoji: '🚀', name: '增長模組', nameEn: 'Growth',
+                href: '/vibe-demo/recruitai/modules/growth',
+                tagline: '讓 AI 替你搵客、追客、留客，廣告 ROAS 3 倍飆升',
+                kpi: '3x+', kpiLabel: 'ROAS 提升',
+                features: ['Google Ads 智能出價', 'SEO 落地頁自動生成', '潛在客戶 5 分鐘內跟進', 'CRM 自動記錄更新'],
+                integrations: ['Google Ads', 'GA4', 'HubSpot', 'WhatsApp'],
+                grad: 'from-blue-500 to-cyan-400',
+              },
+              {
+                emoji: '✨', name: '市場推廣', nameEn: 'Marketing',
+                href: '/vibe-demo/recruitai/modules/marketing',
+                tagline: 'AI 內容工廠每日自動生產，社交互動率提升 2.5 倍',
+                kpi: '5x', kpiLabel: '內容產出',
+                features: ['30 篇/月社交貼文自動生成', 'EDM 個性化分眾行銷', '品牌物料一鍵生成', '最佳時間自動排程發布'],
+                integrations: ['Meta Business', 'Buffer', 'Mailchimp', 'Canva'],
+                grad: 'from-violet-500 to-pink-400',
+              },
+              {
+                emoji: '💬', name: '客戶服務', nameEn: 'Customer Service',
+                href: '/vibe-demo/recruitai/modules/customer-service',
+                tagline: 'WhatsApp AI 客服 24/7 秒回，客戶滿意度提升 40%',
+                kpi: '< 30秒', kpiLabel: '平均回覆',
+                features: ['WhatsApp 全天候 AI 回覆', '多渠道統一收件管理', '智能預約自動確認提醒', '投訴情緒識別即時升級'],
+                integrations: ['WhatsApp API', 'Zendesk', 'Calendly', 'HubSpot CRM'],
+                grad: 'from-emerald-500 to-teal-400',
+              },
+              {
+                emoji: '⚙️', name: '業務運營', nameEn: 'Business Ops',
+                href: '/vibe-demo/recruitai/modules/business-ops',
+                tagline: '發票、表單、報告全自動，每月解放 100+ 小時行政時間',
+                kpi: '100+', kpiLabel: '月省工時',
+                features: ['發票 OCR 自動入帳 Xero', '審批流程自動路由', '管理層週報準時送達', '跨系統數據零誤差同步'],
+                integrations: ['Xero', 'Google Sheets', 'DocuSign', 'Zapier'],
+                grad: 'from-orange-500 to-amber-400',
+              },
+              {
+                emoji: '📊', name: '業務分析', nameEn: 'Analytics',
+                href: '/vibe-demo/recruitai/modules/analytics',
+                tagline: '整合 NDN/Fimmick 全渠道數據，AI 洞察讓決策快 3 倍',
+                kpi: '實時', kpiLabel: '數據洞察',
+                features: ['全渠道 BI 儀表板實時更新', 'NDN / Fimmick 數據整合', 'AI 異常警報 5 分鐘內通知', '客戶流失風險提前 30 天預測'],
+                integrations: ['NDN Group', 'Fimmick', 'BigQuery', 'Looker Studio'],
+                grad: 'from-slate-700 to-indigo-600',
+              },
+            ].map(mod => (
+              <Link
+                key={mod.name}
+                href={mod.href}
+                className="group block rounded-3xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/60 hover:shadow-2xl hover:border-blue-200 dark:hover:border-blue-800/50 hover:-translate-y-0.5 transition-all duration-300 overflow-hidden"
               >
-                {agent.title}
-              </button>
-            ))}
-          </div>
-
-          {/* Agent Cards */}
-          <div className="grid lg:grid-cols-3 gap-6">
-            {AGENTS.map((agent, idx) => {
-              const Icon = agent.icon;
-              const isActive = activeAgent === idx;
-              return (
-                <div
-                  key={agent.id}
-                  onClick={() => setActiveAgent(idx)}
-                  className={`relative rounded-2xl border p-8 cursor-pointer transition-all duration-300 ${
-                    isActive
-                      ? `${agent.bgLight} ${agent.bgDark} ${agent.borderColor} shadow-lg scale-[1.02]`
-                      : 'bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/50 hover:shadow-md'
-                  }`}
-                >
-                  {/* Number */}
-                  <span className="absolute top-4 right-4 text-4xl font-black text-slate-100 dark:text-white/5 select-none">
-                    {String(idx + 1).padStart(2, '0')}
-                  </span>
-
-                  {/* Icon */}
-                  <div className={`w-12 h-12 rounded-xl ${agent.iconBg} flex items-center justify-center mb-5`}>
-                    <Icon className={`w-6 h-6 ${agent.iconColor}`} />
+                <div className="flex flex-col lg:flex-row">
+                  {/* Left identity panel */}
+                  <div className={`flex-none lg:w-52 p-6 lg:p-8 bg-gradient-to-br ${mod.grad} flex lg:flex-col gap-4 items-center lg:items-start justify-between lg:justify-start`}>
+                    <div className="flex items-center lg:flex-col lg:items-start gap-3">
+                      <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-3xl shadow-sm group-hover:scale-110 transition-transform duration-300 flex-none">
+                        {mod.emoji}
+                      </div>
+                      <div className="lg:mt-4">
+                        <h3 className="text-lg font-bold text-white leading-tight">{mod.name}</h3>
+                        <p className="text-xs text-white/70 font-medium mt-0.5">{mod.nameEn}</p>
+                      </div>
+                    </div>
+                    <div className="text-right lg:text-left lg:mt-auto">
+                      <div className="text-3xl font-black text-white">{mod.kpi}</div>
+                      <div className="text-xs text-white/70 mt-0.5">{mod.kpiLabel}</div>
+                    </div>
                   </div>
 
-                  <div className={`inline-block text-xs font-semibold px-2 py-1 rounded ${agent.badgeBg} ${agent.badgeText} mb-3`}>
-                    {agent.titleEn}
-                  </div>
-
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                    {agent.title}
-                  </h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-5 leading-relaxed">
-                    {agent.description}
-                  </p>
-
-                  <ul className="space-y-2 mb-6">
-                    {agent.features.map(f => (
-                      <li key={f} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
-                        <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div className={`text-sm font-bold ${agent.statColor}`}>
-                    📈 {agent.stat}
-                  </div>
-
-                  {/* Workflow expandable */}
-                  <button
-                    onClick={e => { e.stopPropagation(); setExpandedWorkflow(expandedWorkflow === idx ? null : idx); }}
-                    className={`mt-5 w-full flex items-center justify-between text-xs font-semibold px-3 py-2 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-white/20 text-slate-700 dark:text-slate-200 hover:bg-white/30'
-                        : 'bg-slate-100 dark:bg-slate-700/40 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/60'
-                    }`}
-                  >
-                    <span>查看工作流程（如何運作？）</span>
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expandedWorkflow === idx ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {expandedWorkflow === idx && (
-                    <div className="mt-3 space-y-2">
-                      {(AGENT_WORKFLOWS[agent.id] ?? []).map((wf, wi) => (
-                        <div key={wi} className={`flex items-start gap-2.5 text-xs rounded-lg px-3 py-2 ${
-                          isActive ? 'bg-white/15 text-slate-700 dark:text-slate-200' : 'bg-slate-50 dark:bg-slate-700/30 text-slate-600 dark:text-slate-300'
-                        }`}>
-                          <span className="text-sm mt-0.5 shrink-0">{wf.icon}</span>
-                          <span className="leading-relaxed">{wf.step}</span>
+                  {/* Right content */}
+                  <div className="flex-1 p-6 lg:p-8">
+                    <p className="text-slate-700 dark:text-slate-300 font-medium mb-5 text-base leading-relaxed">{mod.tagline}</p>
+                    <div className="grid sm:grid-cols-2 gap-y-2.5 gap-x-6 mb-5">
+                      {mod.features.map(f => (
+                        <div key={f} className="flex items-center gap-2.5 text-sm text-slate-600 dark:text-slate-400">
+                          <CheckCircle className="w-4 h-4 text-emerald-500 flex-none" />
+                          {f}
                         </div>
                       ))}
                     </div>
-                  )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {mod.integrations.map(t => (
+                        <span key={t} className="text-xs px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700/40">{t}</span>
+                      ))}
+                      <span className="text-xs text-slate-400 dark:text-slate-500 ml-1">+ 更多</span>
+                    </div>
+                  </div>
+
+                  {/* Arrow CTA */}
+                  <div className="flex-none flex items-center px-6 lg:px-8 py-4 lg:py-0 border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/40">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      <span className="hidden lg:inline">詳細了解</span>
+                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
                 </div>
-              );
-            })}
+              </Link>
+            ))}
+          </div>
+
+          {/* Bottom CTA */}
+          <div className="mt-14 rounded-3xl bg-gradient-to-br from-blue-600 to-violet-600 p-8 sm:p-12 text-center text-white">
+            <h3 className="text-2xl sm:text-3xl font-bold mb-3">不確定從哪裡開始？</h3>
+            <p className="text-blue-100 mb-8 text-lg">30 分鐘免費評估，顧問為您量身推薦最適合的模組組合</p>
+            <Link
+              href="/vibe-demo/recruitai/consultation"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-white text-blue-700 font-bold rounded-2xl text-lg shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
+            >
+              免費 30 分鐘模組評估 <ArrowRight className="w-5 h-5" />
+            </Link>
           </div>
         </div>
       </section>
@@ -984,6 +1041,117 @@ export default function RecruitAIPage() {
         </div>
       </section>
 
+      {/* ── AI Agents ── */}
+      <section id="agents" className="py-24 px-4 bg-slate-50/50 dark:bg-white/[0.02]">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3">AI 代理生態系統</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
+              200+ AI 代理，覆蓋業務全流程
+            </h2>
+            <p className="text-slate-500 dark:text-slate-400 text-lg max-w-2xl mx-auto">
+              200+ 個預建 AI 代理，即插即用。3 個起步，按業務成長無限擴展，永遠不需要人手重複工作
+            </p>
+          </div>
+
+          {/* Agent Tabs */}
+          <div className="flex justify-center gap-2 mb-10">
+            {AGENTS.map((agent, idx) => (
+              <button
+                key={agent.id}
+                onClick={() => setActiveAgent(idx)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeAgent === idx
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50 hover:border-blue-300 dark:hover:border-blue-700'
+                }`}
+              >
+                {agent.title}
+              </button>
+            ))}
+          </div>
+
+          {/* Agent Cards */}
+          <div className="grid lg:grid-cols-3 gap-6">
+            {AGENTS.map((agent, idx) => {
+              const Icon = agent.icon;
+              const isActive = activeAgent === idx;
+              return (
+                <div
+                  key={agent.id}
+                  onClick={() => setActiveAgent(idx)}
+                  className={`relative rounded-2xl border p-8 cursor-pointer transition-all duration-300 ${
+                    isActive
+                      ? `${agent.bgLight} ${agent.bgDark} ${agent.borderColor} shadow-lg scale-[1.02]`
+                      : 'bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/50 hover:shadow-md'
+                  }`}
+                >
+                  {/* Number */}
+                  <span className="absolute top-4 right-4 text-4xl font-black text-slate-100 dark:text-white/5 select-none">
+                    {String(idx + 1).padStart(2, '0')}
+                  </span>
+
+                  {/* Icon */}
+                  <div className={`w-12 h-12 rounded-xl ${agent.iconBg} flex items-center justify-center mb-5`}>
+                    <Icon className={`w-6 h-6 ${agent.iconColor}`} />
+                  </div>
+
+                  <div className={`inline-block text-xs font-semibold px-2 py-1 rounded ${agent.badgeBg} ${agent.badgeText} mb-3`}>
+                    {agent.titleEn}
+                  </div>
+
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                    {agent.title}
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-5 leading-relaxed">
+                    {agent.description}
+                  </p>
+
+                  <ul className="space-y-2 mb-6">
+                    {agent.features.map(f => (
+                      <li key={f} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                        <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className={`text-sm font-bold ${agent.statColor}`}>
+                    📈 {agent.stat}
+                  </div>
+
+                  {/* Workflow expandable */}
+                  <button
+                    onClick={e => { e.stopPropagation(); setExpandedWorkflow(expandedWorkflow === idx ? null : idx); }}
+                    className={`mt-5 w-full flex items-center justify-between text-xs font-semibold px-3 py-2 rounded-lg transition-colors ${
+                      isActive
+                        ? 'bg-white/20 text-slate-700 dark:text-slate-200 hover:bg-white/30'
+                        : 'bg-slate-100 dark:bg-slate-700/40 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/60'
+                    }`}
+                  >
+                    <span>查看工作流程（如何運作？）</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expandedWorkflow === idx ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {expandedWorkflow === idx && (
+                    <div className="mt-3 space-y-2">
+                      {(AGENT_WORKFLOWS[agent.id] ?? []).map((wf, wi) => (
+                        <div key={wi} className={`flex items-start gap-2.5 text-xs rounded-lg px-3 py-2 ${
+                          isActive ? 'bg-white/15 text-slate-700 dark:text-slate-200' : 'bg-slate-50 dark:bg-slate-700/30 text-slate-600 dark:text-slate-300'
+                        }`}>
+                          <span className="text-sm mt-0.5 shrink-0">{wf.icon}</span>
+                          <span className="leading-relaxed">{wf.step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       {/* ── Key Benefits ── */}
       <section className="py-24 px-4 bg-slate-50/50 dark:bg-white/[0.02]">
         <div className="max-w-6xl mx-auto">
@@ -1086,94 +1254,6 @@ export default function RecruitAIPage() {
               {' '}我們支援自定義 API 整合，幾乎任何有 API 的軟件均可對接。
               {' '}<Link href="/vibe-demo/recruitai/consultation" className="underline hover:no-underline">聯絡我們了解詳情</Link>
             </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ── 5 Module Cards ── */}
-      <section id="modules" className="py-24 px-4 bg-slate-50 dark:bg-slate-900">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-14">
-            <p className="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-3">功能模組</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
-              5 大 AI 功能模組
-            </h2>
-            <p className="text-slate-500 dark:text-slate-400 text-lg max-w-2xl mx-auto">
-              每個模組均可獨立部署或組合使用，按需配置 AI 代理，靈活擴展
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {[
-              {
-                emoji: '🚀', name: '增長模組', nameEn: 'Growth', href: '/vibe-demo/recruitai/modules/growth',
-                desc: '自動化 Google Ads、SEO 及潛在客戶跟進，ROAS 提升 3 倍',
-                tags: ['Google Ads', 'SEO', 'CRM 跟進'],
-                grad: 'from-blue-500 to-cyan-400',
-              },
-              {
-                emoji: '✨', name: '市場推廣', nameEn: 'Marketing', href: '/vibe-demo/recruitai/modules/marketing',
-                desc: 'AI 每日自動生成社交貼文、EDM 及品牌物料，內容產出 5 倍',
-                tags: ['社交媒體', 'EDM', '品牌物料'],
-                grad: 'from-violet-500 to-pink-400',
-              },
-              {
-                emoji: '💬', name: '客戶服務', nameEn: 'Customer Service', href: '/vibe-demo/recruitai/modules/customer-service',
-                desc: 'WhatsApp AI 客服 24/7 即時回覆，自動解決率 70%',
-                tags: ['WhatsApp AI', '24/7 服務', '預約管理'],
-                grad: 'from-emerald-500 to-teal-400',
-              },
-              {
-                emoji: '⚙️', name: '業務運營', nameEn: 'Business Ops', href: '/vibe-demo/recruitai/modules/business-ops',
-                desc: '發票、表單、報告全自動化，每月節省 100+ 小時行政工作',
-                tags: ['發票處理', '表單自動化', '報告生成'],
-                grad: 'from-orange-500 to-amber-400',
-              },
-              {
-                emoji: '📊', name: '業務分析', nameEn: 'Analytics', href: '/vibe-demo/recruitai/modules/analytics',
-                desc: '整合 NDN/Fimmick 及全渠道數據，AI 洞察驅動決策',
-                tags: ['NDN / Fimmick', '歸因分析', 'BI 儀表板'],
-                grad: 'from-slate-700 to-indigo-600',
-              },
-              {
-                emoji: '🎯', name: '定制組合', nameEn: 'Custom Bundle', href: '#pricing',
-                desc: '按您的業務需求，自由組合 2–5 個模組，最大化 ROI',
-                tags: ['靈活配置', '定制報價', '無限擴展'],
-                grad: 'from-rose-500 to-pink-500',
-              },
-            ].map(mod => (
-              <Link
-                key={mod.name}
-                href={mod.href}
-                className="group bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-sm overflow-hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-200 flex flex-col"
-              >
-                <div className={`h-1.5 w-full bg-gradient-to-r ${mod.grad}`} />
-                <div className="p-6 flex flex-col flex-1">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${mod.grad} flex items-center justify-center text-2xl shadow-sm transition-transform duration-300 group-hover:scale-110`}>
-                      {mod.emoji}
-                    </div>
-                    <span className="text-xs text-slate-400 dark:text-slate-500 font-medium pt-1">{mod.nameEn}</span>
-                  </div>
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                    {mod.name}
-                  </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-4 flex-1">{mod.desc}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {mod.tags.map(tag => (
-                      <span key={tag} className="text-xs px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="px-6 py-3 bg-slate-50 dark:bg-white/[0.03] border-t border-slate-100 dark:border-slate-700/40 flex items-center justify-between">
-                  <span className="text-xs text-slate-500 dark:text-slate-400">了解詳情</span>
-                  <svg className="w-4 h-4 text-blue-500 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </Link>
-            ))}
           </div>
         </div>
       </section>
@@ -1362,7 +1442,7 @@ export default function RecruitAIPage() {
             AI 自動化之旅
           </h2>
           <p className="text-blue-100 text-xl mb-4">
-            免費 15 分鐘諮詢，了解 AI 如何為您的業務創造價值
+            免費 30 分鐘諮詢，了解 AI 如何為您的業務創造價值
           </p>
           <p className="text-blue-200/70 text-sm mb-10">
             無需信用卡 · 無義務承諾 · 即日預約即可
@@ -1417,7 +1497,7 @@ export default function RecruitAIPage() {
                 </span>
               </div>
               <p className="text-slate-400 text-sm leading-relaxed mb-4">
-                香港中小企業 AI 自動化平台。三大 AI 代理，一個平台，釋放業務潛能。
+                香港中小企業 AI 自動化平台。200+ AI 代理，5 大功能模組，一週部署，全面釋放業務潛能。
               </p>
               <p className="text-slate-500 text-xs">by 5 Miles Lab</p>
             </div>
@@ -1426,7 +1506,7 @@ export default function RecruitAIPage() {
             <div>
               <h4 className="text-white font-semibold mb-4">產品</h4>
               <ul className="space-y-2 text-sm text-slate-400">
-                <li><button onClick={() => scrollTo('#agents')} className="hover:text-white transition-colors">三大 AI 代理</button></li>
+                <li><button onClick={() => scrollTo('#modules')} className="hover:text-white transition-colors">5 大功能模組</button></li>
                 <li><button onClick={() => scrollTo('#how-it-works')} className="hover:text-white transition-colors">運作方式</button></li>
                 <li><button onClick={() => scrollTo('#pricing')} className="hover:text-white transition-colors">價格方案</button></li>
                 <li><button onClick={() => scrollTo('#faq')} className="hover:text-white transition-colors">常見問題</button></li>
@@ -1472,14 +1552,10 @@ export default function RecruitAIPage() {
 
           <div className="border-t border-slate-800 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-slate-500 text-sm">
-              © 2025 RecruitAIStudio by 5 Miles Lab. 保留所有權利。
+              © 2026 RecruitAI Studio by 5 Miles Lab. 保留所有權利。
             </p>
             <div className="flex gap-6 text-xs text-slate-500">
-              <span className="hover:text-slate-300 cursor-default transition-colors">私隱政策</span>
-              <span className="hover:text-slate-300 cursor-default transition-colors">服務條款</span>
-              <Link href="/vibe-demo" className="hover:text-slate-300 transition-colors">
-                ← Vibe Demo
-              </Link>
+              <Link href="/vibe-demo/recruitai/contact" className="hover:text-slate-300 transition-colors">聯絡我們</Link>
             </div>
           </div>
         </div>
