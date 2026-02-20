@@ -49,9 +49,9 @@ const NAV_LINKS = [
 
 const STATS = [
   { value: '50+', label: '香港中小企信任我們', sub: 'Hong Kong SMEs' },
-  { value: '70%', label: '節省時間成本', sub: 'Time & Cost Saved' },
-  { value: '3×', label: '平均業績增長', sub: 'Revenue Growth' },
-  { value: '<3天', label: '快速上線', sub: 'Deployment Speed' },
+  { value: '30–50%', label: '人力節省承諾', sub: 'Manpower Saving' },
+  { value: '3x+', label: 'ROAS 提升目標', sub: 'ROAS Improvement' },
+  { value: '1週', label: '完成部署 · 1個月見效', sub: 'Deploy in 1 week' },
 ];
 
 const AGENTS = [
@@ -192,20 +192,21 @@ const PLANS = [
     tag: null,
     tagBg: '',
     tagText: '',
-    desc: '適合初創及小型企業，快速驗證 AI 自動化價值',
+    desc: '3 個 AI 代理起步，快速驗證 AI 自動化效益，一週內上線',
     highlighted: false,
     cardBg: 'bg-white dark:bg-slate-800/60',
     cardBorder: 'border-slate-200 dark:border-slate-700/50',
     btnClass:
       'border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white',
     features: [
-      '1 個 AI 代理（自選）',
+      '約 3 個 AI 代理（自選組合）',
       '標準工作流程配置',
       '電郵技術支援',
       '每月效能報告',
+      '一個月內見到成效保證',
       '最多 5 名用戶',
     ],
-    suitFor: '1–5 名員工',
+    suitFor: '1–10 名員工',
   },
   {
     name: '業務版',
@@ -215,22 +216,23 @@ const PLANS = [
     tag: '最受歡迎',
     tagBg: 'bg-amber-400',
     tagText: 'text-slate-900',
-    desc: '三大 AI 代理全配置，最適合快速成長中的中小企',
+    desc: '約 10 個 AI 代理全面部署，最適合快速成長中的中小企',
     highlighted: true,
     cardBg: 'bg-gradient-to-b from-blue-700 to-blue-900',
     cardBorder: 'border-blue-500',
     btnClass:
       'bg-white text-blue-700 hover:bg-blue-50 font-semibold',
     features: [
-      '3 個 AI 代理（全套）',
+      '約 10 個 AI 代理（全面配置）',
       '定制工作流程設計',
       '優先技術支援（4 小時內回覆）',
       '每週效能報告 + 洞察',
+      'ROAS 提升 3 倍以上承諾',
       '無限用戶數量',
       'API 整合（WhatsApp、ERP 等）',
       '季度策略回顧',
     ],
-    suitFor: '5–20 名員工',
+    suitFor: '10–30 名員工',
   },
   {
     name: '企業版',
@@ -555,15 +557,18 @@ export default function RecruitAIPage() {
         </div>
 
         {/* Text overlay — bottom of hero */}
-        <div className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none">
-          <div className="bg-gradient-to-t from-slate-900/90 via-slate-900/60 to-transparent pt-16 pb-8 px-6 text-center">
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight mb-3 text-white drop-shadow-lg">
+        <div className="absolute bottom-0 left-0 right-0 z-20 pointer-events-none">
+          <div className="bg-gradient-to-t from-slate-900/92 via-slate-900/65 to-transparent pt-16 pb-8 px-6 text-center">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight mb-2 text-white drop-shadow-lg">
               讓 AI 代理為您工作
             </h1>
-            <p className="text-base sm:text-lg text-white/80 mb-4 max-w-lg mx-auto">
-              無需技術團隊 · 3 天上線 · 發票、客服、商業智能全自動
+            <p className="text-sm text-white/60 mb-1 font-medium tracking-wide">
+              ✅ 一週內完成部署 &nbsp;·&nbsp; ✅ 一個月內見成效
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center pointer-events-auto">
+            <p className="text-base sm:text-lg text-white/80 mb-4 max-w-lg mx-auto">
+              無需技術團隊 · 節省 30–50% 人力 · 發票、客服、商業智能全自動
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center" style={{ pointerEvents: 'auto' }}>
               <Link
                 href="/vibe-demo/recruitai/consultation"
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-base transition-all duration-200 shadow-lg shadow-blue-900/40"
@@ -572,10 +577,12 @@ export default function RecruitAIPage() {
                 免費 15 分鐘諮詢
               </Link>
               <button
-                onClick={() => scrollTo('#agents')}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-medium rounded-xl text-base transition-all duration-200 backdrop-blur-sm"
+                type="button"
+                onClick={(e) => { e.stopPropagation(); scrollTo('#modules'); }}
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-medium rounded-xl text-base transition-all duration-200 backdrop-blur-sm cursor-pointer"
+                style={{ pointerEvents: 'auto' }}
               >
-                了解三大 AI 代理
+                了解各功能模組
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -634,39 +641,45 @@ export default function RecruitAIPage() {
                 emoji: '📄',
                 title: '發票處理佔用大量時間',
                 desc: '手動錄入、核對發票，一週花費 10+ 小時，錯誤率高且難以追蹤',
+                accent: 'group-hover:bg-blue-50 dark:group-hover:bg-blue-950/20',
               },
               {
                 emoji: '😓',
                 title: '客戶查詢回覆不及時',
                 desc: '非辦公時間客戶無法獲得回覆，損失訂單及客戶信任',
+                accent: 'group-hover:bg-emerald-50 dark:group-hover:bg-emerald-950/20',
               },
               {
                 emoji: '📊',
                 title: '難以掌握業務數據',
                 desc: '數據分散各處，難以整合分析，決策缺乏數據支撐',
+                accent: 'group-hover:bg-violet-50 dark:group-hover:bg-violet-950/20',
               },
               {
                 emoji: '👥',
                 title: '人力成本持續上升',
                 desc: '重複性工作消耗員工精力，但又無法縮減人手',
+                accent: 'group-hover:bg-amber-50 dark:group-hover:bg-amber-950/20',
               },
               {
                 emoji: '🔄',
                 title: '業務流程難以擴展',
                 desc: '增加業務量需要等比例增加人手，成本壓力巨大',
+                accent: 'group-hover:bg-rose-50 dark:group-hover:bg-rose-950/20',
               },
               {
                 emoji: '⏰',
                 title: '老闆親力親為所有事',
                 desc: '無法從瑣務中解脫，難以專注於核心業務策略',
+                accent: 'group-hover:bg-cyan-50 dark:group-hover:bg-cyan-950/20',
               },
             ].map(item => (
               <div
                 key={item.title}
-                className="p-5 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-slate-800/50"
+                className={`group p-5 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-slate-800/50 cursor-default transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-slate-900/50 ${item.accent}`}
               >
-                <div className="text-2xl mb-3">{item.emoji}</div>
-                <h3 className="font-semibold text-slate-900 dark:text-white mb-2">{item.title}</h3>
+                <div className="text-3xl mb-3 inline-block transition-transform duration-300 group-hover:scale-125 group-hover:-rotate-6">{item.emoji}</div>
+                <h3 className="font-semibold text-slate-900 dark:text-white mb-2 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">{item.title}</h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{item.desc}</p>
               </div>
             ))}
@@ -1073,6 +1086,94 @@ export default function RecruitAIPage() {
               {' '}我們支援自定義 API 整合，幾乎任何有 API 的軟件均可對接。
               {' '}<Link href="/vibe-demo/recruitai/consultation" className="underline hover:no-underline">聯絡我們了解詳情</Link>
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 5 Module Cards ── */}
+      <section id="modules" className="py-24 px-4 bg-slate-50 dark:bg-slate-900">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-14">
+            <p className="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-3">功能模組</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
+              5 大 AI 功能模組
+            </h2>
+            <p className="text-slate-500 dark:text-slate-400 text-lg max-w-2xl mx-auto">
+              每個模組均可獨立部署或組合使用，按需配置 AI 代理，靈活擴展
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[
+              {
+                emoji: '🚀', name: '增長模組', nameEn: 'Growth', href: '/vibe-demo/recruitai/modules/growth',
+                desc: '自動化 Google Ads、SEO 及潛在客戶跟進，ROAS 提升 3 倍',
+                tags: ['Google Ads', 'SEO', 'CRM 跟進'],
+                grad: 'from-blue-500 to-cyan-400',
+              },
+              {
+                emoji: '✨', name: '市場推廣', nameEn: 'Marketing', href: '/vibe-demo/recruitai/modules/marketing',
+                desc: 'AI 每日自動生成社交貼文、EDM 及品牌物料，內容產出 5 倍',
+                tags: ['社交媒體', 'EDM', '品牌物料'],
+                grad: 'from-violet-500 to-pink-400',
+              },
+              {
+                emoji: '💬', name: '客戶服務', nameEn: 'Customer Service', href: '/vibe-demo/recruitai/modules/customer-service',
+                desc: 'WhatsApp AI 客服 24/7 即時回覆，自動解決率 70%',
+                tags: ['WhatsApp AI', '24/7 服務', '預約管理'],
+                grad: 'from-emerald-500 to-teal-400',
+              },
+              {
+                emoji: '⚙️', name: '業務運營', nameEn: 'Business Ops', href: '/vibe-demo/recruitai/modules/business-ops',
+                desc: '發票、表單、報告全自動化，每月節省 100+ 小時行政工作',
+                tags: ['發票處理', '表單自動化', '報告生成'],
+                grad: 'from-orange-500 to-amber-400',
+              },
+              {
+                emoji: '📊', name: '業務分析', nameEn: 'Analytics', href: '/vibe-demo/recruitai/modules/analytics',
+                desc: '整合 NDN/Fimmick 及全渠道數據，AI 洞察驅動決策',
+                tags: ['NDN / Fimmick', '歸因分析', 'BI 儀表板'],
+                grad: 'from-slate-700 to-indigo-600',
+              },
+              {
+                emoji: '🎯', name: '定制組合', nameEn: 'Custom Bundle', href: '#pricing',
+                desc: '按您的業務需求，自由組合 2–5 個模組，最大化 ROI',
+                tags: ['靈活配置', '定制報價', '無限擴展'],
+                grad: 'from-rose-500 to-pink-500',
+              },
+            ].map(mod => (
+              <Link
+                key={mod.name}
+                href={mod.href}
+                className="group bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-sm overflow-hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-200 flex flex-col"
+              >
+                <div className={`h-1.5 w-full bg-gradient-to-r ${mod.grad}`} />
+                <div className="p-6 flex flex-col flex-1">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${mod.grad} flex items-center justify-center text-2xl shadow-sm transition-transform duration-300 group-hover:scale-110`}>
+                      {mod.emoji}
+                    </div>
+                    <span className="text-xs text-slate-400 dark:text-slate-500 font-medium pt-1">{mod.nameEn}</span>
+                  </div>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-base mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                    {mod.name}
+                  </h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-4 flex-1">{mod.desc}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {mod.tags.map(tag => (
+                      <span key={tag} className="text-xs px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="px-6 py-3 bg-slate-50 dark:bg-white/[0.03] border-t border-slate-100 dark:border-slate-700/40 flex items-center justify-between">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">了解詳情</span>
+                  <svg className="w-4 h-4 text-blue-500 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
