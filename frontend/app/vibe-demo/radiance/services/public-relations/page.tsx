@@ -165,7 +165,7 @@ export default function PublicRelationsServicePage() {
       <main id="main-content" className="flex-1 pt-20">
 
         {/* Breadcrumb */}
-        <section className="py-6 px-6">
+        <section className="py-3 px-6">
           <div className="max-w-6xl mx-auto">
             <Breadcrumb items={[
               { label: t.breadcrumb[0], href: '/vibe-demo/radiance' },
@@ -198,15 +198,20 @@ export default function PublicRelationsServicePage() {
           </div>
         </section>
 
-        {/* Nielsen Trust Stat */}
-        <section className="py-12 px-6 bg-purple-600">
-          <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-6">
-            <span className="text-6xl md:text-7xl font-black text-white flex-shrink-0">92%</span>
-            <div>
-              <p className="text-white text-xl md:text-2xl font-medium leading-snug mb-2">
-                {t.earnedStat}
-              </p>
-              <p className="text-purple-200 text-sm">{t.earnedSource}</p>
+        {/* Nielsen Trust Stat — elegant pull quote */}
+        <section className="py-16 px-6 bg-slate-50 dark:bg-slate-900/50 border-y border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-8">
+              <div className="flex-shrink-0">
+                <div className="text-7xl md:text-8xl font-black text-purple-600 dark:text-purple-400 leading-none">92<span className="text-5xl">%</span></div>
+                <div className="w-12 h-1 bg-purple-600 dark:bg-purple-400 mt-3 rounded-full" />
+              </div>
+              <div className="flex-1 border-l-0 md:border-l border-slate-300 dark:border-slate-600 md:pl-8">
+                <p className="text-xl md:text-2xl font-medium text-slate-800 dark:text-slate-200 leading-relaxed mb-3">
+                  {t.earnedStat}
+                </p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 italic">{t.earnedSource}</p>
+              </div>
             </div>
           </div>
         </section>

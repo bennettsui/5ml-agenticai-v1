@@ -58,6 +58,7 @@ export function Header() {
   const navItems = [
     { label: lang === 'zh' ? '服務' : 'Services', href: '/vibe-demo/radiance/services', hasDropdown: true },
     { label: lang === 'zh' ? '案例' : 'Case Studies', href: '/vibe-demo/radiance/case-studies' },
+    { label: lang === 'zh' ? '網誌' : 'Blog', href: '/vibe-demo/radiance/blog' },
     { label: lang === 'zh' ? '關於我們' : 'About', href: '/vibe-demo/radiance/about' },
     { label: lang === 'zh' ? '諮詢' : 'Consultation', href: '/vibe-demo/radiance/consultation' },
     { label: lang === 'zh' ? '聯絡' : 'Contact', href: '/vibe-demo/radiance/contact' },
