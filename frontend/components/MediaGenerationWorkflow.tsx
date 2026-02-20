@@ -256,6 +256,8 @@ function PromptCard({ prompt, onApprove, onEdit }: {
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [generatingStep, setGeneratingStep] = useState('');
+  const [elapsed, setElapsed] = useState(0);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState('');
   const [imgLoading, setImgLoading] = useState(false);
@@ -273,8 +275,22 @@ function PromptCard({ prompt, onApprove, onEdit }: {
   const handleGenerateImage = async () => {
     setGenerating(true);
     setGenerateError('');
+    setGeneratedImage(null);
+    setImgLoading(false);
+    setImgError(false);
+    setElapsed(0);
     setExpanded(true);
+
+    // Elapsed timer
+    const startMs = Date.now();
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startMs) / 1000));
+    }, 1000);
+
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+
     try {
+      setGeneratingStep('Submitting to generation queue…');
       const resp = await fetch(`/api/media/prompts/${prompt.id}/generate-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -282,13 +298,52 @@ function PromptCard({ prompt, onApprove, onEdit }: {
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Generation failed');
-      setGeneratedImage(data.imageUrl);
-      setImgLoading(true);
-      setImgError(false);
+
+      const { assetId } = data;
+      if (!assetId) throw new Error('No asset ID returned from server');
+
+      setGeneratingStep('AI model is rendering your image…');
+
+      // Poll asset status every 3 s until complete or error
+      await new Promise<void>((resolve, reject) => {
+        pollInterval = setInterval(async () => {
+          try {
+            const pr = await fetch(`/api/media/assets/${assetId}`);
+            const pd = await pr.json();
+            const asset = pd.asset;
+            if (!asset) { reject(new Error('Asset record not found')); return; }
+
+            if (asset.status === 'error') {
+              reject(new Error(asset.metadata_json?.error || 'Image generation failed on server'));
+              return;
+            }
+            if (asset.url && asset.status !== 'generating') {
+              setGeneratingStep('Downloading to server…');
+              setGeneratedImage(asset.url);
+              setImgLoading(true);
+              resolve();
+              return;
+            }
+
+            // Rotate step messages so user knows it's alive
+            const sec = Math.floor((Date.now() - startMs) / 1000);
+            if (sec < 20)       setGeneratingStep('AI model is rendering your image…');
+            else if (sec < 50)  setGeneratingStep('Still rendering — complex prompts take ~45 s…');
+            else                setGeneratingStep('Almost done — downloading result…');
+
+            if (sec > 180) { reject(new Error('Timed out after 3 minutes — try again')); }
+          } catch (pollErr) {
+            reject(pollErr);
+          }
+        }, 3000);
+      });
     } catch (err: unknown) {
       setGenerateError(err instanceof Error ? err.message : 'Generation failed');
     } finally {
+      clearInterval(timer);
+      if (pollInterval) clearInterval(pollInterval);
       setGenerating(false);
+      setGeneratingStep('');
     }
   };
 
@@ -569,21 +624,32 @@ function PromptCard({ prompt, onApprove, onEdit }: {
             </div>
           )}
 
-          {/* Skeleton shown while API call is in-flight (before imageUrl is returned) */}
-          {generating && !generatedImage && (
+          {/* Live progress skeleton while generating */}
+          {generating && (
             <div className="space-y-2">
               <p className="text-[11px] font-semibold text-violet-400 uppercase tracking-wider flex items-center gap-1">
-                <Zap className="w-3 h-3" /> Generating Preview
+                <Zap className="w-3 h-3" /> Image Generation
               </p>
-              <div className="w-full h-56 rounded-lg bg-slate-900 border border-violet-500/20 flex flex-col items-center justify-center gap-3">
-                <Loader2 className="w-7 h-7 text-violet-400 animate-spin" />
-                <div className="text-center">
-                  <p className="text-sm text-slate-300 font-medium">AI is generating your image…</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Pollinations.ai — typically 15–45 seconds</p>
+              <div className="w-full rounded-xl bg-slate-900 border border-violet-500/20 p-5 flex flex-col items-center gap-4">
+                <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+                <div className="text-center space-y-1 w-full">
+                  <p className="text-sm text-white font-medium">{generatingStep || 'Starting…'}</p>
+                  <p className="text-xs text-slate-500">
+                    Elapsed: <span className="text-slate-300 font-mono">{elapsed}s</span>
+                    <span className="mx-2 text-slate-700">·</span>
+                    Model: <span className="text-violet-300">{IMAGE_MODELS.find(m => m.id === selectedModel)?.label || selectedModel}</span>
+                  </p>
                 </div>
-                <div className="w-48 h-1 bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-violet-500/60 rounded-full animate-pulse" style={{ width: '70%' }} />
+                {/* Animated progress bar */}
+                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-violet-600 to-rose-500 rounded-full transition-all duration-1000"
+                    style={{ width: `${Math.min(95, 5 + (elapsed / 90) * 90)}%` }}
+                  />
                 </div>
+                <p className="text-[10px] text-slate-600 text-center">
+                  Pollinations.ai renders server-side — typically 20–60 s. Page will update automatically.
+                </p>
               </div>
             </div>
           )}
@@ -684,6 +750,32 @@ function PromptCard({ prompt, onApprove, onEdit }: {
   );
 }
 
+// ─── Operation progress banner ────────────────────────────────────────────────
+
+function OperationProgress({ step, elapsed }: { step: string; elapsed: number }) {
+  return (
+    <div className="rounded-xl bg-slate-900 border border-purple-500/20 p-4 space-y-3">
+      <div className="flex items-center gap-3">
+        <Loader2 className="w-4 h-4 text-purple-400 animate-spin shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-white font-medium truncate">{step}</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Elapsed: <span className="text-slate-300 font-mono">{elapsed}s</span>
+            <span className="mx-2 text-slate-700">·</span>
+            <span className="text-slate-500">AI processing — page updates automatically</span>
+          </p>
+        </div>
+      </div>
+      <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-purple-600 to-rose-500 rounded-full transition-all duration-1000"
+          style={{ width: `${Math.min(93, 3 + (elapsed / 60) * 90)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MediaGenerationWorkflow() {
@@ -709,6 +801,10 @@ export default function MediaGenerationWorkflow() {
 
   // Prompt generation
   const [promptsGenerating, setPromptsGenerating] = useState(false);
+
+  // Live operation progress (brief translation + prompt generation)
+  const [operationStep, setOperationStep] = useState('');
+  const [operationElapsed, setOperationElapsed] = useState(0);
 
   // Manual prompt form
   const [showManualForm, setShowManualForm] = useState(false);
@@ -799,11 +895,49 @@ export default function MediaGenerationWorkflow() {
     }
   };
 
+  // ── Shared polling helper — polls project status until done ─────────────
+  const STEP_LABELS: Record<string, string> = {
+    translating_brief:    'Translating brief with AI…',
+    building_style_guide: 'Building visual style guide…',
+    prompt_design:        'Brief processed — ready',
+    generating_prompts:   'Generating prompts for each deliverable…',
+    prompts_ready:        'Done!',
+    error:                'An error occurred — check your brief and retry',
+  };
+  const DONE_STATUSES = new Set(['prompt_design', 'prompts_ready', 'error', 'in_review', 'approved']);
+
+  const pollUntilDone = (projectId: number, startMs: number): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const timerHandle = setInterval(() => setOperationElapsed(Math.floor((Date.now() - startMs) / 1000)), 1000);
+      const poll = setInterval(async () => {
+        try {
+          const pr = await fetch(`/api/media/projects/${projectId}`);
+          const pd = await pr.json();
+          const status: string = pd.project?.status || '';
+          setOperationStep(STEP_LABELS[status] || `Processing… (${status})`);
+          if (DONE_STATUSES.has(status)) {
+            clearInterval(poll);
+            clearInterval(timerHandle);
+            if (status === 'error') reject(new Error('Processing failed — check your brief and try again'));
+            else resolve();
+          }
+          if (Date.now() - startMs > 180000) {
+            clearInterval(poll);
+            clearInterval(timerHandle);
+            reject(new Error('Timed out after 3 minutes'));
+          }
+        } catch { /* keep polling */ }
+      }, 2000);
+    });
+
   // ── Submit brief ──────────────────────────────────────────────────────────
   const submitBrief = async () => {
     if (!selectedProject || !briefText.trim()) return;
     setBriefLoading(true);
     setBriefError('');
+    setOperationStep('Submitting brief…');
+    setOperationElapsed(0);
+    const startMs = Date.now();
     try {
       const resp = await fetch(`/api/media/projects/${selectedProject.project.id}/brief`, {
         method: 'POST',
@@ -812,12 +946,16 @@ export default function MediaGenerationWorkflow() {
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error);
+      setOperationStep('Translating brief with AI…');
+      await pollUntilDone(selectedProject.project.id, startMs);
       await selectProject(selectedProject.project.id);
       setActivePane('prompts');
     } catch (err: unknown) {
       setBriefError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setBriefLoading(false);
+      setOperationStep('');
+      setOperationElapsed(0);
     }
   };
 
@@ -826,6 +964,9 @@ export default function MediaGenerationWorkflow() {
     if (!selectedProject) return;
     setPromptsGenerating(true);
     setError('');
+    setOperationStep('Queuing prompt generation…');
+    setOperationElapsed(0);
+    const startMs = Date.now();
     try {
       const resp = await fetch(`/api/media/projects/${selectedProject.project.id}/generate-prompts`, {
         method: 'POST',
@@ -833,11 +974,15 @@ export default function MediaGenerationWorkflow() {
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error);
+      setOperationStep('Generating prompts for each deliverable…');
+      await pollUntilDone(selectedProject.project.id, startMs);
       await selectProject(selectedProject.project.id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setPromptsGenerating(false);
+      setOperationStep('');
+      setOperationElapsed(0);
     }
   };
 
@@ -1247,10 +1392,13 @@ Mood: Aspirational, high-energy summer.`}
                       className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
                     >
                       {briefLoading
-                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Translating Brief…</>
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Working…</>
                         : <><Sparkles className="w-4 h-4" /> Translate Brief & Build Style Guide</>
                       }
                     </button>
+                    {briefLoading && operationStep && (
+                      <OperationProgress step={operationStep} elapsed={operationElapsed} />
+                    )}
                   </div>
 
                   {/* Show parsed spec if exists */}
@@ -1310,11 +1458,14 @@ Mood: Aspirational, high-energy summer.`}
                         title={!selectedProject.project.brief_spec_json ? 'Submit a brief first to use AI generation' : ''}
                       >
                         {promptsGenerating
-                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
+                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Working…</>
                           : <><Wand2 className="w-3.5 h-3.5" /> Generate with AI</>
                         }
                       </button>
                     </div>
+                    {promptsGenerating && operationStep && (
+                      <OperationProgress step={operationStep} elapsed={operationElapsed} />
+                    )}
                   </div>
 
                   {!selectedProject.project.brief_spec_json && !showManualForm && (

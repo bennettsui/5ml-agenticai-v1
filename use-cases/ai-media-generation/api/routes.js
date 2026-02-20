@@ -148,24 +148,56 @@ router.delete('/projects/:id', async (req, res) => {
   }
 });
 
-// POST /api/media/projects/:id/brief — submit brief → translate → style guide
+// POST /api/media/projects/:id/brief — submit brief (async: responds immediately, processes in background)
 router.post('/projects/:id/brief', async (req, res) => {
+  const projectId = parseInt(req.params.id, 10);
   try {
     const { brief } = req.body;
     if (!brief) return res.status(400).json({ error: '"brief" is required' });
-    const result = await getOrchestrator().submitBrief(parseInt(req.params.id, 10), brief);
-    res.json({ success: true, ...result });
+    // Mark as in-progress BEFORE responding so client poll doesn't see stale "done" status
+    await pool.query(
+      `UPDATE media_projects SET status = 'translating_brief', brief_text = $1, updated_at = NOW() WHERE id = $2`,
+      [brief, projectId]
+    );
+    res.json({ success: true, status: 'processing' });
+    setImmediate(async () => {
+      try {
+        await getOrchestrator().submitBrief(projectId, brief);
+      } catch (err) {
+        console.error('[MediaGeneration] submitBrief background error:', err.message);
+        await pool.query(
+          `UPDATE media_projects SET status = 'error', updated_at = NOW() WHERE id = $1`,
+          [projectId]
+        ).catch(() => {});
+      }
+    });
   } catch (err) {
     console.error('[MediaGeneration] submitBrief error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/media/projects/:id/generate-prompts — generate all prompts + workflow configs
+// POST /api/media/projects/:id/generate-prompts — generate prompts (async: responds immediately)
 router.post('/projects/:id/generate-prompts', async (req, res) => {
+  const projectId = parseInt(req.params.id, 10);
   try {
-    const results = await getOrchestrator().generatePrompts(parseInt(req.params.id, 10));
-    res.json({ success: true, results });
+    // Mark as in-progress before responding to avoid stale-status race
+    await pool.query(
+      `UPDATE media_projects SET status = 'generating_prompts', updated_at = NOW() WHERE id = $1`,
+      [projectId]
+    );
+    res.json({ success: true, status: 'processing' });
+    setImmediate(async () => {
+      try {
+        await getOrchestrator().generatePrompts(projectId);
+      } catch (err) {
+        console.error('[MediaGeneration] generatePrompts background error:', err.message);
+        await pool.query(
+          `UPDATE media_projects SET status = 'error', updated_at = NOW() WHERE id = $1`,
+          [projectId]
+        ).catch(() => {});
+      }
+    });
   } catch (err) {
     console.error('[MediaGeneration] generatePrompts error:', err);
     res.status(500).json({ error: err.message });
@@ -493,11 +525,28 @@ Return ONLY JSON with this schema (no markdown, no explanation):
   }
 });
 
+// ─── Background image download helper ────────────────────────────────────────
+async function downloadAndSaveImage(url, destPath) {
+  const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 90000 });
+  fs.writeFileSync(destPath, resp.data);
+}
+
 // Available Pollinations models
 const POLLINATIONS_MODELS = new Set(['flux', 'flux-realism', 'flux-anime', 'flux-3d', 'turbo']);
 
-// POST /api/media/prompts/:id/generate-image — generate a preview image
-// Body: { model?: 'flux' | 'flux-realism' | 'flux-anime' | 'flux-3d' | 'turbo' | 'dall-e-3' }
+// GET /api/media/assets/:id — fetch single asset (for polling generation status)
+router.get('/assets/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM media_assets WHERE id = $1', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Asset not found' });
+    res.json({ asset: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/media/prompts/:id/generate-image — kick off async image generation
+// Returns immediately with assetId; client polls GET /api/media/assets/:id for status
 router.post('/prompts/:id/generate-image', async (req, res) => {
   try {
     const promptResult = await pool.query(
@@ -507,53 +556,66 @@ router.post('/prompts/:id/generate-image', async (req, res) => {
     const record = promptResult.rows[0];
     if (!record) return res.status(404).json({ error: 'Prompt not found' });
 
-    const positivePrompt = record.prompt_json?.image?.positive || record.prompt_json?.video?.positive;
+    // Support both top-level prompt_json.positive and nested image/video structures
+    const pj = record.prompt_json || {};
+    const positivePrompt = pj.image?.positive || pj.video?.positive || pj.positive;
     if (!positivePrompt) return res.status(400).json({ error: 'No positive prompt found on this record' });
 
     const requestedModel = req.body?.model || 'flux';
 
-    // ── DALL-E 3 ──────────────────────────────────────────────────────────────
-    if (requestedModel === 'dall-e-3') {
-      if (!process.env.OPENAI_API_KEY) {
-        return res.status(400).json({ error: 'DALL-E 3 requires OPENAI_API_KEY to be configured.' });
+    // ── Create placeholder asset immediately (status = generating) ─────────────
+    const placeholder = await pool.query(
+      `INSERT INTO media_assets
+         (project_id, prompt_id, type, url, metadata_json, status, created_at)
+       VALUES ($1, $2, 'image', NULL, $3, 'generating', NOW())
+       RETURNING id`,
+      [record.project_id, record.id, JSON.stringify({ generator: requestedModel, auto: true })]
+    );
+    const assetId = placeholder.rows[0].id;
+
+    // Respond immediately so the client can start polling
+    res.json({ success: true, assetId, status: 'generating' });
+
+    // ── Background: download image and update asset ────────────────────────────
+    setImmediate(async () => {
+      try {
+        let imageUrl;
+
+        if (requestedModel === 'dall-e-3') {
+          if (!process.env.OPENAI_API_KEY) throw new Error('DALL-E 3 requires OPENAI_API_KEY');
+          const dalleResp = await axios.post(
+            'https://api.openai.com/v1/images/generations',
+            { model: 'dall-e-3', prompt: positivePrompt.substring(0, 4000), n: 1, size: '1024x1024', response_format: 'url' },
+            { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 60000 }
+          );
+          const dalleUrl = dalleResp.data?.data?.[0]?.url;
+          if (!dalleUrl) throw new Error('DALL-E did not return an image URL');
+          const filename = `media_${record.project_id}_p${record.id}_dalle_${Date.now()}.jpg`;
+          await downloadAndSaveImage(dalleUrl, path.join(UPLOADS_DIR, filename));
+          imageUrl = `/api/media/serve/${filename}`;
+        } else {
+          const pollinationsModel = POLLINATIONS_MODELS.has(requestedModel) ? requestedModel : 'flux';
+          const seed = Math.floor(Math.random() * 2147483647);
+          const encodedPrompt = encodeURIComponent(positivePrompt.substring(0, 800));
+          const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=${pollinationsModel}&nologo=true&seed=${seed}`;
+          const filename = `media_${record.project_id}_p${record.id}_${seed}.jpg`;
+          await downloadAndSaveImage(pollinationsUrl, path.join(UPLOADS_DIR, filename));
+          imageUrl = `/api/media/serve/${filename}`;
+        }
+
+        // Update asset with the final URL
+        await pool.query(
+          `UPDATE media_assets SET url = $1, status = 'pending_review', updated_at = NOW() WHERE id = $2`,
+          [imageUrl, assetId]
+        );
+      } catch (bgErr) {
+        console.error('[MediaGeneration] background image download error:', bgErr.message);
+        await pool.query(
+          `UPDATE media_assets SET status = 'error', metadata_json = metadata_json || $1::jsonb, updated_at = NOW() WHERE id = $2`,
+          [JSON.stringify({ error: bgErr.message }), assetId]
+        ).catch(() => {});
       }
-      const dalleResp = await axios.post(
-        'https://api.openai.com/v1/images/generations',
-        { model: 'dall-e-3', prompt: positivePrompt.substring(0, 4000), n: 1, size: '1024x1024', response_format: 'url' },
-        { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 60000 }
-      );
-      const dalleUrl = dalleResp.data?.data?.[0]?.url;
-      if (!dalleUrl) throw new Error('DALL-E did not return an image URL');
-      // Download and save locally
-      const dalleImg = await axios.get(dalleUrl, { responseType: 'arraybuffer', timeout: 60000 });
-      const dalleSeed = Date.now();
-      const dalleFilename = `media_${record.project_id}_p${record.id}_dalle_${dalleSeed}.jpg`;
-      fs.writeFileSync(path.join(UPLOADS_DIR, dalleFilename), dalleImg.data);
-      const imageUrl = `/api/media/serve/${dalleFilename}`;
-      const asset = await getOrchestrator().registerAsset(record.project_id, {
-        promptId: record.id, type: 'image', url: imageUrl, metadata: { generator: 'dall-e-3', auto: true },
-      });
-      return res.json({ success: true, imageUrl, assetId: asset?.id, provider: 'dall-e-3' });
-    }
-
-    // ── Pollinations.ai (free, no key) — download server-side ────────────────
-    const pollinationsModel = POLLINATIONS_MODELS.has(requestedModel) ? requestedModel : 'flux';
-    const encodedPrompt = encodeURIComponent(positivePrompt.substring(0, 800));
-    const seed = Math.floor(Math.random() * 2147483647);
-    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=${pollinationsModel}&nologo=true&seed=${seed}`;
-
-    // Download image server-side (avoids CORS / browser timeout issues)
-    const imgResp = await axios.get(pollinationsUrl, { responseType: 'arraybuffer', timeout: 90000 });
-    const ext = 'jpg';
-    const filename = `media_${record.project_id}_p${record.id}_${seed}.${ext}`;
-    const localPath = path.join(UPLOADS_DIR, filename);
-    fs.writeFileSync(localPath, imgResp.data);
-
-    const asset = await getOrchestrator().registerAsset(record.project_id, {
-      promptId: record.id, type: 'image', url: `/api/media/serve/${filename}`, metadata: { generator: `pollinations-${pollinationsModel}`, auto: true, seed },
     });
-    const imageUrl = `/api/media/serve/${filename}`;
-    res.json({ success: true, imageUrl, assetId: asset?.id, provider: `pollinations-${pollinationsModel}` });
   } catch (err) {
     console.error('[MediaGeneration] generate-image error:', err.message);
     res.status(500).json({ error: err.message });
