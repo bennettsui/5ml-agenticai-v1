@@ -5,7 +5,7 @@ import {
   Image, Film, Sparkles, FileText, CheckCircle2, Clock,
   ChevronRight, Plus, Trash2, Loader2, Copy, CheckCheck,
   Wand2, Play, Eye, Upload, AlertCircle, RefreshCw, Pencil, X, Save,
-  Zap, ImagePlus,
+  Zap, ImagePlus, ThumbsUp, ThumbsDown, MessageSquare,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -27,7 +27,11 @@ interface PromptRecord {
   status: 'draft' | 'approved' | 'archived';
   version: string;
   prompt_json: {
-    image?: { positive: string; negative: string; suggestedSampler?: string; suggestedCfg?: number; suggestedSteps?: number };
+    image?: {
+      positive: string; negative: string;
+      suggestedSampler?: string; suggestedCfg?: number; suggestedSteps?: number;
+      headline?: string; tagline?: string; cta?: string; bodyText?: string;
+    };
     video?: { positive: string; negative: string; motionKeywords?: string[]; recommendedFrames?: number; recommendedFps?: number };
   };
   image_workflow_json: Record<string, unknown> | null;
@@ -99,7 +103,142 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-// ─── Prompt card ──────────────────────────────────────────────────────────────
+// ─── Asset card ───────────────────────────────────────────────────────────
+
+function AssetCard({ asset, onRunQc, onUpdateStatus }: {
+  asset: { id: number; type: string; url: string; status: string; qc_json?: { approved: boolean; overallScore?: number; revisionNotes?: string } };
+  onRunQc: () => void;
+  onUpdateStatus: (id: number, status: 'approved' | 'rejected', notes?: string) => Promise<void>;
+}) {
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [acting, setActing] = useState(false);
+
+  const isLocalImage = asset.type === 'image' && (asset.url.startsWith('/api/media/serve/') || asset.url.startsWith('http'));
+  const isApproved = asset.status === 'approved';
+  const isRejected = asset.status === 'rejected';
+
+  const approve = async () => {
+    setActing(true);
+    await onUpdateStatus(asset.id, 'approved');
+    setActing(false);
+  };
+
+  const reject = async () => {
+    setActing(true);
+    await onUpdateStatus(asset.id, 'rejected', rejectReason.trim() || undefined);
+    setActing(false);
+    setRejectOpen(false);
+    setRejectReason('');
+  };
+
+  return (
+    <div className={`rounded-xl border bg-slate-800/60 overflow-hidden ${isApproved ? 'border-emerald-500/30' : isRejected ? 'border-red-500/30' : 'border-slate-700/50'}`}>
+      <div className="flex gap-3 p-4">
+        {/* Thumbnail */}
+        {isLocalImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={asset.url}
+            alt="Asset thumbnail"
+            className="w-24 h-24 rounded-lg object-cover bg-slate-900 border border-slate-700/50 shrink-0"
+          />
+        ) : (
+          <div className="w-24 h-24 rounded-lg bg-slate-900 border border-slate-700/50 flex items-center justify-center shrink-0">
+            {asset.type === 'video' ? <Film className="w-6 h-6 text-rose-400" /> : <Image className="w-6 h-6 text-slate-600" />}
+          </div>
+        )}
+
+        {/* Info */}
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              {asset.type === 'video'
+                ? <Film className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                : <Image className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              }
+              <StatusBadge status={asset.status} />
+              {asset.qc_json?.overallScore != null && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${asset.qc_json.approved ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                  QC {asset.qc_json.overallScore}/10
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {!isApproved && !isRejected && (
+                <button
+                  onClick={onRunQc}
+                  className="text-[10px] px-2 py-1 rounded-lg bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30 transition-colors"
+                >
+                  Run QC
+                </button>
+              )}
+              {!isApproved && (
+                <button
+                  onClick={approve}
+                  disabled={acting}
+                  className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-colors disabled:opacity-50"
+                >
+                  {acting ? <Loader2 className="w-3 h-3 animate-spin" /> : <ThumbsUp className="w-3 h-3" />} Approve
+                </button>
+              )}
+              {!isRejected && (
+                <button
+                  onClick={() => setRejectOpen(v => !v)}
+                  className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 transition-colors"
+                >
+                  <ThumbsDown className="w-3 h-3" /> Reject
+                </button>
+              )}
+            </div>
+          </div>
+
+          {asset.qc_json?.revisionNotes && (
+            <p className="text-[11px] text-slate-400 italic">{asset.qc_json.revisionNotes}</p>
+          )}
+
+          {isApproved && (
+            <p className="text-[11px] text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Approved for delivery</p>
+          )}
+          {isRejected && (
+            <p className="text-[11px] text-red-400 flex items-center gap-1"><X className="w-3 h-3" /> Rejected</p>
+          )}
+        </div>
+      </div>
+
+      {/* Reject reason form */}
+      {rejectOpen && (
+        <div className="border-t border-slate-700/40 px-4 py-3 bg-red-500/5 space-y-2">
+          <p className="text-[11px] font-semibold text-red-400 flex items-center gap-1"><MessageSquare className="w-3 h-3" /> Rejection Reason</p>
+          <textarea
+            value={rejectReason}
+            onChange={e => setRejectReason(e.target.value)}
+            rows={2}
+            placeholder="Describe what needs to change (optional)…"
+            className="w-full bg-white/[0.03] border border-red-500/30 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-red-500/60 resize-none"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={reject}
+              disabled={acting}
+              className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 transition-colors disabled:opacity-50"
+            >
+              {acting ? <Loader2 className="w-3 h-3 animate-spin" /> : <ThumbsDown className="w-3 h-3" />} Confirm Reject
+            </button>
+            <button
+              onClick={() => { setRejectOpen(false); setRejectReason(''); }}
+              className="text-[10px] px-2.5 py-1 rounded-lg text-slate-500 border border-slate-700/30 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Prompt card ───────────────────────────────────────────────────────────────
 
 function PromptCard({ prompt, onApprove, onEdit }: {
   prompt: PromptRecord;
@@ -346,6 +485,47 @@ function PromptCard({ prompt, onApprove, onEdit }: {
                     {img.suggestedSteps   && <span>Steps: <span className="text-slate-300">{img.suggestedSteps}</span></span>}
                     {img.suggestedCfg    && <span>CFG: <span className="text-slate-300">{img.suggestedCfg}</span></span>}
                   </div>
+
+                  {/* Ad copy fields */}
+                  {(img.headline || img.tagline || img.cta || img.bodyText) && (
+                    <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-3 space-y-2">
+                      <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Ad Copy</p>
+                      {img.headline && (
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] text-slate-500">Headline</p>
+                            <p className="text-sm font-bold text-white">{img.headline}</p>
+                          </div>
+                          <CopyButton text={img.headline} />
+                        </div>
+                      )}
+                      {img.tagline && (
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] text-slate-500">Tagline</p>
+                            <p className="text-xs text-slate-300 italic">{img.tagline}</p>
+                          </div>
+                          <CopyButton text={img.tagline} />
+                        </div>
+                      )}
+                      {img.bodyText && (
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] text-slate-500">Body</p>
+                            <p className="text-xs text-slate-300">{img.bodyText}</p>
+                          </div>
+                          <CopyButton text={img.bodyText} />
+                        </div>
+                      )}
+                      {img.cta && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-500">CTA:</span>
+                          <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">{img.cta}</span>
+                          <CopyButton text={img.cta} />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -382,24 +562,43 @@ function PromptCard({ prompt, onApprove, onEdit }: {
               <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {generateError}
             </div>
           )}
+
+          {/* Skeleton shown while API call is in-flight (before imageUrl is returned) */}
+          {generating && !generatedImage && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-violet-400 uppercase tracking-wider flex items-center gap-1">
+                <Zap className="w-3 h-3" /> Generating Preview
+              </p>
+              <div className="w-full h-56 rounded-lg bg-slate-900 border border-violet-500/20 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="w-7 h-7 text-violet-400 animate-spin" />
+                <div className="text-center">
+                  <p className="text-sm text-slate-300 font-medium">AI is generating your image…</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Pollinations.ai — typically 15–45 seconds</p>
+                </div>
+                <div className="w-48 h-1 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-violet-500/60 rounded-full animate-pulse" style={{ width: '70%' }} />
+                </div>
+              </div>
+            </div>
+          )}
+
           {generatedImage && (
             <div className="space-y-2">
               <p className="text-[11px] font-semibold text-violet-400 uppercase tracking-wider flex items-center gap-1">
                 <Zap className="w-3 h-3" /> Generated Preview
               </p>
 
-              {/* Loading skeleton while Pollinations generates the image */}
               {imgLoading && !imgError && (
                 <div className="w-full h-48 rounded-lg bg-slate-900 border border-slate-700/50 flex flex-col items-center justify-center gap-2">
                   <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
-                  <p className="text-xs text-slate-500">Generating image… (15–30 s)</p>
+                  <p className="text-xs text-slate-500">Loading image…</p>
                 </div>
               )}
 
               {imgError && (
                 <div className="w-full h-24 rounded-lg bg-red-500/5 border border-red-500/20 flex items-center justify-center gap-2">
                   <AlertCircle className="w-4 h-4 text-red-400" />
-                  <p className="text-xs text-red-400">Failed to load image</p>
+                  <p className="text-xs text-red-400">Failed to load image — try regenerating</p>
                 </div>
               )}
 
@@ -412,12 +611,19 @@ function PromptCard({ prompt, onApprove, onEdit }: {
                 onError={() => { setImgLoading(false); setImgError(true); }}
               />
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={handleGenerateImage}
+                  disabled={generating}
+                  className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className="w-3 h-3" /> Regenerate
+                </button>
                 <a
                   href={generatedImage}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors"
+                  className="text-[10px] px-2.5 py-1 rounded-lg bg-slate-700/40 text-slate-400 border border-slate-700/30 hover:text-white transition-colors"
                 >
                   Open full size
                 </a>
@@ -738,6 +944,19 @@ export default function MediaGenerationWorkflow() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: selectedProject.project.id }),
+      });
+      await selectProject(selectedProject.project.id);
+    } catch { /* silent */ }
+  };
+
+  // ── Approve / reject asset ────────────────────────────────────────────────
+  const updateAssetStatus = async (assetId: number, status: 'approved' | 'rejected', revisionNotes?: string) => {
+    if (!selectedProject) return;
+    try {
+      await fetch(`/api/media/assets/${assetId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, revisionNotes }),
       });
       await selectProject(selectedProject.project.id);
     } catch { /* silent */ }
@@ -1213,80 +1432,57 @@ Mood: Aspirational, high-energy summer.`}
               {/* ── Assets pane ───────────────────────────────────────── */}
               {activePane === 'assets' && (
                 <div className="space-y-4">
-                  {/* Register asset form */}
-                  <div className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-4 space-y-3">
-                    <p className="text-sm font-semibold text-white flex items-center gap-2">
-                      <Upload className="w-4 h-4 text-slate-400" /> Register GPU Output
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      After generating in ComfyUI / AnimateDiff, register the asset URL here for QC and tracking.
-                    </p>
-                    <div className="flex gap-3">
-                      <select
-                        value={assetForm.type}
-                        onChange={e => setAssetForm(f => ({ ...f, type: e.target.value }))}
-                        className="bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500/50"
-                      >
-                        <option value="image">Image</option>
-                        <option value="video">Video</option>
-                      </select>
-                      <input
-                        value={assetForm.url}
-                        onChange={e => setAssetForm(f => ({ ...f, url: e.target.value }))}
-                        placeholder="https://… or /outputs/filename.png"
-                        className="flex-1 bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500/50"
-                      />
-                      <button
-                        onClick={registerAsset}
-                        disabled={assetLoading || !assetForm.url.trim()}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 transition-colors text-sm disabled:opacity-50"
-                      >
-                        {assetLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                        Add
-                      </button>
+                  {/* Add external asset form (for video / GPU outputs) */}
+                  <details className="rounded-xl border border-slate-700/40 bg-white/[0.02] overflow-hidden">
+                    <summary className="px-4 py-3 text-xs text-slate-400 cursor-pointer hover:text-white transition-colors flex items-center gap-2 select-none">
+                      <Upload className="w-3.5 h-3.5" /> Add External Asset (ComfyUI / AnimateDiff output)
+                    </summary>
+                    <div className="px-4 pb-4 pt-2 space-y-3 border-t border-slate-700/30">
+                      <p className="text-[11px] text-slate-500">
+                        Paste the URL of a video or image you generated externally in ComfyUI / AnimateDiff.
+                      </p>
+                      <div className="flex gap-3">
+                        <select
+                          value={assetForm.type}
+                          onChange={e => setAssetForm(f => ({ ...f, type: e.target.value }))}
+                          className="bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500/50"
+                        >
+                          <option value="image">Image</option>
+                          <option value="video">Video</option>
+                        </select>
+                        <input
+                          value={assetForm.url}
+                          onChange={e => setAssetForm(f => ({ ...f, url: e.target.value }))}
+                          placeholder="https://… or /outputs/filename.png"
+                          className="flex-1 bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500/50"
+                        />
+                        <button
+                          onClick={registerAsset}
+                          disabled={assetLoading || !assetForm.url.trim()}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 transition-colors text-sm disabled:opacity-50"
+                        >
+                          {assetLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                          Add
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  </details>
 
                   {/* Asset list */}
                   {selectedProject.assets.length === 0 ? (
                     <div className="rounded-xl border border-slate-700/40 bg-white/[0.02] p-8 text-center">
-                      <Image className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                      <p className="text-sm text-slate-500">No assets registered yet</p>
+                      <ImagePlus className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                      <p className="text-sm text-slate-500">No assets yet — generate images from the Prompts tab</p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {selectedProject.assets.map(asset => (
-                        <div key={asset.id} className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-2 min-w-0">
-                              {asset.type === 'video'
-                                ? <Film className="w-4 h-4 text-rose-400 shrink-0" />
-                                : <Image className="w-4 h-4 text-blue-400 shrink-0" />
-                              }
-                              <div className="min-w-0">
-                                <p className="text-xs text-slate-300 truncate">{asset.url}</p>
-                                {asset.qc_json && (
-                                  <p className={`text-[11px] mt-0.5 ${asset.qc_json.approved ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {asset.qc_json.approved ? '✓ Approved' : '✗ Needs revision'}
-                                    {asset.qc_json.overallScore != null && ` · Score: ${asset.qc_json.overallScore}/10`}
-                                  </p>
-                                )}
-                                {asset.qc_json?.revisionNotes && (
-                                  <p className="text-[11px] text-slate-500 mt-0.5">{asset.qc_json.revisionNotes}</p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <StatusBadge status={asset.status} />
-                              <button
-                                onClick={() => runAssetQc(asset.id)}
-                                className="text-[10px] px-2 py-1 rounded-lg bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30 transition-colors"
-                              >
-                                Run QC
-                              </button>
-                            </div>
-                          </div>
-                        </div>
+                        <AssetCard
+                          key={asset.id}
+                          asset={asset}
+                          onRunQc={() => runAssetQc(asset.id)}
+                          onUpdateStatus={updateAssetStatus}
+                        />
                       ))}
                     </div>
                   )}
