@@ -806,6 +806,59 @@ export default function MediaGenerationWorkflow() {
 
   const [error, setError] = useState('');
 
+  // ── Quick test panel ──────────────────────────────────────────────────────
+  const [showQuickTest, setShowQuickTest] = useState(false);
+  const [qtPrompt, setQtPrompt]     = useState('a beautiful golden sunset over mountains, photorealistic, cinematic lighting, 8k');
+  const [qtModel, setQtModel]       = useState('flux');
+  const [qtRunning, setQtRunning]   = useState(false);
+  const [qtStep, setQtStep]         = useState('');
+  const [qtElapsed, setQtElapsed]   = useState(0);
+  const [qtImageUrl, setQtImageUrl] = useState<string | null>(null);
+  const [qtError, setQtError]       = useState('');
+
+  const runQuickTest = async () => {
+    setQtRunning(true);
+    setQtError('');
+    setQtImageUrl(null);
+    setQtElapsed(0);
+    const startMs = Date.now();
+    const timer = setInterval(() => setQtElapsed(Math.floor((Date.now() - startMs) / 1000)), 1000);
+    try {
+      setQtStep('Sending request to server…');
+      const params = new URLSearchParams({ prompt: qtPrompt, model: qtModel });
+      const resp = await fetch(`/api/media/quick-test?${params}`);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Request failed');
+      const { jobId } = data;
+      if (!jobId) throw new Error('No jobId returned — server may need restart');
+
+      setQtStep('Downloading from Pollinations.ai (20–60 s)…');
+      await new Promise<void>((resolve, reject) => {
+        const poll = setInterval(async () => {
+          try {
+            const sr = await fetch(`/api/media/quick-test/status/${jobId}`);
+            const sd = await sr.json();
+            const sec = Math.floor((Date.now() - startMs) / 1000);
+            if (sd.status === 'done' && sd.url) { clearInterval(poll); setQtImageUrl(sd.url); resolve(); }
+            else if (sd.status === 'error')      { clearInterval(poll); reject(new Error(sd.error || 'Generation failed')); }
+            else {
+              if (sec < 25)      setQtStep('AI is rendering…');
+              else if (sec < 55) setQtStep('Still rendering — almost there…');
+              else               setQtStep('Finalising download…');
+              if (sec > 180) { clearInterval(poll); reject(new Error('Timed out after 3 min')); }
+            }
+          } catch (pe) { clearInterval(poll); reject(pe); }
+        }, 3000);
+      });
+    } catch (err: unknown) {
+      setQtError(err instanceof Error ? err.message : 'Test failed');
+    } finally {
+      clearInterval(timer);
+      setQtRunning(false);
+      setQtStep('');
+    }
+  };
+
   // ── Load project list ────────────────────────────────────────────────────
   const loadProjects = async () => {
     setProjectsLoading(true);
@@ -1141,6 +1194,13 @@ export default function MediaGenerationWorkflow() {
             </button>
           )}
           <button
+            onClick={() => setShowQuickTest(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors text-sm ${showQuickTest ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30' : 'bg-slate-700/40 text-slate-400 border-slate-600/40 hover:text-white'}`}
+            title="Quick test: generate one image without a project"
+          >
+            🧪 Test
+          </button>
+          <button
             onClick={() => setShowCreateForm(v => !v)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-colors text-sm"
           >
@@ -1148,6 +1208,108 @@ export default function MediaGenerationWorkflow() {
           </button>
         </div>
       </div>
+
+      {/* ── Quick Test Panel ─────────────────────────────────────────────── */}
+      {showQuickTest && (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-emerald-400 flex items-center gap-2">
+              🧪 Quick Image Generation Test
+            </p>
+            <p className="text-[11px] text-slate-500">No project needed — tests the full pipeline directly</p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Test Prompt</label>
+            <textarea
+              value={qtPrompt}
+              onChange={e => setQtPrompt(e.target.value)}
+              rows={2}
+              disabled={qtRunning}
+              className="w-full bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/50 resize-none disabled:opacity-50"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] text-slate-400">Model:</label>
+              <select
+                value={qtModel}
+                onChange={e => setQtModel(e.target.value)}
+                disabled={qtRunning}
+                className="bg-white/[0.04] border border-slate-700/50 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none disabled:opacity-50"
+              >
+                {IMAGE_MODELS.filter(m => m.id !== 'dall-e-3').map(m => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={runQuickTest}
+              disabled={qtRunning || !qtPrompt.trim()}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {qtRunning
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Testing… {qtElapsed}s</>
+                : <>🧪 Run Test</>
+              }
+            </button>
+            {(qtImageUrl || qtError) && !qtRunning && (
+              <button onClick={() => { setQtImageUrl(null); setQtError(''); }} className="text-xs text-slate-500 hover:text-white transition-colors">
+                Reset
+              </button>
+            )}
+          </div>
+
+          {/* Progress */}
+          {qtRunning && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin shrink-0" />
+                <p className="text-sm text-slate-300">{qtStep}</p>
+                <span className="text-xs text-slate-500 font-mono ml-auto">{qtElapsed}s</span>
+              </div>
+              <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-1000"
+                  style={{ width: `${Math.min(95, 5 + (qtElapsed / 60) * 90)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {qtError && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Test failed</p>
+                <p className="text-xs mt-0.5 text-red-300">{qtError}</p>
+                <p className="text-[11px] mt-1 text-slate-500">Check: is the server running? Does the uploads/media directory exist?</p>
+              </div>
+            </div>
+          )}
+
+          {/* Result */}
+          {qtImageUrl && !qtRunning && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Pipeline working — image generated successfully
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qtImageUrl}
+                alt="Quick test result"
+                className="w-full max-h-64 object-contain rounded-lg border border-emerald-500/20 bg-slate-900"
+              />
+              <div className="flex gap-2 text-[11px] text-slate-500">
+                <span>URL: <span className="text-slate-300 font-mono">{qtImageUrl}</span></span>
+                <a href={qtImageUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 ml-auto">Open full size ↗</a>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">

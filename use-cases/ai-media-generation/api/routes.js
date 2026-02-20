@@ -622,6 +622,42 @@ router.post('/prompts/:id/generate-image', async (req, res) => {
   }
 });
 
+// GET /api/media/quick-test?prompt=...&model=flux
+// Fire a one-shot test image generation with no project/prompt record needed.
+// Responds immediately; poll GET /api/media/quick-test/status/:jobId for result.
+const quickTestJobs = new Map(); // jobId → { status, url, error }
+
+router.get('/quick-test', (req, res) => {
+  const prompt = (req.query.prompt || 'a beautiful golden sunset over mountains, photorealistic, 8k, vibrant colours').trim();
+  const model = POLLINATIONS_MODELS.has(req.query.model) ? req.query.model : 'flux';
+  const jobId = `qt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  quickTestJobs.set(jobId, { status: 'generating', url: null, error: null, prompt, model, startedAt: Date.now() });
+
+  // Respond immediately
+  res.json({ jobId, status: 'generating', prompt, model });
+
+  // Background download
+  setImmediate(async () => {
+    try {
+      const seed = Math.floor(Math.random() * 2147483647);
+      const encoded = encodeURIComponent(prompt.substring(0, 800));
+      const pollinationsUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&model=${model}&nologo=true&seed=${seed}`;
+      await downloadAndSaveImage(pollinationsUrl, path.join(UPLOADS_DIR, `${jobId}.jpg`));
+      quickTestJobs.set(jobId, { ...quickTestJobs.get(jobId), status: 'done', url: `/api/media/serve/${jobId}.jpg` });
+    } catch (err) {
+      console.error('[MediaGeneration] quick-test error:', err.message);
+      quickTestJobs.set(jobId, { ...quickTestJobs.get(jobId), status: 'error', error: err.message });
+    }
+  });
+});
+
+router.get('/quick-test/status/:jobId', (req, res) => {
+  const job = quickTestJobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  res.json(job);
+});
+
 // GET /api/media/serve/:filename — serve a locally-saved generated image
 router.get('/serve/:filename', (req, res) => {
   const filename = path.basename(req.params.filename); // prevent directory traversal
