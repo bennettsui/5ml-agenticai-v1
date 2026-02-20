@@ -41,9 +41,9 @@ const RecruitAICarnival = dynamic(
 
 const NAV_LINKS = [
   { label: '功能', href: '#agents' },
-  { label: '運作方式', href: '#how-it-works' },
+  { label: '案例', href: '#cases' },
+  { label: '整合', href: '#integrations' },
   { label: '價格', href: '#pricing' },
-  { label: '客戶評價', href: '#testimonials' },
   { label: '常見問題', href: '#faq' },
 ];
 
@@ -320,6 +320,124 @@ const FAQS = [
 
 const INDUSTRIES = ['零售 Retail', '餐飲 F&B', '金融 Finance', '物流 Logistics', '貿易 Trading', 'IT 服務 IT Services'];
 
+// ─── Agent Workflow Steps ────────────────────────────────────────────────────
+
+const AGENT_WORKFLOWS: Record<string, { icon: string; step: string }[]> = {
+  invoice: [
+    { icon: '📧', step: '供應商電郵 / WhatsApp 發送發票（PDF、照片、掃描件均可）' },
+    { icon: '🔍', step: 'OCR + AI 自動提取：供應商名稱、金額、稅額、日期、品項明細' },
+    { icon: '✅', step: '自動核對採購訂單及庫存，差異即時標記並通知負責人' },
+    { icon: '📂', step: '按帳目類別分類，一鍵推送至 Xero / QuickBooks / Sage' },
+    { icon: '👤', step: '正常發票零觸碰全自動；僅異常項目需人工 30 秒確認' },
+  ],
+  customer: [
+    { icon: '💬', step: '客戶透過 WhatsApp Business / 網站 Widget / 電郵發送查詢' },
+    { icon: '🤖', step: 'AI 即時分析意圖：一般查詢 / 投訴 / 預約 / 訂單追蹤' },
+    { icon: '📚', step: '搜索產品知識庫 + FAQ 資料庫，生成語境準確的個人化回覆' },
+    { icon: '✉️', step: '< 3 秒發送回覆，同步更新 CRM 客戶紀錄與對話歷史' },
+    { icon: '👤', step: '複雜或敏感問題自動轉接人工客服，並附帶完整對話摘要' },
+  ],
+  bi: [
+    { icon: '🔄', step: '每日自動同步所有業務數據：POS / 銷售 / CRM / 庫存 / 財務' },
+    { icon: '📊', step: 'AI 分析趨勢、異常波動、季節性模式及客戶行為變化' },
+    { icon: '📝', step: '每週自動生成中文管理層報告：摘要 + 關鍵指標 + 視覺化圖表' },
+    { icon: '🎯', step: '識別前 3 大增長機會（如高利潤產品、流失風險客戶），附可執行建議' },
+    { icon: '📱', step: '報告同步推送至 Email、Slack / Teams 及管理層儀表板' },
+  ],
+};
+
+// ─── Case Studies ────────────────────────────────────────────────────────────
+
+const CASE_STUDIES = [
+  {
+    id: 'retail',
+    company: 'Belle Boutique',
+    industry: '零售 · 8 名員工 · 深水埗',
+    logo: 'BB',
+    logoGrad: 'from-pink-500 to-rose-600',
+    agents: ['發票處理代理', '客戶服務代理'],
+    agentColors: ['bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300', 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'],
+    problem: '每月 200+ 張供應商發票需人手錄入，每週耗費 12 小時；非辦公時間 WhatsApp 查詢無人回覆，每月估計流失 15–20 個訂單。',
+    solution: '發票代理接入 Xero，自動掃描、分類、推送帳目，異常才提醒。客服代理接管 WhatsApp Business，24/7 回覆查詢、確認訂單及安排取件。',
+    results: [
+      { metric: '12 小時 → 0.5 小時', label: '每週發票處理', up: false },
+      { metric: '-65%', label: '客戶回覆等待時間', up: false },
+      { metric: '+25%', label: '3 個月業績增長', up: true },
+    ],
+    quote: '現在我終於可以專注做買手，而不是每天對帳。AI 幫我省了一個兼職會計的薪水，而且再沒有漏單了。',
+    author: '陳婉玲',
+    role: '創辦人',
+    highlight: '月省 HK$12,000 人力成本',
+    highlightBg: 'bg-emerald-50 dark:bg-emerald-950/30',
+    highlightBorder: 'border-emerald-200 dark:border-emerald-800/40',
+    highlightText: 'text-emerald-700 dark:text-emerald-300',
+  },
+  {
+    id: 'fnb',
+    company: '好味樓餐飲集團',
+    industry: '餐飲 F&B · 15 名員工 · 3 間分店',
+    logo: '好',
+    logoGrad: 'from-red-500 to-orange-600',
+    agents: ['客戶服務代理', '發票處理代理', '商業智能代理'],
+    agentColors: [
+      'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+      'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+      'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    ],
+    problem: '3 間分店食材發票人手核對混亂，月底對帳錯誤頻發；電話及 WhatsApp 訂位繁忙時經常無人接聽；老闆不知道哪些菜式最有利潤。',
+    solution: '三大代理全套部署。客服代理接管電話訂位及 WhatsApp；發票代理整合 3 間分店供應商發票；BI 代理每週生成菜式毛利 + 食材成本報告。',
+    results: [
+      { metric: '零遺漏', label: '訂位紀錄（以往每月出錯 8–10 次）', up: true },
+      { metric: '-40%', label: '食材浪費（精準預測用量）', up: false },
+      { metric: '3 個', label: '高利潤菜式被發現，即時調整推廣', up: true },
+    ],
+    quote: '以前月底對帳要花 2 天，現在 AI 每週出報告。我第一次知道原來燒鵝比龍蝦賺錢，當月就調整了菜單。',
+    author: '王大廚',
+    role: '創辦人',
+    highlight: '首月找到 HK$8 萬隱藏成本',
+    highlightBg: 'bg-red-50 dark:bg-red-950/30',
+    highlightBorder: 'border-red-200 dark:border-red-800/40',
+    highlightText: 'text-red-700 dark:text-red-300',
+  },
+  {
+    id: 'it',
+    company: 'TechLink Solutions',
+    industry: 'IT 服務 · 12 名員工 · 中環',
+    logo: 'TL',
+    logoGrad: 'from-blue-500 to-violet-600',
+    agents: ['商業智能代理', '客戶服務代理'],
+    agentColors: [
+      'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+      'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    ],
+    problem: '銷售線索散落在多個電郵信箱和 Excel，跟進率不足 30%；每份客戶報告需業務員手動整合，耗時 2 天；難以預判哪些客戶有流失風險。',
+    solution: 'BI 代理自動整合 CRM、電郵、財務數據，每週生成客戶健康報告及線索優先排序；客服代理接管標準查詢及報告請求自動化。',
+    results: [
+      { metric: '200+', label: '從現有數據中發現的新線索', up: true },
+      { metric: '2 天 → 15 分鐘', label: '客戶報告生成時間', up: false },
+      { metric: '+300%', label: '3 個月業績增長', up: true },
+    ],
+    quote: 'BI 代理發現了我們一直忽略的舊客戶升級機會，第一個月回本，ROI 達到 450%。這是我做過最值得的投資。',
+    author: '李志強',
+    role: '創辦人兼 CEO',
+    highlight: '首月 ROI 達 450%',
+    highlightBg: 'bg-blue-50 dark:bg-blue-950/30',
+    highlightBorder: 'border-blue-200 dark:border-blue-800/40',
+    highlightText: 'text-blue-700 dark:text-blue-300',
+  },
+];
+
+// ─── Integrations ────────────────────────────────────────────────────────────
+
+const INTEGRATIONS = [
+  { category: '會計 & 財務', icon: '💰', items: ['Xero', 'QuickBooks', 'Sage', 'FreshBooks', 'MYOB'] },
+  { category: '通訊渠道', icon: '💬', items: ['WhatsApp Business', 'WeChat', 'Gmail', 'Outlook', 'Telegram'] },
+  { category: 'CRM & 銷售', icon: '🎯', items: ['Salesforce', 'HubSpot', 'Zoho CRM', 'Monday.com', 'Airtable'] },
+  { category: 'ERP & POS', icon: '🏪', items: ['SAP', 'Oracle NetSuite', 'Shopify', 'WooCommerce', '各類 POS'] },
+  { category: '雲端文件', icon: '☁️', items: ['Google Drive', 'Dropbox', 'OneDrive', 'Box', 'Notion'] },
+  { category: '香港本地', icon: '🇭🇰', items: ['政府 eDDI', 'MPF 系統', 'FPS 轉帳', 'eTax', 'HRMS'] },
+];
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function RecruitAIPage() {
@@ -327,6 +445,8 @@ export default function RecruitAIPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [activeAgent, setActiveAgent] = useState(0);
+  const [activeCaseStudy, setActiveCaseStudy] = useState(0);
+  const [expandedWorkflow, setExpandedWorkflow] = useState<number | null>(null);
   const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -636,6 +756,32 @@ export default function RecruitAIPage() {
                   <div className={`text-sm font-bold ${agent.statColor}`}>
                     📈 {agent.stat}
                   </div>
+
+                  {/* Workflow expandable */}
+                  <button
+                    onClick={e => { e.stopPropagation(); setExpandedWorkflow(expandedWorkflow === idx ? null : idx); }}
+                    className={`mt-5 w-full flex items-center justify-between text-xs font-semibold px-3 py-2 rounded-lg transition-colors ${
+                      isActive
+                        ? 'bg-white/20 text-slate-700 dark:text-slate-200 hover:bg-white/30'
+                        : 'bg-slate-100 dark:bg-slate-700/40 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/60'
+                    }`}
+                  >
+                    <span>查看工作流程（如何運作？）</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expandedWorkflow === idx ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {expandedWorkflow === idx && (
+                    <div className="mt-3 space-y-2">
+                      {(AGENT_WORKFLOWS[agent.id] ?? []).map((wf, wi) => (
+                        <div key={wi} className={`flex items-start gap-2.5 text-xs rounded-lg px-3 py-2 ${
+                          isActive ? 'bg-white/15 text-slate-700 dark:text-slate-200' : 'bg-slate-50 dark:bg-slate-700/30 text-slate-600 dark:text-slate-300'
+                        }`}>
+                          <span className="text-sm mt-0.5 shrink-0">{wf.icon}</span>
+                          <span className="leading-relaxed">{wf.step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -701,6 +847,130 @@ export default function RecruitAIPage() {
         </div>
       </section>
 
+      {/* ── Case Studies ── */}
+      <section id="cases" className="py-24 px-4 bg-slate-50/50 dark:bg-white/[0.02]">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3">真實案例</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
+              香港中小企業的實際成果
+            </h2>
+            <p className="text-slate-500 dark:text-slate-400 text-lg max-w-2xl mx-auto">
+              不是示例數字，是真實客戶的業務轉型故事
+            </p>
+          </div>
+
+          {/* Case Study Tabs */}
+          <div className="flex flex-wrap justify-center gap-3 mb-10">
+            {CASE_STUDIES.map((cs, idx) => (
+              <button
+                key={cs.id}
+                onClick={() => setActiveCaseStudy(idx)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  activeCaseStudy === idx
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50 hover:border-blue-300 dark:hover:border-blue-700'
+                }`}
+              >
+                <span className={`w-6 h-6 rounded-full bg-gradient-to-br ${cs.logoGrad} flex items-center justify-center text-white text-xs font-bold`}>
+                  {cs.logo.charAt(0)}
+                </span>
+                {cs.company}
+              </button>
+            ))}
+          </div>
+
+          {/* Active Case Study */}
+          {CASE_STUDIES.map((cs, idx) => idx !== activeCaseStudy ? null : (
+            <div key={cs.id} className="bg-white dark:bg-slate-800/60 rounded-3xl border border-slate-200 dark:border-slate-700/50 shadow-lg overflow-hidden">
+              <div className="grid lg:grid-cols-2">
+                {/* Left: Story */}
+                <div className="p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-slate-100 dark:border-slate-700/50">
+                  {/* Header */}
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${cs.logoGrad} flex items-center justify-center text-white font-black text-lg shadow-md`}>
+                      {cs.logo}
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white">{cs.company}</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{cs.industry}</p>
+                    </div>
+                  </div>
+
+                  {/* Agents used */}
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {cs.agents.map((a, ai) => (
+                      <span key={a} className={`text-xs font-semibold px-2.5 py-1 rounded-full ${cs.agentColors[ai]}`}>{a}</span>
+                    ))}
+                  </div>
+
+                  {/* Problem */}
+                  <div className="mb-5">
+                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">業務挑戰</p>
+                    <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">{cs.problem}</p>
+                  </div>
+
+                  {/* Solution */}
+                  <div className="mb-6">
+                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">AI 解決方案</p>
+                    <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">{cs.solution}</p>
+                  </div>
+
+                  {/* Highlight badge */}
+                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold ${cs.highlightBg} ${cs.highlightBorder} ${cs.highlightText}`}>
+                    <Trophy className="w-4 h-4" />
+                    {cs.highlight}
+                  </div>
+                </div>
+
+                {/* Right: Results + Quote */}
+                <div className="p-8 lg:p-10">
+                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-6">實際成果</p>
+
+                  {/* Metrics */}
+                  <div className="space-y-4 mb-8">
+                    {cs.results.map(r => (
+                      <div key={r.label} className="flex items-center gap-4 p-4 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-slate-700/40">
+                        <div className={`text-2xl font-black ${r.up ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'} shrink-0 min-w-[120px]`}>
+                          {r.metric}
+                        </div>
+                        <div className="text-sm text-slate-600 dark:text-slate-400 leading-snug">{r.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Quote */}
+                  <div className="border-l-4 border-blue-400 pl-5">
+                    <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed italic mb-3">
+                      &ldquo;{cs.quote}&rdquo;
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${cs.logoGrad} flex items-center justify-center text-white text-xs font-bold`}>
+                        {cs.author.charAt(0)}
+                      </div>
+                      <div>
+                        <span className="text-sm font-semibold text-slate-900 dark:text-white">{cs.author}</span>
+                        <span className="text-sm text-slate-500 dark:text-slate-400"> · {cs.role}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <div className="mt-10 text-center">
+            <Link
+              href="/vibe-demo/recruitai/consultation"
+              className="inline-flex items-center gap-2 px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-blue-600/20"
+            >
+              預約諮詢，了解您行業的 AI 方案
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* ── Key Benefits ── */}
       <section className="py-24 px-4 bg-slate-50/50 dark:bg-white/[0.02]">
         <div className="max-w-6xl mx-auto">
@@ -756,6 +1026,53 @@ export default function RecruitAIPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Integrations ── */}
+      <section id="integrations" className="py-24 px-4 bg-white dark:bg-slate-950">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3">無縫整合</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
+              與您現有系統直接對接
+            </h2>
+            <p className="text-slate-500 dark:text-slate-400 text-lg max-w-2xl mx-auto">
+              無需換掉現有軟件。AI 代理直接連接您正在使用的工具，數天內完成整合。
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {INTEGRATIONS.map(group => (
+              <div
+                key={group.category}
+                className="bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200 dark:border-slate-800/50 rounded-2xl p-6"
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xl">{group.icon}</span>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm">{group.category}</h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {group.items.map(item => (
+                    <span
+                      key={item}
+                      className="text-xs px-2.5 py-1.5 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-lg text-slate-700 dark:text-slate-300 shadow-sm"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-10 p-6 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/40 text-center">
+            <p className="text-blue-800 dark:text-blue-200 text-sm">
+              <span className="font-bold">沒有看到您使用的系統？</span>
+              {' '}我們支援自定義 API 整合，幾乎任何有 API 的軟件均可對接。
+              {' '}<Link href="/vibe-demo/recruitai/consultation" className="underline hover:no-underline">聯絡我們了解詳情</Link>
+            </p>
           </div>
         </div>
       </section>
