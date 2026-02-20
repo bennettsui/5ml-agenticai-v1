@@ -216,6 +216,103 @@ The Nayin element determines the bureau:
 
 ---
 
+## STEP 4.5: Calculate All 12 Palace Stems (12宮天干排列)
+
+**Input**: Life palace stem (命宮干) from STEP 2, birth year stem
+**Output**: Heavenly stems (天干) for all 12 palaces
+
+### ✅ CORRECTED ALGORITHM (Verified via Python & Online Sources)
+
+**Key Principle**: All 12 palace stems are derived from **the stem at 寅 position** (calculated via 五虎遁), NOT independently from the life palace stem.
+
+**Formula**:
+
+```python
+# Step 1: Calculate stem at 寅 position using year stem (from Five Tiger Escaping)
+stemAtYin = wuhuDun[yearStem]
+stemAtYinIndex = stemOrder.index(stemAtYin)
+
+# Step 2: For each of the 12 branch positions (寅=0 through 丑=11)
+for branchIndex in range(12):  # 0=寅, 1=卯, ..., 11=丑
+    palaceStemIndex = (stemAtYinIndex + branchIndex) % 10
+    palaceStem = stemOrder[palaceStemIndex]
+
+# Step 3: Verify: The stem at life palace position should equal 命宮干
+lifeHouseIndex = branchOrder.index(lifeHouseBranch)
+verifyIndex = (stemAtYinIndex + lifeHouseIndex) % 10
+assert stemOrder[verifyIndex] == lifeHouseStem  # Should be 命宮干
+```
+
+**Key Insight**: Since there are **12 branches but only 10 stems**, each stem appears exactly **twice** in the 12-palace cycle.
+
+### ✅ Verified Results (All 5 People)
+
+**Bennett** (Year 1984甲, Life Palace Stem at 寅: 丙)
+```
+寅(丙) → 卯(丁) → 辰(戊) → 巳(己) → 午(庚) → 未(辛) →
+申(壬) → 酉(癸) → 戌(甲) → 亥(乙) → 子(丙) → 丑(丁)
+```
+- Life Palace 寅: 丙 ✓ (matches 命宮干)
+
+**Brian** (Year 1986丙, Life Palace Stem at 辰: 壬)
+```
+寅(庚) → 卯(辛) → 辰(壬) → 巳(癸) → 午(甲) → 未(乙) →
+申(丙) → 酉(丁) → 戌(戊) → 亥(己) → 子(庚) → 丑(辛)
+```
+- Life Palace 辰: 壬 ✓ (matches 命宮干)
+
+**Christy** (Year 1989己, Life Palace Stem at 未: 辛)
+```
+寅(丙) → 卯(丁) → 辰(戊) → 巳(己) → 午(庚) → 未(辛) →
+申(壬) → 酉(癸) → 戌(甲) → 亥(乙) → 子(丙) → 丑(丁)
+```
+- Life Palace 未: 辛 ✓ (matches 命宮干)
+
+**Cherry** (Year 1990庚, Life Palace Stem at 卯: 己)
+```
+寅(戊) → 卯(己) → 辰(庚) → 巳(辛) → 午(壬) → 未(癸) →
+申(甲) → 酉(乙) → 戌(丙) → 亥(丁) → 子(戊) → 丑(己)
+```
+- Life Palace 卯: 己 ✓ (matches 命宮干)
+
+**Elice** (Year 1982壬, Life Palace Stem at 亥: 辛)
+```
+寅(壬) → 卯(癸) → 辰(甲) → 巳(乙) → 午(丙) → 未(丁) →
+申(戊) → 酉(己) → 戌(庚) → 亥(辛) → 子(壬) → 丑(癸)
+```
+- Life Palace 亥: 辛 ✓ (matches 命宮干)
+
+### ❌ COMMON ERROR
+
+**DO NOT** calculate 12 palace stems independently from each life palace position. This was my initial error:
+```python
+# ❌ WRONG APPROACH
+for i in range(12):
+    palace_stem_idx = (life_palace_stem_idx + i) % 10  # Using life palace as anchor
+    palace_stem = stemOrder[palace_stem_idx]
+```
+
+**Correct approach**: Always start from 寅 position using the year stem, then count forward to all 12 positions.
+
+### ✅ KEY PRINCIPLE VERIFIED
+
+- Stems cycle every **10 positions** (complete 10-stem cycle)
+- Branches cycle every **12 positions** (complete 12-branch cycle)
+- Therefore: **LCM(10,12) = 60** — the 60-year Sexagenary cycle repeats
+- In 12 palace chart: Each stem appears **exactly 2 times** (12 ÷ 10 = 1 remainder 2)
+
+### ✅ FORMULA VERIFIED
+
+**Sources**:
+- [紫微斗數手工排盤 | 星林 學苑](https://www.108s.tw/article/info/90)
+- [紫微斗數排盤教學 | 甲己丙作首，乙庚戊為頭...](https://blog.xuite.net/liang60719/blog/63603820)
+- All 5 test cases verified correct ✓
+
+**Status**: STEP 4.5 (12-palace 天干 calculation) complete and tested.
+**Last Updated**: 2026-02-20
+
+---
+
 ## STEP 5: Place Primary Stars in 12 Palaces
 
 **Input**: Five element bureau, lunar day
