@@ -5063,7 +5063,7 @@ app.get('/api/ziwei/stars/:id', async (req, res) => {
   }
 });
 
-// GET /api/ziwei/palace-star-meanings/:palaceId/:starId - Get star meaning in specific palace
+// GET /api/ziwei/palace-star-meanings/:palaceId/:starId - Get star meaning in specific palace (DB version)
 app.get('/api/ziwei/palace-star-meanings/:palaceId/:starId', async (req, res) => {
   try {
     if (!process.env.DATABASE_URL) {
@@ -5100,6 +5100,53 @@ app.get('/api/ziwei/palace-star-meanings/:palaceId/:starId', async (req, res) =>
   } catch (error) {
     console.error('❌ Ziwei palace-star meanings error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/star/:name/palaces - Get all 12 palace meanings for one star
+app.get('/api/ziwei/star/:name/palaces', (req, res) => {
+  try {
+    const zwEngine = require('./services/ziwei-chart-engine');
+    const result = zwEngine.getStarInAllPalaces(req.params.name);
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        error: `No palace data found for star '${req.params.name}'`,
+        note: 'Palace-specific meanings database is being compiled'
+      });
+    }
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/ziwei/star/:name/palace/:palace - Single star-palace combination
+app.get('/api/ziwei/star/:name/palace/:palace', (req, res) => {
+  try {
+    const zwEngine = require('./services/ziwei-chart-engine');
+    const result = zwEngine.getStarPalaceMeaning(req.params.name, req.params.palace);
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        error: `No data for '${req.params.name}' in palace '${req.params.palace}'`,
+        note: 'Palace-specific meanings database is being compiled'
+      });
+    }
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/ziwei/palace/:palace - All stars documented in a specific palace
+app.get('/api/ziwei/palace/:palace', (req, res) => {
+  try {
+    const zwEngine = require('./services/ziwei-chart-engine');
+    const result = zwEngine.getPalaceAllStars(req.params.palace);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

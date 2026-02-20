@@ -689,6 +689,54 @@ function getStarDatabase() {
   return loadStarMeanings();
 }
 
+// Palace-Specific Star Meanings Functions
+let starPalaceMeaningsCache = null;
+
+function loadStarPalaceMeanings() {
+  if (!starPalaceMeaningsCache) {
+    try {
+      const path = require('path');
+      starPalaceMeaningsCache = require(path.join(__dirname, 'star-palace-meanings.json'));
+    } catch (e) {
+      console.warn('Warning: Could not load star-palace-meanings.json', e.message);
+      starPalaceMeaningsCache = { metadata: { error: 'Database not available', available: false } };
+    }
+  }
+  return starPalaceMeaningsCache;
+}
+
+function getStarPalaceMeaning(starName, palaceName) {
+  const db = loadStarPalaceMeanings();
+  if (!db[starName]) return null;
+  if (!db[starName][palaceName]) return null;
+  return {
+    star: starName,
+    palace: palaceName,
+    ...db[starName][palaceName]
+  };
+}
+
+function getStarInAllPalaces(starName) {
+  const db = loadStarPalaceMeanings();
+  if (!db[starName] || db[starName] === 'metadata') return null;
+  return {
+    star: starName,
+    palaces: db[starName]
+  };
+}
+
+function getPalaceAllStars(palaceName) {
+  const db = loadStarPalaceMeanings();
+  const result = {};
+  for (const [star, palaces] of Object.entries(db)) {
+    if (star === 'metadata') continue;
+    if (typeof palaces === 'object' && palaces[palaceName]) {
+      result[star] = palaces[palaceName];
+    }
+  }
+  return { palace: palaceName, stars: result, count: Object.keys(result).length };
+}
+
 // Exports
 module.exports = {
   calcBaseChart,
@@ -702,5 +750,9 @@ module.exports = {
   getStarsByElement,
   getStarsByType,
   getStarsByKeyword,
-  getStarDatabase
+  getStarDatabase,
+  loadStarPalaceMeanings,
+  getStarPalaceMeaning,
+  getStarInAllPalaces,
+  getPalaceAllStars
 };
