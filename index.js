@@ -94,6 +94,9 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
 app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx')));
 app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi')));
 
+// Serve Radiance uploaded media
+app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
+
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
 app.use(express.static(nextJsPath));
@@ -4191,6 +4194,30 @@ const wsServer = require('./services/websocket-server');
 // Radiance PR Contact Form API
 // ==========================================
 
+// Multer config for Radiance media uploads
+const multer = require('multer');
+const radianceMediaStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, 'uploads', 'radiance');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const radianceUpload = multer({
+  storage: radianceMediaStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Only images allowed'));
+  },
+});
+
+const RADIANCE_ADMIN_PW = 'radiance2026happyday!';
+
 // POST /api/radiance/contact — save enquiry to DB + send email alert
 app.post('/api/radiance/contact', async (req, res) => {
   try {
@@ -4255,6 +4282,154 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
     console.error('❌ [Radiance] Submissions fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch submissions' });
   }
+});
+
+// POST /api/radiance/admin/media/upload
+app.post('/api/radiance/admin/media/upload', radianceUpload.single('file'), async (req, res) => {
+  try {
+    if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const url = `/uploads/radiance/${req.file.filename}`;
+    await pool.query(
+      `INSERT INTO radiance_media (filename, original_name, url, mime_type, size) VALUES ($1,$2,$3,$4,$5)`,
+      [req.file.filename, req.file.originalname, url, req.file.mimetype, req.file.size]
+    );
+    res.json({ success: true, url, filename: req.file.filename, originalName: req.file.originalname });
+  } catch (err) {
+    console.error('Radiance media upload error:', err);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// GET /api/radiance/admin/media
+app.get('/api/radiance/admin/media', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const result = await pool.query('SELECT * FROM radiance_media ORDER BY uploaded_at DESC LIMIT 200');
+    res.json({ success: true, media: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch media' }); }
+});
+
+// DELETE /api/radiance/admin/media/:id
+app.delete('/api/radiance/admin/media/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const result = await pool.query('SELECT filename FROM radiance_media WHERE id=$1', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    const filePath = path.join(__dirname, 'uploads', 'radiance', result.rows[0].filename);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    await pool.query('DELETE FROM radiance_media WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Delete failed' }); }
+});
+
+// GET /api/radiance/blog/:slug — returns CMS override or null
+app.get('/api/radiance/blog/:slug', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM radiance_blog_cms WHERE slug=$1', [req.params.slug]);
+    if (result.rows.length === 0) return res.json({ success: true, post: null });
+    res.json({ success: true, post: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch blog post' }); }
+});
+
+// GET /api/radiance/admin/blog — list all CMS blog posts
+app.get('/api/radiance/admin/blog', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const result = await pool.query('SELECT * FROM radiance_blog_cms ORDER BY updated_at DESC');
+    res.json({ success: true, posts: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch posts' }); }
+});
+
+// PUT /api/radiance/admin/blog/:slug
+app.put('/api/radiance/admin/blog/:slug', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { title_en, title_zh, date_en, date_zh, category_en, category_zh, read_time, excerpt_en, excerpt_zh, hero_image, content_en, content_zh } = req.body;
+    await pool.query(
+      `INSERT INTO radiance_blog_cms (slug, title_en, title_zh, date_en, date_zh, category_en, category_zh, read_time, excerpt_en, excerpt_zh, hero_image, content_en, content_zh, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
+       ON CONFLICT (slug) DO UPDATE SET
+         title_en=EXCLUDED.title_en, title_zh=EXCLUDED.title_zh,
+         date_en=EXCLUDED.date_en, date_zh=EXCLUDED.date_zh,
+         category_en=EXCLUDED.category_en, category_zh=EXCLUDED.category_zh,
+         read_time=EXCLUDED.read_time, excerpt_en=EXCLUDED.excerpt_en, excerpt_zh=EXCLUDED.excerpt_zh,
+         hero_image=EXCLUDED.hero_image, content_en=EXCLUDED.content_en, content_zh=EXCLUDED.content_zh,
+         updated_at=NOW()`,
+      [req.params.slug, title_en, title_zh, date_en, date_zh, category_en, category_zh, read_time, excerpt_en, excerpt_zh, hero_image, content_en, content_zh]
+    );
+    res.json({ success: true });
+  } catch (err) { console.error('Blog CMS save error:', err); res.status(500).json({ error: 'Save failed' }); }
+});
+
+// POST /api/radiance/admin/blog/:slug/ai-format — AI formatting
+app.post('/api/radiance/admin/blog/:slug/ai-format', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { content, lang } = req.body;
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const langNote = lang === 'zh' ? 'The content is in Traditional Chinese (繁體中文). Keep it in Chinese.' : 'The content is in English.';
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: `You are an AI SEO and UX content editor. Reformat the following HTML blog content to follow AI SEO best practices. ${langNote}
+
+Rules:
+- Paragraphs: max 3 sentences, ~40-50 words each
+- H2 for major sections (keyword-rich titles). H3 for subsections.
+- Convert any numbered/bulleted items written as <p><strong>1. Item</strong> text</p> into proper <ol><li> or <ul><li> lists
+- Opening paragraph: hook + primary keyword in first 2 sentences, under 50 words
+- Add a FAQ section at the end with 3-5 Q&As using <h3> for questions and <p> for answers
+- Bold (<strong>) only the single most important phrase per section
+- Keep <section> wrappers around H2 blocks
+- Return ONLY the reformatted HTML, no explanation, no markdown code blocks
+
+Content to reformat:
+${content}`
+      }]
+    });
+    const formatted = message.content[0].type === 'text' ? message.content[0].text : content;
+    res.json({ success: true, content: formatted });
+  } catch (err) { console.error('AI format error:', err); res.status(500).json({ error: 'AI formatting failed' }); }
+});
+
+// GET /api/radiance/case-studies/:slug
+app.get('/api/radiance/case-studies/:slug', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM radiance_case_study_cms WHERE slug=$1', [req.params.slug]);
+    if (result.rows.length === 0) return res.json({ success: true, study: null });
+    res.json({ success: true, study: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// GET /api/radiance/admin/case-studies
+app.get('/api/radiance/admin/case-studies', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const result = await pool.query('SELECT * FROM radiance_case_study_cms ORDER BY updated_at DESC');
+    res.json({ success: true, studies: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// PUT /api/radiance/admin/case-studies/:slug
+app.put('/api/radiance/admin/case-studies/:slug', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { title_en, title_zh, client, excerpt_en, excerpt_zh, featured_image, content_html_en, content_html_zh } = req.body;
+    await pool.query(
+      `INSERT INTO radiance_case_study_cms (slug, title_en, title_zh, client, excerpt_en, excerpt_zh, featured_image, content_html_en, content_html_zh, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+       ON CONFLICT (slug) DO UPDATE SET
+         title_en=EXCLUDED.title_en, title_zh=EXCLUDED.title_zh, client=EXCLUDED.client,
+         excerpt_en=EXCLUDED.excerpt_en, excerpt_zh=EXCLUDED.excerpt_zh,
+         featured_image=EXCLUDED.featured_image, content_html_en=EXCLUDED.content_html_en,
+         content_html_zh=EXCLUDED.content_html_zh, updated_at=NOW()`,
+      [req.params.slug, title_en, title_zh, client, excerpt_en, excerpt_zh, featured_image, content_html_en, content_html_zh]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Save failed' }); }
 });
 
 // ==========================================
