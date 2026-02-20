@@ -14,7 +14,7 @@ The Ziwei (紫微) birth chart calculation follows a deterministic 7-step algori
 立命宮 → 五行局 → 安紫微 → 安天府 → 安十四主星 → 安輔佐煞曜 → 本命四化
 ```
 
-This document covers **Steps 1-7** (Life Palace through Auxiliary & Calamity Stars).
+This document covers **Steps 1-8** (Life Palace through Four Transformations).
 
 ---
 
@@ -696,3 +696,102 @@ lingXingIndex = (lingXingStart + hourIndex) % 12
 
 **Status**: STEP 7 algorithm complete and tested.
 **Last Updated**: 2026-02-20
+
+---
+
+## STEP 8: 本命四化 (Natal Four Transformations)
+
+**Input**: Birth year heavenly stem
+**Output**: Four transformed stars (Prosperity, Authority, Excellence, Obstacle)
+
+### ✅ FOUR TRANSFORMATIONS METHODOLOGY
+
+The **四化** (Four Transformations) are determined EXCLUSIVELY by the **生年天干** (birth year heavenly stem). They represent qualitative changes in star characteristics:
+
+- **化祿 (Hua Lu)**: Transformation to Prosperity, abundance, satisfaction
+- **化權 (Hua Quan)**: Transformation to Authority, control, power
+- **化科 (Hua Ke)**: Transformation to Excellence, recognition, reputation
+- **化忌 (Hua Ji)**: Transformation to Obstacle, challenges, voids
+
+### ✅ COMPLETE TRANSFORMATION TABLE (十天干四化表)
+
+| **Year Stem** | **化祿** | **化權** | **化科** | **化忌** |
+|---|---|---|---|---|
+| **甲** (1984, 1994, 2004, 2014, 2024) | 廉貞 | 破軍 | 武曲 | 太陽 |
+| **乙** (1985, 1995, 2005, 2015, 2025) | 天機 | 天梁 | 紫微 | 太陰 |
+| **丙** (1986, 1996, 2006, 2016, 2026) | 天同 | 天機 | 文昌 | 廉貞 |
+| **丁** (1987, 1997, 2007, 2017) | 太陰 | 天同 | 天機 | 巨門 |
+| **戊** (1988, 1998, 2008, 2018) | 貪狼 | 太陰 | 右弼 | 天機 |
+| **己** (1989, 1999, 2009, 2019) | 武曲 | 貪狼 | 天梁 | 文曲 |
+| **庚** (1990, 2000, 2010, 2020) | 太陽 | 武曲 | 太陰 | 天同 |
+| **辛** (1991, 2001, 2011, 2021) | 巨門 | 太陽 | 文曲 | 文昌 |
+| **壬** (1992, 2002, 2012, 2022) | 天梁 | 紫微 | 左輔 | 武曲 |
+| **癸** (1993, 2003, 2013, 2023) | 破軍 | 巨門 | 太陰 | 貪狼 |
+
+### ✅ Verified Results (All 5 People)
+
+**Bennett** (Year: 1984甲)
+- 化祿: **廉貞** - Passion brings wealth through principles-driven work
+- 化權: **破軍** - Breakthrough energy becomes stronger and controllable
+- 化科: **武曲** - Decisiveness gains recognition through financial management
+- 化忌: **太陽** - Brightness encounters challenges requiring deliberate effort
+
+**Brian** (Year: 1986丙)
+- 化祿: **天同** - Contentment and harmony bring smooth abundance
+- 化權: **天機** - Intelligence becomes a powerful tool of influence
+- 化科: **文昌** - Communication skills and scholarship bring distinction
+- 化忌: **廉貞** - Passionate principles create inner turbulence and conflict
+
+**Christy** (Year: 1989己)
+- 化祿: **武曲** - Decisive action and financial acumen create stable wealth
+- 化權: **貪狼** - Charisma and ambition become powerful drivers of influence
+- 化科: **天梁** - Wisdom and protective nature gain honor and recognition
+- 化忌: **文曲** - Artistic and literary expression meets resistance
+
+**Cherry** (Year: 1990庚)
+- 化祿: **太陽** - Brightness and warmth bring abundant resources
+- 化權: **武曲** - Financial decisiveness becomes a tool of power
+- 化科: **太陰** - Gentleness and intuition gain recognition through refinement
+- 化忌: **天同** - Enjoyment and harmony become complicated and blocked
+
+**Elice** (Year: 1982壬)
+- 化祿: **天梁** - Wisdom and shelter bring abundant blessings
+- 化權: **紫微** - Imperial character and authority become stronger
+- 化科: **左輔** - Assistance and support gain recognition and honor
+- 化忌: **武曲** - Financial and decisive control becomes challenging
+
+### ✅ KEY PRINCIPLES
+
+1. **Only year stem matters** for natal chart transformations
+2. **All four transformation types present** - each assigned to one major star
+3. **Transformations modify star characteristics**, not the star itself
+4. **Transformed star location matters** - same star in different palaces has different meanings
+5. **All 14 major stars can transform** - auxiliary stars rarely transform in natal chart
+
+### ✅ FORMULA VERIFIED
+
+- **Source**: Zhongzhou School (中州派) - Wang Tingzhi methodology
+- **Authority**: Classical 安星訣 and traditional Ziwei texts
+- **Implementation**: iztro JavaScript library verification
+- **All 5 people verified** ✓
+
+**Status**: STEP 8 algorithm complete and tested.
+**Last Updated**: 2026-02-20
+
+---
+
+## Algorithm Summary: Complete 8-Step Ziwei Doushu 排盤
+
+The complete birth chart calculation now includes:
+
+1. **STEP 1**: Calculate Life Palace (命宮) - Month + Hour
+2. **STEP 2**: Calculate Life Palace Stem (命宮干) - Five Tiger Escaping
+3. **STEP 3**: Determine Stem-Branch Pair (命宮干支) - Combine Step 1 & 2
+4. **STEP 4**: Determine Five Element Bureau (五行局) - Nayin mapping
+5. **STEP 5**: Place Ziwei & Tianfu - Odd/Even Difference Method + Fixed Mapping
+6. **STEP 6**: Place 14 Major Stars - Counter-clockwise/Clockwise offsets
+7. **STEP 7**: Place Auxiliary & Calamity Stars - Multiple grouping formulas
+8. **STEP 8**: Apply Natal Four Transformations - Year stem-based lookup
+
+**Verification Status**: All 8 steps complete, all 5 test cases passing ✓
+**Last Comprehensive Update**: 2026-02-20
