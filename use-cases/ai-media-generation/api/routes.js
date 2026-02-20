@@ -534,6 +534,25 @@ async function downloadAndSaveImage(url, destPath) {
 // Available Pollinations models
 const POLLINATIONS_MODELS = new Set(['flux', 'flux-realism', 'flux-anime', 'flux-3d', 'turbo']);
 
+// Convert an aspect ratio string (e.g. "16:9", "9:16", "4:5") to pixel dimensions
+// Uses Pollinations-friendly sizes (multiples of 64, ~1M total pixels)
+function aspectRatioDimensions(ratio) {
+  const MAP = {
+    '1:1':   { width: 1024, height: 1024 },
+    '16:9':  { width: 1344, height: 768  },
+    '9:16':  { width: 768,  height: 1344 },
+    '4:5':   { width: 896,  height: 1120 },
+    '5:4':   { width: 1120, height: 896  },
+    '3:2':   { width: 1152, height: 768  },
+    '2:3':   { width: 768,  height: 1152 },
+    '4:3':   { width: 1024, height: 768  },
+    '3:4':   { width: 768,  height: 1024 },
+    '21:9':  { width: 1344, height: 576  },
+    '1.91:1':{ width: 1232, height: 640  },
+  };
+  return MAP[ratio] || { width: 1024, height: 1024 };
+}
+
 // GET /api/media/assets/:id — fetch single asset (for polling generation status)
 router.get('/assets/:id', async (req, res) => {
   try {
@@ -597,7 +616,8 @@ router.post('/prompts/:id/generate-image', async (req, res) => {
           const pollinationsModel = POLLINATIONS_MODELS.has(requestedModel) ? requestedModel : 'flux';
           const seed = Math.floor(Math.random() * 2147483647);
           const encodedPrompt = encodeURIComponent(positivePrompt.substring(0, 800));
-          const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=${pollinationsModel}&nologo=true&seed=${seed}`;
+          const { width, height } = aspectRatioDimensions(pj.image?.aspectRatio);
+          const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${pollinationsModel}&nologo=true&seed=${seed}&enhance=true`;
           const filename = `media_${record.project_id}_p${record.id}_${seed}.jpg`;
           await downloadAndSaveImage(pollinationsUrl, path.join(UPLOADS_DIR, filename));
           imageUrl = `/api/media/serve/${filename}`;
@@ -628,8 +648,10 @@ router.post('/prompts/:id/generate-image', async (req, res) => {
 const quickTestJobs = new Map(); // jobId → { status, url, error }
 
 router.get('/quick-test', (req, res) => {
-  const prompt = (req.query.prompt || 'a beautiful golden sunset over mountains, photorealistic, 8k, vibrant colours').trim();
+  const defaultPrompt = 'A professional product photograph of a premium glass perfume bottle sitting on white marble, soft studio diffused lighting from above, shallow depth of field with subtle bokeh background, warm neutral color palette, commercial advertising photography aesthetic';
+  const prompt = (req.query.prompt || defaultPrompt).trim();
   const model = POLLINATIONS_MODELS.has(req.query.model) ? req.query.model : 'flux';
+  const ratio = req.query.ratio || '1:1';
   const jobId = `qt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   quickTestJobs.set(jobId, { status: 'generating', url: null, error: null, prompt, model, startedAt: Date.now() });
@@ -642,7 +664,8 @@ router.get('/quick-test', (req, res) => {
     try {
       const seed = Math.floor(Math.random() * 2147483647);
       const encoded = encodeURIComponent(prompt.substring(0, 800));
-      const pollinationsUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&model=${model}&nologo=true&seed=${seed}`;
+      const { width, height } = aspectRatioDimensions(ratio);
+      const pollinationsUrl = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&model=${model}&nologo=true&seed=${seed}&enhance=true`;
       await downloadAndSaveImage(pollinationsUrl, path.join(UPLOADS_DIR, `${jobId}.jpg`));
       quickTestJobs.set(jobId, { ...quickTestJobs.get(jobId), status: 'done', url: `/api/media/serve/${jobId}.jpg` });
     } catch (err) {

@@ -31,11 +31,15 @@ interface PromptRecord {
       positive: string;
       negative: string;
       headline?: string;
-      ctaCopy?: string;
+      tagline?: string;
+      cta?: string;
+      bodyText?: string;
+      aspectRatio?: string;
       suggestedSampler?: string;
       suggestedCfg?: number;
       suggestedSteps?: number;
       styleTokens?: string[];
+      promptNotes?: string;
       notes?: string;
     };
     video?: { positive: string; negative: string; motionKeywords?: string[]; recommendedFrames?: number; recommendedFps?: number };
@@ -572,11 +576,19 @@ function PromptCard({ prompt, onApprove, onEdit }: {
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-3 text-[11px] text-slate-500">
+                  <div className="flex flex-wrap gap-3 text-[11px] text-slate-500">
+                    {img.aspectRatio    && <span>Ratio: <span className="text-slate-300">{img.aspectRatio}</span></span>}
                     {img.suggestedSampler && <span>Sampler: <span className="text-slate-300">{img.suggestedSampler}</span></span>}
                     {img.suggestedSteps   && <span>Steps: <span className="text-slate-300">{img.suggestedSteps}</span></span>}
                     {img.suggestedCfg    && <span>CFG: <span className="text-slate-300">{img.suggestedCfg}</span></span>}
                   </div>
+
+                  {/* Prompt notes */}
+                  {(img.promptNotes || img.notes) && (
+                    <p className="text-[11px] text-slate-500 italic border-l-2 border-slate-700 pl-2">
+                      {img.promptNotes || img.notes}
+                    </p>
+                  )}
 
                   {/* Ad copy fields */}
                   {(img.headline || img.tagline || img.cta || img.bodyText) && (
@@ -808,7 +820,7 @@ export default function MediaGenerationWorkflow() {
 
   // ── Quick test panel ──────────────────────────────────────────────────────
   const [showQuickTest, setShowQuickTest] = useState(false);
-  const [qtPrompt, setQtPrompt]     = useState('a beautiful golden sunset over mountains, photorealistic, cinematic lighting, 8k');
+  const [qtPrompt, setQtPrompt]     = useState('A professional product photograph of a premium glass perfume bottle sitting on white marble, soft studio diffused lighting from above, shallow depth of field with subtle bokeh background, warm neutral color palette, commercial advertising photography aesthetic');
   const [qtModel, setQtModel]       = useState('flux');
   const [qtRunning, setQtRunning]   = useState(false);
   const [qtStep, setQtStep]         = useState('');
