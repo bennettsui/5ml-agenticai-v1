@@ -6,6 +6,54 @@
 
 ---
 
+## 🔒 **LOCKED - VERIFIED ALGORITHMS (USER APPROVAL REQUIRED FOR CHANGES)**
+
+**The following sections are LOCKED and verified correct. ANY changes require USER APPROVAL FIRST:**
+
+### ✅ Locked Steps:
+- **STEP 1**: Life Palace (命宮) Calculation
+  - Formula: `(month_idx - hour_idx + 10) % 12`
+  - Verified for all 5 test cases ✓
+
+- **STEP 2**: Life Palace Stem (命宮干) via 五虎遁
+  - Uses Five Tiger Escaping Method
+  - Verified for all 5 test cases ✓
+
+- **STEP 3**: Life Palace Stem-Branch (命宮干支)
+  - Simple combination: stem + branch
+  - Verified for all 5 test cases ✓
+
+- **STEP 4**: Five Element Bureau (五行局) via Nayin
+  - Uses 命宮干支 to lookup Nayin element
+  - Maps to bureau: 2/3/4/5/6
+  - Verified for all 5 test cases ✓
+
+- **STEP 5**: Ziwei & Tianfu Placement
+  - Uses **Odd/Even Difference Method** (NOT remainder table!)
+  - Formula:
+    ```
+    quotient = ceil(day / bureau)
+    difference = (quotient × bureau) - day
+    if difference is EVEN: finalNumber = quotient + difference
+    if difference is ODD: finalNumber = quotient - difference
+    ziweiIndex = (finalNumber - 1) % 12
+    ```
+  - Tianfu uses **FIXED MNEMONIC MAPPING** (NOT opposite!)
+  - Verified for all 5 test cases ✓
+
+### ✅ Test Cases (All Verified):
+| Person | Day | Bureau | Ziwei | Tianfu |
+|--------|-----|--------|-------|--------|
+| Bennett | 3 | 6 | 亥 | 巳 ✓ |
+| Brian | 17 | 2 | 酉 | 未 ✓ |
+| Christy | 2 | 5 | 亥 | 巳 ✓ |
+| Cherry | 4 | 5 | 丑 | 卯 ✓ |
+| Elice | 14 | 4 | 未 | 酉 ✓ |
+
+**Change Process**: To modify any locked section, create a GitHub issue with your proposed changes and user approval.
+
+---
+
 ## Overview
 
 The Ziwei (紫微) birth chart calculation follows a deterministic 7-step algorithm:
