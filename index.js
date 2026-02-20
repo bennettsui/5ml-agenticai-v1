@@ -4244,7 +4244,7 @@ app.post('/api/radiance/contact', async (req, res) => {
 app.get('/api/radiance/contact/submissions', async (req, res) => {
   try {
     const { password } = req.query;
-    if (password !== 'Radiance2026goodluck!') {
+    if (password !== 'radiance2026happyday!') {
       return res.status(401).json({ error: 'Unauthorised' });
     }
     const limit = Math.min(parseInt(req.query.limit || '50'), 200);
