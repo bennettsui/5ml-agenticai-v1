@@ -80,6 +80,19 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── Image generation models ───────────────────────────────────────────────────
+
+const IMAGE_MODELS: { id: string; label: string; desc: string; tag?: string }[] = [
+  { id: 'flux',           label: 'FLUX',          desc: 'Photorealistic, general purpose', tag: 'free' },
+  { id: 'flux-realism',   label: 'FLUX Realism',  desc: 'Enhanced photorealism',           tag: 'free' },
+  { id: 'flux-anime',     label: 'FLUX Anime',    desc: 'Anime / illustrated style',       tag: 'free' },
+  { id: 'flux-3d',        label: 'FLUX 3D',       desc: '3D render style',                 tag: 'free' },
+  { id: 'turbo',          label: 'Turbo',         desc: 'Fastest generation (~5 s)',        tag: 'free' },
+  { id: 'dall-e-3',       label: 'DALL-E 3',      desc: 'Requires OPENAI_API_KEY',         tag: 'paid' },
+];
+
+const DEFAULT_MODEL = 'flux';
+
 // ─── Copy button ──────────────────────────────────────────────────────────────
 
 function CopyButton({ text }: { text: string }) {
@@ -104,7 +117,7 @@ function PromptCard({ prompt, onApprove, onEdit }: {
   onEdit: (id: number, newPromptJson: PromptRecord['prompt_json']) => Promise<void>;
   projectId: number;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -112,6 +125,8 @@ function PromptCard({ prompt, onApprove, onEdit }: {
   const [generateError, setGenerateError] = useState('');
   const [imgLoading, setImgLoading] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const img = prompt.prompt_json?.image;
   const vid = prompt.prompt_json?.video;
 
@@ -125,7 +140,11 @@ function PromptCard({ prompt, onApprove, onEdit }: {
     setGenerateError('');
     setExpanded(true);
     try {
-      const resp = await fetch(`/api/media/prompts/${prompt.id}/generate-image`, { method: 'POST' });
+      const resp = await fetch(`/api/media/prompts/${prompt.id}/generate-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: selectedModel }),
+      });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Generation failed');
       setGeneratedImage(data.imageUrl);
@@ -190,18 +209,53 @@ function PromptCard({ prompt, onApprove, onEdit }: {
             </button>
           )}
           {!editMode && (
-            <button
-              onClick={handleGenerateImage}
-              disabled={generating}
-              className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors disabled:opacity-50"
-              title="Generate a preview image from this prompt"
-            >
-              {generating
-                ? <Loader2 className="w-3 h-3 animate-spin" />
-                : <Zap className="w-3 h-3" />
-              }
-              {generating ? 'Generating…' : 'Generate Image'}
-            </button>
+            <div className="relative flex items-center" onMouseDown={e => e.stopPropagation()}>
+              {/* Compound button: main action + model picker */}
+              <div className="flex items-stretch rounded-lg border border-violet-500/30 overflow-hidden">
+                <button
+                  onClick={handleGenerateImage}
+                  disabled={generating}
+                  className="flex items-center gap-1 text-[10px] px-2.5 py-1 bg-violet-600/20 text-violet-400 hover:bg-violet-600/30 transition-colors disabled:opacity-50"
+                >
+                  {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                  {generating ? 'Generating…' : 'Generate'}
+                </button>
+                <button
+                  onClick={() => setModelPickerOpen(v => !v)}
+                  disabled={generating}
+                  className="flex items-center px-1.5 border-l border-violet-500/30 bg-violet-600/10 text-violet-400 hover:bg-violet-600/30 transition-colors disabled:opacity-50"
+                  title="Choose model"
+                >
+                  <ChevronRight className={`w-3 h-3 transition-transform ${modelPickerOpen ? 'rotate-90' : ''}`} />
+                </button>
+              </div>
+
+              {/* Model picker dropdown */}
+              {modelPickerOpen && (
+                <div className="absolute top-full right-0 mt-1 w-56 bg-slate-800 border border-slate-700/60 rounded-xl shadow-xl z-30 overflow-hidden">
+                  <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Image Model</p>
+                  {IMAGE_MODELS.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setSelectedModel(m.id); setModelPickerOpen(false); }}
+                      className={`w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-white/[0.04] transition-colors ${selectedModel === m.id ? 'bg-violet-500/10' : ''}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-xs font-medium ${selectedModel === m.id ? 'text-violet-300' : 'text-slate-200'}`}>{m.label}</span>
+                          <span className={`text-[9px] px-1.5 py-px rounded-full ${m.tag === 'paid' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}`}>{m.tag}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{m.desc}</p>
+                      </div>
+                      {selectedModel === m.id && <span className="text-violet-400 text-xs mt-0.5">✓</span>}
+                    </button>
+                  ))}
+                  <p className="px-3 py-2 text-[10px] text-slate-600 border-t border-slate-700/40">
+                    Using: <span className="text-slate-400">{IMAGE_MODELS.find(m => m.id === selectedModel)?.label}</span>
+                  </p>
+                </div>
+              )}
+            </div>
           )}
           {!editMode ? (
             <button

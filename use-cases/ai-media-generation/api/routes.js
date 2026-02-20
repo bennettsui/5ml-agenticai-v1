@@ -487,7 +487,11 @@ Return ONLY JSON with this schema (no markdown, no explanation):
   }
 });
 
-// POST /api/media/prompts/:id/generate-image — generate a preview image via DALL-E or HF
+// Available Pollinations models
+const POLLINATIONS_MODELS = new Set(['flux', 'flux-realism', 'flux-anime', 'flux-3d', 'turbo']);
+
+// POST /api/media/prompts/:id/generate-image — generate a preview image
+// Body: { model?: 'flux' | 'flux-realism' | 'flux-anime' | 'flux-3d' | 'turbo' | 'dall-e-3' }
 router.post('/prompts/:id/generate-image', async (req, res) => {
   try {
     const promptResult = await pool.query(
@@ -500,51 +504,36 @@ router.post('/prompts/:id/generate-image', async (req, res) => {
     const positivePrompt = record.prompt_json?.image?.positive || record.prompt_json?.video?.positive;
     if (!positivePrompt) return res.status(400).json({ error: 'No positive prompt found on this record' });
 
-    // Try DALL-E 3 (OpenAI) if key is available
-    if (process.env.OPENAI_API_KEY) {
+    const requestedModel = req.body?.model || 'flux';
+
+    // ── DALL-E 3 ──────────────────────────────────────────────────────────────
+    if (requestedModel === 'dall-e-3') {
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(400).json({ error: 'DALL-E 3 requires OPENAI_API_KEY to be configured.' });
+      }
       const dalleResp = await axios.post(
         'https://api.openai.com/v1/images/generations',
-        {
-          model: 'dall-e-3',
-          prompt: positivePrompt.substring(0, 4000),
-          n: 1,
-          size: '1024x1024',
-          response_format: 'url',
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 60000,
-        }
+        { model: 'dall-e-3', prompt: positivePrompt.substring(0, 4000), n: 1, size: '1024x1024', response_format: 'url' },
+        { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 60000 }
       );
       const imageUrl = dalleResp.data?.data?.[0]?.url;
       if (!imageUrl) throw new Error('DALL-E did not return an image URL');
-
-      // Register as asset
-      const asset = await getOrchestrator().registerAsset(record.project_id, {
-        promptId: record.id,
-        type: 'image',
-        url: imageUrl,
-        metadata: { generator: 'dall-e-3', auto: true },
+      await getOrchestrator().registerAsset(record.project_id, {
+        promptId: record.id, type: 'image', url: imageUrl, metadata: { generator: 'dall-e-3', auto: true },
       });
-      return res.json({ success: true, imageUrl, asset, provider: 'dall-e-3' });
+      return res.json({ success: true, imageUrl, provider: 'dall-e-3' });
     }
 
-    // Fallback: Pollinations.ai — free, no API key, FLUX model
+    // ── Pollinations.ai (free, no key) ────────────────────────────────────────
+    const pollinationsModel = POLLINATIONS_MODELS.has(requestedModel) ? requestedModel : 'flux';
     const encodedPrompt = encodeURIComponent(positivePrompt.substring(0, 1000));
     const seed = Math.floor(Math.random() * 2147483647);
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true&seed=${seed}`;
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=${pollinationsModel}&nologo=true&seed=${seed}`;
 
-    // Register as asset so it shows up in the Assets pane
     await getOrchestrator().registerAsset(record.project_id, {
-      promptId: record.id,
-      type: 'image',
-      url: imageUrl,
-      metadata: { generator: 'pollinations-flux', auto: true },
+      promptId: record.id, type: 'image', url: imageUrl, metadata: { generator: `pollinations-${pollinationsModel}`, auto: true },
     });
-    res.json({ success: true, imageUrl, provider: 'pollinations-flux' });
+    res.json({ success: true, imageUrl, provider: `pollinations-${pollinationsModel}` });
   } catch (err) {
     console.error('[MediaGeneration] generate-image error:', err.message);
     res.status(500).json({ error: err.message });
