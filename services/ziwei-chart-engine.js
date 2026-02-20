@@ -594,14 +594,27 @@ function loadStarMeanings() {
 function getStarMeaning(starName) {
   const meanings = loadStarMeanings();
 
-  // Search across all star categories
-  for (const category of ['main_stars', 'auxiliary_stars', 'malevolent_stars', 'longevity_stars', 'romance_stars', 'auspicious_auxiliary_stars']) {
+  // Search across all star categories (excluding nested structures)
+  for (const category of ['main_stars', 'auxiliary_stars', 'malevolent_stars', 'longevity_stars', 'romance_stars', 'auspicious_auxiliary_stars', 'secondary_stars']) {
     if (meanings[category] && meanings[category][starName]) {
       return {
         name: starName,
         category,
         ...meanings[category][starName]
       };
+    }
+  }
+
+  // Handle nested annual_stars structure (sub-groups: 博士十二星, 歲前十二星)
+  if (meanings.annual_stars) {
+    for (const group of Object.values(meanings.annual_stars)) {
+      if (group[starName]) {
+        return {
+          name: starName,
+          category: 'annual_stars',
+          ...group[starName]
+        };
+      }
     }
   }
 
