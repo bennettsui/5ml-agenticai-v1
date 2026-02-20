@@ -3143,6 +3143,55 @@ async function unlinkContactFromProject(contactId, projectId) {
   }
 }
 
+// ── Meta Page Tokens ───────────────────────────────────────────────────────
+
+let metaPageTokensTableReady = false;
+
+async function ensureMetaPageTokensTable() {
+  if (metaPageTokensTableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS meta_page_tokens (
+      id SERIAL PRIMARY KEY,
+      page_id VARCHAR(64) UNIQUE NOT NULL,
+      page_name VARCHAR(255),
+      access_token TEXT NOT NULL,
+      token_source VARCHAR(100),
+      fetched_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  metaPageTokensTableReady = true;
+}
+
+async function upsertMetaPageTokens(pages, tokenSource = null) {
+  try {
+    if (!Array.isArray(pages) || pages.length === 0) return 0;
+    await ensureMetaPageTokensTable();
+
+    let count = 0;
+    for (const page of pages) {
+      if (!page || !page.id || !page.access_token) continue;
+      await pool.query(
+        `INSERT INTO meta_page_tokens (page_id, page_name, access_token, token_source, fetched_at, updated_at)
+         VALUES ($1, $2, $3, $4, NOW(), NOW())
+         ON CONFLICT (page_id) DO UPDATE
+           SET page_name = EXCLUDED.page_name,
+               access_token = EXCLUDED.access_token,
+               token_source = EXCLUDED.token_source,
+               fetched_at = NOW(),
+               updated_at = NOW()`,
+        [page.id, page.name || null, page.access_token, tokenSource]
+      );
+      count += 1;
+    }
+
+    return count;
+  } catch (err) {
+    console.error('[upsertMetaPageTokens] error:', err.message);
+    throw err;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -3273,4 +3322,5 @@ module.exports = {
   linkContactToProject,
   getProjectContacts,
   unlinkContactFromProject,
+  upsertMetaPageTokens,
 };
