@@ -1445,6 +1445,68 @@ app.post('/api/brands', async (req, res) => {
   }
 });
 
+// POST /api/brands/setup-complete — Brand Setup → CRM sync
+// Auto-creates brand in CRM from setup wizard
+app.post('/api/brands/setup-complete', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  try {
+    const { brandName, industry, markets, voiceTone, brandPersonality, colorPalette, visualStyle, strategy } = req.body;
+
+    if (!brandName) {
+      return res.status(400).json({ error: 'Brand name is required' });
+    }
+
+    // 1. Check if brand already exists
+    const existing = await pool.query('SELECT id FROM crm_clients WHERE name = $1', [brandName]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Brand already exists' });
+    }
+
+    // 2. Create brand in CRM
+    const brandResult = await pool.query(
+      `INSERT INTO crm_clients (name, industry, region, status, health_score)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, name`,
+      [
+        brandName,
+        JSON.stringify(Array.isArray(industry) ? [industry] : (industry ? [industry] : [])),
+        JSON.stringify(markets || []),
+        'active', // Default to active when created from setup
+        75, // Default health score
+      ]
+    );
+
+    const crmBrandId = brandResult.rows[0].id;
+
+    // 3. Also save to social-content-ops brands table with full profile
+    await saveBrand(brandName, {
+      industry: industry,
+      brand_info: {
+        profile: {
+          brandName,
+          industry,
+          markets: markets || [],
+          voiceTone,
+          brandPersonality,
+          colorPalette,
+          visualStyle,
+        },
+        strategy: strategy,
+      },
+    });
+
+    res.json({
+      success: true,
+      brand_id: crmBrandId,
+      redirect: `/use-cases/crm/brands/detail?id=${crmBrandId}`,
+    });
+  } catch (err) {
+    console.error('Error in setup-complete:', err);
+    res.status(500).json({ error: 'Failed to create brand in CRM' });
+  }
+});
+
 // ==========================================
 // Conversation History Endpoints
 // ==========================================
