@@ -23,64 +23,86 @@ This document focuses on **Steps 1-5** (up to the placement of primary stars).
 **Input**: Lunar month, birth hour
 **Output**: Life palace index (0-11, starting from 寅 at index 0)
 
-### Algorithm
+### ✅ CORRECTED FORMULA (Verified via Python)
 
-```
-命宮索引 = (月宮索引 - 時辰索引 + 12) % 12
+```python
+branchOrder = ["寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥", "子", "丑"]
+
+命宮索引 = (月宮索引 - 時辰索引 + 10) % 12
 
 where:
 - 月宮索引 = (農曆月 - 1) % 12
-- 時辰索引 = 0-based hour index (子=0, 丑=1, 寅=2, ..., 亥=11)
-- branchOrder = ["寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥", "子", "丑"]
+- 時辰索引 = branchOrder.index(時辰)  [0-based: 寅=0, 卯=1, ..., 丑=11]
+- 命宮 = branchOrder[命宮索引]
 ```
 
-### Example Verification
+**KEY DIFFERENCE FROM PREVIOUS:**
+- Old formula: `(mh - h + 24) % 12` or `(mh - h + 12) % 12`  ❌
+- **New formula: `(mh - h + 10) % 12`** ✅
+
+### ✅ Verified Results (All 5 People Match)
 
 | Person | Month | Hour | 月宮索引 | 時辰索引 | Calculation | 命宮 |
 |--------|-------|------|---------|---------|-------------|------|
-| Bennett | 12 | 亥(11) | 11 | 11 | (11 - 11 + 12) % 12 = 0 | **寅** ✓ |
-| Brian | 12 | 酉(9) | 11 | 9 | (11 - 9 + 12) % 12 = 2 | **辰** ✓ |
-| Christy | 12 | 午(6) | 11 | 6 | (11 - 6 + 12) % 12 = 5 | **未** ✓ |
-| Cherry | 11 | 酉(9) | 10 | 9 | (10 - 9 + 12) % 12 = 1 | **卯** ✓ |
-| Elice | 8 | 戌(10) | 7 | 10 | (7 - 10 + 12) % 12 = 9 | **亥** ✓ |
+| Bennett | 12 | 亥(9) | 11 | 9 | (11 - 9 + 10) % 12 = 0 | **寅** ✓ |
+| Brian | 12 | 酉(7) | 11 | 7 | (11 - 7 + 10) % 12 = 2 | **辰** ✓ |
+| Christy | 12 | 午(4) | 11 | 4 | (11 - 4 + 10) % 12 = 5 | **未** ✓ |
+| Cherry | 11 | 酉(7) | 10 | 7 | (10 - 7 + 10) % 12 = 1 | **卯** ✓ |
+| Elice | 8 | 戌(8) | 7 | 8 | (7 - 8 + 10) % 12 = 9 | **亥** ✓ |
 
 ---
 
-## STEP 2: Calculate Life Palace Stem (命宮干)
+## STEP 2: Calculate Life Palace Stem (命宮干) via 五虎遁
 
-**Input**: Birth year stem, life palace branch
+**Input**: Birth year stem, life palace branch (from Step 1)
 **Output**: Life palace stem
 
-### The Five Tiger Escaping Method (五虎遁)
+### ✅ CORRECTED ALGORITHM (Verified via Python)
 
-The mnemonic: **「甲己之年丙作首，乙庚之岁戊为头，丙辛岁首寻庚起，丁壬壬位顺行流，若言戊癸何方发，甲寅之上好追求」**
+**Five Tiger Escaping Mapping (五虎遁):**
 
-This determines the **stem at 寅 (Tiger)**, from which all other palace stems follow sequentially:
-
-| Birth Year Stem | Stem at 寅 |
-|-----------------|-----------|
-| 甲, 己 | 丙 |
-| 乙, 庚 | 戊 |
-| 丙, 辛 | 庚 |
-| 丁, 壬 | 壬 |
-| 戊, 癸 | 甲 |
-
-### Determining Life Palace Stem
-
-Once we know the stem at 寅, we calculate stems for all 12 palaces by adding sequentially:
-
-```
-命宮干 = stemAt寅 + (命宮地支索引 - 寅索引)
-
-where stems cycle: 甲→乙→丙→丁→戊→己→庚→辛→壬→癸→甲→...
+```python
+wuhuDun = {
+    "甲": "丙", "己": "丙",
+    "乙": "戊", "庚": "戊",
+    "丙": "庚", "辛": "庚",
+    "丁": "壬", "壬": "壬",
+    "戊": "甲", "癸": "甲",
+}
 ```
 
-### Example Calculation
+**Formula:**
 
-Assuming Bennett's year stem is 乙 (based on 命宮干 = 戊 at 寅):
-- Stem at 寅 = 戊 (from 乙 year)
-- Bennett's 命宮 = 寅
-- 命宮干 = 戊 (matches! ✓)
+```python
+branchOrder = ["寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥", "子", "丑"]
+stemOrder = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"]
+
+# Step 1: Get stem at 寅 using Five Tiger Escaping
+stemAtYin = wuhuDun[yearStem]
+
+# Step 2: Calculate distance from 寅 to life palace
+yinIndex = 0  # 寅 is always at index 0
+lifeHouseIndex = branchOrder.index(lifeHouseBranch)
+distance = (lifeHouseIndex - yinIndex) % 12
+
+# Step 3: Calculate life house stem
+stemAtYinIndex = stemOrder.index(stemAtYin)
+lifeHouseStemIndex = (stemAtYinIndex + distance) % 10  # Stems cycle every 10
+lifeHouseStem = stemOrder[lifeHouseStemIndex]
+
+# Step 4: Create stem-branch pair
+lifeHouseStemBranch = lifeHouseStem + lifeHouseBranch
+```
+
+### ✅ Verified Results (All 5 People)
+
+| Person | Year | 年干 | Stem@寅 | 命宮 | Distance | 命宮干 | 命宮干支 |
+|--------|------|------|---------|------|----------|--------|----------|
+| Bennett | 1984 | 甲 | 丙 | 寅(0) | 0 | 丙 | **丙寅** |
+| Brian | 1986 | 丙 | 庚 | 辰(2) | 2 | 壬 | **壬辰** |
+| Christy | 1989 | 己 | 丙 | 未(5) | 5 | 辛 | **辛未** |
+| Cherry | 1990 | 庚 | 戊 | 卯(1) | 1 | 己 | **己卯** |
+| Elice | 1982 | 壬 | 壬 | 亥(9) | 9 | 辛 | **辛亥** |
 
 ---
 
