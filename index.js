@@ -3997,10 +3997,11 @@ app.post('/api/recruitai/chat', async (req, res) => {
 聯絡資料收集（重要）：
 - 當對方表示感興趣或詢問價格/方案時，自然地邀請留下聯絡方式
 - 說話示範：「咁你係咪方便留個 WhatsApp / 電郵俾我？我哋可以安排個免費 30 分鐘 AI 評估 😊」
-- 一旦收集到聯絡資料，必須在回覆末尾加上（這行對用戶不可見）：
+- 一旦對話中出現任何聯絡資料（WhatsApp、手機、電郵），必須在回覆末尾加上以下標記（此行對用戶不可見，不要解釋它）：
 [CONTACT_CAPTURED: name=姓名, email=電郵地址, phone=電話號碼]
-
-注意：name/email/phone 只填已知的，未知的欄位省略。`;
+例子：[CONTACT_CAPTURED: name=陳先生, email=chan@example.com, phone=+852 9123 4567]
+例子（只有電話）：[CONTACT_CAPTURED: phone=+852 9123 4567]
+只填已知的欄位，未知欄位省略。標記必須在回覆最後一行。`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -4018,16 +4019,20 @@ app.post('/api/recruitai/chat', async (req, res) => {
     let contactCaptured = false;
     let capturedData = {};
 
-    // Parse contact capture marker
-    const captureMatch = replyContent.match(/\[CONTACT_CAPTURED:([^\]]+)\]/);
+    // Parse contact capture marker (case-insensitive)
+    const captureMatch = replyContent.match(/\[CONTACT_CAPTURED:([^\]]+)\]/i);
     if (captureMatch) {
       contactCaptured = true;
       const parts = captureMatch[1].split(',');
       parts.forEach(p => {
-        const [k, v] = p.split('=');
-        if (k && v) capturedData[k.trim()] = v.trim();
+        const eqIdx = p.indexOf('=');
+        if (eqIdx > 0) {
+          const k = p.slice(0, eqIdx).trim();
+          const v = p.slice(eqIdx + 1).trim();
+          if (k && v) capturedData[k] = v;
+        }
       });
-      replyContent = replyContent.replace(/\[CONTACT_CAPTURED:[^\]]+\]/, '').trim();
+      replyContent = replyContent.replace(/\[CONTACT_CAPTURED:[^\]]+\]/i, '').trim();
     }
 
     // Save messages to DB
@@ -4054,16 +4059,22 @@ app.post('/api/recruitai/chat', async (req, res) => {
       updateParams
     );
 
-    // If contact captured, also save as lead
+    // If contact captured, save as lead (chatbot-sourced)
     if (contactCaptured && capturedData.email) {
       try {
         await pool.query(
           `INSERT INTO recruitai_leads (name, email, phone, source_page, industry, message)
-           VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (email) DO NOTHING`,
+           SELECT $1,$2,$3,$4,$5,$6
+           WHERE NOT EXISTS (
+             SELECT 1 FROM recruitai_leads WHERE email = $2
+           )`,
           [capturedData.name || null, capturedData.email, capturedData.phone || null,
-           'chatbot:' + (sourcePage || 'unknown'), industry || null, `From chatbot session ${currentSessionId}`]
+           'chatbot:' + (sourcePage || 'unknown'), industry || null,
+           `Chat session ${currentSessionId}`]
         );
-      } catch (e) { /* ignore duplicate */ }
+      } catch (e) {
+        console.error('⚠️ RecruitAI chatbot lead save failed:', e.message);
+      }
     }
 
     res.json({

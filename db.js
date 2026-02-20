@@ -893,7 +893,7 @@ async function initDatabase() {
       CREATE TABLE IF NOT EXISTS recruitai_leads (
         id SERIAL PRIMARY KEY,
         lead_id UUID UNIQUE DEFAULT gen_random_uuid(),
-        name VARCHAR(255) NOT NULL,
+        name VARCHAR(255),
         email VARCHAR(255) NOT NULL,
         phone VARCHAR(100),
         company VARCHAR(255),
@@ -907,6 +907,9 @@ async function initDatabase() {
         ip_address VARCHAR(100),
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      -- Allow name to be null for chatbot-captured leads where name is unknown
+      ALTER TABLE recruitai_leads ALTER COLUMN name DROP NOT NULL;
 
       CREATE INDEX IF NOT EXISTS idx_recruitai_leads_email ON recruitai_leads(email);
       CREATE INDEX IF NOT EXISTS idx_recruitai_leads_industry ON recruitai_leads(industry);
