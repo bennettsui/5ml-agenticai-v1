@@ -5,9 +5,11 @@ import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { useLanguage } from '../hooks/useLanguage';
+import { useParallax } from '../hooks/useParallax';
 
 export default function RadianceAboutPage() {
   const { lang } = useLanguage();
+  const parallaxRef = useParallax(0.25);
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
@@ -25,16 +27,27 @@ export default function RadianceAboutPage() {
         </section>
 
       {/* Hero Intro */}
-      <section className="pt-32 pb-16 px-6 max-w-6xl mx-auto">
-        <div className="space-y-6">
-          <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
-            {lang === 'zh' ? '關於Radiance' : 'About Radiance'}
-          </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
-            {lang === 'zh'
-              ? 'Radiance PR & Martech Limited 是一家立足香港的綜合市場傳播機構，將公共關係、活動策劃、社交媒體、KOL行銷及創意製作融為一體，為品牌、非政府組織、文化機構及社區項目提供度身訂造的傳播方案。我們相信策略必須有紮實執行為後盾，以贏得媒體報導為核心，並以真誠協作為基礎。每一個宣傳活動均以帶來可量化的成效、重塑品牌形象及鞏固聲譽為目標，切實回應數碼優先時代日趨複雜的傳播環境。'
-              : 'Radiance PR & Martech Limited is a Hong Kong-based integrated marketing communications agency that combines public relations, events, social media, KOL marketing, and creative production into cohesive solutions for brands, NGOs, cultural institutions, and community initiatives. We believe in tailored strategies backed by hands-on execution, earned media expertise, and genuine collaboration. Every campaign is designed to deliver measurable value, reshape perceptions, and strengthen reputations in an increasingly complex digital-first landscape.'}
-          </p>
+      <section className="relative py-24 px-6 overflow-hidden">
+        {/* Hero background */}
+        <div className="absolute inset-0 z-0">
+          <div
+            ref={parallaxRef}
+            className="absolute inset-0 w-full h-[130%] -top-[15%] bg-cover bg-center will-change-transform"
+            style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1920&q=80)' }}
+          />
+          <div className="absolute inset-0 bg-slate-950/75" />
+        </div>
+        <div className="relative z-10 max-w-6xl mx-auto">
+          <div className="space-y-6">
+            <h1 className="text-5xl font-bold text-white leading-tight">
+              {lang === 'zh' ? '關於Radiance' : 'About Radiance'}
+            </h1>
+            <p className="text-lg text-white leading-relaxed">
+              {lang === 'zh'
+                ? 'Radiance PR & Martech Limited 是一家立足香港的綜合市場傳播機構，將公共關係、活動策劃、社交媒體、KOL行銷及創意製作融為一體，為品牌、非政府組織、文化機構及社區項目提供度身訂造的傳播方案。我們相信策略必須有紮實執行為後盾，以贏得媒體報導為核心，並以真誠協作為基礎。每一個宣傳活動均以帶來可量化的成效、重塑品牌形象及鞏固聲譽為目標，切實回應數碼優先時代日趨複雜的傳播環境。'
+                : 'Radiance PR & Martech Limited is a Hong Kong-based integrated marketing communications agency that combines public relations, events, social media, KOL marketing, and creative production into cohesive solutions for brands, NGOs, cultural institutions, and community initiatives. We believe in tailored strategies backed by hands-on execution, earned media expertise, and genuine collaboration. Every campaign is designed to deliver measurable value, reshape perceptions, and strengthen reputations in an increasingly complex digital-first landscape.'}
+            </p>
+          </div>
         </div>
       </section>
 

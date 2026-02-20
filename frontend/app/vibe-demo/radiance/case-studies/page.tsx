@@ -9,9 +9,11 @@ import {
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Breadcrumb } from '../components/Breadcrumb';
+import { useParallax } from '../hooks/useParallax';
 
 export default function CaseStudiesPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const parallaxRef = useParallax(0.25);
 
   const tagColorMap: Record<string, { bg: string; text: string; border: string }> = {
     'PR': { bg: 'bg-blue-50 dark:bg-blue-950/20', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
@@ -139,22 +141,33 @@ export default function CaseStudiesPage() {
         </section>
 
         {/* Hero Section */}
-        <section className="pt-16 pb-12 px-6 max-w-6xl mx-auto">
-          <div className="space-y-4">
-            <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
-              Our Work
-            </h1>
-            <p className="text-xl text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl">
-              Integrated campaigns across{' '}
-              <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">PR</Link>
-              {', '}
-              <Link href="/vibe-demo/radiance/services/events" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">events</Link>
-              {', '}
-              <Link href="/vibe-demo/radiance/services/kol-marketing" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">KOL marketing</Link>
-              {' and '}
-              <Link href="/vibe-demo/radiance/services/creative-production" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">creative production</Link>
-              {' that deliver real business results for brands and institutions across Hong Kong and beyond.'}
-            </p>
+        <section className="relative py-24 px-6 overflow-hidden">
+          {/* Hero background */}
+          <div className="absolute inset-0 z-0">
+            <div
+              ref={parallaxRef}
+              className="absolute inset-0 w-full h-[130%] -top-[15%] bg-cover bg-center will-change-transform"
+              style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1920&q=80)' }}
+            />
+            <div className="absolute inset-0 bg-slate-950/75" />
+          </div>
+          <div className="relative z-10 max-w-6xl mx-auto">
+            <div className="space-y-4">
+              <h1 className="text-5xl font-bold text-white leading-tight">
+                Our Work
+              </h1>
+              <p className="text-xl text-white leading-relaxed max-w-3xl">
+                Integrated campaigns across{' '}
+                <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-300 hover:underline font-medium">PR</Link>
+                {', '}
+                <Link href="/vibe-demo/radiance/services/events" className="text-purple-300 hover:underline font-medium">events</Link>
+                {', '}
+                <Link href="/vibe-demo/radiance/services/kol-marketing" className="text-purple-300 hover:underline font-medium">KOL marketing</Link>
+                {' and '}
+                <Link href="/vibe-demo/radiance/services/creative-production" className="text-purple-300 hover:underline font-medium">creative production</Link>
+                {' that deliver real business results for brands and institutions across Hong Kong and beyond.'}
+              </p>
+            </div>
           </div>
         </section>
 

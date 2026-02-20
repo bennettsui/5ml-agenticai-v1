@@ -5,6 +5,7 @@ import { Header } from '../../components/Header';
 import { Footer } from '../../components/Footer';
 import { Breadcrumb } from '../../components/Breadcrumb';
 import { useLanguage } from '../../hooks/useLanguage';
+import { useParallax } from '../../hooks/useParallax';
 
 const en = {
   breadcrumb: ['Home', 'Services', 'Public Relations'],
@@ -155,6 +156,7 @@ const zh = {
 export default function PublicRelationsServicePage() {
   const { lang } = useLanguage();
   const t = lang === 'zh' ? zh : en;
+  const parallaxRef = useParallax(0.25);
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
@@ -174,15 +176,23 @@ export default function PublicRelationsServicePage() {
         </section>
 
         {/* Hero */}
-        <section className="py-16 px-6 border-t border-slate-100 dark:border-slate-800">
-          <div className="max-w-6xl mx-auto">
-            <p className="text-xs font-semibold uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-4">
+        <section className="relative py-28 px-6 overflow-hidden">
+          <div className="absolute inset-0 z-0">
+            <div
+              ref={parallaxRef}
+              className="absolute inset-0 w-full h-[130%] -top-[15%] bg-cover bg-center will-change-transform"
+              style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1577962917302-cd874c4e31d2?auto=format&fit=crop&w=1920&q=80)' }}
+            />
+            <div className="absolute inset-0 bg-slate-950/75" />
+          </div>
+          <div className="relative z-10 max-w-6xl mx-auto">
+            <h1 className="text-5xl md:text-7xl font-bold text-white mb-4 leading-tight">
               {t.label}
-            </p>
-            <h1 className="text-5xl md:text-6xl font-bold text-slate-900 dark:text-white mb-8 leading-tight max-w-3xl">
-              {t.h1}
             </h1>
-            <p className="text-lg text-slate-600 dark:text-slate-400 leading-relaxed max-w-3xl font-light">
+            <p className="text-xl md:text-2xl text-purple-300 font-medium mb-8">
+              {t.h1}
+            </p>
+            <p className="text-lg text-white/80 leading-relaxed max-w-3xl font-light">
               {t.intro}
             </p>
           </div>
