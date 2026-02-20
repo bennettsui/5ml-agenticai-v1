@@ -139,11 +139,6 @@ export default function ZiweiChartLibrary() {
                 <div className="text-xs space-y-1 mb-4 text-slate-400">
                   <p>Gender: {birthInfo?.gender}</p>
                   <p>Hour: {birthInfo?.hourBranch}</p>
-                  {chart.created_at && (
-                    <p className="text-slate-500">
-                      {new Date(chart.created_at).toLocaleDateString()}
-                    </p>
-                  )}
                 </div>
 
                 <div className="flex gap-2">
