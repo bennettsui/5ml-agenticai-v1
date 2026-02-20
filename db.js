@@ -885,6 +885,26 @@ async function initDatabase() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_community_brand ON social_community_management(brand_id);
+
+      CREATE TABLE IF NOT EXISTS radiance_enquiries (
+        id SERIAL PRIMARY KEY,
+        enquiry_id UUID DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        phone VARCHAR(100),
+        company VARCHAR(255),
+        industry VARCHAR(255),
+        service_interest VARCHAR(255),
+        message TEXT NOT NULL,
+        source_lang VARCHAR(10) DEFAULT 'en',
+        status VARCHAR(50) DEFAULT 'new',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        ip_address VARCHAR(100),
+        user_agent TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_radiance_enquiries_email ON radiance_enquiries(email);
+      CREATE INDEX IF NOT EXISTS idx_radiance_enquiries_created ON radiance_enquiries(created_at DESC);
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');
@@ -3074,4 +3094,29 @@ module.exports = {
   getSocialInteractive,
   saveSocialCalendar,
   getSocialCalendar,
+  // Radiance Enquiries
+  saveRadianceEnquiry,
+  getRadianceEnquiries,
 };
+
+async function saveRadianceEnquiry({ name, email, phone, company, industry, serviceInterest, message, sourceLang, ipAddress, userAgent }) {
+  const result = await pool.query(
+    `INSERT INTO radiance_enquiries
+      (name, email, phone, company, industry, service_interest, message, source_lang, ip_address, user_agent)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     RETURNING enquiry_id, created_at`,
+    [name, email, phone || null, company || null, industry || null, serviceInterest || null, message, sourceLang || 'en', ipAddress || null, userAgent || null]
+  );
+  return result.rows[0];
+}
+
+async function getRadianceEnquiries({ limit = 50, offset = 0 } = {}) {
+  const result = await pool.query(
+    `SELECT id, enquiry_id, name, email, phone, company, industry, service_interest, message, source_lang, status, created_at
+     FROM radiance_enquiries
+     ORDER BY created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  );
+  return result.rows;
+}

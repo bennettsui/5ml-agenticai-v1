@@ -1,11 +1,59 @@
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
 const zwEngine = require('./services/ziwei-chart-engine');
 require('dotenv').config();
+
+// ─── Radiance Email Alert Setup ───────────────────────────────────────────────
+function createMailTransporter() {
+  if (!process.env.SMTP_HOST) return null;
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_PORT === '465',
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  });
+}
+
+async function sendRadianceEnquiryAlert(enquiry) {
+  const transporter = createMailTransporter();
+  if (!transporter) {
+    console.log('📧 [Radiance] SMTP not configured — enquiry logged to DB only.');
+    return;
+  }
+  const alertRecipients = 'mandy@radiancehk.com, bennet.tsui@5mileslab.com';
+  const subject = `[Radiance Enquiry] ${enquiry.name} (${enquiry.company || 'Individual'}) — ${enquiry.serviceInterest || 'General'}`;
+  const html = `<h2 style="font-family:sans-serif;">New Radiance Enquiry</h2>
+<table cellpadding="6" style="border-collapse:collapse;font-family:sans-serif;font-size:14px;">
+  <tr><td><b>Name</b></td><td>${enquiry.name}</td></tr>
+  <tr><td><b>Email</b></td><td><a href="mailto:${enquiry.email}">${enquiry.email}</a></td></tr>
+  <tr><td><b>Phone</b></td><td>${enquiry.phone || '—'}</td></tr>
+  <tr><td><b>Company</b></td><td>${enquiry.company || '—'}</td></tr>
+  <tr><td><b>Industry</b></td><td>${enquiry.industry || '—'}</td></tr>
+  <tr><td><b>Service Interest</b></td><td>${enquiry.serviceInterest || '—'}</td></tr>
+  <tr><td><b>Language</b></td><td>${enquiry.sourceLang === 'zh' ? '繁體中文' : 'English'}</td></tr>
+  <tr><td><b>Submitted</b></td><td>${new Date().toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong' })} HKT</td></tr>
+</table>
+<h3 style="font-family:sans-serif;">Message</h3>
+<p style="white-space:pre-wrap;background:#f5f5f5;padding:12px;border-radius:6px;font-family:sans-serif;">${enquiry.message}</p>
+<hr/><p style="color:#999;font-size:12px;font-family:sans-serif;">Radiance PR &amp; Martech — Enquiry System</p>`;
+  try {
+    await transporter.sendMail({
+      from: `"Radiance Enquiries" <${process.env.SMTP_USER}>`,
+      to: alertRecipients,
+      subject,
+      html,
+    });
+    console.log(`📧 [Radiance] Alert sent to ${alertRecipients}`);
+  } catch (mailErr) {
+    console.error('📧 [Radiance] Email send failed:', mailErr.message);
+  }
+}
+// ──────────────────────────────────────────────────────────────────────────────
 
 const app = express();
 const path = require('path');
@@ -58,7 +106,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar, saveRadianceEnquiry, getRadianceEnquiries } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -3451,93 +3499,69 @@ const wsServer = require('./services/websocket-server');
 // Radiance PR Contact Form API
 // ==========================================
 
-// Contact form submission endpoint
+// POST /api/radiance/contact — save enquiry to DB + send email alert
 app.post('/api/radiance/contact', async (req, res) => {
   try {
-    const { name, email, phone, company, industry, serviceInterest, message } = req.body;
+    const { name, email, phone, company, industry, serviceInterest, message, sourceLang } = req.body;
 
-    // Validation
     if (!name || !email || !message) {
-      return res.status(400).json({
-        success: false,
-        error: 'Name, email, and message are required'
-      });
+      return res.status(400).json({ success: false, error: 'Name, email, and message are required' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, error: 'Invalid email address' });
+    }
+    if (message.length < 5 || message.length > 5000) {
+      return res.status(400).json({ success: false, error: 'Message must be between 5 and 5000 characters' });
     }
 
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid email address'
-      });
-    }
-
-    // Message length validation
-    if (message.length < 10 || message.length > 5000) {
-      return res.status(400).json({
-        success: false,
-        error: 'Message must be between 10 and 5000 characters'
-      });
-    }
-
-    // Store contact submission (in-memory for now, can be extended to database)
-    const submission = {
-      id: Date.now().toString(),
-      name,
-      email,
-      phone: phone || '',
-      company: company || '',
-      industry: industry || '',
-      serviceInterest: serviceInterest || '',
-      message,
-      submittedAt: new Date().toISOString(),
-      ip: req.ip,
-      userAgent: req.get('user-agent')
+    const enquiryData = {
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      phone: phone || null,
+      company: company || null,
+      industry: industry || null,
+      serviceInterest: serviceInterest || null,
+      message: message.trim(),
+      sourceLang: sourceLang || 'en',
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
     };
 
-    // Log the submission
-    console.log('📧 New Radiance contact submission:', {
-      id: submission.id,
-      name: submission.name,
-      email: submission.email,
-      company: submission.company,
-      submittedAt: submission.submittedAt
-    });
+    // Save to database
+    const saved = await saveRadianceEnquiry(enquiryData);
+    console.log(`📋 [Radiance] Enquiry saved: ${saved.enquiry_id} from ${enquiryData.name} <${enquiryData.email}>`);
 
-    // TODO: Implement email notification to hello@radiancehk.com
-    // TODO: Implement database storage
-    // TODO: Implement automated response email to user
+    // Send email alert (non-blocking — don't fail the response if email fails)
+    sendRadianceEnquiryAlert(enquiryData).catch(err =>
+      console.error('📧 [Radiance] Alert email error:', err.message)
+    );
 
-    // Return success response
-    res.status(201).json({
-      success: true,
-      message: 'Thank you for your inquiry. We\'ll be in touch within 2 business days.',
-      submissionId: submission.id
-    });
+    const successMsg = sourceLang === 'zh'
+      ? '感謝您的查詢，我們將於兩個工作天內回覆您。'
+      : "Thank you for your enquiry. We'll be in touch within 2 business days.";
+
+    res.status(201).json({ success: true, message: successMsg, enquiryId: saved.enquiry_id });
 
   } catch (error) {
-    console.error('❌ Contact form submission error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to process contact form. Please try again later.'
-    });
+    console.error('❌ [Radiance] Contact form error:', error);
+    res.status(500).json({ success: false, error: 'Failed to process enquiry. Please try again.' });
   }
 });
 
-// Contact form submission history (for admin dashboard)
+// GET /api/radiance/contact/submissions — admin view of all enquiries
 app.get('/api/radiance/contact/submissions', async (req, res) => {
   try {
-    // This would typically check authentication and fetch from database
-    // For now, return a placeholder
-    res.status(501).json({
-      error: 'Not yet implemented - requires database integration'
-    });
+    const { password } = req.query;
+    if (password !== 'Radiance2026goodluck!') {
+      return res.status(401).json({ error: 'Unauthorised' });
+    }
+    const limit = Math.min(parseInt(req.query.limit || '50'), 200);
+    const offset = parseInt(req.query.offset || '0');
+    const submissions = await getRadianceEnquiries({ limit, offset });
+    res.json({ success: true, count: submissions.length, submissions });
   } catch (error) {
-    console.error('❌ Error fetching submissions:', error);
-    res.status(500).json({
-      error: 'Failed to fetch submissions'
-    });
+    console.error('❌ [Radiance] Submissions fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch submissions' });
   }
 });
 
