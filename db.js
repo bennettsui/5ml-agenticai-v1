@@ -917,6 +917,64 @@ async function initDatabase() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_community_brand ON social_community_management(brand_id);
+
+      -- ==========================================
+      -- RecruitAI Studio Lead Capture & Chatbot
+      -- ==========================================
+
+      CREATE TABLE IF NOT EXISTS recruitai_leads (
+        id SERIAL PRIMARY KEY,
+        lead_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        phone VARCHAR(100),
+        company VARCHAR(255),
+        industry VARCHAR(100),
+        headcount VARCHAR(50),
+        message TEXT,
+        source_page VARCHAR(255),
+        utm_source VARCHAR(100),
+        utm_medium VARCHAR(100),
+        utm_campaign VARCHAR(100),
+        ip_address VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_recruitai_leads_email ON recruitai_leads(email);
+      CREATE INDEX IF NOT EXISTS idx_recruitai_leads_industry ON recruitai_leads(industry);
+      CREATE INDEX IF NOT EXISTS idx_recruitai_leads_created ON recruitai_leads(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS recruitai_chat_sessions (
+        id SERIAL PRIMARY KEY,
+        session_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        visitor_id VARCHAR(255),
+        lead_id UUID REFERENCES recruitai_leads(lead_id) ON DELETE SET NULL,
+        industry VARCHAR(100),
+        source_page VARCHAR(255),
+        turn_count INTEGER DEFAULT 0,
+        contact_captured BOOLEAN DEFAULT FALSE,
+        captured_name VARCHAR(255),
+        captured_email VARCHAR(255),
+        captured_phone VARCHAR(255),
+        summary TEXT,
+        ip_address VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_recruitai_sessions_visitor ON recruitai_chat_sessions(visitor_id);
+      CREATE INDEX IF NOT EXISTS idx_recruitai_sessions_created ON recruitai_chat_sessions(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS recruitai_chat_messages (
+        id SERIAL PRIMARY KEY,
+        session_id UUID NOT NULL REFERENCES recruitai_chat_sessions(session_id) ON DELETE CASCADE,
+        role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant')),
+        content TEXT NOT NULL,
+        turn_number INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_recruitai_messages_session ON recruitai_chat_messages(session_id);
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');

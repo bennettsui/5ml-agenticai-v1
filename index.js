@@ -4234,6 +4234,244 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
 });
 
 // ==========================================
+// RecruitAI Studio API
+// ==========================================
+
+const { Resend } = require('resend');
+const resendClient = new Resend(process.env.RESEND_API_KEY);
+
+// POST /api/recruitai/lead — save lead + send email alert
+app.post('/api/recruitai/lead', async (req, res) => {
+  try {
+    const { name, email, phone, company, industry, headcount, message, sourcePage, utmSource, utmMedium, utmCampaign } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({ success: false, error: 'Name and email are required' });
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ success: false, error: 'Invalid email address' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO recruitai_leads (name, email, phone, company, industry, headcount, message, source_page, utm_source, utm_medium, utm_campaign, ip_address)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING lead_id, created_at`,
+      [name, email, phone || null, company || null, industry || null, headcount || null, message || null,
+       sourcePage || null, utmSource || null, utmMedium || null, utmCampaign || null, req.ip]
+    );
+    const lead = result.rows[0];
+
+    // Send email alert via Resend
+    if (process.env.RESEND_API_KEY) {
+      try {
+        await resendClient.emails.send({
+          from: 'RecruitAI Studio <noreply@5mileslab.com>',
+          to: 'bennet.tsui@5mileslab.com',
+          subject: `🎯 New RecruitAI Lead: ${name} — ${company || industry || 'Unknown'}`,
+          html: `
+            <h2>New Lead from RecruitAI Studio</h2>
+            <table style="border-collapse:collapse;width:100%;font-family:sans-serif">
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Name</td><td style="padding:8px;border:1px solid #ddd">${name}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Email</td><td style="padding:8px;border:1px solid #ddd">${email}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Phone</td><td style="padding:8px;border:1px solid #ddd">${phone || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Company</td><td style="padding:8px;border:1px solid #ddd">${company || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Industry</td><td style="padding:8px;border:1px solid #ddd">${industry || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Headcount</td><td style="padding:8px;border:1px solid #ddd">${headcount || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Message</td><td style="padding:8px;border:1px solid #ddd">${message || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Source</td><td style="padding:8px;border:1px solid #ddd">${sourcePage || '—'} | ${utmSource || ''}/${utmMedium || ''}/${utmCampaign || ''}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Time</td><td style="padding:8px;border:1px solid #ddd">${new Date().toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong' })}</td></tr>
+            </table>
+          `,
+        });
+      } catch (emailErr) {
+        console.warn('⚠️ RecruitAI email alert failed:', emailErr.message);
+      }
+    }
+
+    res.status(201).json({ success: true, leadId: lead.lead_id });
+  } catch (error) {
+    console.error('❌ RecruitAI lead error:', error);
+    res.status(500).json({ success: false, error: 'Failed to save lead' });
+  }
+});
+
+// POST /api/recruitai/chat — DeepSeek chatbot with session management
+app.post('/api/recruitai/chat', async (req, res) => {
+  try {
+    const { sessionId, visitorId, message, history = [], industry, sourcePage } = req.body;
+
+    if (!message) return res.status(400).json({ success: false, error: 'Message required' });
+
+    // Get or create session
+    let currentSessionId = sessionId;
+    if (!currentSessionId) {
+      const newSession = await pool.query(
+        `INSERT INTO recruitai_chat_sessions (visitor_id, industry, source_page, ip_address)
+         VALUES ($1,$2,$3,$4) RETURNING session_id`,
+        [visitorId || null, industry || null, sourcePage || null, req.ip]
+      );
+      currentSessionId = newSession.rows[0].session_id;
+    }
+
+    // Count turns
+    const turnResult = await pool.query(
+      'SELECT turn_count FROM recruitai_chat_sessions WHERE session_id=$1',
+      [currentSessionId]
+    );
+    const turnCount = turnResult.rows[0]?.turn_count || 0;
+
+    // Build DeepSeek messages
+    const systemPrompt = `你是 RecruitAI Studio 的 AI 銷售顧問，專門協助香港中小企業了解 AI 招聘自動化解決方案。
+
+你的目標：
+1. 了解對方的業務需求和痛點（招聘、HR、自動化等）
+2. 簡短介紹我們如何用 AI 解決他們的問題
+3. 在 20 輪對話內自然地收集聯絡資料（姓名、電郵、電話/WhatsApp）
+
+對話風格：
+- 回答簡短直接，最多 3 句話
+- 用繁體中文，語氣友好專業
+- 主動提問了解需求
+- 當對方表現興趣時，引導提供聯絡資料
+
+目前是第 ${turnCount + 1} 輪對話。${turnCount >= 15 ? '請積極邀請對方留下聯絡方式，以便安排免費諮詢。' : ''}
+
+當收集到聯絡資料時，在回應末尾加上：
+[CONTACT_CAPTURED: name=姓名, email=電郵, phone=電話]`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-10), // Keep last 10 turns for context
+      { role: 'user', content: message }
+    ];
+
+    const response = await deepseekService.chat(messages, {
+      model: 'deepseek-chat',
+      maxTokens: 300,
+      temperature: 0.8,
+    });
+
+    let replyContent = response.content;
+    let contactCaptured = false;
+    let capturedData = {};
+
+    // Parse contact capture marker
+    const captureMatch = replyContent.match(/\[CONTACT_CAPTURED:([^\]]+)\]/);
+    if (captureMatch) {
+      contactCaptured = true;
+      const parts = captureMatch[1].split(',');
+      parts.forEach(p => {
+        const [k, v] = p.split('=');
+        if (k && v) capturedData[k.trim()] = v.trim();
+      });
+      replyContent = replyContent.replace(/\[CONTACT_CAPTURED:[^\]]+\]/, '').trim();
+    }
+
+    // Save messages to DB
+    await pool.query(
+      `INSERT INTO recruitai_chat_messages (session_id, role, content, turn_number) VALUES ($1,'user',$2,$3)`,
+      [currentSessionId, message, turnCount + 1]
+    );
+    await pool.query(
+      `INSERT INTO recruitai_chat_messages (session_id, role, content, turn_number) VALUES ($1,'assistant',$2,$3)`,
+      [currentSessionId, replyContent, turnCount + 1]
+    );
+
+    // Update session
+    const updateFields = ['turn_count = turn_count + 1', 'updated_at = NOW()'];
+    const updateParams = [currentSessionId];
+    if (contactCaptured) {
+      updateFields.push(`contact_captured = TRUE`);
+      if (capturedData.name) { updateFields.push(`captured_name = $${updateParams.length + 1}`); updateParams.push(capturedData.name); }
+      if (capturedData.email) { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(capturedData.email); }
+      if (capturedData.phone) { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(capturedData.phone); }
+    }
+    await pool.query(
+      `UPDATE recruitai_chat_sessions SET ${updateFields.join(', ')} WHERE session_id = $1`,
+      updateParams
+    );
+
+    // If contact captured, also save as lead
+    if (contactCaptured && capturedData.email) {
+      try {
+        await pool.query(
+          `INSERT INTO recruitai_leads (name, email, phone, source_page, industry, message)
+           VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (email) DO NOTHING`,
+          [capturedData.name || null, capturedData.email, capturedData.phone || null,
+           'chatbot:' + (sourcePage || 'unknown'), industry || null, `From chatbot session ${currentSessionId}`]
+        );
+      } catch (e) { /* ignore duplicate */ }
+    }
+
+    res.json({
+      success: true,
+      reply: replyContent,
+      sessionId: currentSessionId,
+      turnCount: turnCount + 1,
+      contactCaptured,
+    });
+  } catch (error) {
+    console.error('❌ RecruitAI chat error:', error);
+    res.status(500).json({ success: false, error: 'Chat service unavailable' });
+  }
+});
+
+// GET /api/recruitai/admin/leads — list all leads (password-protected)
+app.get('/api/recruitai/admin/leads', async (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const result = await pool.query(
+      'SELECT * FROM recruitai_leads ORDER BY created_at DESC LIMIT 500'
+    );
+    res.json({ success: true, leads: result.rows });
+  } catch (error) {
+    console.error('❌ Admin leads error:', error);
+    res.status(500).json({ error: 'Failed to fetch leads' });
+  }
+});
+
+// GET /api/recruitai/admin/sessions — list all chat sessions
+app.get('/api/recruitai/admin/sessions', async (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT s.*, COUNT(m.id) as message_count
+       FROM recruitai_chat_sessions s
+       LEFT JOIN recruitai_chat_messages m ON m.session_id = s.session_id
+       GROUP BY s.id ORDER BY s.created_at DESC LIMIT 200`
+    );
+    res.json({ success: true, sessions: result.rows });
+  } catch (error) {
+    console.error('❌ Admin sessions error:', error);
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+// GET /api/recruitai/admin/sessions/:sessionId/messages
+app.get('/api/recruitai/admin/sessions/:sessionId/messages', async (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const result = await pool.query(
+      'SELECT * FROM recruitai_chat_messages WHERE session_id=$1 ORDER BY created_at ASC',
+      [req.params.sessionId]
+    );
+    res.json({ success: true, messages: result.rows });
+  } catch (error) {
+    console.error('❌ Admin messages error:', error);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// ==========================================
 // Ziwei Astrology API
 // ==========================================
 
