@@ -348,6 +348,38 @@ async function initDatabase() {
         updated_at TIMESTAMP DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS crm_contacts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID REFERENCES crm_clients(id) ON DELETE CASCADE,
+        name VARCHAR(300) NOT NULL,
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        title VARCHAR(200),
+        department VARCHAR(100),
+        linkedin_url VARCHAR(500),
+        linkedin_data JSONB DEFAULT '{}',
+        research_data JSONB DEFAULT '{}',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_client ON crm_contacts(client_id);
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_email ON crm_contacts(email);
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_linkedin ON crm_contacts(linkedin_url);
+
+      CREATE TABLE IF NOT EXISTS crm_contact_project_links (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        contact_id UUID REFERENCES crm_contacts(id) ON DELETE CASCADE,
+        project_id UUID REFERENCES crm_projects(id) ON DELETE CASCADE,
+        role VARCHAR(100),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_contact_project_links_contact ON crm_contact_project_links(contact_id);
+      CREATE INDEX IF NOT EXISTS idx_crm_contact_project_links_project ON crm_contact_project_links(project_id);
+
       -- ==========================================
       -- Ziwei Astrology Tables (中州派紫微斗數)
       -- ==========================================
@@ -2953,6 +2985,164 @@ async function getSocialCalendar(brandId) {
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// CRM Contacts
+// ──────────────────────────────────────────────────────────────────────
+
+async function createContact(clientId, contactData) {
+  try {
+    const {
+      name,
+      email,
+      phone,
+      title,
+      department,
+      linkedin_url,
+      linkedin_data,
+      research_data,
+      notes,
+    } = contactData;
+
+    const result = await pool.query(
+      `INSERT INTO crm_contacts (client_id, name, email, phone, title, department, linkedin_url, linkedin_data, research_data, notes, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+       RETURNING *`,
+      [
+        clientId,
+        name,
+        email || null,
+        phone || null,
+        title || null,
+        department || null,
+        linkedin_url || null,
+        JSON.stringify(linkedin_data || {}),
+        JSON.stringify(research_data || {}),
+        notes || null,
+      ]
+    );
+    return result.rows[0];
+  } catch (err) {
+    console.error('[createContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function getContactsByClient(clientId) {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM crm_contacts WHERE client_id = $1 ORDER BY created_at DESC',
+      [clientId]
+    );
+    return result.rows;
+  } catch (err) {
+    console.error('[getContactsByClient] error:', err.message);
+    throw err;
+  }
+}
+
+async function getContact(contactId) {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM crm_contacts WHERE id = $1',
+      [contactId]
+    );
+    return result.rows[0] || null;
+  } catch (err) {
+    console.error('[getContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function updateContact(contactId, contactData) {
+  try {
+    const {
+      name,
+      email,
+      phone,
+      title,
+      department,
+      linkedin_url,
+      linkedin_data,
+      research_data,
+      notes,
+    } = contactData;
+
+    const result = await pool.query(
+      `UPDATE crm_contacts
+       SET name = COALESCE($1, name),
+           email = COALESCE($2, email),
+           phone = COALESCE($3, phone),
+           title = COALESCE($4, title),
+           department = COALESCE($5, department),
+           linkedin_url = COALESCE($6, linkedin_url),
+           linkedin_data = COALESCE($7, linkedin_data),
+           research_data = COALESCE($8, research_data),
+           notes = COALESCE($9, notes),
+           updated_at = NOW()
+       WHERE id = $10
+       RETURNING *`,
+      [name, email, phone, title, department, linkedin_url, linkedin_data ? JSON.stringify(linkedin_data) : null, research_data ? JSON.stringify(research_data) : null, notes, contactId]
+    );
+    return result.rows[0] || null;
+  } catch (err) {
+    console.error('[updateContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function deleteContact(contactId) {
+  try {
+    await pool.query('DELETE FROM crm_contacts WHERE id = $1', [contactId]);
+  } catch (err) {
+    console.error('[deleteContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function linkContactToProject(contactId, projectId, role = null) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO crm_contact_project_links (contact_id, project_id, role, created_at, updated_at)
+       VALUES ($1, $2, $3, NOW(), NOW())
+       ON CONFLICT (contact_id, project_id) DO UPDATE SET role = $3, updated_at = NOW()
+       RETURNING *`,
+      [contactId, projectId, role || null]
+    );
+    return result.rows[0];
+  } catch (err) {
+    console.error('[linkContactToProject] error:', err.message);
+    throw err;
+  }
+}
+
+async function getProjectContacts(projectId) {
+  try {
+    const result = await pool.query(
+      `SELECT c.*, l.role FROM crm_contacts c
+       JOIN crm_contact_project_links l ON c.id = l.contact_id
+       WHERE l.project_id = $1
+       ORDER BY c.name ASC`,
+      [projectId]
+    );
+    return result.rows;
+  } catch (err) {
+    console.error('[getProjectContacts] error:', err.message);
+    throw err;
+  }
+}
+
+async function unlinkContactFromProject(contactId, projectId) {
+  try {
+    await pool.query(
+      'DELETE FROM crm_contact_project_links WHERE contact_id = $1 AND project_id = $2',
+      [contactId, projectId]
+    );
+  } catch (err) {
+    console.error('[unlinkContactFromProject] error:', err.message);
+    throw err;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -3074,4 +3264,13 @@ module.exports = {
   getSocialInteractive,
   saveSocialCalendar,
   getSocialCalendar,
+  // CRM Contacts
+  createContact,
+  getContactsByClient,
+  getContact,
+  updateContact,
+  deleteContact,
+  linkContactToProject,
+  getProjectContacts,
+  unlinkContactFromProject,
 };

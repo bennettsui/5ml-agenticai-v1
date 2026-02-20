@@ -19,6 +19,7 @@ const navItems = [
   { label: 'Dashboard', href: '/use-cases/crm', icon: LayoutDashboard },
   { label: 'Brands', href: '/use-cases/crm/brands', icon: Users },
   { label: 'Projects', href: '/use-cases/crm/projects', icon: FolderKanban },
+  { label: 'Contacts', href: '/use-cases/crm/contacts', icon: Users },
   { label: 'Feedback', href: '/use-cases/crm/feedback', icon: MessageSquare },
   { label: 'Debug QA', href: '/use-cases/crm/debug', icon: Bug },
   { label: 'Integrations', href: '/use-cases/crm/integrations', icon: Plug },

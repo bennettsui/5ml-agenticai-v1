@@ -61,7 +61,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar, createContact, getContactsByClient, getContact, updateContact, deleteContact, linkContactToProject, getProjectContacts, unlinkContactFromProject } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -3061,6 +3061,176 @@ app.delete('/api/research/:brandId/products/:productId', async (req, res) => {
 });
 
 // ==========================================
+// CRM Contacts (with LinkedIn + Research)
+// ==========================================
+
+// POST /api/crm/contacts/:clientId — create contact
+app.post('/api/crm/contacts/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const contact = await createContact(clientId, req.body);
+    res.json({ success: true, contact });
+  } catch (err) {
+    console.error('[POST /api/crm/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/contacts/:clientId — list client contacts
+app.get('/api/crm/contacts/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const contacts = await getContactsByClient(clientId);
+    res.json({ contacts });
+  } catch (err) {
+    console.error('[GET /api/crm/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/contacts/:clientId/:contactId — get contact details
+app.get('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const contact = await getContact(contactId);
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+    res.json(contact);
+  } catch (err) {
+    console.error('[GET /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/crm/contacts/:clientId/:contactId — update contact
+app.put('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const contact = await updateContact(contactId, req.body);
+    res.json({ success: true, contact });
+  } catch (err) {
+    console.error('[PUT /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/crm/contacts/:clientId/:contactId — delete contact
+app.delete('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    await deleteContact(contactId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/crm/contacts/:contactId/link-project — link contact to project
+app.post('/api/crm/contacts/:contactId/link-project', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { projectId, role } = req.body;
+    const link = await linkContactToProject(contactId, projectId, role);
+    res.json({ success: true, link });
+  } catch (err) {
+    console.error('[POST /api/crm/contacts/:id/link-project] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/projects/:projectId/contacts — get project contacts
+app.get('/api/crm/projects/:projectId/contacts', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const contacts = await getProjectContacts(projectId);
+    res.json({ contacts });
+  } catch (err) {
+    console.error('[GET /api/crm/projects/:id/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/crm/contacts/:contactId/unlink-project — unlink contact from project
+app.delete('/api/crm/contacts/:contactId/unlink-project/:projectId', async (req, res) => {
+  try {
+    const { contactId, projectId } = req.params;
+    await unlinkContactFromProject(contactId, projectId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/crm/contacts/:id/unlink-project/:projectId] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Contact Intelligence (LinkedIn + Research)
+// ==========================================
+
+// Lazy-load services
+let linkedinFetcher = null;
+let contactResearch = null;
+
+function getLinkedInFetcher() {
+  if (!linkedinFetcher) {
+    const LinkedInProfileFetcher = require('./services/linkedinProfileFetcher');
+    linkedinFetcher = new LinkedInProfileFetcher();
+  }
+  return linkedinFetcher;
+}
+
+function getContactResearchService() {
+  if (!contactResearch) {
+    const ContactResearchService = require('./services/contactResearchService');
+    contactResearch = new ContactResearchService();
+  }
+  return contactResearch;
+}
+
+// POST /api/linkedin/profile — fetch LinkedIn profile data
+app.post('/api/linkedin/profile', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'LinkedIn URL required' });
+
+    const fetcher = getLinkedInFetcher();
+    const profile = await fetcher.getProfileSummary(url);
+
+    res.json({ success: true, data: profile });
+  } catch (err) {
+    console.error('[POST /api/linkedin/profile] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/contacts/:contactId/research — conduct online research
+app.post('/api/contacts/:contactId/research', async (req, res) => {
+  try {
+    const { name, title, company, linkedinUrl } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name required' });
+
+    const researchService = getContactResearchService();
+    const research = await researchService.comprehensiveResearch(name, title, company, linkedinUrl);
+
+    // Update contact with research data
+    const contactId = req.params.contactId;
+    // Find contact's client ID - query all contacts
+    const contactResult = await pool.query('SELECT * FROM crm_contacts WHERE id = $1', [contactId]);
+    if (contactResult.rows[0]) {
+      const contact = contactResult.rows[0];
+      await updateContact(contactId, {
+        ...contact,
+        research_data: research,
+      });
+    }
+
+    res.json({ success: true, research });
+  } catch (err) {
+    console.error('[POST /api/contacts/:id/research] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // Social Content Ops: Strategy
 // ==========================================
 
@@ -3277,6 +3447,108 @@ app.get('/api/social/calendar/:brandId', async (req, res) => {
     res.json({ data });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/social/compliance/check — check content against brand profile
+app.post('/api/social/compliance/check', async (req, res) => {
+  try {
+    const { brand_id, copy, colors, brand_profile } = req.body;
+
+    if (!brand_id) {
+      return res.status(400).json({ error: 'brand_id is required' });
+    }
+
+    const { checkBrandCompliance } = require('./services/complianceChecker');
+    const complianceScore = await checkBrandCompliance(
+      brand_id,
+      { copy, colors },
+      brand_profile
+    );
+
+    res.json({
+      compliance: complianceScore,
+      can_proceed: complianceScore.can_proceed,
+      action: complianceScore.action,
+    });
+  } catch (err) {
+    console.error('Error checking compliance:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/brands/guidelines/upload — upload brand guidelines PDF/image
+app.post('/api/brands/guidelines/upload', async (req, res) => {
+  try {
+    const { brandId } = req.body;
+
+    if (!brandId) {
+      return res.status(400).json({ error: 'brandId is required' });
+    }
+
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const file = req.files.file;
+    const allowedMimes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+
+    if (!allowedMimes.includes(file.mimetype)) {
+      return res.status(400).json({ error: 'Invalid file type' });
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File too large (max 10MB)' });
+    }
+
+    // Store file path (in production, would use cloud storage like S3)
+    const fileName = `${brandId}-guidelines-${Date.now()}.${file.name.split('.').pop()}`;
+    const uploadDir = `${__dirname}/uploads/guidelines`;
+
+    // Create directory if it doesn't exist
+    const fs = require('fs');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const filePath = `${uploadDir}/${fileName}`;
+    await file.mv(filePath);
+
+    // Store URL in brand profile
+    const guidelineUrl = `/uploads/guidelines/${fileName}`;
+
+    res.json({
+      success: true,
+      url: guidelineUrl,
+      fileName: file.name,
+    });
+  } catch (err) {
+    console.error('Error uploading guidelines:', err);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// POST /api/brands/guidelines/delete — delete brand guidelines
+app.post('/api/brands/guidelines/delete', async (req, res) => {
+  try {
+    const { brandId, url } = req.body;
+
+    if (!url) {
+      return res.status(400).json({ error: 'url is required' });
+    }
+
+    // Delete file
+    const fs = require('fs');
+    const filePath = `${__dirname}${url}`;
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting guidelines:', err);
+    res.status(500).json({ error: 'Delete failed' });
   }
 });
 

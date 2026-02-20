@@ -27,7 +27,17 @@ interface PromptRecord {
   status: 'draft' | 'approved' | 'archived';
   version: string;
   prompt_json: {
-    image?: { positive: string; negative: string; suggestedSampler?: string; suggestedCfg?: number; suggestedSteps?: number };
+    image?: {
+      positive: string;
+      negative: string;
+      headline?: string;
+      ctaCopy?: string;
+      suggestedSampler?: string;
+      suggestedCfg?: number;
+      suggestedSteps?: number;
+      styleTokens?: string[];
+      notes?: string;
+    };
     video?: { positive: string; negative: string; motionKeywords?: string[]; recommendedFrames?: number; recommendedFps?: number };
   };
   image_workflow_json: Record<string, unknown> | null;
@@ -374,6 +384,19 @@ function PromptCard({ prompt, onApprove, onEdit }: {
                   Clear
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Image Generation Status */}
+          {img && (
+            <div className="mt-3 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+              <p className="text-[10px] font-semibold text-amber-300 uppercase tracking-wide mb-2">⚙️ Image Generation</p>
+              <p className="text-xs text-amber-200 mb-2">
+                {prompt.image_workflow_json ? '✓ Workflow configured - Ready to generate' : '○ Awaiting generation'}
+              </p>
+              <button className="text-[10px] px-2.5 py-1 rounded-lg bg-amber-600/20 text-amber-400 border border-amber-500/30 hover:bg-amber-600/30 transition-colors">
+                {prompt.image_workflow_json ? 'Regenerate Image' : 'Generate Image'}
+              </button>
             </div>
           )}
 
