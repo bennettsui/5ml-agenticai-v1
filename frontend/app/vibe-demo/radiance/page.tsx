@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { ServicesShowcase } from './components/ServicesShowcase';
@@ -39,77 +38,29 @@ function TestimonialCard({
   quote,
   author,
   company,
-  active,
+  delay = 0,
 }: {
   quote: string;
   author: string;
   company: string;
-  active: boolean;
+  delay?: number;
 }) {
-  const { displayed, done } = useTypewriter(active ? quote : '', 18, 200);
-
-  if (!active) return null;
+  const { displayed, done } = useTypewriter(quote, 16, delay);
 
   return (
-    <div className="p-8 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-lg">
+    <div className="flex flex-col p-8 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-lg">
       <div className="flex gap-0.5 mb-5">
         {[...Array(5)].map((_, i) => (
           <span key={i} className="text-yellow-400 text-base">★</span>
         ))}
       </div>
-      <p className="text-slate-700 dark:text-slate-300 text-lg leading-relaxed mb-6 min-h-[80px]">
-        &ldquo;{displayed}<span className={`inline-block w-0.5 h-5 bg-purple-500 ml-0.5 ${done ? 'opacity-0' : 'animate-pulse'}`} />&rdquo;
+      <p className="text-slate-700 dark:text-slate-300 leading-relaxed mb-6 flex-1 min-h-[96px]">
+        &ldquo;{displayed}<span className={`inline-block w-0.5 h-4 bg-purple-500 ml-0.5 ${done ? 'opacity-0' : 'animate-pulse'}`} />&rdquo;
       </p>
-      <div
-        className="transition-opacity duration-500"
-        style={{ opacity: done ? 1 : 0 }}
-      >
-        <p className="font-semibold text-slate-900 dark:text-white">{author}</p>
-        <p className="text-sm text-slate-500 dark:text-slate-400">{company}</p>
+      <div className="transition-opacity duration-500" style={{ opacity: done ? 1 : 0 }}>
+        <p className="font-semibold text-slate-900 dark:text-white text-sm">{author}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{company}</p>
       </div>
-    </div>
-  );
-}
-
-/* ─── Interactive Process step ──────────────────────────── */
-function ProcessStep({
-  step,
-  title,
-  desc,
-  revealed,
-  isLast,
-  onReveal,
-}: {
-  step: string;
-  title: string;
-  desc: string;
-  revealed: boolean;
-  isLast: boolean;
-  onReveal?: () => void;
-}) {
-  return (
-    <div
-      className={`relative transition-all duration-500 ${revealed ? 'opacity-100' : 'opacity-0 translate-y-4 pointer-events-none'}`}
-    >
-      {/* Connector line */}
-      {!isLast && (
-        <div className="hidden md:block absolute top-8 left-[calc(100%+0px)] w-8 h-px bg-purple-300 dark:bg-purple-800 z-10" />
-      )}
-      <div className="p-8 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-lg h-full">
-        <div className="w-14 h-14 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xl mb-6">
-          {step}
-        </div>
-        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">{title}</h3>
-        <p className="text-slate-600 dark:text-slate-400 leading-relaxed">{desc}</p>
-      </div>
-      {!isLast && onReveal && (
-        <button
-          onClick={onReveal}
-          className="mt-4 flex items-center gap-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors group"
-        >
-          Next step <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-        </button>
-      )}
     </div>
   );
 }
@@ -118,10 +69,7 @@ function ProcessStep({
 export default function RadiancePage() {
   const { lang } = useLanguage();
 
-  // Interactive process state
-  const [stepsRevealed, setStepsRevealed] = useState(1);
-
-  // Testimonial carousel
+  // Testimonials — 3 entries
   const testimonials = lang === 'zh'
     ? [
         {
@@ -133,6 +81,11 @@ export default function RadiancePage() {
           quote: '短短六個月，我們從一個名不見經傳的品牌，蛻變為業界公認的思想領袖。團隊專業、反應迅速，切實兌現每一個承諾。',
           author: '創辦人',
           company: 'SaaS 企業'
+        },
+        {
+          quote: '他們策劃的每一個活動都有清晰意圖——從邀請到最後的媒體剪片，環環緊扣。他們的思維方式是市場人，而非單純的活動籌辦者。',
+          author: '品牌經理',
+          company: '美容生活品牌'
         },
       ]
     : [
@@ -146,24 +99,52 @@ export default function RadiancePage() {
           author: 'Founder',
           company: 'SaaS Company'
         },
+        {
+          quote: 'Every event they produce feels intentional — from the invite to the final media clip. They think like marketers, not just event planners.',
+          author: 'Brand Manager',
+          company: 'Beauty & Lifestyle Brand'
+        },
       ];
 
-  const [activeTestimonial, setActiveTestimonial] = useState(0);
-  const [testimonialKey, setTestimonialKey] = useState(0);
+  // Hero slides — rotating images + messages
+  const heroSlides = lang === 'zh'
+    ? [
+        { image: 'https://images.unsplash.com/photo-1536599018102-9f803c140fc1?auto=format&fit=crop&w=1920&q=80', tagline: '讓您的品牌成為市場焦點', sub: '策略與執行並重。我們整合公關、活動及數碼渠道，為您的品牌在香港建立真正的市場動力。' },
+        { image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1920&q=80', tagline: '您的故事，登上每一個頭條', sub: '我們精準構建媒體報道，將您的品牌定位為業界不可忽視的聲音。' },
+        { image: 'https://images.unsplash.com/photo-1505236858219-8359eb29e329?auto=format&fit=crop&w=1920&q=80', tagline: '建立口碑，推動商業成果', sub: '公關、活動、社交媒體——整合協作，每個渠道都為下一個賦能。' },
+      ]
+    : [
+        { image: 'https://images.unsplash.com/photo-1536599018102-9f803c140fc1?auto=format&fit=crop&w=1920&q=80', tagline: 'Make Your Brand Impossible to Ignore', sub: 'Strategy meets execution. We orchestrate PR, events, and digital to build real momentum for your brand in Hong Kong.' },
+        { image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1920&q=80', tagline: 'Your Story. In Every Headline.', sub: 'We engineer precise media coverage that positions your brand as the voice every journalist wants to feature.' },
+        { image: 'https://images.unsplash.com/photo-1505236858219-8359eb29e329?auto=format&fit=crop&w=1920&q=80', tagline: 'Reputation Built. Results Delivered.', sub: 'PR, events, social media—working together so every channel amplifies the next.' },
+      ];
 
-  // Auto-advance testimonials
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setActiveTestimonial(prev => (prev + 1) % testimonials.length);
-      setTestimonialKey(k => k + 1);
-    }, 8000);
-    return () => clearTimeout(t);
-  }, [activeTestimonial, testimonials.length]);
+  const [activeSlide, setActiveSlide] = useState(0);
 
-  // Reset process when lang changes
   useEffect(() => {
-    setStepsRevealed(1);
-  }, [lang]);
+    const t = setInterval(() => {
+      setActiveSlide(s => (s + 1) % heroSlides.length);
+    }, 5500);
+    return () => clearInterval(t);
+  }, [heroSlides.length]);
+
+  // Parallax
+  const heroParallaxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let rafId: number;
+    const onScroll = () => {
+      rafId = requestAnimationFrame(() => {
+        if (heroParallaxRef.current) {
+          heroParallaxRef.current.style.transform = `translateY(${window.scrollY * 0.28}px)`;
+        }
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(rafId);
+    };
+  }, []);
 
   const processSteps = lang === 'zh'
     ? [
@@ -195,32 +176,60 @@ export default function RadiancePage() {
     <main id="main-content" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <Header />
 
-      {/* ── Hero: full-bleed photo ── */}
+      {/* ── Hero: rotating full-bleed photos ── */}
       <section className="relative h-screen min-h-[600px] max-h-[900px] flex items-center justify-center overflow-hidden">
-        {/* Background photo */}
-        <img
-          src="https://images.unsplash.com/photo-1536599018102-9f803c140fc1?auto=format&fit=crop&w=1920&q=80"
-          alt="Hong Kong cityscape"
-          className="absolute inset-0 w-full h-full object-cover"
-          aria-hidden="true"
-        />
+        {/* Parallax background container */}
+        <div ref={heroParallaxRef} className="absolute inset-0 w-full h-[120%] -top-[10%] will-change-transform">
+          {heroSlides.map((slide, i) => (
+            <div
+              key={i}
+              aria-hidden="true"
+              className="absolute inset-0 w-full h-full bg-cover bg-center transition-opacity duration-1000"
+              style={{
+                backgroundImage: `url(${slide.image})`,
+                opacity: i === activeSlide ? 1 : 0,
+              }}
+            />
+          ))}
+        </div>
+
         {/* Dark overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/60 to-slate-950/80" />
 
         <div className="relative z-10 text-center px-6 max-w-5xl mx-auto">
-          <h1 className="text-6xl md:text-8xl font-bold mb-8 leading-tight text-white">
-            {lang === 'zh' ? (
-              <>讓您的品牌<br className="hidden md:block" />成為市場焦點</>
-            ) : (
-              <>Make Your Brand<br className="hidden md:block" />Impossible to Ignore</>
-            )}
-          </h1>
-          <p className="text-xl text-white/80 mb-10 leading-relaxed max-w-2xl mx-auto font-light">
-            {lang === 'zh'
-              ? '策略與執行並重。我們整合公關、活動及數碼渠道，為您的品牌在香港建立真正的市場動力。'
-              : 'Strategy meets execution. We orchestrate PR, events, and digital to build real momentum for your brand in Hong Kong.'}
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          {/* Rotating tagline */}
+          <div className="relative h-[1.2em] md:h-[1.15em] overflow-hidden mb-8">
+            {heroSlides.map((slide, i) => (
+              <h1
+                key={i}
+                className="absolute inset-x-0 text-5xl md:text-7xl font-bold leading-tight text-white transition-all duration-700"
+                style={{
+                  opacity: i === activeSlide ? 1 : 0,
+                  transform: i === activeSlide ? 'translateY(0)' : 'translateY(24px)',
+                }}
+              >
+                {slide.tagline}
+              </h1>
+            ))}
+          </div>
+
+          {/* Rotating subtitle */}
+          <div className="relative overflow-hidden mb-10 min-h-[60px]">
+            {heroSlides.map((slide, i) => (
+              <p
+                key={i}
+                className="absolute inset-x-0 text-lg md:text-xl text-white/80 leading-relaxed max-w-2xl mx-auto font-light transition-all duration-700"
+                style={{
+                  opacity: i === activeSlide ? 1 : 0,
+                  transform: i === activeSlide ? 'translateY(0)' : 'translateY(16px)',
+                }}
+              >
+                {slide.sub}
+              </p>
+            ))}
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-10">
             <Link
               href="/vibe-demo/radiance/consultation"
               className="px-8 py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-all duration-300 text-lg"
@@ -233,6 +242,18 @@ export default function RadiancePage() {
             >
               {lang === 'zh' ? '瀏覽我們的作品' : 'See Our Work'}
             </Link>
+          </div>
+
+          {/* Slide indicators */}
+          <div className="flex justify-center gap-2">
+            {heroSlides.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setActiveSlide(i)}
+                aria-label={`Slide ${i + 1}`}
+                className={`h-1 rounded-full transition-all duration-500 ${i === activeSlide ? 'w-8 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'}`}
+              />
+            ))}
           </div>
         </div>
       </section>
@@ -364,7 +385,7 @@ export default function RadiancePage() {
         </div>
       </section>
 
-      {/* ── Interactive Process ── */}
+      {/* ── Our Process ── */}
       <section className="py-24 px-6 bg-white dark:bg-slate-950">
         <div className="max-w-6xl mx-auto">
           <div className="mb-16">
@@ -376,32 +397,31 @@ export default function RadiancePage() {
             </h2>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6 md:gap-8 items-start">
+          <div className="grid md:grid-cols-3 gap-0 relative">
+            {/* Connecting line behind cards */}
+            <div className="hidden md:block absolute top-12 left-[calc(33.333%-16px)] right-[calc(33.333%-16px)] h-px bg-gradient-to-r from-purple-300 via-purple-400 to-purple-300 dark:from-purple-800 dark:via-purple-600 dark:to-purple-800 z-0" />
+
             {processSteps.map((item, idx) => (
-              <ProcessStep
-                key={`${lang}-${idx}`}
-                step={item.step}
-                title={item.title}
-                desc={item.desc}
-                revealed={idx < stepsRevealed}
-                isLast={idx === processSteps.length - 1}
-                onReveal={idx === stepsRevealed - 1 && idx < processSteps.length - 1
-                  ? () => setStepsRevealed(s => s + 1)
-                  : undefined
-                }
-              />
+              <div key={`${lang}-${idx}`} className="relative z-10 px-4 first:pl-0 last:pr-0">
+                <div className="bg-white dark:bg-slate-950 pt-2 pb-8">
+                  {/* Step badge */}
+                  <div className="w-14 h-14 bg-purple-600 text-white rounded-full flex items-center justify-center font-black text-lg mb-8 ring-4 ring-white dark:ring-slate-950">
+                    {item.step}
+                  </div>
+                  {/* Large decorative number */}
+                  <div className="absolute top-2 left-8 text-[120px] font-black text-slate-50 dark:text-white/[0.03] leading-none select-none pointer-events-none -z-10">
+                    {item.step}
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">{item.title}</h3>
+                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed">{item.desc}</p>
+                </div>
+              </div>
             ))}
           </div>
-
-          {stepsRevealed < processSteps.length && (
-            <p className="mt-8 text-sm text-slate-400 dark:text-slate-500 text-center">
-              {lang === 'zh' ? '點擊「下一步」繼續了解我們的流程' : 'Click "Next step" to continue exploring our process'}
-            </p>
-          )}
         </div>
       </section>
 
-      {/* ── Typewriter Testimonials ── */}
+      {/* ── Typewriter Testimonials — 3 in a row ── */}
       <section className="py-24 px-6 bg-slate-50 dark:bg-slate-900/30">
         <div className="max-w-6xl mx-auto">
           <div className="mb-16 text-center">
@@ -413,26 +433,16 @@ export default function RadiancePage() {
             </h2>
           </div>
 
-          <div className="max-w-3xl mx-auto">
-            <TestimonialCard
-              key={`${lang}-${testimonialKey}`}
-              quote={testimonials[activeTestimonial].quote}
-              author={testimonials[activeTestimonial].author}
-              company={testimonials[activeTestimonial].company}
-              active={true}
-            />
-
-            {/* Dots */}
-            <div className="flex justify-center gap-2 mt-6">
-              {testimonials.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setActiveTestimonial(i); setTestimonialKey(k => k + 1); }}
-                  className={`w-2 h-2 rounded-full transition-all ${i === activeTestimonial ? 'bg-purple-600 w-6' : 'bg-slate-300 dark:bg-slate-600 hover:bg-purple-400'}`}
-                  aria-label={`Testimonial ${i + 1}`}
-                />
-              ))}
-            </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {testimonials.map((t, i) => (
+              <TestimonialCard
+                key={`${lang}-${i}`}
+                quote={t.quote}
+                author={t.author}
+                company={t.company}
+                delay={i * 700}
+              />
+            ))}
           </div>
         </div>
       </section>

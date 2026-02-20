@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { Header } from '../../components/Header';
 import { Footer } from '../../components/Footer';
 import { Breadcrumb } from '../../components/Breadcrumb';
+import { useParallax } from '../../hooks/useParallax';
 
 export default function CreativeProductionServicePage() {
+  const parallaxRef = useParallax(0.25);
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
@@ -23,25 +25,36 @@ export default function CreativeProductionServicePage() {
         </section>
 
         {/* Hero Section */}
-        <section className="pt-16 pb-16 px-6 max-w-4xl mx-auto">
-        <div className="space-y-6">
-          <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
-            Creative Design & Content Production
-          </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
-            Good creative doesn't decorate a campaign—it is the campaign. The right visual identity, the right words, the right film can change how people see your brand. Radiance brings design, photography, video and copywriting together under one roof, so every asset across your{' '}
-            <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">PR</Link>
-            {', '}
-            <Link href="/vibe-demo/radiance/services/events" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">events</Link>
-            {' and '}
-            <Link href="/vibe-demo/radiance/services/social-media" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">social activity</Link>
-            {' feels intentional and cohesive.'}
-          </p>
-          <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-            Creative production isn't an afterthought—it's integral to every campaign. Whether you're launching a product, running an event, building social presence or reshaping your brand identity, exceptional creative assets amplify your message and strengthen stakeholder connections. We integrate design, photography, video and copywriting so your communications feel cohesive and professional across all touchpoints.
-          </p>
-        </div>
-      </section>
+        <section className="relative py-24 px-6 overflow-hidden">
+          {/* Hero background */}
+          <div className="absolute inset-0 z-0">
+            <div
+              ref={parallaxRef}
+              className="absolute inset-0 w-full h-[130%] -top-[15%] bg-cover bg-center will-change-transform"
+              style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=1920&q=80)' }}
+            />
+            <div className="absolute inset-0 bg-slate-950/75" />
+          </div>
+          <div className="relative z-10 max-w-6xl mx-auto">
+            <div className="space-y-6">
+              <h1 className="text-5xl font-bold text-white leading-tight">
+                Creative Design & Content Production
+              </h1>
+              <p className="text-lg text-white leading-relaxed">
+                Good creative doesn't decorate a campaign—it is the campaign. The right visual identity, the right words, the right film can change how people see your brand. Radiance brings design, photography, video and copywriting together under one roof, so every asset across your{' '}
+                <Link href="/vibe-demo/radiance/services/public-relations" className="text-emerald-300 hover:underline font-medium">PR</Link>
+                {', '}
+                <Link href="/vibe-demo/radiance/services/events" className="text-emerald-300 hover:underline font-medium">events</Link>
+                {' and '}
+                <Link href="/vibe-demo/radiance/services/social-media" className="text-emerald-300 hover:underline font-medium">social activity</Link>
+                {' feels intentional and cohesive.'}
+              </p>
+              <p className="text-white/80 leading-relaxed">
+                Creative production isn't an afterthought—it's integral to every campaign. Whether you're launching a product, running an event, building social presence or reshaping your brand identity, exceptional creative assets amplify your message and strengthen stakeholder connections. We integrate design, photography, video and copywriting so your communications feel cohesive and professional across all touchpoints.
+              </p>
+            </div>
+          </div>
+        </section>
 
       {/* Why This Service Matters */}
       <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
@@ -51,19 +64,19 @@ export default function CreativeProductionServicePage() {
         </p>
         <ul className="space-y-4">
           <li className="flex gap-4">
-            <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
             <span className="text-slate-600 dark:text-slate-400">Your visual identity and brand assets are often the first impression stakeholders have—make it count with consistent, high-quality design that reinforces your positioning.</span>
           </li>
           <li className="flex gap-4">
-            <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
             <span className="text-slate-600 dark:text-slate-400">Engaging video, photography and infographics drive higher engagement rates and make complex messages more digestible and shareable.</span>
           </li>
           <li className="flex gap-4">
-            <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
             <span className="text-slate-600 dark:text-slate-400">Strategic copywriting—from headlines to body copy to social captions—sets the tone and ensures your voice remains consistent and on-brand across channels.</span>
           </li>
           <li className="flex gap-4">
-            <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
             <span className="text-slate-600 dark:text-slate-400">Coordinated creative production saves time, reduces cost, and ensures all assets serve a unified campaign narrative rather than operating independently.</span>
           </li>
         </ul>
@@ -118,19 +131,19 @@ export default function CreativeProductionServicePage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Copywriting</h3>
             <ul className="space-y-3">
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Website copy, landing pages and value propositions that convert visitors to customers.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Blog articles, whitepapers and thought-leadership content that establish your authority.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Social media captions, email copy and campaign messaging optimised for each platform.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Press releases, media kits and corporate communications that maintain professional tone.</span>
               </li>
             </ul>
@@ -141,19 +154,19 @@ export default function CreativeProductionServicePage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Graphic Design</h3>
             <ul className="space-y-3">
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Logo design, brand identity systems and visual guidelines that anchor your brand.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Social media graphics, infographics and visual content assets that drive engagement.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Web graphics, UI design and digital assets for websites and applications.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Print collateral—brochures, business cards, posters, event materials—that reflect your brand offline.</span>
               </li>
             </ul>
@@ -164,19 +177,19 @@ export default function CreativeProductionServicePage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Video Production</h3>
             <ul className="space-y-3">
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Product demos and explainer videos that simplify complex offerings.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Corporate profiles, team spotlights and behind-the-scenes content that humanise your brand.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Campaign films and social clips optimised for different platforms and audiences.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Event coverage, testimonials and user-generated content curation for authentic storytelling.</span>
               </li>
             </ul>
@@ -187,19 +200,19 @@ export default function CreativeProductionServicePage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Photography & Visual Content</h3>
             <ul className="space-y-3">
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Product photography that showcases features, quality and unique selling points.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Team and portrait photography that humanise your organisation.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Event and lifestyle photography capturing authentic moments for social and marketing use.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Motion graphics and animation for dynamic infographics and multimedia storytelling.</span>
               </li>
             </ul>
@@ -210,19 +223,19 @@ export default function CreativeProductionServicePage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Content Strategy & Optimisation</h3>
             <ul className="space-y-3">
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Content strategy development aligned to your brand goals, audience and channel mix.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Content calendars and editorial planning for consistent, on-brand output.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Performance monitoring and optimisation based on engagement, reach and conversion data.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">A/B testing different creative approaches to identify what resonates with your audience.</span>
               </li>
             </ul>
@@ -235,49 +248,49 @@ export default function CreativeProductionServicePage() {
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">How brands work with us</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
           Radiance applies creative production across diverse industries and campaign types. Often, we combine design and video with{' '}
-          <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">PR</Link>
+          <Link href="/vibe-demo/radiance/services/public-relations" className="text-emerald-600 dark:text-emerald-400 hover:underline font-medium">PR</Link>
           {' and '}
-          <Link href="/vibe-demo/radiance/services/social-media" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">social strategy</Link>
+          <Link href="/vibe-demo/radiance/services/social-media" className="text-emerald-600 dark:text-emerald-400 hover:underline font-medium">social strategy</Link>
           {' to create fully integrated campaigns where every asset reinforces the core message.'}
         </p>
         <div className="space-y-8">
           {/* Use Case 1 */}
-          <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-6">
+          <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-6">
             <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Product Launch, Consumer Brand</h3>
             <p className="text-slate-600 dark:text-slate-400 mb-3 leading-relaxed">
               A fashion or beauty brand needed to launch a new product line with integrated PR and social presence. We designed product photography, created launch video assets, developed social content calendar, and coordinated press release copy and event collateral—ensuring the visual identity and messaging felt consistent across media coverage, Instagram, the website and the launch event itself.
             </p>
             <ul className="space-y-2">
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold">→</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">→</span>
                 <span className="text-slate-600 dark:text-slate-400 text-sm">Strong visual differentiation in market, coordinated media and social coverage, higher social engagement through platform-specific creative.</span>
               </li>
             </ul>
           </div>
 
           {/* Use Case 2 */}
-          <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-6">
+          <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-6">
             <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Exhibition & Cultural Programme, Art Institution</h3>
             <p className="text-slate-600 dark:text-slate-400 mb-3 leading-relaxed">
               A museum or gallery running an exhibition needed promotional materials, event graphics, artist interviews and social content to drive attendance. We developed the visual identity, photographed key artworks, created social media series, produced interview videos and coordinated all written collateral—press materials, website copy, social captions—into a cohesive storytelling campaign.
             </p>
             <ul className="space-y-2">
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold">→</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">→</span>
                 <span className="text-slate-600 dark:text-slate-400 text-sm">Unified visual and narrative identity across all touchpoints; increased event awareness and attendance through coordinated creative assets.</span>
               </li>
             </ul>
           </div>
 
           {/* Use Case 3 */}
-          <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-6">
+          <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-6">
             <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Brand Refresh & Sustainability Initiative, NGO</h3>
             <p className="text-slate-600 dark:text-slate-400 mb-3 leading-relaxed">
               An environmental NGO needed to rebrand and launch a new sustainability programme. We created a new visual identity, designed collateral and social assets, filmed beneficiary testimonials and impact videos, developed website copy, and coordinated all creative to reinforce the organisation's evolved mission and credibility with donors, partners and the community.
             </p>
             <ul className="space-y-2">
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold">→</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">→</span>
                 <span className="text-slate-600 dark:text-slate-400 text-sm">Modern, cohesive brand identity reflecting organisational evolution; authentic storytelling through video and photography strengthening trust with stakeholders.</span>
               </li>
             </ul>
@@ -355,16 +368,16 @@ export default function CreativeProductionServicePage() {
 
       {/* CTA */}
       <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8">
+        <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-8">
           <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Ready to elevate your brand with exceptional creative?</h3>
           <p className="text-slate-700 dark:text-slate-300 mb-8 leading-relaxed">
             Whether you need a one-off project or ongoing creative support, our team is ready to craft assets that captivate your audience and drive results. Let's talk about your creative needs and explore how we can help you stand out in a crowded marketplace.
           </p>
           <div className="flex gap-4 flex-wrap">
-            <Link href="/vibe-demo/radiance/consultation" className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+            <Link href="/vibe-demo/radiance/consultation" className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors">
               Start a creative project
             </Link>
-            <Link href="/vibe-demo/radiance/case-studies" className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
+            <Link href="/vibe-demo/radiance/case-studies" className="px-6 py-3 border border-emerald-600 dark:border-emerald-400 text-emerald-600 dark:text-emerald-400 font-medium rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors">
               See our work
             </Link>
           </div>

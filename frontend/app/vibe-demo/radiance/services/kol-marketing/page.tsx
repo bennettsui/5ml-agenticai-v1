@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { Header } from '../../components/Header';
 import { Footer } from '../../components/Footer';
 import { Breadcrumb } from '../../components/Breadcrumb';
+import { useParallax } from '../../hooks/useParallax';
 
 export default function KOLMarketingServicePage() {
+  const parallaxRef = useParallax(0.25);
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
@@ -23,18 +25,29 @@ export default function KOLMarketingServicePage() {
         </section>
 
         {/* Hero Section */}
-        <section className="pt-16 pb-16 px-6 max-w-6xl mx-auto">
-        <div className="space-y-6">
-          <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
-            KOL & Influencer Marketing
-          </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
-            Social media and KOLs are now essential levers for brand awareness and perception. When paired with the right content and structure, KOL collaborations can educate audiences, influence behaviour and build long-term affinity. Radiance operates as your strategic KOL partner, from campaign ideation and talent matching to coordination,{' '}
-            <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">media support</Link>
-            {' '}and results analysis.
-          </p>
-        </div>
-      </section>
+        <section className="relative py-24 px-6 overflow-hidden">
+          {/* Hero background */}
+          <div className="absolute inset-0 z-0">
+            <div
+              ref={parallaxRef}
+              className="absolute inset-0 w-full h-[130%] -top-[15%] bg-cover bg-center will-change-transform"
+              style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1588702547923-7093a6c3ba33?auto=format&fit=crop&w=1920&q=80)' }}
+            />
+            <div className="absolute inset-0 bg-slate-950/75" />
+          </div>
+          <div className="relative z-10 max-w-6xl mx-auto">
+            <div className="space-y-6">
+              <h1 className="text-5xl font-bold text-white leading-tight">
+                KOL & Influencer Marketing
+              </h1>
+              <p className="text-lg text-white leading-relaxed">
+                Social media and KOLs are now essential levers for brand awareness and perception. When paired with the right content and structure, KOL collaborations can educate audiences, influence behaviour and build long-term affinity. Radiance operates as your strategic KOL partner, from campaign ideation and talent matching to coordination,{' '}
+                <Link href="/vibe-demo/radiance/services/public-relations" className="text-rose-300 hover:underline font-medium">media support</Link>
+                {' '}and results analysis.
+              </p>
+            </div>
+          </div>
+        </section>
 
       {/* Why KOL Marketing */}
       <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
@@ -44,19 +57,19 @@ export default function KOLMarketingServicePage() {
         </p>
         <ul className="space-y-4">
           <li className="flex gap-4">
-            <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+            <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
             <span className="text-slate-600 dark:text-slate-400">Authentic endorsements—when a creator genuinely likes your product, their audience believes it more than paid ads.</span>
           </li>
           <li className="flex gap-4">
-            <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+            <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
             <span className="text-slate-600 dark:text-slate-400">Reach specific audiences—micro-influencers in niche communities often drive higher engagement and conversion than broad celebrity endorsements.</span>
           </li>
           <li className="flex gap-4">
-            <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+            <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
             <span className="text-slate-600 dark:text-slate-400">Content creation—influencers produce high-quality content you can repurpose across your own channels.</span>
           </li>
           <li className="flex gap-4">
-            <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+            <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
             <span className="text-slate-600 dark:text-slate-400">Long-term relationships—strategic partnerships with the right creators build sustained brand presence and advocacy.</span>
           </li>
         </ul>
@@ -70,7 +83,7 @@ export default function KOLMarketingServicePage() {
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {['Celebrity & Talent Relations', 'YouTubers & Long-form Creators', 'Top-tier Influencers (100K–1M followers)', 'Micro-influencers (10K–100K followers)', 'Niche & Specialist Creators', 'Emerging Creators & Rising Stars'].map((item) => (
-            <div key={item} className="p-4 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+            <div key={item} className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 rounded-lg">
               <p className="font-semibold text-slate-900 dark:text-white">{item}</p>
             </div>
           ))}
@@ -122,15 +135,15 @@ export default function KOLMarketingServicePage() {
             <h3 className="font-semibold text-slate-900 dark:text-white mb-3">Influencer identification and outreach</h3>
             <ul className="space-y-2 ml-6">
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Database search and KOL matching based on audience demographics, engagement rate and brand alignment.</span>
               </li>
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Initial outreach, negotiation and contract management.</span>
               </li>
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Ongoing relationship management and repeat collaboration coordination.</span>
               </li>
             </ul>
@@ -139,15 +152,15 @@ export default function KOLMarketingServicePage() {
             <h3 className="font-semibold text-slate-900 dark:text-white mb-3">Product trial and content creation</h3>
             <ul className="space-y-2 ml-6">
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Coordinating product trials so creators can develop authentic, nuanced content.</span>
               </li>
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Supporting content ideation and ensuring posts highlight key product benefits.</span>
               </li>
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Managing content delivery timelines and payment terms.</span>
               </li>
             </ul>
@@ -156,17 +169,17 @@ export default function KOLMarketingServicePage() {
             <h3 className="font-semibold text-slate-900 dark:text-white mb-3">Event invitations and brand ambassadorships</h3>
             <ul className="space-y-2 ml-6">
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Identifying suitable KOLs for{' '}
-                  <Link href="/vibe-demo/radiance/services/events" className="text-purple-600 dark:text-purple-400 hover:underline">event attendance</Link>
+                  <Link href="/vibe-demo/radiance/services/events" className="text-rose-600 dark:text-rose-400 hover:underline">event attendance</Link>
                   {' '}and live content coverage.</span>
               </li>
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Structuring longer-term brand ambassador relationships and ongoing visibility.</span>
               </li>
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Post-event content amplification and monitoring.</span>
               </li>
             </ul>
@@ -175,15 +188,15 @@ export default function KOLMarketingServicePage() {
             <h3 className="font-semibold text-slate-900 dark:text-white mb-3">Campaign performance tracking</h3>
             <ul className="space-y-2 ml-6">
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Real-time monitoring of post performance, engagement and sentiment.</span>
               </li>
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Audience insights and demographic breakdown from influencer content.</span>
               </li>
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">ROI analysis and recommendations for future campaigns.</span>
               </li>
             </ul>
@@ -261,16 +274,16 @@ export default function KOLMarketingServicePage() {
 
       {/* CTA */}
       <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8">
+        <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 rounded-lg p-8">
           <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Ready to amplify with the right KOLs?</h3>
           <p className="text-slate-700 dark:text-slate-300 mb-8 leading-relaxed">
             Whether you're launching a product, building brand awareness or reaching a specific audience segment, Radiance can identify and coordinate with creators who connect authentically with your brand. Let's explore what KOL partnerships can do for your business.
           </p>
           <div className="flex gap-4 flex-wrap">
-            <Link href="/vibe-demo/radiance/consultation" className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+            <Link href="/vibe-demo/radiance/consultation" className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg transition-colors">
               Explore KOL options
             </Link>
-            <Link href="/vibe-demo/radiance/case-studies" className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
+            <Link href="/vibe-demo/radiance/case-studies" className="px-6 py-3 border border-rose-600 dark:border-rose-400 text-rose-600 dark:text-rose-400 font-medium rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors">
               See our work
             </Link>
           </div>

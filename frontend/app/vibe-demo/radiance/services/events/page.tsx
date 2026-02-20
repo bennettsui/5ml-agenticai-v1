@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { Header } from '../../components/Header';
 import { Footer } from '../../components/Footer';
 import { Breadcrumb } from '../../components/Breadcrumb';
+import { useParallax } from '../../hooks/useParallax';
 
 export default function EventManagementServicePage() {
+  const parallaxRef = useParallax(0.25);
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
@@ -23,19 +25,30 @@ export default function EventManagementServicePage() {
         </section>
 
         {/* Hero Section */}
-        <section className="pt-16 pb-16 px-6 max-w-6xl mx-auto">
-        <div className="space-y-6">
-          <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
-            Event & Experience Management
-          </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
-            A successful event doesn't happen by accident. It requires clear objectives, thoughtful planning and meticulous execution. Radiance provides end-to-end event management from conception to implementation, helping you create memorable experiences that gain media publicity, drive social media exposure and connect you with your target audiences.
-          </p>
-          <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-            Events are powerful marketing tools. Whether you're launching a product, opening a venue, activating a brand, supporting a cause or entertaining your community, Radiance brings strategic planning, creative production and hands-on logistics expertise to make sure your event achieves its objectives and leaves a lasting impression.
-          </p>
-        </div>
-      </section>
+        <section className="relative py-24 px-6 overflow-hidden">
+          {/* Hero background */}
+          <div className="absolute inset-0 z-0">
+            <div
+              ref={parallaxRef}
+              className="absolute inset-0 w-full h-[130%] -top-[15%] bg-cover bg-center will-change-transform"
+              style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1920&q=80)' }}
+            />
+            <div className="absolute inset-0 bg-slate-950/75" />
+          </div>
+          <div className="relative z-10 max-w-6xl mx-auto">
+            <div className="space-y-6">
+              <h1 className="text-5xl font-bold text-white leading-tight">
+                Event & Experience Management
+              </h1>
+              <p className="text-lg text-white leading-relaxed">
+                A successful event doesn't happen by accident. It requires clear objectives, thoughtful planning and meticulous execution. Radiance provides end-to-end event management from conception to implementation, helping you create memorable experiences that gain media publicity, drive social media exposure and connect you with your target audiences.
+              </p>
+              <p className="text-white/80 leading-relaxed">
+                Events are powerful marketing tools. Whether you're launching a product, opening a venue, activating a brand, supporting a cause or entertaining your community, Radiance brings strategic planning, creative production and hands-on logistics expertise to make sure your event achieves its objectives and leaves a lasting impression.
+              </p>
+            </div>
+          </div>
+        </section>
 
       {/* Why This Service Matters */}
       <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
@@ -45,19 +58,19 @@ export default function EventManagementServicePage() {
         </p>
         <ul className="space-y-4">
           <li className="flex gap-4">
-            <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+            <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
             <span className="text-slate-600 dark:text-slate-400">Events generate earned media coverage and social media moments that amplify reach far beyond attendees—when planned with publicity in mind.</span>
           </li>
           <li className="flex gap-4">
-            <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+            <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
             <span className="text-slate-600 dark:text-slate-400">Live experiences build stronger emotional connections than digital alone—trust, loyalty and advocacy are forged through face-to-face interaction.</span>
           </li>
           <li className="flex gap-4">
-            <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+            <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
             <span className="text-slate-600 dark:text-slate-400">Well-executed events create memorable stories that people share—through photos, posts, word-of-mouth—extending your message long after the event ends.</span>
           </li>
           <li className="flex gap-4">
-            <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+            <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
             <span className="text-slate-600 dark:text-slate-400">Events allow you to control the narrative, showcase your brand personality and demonstrate commitment to your audience in ways no other channel can match.</span>
           </li>
         </ul>
@@ -68,11 +81,11 @@ export default function EventManagementServicePage() {
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Our approach to events & experience</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
           We treat every event as a strategic communication opportunity. Our planning integrates{' '}
-          <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">PR goals</Link>
+          <Link href="/vibe-demo/radiance/services/public-relations" className="text-amber-600 dark:text-amber-400 hover:underline font-medium">PR goals</Link>
           {' (media coverage), '}
-          <Link href="/vibe-demo/radiance/services/social-media" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">social goals</Link>
+          <Link href="/vibe-demo/radiance/services/social-media" className="text-amber-600 dark:text-amber-400 hover:underline font-medium">social goals</Link>
           {' (content and engagement), '}
-          <Link href="/vibe-demo/radiance/services/creative-production" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">creative goals</Link>
+          <Link href="/vibe-demo/radiance/services/creative-production" className="text-amber-600 dark:text-amber-400 hover:underline font-medium">creative goals</Link>
           {' (memorable experience) and business goals (awareness, leads, loyalty). We sweat the details—from concept through to post-event follow-up—so your event runs smoothly and delivers results.'}
         </p>
         <div className="space-y-8">
@@ -98,11 +111,11 @@ export default function EventManagementServicePage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-3">Media and content integration</h3>
             <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
               We coordinate with our{' '}
-              <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline">PR</Link>
+              <Link href="/vibe-demo/radiance/services/public-relations" className="text-amber-600 dark:text-amber-400 hover:underline">PR</Link>
               {' and '}
-              <Link href="/vibe-demo/radiance/services/social-media" className="text-purple-600 dark:text-purple-400 hover:underline">social</Link>
+              <Link href="/vibe-demo/radiance/services/social-media" className="text-amber-600 dark:text-amber-400 hover:underline">social</Link>
               {' teams to ensure media relations, '}
-              <Link href="/vibe-demo/radiance/services/kol-marketing" className="text-purple-600 dark:text-purple-400 hover:underline">KOL seeding</Link>
+              <Link href="/vibe-demo/radiance/services/kol-marketing" className="text-amber-600 dark:text-amber-400 hover:underline">KOL seeding</Link>
               {', and content capture are built into the event plan. Press invitations, media briefing materials, live social posting, photography and videography all work together to amplify your event\'s reach and impact.'}
             </p>
           </div>
@@ -124,19 +137,19 @@ export default function EventManagementServicePage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Strategy & Planning</h3>
             <ul className="space-y-3">
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Event objectives and success metrics aligned to your business and communication goals.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Audience analysis, target attendee profiling and invitation strategy.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Event concept development, theme, experience flow and key touchpoints.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Budget development and vendor selection process.</span>
               </li>
             </ul>
@@ -147,19 +160,19 @@ export default function EventManagementServicePage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Venue & Production</h3>
             <ul className="space-y-3">
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Venue sourcing, selection and liaison with venue management.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Venue design, layout, decoration, lighting and PA system setup.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Stage design, performance logistics and entertainment coordination.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Vendor management: catering, florals, furniture rental, technical support.</span>
               </li>
             </ul>
@@ -170,19 +183,19 @@ export default function EventManagementServicePage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Guest Management & Flow</h3>
             <ul className="space-y-3">
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Guest list development, invitation design and distribution.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">RSVP tracking, capacity management and seating / registration logistics.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">On-site guest reception, welcome desk management and guest flow direction.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">VIP coordination, special guest arrival and interaction management.</span>
               </li>
             </ul>
@@ -193,19 +206,19 @@ export default function EventManagementServicePage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Content & Entertainment</h3>
             <ul className="space-y-3">
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">MC selection, script writing and presentation coordination.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Entertainment booking and rehearsal: performers, speakers, activities.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Event opening gimmick design and execution—the moment that captures attention.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Gift and premium sourcing, packaging and distribution logistics.</span>
               </li>
             </ul>
@@ -216,19 +229,19 @@ export default function EventManagementServicePage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Documentation & Post-Event</h3>
             <ul className="space-y-3">
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Photography and videography for documentation, social content and media use.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Event recap content: behind-the-scenes, highlights, testimonials.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Press follow-up and media coverage tracking and reporting.</span>
               </li>
               <li className="flex gap-4">
-                <span className="text-purple-600 dark:text-purple-400 font-bold flex-shrink-0">•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold flex-shrink-0">•</span>
                 <span className="text-slate-600 dark:text-slate-400">Attendee database management and post-event follow-up strategy.</span>
               </li>
             </ul>
@@ -241,50 +254,50 @@ export default function EventManagementServicePage() {
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">How brands work with us</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
           Radiance has rich experience organizing a wide range of event formats, from intimate product showcases to large-scale community activations. We often combine event management with{' '}
-          <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline">PR media relations</Link>
+          <Link href="/vibe-demo/radiance/services/public-relations" className="text-amber-600 dark:text-amber-400 hover:underline">PR media relations</Link>
           {' and '}
-          <Link href="/vibe-demo/radiance/services/social-media" className="text-purple-600 dark:text-purple-400 hover:underline">social media coverage</Link>
+          <Link href="/vibe-demo/radiance/services/social-media" className="text-amber-600 dark:text-amber-400 hover:underline">social media coverage</Link>
           {', turning each event into a multi-channel campaign that extends reach well beyond the room. See how this looks in practice in our '}
-          <Link href="/vibe-demo/radiance/case-studies" className="text-purple-600 dark:text-purple-400 hover:underline">case studies</Link>.
+          <Link href="/vibe-demo/radiance/case-studies" className="text-amber-600 dark:text-amber-400 hover:underline">case studies</Link>.
         </p>
         <div className="space-y-8">
           {/* Use Case 1 */}
-          <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-6">
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
             <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Product Launch, Consumer Brand</h3>
             <p className="text-slate-600 dark:text-slate-400 mb-3 leading-relaxed">
               A fashion, beauty or F&B brand launched a new product or collection with a dedicated launch event. We designed the concept, secured an exciting venue, coordinated entertainment, managed media and KOL invitations, coordinated live social content, and ensured press coverage flowed through—turning the event into a media moment with reach far beyond the guest list.
             </p>
             <ul className="space-y-2">
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold">→</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold">→</span>
                 <span className="text-slate-600 dark:text-slate-400 text-sm">Strong media coverage, social amplification through attendee and KOL posts, product awareness spike and customer acquisition.</span>
               </li>
             </ul>
           </div>
 
           {/* Use Case 2 */}
-          <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-6">
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
             <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Charity Gala or Fundraising Event, NGO</h3>
             <p className="text-slate-600 dark:text-slate-400 mb-3 leading-relaxed">
               An environmental or social-impact NGO held a fundraising gala to support a programme. We conceptualized the event, managed all logistics from venue to catering to entertainment, coordinated media attendance, ensured compelling storytelling about the cause throughout the evening, and captured content that could be repurposed for future campaigns and donor outreach.
             </p>
             <ul className="space-y-2">
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold">→</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold">→</span>
                 <span className="text-slate-600 dark:text-slate-400 text-sm">Successful fundraising, earned media coverage of the cause, strengthened donor relationships and authentic storytelling assets for future campaigns.</span>
               </li>
             </ul>
           </div>
 
           {/* Use Case 3 */}
-          <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-6">
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
             <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Shopping Mall Activation or Roadshow, Retail Brand</h3>
             <p className="text-slate-600 dark:text-slate-400 mb-3 leading-relaxed">
               A brand ran a multi-week mall activation or roadshow across Hong Kong venues. We designed the concept and booth experience, coordinated on-site logistics at each location, managed performance talent and entertainment, drove foot traffic through social and community outreach, ensured consistent branding and messaging, and captured content from each location for real-time social and recap use.
             </p>
             <ul className="space-y-2">
               <li className="flex gap-3">
-                <span className="text-purple-600 dark:text-purple-400 font-bold">→</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold">→</span>
                 <span className="text-slate-600 dark:text-slate-400 text-sm">Strong foot traffic, social engagement across multiple venues, direct customer engagement and feedback, and content library for ongoing marketing use.</span>
               </li>
             </ul>
@@ -380,16 +393,16 @@ export default function EventManagementServicePage() {
 
       {/* CTA */}
       <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
-        <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8">
+        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-8">
           <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Ready to plan an impactful event?</h3>
           <p className="text-slate-700 dark:text-slate-300 mb-8 leading-relaxed">
             Whether you're launching a product, hosting a gala, running a community activation or any other event, Radiance brings strategic planning, creative energy and meticulous execution to make it a success. Let's discuss your vision and explore how we can help you create an unforgettable experience that drives results.
           </p>
           <div className="flex gap-4 flex-wrap">
-            <Link href="/vibe-demo/radiance/consultation" className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+            <Link href="/vibe-demo/radiance/consultation" className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition-colors">
               Plan your event
             </Link>
-            <Link href="/vibe-demo/radiance/case-studies" className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
+            <Link href="/vibe-demo/radiance/case-studies" className="px-6 py-3 border border-amber-600 dark:border-amber-400 text-amber-600 dark:text-amber-400 font-medium rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors">
               See our work
             </Link>
           </div>

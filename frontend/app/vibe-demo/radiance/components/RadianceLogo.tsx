@@ -57,10 +57,10 @@ export function RadianceLogo({ variant = 'full', size = 'md', className = '', co
   if (variant === 'text') {
     return (
       <div className={`${className}`}>
-        <div className="text-sm tracking-widest font-bold" style={{ color: colors.primary, letterSpacing: '2px' }}>
+        <div className="text-[16px] tracking-widest font-bold" style={{ color: colors.primary, letterSpacing: '2px' }}>
           RADIANCE
         </div>
-        <div className="text-[10px] tracking-wide" style={{ color: colors.secondary, letterSpacing: '0.5px', lineHeight: '1.2' }}>
+        <div className="text-[11.5px] tracking-wide" style={{ color: colors.secondary, letterSpacing: '0.5px', lineHeight: '1.2' }}>
           PR & MARTECH
         </div>
       </div>

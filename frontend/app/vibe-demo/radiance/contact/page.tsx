@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { useLanguage } from '../hooks/useLanguage';
+import { useParallax } from '../hooks/useParallax';
 
 function CustomSelect({ name, value, onChange, options, placeholder, required }: {
   name: string; value: string;
@@ -48,6 +50,7 @@ function CustomSelect({ name, value, onChange, options, placeholder, required }:
 
 export default function ContactPage() {
   const { lang } = useLanguage();
+  const parallaxRef = useParallax(0.25);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -150,13 +153,22 @@ export default function ContactPage() {
           </div>
         </section>
 
-        <section className="py-16 px-6">
-          <div className="max-w-6xl mx-auto">
+        <section className="relative py-24 px-6 overflow-hidden">
+          {/* Hero background */}
+          <div className="absolute inset-0 z-0">
+            <div
+              ref={parallaxRef}
+              className="absolute inset-0 w-full h-[130%] -top-[15%] bg-cover bg-center will-change-transform"
+              style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1920&q=80)' }}
+            />
+            <div className="absolute inset-0 bg-slate-950/75" />
+          </div>
+          <div className="relative z-10 max-w-6xl mx-auto">
             <div className="space-y-6">
-              <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
+              <h1 className="text-5xl font-bold text-white leading-tight">
                 {lang === 'zh' ? '聯絡我們' : 'Get in Touch'}
               </h1>
-              <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
+              <p className="text-lg text-white leading-relaxed">
                 {lang === 'zh'
                   ? '無論您正在探索新的宣傳活動、希望討論公關策略，還是對我們的服務有任何疑問——我們誠摯期待您的來訊。請填寫以下表格或直接聯絡我們，我們將於24小時內回覆。'
                   : 'Whether you\'re exploring a new campaign, want to discuss your PR strategy, or have a question about our services—we\'d love to hear from you. Fill out the form below or reach out directly, and we\'ll get back to you within 24 hours.'}
@@ -333,8 +345,8 @@ export default function ContactPage() {
                   <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide mb-2">
                     {lang === 'zh' ? '電郵' : 'Email'}
                   </p>
-                  <a href="mailto:hello@radiancehk.com" className="text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition">
-                    hello@radiancehk.com
+                  <a href="mailto:mandy@radiancehk.com" className="text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition">
+                    mandy@radiancehk.com
                   </a>
                 </div>
                 <div>
@@ -365,9 +377,9 @@ export default function ContactPage() {
                   ? '如有緊急事宜或希望快速溝通，歡迎直接聯絡我們，與您討論項目詳情。'
                   : 'For urgent matters or a quick conversation, you can also reach out directly to discuss your project.'}
               </p>
-              <button className="w-full px-4 py-2 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors text-sm">
+              <Link href="/vibe-demo/radiance/consultation" className="block w-full text-center px-4 py-2 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors text-sm">
                 {lang === 'zh' ? '預約通話' : 'Schedule a Call'}
-              </button>
+              </Link>
             </div>
 
             <div className="bg-slate-50 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800 rounded-lg p-6">
@@ -457,9 +469,9 @@ export default function ContactPage() {
                 ? '更傾向於先來一次對話？我們樂意聆聽您的挑戰、分享想法並探索可能性——沒有推銷，只有務實的交流。'
                 : 'Prefer to start with a conversation? We\'re happy to discuss your challenge, share ideas and explore what\'s possible—no sales pitch, just practical thinking.'}
             </p>
-            <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+            <Link href="/vibe-demo/radiance/consultation" className="inline-block px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
               {lang === 'zh' ? '預約30分鐘通話' : 'Schedule a 30-Minute Call'}
-            </button>
+            </Link>
           </div>
         </section>
       </main>
