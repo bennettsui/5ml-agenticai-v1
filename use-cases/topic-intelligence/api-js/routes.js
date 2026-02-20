@@ -4890,13 +4890,23 @@ router.get('/meta/pages', async (req, res) => {
           'fan_count',
           'followers_count',
           'instagram_business_account',
+          'access_token',
         ].join(','),
         limit: '100',
         access_token: token,
       }).toString();
 
     const data = await fetchMetaJson(url, 'page_discovery');
-    res.json({ success: true, data: data.data || [] });
+    const pages = Array.isArray(data.data) ? data.data : [];
+    let storedTokens = 0;
+
+    if (db && process.env.DATABASE_URL && typeof db.upsertMetaPageTokens === 'function') {
+      const tokenSource = req.query.access_token ? 'query.access_token' : 'env.META_ACCESS_TOKEN';
+      storedTokens = await db.upsertMetaPageTokens(pages, tokenSource);
+    }
+
+    const sanitized = pages.map(({ access_token, ...rest }) => rest);
+    res.json({ success: true, data: sanitized, meta: { stored_tokens: storedTokens } });
   } catch (error) {
     const meta = error && error.meta ? error.meta : undefined;
     console.error('[Meta Page Discovery] Error:', error.message, meta ? meta : '');
