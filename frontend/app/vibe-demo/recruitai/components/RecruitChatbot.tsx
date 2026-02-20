@@ -3,9 +3,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Minimize2 } from 'lucide-react';
 
-const API_BASE = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
-  : 'http://localhost:8080';
+function getApiBase() {
+  if (typeof window === 'undefined') return '';
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  return isLocal
+    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
+    : (process.env.NEXT_PUBLIC_API_URL || '');
+}
+const API_BASE = getApiBase();
 
 interface Message {
   role: 'user' | 'assistant';
@@ -64,7 +69,7 @@ export default function RecruitChatbot() {
       setHasGreeted(true);
       const greeting: Message = {
         role: 'assistant',
-        content: '你好！我係 RecruitAI 的 AI 顧問 👋\n\n你哋公司係咪有啲行政或者業務流程想自動化？\n\n可以話俾我知你係做緊咩行業，我幫你分析下 AI 代理點樣幫到你 💡',
+        content: '你好！我係 Nora 👋\n\nRecruitAI Studio 的 AI 顧問，專幫香港中小企搵出最適合的 AI 自動化方案。\n\n你哋係做咩行業？有冇啲日常流程覺得好費時或者好想自動化？話俾我知，我幫你分析下 💡',
       };
       setMessages([greeting]);
     }
@@ -144,10 +149,10 @@ export default function RecruitChatbot() {
     return (
       <button
         onClick={handleOpen}
-        aria-label="開啟 AI 對話"
+        aria-label="與 Nora 對話"
         className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl flex items-center justify-center transition-all duration-300 hover:scale-110 ${pulsing ? 'animate-pulse' : ''}`}
       >
-        <MessageCircle className="w-6 h-6" />
+        <span className="text-sm font-bold tracking-wide">Nora</span>
         {unread > 0 && (
           <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold">
             {unread}
@@ -165,12 +170,12 @@ export default function RecruitChatbot() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-blue-600 text-white flex-none">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold">
-            AI
+          <div className="w-9 h-9 rounded-full bg-white/25 flex items-center justify-center text-sm font-bold border border-white/30">
+            N
           </div>
           <div>
-            <p className="text-sm font-semibold leading-none">RecruitAI 顧問</p>
-            <p className="text-xs text-blue-200 mt-0.5">AI 驅動 · 即時回覆</p>
+            <p className="text-sm font-semibold leading-none">Nora · AI 顧問</p>
+            <p className="text-xs text-blue-200 mt-0.5">RecruitAI Studio · 隨時為您服務</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -199,7 +204,7 @@ export default function RecruitChatbot() {
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.role === 'assistant' && (
                   <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-700 flex-none mr-2 mt-0.5">
-                    AI
+                    N
                   </div>
                 )}
                 <div
