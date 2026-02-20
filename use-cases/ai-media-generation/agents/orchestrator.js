@@ -75,11 +75,17 @@ class MediaGenerationOrchestrator {
     if (!project) throw new Error(`Project ${projectId} not found`);
 
     const spec = project.brief_spec_json;
-    const styleGuide = await this.styleManager.getStyleGuide(projectId);
+    if (!spec) {
+      throw new Error('No brief found for this project. Submit a brief first before generating prompts.');
+    }
+    const deliverables = spec.deliverables || [];
+    if (deliverables.length === 0) {
+      throw new Error('The brief produced no deliverables. Make sure your brief specifies formats (e.g. "2 Instagram posts 1:1, 1 TikTok video 9:16").');
+    }
 
+    const styleGuide = await this.styleManager.getStyleGuide(projectId);
     await this._updateProjectStatus(projectId, 'generating_prompts');
 
-    const deliverables = spec.deliverables || [];
     const results = [];
 
     for (const deliverable of deliverables) {

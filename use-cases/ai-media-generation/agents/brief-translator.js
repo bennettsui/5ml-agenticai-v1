@@ -58,42 +58,32 @@ Return ONLY valid JSON — no markdown, no explanation — matching this schema 
     const userMessage = `Translate this creative brief into the JSON schema:\n\n${brief}`;
     const messages = [{ role: 'user', content: userMessage }];
 
-    try {
-      let rawJson;
-      if (shouldUseDeepSeek('deepseek')) {
-        const resp = await deepseekService.chat([
-          { role: 'system', content: systemPrompt },
-          ...messages,
-        ]);
-        rawJson = resp.content;
-      } else {
-        const resp = await this.anthropic.messages.create({
-          model: getClaudeModel('haiku'),
-          max_tokens: 2048,
-          system: systemPrompt,
-          messages,
-        });
-        rawJson = resp.content[0].text;
-      }
-
-      // Strip any accidental markdown fences
-      const cleaned = rawJson.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      return JSON.parse(cleaned);
-    } catch (err) {
-      // Return a minimal fallback so the workflow can still proceed
-      console.error(`[${this.name}] Brief translation failed:`, err.message);
-      return {
-        projectName: 'Untitled Project',
-        client: 'Unknown',
-        deliverables: [],
-        brand: { name: '', palette: [], adjectives: [], avoidList: [] },
-        subject: { type: 'scene', description: brief.substring(0, 200) },
-        style: { aesthetic: 'cinematic', references: [], lighting: 'natural', mood: 'neutral' },
-        technicalConstraints: { resolution: 'sdxl', loraHints: [], modelPreference: 'auto' },
-        approvalSteps: [],
-        notes: `Auto-fallback: original brief preserved. Error: ${err.message}`,
-      };
+    let rawJson;
+    if (shouldUseDeepSeek('deepseek')) {
+      const resp = await deepseekService.chat([
+        { role: 'system', content: systemPrompt },
+        ...messages,
+      ]);
+      rawJson = resp.content;
+    } else {
+      const resp = await this.anthropic.messages.create({
+        model: getClaudeModel('haiku'),
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages,
+      });
+      rawJson = resp.content[0].text;
     }
+
+    // Strip any accidental markdown fences
+    const cleaned = rawJson.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+
+    if (!parsed.deliverables || parsed.deliverables.length === 0) {
+      throw new Error('Brief translation produced no deliverables. Please include specific formats (e.g. "2 Instagram posts 1:1, 1 TikTok video 9:16").');
+    }
+
+    return parsed;
   }
 }
 

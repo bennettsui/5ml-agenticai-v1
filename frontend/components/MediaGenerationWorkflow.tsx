@@ -437,8 +437,13 @@ export default function MediaGenerationWorkflow() {
       const resp = await fetch('/api/media/projects');
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Failed to load projects');
-      setProjects(data.projects || []);
+      const list: MediaProject[] = data.projects || [];
+      setProjects(list);
       setProjectsLoaded(true);
+      // Auto-select the most recent project so the user can start immediately
+      if (list.length > 0 && !selectedProject) {
+        await selectProject(list[0].id);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -456,7 +461,14 @@ export default function MediaGenerationWorkflow() {
       if (!resp.ok) throw new Error(data.error || 'Failed to load project');
       setSelectedProject(data);
       setBriefText(data.project.brief_text || '');
-      setActivePane(data.project.brief_text ? 'prompts' : 'brief');
+      // Navigate to the most relevant pane
+      if (data.prompts && data.prompts.length > 0) {
+        setActivePane('prompts');
+      } else if (data.project.brief_text) {
+        setActivePane('prompts');
+      } else {
+        setActivePane('brief');
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -802,18 +814,44 @@ export default function MediaGenerationWorkflow() {
           {!projectLoading && selectedProject && (
             <div className="space-y-4">
               {/* Project header */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-white">{selectedProject.project.name}</h3>
-                  {selectedProject.project.client && (
-                    <p className="text-sm text-slate-400">{selectedProject.project.client}</p>
-                  )}
-                </div>
-                <StatusBadge status={selectedProject.project.status} />
+              <div>
+                <h3 className="text-lg font-bold text-white">{selectedProject.project.name}</h3>
+                {selectedProject.project.client && (
+                  <p className="text-sm text-slate-400">{selectedProject.project.client}</p>
+                )}
               </div>
 
-              {/* Pane tabs */}
-              <div className="flex gap-1 border-b border-slate-700/40 pb-0">
+              {/* Step progress + pane tabs */}
+              <div className="space-y-2">
+                {/* Step indicator */}
+                <div className="flex items-center gap-1 text-[11px]">
+                  {[
+                    { key: 'brief',   label: '1 · Brief',   done: !!selectedProject.project.brief_spec_json },
+                    { key: 'prompts', label: '2 · Prompts',  done: selectedProject.prompts.length > 0 },
+                    { key: 'assets',  label: '3 · Generate', done: selectedProject.assets.length > 0 },
+                  ].map((step, i) => (
+                    <div key={step.key} className="flex items-center gap-1">
+                      {i > 0 && <div className="w-4 h-px bg-slate-700" />}
+                      <button
+                        onClick={() => setActivePane(step.key as 'brief' | 'prompts' | 'assets')}
+                        className={`px-2.5 py-0.5 rounded-full border transition-colors ${
+                          activePane === step.key
+                            ? 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                            : step.done
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                            : 'bg-white/[0.02] border-slate-700/40 text-slate-500'
+                        }`}
+                      >
+                        {step.done && activePane !== step.key && '✓ '}{step.label}
+                      </button>
+                    </div>
+                  ))}
+                  <div className="ml-auto">
+                    <StatusBadge status={selectedProject.project.status} />
+                  </div>
+                </div>
+
+                <div className="flex gap-1 border-b border-slate-700/40 pb-0">
                 {(['brief', 'prompts', 'assets'] as const).map(pane => (
                   <button
                     key={pane}
@@ -829,7 +867,8 @@ export default function MediaGenerationWorkflow() {
                     {pane === 'assets'  && <span className="flex items-center gap-1.5"><Eye className="w-3.5 h-3.5" />Assets{selectedProject.assets.length > 0 && ` (${selectedProject.assets.length})`}</span>}
                   </button>
                 ))}
-              </div>
+                </div>
+              </div>{/* /step progress + pane tabs */}
 
               {/* ── Brief pane ─────────────────────────────────────────── */}
               {activePane === 'brief' && (
@@ -918,11 +957,30 @@ Mood: Aspirational, high-energy summer.`}
               {/* ── Prompts pane ──────────────────────────────────────── */}
               {activePane === 'prompts' && (
                 <div className="space-y-4">
+                  {/* Next-step banner when prompts exist */}
+                  {selectedProject.prompts.length > 0 && (
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-violet-500/10 border border-violet-500/30">
+                      <Zap className="w-4 h-4 text-violet-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-violet-300">
+                          {selectedProject.prompts.length} prompt{selectedProject.prompts.length !== 1 ? 's' : ''} ready
+                        </p>
+                        <p className="text-xs text-violet-400/70">Expand any card below and click <strong>Generate Image</strong> to create a preview</p>
+                      </div>
+                      <button
+                        onClick={() => setActivePane('assets')}
+                        className="text-[11px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors whitespace-nowrap"
+                      >
+                        View Assets →
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <p className="text-sm text-slate-300">
                       {selectedProject.prompts.length === 0
                         ? 'No prompts yet — generate from brief or write manually.'
-                        : `${selectedProject.prompts.length} prompt set${selectedProject.prompts.length !== 1 ? 's' : ''} · ${selectedProject.prompts.filter(p => p.status === 'approved').length} approved`
+                        : `${selectedProject.prompts.filter(p => p.status === 'approved').length} of ${selectedProject.prompts.length} approved`
                       }
                     </p>
                     <div className="flex items-center gap-2">
