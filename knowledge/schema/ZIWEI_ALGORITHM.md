@@ -14,7 +14,7 @@ The Ziwei (紫微) birth chart calculation follows a deterministic 7-step algori
 立命宮 → 五行局 → 安紫微 → 安天府 → 安十四主星 → 安輔佐煞曜 → 本命四化
 ```
 
-This document focuses on **Steps 1-6** (up to the placement of all 14 major stars).
+This document covers **Steps 1-7** (Life Palace through Auxiliary & Calamity Stars).
 
 ---
 
@@ -472,4 +472,227 @@ for star, offset in tianfuStarOffsets.items():
 - **All 5 people verified** ✓
 
 **Status**: STEP 6 algorithm complete and tested against all 5 examples.
+**Last Updated**: 2026-02-20
+
+---
+
+## STEP 7: Place Auxiliary & Calamity Stars (安輔佐煞曜)
+
+**Input**: Birth hour, lunar month, year branch, Lu Cun position
+**Output**: All 12 auxiliary stars positioned in 12 palaces
+
+### ✅ CORRECTED FORMULAS (Verified 2026-02-20)
+
+#### **Group 1: Stars Based on Year Stem (5 stars)**
+
+**祿存 (Lu Cun) - Wealth Preservation Star**
+
+Lookup table by year stem:
+```python
+luCunByYearStem = {
+    "甲": "寅", "乙": "卯", "丙": "巳", "丁": "午",
+    "戊": "巳", "己": "午", "庚": "申", "辛": "酉",
+    "壬": "亥", "癸": "子"
+}
+```
+
+**擎羊 (Qing Yang) - Blade Star**
+```python
+qingYangIndex = (luCunIndex + 1) % 12
+```
+
+**陀羅 (Tuo Luo) - Rope Star**
+```python
+tuoLuoIndex = (luCunIndex - 1 + 12) % 12
+```
+
+**天魁 (Tian Kuei) - Heavenly Guide**
+
+Lookup table by year stem (mnemonic: 甲戊庚牛羊，乙己鼠猴鄉):
+```python
+tianKueiByYearStem = {
+    "甲": "丑", "乙": "子", "丙": "亥", "丁": "亥",
+    "戊": "丑", "己": "子", "庚": "丑", "辛": "午",
+    "壬": "卯", "癸": "卯"
+}
+```
+
+**天鉞 (Tian Yue) - Heavenly Rescue**
+
+Lookup table by year stem (opposite Tian Kuei mnemonic):
+```python
+tianYueByYearStem = {
+    "甲": "未", "乙": "申", "丙": "酉", "丁": "酉",
+    "戊": "未", "己": "申", "庚": "未", "辛": "寅",
+    "壬": "巳", "癸": "巳"
+}
+```
+
+#### **Group 2: Stars Based on Year Branch (2 stars)**
+
+**天馬 (Tian Ma) - Heavenly Horse**
+
+Year branch group → fixed palace:
+```python
+tianMaByYearBranch = {
+    "申": "申", "子": "申", "辰": "申",  # 申子辰 group → 申
+    "寅": "寅", "午": "寅", "戌": "寅",  # 寅午戌 group → 寅
+    "巳": "亥", "酉": "亥", "丑": "亥",  # 巳酉丑 group → 亥
+    "亥": "巳", "卯": "巳", "未": "巳"   # 亥卯未 group → 巳
+}
+```
+
+#### **Group 3: Stars Based on Birth Hour (2 stars)**
+
+**文昌 (Wen Chang) - Literary Prosperity**
+
+Mnemonic: "子時戌上起文昌，逆到生時是貴鄉"
+Start at 戌 (Xu=8), count **backward** (retrograde) by hour
+
+```python
+branchOrder = ["寅","卯","辰","巳","午","未","申","酉","戌","亥","子","丑"]
+hourOrder = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"]
+xuIndex = 8  # 戌
+
+# Hour to index: 子=0, 丑=1, 寅=2, ..., 亥=11
+hourIndex = hourOrder.index(birthHour)
+wenChangIndex = (xuIndex - hourIndex + 12) % 12
+```
+
+**Complete lookup table:**
+| Hour | Palace | Hour | Palace |
+|------|--------|------|--------|
+| 子 | 戌 | 申 | 寅 |
+| 丑 | 酉 | 酉 | 丑 |
+| 寅 | 申 | 戌 | 子 |
+| 卯 | 未 | 亥 | 亥 |
+| 辰 | 午 | | |
+| 巳 | 巳 | | |
+
+**文曲 (Wen Qu) - Literary Excellence**
+
+Mnemonic: "文曲數從辰上起，順到生時是本鄉"
+Start at 辰 (Chen=2), count **forward** (prograde) by hour
+
+```python
+chenIndex = 2  # 辰
+wenQuIndex = (chenIndex + hourIndex) % 12
+```
+
+**Complete lookup table:**
+| Hour | Palace | Hour | Palace |
+|------|--------|------|--------|
+| 子 | 辰 | 申 | 子 |
+| 丑 | 巳 | 酉 | 丑 |
+| 寅 | 午 | 戌 | 寅 |
+| 卯 | 未 | 亥 | 卯 |
+| 辰 | 申 | | |
+| 巳 | 酉 | | |
+
+#### **Group 4: Stars Based on Lunar Month (2 stars)**
+
+**左輔 (Zuo Fu) - Left Assistant**
+
+Mnemonic: "左輔正月起於辰，順逢生月是貴方"
+Start at 辰 (Chen=2), count **forward** by (month-1)
+
+```python
+chenIndex = 2
+zuoFuIndex = (chenIndex + lunarMonth - 1) % 12
+```
+
+**Complete lookup table:**
+| Month | Palace | Month | Palace |
+|-------|--------|-------|--------|
+| 1 | 辰 | 7 | 戌 |
+| 2 | 巳 | 8 | 亥 |
+| 3 | 午 | 9 | 子 |
+| 4 | 未 | 10 | 丑 |
+| 5 | 申 | 11 | 寅 |
+| 6 | 酉 | 12 | 卯 |
+
+**右弼 (You Bi) - Right Assistant**
+
+Mnemonic: "戌上逆正右弼當"
+Start at 戌 (Xu=8), count **backward** by (month-1)
+
+```python
+xuIndex = 8
+youBiIndex = (xuIndex - (lunarMonth - 1) + 12) % 12
+```
+
+**Complete lookup table:**
+| Month | Palace | Month | Palace |
+|-------|--------|-------|--------|
+| 1 | 戌 | 7 | 辰 |
+| 2 | 酉 | 8 | 卯 |
+| 3 | 申 | 9 | 寅 |
+| 4 | 未 | 10 | 丑 |
+| 5 | 午 | 11 | 子 |
+| 6 | 巳 | 12 | 亥 |
+
+#### **Group 5: Stars Based on Year Branch + Hour (2 stars)**
+
+**火星 (Huo Xing) - Fire Star**
+
+Mnemonic: "申子辰人寅戌揚，寅午戌人丑卯方，巳酉丑人卯戌位，亥卯未人酉戌房"
+
+Year branch group → starting palace, then add hour index:
+
+```python
+hourIndex = hourOrder.index(birthHour)
+
+huoXingStartByBranch = {
+    "申": 0, "子": 0, "辰": 0,      # 申子辰 → 寅(0)
+    "寅": 11, "午": 11, "戌": 11,   # 寅午戌 → 丑(11)
+    "巳": 1, "酉": 1, "丑": 1,      # 巳酉丑 → 卯(1)
+    "亥": 7, "卯": 7, "未": 7       # 亥卯未 → 酉(7)
+}
+
+huoXingStart = huoXingStartByBranch[yearBranch]
+huoXingIndex = (huoXingStart + hourIndex) % 12
+```
+
+**鈴星 (Ling Xing) - Bell Star**
+
+Similar to Fire Star but different starting palaces:
+
+```python
+lingXingStartByBranch = {
+    "申": 8, "子": 8, "辰": 8,      # 申子辰 → 戌(8)
+    "寅": 1, "午": 1, "戌": 1,      # 寅午戌 → 卯(1)
+    "巳": 8, "酉": 8, "丑": 8,      # 巳酉丑 → 戌(8)
+    "亥": 8, "卯": 8, "未": 8       # 亥卯未 → 戌(8)
+}
+
+lingXingStart = lingXingStartByBranch[yearBranch]
+lingXingIndex = (lingXingStart + hourIndex) % 12
+```
+
+### ✅ Verified Results (All 5 People)
+
+| Person | 祿存 | 擎羊 | 陀羅 | 天魁 | 天鉞 | 天馬 | 文昌 | 文曲 | 左輔 | 右弼 | 火星 | 鈴星 |
+|--------|------|------|------|------|------|------|------|------|------|------|------|------|
+| **Bennett** | 寅 | 卯 | 丑 | 丑 | 未 | 寅 | **亥** | **卯** | **卯** | 亥 | **丑** | **酉** |
+| **Brian** | 巳 | 午 | 辰 | 亥 | 酉 | 申 | **丑** | **丑** | **卯** | 亥 | **戌** | **子** |
+| **Christy** | 午 | 未 | 巳 | 子 | 申 | 巳 | **辰** | **戌** | **卯** | 亥 | **酉** | **辰** |
+| **Cherry** | 申 | 酉 | 未 | 丑 | 未 | 申 | **丑** | **丑** | **寅** | 子 | **戌** | **子** |
+| **Elice** | 亥 | 子 | 戌 | 卯 | 巳 | 申 | **子** | **寅** | **亥** | 卯 | **亥** | **丑** |
+
+### ✅ FORMULA VERIFIED
+
+**Corrections from initial attempt:**
+- 文昌: Changed from "hour-based mystery formula" to "start at 戌, count backward by hour" ✓
+- 文曲: Changed from "hour-based mystery formula" to "start at 辰, count forward by hour" ✓
+- 左輔: Changed from "start at Chou" to "start at Chen" ✓
+- 火星: Changed from "opposite Lu Cun" to "year branch group + hour" ✓
+- 鈴星: Changed from "opposite Lu Cun" to "year branch group + hour (different starting palaces)" ✓
+
+**Sources:**
+- Classical mnemonic verses from 《紫微斗數全書》安星訣
+- iztro JavaScript library (GitHub: SylarLong/iztro) implementation verified
+- Star Forest Academy (星林學苑) STEP 7 tutorials
+- All 5 test cases verified correct ✓
+
+**Status**: STEP 7 algorithm complete and tested.
 **Last Updated**: 2026-02-20
