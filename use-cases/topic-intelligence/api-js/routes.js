@@ -4317,6 +4317,544 @@ function generateMockNews(limit = 20) {
 }
 
 /**
+ * GET /fb-ig-page-data
+ * Fetches Facebook Page + Instagram data
+ */
+const META_API_BASE = 'https://graph.facebook.com/v20.0';
+const DEFAULT_AD_ACCOUNT_ID = 'act_1249401425701453';
+const PAGE_TOKEN_CACHE = {
+  pageId: null,
+  token: null,
+  expiresAt: null,
+  source: null,
+};
+
+function normalizeAccountId(accountId) {
+  if (!accountId) return accountId;
+  return accountId.startsWith('act_') ? accountId : `act_${accountId}`;
+}
+
+function formatDateOnly(date) {
+  return date.toISOString().split('T')[0];
+}
+
+function safeNumber(value) {
+  if (value === null || value === undefined) return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function maskAccessToken(url) {
+  return url.replace(/access_token=[^&]+/i, 'access_token=***');
+}
+
+async function fetchMetaJson(url, label) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    const body = await response.text();
+    console.error('[Meta API] Request failed', {
+      label,
+      status: response.status,
+      statusText: response.statusText,
+      url: maskAccessToken(url),
+      body: body.substring(0, 500),
+    });
+    throw new Error(`Meta API error (${label}): ${response.status}`);
+  }
+  return response.json();
+}
+
+async function fetchMetaPaginated(url, maxPages = 3) {
+  const results = [];
+  let nextUrl = url;
+  let pages = 0;
+  let retries = 0;
+
+  while (nextUrl && pages < maxPages) {
+    const response = await fetch(nextUrl);
+
+    if (response.status === 429) {
+      retries += 1;
+      if (retries > 3) {
+        throw new Error('Meta API rate limit exceeded after max retries');
+      }
+      const waitMs = Math.pow(2, retries) * 1000;
+      console.warn(`[Meta API] Rate limited, retrying in ${waitMs}ms`);
+      await sleep(waitMs);
+      continue;
+    }
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.error('[Meta API] Paginated request failed', {
+        status: response.status,
+        statusText: response.statusText,
+        url: maskAccessToken(nextUrl),
+        body: body.substring(0, 500),
+      });
+      throw new Error(`Meta API error: ${response.status}`);
+    }
+
+    const json = await response.json();
+    retries = 0;
+
+    if (Array.isArray(json.data)) {
+      results.push(...json.data);
+    }
+
+    nextUrl = json.paging?.next || null;
+    pages += 1;
+  }
+
+  return results;
+}
+
+async function exchangeForLongLivedUserToken(userToken) {
+  const appId = process.env.META_APP_ID;
+  const appSecret = process.env.META_APP_SECRET;
+  if (!appId || !appSecret) {
+    return { token: userToken, expiresAt: null, source: 'env.user' };
+  }
+
+  const url =
+    `${META_API_BASE}/oauth/access_token?` +
+    new URLSearchParams({
+      grant_type: 'fb_exchange_token',
+      client_id: appId,
+      client_secret: appSecret,
+      fb_exchange_token: userToken,
+    }).toString();
+
+  const data = await fetchMetaJson(url, 'exchange_token');
+  const expiresAt = data.expires_in ? Date.now() + data.expires_in * 1000 : null;
+
+  return {
+    token: data.access_token || userToken,
+    expiresAt,
+    source: 'exchange',
+  };
+}
+
+async function resolvePageAccessToken(pageId) {
+  const pageToken = process.env.META_PAGE_ACCESS_TOKEN;
+  if (pageToken) {
+    const pageTokenNonExpiring = process.env.META_PAGE_ACCESS_TOKEN_NON_EXPIRING === 'true';
+    return {
+      token: pageToken,
+      expiresAt: null,
+      source: 'env.page',
+      isNonExpiring: pageTokenNonExpiring,
+    };
+  }
+
+  const systemUserToken = process.env.META_SYSTEM_USER_TOKEN;
+  const userToken = process.env.META_USER_ACCESS_TOKEN;
+  const baseToken = systemUserToken || userToken;
+
+  if (!baseToken) {
+    throw new Error('META_PAGE_ACCESS_TOKEN or META_USER_ACCESS_TOKEN is required');
+  }
+
+  let resolvedUserToken = baseToken;
+  let userExpiresAt = null;
+  let tokenSource = systemUserToken ? 'env.system_user' : 'env.user';
+
+  if (!systemUserToken) {
+    const exchanged = await exchangeForLongLivedUserToken(baseToken);
+    resolvedUserToken = exchanged.token;
+    userExpiresAt = exchanged.expiresAt;
+    tokenSource = exchanged.source;
+  }
+
+  if (
+    PAGE_TOKEN_CACHE.pageId === pageId &&
+    PAGE_TOKEN_CACHE.token &&
+    (!PAGE_TOKEN_CACHE.expiresAt || Date.now() < PAGE_TOKEN_CACHE.expiresAt - 5 * 60 * 1000)
+  ) {
+    return {
+      token: PAGE_TOKEN_CACHE.token,
+      expiresAt: PAGE_TOKEN_CACHE.expiresAt,
+      source: PAGE_TOKEN_CACHE.source,
+      isNonExpiring: !!systemUserToken,
+    };
+  }
+
+  const url =
+    `${META_API_BASE}/${pageId}?` +
+    new URLSearchParams({
+      fields: 'access_token',
+      access_token: resolvedUserToken,
+    }).toString();
+
+  const data = await fetchMetaJson(url, 'page_access_token');
+  if (!data.access_token) {
+    throw new Error('Unable to resolve page access token');
+  }
+
+  PAGE_TOKEN_CACHE.pageId = pageId;
+  PAGE_TOKEN_CACHE.token = data.access_token;
+  PAGE_TOKEN_CACHE.expiresAt = userExpiresAt;
+  PAGE_TOKEN_CACHE.source = tokenSource;
+
+  return {
+    token: data.access_token,
+    expiresAt: userExpiresAt,
+    source: tokenSource,
+    isNonExpiring: !!systemUserToken,
+  };
+}
+
+router.get('/fb-ig-page-data', async (req, res) => {
+  try {
+    const pageId = req.query.page_id || process.env.META_PAGE_ID;
+    if (!pageId) {
+      return res.status(400).json({ error: 'META_PAGE_ID is required' });
+    }
+
+    const adAccountId = normalizeAccountId(
+      req.query.ad_account_id || process.env.META_AD_ACCOUNT_ID || DEFAULT_AD_ACCOUNT_ID
+    );
+
+    const tokenInfo = await resolvePageAccessToken(pageId);
+    const pageToken = tokenInfo.token;
+
+    const pageUrl =
+      `${META_API_BASE}/${pageId}?` +
+      new URLSearchParams({
+        fields: [
+          'id',
+          'name',
+          'description',
+          'about',
+          'fan_count',
+          'followers_count',
+          'instagram_business_account',
+          'connected_instagram_account',
+        ].join(','),
+        access_token: pageToken,
+      }).toString();
+
+    const pageData = await fetchMetaJson(pageUrl, 'page');
+    const followerCount = safeNumber(pageData.followers_count || pageData.fan_count);
+
+    const postsUrl =
+      `${META_API_BASE}/${pageId}/posts?` +
+      new URLSearchParams({
+        fields: [
+          'id',
+          'message',
+          'created_time',
+          'permalink_url',
+          'reactions.summary(true)',
+          'comments.summary(true).limit(10){id,from,message,created_time}',
+          'shares',
+        ].join(','),
+        limit: req.query.limit || '25',
+        access_token: pageToken,
+      }).toString();
+
+    const postsData = await fetchMetaPaginated(postsUrl, 2);
+    const pagePosts = postsData.map(post => {
+      const totalReactions = safeNumber(post.reactions?.summary?.total_count);
+      const totalComments = safeNumber(post.comments?.summary?.total_count);
+      const totalShares = safeNumber(post.shares?.count);
+      return {
+        id: post.id,
+        message: post.message || '',
+        created_time: post.created_time,
+        permalink_url: post.permalink_url,
+        reactions: {
+          total: totalReactions,
+        },
+        comments: (post.comments?.data || []).map(comment => ({
+          id: comment.id,
+          from: comment.from?.name || '',
+          message: comment.message || '',
+          created_time: comment.created_time,
+        })),
+        engagement: {
+          total_reactions: totalReactions,
+          total_comments: totalComments,
+          total_shares: totalShares,
+        },
+      };
+    });
+
+    const pageEngagementTotals = pagePosts.reduce(
+      (acc, post) => {
+        acc.total_posts += 1;
+        acc.total_reactions += safeNumber(post.engagement?.total_reactions);
+        acc.total_comments += safeNumber(post.engagement?.total_comments);
+        acc.total_shares += safeNumber(post.engagement?.total_shares);
+        return acc;
+      },
+      { total_posts: 0, total_reactions: 0, total_comments: 0, total_shares: 0 }
+    );
+
+    const pageEngagementRate = followerCount
+      ? (pageEngagementTotals.total_reactions +
+          pageEngagementTotals.total_comments +
+          pageEngagementTotals.total_shares) / followerCount
+      : null;
+
+    const igAccount =
+      pageData.instagram_business_account || pageData.connected_instagram_account || null;
+
+    let igProfile = null;
+    let igPosts = [];
+    let igEngagementTotals = { total_posts: 0, total_likes: 0, total_comments: 0 };
+    let igEngagementRate = null;
+
+    if (igAccount?.id) {
+      const igProfileUrl =
+        `${META_API_BASE}/${igAccount.id}?` +
+        new URLSearchParams({
+          fields: ['id', 'username', 'followers_count', 'media_count'].join(','),
+          access_token: pageToken,
+        }).toString();
+
+      const igProfileData = await fetchMetaJson(igProfileUrl, 'instagram_profile');
+      igProfile = {
+        id: igProfileData.id,
+        username: igProfileData.username,
+        followers_count: safeNumber(igProfileData.followers_count),
+        media_count: safeNumber(igProfileData.media_count),
+        profile_url: igProfileData.username
+          ? `https://www.instagram.com/${igProfileData.username}/`
+          : null,
+      };
+
+      const igMediaUrl =
+        `${META_API_BASE}/${igAccount.id}/media?` +
+        new URLSearchParams({
+          fields: [
+            'id',
+            'caption',
+            'media_url',
+            'permalink',
+            'timestamp',
+            'like_count',
+            'comments_count',
+          ].join(','),
+          limit: req.query.ig_limit || '25',
+          access_token: pageToken,
+        }).toString();
+
+      const igMedia = await fetchMetaPaginated(igMediaUrl, 2);
+      igPosts = igMedia.map(media => ({
+        id: media.id,
+        caption: media.caption || '',
+        timestamp: media.timestamp,
+        media_url: media.media_url,
+        permalink: media.permalink,
+        like_count: safeNumber(media.like_count),
+        comment_count: safeNumber(media.comments_count),
+      }));
+
+      igEngagementTotals = igPosts.reduce(
+        (acc, post) => {
+          acc.total_posts += 1;
+          acc.total_likes += safeNumber(post.like_count);
+          acc.total_comments += safeNumber(post.comment_count);
+          return acc;
+        },
+        { total_posts: 0, total_likes: 0, total_comments: 0 }
+      );
+
+      igEngagementRate = igProfile?.followers_count
+        ? (igEngagementTotals.total_likes + igEngagementTotals.total_comments) /
+            igProfile.followers_count
+        : null;
+    }
+
+    const now = new Date();
+    const weeklyStart = new Date(now);
+    weeklyStart.setDate(now.getDate() - 6);
+    const monthlyStart = new Date(now);
+    monthlyStart.setDate(now.getDate() - 29);
+
+    const weeklyPagePosts = pagePosts.filter(post => {
+      const created = post.created_time ? new Date(post.created_time) : null;
+      return created && created >= weeklyStart;
+    });
+    const weeklyIgPosts = igPosts.filter(post => {
+      const created = post.timestamp ? new Date(post.timestamp) : null;
+      return created && created >= weeklyStart;
+    });
+
+    const monthlyPagePosts = pagePosts.filter(post => {
+      const created = post.created_time ? new Date(post.created_time) : null;
+      return created && created >= monthlyStart;
+    });
+    const monthlyIgPosts = igPosts.filter(post => {
+      const created = post.timestamp ? new Date(post.timestamp) : null;
+      return created && created >= monthlyStart;
+    });
+
+    function summarizePagePosts(posts) {
+      return posts.reduce(
+        (acc, post) => {
+          acc.reactions += safeNumber(post.engagement?.total_reactions);
+          acc.comments += safeNumber(post.engagement?.total_comments);
+          acc.shares += safeNumber(post.engagement?.total_shares);
+          return acc;
+        },
+        { reactions: 0, comments: 0, shares: 0 }
+      );
+    }
+
+    function summarizeIgPosts(posts) {
+      return posts.reduce(
+        (acc, post) => {
+          acc.likes += safeNumber(post.like_count);
+          acc.comments += safeNumber(post.comment_count);
+          return acc;
+        },
+        { likes: 0, comments: 0 }
+      );
+    }
+
+    const weeklyPageTotals = summarizePagePosts(weeklyPagePosts);
+    const weeklyIgTotals = summarizeIgPosts(weeklyIgPosts);
+    const monthlyPageTotals = summarizePagePosts(monthlyPagePosts);
+    const monthlyIgTotals = summarizeIgPosts(monthlyIgPosts);
+
+    const weeklyEngagements =
+      weeklyPageTotals.reactions +
+      weeklyPageTotals.comments +
+      weeklyPageTotals.shares +
+      weeklyIgTotals.likes +
+      weeklyIgTotals.comments;
+    const monthlyEngagements =
+      monthlyPageTotals.reactions +
+      monthlyPageTotals.comments +
+      monthlyPageTotals.shares +
+      monthlyIgTotals.likes +
+      monthlyIgTotals.comments;
+
+    const adToken = process.env.META_ADS_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN;
+    let adAccount = null;
+    if (adAccountId && adToken) {
+      try {
+        const adUrl =
+          `${META_API_BASE}/${adAccountId}?` +
+          new URLSearchParams({
+            fields: ['id', 'name', 'account_id', 'account_status', 'currency', 'business_name'].join(','),
+            access_token: adToken,
+          }).toString();
+        adAccount = await fetchMetaJson(adUrl, 'ad_account');
+      } catch (error) {
+        adAccount = { id: adAccountId, error: error.message };
+      }
+    } else if (adAccountId) {
+      adAccount = {
+        id: adAccountId,
+        error: 'META_ADS_ACCESS_TOKEN is required to fetch ad account details',
+      };
+    }
+
+    const dashboards = [
+      {
+        id: 'dashboard-overview',
+        name: 'Social Media Overview',
+        metrics: ['followers', 'engagement_rate', 'posts', 'top_posts'],
+        last_updated: now.toISOString(),
+        summary: {
+          facebook_followers: followerCount,
+          instagram_followers: igProfile?.followers_count || 0,
+          combined_engagement_rate: followerCount || igProfile?.followers_count
+            ? (pageEngagementRate || 0) + (igEngagementRate || 0)
+            : null,
+        },
+      },
+      {
+        id: 'dashboard-content',
+        name: 'Content Performance',
+        metrics: ['avg_reactions', 'avg_comments', 'shares', 'likes'],
+        last_updated: now.toISOString(),
+      },
+    ];
+
+    const response = {
+      timestamp: now.toISOString(),
+      ad_account: adAccount,
+      page: {
+        id: pageData.id,
+        name: pageData.name || '',
+        description: pageData.description || pageData.about || '',
+        follower_count: followerCount,
+        posts: pagePosts,
+        engagement: {
+          ...pageEngagementTotals,
+          engagement_rate: pageEngagementRate,
+        },
+      },
+      instagram: {
+        connected: !!igAccount?.id,
+        profile: igProfile,
+        posts: igPosts,
+        engagement: {
+          ...igEngagementTotals,
+          engagement_rate: igEngagementRate,
+        },
+      },
+      reporting: {
+        social_media_dashboards: dashboards,
+        weekly_report: {
+          period: `${formatDateOnly(weeklyStart)} to ${formatDateOnly(now)}`,
+          highlights: [
+            `Weekly engagements: ${weeklyEngagements}`,
+            `Facebook posts: ${weeklyPagePosts.length}, Instagram posts: ${weeklyIgPosts.length}`,
+          ],
+          totals: {
+            engagements: weeklyEngagements,
+            facebook: weeklyPageTotals,
+            instagram: weeklyIgTotals,
+          },
+          top_posts: {
+            facebook: weeklyPagePosts.slice(0, 3).map(post => post.id),
+            instagram: weeklyIgPosts.slice(0, 3).map(post => post.id),
+          },
+        },
+        monthly_report: {
+          period: `${formatDateOnly(monthlyStart)} to ${formatDateOnly(now)}`,
+          highlights: [
+            `Monthly engagements: ${monthlyEngagements}`,
+            `Facebook posts: ${monthlyPagePosts.length}, Instagram posts: ${monthlyIgPosts.length}`,
+          ],
+          totals: {
+            engagements: monthlyEngagements,
+            facebook: monthlyPageTotals,
+            instagram: monthlyIgTotals,
+          },
+        },
+        internal_analytics_tools: [
+          {
+            name: 'meta_graph_api',
+            description: 'Aggregates page, post, and IG metrics from the Graph API.',
+          },
+        ],
+      },
+      page_access_token: {
+        source: tokenInfo.source,
+        expires_at: tokenInfo.expiresAt ? new Date(tokenInfo.expiresAt).toISOString() : null,
+        is_non_expiring: tokenInfo.isNonExpiring,
+        note: tokenInfo.isNonExpiring
+          ? tokenInfo.source === 'env.page'
+            ? 'Using a non-expiring page token from environment.'
+            : 'Using a system user token to mint the page access token.'
+          : 'Provide META_SYSTEM_USER_TOKEN or set META_PAGE_ACCESS_TOKEN_NON_EXPIRING=true to avoid token expiry.',
+      },
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('[FB/IG Page Data] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * GET /debug/llm-status
  * Diagnostic endpoint to check LLM API key status
  */
