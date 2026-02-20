@@ -1,0 +1,289 @@
+{
+  "title": "Ziwei Doushu - 12 Palaces (十二宮位) Reference",
+  "date_updated": "2026-02-19",
+  "description": "Comprehensive guide to the 12 palaces in Ziwei Doushu, including their meanings, elemental associations, and directional correspondences.",
+  "palaces": [
+    {
+      "index": 1,
+      "chinese_name": "命宮",
+      "english_name": "Life Palace",
+      "position": "Self",
+      "represents": "Self identity, overall life direction, personality traits, life trajectory",
+      "four_pillars": "Year Pillar",
+      "temple_strength": "Most important palace - determines overall fortune",
+      "key_meanings": [
+        "Personal character and temperament",
+        "Life purpose and direction",
+        "Overall destiny pattern",
+        "Internal potential"
+      ],
+      "celestial_position": null,
+      "element": null,
+      "direction": null,
+      "notes": "The center of the destiny chart. Stars here have the strongest influence."
+    },
+    {
+      "index": 2,
+      "chinese_name": "兄弟宮",
+      "english_name": "Siblings Palace",
+      "position": "Family relationships",
+      "represents": "Sibling relationships, friendships similar to siblings, trust, mutual support",
+      "four_pillars": "Month Pillar",
+      "temple_strength": "Secondary importance",
+      "key_meanings": [
+        "Relationships with siblings",
+        "Platonic friendships",
+        "Mutual support networks",
+        "Trust and loyalty"
+      ],
+      "celestial_position": null,
+      "element": null,
+      "direction": null,
+      "notes": "Also reflects ability to build supportive relationships beyond family."
+    },
+    {
+      "index": 3,
+      "chinese_name": "夫妻宮",
+      "english_name": "Marriage/Spouse Palace",
+      "position": "Romantic relationships",
+      "represents": "Marriage quality, spouse personality, romantic relationships, intimate partnerships",
+      "four_pillars": "Day Pillar",
+      "temple_strength": "Critical for relationship analysis",
+      "key_meanings": [
+        "Spouse character and personality",
+        "Marriage harmony and stability",
+        "Romantic relationships",
+        "Intimate partnership quality"
+      ],
+      "celestial_position": null,
+      "element": null,
+      "direction": null,
+      "notes": "Determines marriage fortune and spouse compatibility."
+    },
+    {
+      "index": 4,
+      "chinese_name": "子女宮",
+      "english_name": "Children Palace",
+      "position": "Family expansion",
+      "represents": "Children, fertility, descendants, creativity, emotional expression",
+      "four_pillars": "Hour Pillar",
+      "temple_strength": "Secondary importance",
+      "key_meanings": [
+        "Number and quality of children",
+        "Parenting ability",
+        "Creativity and self-expression",
+        "Reproductive health"
+      ],
+      "celestial_position": null,
+      "element": null,
+      "direction": null,
+      "notes": "Not just children, but also creative output and emotional expression."
+    },
+    {
+      "index": 5,
+      "chinese_name": "財帛宮",
+      "english_name": "Wealth Palace",
+      "position": "Material resources",
+      "represents": "Income sources, financial ability, wealth accumulation, material fortune",
+      "four_pillars": null,
+      "temple_strength": "Critical for financial analysis",
+      "key_meanings": [
+        "Income and earning ability",
+        "Wealth accumulation capacity",
+        "Financial fortune",
+        "Sources of money"
+      ],
+      "celestial_position": null,
+      "element": null,
+      "direction": null,
+      "notes": "Shows both earning power and wealth-related fortune."
+    },
+    {
+      "index": 6,
+      "chinese_name": "疾厄宮",
+      "english_name": "Health/Disease Palace",
+      "position": "Physical wellbeing",
+      "represents": "Health status, illnesses, physical constitution, medical issues",
+      "four_pillars": null,
+      "temple_strength": "Important for health prediction",
+      "key_meanings": [
+        "Physical health and constitution",
+        "Disease predisposition",
+        "Medical conditions",
+        "Longevity indicators"
+      ],
+      "celestial_position": null,
+      "element": null,
+      "direction": null,
+      "notes": "Reveals potential health challenges and physical resilience."
+    },
+    {
+      "index": 7,
+      "chinese_name": "遷移宮",
+      "english_name": "Travel/Relocation Palace",
+      "position": "Movement and change",
+      "represents": "Travel, relocation, external environment, changes in living situation",
+      "four_pillars": null,
+      "temple_strength": "Secondary importance",
+      "key_meanings": [
+        "Travel and moving fortune",
+        "Life changes and relocations",
+        "External environment changes",
+        "Opportunities elsewhere"
+      ],
+      "celestial_position": null,
+      "element": null,
+      "direction": null,
+      "notes": "Shows how fortune changes when moving or traveling away from birthplace."
+    },
+    {
+      "index": 8,
+      "chinese_name": "朋友宮 / 僕役宮",
+      "english_name": "Friends/Servants Palace",
+      "position": "Social relationships",
+      "represents": "Friendships, subordinates, colleagues, social networks, people under command",
+      "four_pillars": null,
+      "temple_strength": "Secondary importance",
+      "key_meanings": [
+        "Quality of friendships",
+        "Colleague relationships",
+        "Subordinate relationships",
+        "Social network quality"
+      ],
+      "celestial_position": null,
+      "element": null,
+      "direction": null,
+      "notes": "Historically called 僕役宮 (servants), now refers to all non-family relationships."
+    },
+    {
+      "index": 9,
+      "chinese_name": "官祿宮 / 事業宮",
+      "english_name": "Career/Official Palace",
+      "position": "Professional life",
+      "represents": "Career, occupation, official position, social status, career development",
+      "four_pillars": null,
+      "temple_strength": "Critical for career analysis",
+      "key_meanings": [
+        "Career path and opportunities",
+        "Job satisfaction",
+        "Social status and position",
+        "Professional development"
+      ],
+      "celestial_position": null,
+      "element": null,
+      "direction": null,
+      "notes": "One of the most important palaces for assessing life achievement and success."
+    },
+    {
+      "index": 10,
+      "chinese_name": "田宅宮",
+      "english_name": "Property/Home Palace",
+      "position": "Real estate and home",
+      "represents": "Real estate, property, home, family inheritance, living environment",
+      "four_pillars": null,
+      "temple_strength": "Important for material security",
+      "key_meanings": [
+        "Real estate ownership",
+        "Property wealth",
+        "Home stability",
+        "Living environment quality",
+        "Family inheritance"
+      ],
+      "celestial_position": null,
+      "element": null,
+      "direction": null,
+      "notes": "Represents both physical property and family heritage/inheritance."
+    },
+    {
+      "index": 11,
+      "chinese_name": "福德宮",
+      "english_name": "Fortune/Blessing Palace",
+      "position": "Spiritual fortune",
+      "represents": "Spiritual fortune, blessings, happiness, life satisfaction, karma",
+      "four_pillars": null,
+      "temple_strength": "Important for overall wellbeing",
+      "key_meanings": [
+        "Spiritual blessings",
+        "Life happiness and contentment",
+        "Karmic fortune",
+        "Leisure and relaxation"
+      ],
+      "celestial_position": null,
+      "element": null,
+      "direction": null,
+      "notes": "Shows accumulated karmic blessings and capacity for happiness."
+    },
+    {
+      "index": 12,
+      "chinese_name": "父母宮",
+      "english_name": "Parents Palace",
+      "position": "Family origin",
+      "represents": "Parent relationships, family origin, upbringing, parental influence, inheritance",
+      "four_pillars": null,
+      "temple_strength": "Important for family dynamics",
+      "key_meanings": [
+        "Parent relationships",
+        "Parental influence",
+        "Family background",
+        "Upbringing quality",
+        "Inheritance from parents"
+      ],
+      "celestial_position": null,
+      "element": null,
+      "direction": null,
+      "notes": "Reflects both parental relationship and early family influences."
+    }
+  ],
+  "palace_categories": {
+    "six_relatives_palaces": {
+      "name": "Six Relatives Palaces (六親宮)",
+      "count": 6,
+      "palaces": ["福德宮", "父母宮", "命宮", "兄弟宮", "夫妻宮", "子女宮"],
+      "meaning": "Palaces related to family and close relationships"
+    },
+    "people_affairs_palaces": {
+      "name": "People/Affairs Palaces (人事宮)",
+      "count": 6,
+      "palaces": ["財帛宮", "疾厄宮", "遷移宮", "僕役宮", "官祿宮", "田宅宮"],
+      "meaning": "Palaces related to personal affairs and external circumstances"
+    }
+  },
+  "four_pillars_connection": {
+    "description": "Traditional connection between the first 4 palaces and the Four Pillars of Destiny",
+    "mappings": [
+      {
+        "palace": "命宮",
+        "pillar": "Year Pillar (年柱)",
+        "element": "Parent's generation",
+        "meaning": "Overall destiny framework"
+      },
+      {
+        "palace": "兄弟宮",
+        "pillar": "Month Pillar (月柱)",
+        "element": "Person's generation",
+        "meaning": "Peer relationships"
+      },
+      {
+        "palace": "夫妻宮",
+        "pillar": "Day Pillar (日柱)",
+        "element": "Spouse's generation",
+        "meaning": "Close intimate relationships"
+      },
+      {
+        "palace": "子女宮",
+        "pillar": "Hour Pillar (時柱)",
+        "element": "Child's generation",
+        "meaning": "Next generation and legacy"
+      }
+    ]
+  },
+  "sources": [
+    "88say - 紫微斗數教學（十）--認識十二地理宮位",
+    "知乎 - 紫微斗数 | 命盘12宫的分类、方位、五行解析",
+    "Lucks - 紫微斗數12宮位揭秘",
+    "Vocus - 紫微斗數的 12 宮位：每個宮位的意義與作用",
+    "AI5429 - 紫微斗數12宮位介紹",
+    "Click108 - 紫微教學",
+    "科技紫微網 - 紫微宮位-認識命盤12宮位"
+  ]
+}

@@ -11,17 +11,11 @@ import AgenticWorkflows from '@/components/AgenticWorkflows';
 import KnowledgeBase from '@/components/KnowledgeBase';
 import CostAnalysis from '@/components/CostAnalysis';
 import ZiweiChat from '@/components/ZiweiChat';
-import ZiweiCompatibility from '@/components/ZiweiCompatibility';
-import ZiweiInsights from '@/components/ZiweiInsights';
-import ZiweiRuleManagement from '@/components/ZiweiRuleManagement';
-import ZiweiChartLibrary from '@/components/ZiweiChartLibrary';
-import ZiweiAnalytics from '@/components/ZiweiAnalytics';
-import ZiweiChartAnalysis from '@/components/ZiweiChartAnalysis';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
   ChevronRight, Map, Zap, Send, Loader2, Sparkles, History,
-  Plus, Trash2, Clock, Monitor, TrendingUp, Wand2,
+  Plus, Trash2, Clock, Monitor, TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -34,7 +28,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'ziwei-analytics' | 'ziwei-analysis' | 'ziwei-charts' | 'ziwei-rules';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -379,7 +373,7 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','ziwei-analytics','ziwei-analysis','ziwei-charts','ziwei-rules'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
@@ -393,10 +387,6 @@ export default function Dashboard() {
     { id: 'chat', label: 'Agent Chat', icon: MessageSquare },
     { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen },
     { id: 'analytics', label: 'Analytics & API', icon: Wifi },
-    { id: 'ziwei-analytics', label: '✨ Ziwei Generator', icon: Sparkles },
-    { id: 'ziwei-analysis', label: '🔍 Ziwei Analysis', icon: Brain },
-    { id: 'ziwei-charts', label: '📊 Ziwei Charts', icon: History },
-    { id: 'ziwei-rules', label: '🧿 Ziwei Rules', icon: Wand2 },
     { id: 'architecture', label: 'Architecture', icon: Layers },
   ];
 
@@ -663,23 +653,6 @@ export default function Dashboard() {
             <AgenticWorkflows />
           </div>
         )}
-
-        {/* ================================================================ */}
-        {/* ZIWEI ANALYTICS TAB                                               */}
-        {/* ================================================================ */}
-        {activeTab === 'ziwei-analytics' && <ZiweiAnalytics />}
-
-        {/* ZIWEI ANALYSIS TAB                                                */}
-        {/* ================================================================ */}
-        {activeTab === 'ziwei-analysis' && <ZiweiChartAnalysis />}
-
-        {/* ZIWEI CHARTS TAB                                                  */}
-        {/* ================================================================ */}
-        {activeTab === 'ziwei-charts' && <ZiweiChartLibrary />}
-
-        {/* ZIWEI RULES MANAGEMENT TAB                                       */}
-        {/* ================================================================ */}
-        {activeTab === 'ziwei-rules' && <ZiweiRuleManagement />}
 
       </main>
     </div>

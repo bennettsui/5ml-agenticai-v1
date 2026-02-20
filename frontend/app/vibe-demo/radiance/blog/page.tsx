@@ -1,10 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
+import { Breadcrumb } from '../components/Breadcrumb';
 
 export default function BlogPage() {
+  const [selectedCategory, setSelectedCategory] = useState('All');
+
   const articles = [
     {
       slug: 'earned-media-strategy',
@@ -73,19 +77,32 @@ export default function BlogPage() {
   ];
 
   const categories = ['All', ...new Set(articles.map(a => a.category))];
+  const filteredArticles = selectedCategory === 'All'
+    ? articles
+    : articles.filter(a => a.category === selectedCategory);
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
 
       <main id="main-content" className="flex-1 pt-20">
+        {/* Breadcrumb */}
+        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <Breadcrumb items={[
+              { label: 'Home', href: '/vibe-demo/radiance' },
+              { label: 'Blog' }
+            ]} />
+          </div>
+        </section>
+
         {/* Hero Section */}
-        <section className="pt-16 pb-12 px-6 max-w-6xl mx-auto">
+        <section className="pt-16 pb-12 px-6 max-w-4xl mx-auto">
           <div className="space-y-4">
             <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
               Radiance Blog
             </h1>
-            <p className="text-xl text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl">
+            <p className="text-xl text-slate-600 dark:text-slate-300 leading-relaxed">
               Insights on PR strategy, integrated campaigns, media relations, and communications best practices for brands and organizations in Hong Kong.
             </p>
           </div>
@@ -97,7 +114,12 @@ export default function BlogPage() {
             {categories.map((cat) => (
               <button
                 key={cat}
-                className="px-4 py-2 text-sm font-medium rounded-full border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-purple-600 dark:hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-2 text-sm font-medium rounded-full border-2 transition-colors ${
+                  selectedCategory === cat
+                    ? 'border-purple-600 dark:border-purple-400 bg-purple-600 dark:bg-purple-500 text-white'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-purple-600 dark:hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-400'
+                }`}
               >
                 {cat}
               </button>
@@ -105,7 +127,7 @@ export default function BlogPage() {
           </div>
 
           <div className="space-y-8">
-            {articles.map((article) => (
+            {filteredArticles.map((article) => (
               <Link
                 key={article.slug}
                 href={`/vibe-demo/radiance/blog/${article.slug}`}
