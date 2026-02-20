@@ -820,7 +820,7 @@ export default function MediaGenerationWorkflow() {
 
   // ── Quick test panel ──────────────────────────────────────────────────────
   const [showQuickTest, setShowQuickTest] = useState(false);
-  const [qtPrompt, setQtPrompt]     = useState('a beautiful golden sunset over mountains, photorealistic, cinematic lighting, 8k');
+  const [qtPrompt, setQtPrompt]     = useState('A professional product photograph of a premium glass perfume bottle sitting on white marble, soft studio diffused lighting from above, shallow depth of field with subtle bokeh background, warm neutral color palette, commercial advertising photography aesthetic');
   const [qtModel, setQtModel]       = useState('flux');
   const [qtRunning, setQtRunning]   = useState(false);
   const [qtStep, setQtStep]         = useState('');
