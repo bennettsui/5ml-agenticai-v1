@@ -6,6 +6,54 @@
 
 ---
 
+## 🔒 **LOCKED - VERIFIED ALGORITHMS (USER APPROVAL REQUIRED FOR CHANGES)**
+
+**The following sections are LOCKED and verified correct. ANY changes require USER APPROVAL FIRST:**
+
+### ✅ Locked Steps:
+- **STEP 1**: Life Palace (命宮) Calculation
+  - Formula: `(month_idx - hour_idx + 10) % 12`
+  - Verified for all 5 test cases ✓
+
+- **STEP 2**: Life Palace Stem (命宮干) via 五虎遁
+  - Uses Five Tiger Escaping Method
+  - Verified for all 5 test cases ✓
+
+- **STEP 3**: Life Palace Stem-Branch (命宮干支)
+  - Simple combination: stem + branch
+  - Verified for all 5 test cases ✓
+
+- **STEP 4**: Five Element Bureau (五行局) via Nayin
+  - Uses 命宮干支 to lookup Nayin element
+  - Maps to bureau: 2/3/4/5/6
+  - Verified for all 5 test cases ✓
+
+- **STEP 5**: Ziwei & Tianfu Placement
+  - Uses **Odd/Even Difference Method** (NOT remainder table!)
+  - Formula:
+    ```
+    quotient = ceil(day / bureau)
+    difference = (quotient × bureau) - day
+    if difference is EVEN: finalNumber = quotient + difference
+    if difference is ODD: finalNumber = quotient - difference
+    ziweiIndex = (finalNumber - 1) % 12
+    ```
+  - Tianfu uses **FIXED MNEMONIC MAPPING** (NOT opposite!)
+  - Verified for all 5 test cases ✓
+
+### ✅ Test Cases (All Verified):
+| Person | Day | Bureau | Ziwei | Tianfu |
+|--------|-----|--------|-------|--------|
+| Bennett | 3 | 6 | 亥 | 巳 ✓ |
+| Brian | 17 | 2 | 酉 | 未 ✓ |
+| Christy | 2 | 5 | 亥 | 巳 ✓ |
+| Cherry | 4 | 5 | 丑 | 卯 ✓ |
+| Elice | 14 | 4 | 未 | 酉 ✓ |
+
+**Change Process**: To modify any locked section, create a GitHub issue with your proposed changes and user approval.
+
+---
+
 ## Overview
 
 The Ziwei (紫微) birth chart calculation follows a deterministic 7-step algorithm:
@@ -168,19 +216,145 @@ The Nayin element determines the bureau:
 
 ---
 
+## STEP 4.5: Calculate All 12 Palace Stems & Branches (12宮天干地支排列)
+
+**Input**: Life palace branch (命宮地支) from STEP 1, birth year stem
+**Output**: Heavenly stems and branches (天干地支) for all 12 palaces in COUNTERCLOCKWISE order
+
+### ✅ CRITICAL CORRECTION: COUNTERCLOCKWISE ARRANGEMENT (逆時針排列)
+
+**Key Principle**: The 12 palaces are arranged in **COUNTERCLOCKWISE order (逆時針)**, going BACKWARD through the branches!
+
+Palace order (counterclockwise): 命宮 → 兄弟宮 → 夫妻宮 → 子女宮 → 財帛宮 → 疾厄宮 → 遷移宮 → 交友宮 → 官祿宮 → 田宅宮 → 福德宮 → 父母宮
+
+**Formula**:
+
+```python
+# Step 1: Calculate stem at 寅 position using year stem (from Five Tiger Escaping)
+stemAtYin = wuhuDun[yearStem]
+stemAtYinIndex = stemOrder.index(stemAtYin)
+
+# Step 2: Get life palace index
+lifeHouseIndex = branchOrder.index(lifeHouseBranch)  # e.g., 寅 = 0
+
+# Step 3: For each palace (0-11), calculate branch going COUNTERCLOCKWISE (BACKWARD)
+palaceNames = ["命宮", "兄弟宮", "夫妻宮", "子女宮", "財帛宮", "疾厄宮",
+                "遷移宮", "交友宮", "官祿宮", "田宅宮", "福德宮", "父母宮"]
+
+for i in range(12):
+    # BACKWARD through branches (counterclockwise)
+    palaceBranchIndex = (lifeHouseIndex - i) % 12
+    palaceBranch = branchOrder[palaceBranchIndex]
+
+    # Calculate stem for this branch position
+    palaceStemIndex = (stemAtYinIndex + palaceBranchIndex) % 10
+    palaceStem = stemOrder[palaceStemIndex]
+```
+
+**Key Insight**:
+- **NOT clockwise**: ❌ 寅 → 卯 → 辰 → ...
+- **COUNTERCLOCKWISE**: ✅ 寅 → 丑 → 子 → 亥 → ...
+- Stems cycle every **10 positions**; branches cycle every **12 positions**
+- Each stem appears exactly **twice** in the 12-palace cycle
+
+### ✅ Verified Results (All 5 People) - COUNTERCLOCKWISE ORDER
+
+**Bennett** (Year 1984甲, Life Palace 寅)
+```
+COUNTERCLOCKWISE (BACKWARD):
+命宮 寅(丙) → 兄弟宮 丑(丁) → 夫妻宮 子(丙) → 子女宮 亥(乙) → 財帛宮 戌(甲) → 疾厄宮 酉(癸) →
+遷移宮 申(壬) → 交友宮 未(辛) → 官祿宮 午(庚) → 田宅宮 巳(己) → 福德宮 辰(戊) → 父母宮 卯(丁)
+```
+
+**Brian** (Year 1986丙, Life Palace 辰)
+```
+COUNTERCLOCKWISE (BACKWARD):
+命宮 辰(壬) → 兄弟宮 卯(辛) → 夫妻宮 寅(庚) → 子女宮 丑(辛) → 財帛宮 子(庚) → 疾厄宮 亥(己) →
+遷移宮 戌(戊) → 交友宮 酉(丁) → 官祿宮 申(丙) → 田宅宮 未(乙) → 福德宮 午(甲) → 父母宮 巳(癸)
+```
+
+**Christy** (Year 1989己, Life Palace 未)
+```
+COUNTERCLOCKWISE (BACKWARD):
+命宮 未(辛) → 兄弟宮 午(庚) → 夫妻宮 巳(己) → 子女宮 辰(戊) → 財帛宮 卯(丁) → 疾厄宮 寅(丙) →
+遷移宮 丑(丁) → 交友宮 子(丙) → 官祿宮 亥(乙) → 田宅宮 戌(甲) → 福德宮 酉(癸) → 父母宮 申(壬)
+```
+
+**Cherry** (Year 1990庚, Life Palace 卯)
+```
+COUNTERCLOCKWISE (BACKWARD):
+命宮 卯(己) → 兄弟宮 寅(戊) → 夫妻宮 丑(己) → 子女宮 子(戊) → 財帛宮 亥(丁) → 疾厄宮 戌(丙) →
+遷移宮 酉(乙) → 交友宮 申(甲) → 官祿宮 未(癸) → 田宅宮 午(壬) → 福德宮 巳(辛) → 父母宮 辰(庚)
+```
+
+**Elice** (Year 1982壬, Life Palace 亥)
+```
+COUNTERCLOCKWISE (BACKWARD):
+命宮 亥(辛) → 兄弟宮 戌(庚) → 夫妻宮 酉(己) → 子女宮 申(戊) → 財帛宮 未(丁) → 疾厄宮 午(丙) →
+遷移宮 巳(乙) → 交友宮 辰(甲) → 官祿宮 卯(癸) → 田宅宮 寅(壬) → 福德宮 丑(癸) → 父母宮 子(壬)
+```
+
+### ❌ CRITICAL ERRORS (Fixed 2026-02-20)
+
+**ERROR 1: Used CLOCKWISE order instead of COUNTERCLOCKWISE**
+```python
+# ❌ WRONG: Clockwise/forward through branches
+寅 → 卯 → 辰 → 巳 → ... (WRONG!)
+
+# ✅ CORRECT: COUNTERCLOCKWISE/backward through branches
+寅 → 丑 → 子 → 亥 → ... (CORRECT!)
+```
+
+**ERROR 2: Calculated palace stems from life palace instead of from 寅**
+```python
+# ❌ WRONG APPROACH
+for i in range(12):
+    palace_stem_idx = (life_palace_stem_idx + i) % 10
+    palace_stem = stemOrder[palace_stem_idx]
+
+# ✅ CORRECT APPROACH
+for i in range(12):
+    palace_branch_idx = (life_house_idx - i) % 12  # Go BACKWARD
+    palace_stem_idx = (stem_at_yin_idx + palace_branch_idx) % 10
+    palace_stem = stemOrder[palace_stem_idx]
+```
+
+**Root Cause**: Misunderstood the palace arrangement direction. 12 palaces are NOT in clockwise sequential order - they are in COUNTERCLOCKWISE order going backward through the branches!
+
+### ✅ KEY PRINCIPLE VERIFIED
+
+- Stems cycle every **10 positions** (complete 10-stem cycle)
+- Branches cycle every **12 positions** (complete 12-branch cycle)
+- Therefore: **LCM(10,12) = 60** — the 60-year Sexagenary cycle repeats
+- In 12 palace chart: Each stem appears **exactly 2 times** (12 ÷ 10 = 1 remainder 2)
+
+### ✅ FORMULA VERIFIED - COUNTERCLOCKWISE ARRANGEMENT
+
+**Critical Discovery**: The 12 palaces are arranged in **COUNTERCLOCKWISE order (逆時針)**, NOT clockwise!
+
+From search results (2026-02-20):
+> "逆時針方向排列為：命宮、兄弟宮、夫妻宮、子女宮、財帛宮、疾厄宮..."
+> (Counterclockwise direction: Life Palace → Siblings → Spouse → Children → Wealth → Health...)
+
+**Sources**:
+- [紫微斗數手工排盤 | 星林 學苑](https://www.108s.tw/article/info/88)
+- [兄弟宮是你與生俱來的助力或是阻力的來源 | 星林 學苑](https://www.108s.tw/article/info/43)
+- Multiple Chinese astrology sources confirming counterclockwise arrangement
+- All 5 test cases verified with COUNTERCLOCKWISE algorithm ✓
+
+**Status**: STEP 4.5 COMPLETELY CORRECTED with counterclockwise arrangement.
+**Last Updated**: 2026-02-20
+
+---
+
 ## STEP 5: Place Primary Stars in 12 Palaces
 
-**Input**: Five element bureau, life palace index, lunar day, life palace branch
-**Output**: 12-palace chart with 紫微 and 天府 positioned
+**Input**: Five element bureau, lunar day
+**Output**: Ziwei and Tianfu positions
 
-### 5A: Place 紫微 (Ziwei - Purple Subtlety)
+### ❌ INCORRECT FORMULA (DO NOT USE)
 
-```
-紫微位置 = ziweiPositionByBureauAndRemainder[五行局][(農曆日 % 五行局) or 五行局]
-```
-
-Where `ziweiPositionByBureauAndRemainder` is:
-
+The simple remainder table below is WRONG:
 ```javascript
 const ziweiPositionByBureauAndRemainder = {
   2: { 0: "亥", 1: "丑", 2: "子" },
@@ -190,35 +364,20 @@ const ziweiPositionByBureauAndRemainder = {
   6: { 0: "卯", 1: "巳", 2: "辰", 3: "卯", 4: "巳", 5: "辰", 6: "卯" }
 };
 ```
+**This produces INCORRECT results. Use the Odd/Even Difference Method instead.**
 
-### 5B: Place 天府 (Tianfu - Heavenly Storehouse)
+### ✅ VERIFIED RESULTS (Using Correct Odd/Even Difference Method)
 
-The 天府 position is opposite to 紫微:
+**NOTE: The simple remainder table (ziweiPositionByBureauAndRemainder) is INCORRECT! Use the Odd/Even Difference Method below instead.**
 
-```
-天府位置 = (紫微位置 + 6宮) % 12
-```
-
-Or use the lookup table:
-
-```javascript
-const tianfuByZiweiBranch = {
-  "子": "午", "丑": "未", "寅": "申", "卯": "酉",
-  "辰": "戌", "巳": "亥", "午": "子", "未": "丑",
-  "申": "寅", "酉": "卯", "戌": "辰", "亥": "巳"
-};
-```
-
-### Example (Pending Complete Birth Data)
-
-Once we have complete lunar day information for all 5 people, we can calculate:
+All 5 people verified with correct calculations:
 
 ```
-Bennett (Bureau 5):  紫微 at ? (need lunar day)
-Brian (Bureau 4):    紫微 at ? (need lunar day)
-Christy (Bureau 3):  紫微 at ? (need lunar day)
-Cherry (Bureau 5):   紫微 at ? (need lunar day)
-Elice (Bureau 5):    紫微 at ? (need lunar day)
+Bennett: Day 3, Bureau 6 (火六局) → Ziwei 亥, Tianfu 巳 ✓
+Brian: Day 17, Bureau 2 (水二局) → Ziwei 酉, Tianfu 未 ✓
+Christy: Day 2, Bureau 5 (土五局) → Ziwei 亥, Tianfu 巳 ✓
+Cherry: Day 4, Bureau 5 (土五局) → Ziwei 丑, Tianfu 卯 ✓
+Elice: Day 14, Bureau 4 (金四局) → Ziwei 未, Tianfu 酉 ✓
 ```
 
 ---
