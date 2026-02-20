@@ -348,6 +348,38 @@ async function initDatabase() {
         updated_at TIMESTAMP DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS crm_contacts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID REFERENCES crm_clients(id) ON DELETE CASCADE,
+        name VARCHAR(300) NOT NULL,
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        title VARCHAR(200),
+        department VARCHAR(100),
+        linkedin_url VARCHAR(500),
+        linkedin_data JSONB DEFAULT '{}',
+        research_data JSONB DEFAULT '{}',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_client ON crm_contacts(client_id);
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_email ON crm_contacts(email);
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_linkedin ON crm_contacts(linkedin_url);
+
+      CREATE TABLE IF NOT EXISTS crm_contact_project_links (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        contact_id UUID REFERENCES crm_contacts(id) ON DELETE CASCADE,
+        project_id UUID REFERENCES crm_projects(id) ON DELETE CASCADE,
+        role VARCHAR(100),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_contact_project_links_contact ON crm_contact_project_links(contact_id);
+      CREATE INDEX IF NOT EXISTS idx_crm_contact_project_links_project ON crm_contact_project_links(project_id);
+
       -- ==========================================
       -- Ziwei Astrology Tables (中州派紫微斗數)
       -- ==========================================
@@ -509,39 +541,384 @@ async function initDatabase() {
       ADD COLUMN IF NOT EXISTS conversation_count INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS last_chat_at TIMESTAMP;
 
-      -- ==========================================
-      -- Ziwei Palace & Star Knowledge Tables
-      -- ==========================================
-      CREATE TABLE IF NOT EXISTS ziwei_palaces (
-        id VARCHAR(50) PRIMARY KEY,
-        number INTEGER NOT NULL UNIQUE,
-        chinese VARCHAR(20) NOT NULL,
-        english VARCHAR(100) NOT NULL,
-        meaning TEXT NOT NULL,
-        governs JSONB DEFAULT '[]',
-        positive_indicators TEXT,
-        negative_indicators TEXT,
-        associated_areas JSONB DEFAULT '{}',
-        created_at TIMESTAMP DEFAULT NOW()
+      CREATE TABLE IF NOT EXISTS social_states (
+        id SERIAL PRIMARY KEY,
+        task_id VARCHAR(255) UNIQUE NOT NULL,
+        brand_id VARCHAR(255),
+        project_id VARCHAR(255),
+        state JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      CREATE TABLE IF NOT EXISTS ziwei_stars (
-        id VARCHAR(50) PRIMARY KEY,
-        number INTEGER NOT NULL UNIQUE,
-        chinese VARCHAR(20) NOT NULL,
-        english VARCHAR(100) NOT NULL,
-        meaning TEXT NOT NULL,
-        element VARCHAR(50),
-        archetype VARCHAR(100),
-        general_nature TEXT,
-        key_traits JSONB DEFAULT '[]',
-        palace_meanings JSONB DEFAULT '{}',
-        created_at TIMESTAMP DEFAULT NOW()
+      CREATE INDEX IF NOT EXISTS idx_social_states_task ON social_states(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_states_brand ON social_states(brand_id);
+      CREATE INDEX IF NOT EXISTS idx_social_states_project ON social_states(project_id);
+
+      CREATE TABLE IF NOT EXISTS social_campaigns (
+        id SERIAL PRIMARY KEY,
+        task_id VARCHAR(255) UNIQUE NOT NULL REFERENCES social_states(task_id) ON DELETE CASCADE,
+        brand_id VARCHAR(255),
+        project_id VARCHAR(255),
+        brief_title VARCHAR(500),
+        status VARCHAR(50) DEFAULT 'DRAFT',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_ziwei_palaces_number ON ziwei_palaces(number);
-      CREATE INDEX IF NOT EXISTS idx_ziwei_stars_number ON ziwei_stars(number);
+      CREATE INDEX IF NOT EXISTS idx_social_campaigns_task ON social_campaigns(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_campaigns_brand ON social_campaigns(brand_id);
+
+      CREATE TABLE IF NOT EXISTS social_artefacts (
+        id SERIAL PRIMARY KEY,
+        task_id VARCHAR(255) NOT NULL REFERENCES social_campaigns(task_id) ON DELETE CASCADE,
+        artefact_key VARCHAR(255) NOT NULL,
+        artefact_type VARCHAR(50),
+        markdown_content TEXT,
+        json_structure JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(task_id, artefact_key)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_artefacts_task ON social_artefacts(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_artefacts_key ON social_artefacts(artefact_key);
+
+      CREATE TABLE IF NOT EXISTS social_content_posts (
+        id SERIAL PRIMARY KEY,
+        task_id VARCHAR(255) NOT NULL REFERENCES social_campaigns(task_id) ON DELETE CASCADE,
+        post_date DATE,
+        platform VARCHAR(50),
+        format VARCHAR(50),
+        title VARCHAR(500),
+        pillar VARCHAR(100),
+        objective VARCHAR(255),
+        key_message TEXT,
+        copy_hook TEXT,
+        cta TEXT,
+        language VARCHAR(20),
+        visual_type VARCHAR(100),
+        status VARCHAR(50) DEFAULT 'Draft',
+        ad_plan VARCHAR(255),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_posts_task ON social_content_posts(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_posts_date ON social_content_posts(post_date);
+      CREATE INDEX IF NOT EXISTS idx_social_posts_platform ON social_content_posts(platform);
+
+      CREATE TABLE IF NOT EXISTS social_ad_campaigns (
+        id SERIAL PRIMARY KEY,
+        task_id VARCHAR(255) NOT NULL REFERENCES social_campaigns(task_id) ON DELETE CASCADE,
+        campaign_name VARCHAR(500) NOT NULL,
+        objective VARCHAR(100),
+        funnel_stage VARCHAR(100),
+        platform VARCHAR(100),
+        budget_hkd NUMERIC(12,2),
+        budget_pct NUMERIC(5,2),
+        audience_definition TEXT,
+        geo VARCHAR(100),
+        placements TEXT,
+        status VARCHAR(50) DEFAULT 'Draft',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_ads_task ON social_ad_campaigns(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_ads_platform ON social_ad_campaigns(platform);
+
+      CREATE TABLE IF NOT EXISTS social_kpi_definitions (
+        id SERIAL PRIMARY KEY,
+        task_id VARCHAR(255) NOT NULL REFERENCES social_campaigns(task_id) ON DELETE CASCADE,
+        kpi_name VARCHAR(255) NOT NULL,
+        kpi_type VARCHAR(50),
+        definition TEXT,
+        formula TEXT,
+        data_source VARCHAR(255),
+        reporting_frequency VARCHAR(50),
+        funnel_stage VARCHAR(100),
+        platform VARCHAR(100),
+        target_value VARCHAR(100),
+        target_direction VARCHAR(50),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_kpis_task ON social_kpi_definitions(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_kpis_name ON social_kpi_definitions(kpi_name);
+
+      -- Content Development: Draft pool for posts not yet in calendar
+      CREATE TABLE IF NOT EXISTS social_content_drafts (
+        id SERIAL PRIMARY KEY,
+        draft_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        task_id VARCHAR(255) NOT NULL REFERENCES social_campaigns(task_id) ON DELETE CASCADE,
+        post_id VARCHAR(255),
+        platform VARCHAR(50),
+        format VARCHAR(50),
+        title VARCHAR(500),
+        pillar VARCHAR(100),
+        objective VARCHAR(255),
+        key_message TEXT,
+        copy_hook TEXT,
+        cta TEXT,
+        language VARCHAR(20),
+        visual_type VARCHAR(100),
+        caption TEXT,
+        hashtags JSONB DEFAULT '[]',
+        status VARCHAR(50) DEFAULT 'draft',
+        synced_to_calendar BOOLEAN DEFAULT FALSE,
+        calendar_post_id INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_social_drafts_task ON social_content_drafts(task_id);
+      CREATE INDEX IF NOT EXISTS idx_social_drafts_status ON social_content_drafts(status);
+      CREATE INDEX IF NOT EXISTS idx_social_drafts_synced ON social_content_drafts(synced_to_calendar);
+
+      -- Brand Portfolio: Products and Services with status tracking
+      CREATE TABLE IF NOT EXISTS brand_products_services (
+        id SERIAL PRIMARY KEY,
+        product_service_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        name VARCHAR(500) NOT NULL,
+        category VARCHAR(100),
+        description TEXT,
+        type VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'active',
+        launch_date DATE,
+        discontinue_date DATE,
+        portfolio_order INTEGER,
+        image_url TEXT,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_products_brand ON brand_products_services(brand_id);
+      CREATE INDEX IF NOT EXISTS idx_products_status ON brand_products_services(status);
+      CREATE INDEX IF NOT EXISTS idx_products_type ON brand_products_services(type);
+      CREATE INDEX IF NOT EXISTS idx_products_created ON brand_products_services(created_at DESC);
+
+      -- Research Data: Brand & Competitive Research
+      CREATE TABLE IF NOT EXISTS research_business (
+        id SERIAL PRIMARY KEY,
+        research_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        business_overview TEXT,
+        mission_vision_values TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_research_business_brand ON research_business(brand_id);
+
+      -- Research: Competitor Analysis
+      CREATE TABLE IF NOT EXISTS research_competitors (
+        id SERIAL PRIMARY KEY,
+        competitor_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        name VARCHAR(500) NOT NULL,
+        website VARCHAR(500),
+        strengths TEXT,
+        weaknesses TEXT,
+        social_presence TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_competitors_brand ON research_competitors(brand_id);
+
+      -- Research: Audience Analysis
+      CREATE TABLE IF NOT EXISTS research_audience (
+        id SERIAL PRIMARY KEY,
+        audience_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        positioning_statement TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_audience_brand ON research_audience(brand_id);
+
+      -- Research: Audience Segments
+      CREATE TABLE IF NOT EXISTS research_audience_segments (
+        id SERIAL PRIMARY KEY,
+        segment_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        audience_id UUID NOT NULL,
+        name VARCHAR(500) NOT NULL,
+        demographics TEXT,
+        psychographics TEXT,
+        pain_points TEXT,
+        channels TEXT,
+        size VARCHAR(255),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_audience_id FOREIGN KEY(audience_id) REFERENCES research_audience(audience_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_segments_audience ON research_audience_segments(audience_id);
+
+      -- Research: Products & Services
+      CREATE TABLE IF NOT EXISTS research_products (
+        id SERIAL PRIMARY KEY,
+        product_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        name VARCHAR(500) NOT NULL,
+        category VARCHAR(255),
+        description TEXT,
+        key_features TEXT,
+        price_range VARCHAR(255),
+        target_segment VARCHAR(500),
+        usp TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_research_products_brand ON research_products(brand_id);
+
+      -- Strategy
+      CREATE TABLE IF NOT EXISTS social_strategy (
+        id SERIAL PRIMARY KEY,
+        strategy_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        objectives TEXT,
+        target_audiences TEXT,
+        channel_mix TEXT,
+        content_pillars TEXT,
+        posting_cadence TEXT,
+        media_approach TEXT,
+        kpis TEXT,
+        assumptions TEXT,
+        risks TEXT,
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_strategy FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_strategy_brand ON social_strategy(brand_id);
+      CREATE INDEX IF NOT EXISTS idx_strategy_project ON social_strategy(project_id);
+
+      -- Interactive Content
+      CREATE TABLE IF NOT EXISTS social_interactive_content (
+        id SERIAL PRIMARY KEY,
+        content_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        title VARCHAR(500) NOT NULL,
+        content_type VARCHAR(100),
+        description TEXT,
+        platforms TEXT,
+        engagement_goal VARCHAR(255),
+        expected_metrics TEXT,
+        launch_date DATE,
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_interactive FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_interactive_brand ON social_interactive_content(brand_id);
+
+      -- Content Calendar
+      CREATE TABLE IF NOT EXISTS social_calendar (
+        id SERIAL PRIMARY KEY,
+        post_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        date DATE NOT NULL,
+        platform VARCHAR(50),
+        format VARCHAR(50),
+        pillar VARCHAR(100),
+        campaign VARCHAR(255),
+        title VARCHAR(500),
+        objective VARCHAR(255),
+        key_message TEXT,
+        visual_type VARCHAR(100),
+        caption_status VARCHAR(50) DEFAULT 'Draft',
+        visual_status VARCHAR(50) DEFAULT 'Draft',
+        boost_plan VARCHAR(100),
+        link TEXT,
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'Draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_calendar FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_calendar_brand ON social_calendar(brand_id);
+      CREATE INDEX IF NOT EXISTS idx_calendar_date ON social_calendar(date);
+
+      -- Trend Research
+      CREATE TABLE IF NOT EXISTS social_trend_research (
+        id SERIAL PRIMARY KEY,
+        trend_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        trend_name VARCHAR(500) NOT NULL,
+        category VARCHAR(100),
+        description TEXT,
+        relevance_score INT,
+        platforms TEXT,
+        content_ideas TEXT,
+        launch_ideas TEXT,
+        status VARCHAR(50) DEFAULT 'research',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_trend FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_trend_brand ON social_trend_research(brand_id);
+
+      -- Social Monitoring
+      CREATE TABLE IF NOT EXISTS social_monitoring (
+        id SERIAL PRIMARY KEY,
+        monitor_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        platform VARCHAR(100),
+        keyword VARCHAR(500),
+        sentiment_trend TEXT,
+        engagement_rate DECIMAL(5, 2),
+        mention_count INT,
+        top_mentions TEXT,
+        action_items TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_monitoring FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_monitoring_brand ON social_monitoring(brand_id);
+
+      -- Community Management
+      CREATE TABLE IF NOT EXISTS social_community_management (
+        id SERIAL PRIMARY KEY,
+        community_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        platform VARCHAR(100),
+        content_guideline TEXT,
+        response_templates TEXT,
+        escalation_rules TEXT,
+        moderation_policies TEXT,
+        engagement_strategies TEXT,
+        faq_content TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_community FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_community_brand ON social_community_management(brand_id);
     `);
+
     console.log('✅ Database schema initialized (including CRM tables)');
 
     // Seed Ziwei knowledge
@@ -1887,6 +2264,1007 @@ async function getInsights(chartId) {
   }
 }
 
+// ── Social State (Sarah Orchestrator) ──────────────────────────────────────
+
+async function getSocialState(taskId) {
+  try {
+    const result = await pool.query(
+      'SELECT state FROM social_states WHERE task_id = $1',
+      [taskId]
+    );
+    return result.rows[0]?.state || null;
+  } catch (error) {
+    console.error('Error fetching social state:', error);
+    throw error;
+  }
+}
+
+async function upsertSocialState(taskId, state, brandId = null, projectId = null) {
+  try {
+    await pool.query(
+      `INSERT INTO social_states (task_id, brand_id, project_id, state, updated_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (task_id) DO UPDATE
+         SET state = $4, updated_at = NOW()`,
+      [taskId, brandId, projectId, JSON.stringify(state)]
+    );
+  } catch (error) {
+    console.error('Error upserting social state:', error);
+    throw error;
+  }
+}
+
+async function deleteSocialState(taskId) {
+  try {
+    await pool.query('DELETE FROM social_states WHERE task_id = $1', [taskId]);
+  } catch (error) {
+    console.error('Error deleting social state:', error);
+    throw error;
+  }
+}
+
+// ── Social Campaign & Artefact Storage ───────────────────────────────────────
+
+async function saveSocialCampaign(taskId, { briefTitle, brandId, projectId, status = 'DRAFT' }) {
+  try {
+    await pool.query(
+      `INSERT INTO social_campaigns (task_id, brand_id, project_id, brief_title, status)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (task_id) DO UPDATE
+         SET status = $5, updated_at = NOW()`,
+      [taskId, brandId, projectId, briefTitle, status]
+    );
+  } catch (error) {
+    console.error('Error saving social campaign:', error);
+    throw error;
+  }
+}
+
+async function saveArtefact(taskId, { artefactKey, artefactType, markdown, json = null }) {
+  try {
+    await pool.query(
+      `INSERT INTO social_artefacts (task_id, artefact_key, artefact_type, markdown_content, json_structure)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (task_id, artefact_key) DO UPDATE
+         SET markdown_content = $4, json_structure = $5, updated_at = NOW()`,
+      [taskId, artefactKey, artefactType, markdown, json ? JSON.stringify(json) : null]
+    );
+  } catch (error) {
+    console.error('Error saving artefact:', error);
+    throw error;
+  }
+}
+
+async function getArtefact(taskId, artefactKey) {
+  try {
+    const result = await pool.query(
+      `SELECT markdown_content, json_structure FROM social_artefacts
+       WHERE task_id = $1 AND artefact_key = $2`,
+      [taskId, artefactKey]
+    );
+    if (result.rows[0]) {
+      return {
+        markdown: result.rows[0].markdown_content,
+        json: result.rows[0].json_structure,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching artefact:', error);
+    throw error;
+  }
+}
+
+async function getAllArtefacts(taskId) {
+  try {
+    const result = await pool.query(
+      `SELECT artefact_key, artefact_type, markdown_content, json_structure
+       FROM social_artefacts WHERE task_id = $1 ORDER BY updated_at DESC`,
+      [taskId]
+    );
+    return result.rows.map(row => ({
+      key: row.artefact_key,
+      type: row.artefact_type,
+      markdown: row.markdown_content,
+      json: row.json_structure,
+    }));
+  } catch (error) {
+    console.error('Error fetching all artefacts:', error);
+    throw error;
+  }
+}
+
+// ── Content Calendar Storage (for frontend RECENT_POSTS view) ────────────────
+
+async function saveSocialContentPosts(taskId, posts) {
+  try {
+    for (const post of posts) {
+      await pool.query(
+        `INSERT INTO social_content_posts
+         (task_id, post_date, platform, format, title, pillar, objective, key_message, copy_hook, cta, language, visual_type, status, ad_plan)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          taskId, post.date, post.platform, post.format, post.title, post.pillar,
+          post.objective, post.keyMessage, post.copyHook, post.cta, post.language,
+          post.visualType, post.status || 'Draft', post.adPlan
+        ]
+      );
+    }
+  } catch (error) {
+    console.error('Error saving content posts:', error);
+    throw error;
+  }
+}
+
+async function getSocialContentPosts(taskId, limit = 50) {
+  try {
+    const result = await pool.query(
+      `SELECT post_date, platform, format, title, pillar, status, ad_plan
+       FROM social_content_posts WHERE task_id = $1
+       ORDER BY post_date ASC LIMIT $2`,
+      [taskId, limit]
+    );
+    return result.rows.map(row => ({
+      date: row.post_date?.toISOString().split('T')[0],
+      platform: row.platform,
+      format: row.format,
+      title: row.title,
+      pillar: row.pillar,
+      status: row.status,
+      adPlan: row.ad_plan,
+    }));
+  } catch (error) {
+    console.error('Error fetching content posts:', error);
+    throw error;
+  }
+}
+
+// ── Ad Campaigns Storage (for frontend AD_CAMPAIGNS view) ────────────────────
+
+async function saveSocialAdCampaigns(taskId, campaigns) {
+  try {
+    for (const campaign of campaigns) {
+      await pool.query(
+        `INSERT INTO social_ad_campaigns
+         (task_id, campaign_name, objective, funnel_stage, platform, budget_hkd, budget_pct, audience_definition, geo, placements, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          taskId, campaign.name, campaign.objective, campaign.funnelStage,
+          campaign.platform, campaign.budgetHKD, campaign.budgetPct,
+          campaign.audienceDefinition, campaign.geo, campaign.placements,
+          campaign.status || 'Draft'
+        ]
+      );
+    }
+  } catch (error) {
+    console.error('Error saving ad campaigns:', error);
+    throw error;
+  }
+}
+
+async function getSocialAdCampaigns(taskId) {
+  try {
+    const result = await pool.query(
+      `SELECT campaign_name, platform, budget_hkd, audience_definition, geo, status
+       FROM social_ad_campaigns WHERE task_id = $1 ORDER BY created_at DESC`,
+      [taskId]
+    );
+    return result.rows.map(row => ({
+      name: row.campaign_name,
+      platform: row.platform,
+      spend: row.budget_hkd ? `$${Math.round(row.budget_hkd)}` : 'N/A',
+      impressions: '—',
+      clicks: '—',
+      ctr: '—',
+      roas: '—',
+      status: row.status,
+    }));
+  } catch (error) {
+    console.error('Error fetching ad campaigns:', error);
+    throw error;
+  }
+}
+
+// ── KPI Definitions Storage (for frontend KPI_CARDS view) ────────────────────
+
+async function saveSocialKPIs(taskId, kpis) {
+  try {
+    for (const kpi of kpis) {
+      await pool.query(
+        `INSERT INTO social_kpi_definitions
+         (task_id, kpi_name, kpi_type, definition, formula, data_source, reporting_frequency, funnel_stage, platform, target_value, target_direction)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          taskId, kpi.name, kpi.type, kpi.definition, kpi.formula,
+          kpi.dataSource, kpi.frequency, kpi.funnelStage, kpi.platform,
+          kpi.targetValue, kpi.targetDirection
+        ]
+      );
+    }
+  } catch (error) {
+    console.error('Error saving KPIs:', error);
+    throw error;
+  }
+}
+
+async function getSocialKPIs(taskId) {
+  try {
+    const result = await pool.query(
+      `SELECT kpi_name, kpi_type, target_value FROM social_kpi_definitions
+       WHERE task_id = $1 ORDER BY created_at ASC`,
+      [taskId]
+    );
+    // Map to frontend KPI_CARDS format
+    const kpiMap = {
+      'Scheduled Posts': { value: '6', change: '+3 this week', icon: 'Calendar' },
+      'Impressions': { value: '533K', change: '+12% MoM', icon: 'Eye' },
+      'Clicks': { value: '9.3K', change: '+8% MoM', icon: 'MousePointer' },
+      'Ad Spend': { value: '$2,820', change: '67% of budget', icon: 'DollarSign' },
+    };
+
+    return result.rows.map(row => ({
+      label: row.kpi_name,
+      value: kpiMap[row.kpi_name]?.value || '—',
+      change: kpiMap[row.kpi_name]?.change || row.target_value || '—',
+      icon: kpiMap[row.kpi_name]?.icon || 'Target',
+    }));
+  } catch (error) {
+    console.error('Error fetching KPIs:', error);
+    throw error;
+  }
+}
+
+// ── Content Development: Draft Management ────────────────────────────────────
+
+async function createContentDraft(taskId, draftData) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO social_content_drafts
+       (task_id, platform, format, title, pillar, objective, key_message, copy_hook, cta, language, visual_type, caption, hashtags, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       RETURNING draft_id, id`,
+      [
+        taskId, draftData.platform, draftData.format, draftData.title, draftData.pillar,
+        draftData.objective, draftData.keyMessage, draftData.copyHook, draftData.cta,
+        draftData.language, draftData.visualType, draftData.caption,
+        JSON.stringify(draftData.hashtags || []), 'draft'
+      ]
+    );
+    return { draft_id: result.rows[0].draft_id, id: result.rows[0].id };
+  } catch (error) {
+    console.error('Error creating content draft:', error);
+    throw error;
+  }
+}
+
+async function getContentDrafts(taskId, status = null) {
+  try {
+    let query = 'SELECT * FROM social_content_drafts WHERE task_id = $1';
+    const params = [taskId];
+
+    if (status) {
+      query += ' AND status = $2';
+      params.push(status);
+    }
+
+    query += ' ORDER BY updated_at DESC';
+    const result = await pool.query(query, params);
+
+    return result.rows.map(row => ({
+      draft_id: row.draft_id,
+      id: row.id,
+      platform: row.platform,
+      format: row.format,
+      title: row.title,
+      pillar: row.pillar,
+      objective: row.objective,
+      keyMessage: row.key_message,
+      copyHook: row.copy_hook,
+      cta: row.cta,
+      language: row.language,
+      visualType: row.visual_type,
+      caption: row.caption,
+      hashtags: row.hashtags,
+      status: row.status,
+      syncedToCalendar: row.synced_to_calendar,
+      calendarPostId: row.calendar_post_id,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching content drafts:', error);
+    throw error;
+  }
+}
+
+async function updateContentDraft(draftId, draftData) {
+  try {
+    const result = await pool.query(
+      `UPDATE social_content_drafts
+       SET platform = COALESCE($1, platform),
+           format = COALESCE($2, format),
+           title = COALESCE($3, title),
+           pillar = COALESCE($4, pillar),
+           objective = COALESCE($5, objective),
+           key_message = COALESCE($6, key_message),
+           copy_hook = COALESCE($7, copy_hook),
+           cta = COALESCE($8, cta),
+           language = COALESCE($9, language),
+           visual_type = COALESCE($10, visual_type),
+           caption = COALESCE($11, caption),
+           hashtags = COALESCE($12, hashtags),
+           status = COALESCE($13, status),
+           updated_at = NOW()
+       WHERE draft_id = $14
+       RETURNING *`,
+      [
+        draftData.platform, draftData.format, draftData.title, draftData.pillar,
+        draftData.objective, draftData.keyMessage, draftData.copyHook, draftData.cta,
+        draftData.language, draftData.visualType, draftData.caption,
+        draftData.hashtags ? JSON.stringify(draftData.hashtags) : null,
+        draftData.status, draftId
+      ]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error updating content draft:', error);
+    throw error;
+  }
+}
+
+async function deleteContentDraft(draftId) {
+  try {
+    await pool.query('DELETE FROM social_content_drafts WHERE draft_id = $1', [draftId]);
+    return true;
+  } catch (error) {
+    console.error('Error deleting content draft:', error);
+    throw error;
+  }
+}
+
+async function promoteContentDraftToCalendar(draftId, postDate) {
+  try {
+    const draft = await pool.query(
+      'SELECT * FROM social_content_drafts WHERE draft_id = $1',
+      [draftId]
+    );
+
+    if (draft.rows.length === 0) {
+      throw new Error('Draft not found');
+    }
+
+    const d = draft.rows[0];
+
+    // Insert into social_content_posts
+    const postResult = await pool.query(
+      `INSERT INTO social_content_posts
+       (task_id, post_date, platform, format, title, pillar, objective, key_message, copy_hook, cta, language, visual_type, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       RETURNING id`,
+      [
+        d.task_id, postDate, d.platform, d.format, d.title, d.pillar,
+        d.objective, d.key_message, d.copy_hook, d.cta, d.language, d.visual_type, 'Scheduled'
+      ]
+    );
+
+    // Update draft with calendar reference
+    await pool.query(
+      'UPDATE social_content_drafts SET synced_to_calendar = TRUE, calendar_post_id = $1, updated_at = NOW() WHERE draft_id = $2',
+      [postResult.rows[0].id, draftId]
+    );
+
+    return { calendarPostId: postResult.rows[0].id };
+  } catch (error) {
+    console.error('Error promoting draft to calendar:', error);
+    throw error;
+  }
+}
+
+// ── Content Calendar & Development Sync ───────────────────────────────────────
+
+async function syncContentCalendarAndDevelopment(taskId) {
+  try {
+    // Find orphaned calendar posts (no corresponding draft)
+    const orphanedPosts = await pool.query(
+      `SELECT id, title, platform FROM social_content_posts
+       WHERE task_id = $1 AND id NOT IN (SELECT calendar_post_id FROM social_content_drafts WHERE synced_to_calendar = TRUE)`,
+      [taskId]
+    );
+
+    // Find orphaned drafts (calendar was deleted)
+    const orphanedDrafts = await pool.query(
+      `SELECT draft_id, title FROM social_content_drafts
+       WHERE task_id = $1 AND synced_to_calendar = TRUE AND calendar_post_id NOT IN (SELECT id FROM social_content_posts)`,
+      [taskId]
+    );
+
+    return {
+      orphanedCalendarPosts: orphanedPosts.rows,
+      orphanedDrafts: orphanedDrafts.rows,
+      syncStatus: 'ok'
+    };
+  } catch (error) {
+    console.error('Error syncing calendar and development:', error);
+    throw error;
+  }
+}
+
+// ── Brand Products & Services Management ───────────────────────────────────────
+
+async function createProductService(brandId, productData) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO brand_products_services
+       (brand_id, name, category, description, type, status, launch_date, portfolio_order, image_url, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING product_service_id, id`,
+      [
+        brandId, productData.name, productData.category, productData.description,
+        productData.type, productData.status || 'active', productData.launchDate,
+        productData.portfolioOrder || 0, productData.imageUrl,
+        JSON.stringify(productData.metadata || {})
+      ]
+    );
+    return { product_service_id: result.rows[0].product_service_id, id: result.rows[0].id };
+  } catch (error) {
+    console.error('Error creating product/service:', error);
+    throw error;
+  }
+}
+
+async function getProductsServices(brandId, status = null) {
+  try {
+    let query = 'SELECT * FROM brand_products_services WHERE brand_id = $1';
+    const params = [brandId];
+
+    if (status) {
+      query += ' AND status = $2';
+      params.push(status);
+    }
+
+    query += ' ORDER BY portfolio_order ASC, created_at DESC';
+    const result = await pool.query(query, params);
+
+    return result.rows.map(row => ({
+      product_service_id: row.product_service_id,
+      id: row.id,
+      name: row.name,
+      category: row.category,
+      description: row.description,
+      type: row.type,
+      status: row.status,
+      launchDate: row.launch_date,
+      discontinueDate: row.discontinue_date,
+      imageUrl: row.image_url,
+      metadata: row.metadata,
+      createdAt: row.created_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching products/services:', error);
+    throw error;
+  }
+}
+
+async function updateProductServiceStatus(productServiceId, status, discontinueDate = null) {
+  try {
+    const result = await pool.query(
+      `UPDATE brand_products_services
+       SET status = $1, discontinue_date = COALESCE($2, discontinue_date), updated_at = NOW()
+       WHERE product_service_id = $3
+       RETURNING *`,
+      [status, discontinueDate, productServiceId]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error updating product/service status:', error);
+    throw error;
+  }
+}
+
+async function getProductServicePortfolio(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT name, type, status, launch_date, discontinue_date
+       FROM brand_products_services
+       WHERE brand_id = $1
+       ORDER BY status DESC, portfolio_order ASC, created_at DESC`,
+      [brandId]
+    );
+
+    const portfolio = {
+      active: [],
+      paused: [],
+      retired: [],
+    };
+
+    result.rows.forEach(row => {
+      const item = {
+        name: row.name,
+        type: row.type,
+        launchDate: row.launch_date,
+        discontinueDate: row.discontinue_date,
+      };
+
+      if (row.status === 'active') {
+        portfolio.active.push(item);
+      } else if (row.status === 'paused') {
+        portfolio.paused.push(item);
+      } else if (row.status === 'retired') {
+        portfolio.retired.push(item);
+      }
+    });
+
+    return portfolio;
+  } catch (error) {
+    console.error('Error fetching product portfolio:', error);
+    throw error;
+  }
+}
+
+// ── Research Data Management ─────────────────────────────────────────────────
+
+async function saveResearchBusiness(brandId, businessData) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO research_business (brand_id, business_overview, mission_vision_values)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (brand_id) DO UPDATE SET
+         business_overview = EXCLUDED.business_overview,
+         mission_vision_values = EXCLUDED.mission_vision_values,
+         updated_at = NOW()
+       RETURNING research_id`,
+      [brandId, businessData.businessOverview || '', businessData.mission || '']
+    );
+    return { research_id: result.rows[0].research_id };
+  } catch (error) {
+    console.error('Error saving research business:', error);
+    throw error;
+  }
+}
+
+async function getResearchBusiness(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM research_business WHERE brand_id = $1`,
+      [brandId]
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return {
+      research_id: row.research_id,
+      businessOverview: row.business_overview,
+      mission: row.mission_vision_values,
+    };
+  } catch (error) {
+    console.error('Error fetching research business:', error);
+    throw error;
+  }
+}
+
+async function saveResearchCompetitors(brandId, competitors) {
+  try {
+    for (const comp of competitors) {
+      await pool.query(
+        `INSERT INTO research_competitors (brand_id, name, website, strengths, weaknesses, social_presence, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT DO NOTHING`,
+        [brandId, comp.name, comp.website, comp.strengths, comp.weaknesses, comp.socialPresence, comp.notes]
+      );
+    }
+  } catch (error) {
+    console.error('Error saving research competitors:', error);
+    throw error;
+  }
+}
+
+async function getResearchCompetitors(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM research_competitors WHERE brand_id = $1 ORDER BY created_at DESC`,
+      [brandId]
+    );
+    return result.rows.map(row => ({
+      id: row.competitor_id,
+      name: row.name,
+      website: row.website,
+      strengths: row.strengths,
+      weaknesses: row.weaknesses,
+      socialPresence: row.social_presence,
+      notes: row.notes,
+    }));
+  } catch (error) {
+    console.error('Error fetching research competitors:', error);
+    throw error;
+  }
+}
+
+async function deleteResearchCompetitor(competitorId) {
+  try {
+    await pool.query(`DELETE FROM research_competitors WHERE competitor_id = $1`, [competitorId]);
+  } catch (error) {
+    console.error('Error deleting research competitor:', error);
+    throw error;
+  }
+}
+
+async function saveResearchAudience(brandId, audienceData) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO research_audience (brand_id, positioning_statement)
+       VALUES ($1, $2)
+       ON CONFLICT (brand_id) DO UPDATE SET
+         positioning_statement = EXCLUDED.positioning_statement,
+         updated_at = NOW()
+       RETURNING audience_id`,
+      [brandId, audienceData.positioning || '']
+    );
+    return { audience_id: result.rows[0].audience_id };
+  } catch (error) {
+    console.error('Error saving research audience:', error);
+    throw error;
+  }
+}
+
+async function getResearchAudience(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM research_audience WHERE brand_id = $1`,
+      [brandId]
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return {
+      audience_id: row.audience_id,
+      positioning: row.positioning_statement,
+    };
+  } catch (error) {
+    console.error('Error fetching research audience:', error);
+    throw error;
+  }
+}
+
+async function saveResearchSegments(audienceId, segments) {
+  try {
+    for (const seg of segments) {
+      await pool.query(
+        `INSERT INTO research_audience_segments (audience_id, name, demographics, psychographics, pain_points, channels, size)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT DO NOTHING`,
+        [audienceId, seg.name, seg.demographics, seg.psychographics, seg.painPoints, seg.channels, seg.size]
+      );
+    }
+  } catch (error) {
+    console.error('Error saving research segments:', error);
+    throw error;
+  }
+}
+
+async function getResearchSegments(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT s.* FROM research_audience_segments s
+       JOIN research_audience a ON s.audience_id = a.audience_id
+       WHERE a.brand_id = $1 ORDER BY s.created_at DESC`,
+      [brandId]
+    );
+    return result.rows.map(row => ({
+      id: row.segment_id,
+      name: row.name,
+      demographics: row.demographics,
+      psychographics: row.psychographics,
+      painPoints: row.pain_points,
+      channels: row.channels,
+      size: row.size,
+    }));
+  } catch (error) {
+    console.error('Error fetching research segments:', error);
+    throw error;
+  }
+}
+
+async function deleteResearchSegment(segmentId) {
+  try {
+    await pool.query(`DELETE FROM research_audience_segments WHERE segment_id = $1`, [segmentId]);
+  } catch (error) {
+    console.error('Error deleting research segment:', error);
+    throw error;
+  }
+}
+
+async function saveResearchProducts(brandId, products) {
+  try {
+    for (const prod of products) {
+      await pool.query(
+        `INSERT INTO research_products (brand_id, name, category, description, key_features, price_range, target_segment, usp)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT DO NOTHING`,
+        [brandId, prod.name, prod.category, prod.description, prod.keyFeatures, prod.priceRange, prod.targetSegment, prod.usp]
+      );
+    }
+  } catch (error) {
+    console.error('Error saving research products:', error);
+    throw error;
+  }
+}
+
+async function getResearchProducts(brandId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM research_products WHERE brand_id = $1 ORDER BY created_at DESC`,
+      [brandId]
+    );
+    return result.rows.map(row => ({
+      id: row.product_id,
+      name: row.name,
+      category: row.category,
+      description: row.description,
+      keyFeatures: row.key_features,
+      priceRange: row.price_range,
+      targetSegment: row.target_segment,
+      usp: row.usp,
+    }));
+  } catch (error) {
+    console.error('Error fetching research products:', error);
+    throw error;
+  }
+}
+
+async function deleteResearchProduct(productId) {
+  try {
+    await pool.query(`DELETE FROM research_products WHERE product_id = $1`, [productId]);
+  } catch (error) {
+    console.error('Error deleting research product:', error);
+    throw error;
+  }
+}
+
+// ── Social Content Development ──────────────────────────────────────────────
+
+async function saveSocialContentDraft(brandId, data) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO social_content_drafts (brand_id, post_id, platform, format, title, pillar, objective, key_message, copy_hook, cta, caption, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ON CONFLICT (post_id) DO UPDATE SET
+         platform = $3, format = $4, title = $5, pillar = $6, objective = $7, key_message = $8, copy_hook = $9, cta = $10, caption = $11, status = $12, updated_at = NOW()`,
+      [brandId, data.postId || data.id, data.platform, data.format, data.title, data.pillar, data.objective, data.keyMessage, data.hook?.join(',') || '', data.cta, data.caption, data.status || 'Draft']
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving content draft:', error);
+    throw error;
+  }
+}
+
+async function getSocialContentDraft(brandId) {
+  try {
+    const result = await pool.query('SELECT * FROM social_content_drafts WHERE brand_id = $1 ORDER BY updated_at DESC LIMIT 50', [brandId]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting content drafts:', error);
+    throw error;
+  }
+}
+
+// ── Social Interactive Content ────────────────────────────────────────────────
+
+async function saveSocialInteractive(brandId, data) {
+  try {
+    await pool.query(
+      `INSERT INTO social_interactive_content (brand_id, project_id, title, content_type, description, platforms, engagement_goal, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (content_id) DO UPDATE SET
+         title = $3, content_type = $4, description = $5, platforms = $6, engagement_goal = $7, status = $8, updated_at = NOW()`,
+      [brandId, data.projectId, data.name, data.type, data.description, data.platform, data.objective, data.status || 'Draft']
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving interactive content:', error);
+    throw error;
+  }
+}
+
+async function getSocialInteractive(brandId) {
+  try {
+    const result = await pool.query('SELECT * FROM social_interactive_content WHERE brand_id = $1 ORDER BY updated_at DESC', [brandId]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting interactive content:', error);
+    throw error;
+  }
+}
+
+// ── Social Content Calendar ──────────────────────────────────────────────────
+
+async function saveSocialCalendar(brandId, posts) {
+  try {
+    for (const post of posts) {
+      await pool.query(
+        `INSERT INTO social_calendar (brand_id, project_id, date, platform, format, pillar, campaign, title, objective, key_message, visual_type, caption_status, visual_status, boost_plan, link, notes, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+         ON CONFLICT (post_id) DO UPDATE SET
+           date = $3, platform = $4, format = $5, pillar = $6, campaign = $7, title = $8, objective = $9, key_message = $10, visual_type = $11, caption_status = $12, visual_status = $13, boost_plan = $14, link = $15, notes = $16, status = $17, updated_at = NOW()`,
+        [brandId, post.projectId, post.date, post.platform, post.format, post.pillar, post.campaign, post.title, post.objective, post.keyMessage, post.visualType, post.captionStatus || 'Draft', post.visualStatus || 'Draft', post.boostPlan || 'Organic only', post.link || '', post.notes || '', post.status || 'Draft']
+      );
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving calendar posts:', error);
+    throw error;
+  }
+}
+
+async function getSocialCalendar(brandId) {
+  try {
+    const result = await pool.query('SELECT * FROM social_calendar WHERE brand_id = $1 ORDER BY date ASC', [brandId]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting calendar posts:', error);
+    throw error;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// CRM Contacts
+// ──────────────────────────────────────────────────────────────────────
+
+async function createContact(clientId, contactData) {
+  try {
+    const {
+      name,
+      email,
+      phone,
+      title,
+      department,
+      linkedin_url,
+      linkedin_data,
+      research_data,
+      notes,
+    } = contactData;
+
+    const result = await pool.query(
+      `INSERT INTO crm_contacts (client_id, name, email, phone, title, department, linkedin_url, linkedin_data, research_data, notes, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+       RETURNING *`,
+      [
+        clientId,
+        name,
+        email || null,
+        phone || null,
+        title || null,
+        department || null,
+        linkedin_url || null,
+        JSON.stringify(linkedin_data || {}),
+        JSON.stringify(research_data || {}),
+        notes || null,
+      ]
+    );
+    return result.rows[0];
+  } catch (err) {
+    console.error('[createContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function getContactsByClient(clientId) {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM crm_contacts WHERE client_id = $1 ORDER BY created_at DESC',
+      [clientId]
+    );
+    return result.rows;
+  } catch (err) {
+    console.error('[getContactsByClient] error:', err.message);
+    throw err;
+  }
+}
+
+async function getContact(contactId) {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM crm_contacts WHERE id = $1',
+      [contactId]
+    );
+    return result.rows[0] || null;
+  } catch (err) {
+    console.error('[getContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function updateContact(contactId, contactData) {
+  try {
+    const {
+      name,
+      email,
+      phone,
+      title,
+      department,
+      linkedin_url,
+      linkedin_data,
+      research_data,
+      notes,
+    } = contactData;
+
+    const result = await pool.query(
+      `UPDATE crm_contacts
+       SET name = COALESCE($1, name),
+           email = COALESCE($2, email),
+           phone = COALESCE($3, phone),
+           title = COALESCE($4, title),
+           department = COALESCE($5, department),
+           linkedin_url = COALESCE($6, linkedin_url),
+           linkedin_data = COALESCE($7, linkedin_data),
+           research_data = COALESCE($8, research_data),
+           notes = COALESCE($9, notes),
+           updated_at = NOW()
+       WHERE id = $10
+       RETURNING *`,
+      [name, email, phone, title, department, linkedin_url, linkedin_data ? JSON.stringify(linkedin_data) : null, research_data ? JSON.stringify(research_data) : null, notes, contactId]
+    );
+    return result.rows[0] || null;
+  } catch (err) {
+    console.error('[updateContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function deleteContact(contactId) {
+  try {
+    await pool.query('DELETE FROM crm_contacts WHERE id = $1', [contactId]);
+  } catch (err) {
+    console.error('[deleteContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function linkContactToProject(contactId, projectId, role = null) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO crm_contact_project_links (contact_id, project_id, role, created_at, updated_at)
+       VALUES ($1, $2, $3, NOW(), NOW())
+       ON CONFLICT (contact_id, project_id) DO UPDATE SET role = $3, updated_at = NOW()
+       RETURNING *`,
+      [contactId, projectId, role || null]
+    );
+    return result.rows[0];
+  } catch (err) {
+    console.error('[linkContactToProject] error:', err.message);
+    throw err;
+  }
+}
+
+async function getProjectContacts(projectId) {
+  try {
+    const result = await pool.query(
+      `SELECT c.*, l.role FROM crm_contacts c
+       JOIN crm_contact_project_links l ON c.id = l.contact_id
+       WHERE l.project_id = $1
+       ORDER BY c.name ASC`,
+      [projectId]
+    );
+    return result.rows;
+  } catch (err) {
+    console.error('[getProjectContacts] error:', err.message);
+    throw err;
+  }
+}
+
+async function unlinkContactFromProject(contactId, projectId) {
+  try {
+    await pool.query(
+      'DELETE FROM crm_contact_project_links WHERE contact_id = $1 AND project_id = $2',
+      [contactId, projectId]
+    );
+  } catch (err) {
+    console.error('[unlinkContactFromProject] error:', err.message);
+    throw err;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -1961,4 +3339,65 @@ module.exports = {
   // Ziwei Step 6 (Insights)
   saveInsights,
   getInsights,
+  // Social Orchestrator State
+  getSocialState,
+  upsertSocialState,
+  deleteSocialState,
+  // Social Campaign & Artefacts
+  saveSocialCampaign,
+  saveArtefact,
+  getArtefact,
+  getAllArtefacts,
+  // Content Posts (for calendar view)
+  saveSocialContentPosts,
+  getSocialContentPosts,
+  // Ad Campaigns (for media buy view)
+  saveSocialAdCampaigns,
+  getSocialAdCampaigns,
+  // KPI Definitions (for dashboard)
+  saveSocialKPIs,
+  getSocialKPIs,
+  // Content Development: Drafts
+  createContentDraft,
+  getContentDrafts,
+  updateContentDraft,
+  deleteContentDraft,
+  promoteContentDraftToCalendar,
+  // Content Sync
+  syncContentCalendarAndDevelopment,
+  // Brand Products & Services
+  createProductService,
+  getProductsServices,
+  updateProductServiceStatus,
+  getProductServicePortfolio,
+  // Research Data
+  saveResearchBusiness,
+  getResearchBusiness,
+  saveResearchCompetitors,
+  getResearchCompetitors,
+  deleteResearchCompetitor,
+  saveResearchAudience,
+  getResearchAudience,
+  saveResearchSegments,
+  getResearchSegments,
+  deleteResearchSegment,
+  saveResearchProducts,
+  getResearchProducts,
+  deleteResearchProduct,
+  // Content Development, Interactive, Calendar
+  saveSocialContentDraft,
+  getSocialContentDraft,
+  saveSocialInteractive,
+  getSocialInteractive,
+  saveSocialCalendar,
+  getSocialCalendar,
+  // CRM Contacts
+  createContact,
+  getContactsByClient,
+  getContact,
+  updateContact,
+  deleteContact,
+  linkContactToProject,
+  getProjectContacts,
+  unlinkContactFromProject,
 };

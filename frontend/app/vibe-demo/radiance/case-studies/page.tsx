@@ -1,10 +1,45 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
+import { Breadcrumb } from '../components/Breadcrumb';
 
 export default function CaseStudiesPage() {
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+  const tagColorMap: Record<string, { bg: string; text: string; border: string }> = {
+    'PR': { bg: 'bg-blue-50 dark:bg-blue-950/20', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
+    'Events': { bg: 'bg-purple-50 dark:bg-purple-950/20', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800' },
+    'Fashion': { bg: 'bg-pink-50 dark:bg-pink-950/20', text: 'text-pink-700 dark:text-pink-300', border: 'border-pink-200 dark:border-pink-800' },
+    'Launch': { bg: 'bg-green-50 dark:bg-green-950/20', text: 'text-green-700 dark:text-green-300', border: 'border-green-200 dark:border-green-800' },
+    'Thought Leadership': { bg: 'bg-amber-50 dark:bg-amber-950/20', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800' },
+    'Executive Positioning': { bg: 'bg-orange-50 dark:bg-orange-950/20', text: 'text-orange-700 dark:text-orange-300', border: 'border-orange-200 dark:border-orange-800' },
+    'Product Launch': { bg: 'bg-indigo-50 dark:bg-indigo-950/20', text: 'text-indigo-700 dark:text-indigo-300', border: 'border-indigo-200 dark:border-indigo-800' },
+    'Consumer Goods': { bg: 'bg-cyan-50 dark:bg-cyan-950/20', text: 'text-cyan-700 dark:text-cyan-300', border: 'border-cyan-200 dark:border-cyan-800' },
+    'Beauty': { bg: 'bg-rose-50 dark:bg-rose-950/20', text: 'text-rose-700 dark:text-rose-300', border: 'border-rose-200 dark:border-rose-800' },
+    'Environmental': { bg: 'bg-lime-50 dark:bg-lime-950/20', text: 'text-lime-700 dark:text-lime-300', border: 'border-lime-200 dark:border-lime-800' },
+    'Education': { bg: 'bg-teal-50 dark:bg-teal-950/20', text: 'text-teal-700 dark:text-teal-300', border: 'border-teal-200 dark:border-teal-800' },
+    'Cultural': { bg: 'bg-violet-50 dark:bg-violet-950/20', text: 'text-violet-700 dark:text-violet-300', border: 'border-violet-200 dark:border-violet-800' },
+    'Art': { bg: 'bg-fuchsia-50 dark:bg-fuchsia-950/20', text: 'text-fuchsia-700 dark:text-fuchsia-300', border: 'border-fuchsia-200 dark:border-fuchsia-800' },
+    'International': { bg: 'bg-sky-50 dark:bg-sky-950/20', text: 'text-sky-700 dark:text-sky-300', border: 'border-sky-200 dark:border-sky-800' },
+    'Architecture': { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-300 dark:border-slate-600' },
+    'Healthcare': { bg: 'bg-red-50 dark:bg-red-950/20', text: 'text-red-700 dark:text-red-300', border: 'border-red-200 dark:border-red-800' },
+    'Advocacy': { bg: 'bg-yellow-50 dark:bg-yellow-950/20', text: 'text-yellow-700 dark:text-yellow-300', border: 'border-yellow-200 dark:border-yellow-800' },
+    'NGO': { bg: 'bg-emerald-50 dark:bg-emerald-950/20', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' }
+  };
+
+  const getTagColors = (tag: string) => tagColorMap[tag] || { bg: 'bg-gray-50 dark:bg-gray-900/20', text: 'text-gray-700 dark:text-gray-300', border: 'border-gray-200 dark:border-gray-700' };
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags(prev =>
+      prev.includes(tag)
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    );
+  };
+
   const caseStudies = [
     {
       slug: 'her-own-words-sport',
@@ -80,13 +115,27 @@ export default function CaseStudiesPage() {
     }
   ];
 
-  const categories = ['All', ...new Set(caseStudies.map(cs => cs.category))];
+  const allTags = Array.from(new Set(caseStudies.flatMap(cs => cs.tags))).sort();
+
+  const filteredCaseStudies = selectedTags.length === 0
+    ? caseStudies
+    : caseStudies.filter(cs => selectedTags.some(tag => cs.tags.includes(tag)));
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
       <Header />
 
       <main className="flex-1 pt-20">
+        {/* Breadcrumb */}
+        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <Breadcrumb items={[
+              { label: 'Home', href: '/vibe-demo/radiance' },
+              { label: 'Case Studies' }
+            ]} />
+          </div>
+        </section>
+
         {/* Hero Section */}
         <section className="pt-16 pb-12 px-6 max-w-6xl mx-auto">
           <div className="space-y-4">
@@ -94,26 +143,63 @@ export default function CaseStudiesPage() {
               Our Work
             </h1>
             <p className="text-xl text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl">
-              Integrated campaigns across PR, events, and digital that deliver real business results for brands and institutions across Hong Kong and beyond.
+              Integrated campaigns across{' '}
+              <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">PR</Link>
+              {', '}
+              <Link href="/vibe-demo/radiance/services/events" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">events</Link>
+              {', '}
+              <Link href="/vibe-demo/radiance/services/kol-marketing" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">KOL marketing</Link>
+              {' and '}
+              <Link href="/vibe-demo/radiance/services/creative-production" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">creative production</Link>
+              {' that deliver real business results for brands and institutions across Hong Kong and beyond.'}
             </p>
+          </div>
+        </section>
+
+        {/* Tag Filter Section */}
+        <section className="py-8 px-6 bg-slate-50 dark:bg-slate-900/30 border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-4">Filter by tag:</p>
+            <div className="flex flex-wrap gap-2">
+              {allTags.map((tag) => {
+                const colors = getTagColors(tag);
+                const isSelected = selectedTags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    onClick={() => toggleTag(tag)}
+                    className={`px-4 py-2 text-sm font-medium rounded-full border transition-all ${
+                      isSelected
+                        ? `${colors.bg} ${colors.text} border-2 ${colors.border.replace('border-', 'border-')} shadow-md`
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-purple-400 dark:hover:border-purple-500'
+                    }`}
+                  >
+                    {tag}
+                    {isSelected && ' ✓'}
+                  </button>
+                );
+              })}
+              {selectedTags.length > 0 && (
+                <button
+                  onClick={() => setSelectedTags([])}
+                  className="px-4 py-2 text-sm font-medium rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ml-2"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+            {selectedTags.length > 0 && (
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-4">
+                Showing {filteredCaseStudies.length} of {caseStudies.length} case studies
+              </p>
+            )}
           </div>
         </section>
 
         {/* Case Studies Grid */}
         <section className="py-16 px-6 max-w-6xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-12">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                className="px-4 py-2 text-sm font-medium rounded-full border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-purple-600 dark:hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {caseStudies.map((caseItem) => (
+            {filteredCaseStudies.map((caseItem) => (
               <Link
                 key={caseItem.slug}
                 href={`/vibe-demo/radiance/case-studies/${caseItem.slug}`}
@@ -133,11 +219,21 @@ export default function CaseStudiesPage() {
                     ✓ {caseItem.result}
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {caseItem.tags.map((tag) => (
-                      <span key={tag} className="px-2 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs text-slate-700 dark:text-slate-300 rounded">
-                        {tag}
-                      </span>
-                    ))}
+                    {caseItem.tags.map((tag) => {
+                      const colors = getTagColors(tag);
+                      return (
+                        <button
+                          key={tag}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            toggleTag(tag);
+                          }}
+                          className={`px-3 py-1 text-xs font-medium rounded border transition-all cursor-pointer ${colors.bg} ${colors.text} border ${colors.border} hover:shadow-md hover:scale-105`}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </Link>

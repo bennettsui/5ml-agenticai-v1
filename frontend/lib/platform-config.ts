@@ -12,6 +12,7 @@ export type SolutionLineKey =
   | 'MediaChannel'
   | 'FrontierVentures'
   | 'CSuite'
+  | 'GovProcurement'
   | 'Platform';
 
 export interface UseCaseConfig {
@@ -116,6 +117,14 @@ export const SOLUTION_LINES: Record<SolutionLineKey, {
     darkBg: 'bg-emerald-500/10 border-emerald-500/20',
     textColor: 'text-emerald-400',
   },
+  GovProcurement: {
+    id: 'GovProcurement',
+    name: 'Government Procurement',
+    tagline: 'Automate RFP tracking, bid management, and procurement intelligence',
+    color: 'from-indigo-500 to-cyan-600',
+    darkBg: 'bg-indigo-500/10 border-indigo-500/20',
+    textColor: 'text-indigo-400',
+  },
   Platform: {
     id: 'Platform',
     name: 'Platform & Infrastructure',
@@ -161,13 +170,14 @@ export const USE_CASES: UseCaseConfig[] = [
   {
     id: 'social-content-ops',
     name: 'Social Content Ops',
-    description: 'End-to-end social content operations: brand onboarding, content calendar, publishing, and performance tracking',
+    description: 'Social Studio: 10-module platform with AI director, human approval workflow, 7-layer agentic architecture, shared knowledge base, and scheduling/delivery',
     solutionLine: 'GrowthOS',
-    status: 'in_progress',
-    progress: 0.5,
+    status: 'live',
+    progress: 0.9,
     priority: 'high',
-    path: '/brands',
-    features: ['Brand Onboarding', 'Content Calendar', 'Publishing', 'Performance Tracking'],
+    path: '/use-cases/social-content-ops',
+    agentCount: 7,
+    features: ['Social Strategy', 'Content Calendar', 'Content Dev', 'Interactive Content', 'Media Buy', 'Community Management', 'Ad Performance', 'Brand Research', 'Trend Research', 'Social Monitoring'],
   },
   {
     id: 'social-agents',
@@ -184,13 +194,13 @@ export const USE_CASES: UseCaseConfig[] = [
   {
     id: 'content-calendar',
     name: 'Content Calendar',
-    description: 'Automated content planning, scheduling, and cross-channel publishing calendar',
+    description: 'AI-powered monthly content calendar with approval workflow, scheduling, and cross-platform delivery',
     solutionLine: 'GrowthOS',
-    status: 'planned',
-    progress: 0,
+    status: 'live',
+    progress: 0.85,
     priority: 'high',
-    path: '#',
-    features: ['AI Scheduling', 'Cross-Channel', 'Template Library', 'Approvals'],
+    path: '/use-cases/social-content-ops/calendar',
+    features: ['AI Generation', 'Approval Workflow', 'Scheduling', 'Cross-Channel'],
   },
   {
     id: 'ads-performance',
@@ -311,13 +321,13 @@ export const USE_CASES: UseCaseConfig[] = [
   {
     id: 'social-trend-research',
     name: 'Social Trend Research',
-    description: 'Real-time social media trend identification across platforms with virality prediction',
+    description: 'Shared knowledge base with format best practices, platform SEO signals, and real-time trend identification',
     solutionLine: 'IntelStudio',
-    status: 'planned',
-    progress: 0,
+    status: 'live',
+    progress: 0.85,
     priority: 'high',
-    path: '#',
-    features: ['Trend Detection', 'Virality Score', 'Platform Comparison', 'Alerts'],
+    path: '/use-cases/social-content-ops/trend-research',
+    features: ['Format Best Practices', 'Platform SEO', 'Trend Detection', 'Shared Knowledge Base'],
   },
   {
     id: 'ai-trend-research',
@@ -333,13 +343,13 @@ export const USE_CASES: UseCaseConfig[] = [
   {
     id: 'brand-competitive-research',
     name: 'Brand & Competitive Research',
-    description: 'Deep competitor analysis, brand positioning audits, and differentiation opportunities',
+    description: '3-tab research hub: business overview, audience segmentation, and products/services analysis with AI-powered insights',
     solutionLine: 'IntelStudio',
-    status: 'planned',
-    progress: 0,
+    status: 'live',
+    progress: 0.8,
     priority: 'high',
-    path: '#',
-    features: ['Competitor Profiles', 'Positioning Map', 'SWOT Analysis', 'Gap Finder'],
+    path: '/use-cases/social-content-ops/research',
+    features: ['Business Overview', 'Audience Segments', 'Product Analysis', 'AI Insights'],
   },
   {
     id: 'web-tech-research',
@@ -486,6 +496,42 @@ export const USE_CASES: UseCaseConfig[] = [
     path: '#',
     features: ['Product Descriptions', 'A+ Content', 'A/B Testing', 'Multi-language'],
   },
+  {
+    id: 'ai-image-generation',
+    name: 'AI Image Generation',
+    description: 'Agency-grade image generation workflow: brief → structured prompts → SDXL / ComfyUI configs → brand QC → delivery',
+    solutionLine: 'MediaChannel',
+    status: 'in_progress',
+    progress: 0.65,
+    priority: 'high',
+    path: '/use-cases/ai-media-generation',
+    agentCount: 6,
+    features: ['Brief Translator', 'Prompt Engineer', 'Style Manager', 'ComfyUI Workflow Config', 'Vision QC', 'Prompt Library'],
+  },
+  {
+    id: 'ai-video-generation',
+    name: 'AI Video Generation',
+    description: 'Image-to-video and text-to-video workflows using AnimateDiff and Stable Video Diffusion with brand-consistent motion prompts',
+    solutionLine: 'MediaChannel',
+    status: 'in_progress',
+    progress: 0.55,
+    priority: 'high',
+    path: '/use-cases/ai-media-generation',
+    agentCount: 8,
+    features: ['AnimateDiff Pipeline', 'SVD Image-to-Video', 'Motion Prompt Engineering', 'Asset Librarian', 'Client Feedback Agent', 'Brand History', 'Performance Loop', 'Delivery Checklist'],
+  },
+  {
+    id: 'multimedia-library',
+    name: 'Multimedia Library',
+    description: 'Upload images or paste video URLs to reverse-engineer prompts and build reusable style templates for any brand or project',
+    solutionLine: 'MediaChannel',
+    status: 'in_progress',
+    progress: 0.50,
+    priority: 'high',
+    path: '/use-cases/ai-media-generation',
+    agentCount: 3,
+    features: ['Image Upload (File/URL/Paste)', 'Video URL Analysis (YouTube)', 'Reverse Prompt Engineering', 'Style Template Builder', 'Canvas Annotation', 'Brand Profile Linking'],
+  },
 
   // ========================================================================
   // FRONTIER VENTURES — FrontierVentures
@@ -617,6 +663,34 @@ export const USE_CASES: UseCaseConfig[] = [
     priority: 'critical',
     path: '#',
     features: ['KPI Dashboard', 'Strategic AI', 'Cross-Function', 'Scenario Planning'],
+  },
+
+  // ========================================================================
+  // GOVERNMENT PROCUREMENT — GovProcurement
+  // ========================================================================
+  {
+    id: 'government-tender-ops',
+    name: 'Government Tender Operations',
+    description: '10-module platform for RFP tracking, bid management, and procurement pipeline with AI orchestrator, team collaboration, and win probability scoring',
+    solutionLine: 'GovProcurement',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '/use-cases/government-tenders',
+    agentCount: 8,
+    features: ['Tender Monitoring', 'Bid Management', 'Proposal Gen', 'Competitor Analysis', 'Compliance Check', 'Deadline Alerts', 'Win Analysis', 'Team Collab'],
+  },
+  {
+    id: 'government-tender-intel',
+    name: 'Government Tender Intelligence',
+    description: 'Real-time government & public utilities tender scraping, news analysis, compliance alerts, and strategic procurement insights with daily digests',
+    solutionLine: 'GovProcurement',
+    status: 'planned',
+    progress: 0,
+    priority: 'high',
+    path: '/intelligence/government-tenders',
+    agentCount: 5,
+    features: ['Tender Scraping', 'News Analysis', 'Smart Alerts', 'Relevance Scoring', 'KB Search', 'Daily Digest', 'Competitor Track', 'Trend Analysis'],
   },
 
   // ========================================================================

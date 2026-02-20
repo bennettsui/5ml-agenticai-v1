@@ -25,7 +25,7 @@ COPY frontend/package*.json ./frontend/
 WORKDIR /usr/src/app/frontend
 RUN npm ci
 COPY frontend/ ./
-ENV NODE_OPTIONS=--max_old_space_size=512
+ENV NODE_OPTIONS=--max_old_space_size=2048
 RUN npm run build
 ENV NODE_OPTIONS=
 RUN test -f /usr/src/app/frontend/out/index.html

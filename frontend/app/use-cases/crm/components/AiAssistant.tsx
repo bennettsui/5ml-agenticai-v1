@@ -795,13 +795,16 @@ export function AiAssistant() {
       {/* Input area */}
       <form onSubmit={handleSend} className="border-t border-slate-700 px-3 py-3">
         <div className="flex items-center gap-2">
-          <input
-            type="text"
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask me anything..."
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (input.trim() && !sending) handleSend(e as unknown as React.FormEvent); } }}
+            placeholder="Ask me anything... (Shift+Enter for new line)"
             disabled={sending}
-            className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none transition-colors focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
+            rows={1}
+            className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none transition-colors focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 resize-none"
+            style={{ maxHeight: '100px' }}
+            onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 100) + 'px'; }}
           />
           <button
             type="submit"

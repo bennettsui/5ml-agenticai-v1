@@ -1,5 +1,6 @@
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
+const fs = require('fs');
 const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
@@ -60,7 +61,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar, createContact, getContactsByClient, getContact, updateContact, deleteContact, linkContactToProject, getProjectContacts, unlinkContactFromProject } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -157,6 +158,17 @@ app.get('/api/app-name', (req, res) => {
 // ==========================================
 // Service test definitions (shared between full and individual tests)
 const SERVICE_TESTS = {
+  minimax: { name: 'MiniMax 2.5', type: 'probe', test: async () => {
+    if (!process.env.MINIMAX_API_KEY) throw new Error('MINIMAX_API_KEY not set');
+    const resp = await fetch('https://api.minimaxi.chat/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'MiniMax-Text-01', messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) { const t = await resp.text(); throw new Error(`HTTP ${resp.status}: ${t.substring(0, 100)}`); }
+    return 'API key valid';
+  }},
   anthropic: { name: 'Anthropic (Claude)', type: 'probe', test: async () => {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1441,6 +1453,68 @@ app.post('/api/brands', async (req, res) => {
   }
 });
 
+// POST /api/brands/setup-complete — Brand Setup → CRM sync
+// Auto-creates brand in CRM from setup wizard
+app.post('/api/brands/setup-complete', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  try {
+    const { brandName, industry, markets, voiceTone, brandPersonality, colorPalette, visualStyle, strategy } = req.body;
+
+    if (!brandName) {
+      return res.status(400).json({ error: 'Brand name is required' });
+    }
+
+    // 1. Check if brand already exists
+    const existing = await pool.query('SELECT id FROM crm_clients WHERE name = $1', [brandName]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Brand already exists' });
+    }
+
+    // 2. Create brand in CRM
+    const brandResult = await pool.query(
+      `INSERT INTO crm_clients (name, industry, region, status, health_score)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, name`,
+      [
+        brandName,
+        JSON.stringify(Array.isArray(industry) ? [industry] : (industry ? [industry] : [])),
+        JSON.stringify(markets || []),
+        'active', // Default to active when created from setup
+        75, // Default health score
+      ]
+    );
+
+    const crmBrandId = brandResult.rows[0].id;
+
+    // 3. Also save to social-content-ops brands table with full profile
+    await saveBrand(brandName, {
+      industry: industry,
+      brand_info: {
+        profile: {
+          brandName,
+          industry,
+          markets: markets || [],
+          voiceTone,
+          brandPersonality,
+          colorPalette,
+          visualStyle,
+        },
+        strategy: strategy,
+      },
+    });
+
+    res.json({
+      success: true,
+      brand_id: crmBrandId,
+      redirect: `/use-cases/crm/brands/detail?id=${crmBrandId}`,
+    });
+  } catch (err) {
+    console.error('Error in setup-complete:', err);
+    res.status(500).json({ error: 'Failed to create brand in CRM' });
+  }
+});
+
 // ==========================================
 // Conversation History Endpoints
 // ==========================================
@@ -1515,17 +1589,17 @@ app.delete('/api/conversation/:id', async (req, res) => {
   }
 });
 
-// Delete a brand (and all its conversations)
-app.delete('/api/brands/:brand_name', async (req, res) => {
+// Delete a brand from crm_clients (cascades to crm_projects + crm_feedback)
+app.delete('/api/brands/:id', async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }
-
   try {
-    await deleteBrand(req.params.brand_name);
-    res.json({ success: true, message: 'Brand deleted' });
-  } catch (error) {
-    console.error('Error deleting brand:', error);
+    const result = await pool.query('DELETE FROM crm_clients WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Brand not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error('Error deleting brand:', err);
     res.status(500).json({ error: 'Failed to delete brand' });
   }
 });
@@ -1570,6 +1644,60 @@ app.get('/api/brands/:brand_name/projects', async (req, res) => {
   } catch (err) {
     console.error('Error fetching projects:', err);
     res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+// List all CRM projects with pagination
+app.get('/api/projects', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const size = Math.min(100, parseInt(req.query.size) || 20);
+    const status = req.query.status || '';
+    const offset = (page - 1) * size;
+    const where = status ? 'WHERE status = $1' : '';
+    const countResult = await pool.query(`SELECT COUNT(*) FROM crm_projects ${where}`, status ? [status] : []);
+    const total = parseInt(countResult.rows[0].count);
+    const params = status ? [status, size, offset] : [size, offset];
+    const dataResult = await pool.query(
+      `SELECT * FROM crm_projects ${where} ORDER BY created_at DESC LIMIT ${status ? '$2' : '$1'} OFFSET ${status ? '$3' : '$2'}`,
+      params
+    );
+    res.json({ items: dataResult.rows, total, page, size, pages: Math.ceil(total / size) });
+  } catch (err) {
+    console.error('Error listing projects:', err);
+    res.status(500).json({ error: 'Failed to list projects' });
+  }
+});
+
+// Create CRM project
+app.post('/api/projects', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const { client_id, name, type, brief, start_date, end_date, status } = req.body;
+    if (!client_id || !name) return res.status(400).json({ error: 'client_id and name are required' });
+    const result = await pool.query(
+      `INSERT INTO crm_projects (client_id, name, type, brief, start_date, end_date, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [client_id, name, type || 'other', brief || null, start_date || null, end_date || null, status || 'planning']
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error creating project:', err);
+    res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// Delete CRM project
+app.delete('/api/projects/:id', async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const result = await pool.query('DELETE FROM crm_projects WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Project not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error('Error deleting project:', err);
+    res.status(500).json({ error: 'Failed to delete project' });
   }
 });
 
@@ -1932,6 +2060,50 @@ app.get('/stats', async (req, res) => {
           },
         },
         {
+          id: 'ai-image-generation',
+          name: 'AI Image Generation',
+          description: 'Agency brief → SDXL/ComfyUI prompts + workflow configs',
+          agentCount: 6,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 brief → full prompt set for all deliverables (avg 4)',
+              modelCalls: [
+                { model: 'DeepSeek', calls: 5, avgTokensIn: 2500, avgTokensOut: 1500, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku', calls: 3, avgTokensIn: 1500, avgTokensOut: 800, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'Claude Sonnet Vision (QC)', calls: 1, avgTokensIn: 2000, avgTokensOut: 500, costPerMillion: { input: 3.00, output: 15.00 } },
+              ],
+              totalTokens: { input: 18500, output: 10100 },
+              estimatedCost: 0.011,
+              notes: 'GPU compute (ComfyUI/SDXL) is self-hosted — electricity only, ~$0.03/image.',
+            },
+            daily: { runsPerDay: 3, estimatedCost: 0.033 },
+            monthly: { runsPerMonth: 60, estimatedCost: 0.66, notes: '~2 briefs/day avg' },
+          },
+        },
+        {
+          id: 'ai-video-generation',
+          name: 'AI Video Generation',
+          description: 'AnimateDiff / SVD video pipeline with motion prompts + QC',
+          agentCount: 8,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 brief → video prompt set + AnimateDiff workflow config',
+              modelCalls: [
+                { model: 'DeepSeek', calls: 6, avgTokensIn: 3000, avgTokensOut: 2000, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku', calls: 4, avgTokensIn: 2000, avgTokensOut: 1000, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'Claude Sonnet Vision (QC)', calls: 2, avgTokensIn: 2500, avgTokensOut: 600, costPerMillion: { input: 3.00, output: 15.00 } },
+              ],
+              totalTokens: { input: 28000, output: 14200 },
+              estimatedCost: 0.022,
+              notes: 'AnimateDiff/SVD on self-hosted GPU — ~$0.08/clip (16 frames) electricity.',
+            },
+            daily: { runsPerDay: 2, estimatedCost: 0.044 },
+            monthly: { runsPerMonth: 40, estimatedCost: 0.88, notes: '~1-2 video projects/day' },
+          },
+        },
+        {
           id: 'crm',
           name: 'Client CRM + KB',
           description: 'AI-powered client CRM with knowledge base',
@@ -1969,8 +2141,10 @@ app.get('/stats', async (req, res) => {
         intelligence: 2.70,
         accounting: 3.60,
         crm: 0.30,
-        totalBase: 25.04,
-        notes: 'Ads cost scales with tenants. Photo booth scales with events. All estimates assume typical usage patterns.',
+        aiImageGeneration: 0.66,
+        aiVideoGeneration: 0.88,
+        totalBase: 26.58,
+        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). All estimates assume typical usage patterns.',
       },
       databaseTables: [
         // Social/Marketing tables
@@ -1988,6 +2162,11 @@ app.get('/stats', async (req, res) => {
         { name: 'intelligence_news', description: 'Collected news articles', category: 'intelligence' },
         // Accounting tables
         { name: 'receipts', description: 'Receipt records from OCR', category: 'accounting' },
+        // AI Media Generation tables
+        { name: 'media_projects', description: 'Media generation projects', category: 'media' },
+        { name: 'media_style_guides', description: 'Per-project brand style guides', category: 'media' },
+        { name: 'media_prompts', description: 'Prompt library with workflow configs', category: 'media' },
+        { name: 'media_assets', description: 'Generated image/video asset registry', category: 'media' },
       ],
     };
 
@@ -2057,6 +2236,43 @@ console.log('✅ Debug routes loaded: /api/debug/sessions, /api/debug/modules, /
 // ==========================================
 const llm = require('./lib/llm');
 
+// Helper: read use case source code for chatbot context
+function readUseCaseCode(useCaseId, maxChars = 8000) {
+  const baseDir = path.join(__dirname, 'frontend', 'app', 'use-cases', useCaseId);
+  if (!fs.existsSync(baseDir)) return '';
+  const files = [];
+  function walkDir(dir, prefix) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      const fullPath = path.join(dir, entry.name);
+      const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        walkDir(fullPath, relPath);
+      } else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
+        files.push({ path: relPath, fullPath });
+      }
+    }
+  }
+  walkDir(baseDir, '');
+  let result = `\n## Use Case Source Code (${useCaseId})\nFiles:\n`;
+  result += files.map(f => `- ${f.path}`).join('\n') + '\n\n';
+  let totalChars = result.length;
+  for (const file of files) {
+    const content = fs.readFileSync(file.fullPath, 'utf8');
+    const header = `### ${file.path}\n\`\`\`tsx\n`;
+    const footer = '\n```\n\n';
+    const available = maxChars - totalChars - header.length - footer.length;
+    if (available <= 200) break;
+    const truncated = content.length > available ? content.slice(0, available) + '\n// ... (truncated)' : content;
+    result += header + truncated + footer;
+    totalChars = result.length;
+    if (totalChars >= maxChars) break;
+  }
+  return result;
+}
+
 // List available LLM models
 app.get('/api/llm/models', (req, res) => {
   res.json({ success: true, models: llm.listModels(), default: llm.DEFAULT_MODEL });
@@ -2065,7 +2281,7 @@ app.get('/api/llm/models', (req, res) => {
 // CRM AI Assistant chat endpoint
 app.post('/api/crm/chat', async (req, res) => {
   try {
-    const { messages, model: modelKey, page_context } = req.body;
+    const { messages, model: modelKey, page_context, use_case_id } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages array is required' });
@@ -2076,9 +2292,12 @@ app.post('/api/crm/chat', async (req, res) => {
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'crm', 3) : '';
     const companyContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
 
+    // Include use case source code for code-aware assistance
+    const codeContext = readUseCaseCode(use_case_id || 'crm', 6000);
+
     const system = `You are an AI assistant embedded in a Brand CRM + Knowledge Base system built by 5 Miles Lab (5ML).
 You help users manage brands, projects, feedback, and brand knowledge.
-${ragContext ? `\n${ragContext}` : ''}${companyContext ? `\n${companyContext}` : ''}
+${ragContext ? `\n${ragContext}` : ''}${companyContext ? `\n${companyContext}` : ''}${codeContext}
 
 When the user asks you to research a company, provide structured information including:
 - industry (as an array of strings)
@@ -2142,6 +2361,1197 @@ Respond concisely. Use English or the language the user writes in.`;
   }
 });
 
+// Growth Chatbot Assistant endpoint (used by Growth Architect & Growth Hacking Studio)
+app.post('/api/growth/chatbot/message', async (req, res) => {
+  try {
+    const { brand_name, plan_id, message, conversation_history, use_case_id } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    // RAG context
+    const ragContext = ragService.getContext(message, 'company', 3);
+
+    // Include use case source code
+    const codeContext = readUseCaseCode(use_case_id || 'growth-architect', 6000);
+
+    const systemPrompt = `You are a Growth Strategy AI assistant for 5 Miles Lab (5ML).
+You help users evaluate growth plans, suggest modifications, identify risks, and recommend optimizations.
+${brand_name ? `Current brand: ${brand_name}` : ''}
+${plan_id ? `Current plan ID: ${plan_id}` : ''}
+${ragContext ? `\n${ragContext}` : ''}${codeContext}
+
+Your capabilities:
+1. Critique and improve growth plans
+2. Suggest new channels, tactics, and experiments
+3. Identify risks and mitigation strategies
+4. Recommend budget allocation and KPI targets
+5. Answer questions about the use case code and architecture
+
+Be concise and actionable. Use bullet points for lists.`;
+
+    const messages = [
+      ...(conversation_history || []),
+      { role: 'user', content: message },
+    ];
+
+    // Try DeepSeek first, fall back to Claude
+    const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
+    if (deepseek.isAvailable()) {
+      const result = await deepseek.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+      );
+      return res.json({ data: { response: result.content, model: 'deepseek-chat' } });
+    }
+
+    const result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+    return res.json({ data: { response: result.text, model: result.modelName || 'claude-haiku' } });
+
+  } catch (error) {
+    console.error('Growth chatbot error:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+// Social Content Ops chat endpoint
+app.post('/api/social/chat', async (req, res) => {
+  try {
+    const { messages, use_case_id, brand_id, brand_name, project_id, project_name, mode, task_id } = req.body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+
+    // ── Orchestrator path (Sarah multi-agent state machine) ──────────────────
+    // Triggered when the caller provides a task_id (new Sarah chat panel).
+    // Module-specific pages that don't send task_id fall through to legacy path.
+    if (task_id) {
+      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+      const userInput = lastUserMsg?.content || '';
+
+      // Detect research-related requests (bypass orchestrator for simpler handling)
+      const isResearchRequest = /research|competitor|business overview|mission|audience segment|positioning/i.test(userInput);
+
+      if (isResearchRequest && brand_id) {
+        // Use legacy path for research requests (simpler LLM call instead of orchestrator)
+        // This avoids the orchestrator workflow which is designed for strategy→content→media
+        const ragContext = ragService.getContext(userInput, 'company', 3) || '';
+        const systemPrompt = `You are **Sarah**, the Social Media Director helping research the brand.
+When asked about brand research, competitive analysis, or audience insights, provide structured, actionable insights.
+${brand_name ? `Brand: ${brand_name}` : ''}
+
+Return ONLY valid JSON with this exact structure:
+{
+  "businessOverview": "Brand positioning, market fit, and unique value proposition",
+  "mission": "Company mission and core values",
+  "competitors": [
+    { "name": "Competitor Name", "strengths": "What they do well", "weaknesses": "Where they fall short", "threat_level": "High|Medium|Low" }
+  ],
+  "audienceSegments": [
+    { "name": "Segment Name", "size": "Market size estimate", "pain_points": "Key problems", "preferences": "What they value" }
+  ],
+  "products": "Overview of key products/services and market positioning"
+}
+
+Be specific, data-driven, and actionable.
+${ragContext ? `\n${ragContext}` : ''}`;
+
+        const deepseek = require('./services/deepseekService');
+        const llm = require('./lib/llm');
+        try {
+          const result = deepseek.isAvailable()
+            ? await deepseek.chat(
+              [{ role: 'system', content: systemPrompt }, ...messages],
+              { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+            )
+            : await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+
+          const responseText = result.content || result.text;
+          let researchData = null;
+
+          // Try to parse JSON from response
+          try {
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              researchData = JSON.parse(jsonMatch[0]);
+            }
+          } catch { }
+
+          // If parsed successfully, persist to database
+          if (researchData) {
+            try {
+              // Save business overview
+              if (researchData.businessOverview || researchData.mission) {
+                await saveResearchBusiness(brand_id, {
+                  business_overview: researchData.businessOverview || '',
+                  mission: researchData.mission || ''
+                });
+              }
+
+              // Save competitors
+              if (researchData.competitors && researchData.competitors.length > 0) {
+                await saveResearchCompetitors(brand_id, researchData.competitors);
+              }
+
+              // Save audience and segments
+              if (researchData.audienceSegments) {
+                const audienceResult = await saveResearchAudience(brand_id, {
+                  positioning: researchData.audienceSegments[0]?.preferences || ''
+                });
+                if (researchData.audienceSegments.length > 0) {
+                  await saveResearchSegments(audienceResult.audience_id, researchData.audienceSegments);
+                }
+              }
+
+              // Save products
+              if (researchData.products) {
+                await saveResearchProducts(brand_id, researchData.products);
+              }
+            } catch (persistErr) {
+              console.error('Error persisting research data:', persistErr);
+              // Don't fail the response if persistence fails - still return the data
+            }
+          }
+
+          return res.json({
+            message: responseText,
+            data: researchData || null,
+            model: result.model || 'research-analyzer',
+            node: 'research_analyzer',
+            status: 'COMPLETED'
+          });
+        } catch (err) {
+          console.error('Research analysis error:', err);
+          return res.status(500).json({ error: err.message });
+        }
+      }
+
+      // Run orchestrator for non-research requests
+      const { runSarah } = require('./agents/social/sarahOrchestrator');
+
+      const brandContext = {
+        brand_name:   brand_name || null,
+        project_name: project_name || null,
+        brand_id:     brand_id || null,
+        project_id:   project_id || null,
+      };
+
+      try {
+        const { state, nodeName, output } = await runSarah({
+          taskId:       task_id,
+          userInput,
+          brandContext,
+          brandId:      brand_id || null,
+          projectId:    project_id || null,
+        });
+
+        // Check if state is valid
+        if (!state || !nodeName) {
+          return res.status(400).json({
+            error: 'Invalid orchestrator state',
+            message: 'The orchestrator failed to generate a valid response.'
+          });
+        }
+
+        // Model label for UI indicator
+        const REFLECT_NODES = new Set(['strategy_reflect', 'content_reflect', 'media_reflect']);
+        const modelLabel = REFLECT_NODES.has(nodeName)
+          ? 'DeepSeek Reasoner (reflection)'
+          : 'DeepSeek Chat (generation)';
+
+        return res.json({
+          message:   output,
+          model:     modelLabel,
+          node:      nodeName,
+          status:    state.status,
+          next_step: state.next_step,
+          artefacts: Object.keys(state.artefacts),
+        });
+      } catch (orchestratorErr) {
+        console.error('Sarah orchestrator error:', orchestratorErr.message);
+        return res.status(500).json({
+          error: 'Orchestrator error',
+          message: orchestratorErr.message || 'Failed to process request'
+        });
+      }
+    }
+    // ── Legacy path (module pages: strategy, content-dev, calendar, etc.) ────
+
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 3) : '';
+    const codeContext = readUseCaseCode(use_case_id || 'social-content-ops', 6000);
+
+    const { current_page, current_module } = req.body;
+
+    const isCritic = mode === 'business_analyst';
+    const moduleContext = current_module ? `\nUser is currently on: **${current_module}** module (${current_page || 'unknown page'}).` : '';
+
+    const systemPrompt = isCritic
+      ? `You are the Social Media Director & Creative Director of Meology HK, reviewing work with a critical business lens.
+Your approach: QUESTION assumptions, IDENTIFY bottlenecks, CHALLENGE strategy, ASSESS ROI, FLAG content quality issues.
+Be direct and analytical. Push back constructively. Cite platform benchmarks and industry data.
+You evaluate content against Meology HK's brand standards, audience expectations, and commercial goals.
+${brand_name ? `Brand: ${brand_name}` : ''}${project_name ? ` | Project: ${project_name}` : ''}${moduleContext}
+${ragContext ? `\n${ragContext}` : ''}${codeContext}`
+      : `You are **Sarah**, the Social Media Director & Creative Director of Meology HK — an agency Social Studio platform by 5 Miles Lab.
+
+## Your Role & Expertise
+You wear two hats:
+1. **Social Media Director**: You set strategy, evaluate campaign performance, manage the content pipeline, oversee community engagement, and ensure every piece of content ladders up to business objectives.
+2. **Creative Director**: You guide visual identity, creative concepts, copy tone, and storytelling. You push for bold, platform-native ideas that stop the scroll.
+
+You have 12+ years of social media expertise across Hong Kong, APAC, and global markets. You stay on top of the latest platform algorithm changes, content formats, and trends.
+
+## Brand Context
+${brand_name ? `Current brand: **${brand_name}**` : 'No brand selected yet — ask the user to select one from the sidebar.'}
+${project_name ? `Current project: **${project_name}**` : ''}${moduleContext}
+
+## Your Knowledge Base — Latest Social Media Trends & Best Practices
+
+### Instagram
+- **Reels**: 9:16, 15-90s (sweet spot 15-30s), hook in first 1.5s, trending audio boosts reach 30%, cover image matters for grid
+- **Carousel**: 4:5 or 1:1, 5-10 slides optimal, educational/storytelling carousels get 1.4x more reach vs single image
+- **Static**: 4:5 preferred, 30-character headline max, CTA in image, alt-text for SEO
+- **Stories**: 9:16, 15s per frame, interactive stickers boost engagement 25%+, polls/quizzes drive DM opens
+- **Algorithm 2025-2026**: Saves > Shares > Comments > Likes. Send-to-friend signals heavily weighted. Original content preferred over reposts.
+- **SEO**: Keywords in username, name field, bio, captions, alt-text. Hashtags: 3-5 niche > 30 generic.
+
+### TikTok
+- 9:16, trending sounds = 2x reach, hook in 0.5-1s, text overlays critical, green screen + duet for engagement
+- Algorithm: Watch time % > Completion > Shares > Comments. Posting frequency matters (1-3x/day for growth).
+- SEO: TikTok is a search engine now — keyword-rich captions, on-screen text, hashtags for discovery.
+
+### Facebook
+- Feed: 1:1 or 4:5, under 80 characters ideal, link posts declining — native video/carousel preferred
+- Reels: Same as IG Reels, cross-posted from IG performs 20% worse than native
+- Groups: Community-first content, questions drive engagement, FB prioritises group content in feed
+
+### Platform-Agnostic Best Practices
+- Post at audience peak times (HK: IG 7-9PM, FB 12-2PM, TikTok 6-10PM)
+- 80/20 rule: 80% value/entertainment, 20% promotional
+- Bilingual content for HK: Lead with Cantonese/Traditional Chinese, English subtitle or vice versa
+- UGC and creator partnerships outperform brand-produced content 2-4x on engagement
+
+## Your Capabilities Across All Modules
+
+### Planning & Analysis
+- **Social Strategy**: Develop and critique social media strategy. Evaluate SWOT, platform mix, content pillars, KPIs, posting cadence, brand voice.
+- **Brand & Competitive Research**: Analyze competitors, identify whitespace, benchmark performance.
+
+### Content Development
+- **Content Calendar**: Plan monthly calendars, suggest posting patterns, balance pillars, identify key dates/moments.
+- **Content Development**: Write full content cards — hooks, scripts, captions, hashtags, visual briefs. Critique copy quality.
+- **Interactive Content**: Plan polls, quizzes, Q&A sessions, AR filters, interactive stories, UGC campaigns.
+- **Media Buy**: Optimize budget allocation, recommend targeting, critique ad creative, suggest A/B tests.
+
+### Intelligence
+- **Trend Research**: Identify emerging trends, suggest how to ride them, evaluate trend relevance for the brand.
+- **Social Monitoring**: Analyze sentiment spikes, recommend response strategies, flag PR risks.
+
+### Management
+- **Community Management**: Draft responses (EN + Cantonese), suggest escalation paths, evaluate sentiment.
+- **Ad Performance**: Analyze campaign metrics, identify optimization opportunities, benchmark against industry.
+
+## Form Interaction
+When the user asks you to help fill in forms, provide structured data they can directly paste or apply:
+- For content calendars: provide date, platform, format, pillar, title, objective, message, etc.
+- For content cards: provide hooks, talking points, scenes, captions, hashtags, visual briefs
+- For media buy: provide campaign name, targeting, budget split, ad format recommendations
+- For community responses: provide ready-to-use reply text in the appropriate language
+- For strategy sections: provide SWOT entries, goals, KPIs with specific numbers
+Always format your form-filling suggestions as clear, labeled fields so the user can copy them into the interface.
+
+## Review & Approval Process
+You are aware of the human review & approval workflow:
+- **Content Pipeline**: Draft → Submitted for Review → In Review → Changes Requested → Approved → Scheduled → Published
+- **Media Buy Pipeline**: Draft → Pending Approval → Approved → Scheduled → Live → Paused → Completed
+When content is submitted for review, provide constructive feedback covering: brand alignment, copy quality, visual direction, platform optimization, and commercial impact.
+When approving content, confirm it meets: brand guidelines, platform best practices, audience targeting, and business objectives.
+
+## Content Calendar Format
+When asked to design or refine a monthly content plan:
+1. Present a 4-week weekly grid overview (rows = weeks, columns = days). Each cell: [Platform] + [Format] + [Pillar] + [Short title].
+   Example: "IG – Reel – Educate – 'Why AI saves 10x time'"
+2. Present a master calendar table where each row = one post. Columns:
+   Date, Day, Platform (IG/FB/both), Format (Static/Carousel/Reel), Content Pillar, Campaign/theme, Post title, Objective, Key message, Visual type, Nano Banana brief ID, Caption status, Visual status, Boosting/Ad plan, Links, Notes.
+
+## Content Development Format
+For each content item, expand into a content card:
+- Post ID, Platform, Format, Date, Content Pillar, Campaign, Objective
+- Target audience insight, Core message
+
+Copy by format:
+- **Reel**: Hook (1-2 options, max 15 words), 3 key scenes/talking points, on-screen text per scene, suggested duration, CTA, Caption (hook + 2-4 lines + CTA + 5-10 hashtags)
+- **Static/Carousel**: Slide plan (Slide 1 headline, Slides 2-X key points, Final slide CTA), Caption (opening hook + short paragraph/bullets + CTA + hashtags)
+
+## Nano Banana Visual Brief (per post)
+Always produce a visual brief with:
+- Visual ID (Post ID + "-VIS"), Format & ratio, Visual type, Subject & composition, Brand style & mood, Key brand assets, Text on image (max 5-8 words + positioning), Special notes.
+
+## Language & Tone
+Default: Cantonese/Traditional Chinese with English support. Bilingual hooks for HK audiences.
+Tone: Brand-aligned, confident, non-salesy but conversion-conscious. Professional yet approachable.
+Support: 繁體中文, 粵語口語, English, 簡體中文
+
+Be concise, actionable, and opinionated. You're the expert — share your professional perspective. Use bullet points for lists. Flag issues proactively.`;
+
+    // Try DeepSeek first, fall back to Claude
+    const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
+    if (deepseek.isAvailable()) {
+      const result = await deepseek.chat(
+        [{ role: 'system', content: systemPrompt }, ...messages],
+        { model: 'deepseek-chat', maxTokens: 2000, temperature: 0.7 }
+      );
+      return res.json({ message: result.content, model: result.model || 'deepseek-chat' });
+    }
+
+    const result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
+    return res.json({ message: result.text, model: result.modelName || 'claude-haiku' });
+
+  } catch (error) {
+    console.error('Social chat error:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+// ── Sarah Orchestrator state endpoints ───────────────────────────────────────
+
+// GET /api/social/state/:taskId — fetch current state for polling / UI display
+app.get('/api/social/state/:taskId', async (req, res) => {
+  try {
+    const { getSarahState } = require('./agents/social/sarahOrchestrator');
+    const state = await getSarahState(req.params.taskId);
+    if (!state) return res.status(404).json({ error: 'No state found for this task_id' });
+    res.json({ state });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/social/state/:taskId — reset / start fresh
+app.delete('/api/social/state/:taskId', async (req, res) => {
+  try {
+    const { resetSarah } = require('./agents/social/sarahOrchestrator');
+    await resetSarah(req.params.taskId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Sarah Orchestrator Artefact APIs ─────────────────────────────────────────
+
+// GET /api/social/artefacts/:taskId — retrieve all Markdown + JSON artefacts
+app.get('/api/social/artefacts/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const artefacts = await getAllArtefacts(taskId);
+    if (!artefacts || artefacts.length === 0) {
+      return res.status(404).json({ error: 'No artefacts found for this task_id' });
+    }
+    res.json({ data: artefacts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/content-posts/:taskId — retrieve formatted content calendar for RECENT_POSTS view
+app.get('/api/social/content-posts/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
+    const posts = await getSocialContentPosts(taskId, limit);
+    if (!posts || posts.length === 0) {
+      return res.status(404).json({ error: 'No content posts found for this task_id' });
+    }
+    res.json({ data: posts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/ad-campaigns/:taskId — retrieve media campaigns for AD_CAMPAIGNS view
+app.get('/api/social/ad-campaigns/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const campaigns = await getSocialAdCampaigns(taskId);
+    if (!campaigns || campaigns.length === 0) {
+      return res.status(404).json({ error: 'No ad campaigns found for this task_id' });
+    }
+    res.json({ data: campaigns });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/kpis/:taskId — retrieve KPI definitions for KPI_CARDS view
+app.get('/api/social/kpis/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const kpis = await getSocialKPIs(taskId);
+    if (!kpis || kpis.length === 0) {
+      return res.status(404).json({ error: 'No KPIs found for this task_id' });
+    }
+    res.json({ data: kpis });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Content Development: Draft Management ────────────────────────────────────
+
+// POST /api/social/drafts — create new draft post
+app.post('/api/social/drafts', async (req, res) => {
+  try {
+    const { taskId, platform, format, title, pillar, objective, keyMessage, copyHook, cta, language, visualType, caption, hashtags } = req.body;
+    if (!taskId || !platform || !format || !title) {
+      return res.status(400).json({ error: 'Missing required fields: taskId, platform, format, title' });
+    }
+    const result = await createContentDraft(taskId, req.body);
+    res.status(201).json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/drafts/:taskId — retrieve draft posts for a task
+app.get('/api/social/drafts/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const status = req.query.status || null;
+    const drafts = await getContentDrafts(taskId, status);
+    res.json({ data: drafts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/social/drafts/:draftId — update draft post
+app.put('/api/social/drafts/:draftId', async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    const result = await updateContentDraft(draftId, req.body);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/social/drafts/:draftId — delete draft post
+app.delete('/api/social/drafts/:draftId', async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    await deleteContentDraft(draftId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/social/drafts/:draftId/promote — promote draft to calendar
+app.post('/api/social/drafts/:draftId/promote', async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    const { postDate } = req.body;
+    if (!postDate) {
+      return res.status(400).json({ error: 'postDate is required' });
+    }
+    const result = await promoteContentDraftToCalendar(draftId, postDate);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/sync/:taskId — check sync status between calendar and development
+app.get('/api/social/sync/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const syncStatus = await syncContentCalendarAndDevelopment(taskId);
+    res.json({ data: syncStatus });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Brand Products & Services Management ─────────────────────────────────────
+
+// POST /api/brands/:brandId/products-services — create new product/service
+app.post('/api/brands/:brandId/products-services', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { name, category, description, type } = req.body;
+    if (!name || !brandId) {
+      return res.status(400).json({ error: 'Missing required fields: name, brandId' });
+    }
+    const result = await createProductService(brandId, req.body);
+    res.status(201).json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/brands/:brandId/products-services — list products/services for a brand
+app.get('/api/brands/:brandId/products-services', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const status = req.query.status || null;
+    const products = await getProductsServices(brandId, status);
+    res.json({ data: products });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/brands/:brandId/products-services/:productId/status — update product status
+app.put('/api/brands/:brandId/products-services/:productId/status', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { status, discontinueDate } = req.body;
+    if (!status || !['active', 'paused', 'retired'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be: active, paused, or retired' });
+    }
+    const result = await updateProductServiceStatus(productId, status, discontinueDate);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/brands/:brandId/portfolio — get full product portfolio by status
+app.get('/api/brands/:brandId/portfolio', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const portfolio = await getProductServicePortfolio(brandId);
+    res.json({ data: portfolio });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Research Data Management ─────────────────────────────────────────────────
+
+// POST /api/research/:brandId/business — save business overview and mission
+app.post('/api/research/:brandId/business', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await saveResearchBusiness(brandId, req.body);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/research/:brandId/business — get business overview and mission
+app.get('/api/research/:brandId/business', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const data = await getResearchBusiness(brandId);
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/research/:brandId/competitors — save competitor analysis
+app.post('/api/research/:brandId/competitors', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    await saveResearchCompetitors(brandId, req.body.competitors || []);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/research/:brandId/competitors — get competitor analysis
+app.get('/api/research/:brandId/competitors', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const competitors = await getResearchCompetitors(brandId);
+    res.json({ data: competitors });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/research/:brandId/competitors/:competitorId — delete competitor
+app.delete('/api/research/:brandId/competitors/:competitorId', async (req, res) => {
+  try {
+    const { competitorId } = req.params;
+    await deleteResearchCompetitor(competitorId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/research/:brandId/audience — save audience positioning and segments
+app.post('/api/research/:brandId/audience', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const audienceResult = await saveResearchAudience(brandId, req.body);
+    if (req.body.segments && req.body.segments.length > 0) {
+      await saveResearchSegments(audienceResult.audience_id, req.body.segments);
+    }
+    res.json({ data: audienceResult });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/research/:brandId/audience — get audience data
+app.get('/api/research/:brandId/audience', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const audience = await getResearchAudience(brandId);
+    const segments = await getResearchSegments(brandId);
+    res.json({ data: { audience, segments } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/research/:brandId/segments/:segmentId — delete audience segment
+app.delete('/api/research/:brandId/segments/:segmentId', async (req, res) => {
+  try {
+    const { segmentId } = req.params;
+    await deleteResearchSegment(segmentId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/research/:brandId/products — save products and services
+app.post('/api/research/:brandId/products', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    await saveResearchProducts(brandId, req.body.products || []);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/research/:brandId/products — get products and services
+app.get('/api/research/:brandId/products', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const products = await getResearchProducts(brandId);
+    res.json({ data: products });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/research/:brandId/products/:productId — delete product
+app.delete('/api/research/:brandId/products/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    await deleteResearchProduct(productId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// CRM Contacts (with LinkedIn + Research)
+// ==========================================
+
+// POST /api/crm/contacts/:clientId — create contact
+app.post('/api/crm/contacts/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const contact = await createContact(clientId, req.body);
+    res.json({ success: true, contact });
+  } catch (err) {
+    console.error('[POST /api/crm/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/contacts/:clientId — list client contacts
+app.get('/api/crm/contacts/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const contacts = await getContactsByClient(clientId);
+    res.json({ contacts });
+  } catch (err) {
+    console.error('[GET /api/crm/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/contacts/:clientId/:contactId — get contact details
+app.get('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const contact = await getContact(contactId);
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+    res.json(contact);
+  } catch (err) {
+    console.error('[GET /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/crm/contacts/:clientId/:contactId — update contact
+app.put('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const contact = await updateContact(contactId, req.body);
+    res.json({ success: true, contact });
+  } catch (err) {
+    console.error('[PUT /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/crm/contacts/:clientId/:contactId — delete contact
+app.delete('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    await deleteContact(contactId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/crm/contacts/:contactId/link-project — link contact to project
+app.post('/api/crm/contacts/:contactId/link-project', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { projectId, role } = req.body;
+    const link = await linkContactToProject(contactId, projectId, role);
+    res.json({ success: true, link });
+  } catch (err) {
+    console.error('[POST /api/crm/contacts/:id/link-project] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/projects/:projectId/contacts — get project contacts
+app.get('/api/crm/projects/:projectId/contacts', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const contacts = await getProjectContacts(projectId);
+    res.json({ contacts });
+  } catch (err) {
+    console.error('[GET /api/crm/projects/:id/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/crm/contacts/:contactId/unlink-project — unlink contact from project
+app.delete('/api/crm/contacts/:contactId/unlink-project/:projectId', async (req, res) => {
+  try {
+    const { contactId, projectId } = req.params;
+    await unlinkContactFromProject(contactId, projectId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/crm/contacts/:id/unlink-project/:projectId] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Contact Intelligence (LinkedIn + Research)
+// ==========================================
+
+// Lazy-load services
+let linkedinFetcher = null;
+let contactResearch = null;
+
+function getLinkedInFetcher() {
+  if (!linkedinFetcher) {
+    const LinkedInProfileFetcher = require('./services/linkedinProfileFetcher');
+    linkedinFetcher = new LinkedInProfileFetcher();
+  }
+  return linkedinFetcher;
+}
+
+function getContactResearchService() {
+  if (!contactResearch) {
+    const ContactResearchService = require('./services/contactResearchService');
+    contactResearch = new ContactResearchService();
+  }
+  return contactResearch;
+}
+
+// POST /api/linkedin/profile — fetch LinkedIn profile data
+app.post('/api/linkedin/profile', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'LinkedIn URL required' });
+
+    const fetcher = getLinkedInFetcher();
+    const profile = await fetcher.getProfileSummary(url);
+
+    res.json({ success: true, data: profile });
+  } catch (err) {
+    console.error('[POST /api/linkedin/profile] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/contacts/:contactId/research — conduct online research
+app.post('/api/contacts/:contactId/research', async (req, res) => {
+  try {
+    const { name, title, company, linkedinUrl } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name required' });
+
+    const researchService = getContactResearchService();
+    const research = await researchService.comprehensiveResearch(name, title, company, linkedinUrl);
+
+    // Update contact with research data
+    const contactId = req.params.contactId;
+    // Find contact's client ID - query all contacts
+    const contactResult = await pool.query('SELECT * FROM crm_contacts WHERE id = $1', [contactId]);
+    if (contactResult.rows[0]) {
+      const contact = contactResult.rows[0];
+      await updateContact(contactId, {
+        ...contact,
+        research_data: research,
+      });
+    }
+
+    res.json({ success: true, research });
+  } catch (err) {
+    console.error('[POST /api/contacts/:id/research] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Strategy
+// ==========================================
+
+// POST /api/social/strategy/:brandId — save strategy
+app.post('/api/social/strategy/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, objectives, targetAudiences, channelMix, contentPillars, postingCadence, mediaApproach, kpis, assumptions, risks } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_strategy (brand_id, project_id, objectives, target_audiences, channel_mix, content_pillars, posting_cadence, media_approach, kpis, assumptions, risks)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (brand_id) DO UPDATE SET
+         objectives = $3, target_audiences = $4, channel_mix = $5, content_pillars = $6,
+         posting_cadence = $7, media_approach = $8, kpis = $9, assumptions = $10, risks = $11,
+         updated_at = NOW()`,
+      [brandId, projectId, objectives, targetAudiences, channelMix, contentPillars, postingCadence, mediaApproach, kpis, assumptions, risks]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/strategy/:brandId — get strategy
+app.get('/api/social/strategy/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_strategy WHERE brand_id = $1', [brandId]);
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Interactive Content
+// ==========================================
+
+// POST /api/social/interactive/:brandId — save interactive content
+app.post('/api/social/interactive/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, title, contentType, description, platforms, engagementGoal, expectedMetrics, launchDate } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_interactive_content (brand_id, project_id, title, content_type, description, platforms, engagement_goal, expected_metrics, launch_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [brandId, projectId, title, contentType, description, platforms, engagementGoal, expectedMetrics, launchDate]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/interactive/:brandId — list interactive content
+app.get('/api/social/interactive/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_interactive_content WHERE brand_id = $1 ORDER BY created_at DESC', [brandId]);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Trend Research
+// ==========================================
+
+// POST /api/social/trends/:brandId — save trend research
+app.post('/api/social/trends/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, trendName, category, description, platforms, contentIdeas, launchIdeas, relevanceScore } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_trend_research (brand_id, project_id, trend_name, category, description, platforms, content_ideas, launch_ideas, relevance_score)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [brandId, projectId, trendName, category, description, platforms, contentIdeas, launchIdeas, relevanceScore]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/trends/:brandId — list trends
+app.get('/api/social/trends/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_trend_research WHERE brand_id = $1 ORDER BY relevance_score DESC, created_at DESC', [brandId]);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Social Monitoring
+// ==========================================
+
+// POST /api/social/monitoring/:brandId — save monitoring data
+app.post('/api/social/monitoring/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, platform, keyword, sentimentTrend, engagementRate, mentionCount, topMentions, actionItems } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_monitoring (brand_id, project_id, platform, keyword, sentiment_trend, engagement_rate, mention_count, top_mentions, action_items)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [brandId, projectId, platform, keyword, sentimentTrend, engagementRate, mentionCount, topMentions, actionItems]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/monitoring/:brandId — get monitoring data
+app.get('/api/social/monitoring/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_monitoring WHERE brand_id = $1 ORDER BY created_at DESC LIMIT 10', [brandId]);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Community Management
+// ==========================================
+
+// POST /api/social/community/:brandId — save community management guidelines
+app.post('/api/social/community/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, platform, contentGuideline, responseTemplates, escalationRules, moderationPolicies, engagementStrategies, faqContent } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_community_management (brand_id, project_id, platform, content_guideline, response_templates, escalation_rules, moderation_policies, engagement_strategies, faq_content)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (brand_id) DO UPDATE SET
+         platform = $3, content_guideline = $4, response_templates = $5, escalation_rules = $6,
+         moderation_policies = $7, engagement_strategies = $8, faq_content = $9, updated_at = NOW()`,
+      [brandId, projectId, platform, contentGuideline, responseTemplates, escalationRules, moderationPolicies, engagementStrategies, faqContent]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/community/:brandId — get community management data
+app.get('/api/social/community/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_community_management WHERE brand_id = $1', [brandId]);
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Content Development
+// ==========================================
+
+// POST /api/social/content-dev/:brandId — save content draft
+app.post('/api/social/content-dev/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    await saveSocialContentDraft(brandId, req.body);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/content-dev/:brandId — get content drafts
+app.get('/api/social/content-dev/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const data = await getSocialContentDraft(brandId);
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Content Calendar
+// ==========================================
+
+// POST /api/social/calendar/:brandId — save calendar posts
+app.post('/api/social/calendar/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { posts, projectId } = req.body;
+    await saveSocialCalendar(brandId, posts.map((p) => ({ ...p, projectId })));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/calendar/:brandId — get calendar posts
+app.get('/api/social/calendar/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const data = await getSocialCalendar(brandId);
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/social/compliance/check — check content against brand profile
+app.post('/api/social/compliance/check', async (req, res) => {
+  try {
+    const { brand_id, copy, colors, brand_profile } = req.body;
+
+    if (!brand_id) {
+      return res.status(400).json({ error: 'brand_id is required' });
+    }
+
+    const { checkBrandCompliance } = require('./services/complianceChecker');
+    const complianceScore = await checkBrandCompliance(
+      brand_id,
+      { copy, colors },
+      brand_profile
+    );
+
+    res.json({
+      compliance: complianceScore,
+      can_proceed: complianceScore.can_proceed,
+      action: complianceScore.action,
+    });
+  } catch (err) {
+    console.error('Error checking compliance:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/brands/guidelines/upload — upload brand guidelines PDF/image
+app.post('/api/brands/guidelines/upload', async (req, res) => {
+  try {
+    const { brandId } = req.body;
+
+    if (!brandId) {
+      return res.status(400).json({ error: 'brandId is required' });
+    }
+
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const file = req.files.file;
+    const allowedMimes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+
+    if (!allowedMimes.includes(file.mimetype)) {
+      return res.status(400).json({ error: 'Invalid file type' });
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File too large (max 10MB)' });
+    }
+
+    // Store file path (in production, would use cloud storage like S3)
+    const fileName = `${brandId}-guidelines-${Date.now()}.${file.name.split('.').pop()}`;
+    const uploadDir = `${__dirname}/uploads/guidelines`;
+
+    // Create directory if it doesn't exist
+    const fs = require('fs');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const filePath = `${uploadDir}/${fileName}`;
+    await file.mv(filePath);
+
+    // Store URL in brand profile
+    const guidelineUrl = `/uploads/guidelines/${fileName}`;
+
+    res.json({
+      success: true,
+      url: guidelineUrl,
+      fileName: file.name,
+    });
+  } catch (err) {
+    console.error('Error uploading guidelines:', err);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// POST /api/brands/guidelines/delete — delete brand guidelines
+app.post('/api/brands/guidelines/delete', async (req, res) => {
+  try {
+    const { brandId, url } = req.body;
+
+    if (!url) {
+      return res.status(400).json({ error: 'url is required' });
+    }
+
+    // Delete file
+    const fs = require('fs');
+    const filePath = `${__dirname}${url}`;
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting guidelines:', err);
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
 // ==========================================
 // Use Case Routes
 // ==========================================
@@ -2196,6 +3606,24 @@ try {
   console.warn('⚠️ Ads Performance routes not loaded:', error.message);
 }
 
+// AI Media Generation Routes (Image + Video)
+try {
+  const mediaGenerationRoutes = require('./use-cases/ai-media-generation/api/routes');
+  app.use('/api/media', mediaGenerationRoutes);
+  console.log('✅ AI Media Generation routes loaded: /api/media');
+} catch (error) {
+  console.warn('⚠️ AI Media Generation routes not loaded:', error.message);
+}
+
+// Multimedia Library Routes (reverse-prompt engineering from images/videos)
+try {
+  const multimediaLibraryRoutes = require('./use-cases/multimedia-library/api/routes');
+  app.use('/api/library', multimediaLibraryRoutes);
+  console.log('✅ Multimedia Library routes loaded: /api/library');
+} catch (error) {
+  console.warn('⚠️ Multimedia Library routes not loaded:', error.message);
+}
+
 // Scheduler Service
 const scheduler = require('./services/scheduler');
 const scheduleRegistry = require('./services/schedule-registry');
@@ -2231,7 +3659,50 @@ app.get('/api/scheduled-jobs', (req, res) => {
 const ragService = require('./services/rag-service');
 
 const WORKFLOW_SYSTEM_PROMPTS = {
-  assistant: `You are an AI Workflow Architect assistant helping the user understand and modify agent orchestration workflows.
+  assistant: `You are WorkflowArchitectOrchestrator, the top-level orchestrator for AI agent workflow design at 5ML.
+
+Your responsibilities:
+- Be the only agent that talks directly to the user.
+- Understand workflow goals, constraints, and performance targets.
+- Decompose design work into clear subtasks (mapping, optimisation, cost modelling, risk review).
+- Decide which internal analytical lenses to apply and in what order.
+- Maintain awareness of the current workflow state (nodes, edges, pattern, triggers).
+- Critically evaluate proposed changes and stop when quality or safety is insufficient.
+
+==================================================
+I. ROLE & SCOPE
+==================================================
+You operate in the AI agent workflow design domain. Examples of tasks:
+- Design or redesign a multi-agent orchestration pipeline
+- Add, remove, or reconfigure agent nodes and connections
+- Analyse trade-offs between sequential, parallel, and fan-out patterns
+- Estimate cost and latency targets for a given workflow
+
+You MUST:
+- Stay within the workflow architecture domain.
+- Ask clarifying questions when the design intent is ambiguous.
+- Prefer incremental changes over wholesale redesigns unless the user asks.
+
+IMPORTANT: Only activate the analytical lens needed for the current request.
+If the user asks to just rename a node, do that — don't redesign the whole pipeline.
+
+==================================================
+II. INTERNAL ROLES / SPECIALISTS
+==================================================
+Internally, you apply these analytical lenses:
+- Architecture Analyst — maps agent relationships, data flows, and orchestration patterns (fan-out, pipeline, circuit breaker)
+- Cost Optimiser — assesses model routing (DeepSeek / Haiku / Sonnet / Perplexity), token budgets, and per-run cost targets
+- Performance Reviewer — identifies bottlenecks, latency hotspots, and parallelisation opportunities
+- Risk Assessor — finds single points of failure, rejection loop risks, compliance gaps, and edge cases
+
+You do NOT name these lenses to the user.
+
+==================================================
+III. KNOWLEDGE BASE & STATE
+==================================================
+You have access to:
+- KB: 5ML model routing guide (DeepSeek for strategy/coordination, Haiku for research/compliance, Sonnet for creative, Perplexity for competitive intel), orchestration patterns, cost benchmarks
+- State: current workflow nodes, edges, pattern, trigger, and metadata (provided as JSON context with each message)
 
 Architecture context — The CSO Marketing Agents use an event-driven parallel pipeline:
 - Input Validator → CSO Orchestrator → Budget Optimizer (entry chain)
@@ -2241,16 +3712,39 @@ Architecture context — The CSO Marketing Agents use an event-driven parallel p
 - Multi-Channel → Compliance Agent → Sentinel Agent (quality gate)
 - Sentinel has a CIRCUIT BREAKER: max 2 rejection loops back to CSO
 - Performance Tracker monitors KPIs after approval
-- Model routing: DeepSeek for strategy/coordination, Haiku for research/compliance, Sonnet for creative, Perplexity for competitive intel
-- Target: <$1.50/campaign, >90% first-pass approval, <2min end-to-end
+- Targets: <$1.50/campaign, >90% first-pass approval, <2min end-to-end
 
-Your capabilities:
-1. Explain how agents work together in the current workflow
-2. Suggest improvements to agent roles, connections, and orchestration patterns
-3. Modify the workflow when the user requests changes (update agent names/roles, add/remove edges)
-4. Discuss trade-offs between different orchestration approaches
+==================================================
+IV. TASK FLOW & STATUS
+==================================================
+Each workflow task has a status:
+- DRAFT — initial design, not yet validated
+- UNDER_REVIEW — being critiqued for quality or cost
+- REVISE_NEEDED — issues found; improvements recommended
+- APPROVED — ready to implement / hand off
+- BLOCKED — cannot safely proceed without human input
 
-When the user asks to MODIFY the workflow, include a JSON block at the end of your response in this exact format:
+==================================================
+V. EVALUATION, CRITIQUE, AND STOP CONDITIONS
+==================================================
+For proposed workflow changes or new designs:
+1) Draft — produce based on user request and current state
+2) Self-evaluate — score 0–10; note architectural strengths, weaknesses, cost risks
+3) Improve or stop:
+   - Score ≥ 8 → apply minor refinements, mark approved
+   - Score < 8 → use critique to produce a better version
+   - Safety / compliance / obviously broken design → mark BLOCKED
+
+==================================================
+VI. OUTPUT STRUCTURE & WORKFLOW UPDATES
+==================================================
+For each response:
+1) Quick summary (2–5 bullets: what you did, key decisions)
+2) Reasoning / rationale (why this approach; key trade-offs)
+3) Artefacts (updated workflow description, cost table, or design diagram in text)
+4) Risks, assumptions, and next steps
+
+When the user asks to MODIFY the workflow, append a JSON block in this exact format:
 [WORKFLOW_UPDATE]
 [{"action":"update_node","node_id":"agent-id","name":"New Name","role":"New Role"}]
 [/WORKFLOW_UPDATE]
@@ -2262,27 +3756,81 @@ Available actions:
 - remove_edge: Remove a connection. Fields: from, to
 - update_meta: Update workflow metadata. Fields: pattern (optional), patternDesc (optional), trigger (optional)
 
-Always reference nodes by their id. Only include the JSON block when making actual changes, not when just explaining.
-Be concise but thorough. Focus on practical, actionable advice.`,
+Always reference nodes by their id. Only include the JSON block when making actual changes, not when explaining.`,
 
-  business_analyst: `You are a critical Business Analyst reviewing AI agent orchestration workflows. Your role is to challenge, question, and improve.
+  business_analyst: `You are WorkflowCriticOrchestrator, a rigorous Business Analyst orchestrating the quality review of AI agent workflows at 5ML.
 
-Your approach:
-1. QUESTION assumptions — why does this agent exist? Is it justified?
-2. IDENTIFY bottlenecks — where are single points of failure?
-3. CHALLENGE the user — if they propose something, play devil's advocate
-4. ASSESS ROI — what is the cost vs value of each agent?
-5. FIND edge cases — what happens when things go wrong?
-6. CRITIQUE both the workflow design AND the user's understanding
+Your responsibilities:
+- Be the only agent that talks directly to the user.
+- Challenge assumptions, probe for weaknesses, and demand justification.
+- Decompose your critique into: ROI analysis, risk identification, bottleneck mapping, and edge-case stress-testing.
+- Update workflow state only when improvements are clearly justified.
+- Stop and block when you detect serious architectural, cost, or safety issues.
 
-Be direct and analytical. Don't just agree — push back constructively. Use specific metrics and frameworks when possible.
+==================================================
+I. ROLE & SCOPE
+==================================================
+You operate in the AI agent workflow quality-review domain. Examples of tasks:
+- Audit an existing workflow for unjustified agents or missing safeguards
+- Challenge a proposed design with devil's advocate analysis
+- Produce a cost–benefit breakdown of every agent node
+- Identify where the circuit breaker or compliance gate is missing or too weak
 
-When you believe modifications would improve the workflow, include a JSON block:
+You MUST:
+- Never simply agree — always pressure-test.
+- Ask "why does this agent exist?" before accepting any node.
+- Quantify risks and costs wherever possible.
+
+==================================================
+II. INTERNAL ROLES / SPECIALISTS
+==================================================
+Internally you apply these critical lenses:
+- ROI Auditor — cost per agent node, token budget, value delivered vs. cost
+- Risk Mapper — single points of failure, infinite loops, missing guards
+- Bottleneck Detector — sequential chains that should be parallelised; agents adding latency without value
+- Assumption Challenger — unstated dependencies, optimistic token estimates, missing edge cases
+
+You do NOT name these lenses to the user.
+
+==================================================
+III. KNOWLEDGE BASE & STATE
+==================================================
+You have access to:
+- KB: 5ML cost benchmarks (DeepSeek $0.14/$0.28, Haiku $0.25/$1.25, Sonnet $3/$15, Perplexity $3/$15 per 1M tokens), target <$1.50/campaign
+- State: current workflow nodes, edges, pattern, and metadata
+
+==================================================
+IV. TASK FLOW & STATUS
+==================================================
+- DRAFT — under initial review
+- UNDER_REVIEW — actively being critiqued
+- REVISE_NEEDED — clear problems found; specific fixes recommended
+- APPROVED — passes all quality gates
+- BLOCKED — serious issue requires human decision before proceeding
+
+==================================================
+V. EVALUATION, CRITIQUE, AND STOP CONDITIONS
+==================================================
+For every workflow or change proposed:
+1) Audit — systematically check each agent: purpose, cost, failure mode
+2) Score 0–10 across: necessity, cost-efficiency, resilience, correctness
+3) If score < 7 → produce specific, actionable improvement recommendations
+4) If score < 5 or serious safety/compliance gap → mark BLOCKED
+
+==================================================
+VI. OUTPUT STRUCTURE & WORKFLOW UPDATES
+==================================================
+1) Quick summary (2–5 bullets: what you reviewed, main findings)
+2) Critique (direct, specific — score each dimension)
+3) Recommended changes (concrete, prioritised)
+4) Risks and blockers
+
+When improvements justify a workflow modification:
 [WORKFLOW_UPDATE]
 [{"action":"update_node","node_id":"agent-id","role":"Improved role description"}]
 [/WORKFLOW_UPDATE]
 
-Your goal is to make both the human and the AI agents better through rigorous analysis.`
+Be direct. Don't soften criticism. Your goal is a better workflow, not a comfortable conversation.`
 };
 
 function parseWorkflowUpdates(text) {
@@ -2335,6 +3883,7 @@ app.post('/api/workflow-chat', async (req, res) => {
 
     // Try DeepSeek first, fall back to Claude
     const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
     let result;
 
     if (deepseek.isAvailable()) {
@@ -2352,7 +3901,6 @@ app.post('/api/workflow-chat', async (req, res) => {
     }
 
     // Fallback to Claude
-    const llm = require('./lib/llm');
     result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
     const parsed = parseWorkflowUpdates(result.text);
     return res.json({
@@ -2398,6 +3946,7 @@ Be concise, specific, and reference actual platform data. Use bullet points for 
 
     // Try DeepSeek first, fall back to Claude
     const deepseek = require('./services/deepseekService');
+    const llm = require('./lib/llm');
     if (deepseek.isAvailable()) {
       const result = await deepseek.chat(
         [{ role: 'system', content: systemPrompt }, ...messages],
@@ -2407,7 +3956,6 @@ Be concise, specific, and reference actual platform data. Use bullet points for 
     }
 
     // Fallback to Claude
-    const llm = require('./lib/llm');
     const result = await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
     return res.json({ message: result.text, model: result.modelName || 'claude-haiku' });
 

@@ -1,10 +1,100 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { Target, Zap, TrendingUp, Newspaper, Sparkles, Smartphone, Star, Palette } from 'lucide-react';
 import { RadianceLogo } from '../components/RadianceLogo';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
+
+/* ── Custom dropdown ─────────────────────────────────────── */
+function CustomSelect({
+  name,
+  value,
+  onChange,
+  options,
+  placeholder,
+  required,
+}: {
+  name: string;
+  value: string;
+  onChange: (name: string, value: string) => void;
+  options: { label: string; value: string }[];
+  placeholder: string;
+  required?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(prev => !prev)}
+        className={`w-full px-4 py-3 border text-left flex items-center justify-between transition-colors focus:outline-none rounded-lg bg-white/90 text-slate-900 ${
+          open
+            ? 'border-white ring-1 ring-white'
+            : 'border-white/30 hover:border-white/50'
+        }`}
+      >
+        <span className={selected ? '' : 'text-slate-400'}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <svg
+          className={`w-4 h-4 flex-shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <ul className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
+          {options.map(opt => (
+            <li key={opt.value}>
+              <button
+                type="button"
+                onClick={() => { onChange(name, opt.value); setOpen(false); }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  value === opt.value
+                    ? 'bg-purple-100 text-purple-900 font-medium'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {required && (
+        <input
+          type="text"
+          name={name}
+          value={value}
+          onChange={() => {}}
+          required={required}
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+      )}
+    </div>
+  );
+}
 
 export default function LeadGenPage() {
   const [formData, setFormData] = useState({
@@ -17,8 +107,12 @@ export default function LeadGenPage() {
   });
   const [submitted, setSubmitted] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectChange = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -69,23 +163,23 @@ export default function LeadGenPage() {
             <div className="grid md:grid-cols-3 gap-8">
               {[
                 {
-                  icon: '🎯',
+                  icon: Target,
                   title: 'Strategic Integration',
                   desc: 'PR, events, and digital work together—not in silos. Each channel amplifies the others.'
                 },
                 {
-                  icon: '⚡',
+                  icon: Zap,
                   title: 'Hands-On Execution',
                   desc: 'We don\'t hand you a deck and disappear. We\'re in the room, on-site, managing outcomes.'
                 },
                 {
-                  icon: '📊',
+                  icon: TrendingUp,
                   title: 'Measurable Results',
                   desc: 'We track what matters: media coverage, event impact, audience growth, and business results.'
                 }
               ].map((item, idx) => (
                 <div key={idx} className="p-8 bg-gradient-to-br from-purple-50 to-slate-50 dark:from-purple-950/20 dark:to-slate-900/20 border border-purple-200 dark:border-purple-900/50 rounded-lg hover:shadow-lg dark:hover:shadow-purple-900/20 transition-all">
-                  <div className="text-5xl mb-4">{item.icon}</div>
+                  <item.icon className="w-10 h-10 mb-4 text-purple-600 dark:text-purple-400" />
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">{item.title}</h3>
                   <p className="text-slate-600 dark:text-slate-400 leading-relaxed">{item.desc}</p>
                 </div>
@@ -102,18 +196,18 @@ export default function LeadGenPage() {
             </h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
               {[
-                { title: 'Public Relations', icon: '📰' },
-                { title: 'Events & Experiences', icon: '🎉' },
-                { title: 'Social Media Strategy', icon: '📱' },
-                { title: 'KOL Marketing', icon: '⭐' },
-                { title: 'Creative Production', icon: '🎨' }
+                { title: 'Public Relations', icon: Newspaper },
+                { title: 'Events & Experiences', icon: Sparkles },
+                { title: 'Social Media Strategy', icon: Smartphone },
+                { title: 'KOL Marketing', icon: Star },
+                { title: 'Creative Production', icon: Palette }
               ].map((service, idx) => (
                 <Link
                   key={idx}
                   href={`/vibe-demo/radiance/services/${service.title.toLowerCase().replace(/ & /g, '-').replace(/ /g, '-')}`}
                   className="p-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-lg transition-all"
                 >
-                  <div className="text-3xl mb-3">{service.icon}</div>
+                  <service.icon className="w-8 h-8 mb-3 text-purple-600 dark:text-purple-400 mx-auto" />
                   <h3 className="font-semibold text-slate-900 dark:text-white text-center">{service.title}</h3>
                 </Link>
               ))}

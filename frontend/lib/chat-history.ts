@@ -3,7 +3,7 @@
  * All chatbots (Agent, Workflow, CRM) use this for session management.
  */
 
-export type ChatType = 'agent' | 'workflow' | 'crm';
+export type ChatType = 'agent' | 'workflow' | 'crm' | 'social' | 'media';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';

@@ -1,20 +1,29 @@
 'use client';
 
+import Link from 'next/link';
+import { Header } from '../../components/Header';
+import { Footer } from '../../components/Footer';
+import { Breadcrumb } from '../../components/Breadcrumb';
+
 export default function EventManagementServicePage() {
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <a href="/vibe-demo/radiance" className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:opacity-80">
-            ← Back to Radiance
-          </a>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Events & Experience</h2>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
+      <Header />
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-16 px-6 max-w-4xl mx-auto">
+      <main id="main-content" className="flex-1 pt-20">
+        {/* Breadcrumb */}
+        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <Breadcrumb items={[
+              { label: 'Home', href: '/vibe-demo/radiance' },
+              { label: 'Services', href: '/vibe-demo/radiance/services' },
+              { label: 'Events & Experiences' }
+            ]} />
+          </div>
+        </section>
+
+        {/* Hero Section */}
+        <section className="pt-16 pb-16 px-6 max-w-4xl mx-auto">
         <div className="space-y-6">
           <h1 className="text-5xl font-bold text-slate-900 dark:text-white leading-tight">
             Event & Experience Management
@@ -58,7 +67,13 @@ export default function EventManagementServicePage() {
       <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Our approach to events & experience</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
-          We treat every event as a strategic communication opportunity. Our planning integrates PR goals (media coverage), social goals (content and engagement), creative goals (memorable experience) and business goals (awareness, leads, loyalty). We sweat the details—from concept through to post-event follow-up—so your event runs smoothly and delivers results.
+          We treat every event as a strategic communication opportunity. Our planning integrates{' '}
+          <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">PR goals</Link>
+          {' (media coverage), '}
+          <Link href="/vibe-demo/radiance/services/social-media" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">social goals</Link>
+          {' (content and engagement), '}
+          <Link href="/vibe-demo/radiance/services/creative-production" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">creative goals</Link>
+          {' (memorable experience) and business goals (awareness, leads, loyalty). We sweat the details—from concept through to post-event follow-up—so your event runs smoothly and delivers results.'}
         </p>
         <div className="space-y-8">
           <div>
@@ -82,7 +97,13 @@ export default function EventManagementServicePage() {
           <div>
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-3">Media and content integration</h3>
             <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              We coordinate with our PR and social teams to ensure media relations, KOL seeding, and content capture are built into the event plan. Press invitations, media briefing materials, live social posting, photography and videography all work together to amplify your event's reach and impact.
+              We coordinate with our{' '}
+              <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline">PR</Link>
+              {' and '}
+              <Link href="/vibe-demo/radiance/services/social-media" className="text-purple-600 dark:text-purple-400 hover:underline">social</Link>
+              {' teams to ensure media relations, '}
+              <Link href="/vibe-demo/radiance/services/kol-marketing" className="text-purple-600 dark:text-purple-400 hover:underline">KOL seeding</Link>
+              {', and content capture are built into the event plan. Press invitations, media briefing materials, live social posting, photography and videography all work together to amplify your event\'s reach and impact.'}
             </p>
           </div>
           <div>
@@ -219,7 +240,12 @@ export default function EventManagementServicePage() {
       <section className="py-16 px-6 max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">How brands work with us</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
-          Radiance has rich experience organizing a wide range of event formats, from intimate product showcases to large-scale community activations. We often combine event management with PR media relations and social media coverage, turning each event into a multi-channel campaign that extends reach well beyond the room.
+          Radiance has rich experience organizing a wide range of event formats, from intimate product showcases to large-scale community activations. We often combine event management with{' '}
+          <Link href="/vibe-demo/radiance/services/public-relations" className="text-purple-600 dark:text-purple-400 hover:underline">PR media relations</Link>
+          {' and '}
+          <Link href="/vibe-demo/radiance/services/social-media" className="text-purple-600 dark:text-purple-400 hover:underline">social media coverage</Link>
+          {', turning each event into a multi-channel campaign that extends reach well beyond the room. See how this looks in practice in our '}
+          <Link href="/vibe-demo/radiance/case-studies" className="text-purple-600 dark:text-purple-400 hover:underline">case studies</Link>.
         </p>
         <div className="space-y-8">
           {/* Use Case 1 */}
@@ -360,25 +386,19 @@ export default function EventManagementServicePage() {
             Whether you're launching a product, hosting a gala, running a community activation or any other event, Radiance brings strategic planning, creative energy and meticulous execution to make it a success. Let's discuss your vision and explore how we can help you create an unforgettable experience that drives results.
           </p>
           <div className="flex gap-4 flex-wrap">
-            <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
+            <Link href="/vibe-demo/radiance/consultation" className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors">
               Plan your event
-            </button>
-            <button className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
-              See past events
-            </button>
+            </Link>
+            <Link href="/vibe-demo/radiance/case-studies" className="px-6 py-3 border border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-medium rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 transition-colors">
+              See our work
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 py-12 px-6 mt-16">
-        <div className="max-w-6xl mx-auto text-center text-sm text-slate-500 dark:text-slate-400">
-          <p>Radiance PR & Martech Limited | Hong Kong</p>
-          <p className="mt-2">
-            <a href="/vibe-demo/radiance" className="text-purple-600 dark:text-purple-400 hover:underline">Back to Radiance</a>
-          </p>
-        </div>
-      </footer>
+      </main>
+
+      <Footer />
     </div>
   );
 }

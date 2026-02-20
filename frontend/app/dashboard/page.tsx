@@ -334,11 +334,15 @@ function AgentChatPanel() {
         {/* Input */}
         <div className="border-t border-slate-700/50 bg-slate-900/60 p-4">
           <form onSubmit={onSubmit} className="flex gap-3 max-w-3xl mx-auto">
-            <input
+            <textarea
               value={input}
               onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSubmit(e as unknown as FormEvent); } }}
               placeholder="Ask about agents, use cases, suggest changes..."
-              className="flex-1 bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50"
+              rows={1}
+              className="flex-1 bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 resize-none"
+              style={{ maxHeight: '120px' }}
+              onInput={e => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; }}
             />
             <button
               type="submit"
