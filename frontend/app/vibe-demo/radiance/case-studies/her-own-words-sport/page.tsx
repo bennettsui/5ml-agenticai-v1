@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Header } from '../../components/Header';
 import { Footer } from '../../components/Footer';
+import { Breadcrumb } from '../../components/Breadcrumb';
 
 export default function HerOwnWordsSportCaseStudy() {
   return (
@@ -10,6 +11,17 @@ export default function HerOwnWordsSportCaseStudy() {
       <Header />
 
       <main className="flex-1 pt-20">
+        {/* Breadcrumb */}
+        <section className="py-3 px-6 border-b border-slate-100 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <Breadcrumb items={[
+              { label: 'Home', href: '/vibe-demo/radiance' },
+              { label: 'Case Studies', href: '/vibe-demo/radiance/case-studies' },
+              { label: 'Her Own Words Sport' }
+            ]} />
+          </div>
+        </section>
+
         <section className="py-16 px-6 bg-gradient-to-br from-pink-50 to-purple-50 dark:from-slate-800 dark:to-slate-900">
           <div className="max-w-4xl mx-auto">
             <span className="text-sm font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide">Fashion & Apparel</span>

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Metadata } from 'next';
 import { Header } from '../../components/Header';
 import { Footer } from '../../components/Footer';
+import { Breadcrumb } from '../../components/Breadcrumb';
 
 export const articles = {
   'earned-media-strategy': {
@@ -522,6 +523,17 @@ export default function BlogArticle({ params }: { params: { slug: string } }) {
       <Header />
 
       <main className="flex-1 pt-20">
+        {/* Breadcrumb */}
+        <section className="py-3 px-6 border-b border-slate-100 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <Breadcrumb items={[
+              { label: 'Home', href: '/vibe-demo/radiance' },
+              { label: 'Blog', href: '/vibe-demo/radiance/blog' },
+              { label: article.title }
+            ]} />
+          </div>
+        </section>
+
         {/* Hero Section */}
         <section className="relative py-20 px-6 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-800" />
