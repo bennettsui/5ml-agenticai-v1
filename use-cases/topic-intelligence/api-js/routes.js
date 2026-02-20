@@ -4359,7 +4359,14 @@ async function fetchMetaJson(url, label) {
       url: maskAccessToken(url),
       body: body.substring(0, 500),
     });
-    throw new Error(`Meta API error (${label}): ${response.status}`);
+    const error = new Error(`Meta API error (${label}): ${response.status}`);
+    error.meta = {
+      label,
+      status: response.status,
+      statusText: response.statusText,
+      body: body.substring(0, 2000),
+    };
+    throw error;
   }
   return response.json();
 }
@@ -4392,7 +4399,13 @@ async function fetchMetaPaginated(url, maxPages = 3) {
         url: maskAccessToken(nextUrl),
         body: body.substring(0, 500),
       });
-      throw new Error(`Meta API error: ${response.status}`);
+      const error = new Error(`Meta API error: ${response.status}`);
+      error.meta = {
+        status: response.status,
+        statusText: response.statusText,
+        body: body.substring(0, 2000),
+      };
+      throw error;
     }
 
     const json = await response.json();
@@ -4849,8 +4862,9 @@ router.get('/fb-ig-page-data', async (req, res) => {
 
     res.json(response);
   } catch (error) {
-    console.error('[FB/IG Page Data] Error:', error.message);
-    res.status(500).json({ error: error.message });
+    const meta = error && error.meta ? error.meta : undefined;
+    console.error('[FB/IG Page Data] Error:', error.message, meta ? meta : '');
+    res.status(500).json({ error: error.message, meta });
   }
 });
 
