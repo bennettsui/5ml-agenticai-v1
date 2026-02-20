@@ -216,14 +216,16 @@ The Nayin element determines the bureau:
 
 ---
 
-## STEP 4.5: Calculate All 12 Palace Stems (12宮天干排列)
+## STEP 4.5: Calculate All 12 Palace Stems & Branches (12宮天干地支排列)
 
-**Input**: Life palace stem (命宮干) from STEP 2, birth year stem
-**Output**: Heavenly stems (天干) for all 12 palaces
+**Input**: Life palace branch (命宮地支) from STEP 1, birth year stem
+**Output**: Heavenly stems and branches (天干地支) for all 12 palaces in COUNTERCLOCKWISE order
 
-### ✅ CORRECTED ALGORITHM (Verified via Python & Online Sources)
+### ✅ CRITICAL CORRECTION: COUNTERCLOCKWISE ARRANGEMENT (逆時針排列)
 
-**Key Principle**: All 12 palace stems are derived from **the stem at 寅 position** (calculated via 五虎遁), NOT independently from the life palace stem.
+**Key Principle**: The 12 palaces are arranged in **COUNTERCLOCKWISE order (逆時針)**, going BACKWARD through the branches!
+
+Palace order (counterclockwise): 命宮 → 兄弟宮 → 夫妻宮 → 子女宮 → 財帛宮 → 疾厄宮 → 遷移宮 → 交友宮 → 官祿宮 → 田宅宮 → 福德宮 → 父母宮
 
 **Formula**:
 
@@ -232,67 +234,92 @@ The Nayin element determines the bureau:
 stemAtYin = wuhuDun[yearStem]
 stemAtYinIndex = stemOrder.index(stemAtYin)
 
-# Step 2: For each of the 12 branch positions (寅=0 through 丑=11)
-for branchIndex in range(12):  # 0=寅, 1=卯, ..., 11=丑
-    palaceStemIndex = (stemAtYinIndex + branchIndex) % 10
+# Step 2: Get life palace index
+lifeHouseIndex = branchOrder.index(lifeHouseBranch)  # e.g., 寅 = 0
+
+# Step 3: For each palace (0-11), calculate branch going COUNTERCLOCKWISE (BACKWARD)
+palaceNames = ["命宮", "兄弟宮", "夫妻宮", "子女宮", "財帛宮", "疾厄宮",
+                "遷移宮", "交友宮", "官祿宮", "田宅宮", "福德宮", "父母宮"]
+
+for i in range(12):
+    # BACKWARD through branches (counterclockwise)
+    palaceBranchIndex = (lifeHouseIndex - i) % 12
+    palaceBranch = branchOrder[palaceBranchIndex]
+
+    # Calculate stem for this branch position
+    palaceStemIndex = (stemAtYinIndex + palaceBranchIndex) % 10
     palaceStem = stemOrder[palaceStemIndex]
-
-# Step 3: Verify: The stem at life palace position should equal 命宮干
-lifeHouseIndex = branchOrder.index(lifeHouseBranch)
-verifyIndex = (stemAtYinIndex + lifeHouseIndex) % 10
-assert stemOrder[verifyIndex] == lifeHouseStem  # Should be 命宮干
 ```
 
-**Key Insight**: Since there are **12 branches but only 10 stems**, each stem appears exactly **twice** in the 12-palace cycle.
+**Key Insight**:
+- **NOT clockwise**: ❌ 寅 → 卯 → 辰 → ...
+- **COUNTERCLOCKWISE**: ✅ 寅 → 丑 → 子 → 亥 → ...
+- Stems cycle every **10 positions**; branches cycle every **12 positions**
+- Each stem appears exactly **twice** in the 12-palace cycle
 
-### ✅ Verified Results (All 5 People)
+### ✅ Verified Results (All 5 People) - COUNTERCLOCKWISE ORDER
 
-**Bennett** (Year 1984甲, Life Palace Stem at 寅: 丙)
+**Bennett** (Year 1984甲, Life Palace 寅)
 ```
-寅(丙) → 卯(丁) → 辰(戊) → 巳(己) → 午(庚) → 未(辛) →
-申(壬) → 酉(癸) → 戌(甲) → 亥(乙) → 子(丙) → 丑(丁)
+COUNTERCLOCKWISE (BACKWARD):
+命宮 寅(丙) → 兄弟宮 丑(丁) → 夫妻宮 子(丙) → 子女宮 亥(乙) → 財帛宮 戌(甲) → 疾厄宮 酉(癸) →
+遷移宮 申(壬) → 交友宮 未(辛) → 官祿宮 午(庚) → 田宅宮 巳(己) → 福德宮 辰(戊) → 父母宮 卯(丁)
 ```
-- Life Palace 寅: 丙 ✓ (matches 命宮干)
 
-**Brian** (Year 1986丙, Life Palace Stem at 辰: 壬)
+**Brian** (Year 1986丙, Life Palace 辰)
 ```
-寅(庚) → 卯(辛) → 辰(壬) → 巳(癸) → 午(甲) → 未(乙) →
-申(丙) → 酉(丁) → 戌(戊) → 亥(己) → 子(庚) → 丑(辛)
+COUNTERCLOCKWISE (BACKWARD):
+命宮 辰(壬) → 兄弟宮 卯(辛) → 夫妻宮 寅(庚) → 子女宮 丑(辛) → 財帛宮 子(庚) → 疾厄宮 亥(己) →
+遷移宮 戌(戊) → 交友宮 酉(丁) → 官祿宮 申(丙) → 田宅宮 未(乙) → 福德宮 午(甲) → 父母宮 巳(癸)
 ```
-- Life Palace 辰: 壬 ✓ (matches 命宮干)
 
-**Christy** (Year 1989己, Life Palace Stem at 未: 辛)
+**Christy** (Year 1989己, Life Palace 未)
 ```
-寅(丙) → 卯(丁) → 辰(戊) → 巳(己) → 午(庚) → 未(辛) →
-申(壬) → 酉(癸) → 戌(甲) → 亥(乙) → 子(丙) → 丑(丁)
+COUNTERCLOCKWISE (BACKWARD):
+命宮 未(辛) → 兄弟宮 午(庚) → 夫妻宮 巳(己) → 子女宮 辰(戊) → 財帛宮 卯(丁) → 疾厄宮 寅(丙) →
+遷移宮 丑(丁) → 交友宮 子(丙) → 官祿宮 亥(乙) → 田宅宮 戌(甲) → 福德宮 酉(癸) → 父母宮 申(壬)
 ```
-- Life Palace 未: 辛 ✓ (matches 命宮干)
 
-**Cherry** (Year 1990庚, Life Palace Stem at 卯: 己)
+**Cherry** (Year 1990庚, Life Palace 卯)
 ```
-寅(戊) → 卯(己) → 辰(庚) → 巳(辛) → 午(壬) → 未(癸) →
-申(甲) → 酉(乙) → 戌(丙) → 亥(丁) → 子(戊) → 丑(己)
+COUNTERCLOCKWISE (BACKWARD):
+命宮 卯(己) → 兄弟宮 寅(戊) → 夫妻宮 丑(己) → 子女宮 子(戊) → 財帛宮 亥(丁) → 疾厄宮 戌(丙) →
+遷移宮 酉(乙) → 交友宮 申(甲) → 官祿宮 未(癸) → 田宅宮 午(壬) → 福德宮 巳(辛) → 父母宮 辰(庚)
 ```
-- Life Palace 卯: 己 ✓ (matches 命宮干)
 
-**Elice** (Year 1982壬, Life Palace Stem at 亥: 辛)
+**Elice** (Year 1982壬, Life Palace 亥)
 ```
-寅(壬) → 卯(癸) → 辰(甲) → 巳(乙) → 午(丙) → 未(丁) →
-申(戊) → 酉(己) → 戌(庚) → 亥(辛) → 子(壬) → 丑(癸)
+COUNTERCLOCKWISE (BACKWARD):
+命宮 亥(辛) → 兄弟宮 戌(庚) → 夫妻宮 酉(己) → 子女宮 申(戊) → 財帛宮 未(丁) → 疾厄宮 午(丙) →
+遷移宮 巳(乙) → 交友宮 辰(甲) → 官祿宮 卯(癸) → 田宅宮 寅(壬) → 福德宮 丑(癸) → 父母宮 子(壬)
 ```
-- Life Palace 亥: 辛 ✓ (matches 命宮干)
 
-### ❌ COMMON ERROR
+### ❌ CRITICAL ERRORS (Fixed 2026-02-20)
 
-**DO NOT** calculate 12 palace stems independently from each life palace position. This was my initial error:
+**ERROR 1: Used CLOCKWISE order instead of COUNTERCLOCKWISE**
+```python
+# ❌ WRONG: Clockwise/forward through branches
+寅 → 卯 → 辰 → 巳 → ... (WRONG!)
+
+# ✅ CORRECT: COUNTERCLOCKWISE/backward through branches
+寅 → 丑 → 子 → 亥 → ... (CORRECT!)
+```
+
+**ERROR 2: Calculated palace stems from life palace instead of from 寅**
 ```python
 # ❌ WRONG APPROACH
 for i in range(12):
-    palace_stem_idx = (life_palace_stem_idx + i) % 10  # Using life palace as anchor
+    palace_stem_idx = (life_palace_stem_idx + i) % 10
+    palace_stem = stemOrder[palace_stem_idx]
+
+# ✅ CORRECT APPROACH
+for i in range(12):
+    palace_branch_idx = (life_house_idx - i) % 12  # Go BACKWARD
+    palace_stem_idx = (stem_at_yin_idx + palace_branch_idx) % 10
     palace_stem = stemOrder[palace_stem_idx]
 ```
 
-**Correct approach**: Always start from 寅 position using the year stem, then count forward to all 12 positions.
+**Root Cause**: Misunderstood the palace arrangement direction. 12 palaces are NOT in clockwise sequential order - they are in COUNTERCLOCKWISE order going backward through the branches!
 
 ### ✅ KEY PRINCIPLE VERIFIED
 
@@ -301,14 +328,21 @@ for i in range(12):
 - Therefore: **LCM(10,12) = 60** — the 60-year Sexagenary cycle repeats
 - In 12 palace chart: Each stem appears **exactly 2 times** (12 ÷ 10 = 1 remainder 2)
 
-### ✅ FORMULA VERIFIED
+### ✅ FORMULA VERIFIED - COUNTERCLOCKWISE ARRANGEMENT
+
+**Critical Discovery**: The 12 palaces are arranged in **COUNTERCLOCKWISE order (逆時針)**, NOT clockwise!
+
+From search results (2026-02-20):
+> "逆時針方向排列為：命宮、兄弟宮、夫妻宮、子女宮、財帛宮、疾厄宮..."
+> (Counterclockwise direction: Life Palace → Siblings → Spouse → Children → Wealth → Health...)
 
 **Sources**:
-- [紫微斗數手工排盤 | 星林 學苑](https://www.108s.tw/article/info/90)
-- [紫微斗數排盤教學 | 甲己丙作首，乙庚戊為頭...](https://blog.xuite.net/liang60719/blog/63603820)
-- All 5 test cases verified correct ✓
+- [紫微斗數手工排盤 | 星林 學苑](https://www.108s.tw/article/info/88)
+- [兄弟宮是你與生俱來的助力或是阻力的來源 | 星林 學苑](https://www.108s.tw/article/info/43)
+- Multiple Chinese astrology sources confirming counterclockwise arrangement
+- All 5 test cases verified with COUNTERCLOCKWISE algorithm ✓
 
-**Status**: STEP 4.5 (12-palace 天干 calculation) complete and tested.
+**Status**: STEP 4.5 COMPLETELY CORRECTED with counterclockwise arrangement.
 **Last Updated**: 2026-02-20
 
 ---
