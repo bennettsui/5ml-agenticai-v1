@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import dynamic from 'next/dynamic';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   CheckCircle,
@@ -23,18 +22,6 @@ import {
   Phone,
 } from 'lucide-react';
 import RecruitNav from './components/RecruitNav';
-
-const RecruitAICarnival = dynamic(
-  () => import('./components/RecruitAICarnival'),
-  { ssr: false, loading: () => (
-    <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-900 flex items-center justify-center">
-      <div className="text-white text-center">
-        <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-sm opacity-70">Loading AI Carnival...</p>
-      </div>
-    </div>
-  )}
-);
 
 // ─── Data ───────────────────────────────────────────────────────────────────
 
@@ -439,7 +426,6 @@ export default function RecruitAIPage() {
   const [activeAgent, setActiveAgent] = useState(0);
   const [activeCaseStudy, setActiveCaseStudy] = useState(0);
   const [expandedWorkflow, setExpandedWorkflow] = useState<number | null>(null);
-  const heroRef = useRef<HTMLDivElement>(null);
 
   // Cycle through agents automatically
   useEffect(() => {
@@ -456,42 +442,34 @@ export default function RecruitAIPage() {
       <RecruitNav />
 
 
-      {/* ── Hero: 3D AI Carnival ── */}
-      <section
-        ref={heroRef}
-        className="relative overflow-hidden pt-16"
-        style={{ height: '100svh', minHeight: '600px' }}
-      >
-        {/* 3D World fills the hero */}
-        <div className="absolute inset-0 top-16">
-          <RecruitAICarnival />
-        </div>
-
-        {/* Text overlay — bottom of hero */}
-        <div className="absolute bottom-0 left-0 right-0 z-20 pointer-events-none">
-          <div className="bg-gradient-to-t from-slate-900/92 via-slate-900/65 to-transparent pt-16 pb-8 px-6 text-center">
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight mb-2 text-white drop-shadow-lg">
+      {/* ── Hero ── */}
+      <section className="pt-16">
+        <div className="py-20 px-4 bg-gradient-to-br from-blue-700 to-blue-900 text-white">
+          <div className="max-w-4xl mx-auto text-center">
+            <p className="text-xs font-semibold text-blue-200 uppercase tracking-widest mb-4">
+              香港中小企 AI 自動化平台
+            </p>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black mb-5 leading-tight">
               讓 AI 代理為您工作
             </h1>
-            <p className="text-sm text-white/60 mb-1 font-medium tracking-wide">
-              ✅ 一週內完成部署 &nbsp;·&nbsp; ✅ 一個月內見成效
-            </p>
-            <p className="text-base sm:text-lg text-white/80 mb-4 max-w-lg mx-auto">
+            <p className="text-blue-100 text-lg sm:text-xl max-w-2xl mx-auto mb-3 leading-relaxed">
               無需技術團隊 · 節省 30–50% 人力 · 發票、客服、商業智能全自動
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center" style={{ pointerEvents: 'auto' }}>
+            <p className="text-blue-200/80 text-sm mb-8">
+              ✅ 一週內完成部署 &nbsp;·&nbsp; ✅ 一個月內見成效
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
                 href="/vibe-demo/recruitai/consultation"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-base transition-all duration-200 shadow-lg shadow-blue-900/40"
+                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white hover:bg-blue-50 text-blue-700 font-bold rounded-xl text-base transition-all duration-200 shadow-lg"
               >
                 <Phone className="w-4 h-4" />
                 免費 30 分鐘諮詢
               </Link>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); scrollTo('#modules'); }}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-medium rounded-xl text-base transition-all duration-200 backdrop-blur-sm cursor-pointer"
-                style={{ pointerEvents: 'auto' }}
+                onClick={() => scrollTo('#modules')}
+                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-medium rounded-xl text-base transition-all duration-200 backdrop-blur-sm"
               >
                 了解各功能模組
                 <ArrowRight className="w-4 h-4" />
