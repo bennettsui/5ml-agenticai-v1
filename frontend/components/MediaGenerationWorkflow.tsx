@@ -1297,7 +1297,13 @@ export default function MediaGenerationWorkflow() {
               <div>
                 <p className="font-medium">Test failed</p>
                 <p className="text-xs mt-0.5 text-red-300">{qtError}</p>
-                <p className="text-[11px] mt-1 text-slate-500">Check: is the server running? Does the uploads/media directory exist?</p>
+                <p className="text-[11px] mt-1 text-slate-500">
+                  {/pollinations|530|429|403|timeout|timed out|unreachable|dns|connectivity/i.test(qtError)
+                    ? 'This is an external API issue — Pollinations.ai may be temporarily unavailable. Try again in a minute.'
+                    : /server|restart|jobId/i.test(qtError)
+                    ? 'Check: is the backend server running?'
+                    : 'Check: is the server running? Does the uploads/media directory exist?'}
+                </p>
               </div>
             </div>
           )}
