@@ -4147,18 +4147,24 @@ app.post('/api/recruitai/chat', async (req, res) => {
       updateParams
     );
 
-    // If contact captured, save as lead (chatbot-sourced)
+    // If contact captured, save as lead (chatbot-sourced), encrypt PII at rest
+    // Dedup by session_id (not email — emails are encrypted so plaintext comparison fails)
     if (contactCaptured && capturedData.email) {
       try {
         await pool.query(
           `INSERT INTO recruitai_leads (name, email, phone, source_page, industry, message)
            SELECT $1,$2,$3,$4,$5,$6
            WHERE NOT EXISTS (
-             SELECT 1 FROM recruitai_leads WHERE email = $2
+             SELECT 1 FROM recruitai_leads WHERE source_page = $4
            )`,
-          [capturedData.name || null, capturedData.email, capturedData.phone || null,
-           'chatbot:' + (sourcePage || 'unknown'), industry || null,
-           `Chat session ${currentSessionId}`]
+          [
+            capturedData.name  ? encrypt(capturedData.name)  : null,
+            encrypt(capturedData.email),
+            capturedData.phone ? encrypt(capturedData.phone) : null,
+            'chatbot:' + currentSessionId,
+            industry || null,
+            encrypt(`Chat session ${currentSessionId}`),
+          ]
         );
       } catch (e) {
         console.error('⚠️ RecruitAI chatbot lead save failed:', e.message);
