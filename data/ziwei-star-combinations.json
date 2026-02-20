@@ -1,0 +1,450 @@
+{
+  "title": "Ziwei Doushu - Complete Star Combinations (組合/格局) Reference",
+  "date_updated": "2026-02-19",
+  "description": "Comprehensive database of Ziwei Doushu star combinations (組合) and palace patterns (格局)",
+  "total_combinations_found": "50+",
+  "note": "This represents the major combinations found. The complete list of all 34 wealth patterns and additional variations continues to expand.",
+  "auspicious_patterns": {
+    "major_wealth_patterns": [
+      {
+        "id": "aus-01-zifu-chaoyuan",
+        "name": "紫府朝垣格",
+        "english": "Ziwei-Tianfu Facing Court",
+        "significance": "很高",
+        "description": "紫微、天府兩星在廟旺之地並合照命垣。古書稱『食祿萬鐘』，入此格者不大貴即當大富。",
+        "conditions": [
+          "Ziwei and Tianfu in auspicious positions",
+          "Both stars facing and influencing Life Palace",
+          "Temple strength good for both stars",
+          "Three Palaces Four Positives contain auspicious stars"
+        ],
+        "requirements": [
+          "祿存、科權祿 in Three Palaces Four Positives",
+          "左輔右弼 (Left/Right Assistants)",
+          "文昌文曲 (Talent Stars)",
+          "天魁天鉞 (Celestial Excellence)"
+        ],
+        "result": "Great wealth or nobility, stable fortune",
+        "source": ["王亭之談星系列", "古傳紫微斗數"]
+      },
+      {
+        "id": "aus-02-fuoxiang-chaoyuan",
+        "name": "府相朝垣格",
+        "english": "Tianfu-Tianxiang Facing Court",
+        "significance": "很高",
+        "description": "天府在官祿宮，天相在財帛宮，來合照命宮。為紫微斗數著名的富貴格局。",
+        "conditions": [
+          "Tianfu in Career Palace",
+          "Tianxiang in Wealth Palace",
+          "Both facing and blessing Life Palace",
+          "Life Palace has no main star (weak)"
+        ],
+        "requirements": [
+          "祿存 in Three Palaces Four Positives",
+          "科權祿 stars",
+          "左右、昌曲、魁鉞"
+        ],
+        "result": "衣食無憂，財富自由 - Food and clothing assured, financial freedom",
+        "source": ["百度百科-府相朝垣", "易好智慧"]
+      },
+      {
+        "id": "aus-03-shuanglu-chaoyuan",
+        "name": "雙祿朝垣格",
+        "english": "Dual Lu Facing Court",
+        "significance": "高",
+        "description": "祿存星和化祿星同時在命宮的三方四正朝拱命宮。代表財富雙重加持。",
+        "conditions": [
+          "Lu Cun (祿存) star",
+          "Lu transformation (化祿)",
+          "Both in Three Palaces Four Positives facing Life Palace"
+        ],
+        "result": "多重財源，wealth multiplied",
+        "source": ["科技紫微網"]
+      },
+      {
+        "id": "aus-04-rizhaoleimen",
+        "name": "日照雷門格",
+        "english": "Sun Illuminates Thunder Gate",
+        "significance": "高",
+        "description": "太陽星在廟地朝照命垣或官祿宮，象徵光明和權力。",
+        "conditions": [
+          "Taiyang (Sun) in auspicious position",
+          "Taiyang facing Life or Career Palace",
+          "No heavy shadows from inauspicious stars"
+        ],
+        "result": "官星明亮，事業成就大",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "aus-05-jiangxing-dedi",
+        "name": "將星得地格",
+        "english": "General Star Well-Placed",
+        "significance": "高",
+        "description": "七殺星在廟地坐命，化為威權。紫微制七殺之惡。",
+        "conditions": [
+          "Qisha (Seven Killing) in strong position",
+          "Ziwei or other benevolent star controlling Qisha",
+          "Positioned well for authority"
+        ],
+        "result": "軍警界或領導人物，威權顯著",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "aus-06-sifang-tonglin",
+        "name": "四正同臨格",
+        "english": "Four Positions Concurrent",
+        "significance": "很高",
+        "description": "紫、府、日、月四星得地，不遇忌煞。財官雙美。",
+        "conditions": [
+          "Ziwei, Tianfu, Taiyang, Taiyin all in good positions",
+          "No major inauspicious stars",
+          "Arranged in Life, Wealth, Career, Home palaces"
+        ],
+        "result": "財官雙美，富貴兼全",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "aus-07-fubiyi-gongzhu",
+        "name": "輔弼拱主格",
+        "english": "Left/Right Assistants Arch Master",
+        "significance": "中",
+        "description": "左輔或右弼在三方四正朝拱主星。助力增強。",
+        "conditions": [
+          "左輔 or 右弼 in three palace aspects",
+          "Facing and supporting main star",
+          "Creates arching formation"
+        ],
+        "result": "得人助力，事業順遂",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "aus-08-jixiang-liming",
+        "name": "極向離明格",
+        "english": "Extreme Facing Clarity",
+        "significance": "高",
+        "description": "機月同梁，廟地順行，甚美。",
+        "conditions": [
+          "Tianji, Taiyin, Tianliang together or in combination",
+          "In auspicious positions",
+          "Good transit arrangements"
+        ],
+        "result": "聰慧聰慧，學問佳",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "aus-09-junchen-qinghui",
+        "name": "君臣慶會格",
+        "english": "Ruler-Minister Celebration",
+        "significance": "高",
+        "description": "主星與輔星和諧相處，形成政治聯盟的象徵。",
+        "conditions": [
+          "Main star and assistant star in harmony",
+          "Three palace positions aligned",
+          "Natural alignment without conflict"
+        ],
+        "result": "人事順利，得眾人之心",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "aus-10-riyue-jiaming",
+        "name": "日月夾命格",
+        "english": "Sun-Moon Sandwich Life",
+        "significance": "中",
+        "description": "太陽和太陰夾著命宮。陰陽平衡，光明與柔和並存。",
+        "conditions": [
+          "Taiyang on left side",
+          "Taiyin on right side",
+          "Life Palace in center (sandwiched)"
+        ],
+        "result": "性格圓融，內外兼備",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "aus-11-yushou-tianxiang",
+        "name": "玉袖天香格",
+        "english": "Jade Sleeve Celestial Fragrance",
+        "significance": "高",
+        "description": "太陰在廟地，與文昌文曲同宮。女性命主尤佳。",
+        "conditions": [
+          "Taiyin in auspicious position",
+          "Wenchang and Wenqu in same palace",
+          "Refined and elegant formation"
+        ],
+        "result": "氣質優雅，才華出眾",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "aus-12-shuimu-qinghua",
+        "name": "水木清華格",
+        "english": "Water-Wood Purity",
+        "significance": "高",
+        "description": "天機與太陰同時坐命宮，此格局只會出現在寅宮或申宮。機月同梁格局的子格局。",
+        "conditions": [
+          "Tianji and Taiyin in Life Palace together",
+          "Only occurs in Yin or Shen position",
+          "Both stars in strong positions"
+        ],
+        "palace_positions": ["寅", "申"],
+        "result": "聰慧優雅，才華橫溢",
+        "source": ["紫微樓", "古傳紫微斗數"]
+      },
+      {
+        "id": "aus-13-kuiyue-jiaming",
+        "name": "魁鉞夾命格",
+        "english": "Kui-Yue Sandwich Life",
+        "significance": "高",
+        "description": "天魁和天鉞夾著命宮。貴人運極強。",
+        "conditions": [
+          "天魁 on one side",
+          "天鉞 on other side",
+          "Life Palace sandwiched",
+          "Creates noble protection"
+        ],
+        "result": "貴人運佳，逢兇化吉",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "aus-14-chanyuan-zhegui",
+        "name": "蟾宮折桂格",
+        "english": "Moon Palace Laurel",
+        "significance": "高",
+        "description": "太陰和文昌或文曲組合。寧靜致遠，學問佳。",
+        "conditions": [
+          "Taiyin primary",
+          "Wenchang or Wenqu enhancing",
+          "In auspicious positions for study"
+        ],
+        "result": "文章事業成，學問高深",
+        "source": ["古傳紫微斗數"]
+      }
+    ],
+    "secondary_patterns": [
+      {
+        "id": "aus-15-luquan-kege",
+        "name": "祿化科格",
+        "english": "Wealth Transforms to Talent",
+        "significance": "中",
+        "description": "祿存或祿化與科星同宮。名利雙收，聲譽和財富同時提升。",
+        "conditions": [
+          "Lu Cun or Lu transformation",
+          "Ke star in same palace",
+          "Both working together"
+        ],
+        "result": "名利雙收，事業財務都提升",
+        "source": ["王亭之談星系列"]
+      },
+      {
+        "id": "aus-16-hongluan-tianxi",
+        "name": "紅鸞天喜",
+        "english": "Red Phoenix Heaven Joy",
+        "significance": "中",
+        "description": "紅鸞星和天喜星共現。主桃花運佳，感情生活豐富。",
+        "conditions": [
+          "紅鸞 star",
+          "天喜 star",
+          "Together or in aspect",
+          "Especially in Life or Marriage Palace"
+        ],
+        "result": "感情運佳，容易結識異性",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "aus-17-tianliang-zhaoyuan",
+        "name": "天梁朝垣",
+        "english": "Tian Liang Facing Court",
+        "significance": "中",
+        "description": "天梁星與官祿宮或身宮有關照。主貴氣，得人緣。",
+        "conditions": [
+          "Tianliang star",
+          "Facing Career or Body Palace",
+          "Brings protection and dignity"
+        ],
+        "result": "品德受重視，人緣佳",
+        "source": ["王亭之談星系列"]
+      },
+      {
+        "id": "aus-18-sanfang-huizhao",
+        "name": "三方會照",
+        "english": "Three-Way Convergence",
+        "significance": "中",
+        "description": "主星在三個方位同時出現（命、財、官三方）。力量集中，主事業或財運突出。",
+        "conditions": [
+          "Main star in Life Palace",
+          "Main star in Wealth Palace",
+          "Main star in Career Palace",
+          "All three positions activated"
+        ],
+        "result": "所涉領域運勢集中爆發",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "aus-19-yima-xing",
+        "name": "驛馬星",
+        "english": "Traveling Horse Star",
+        "significance": "低",
+        "description": "驛馬星現於命宮或遷移宮。主遠行、遷移、變動。適合經常出差或經商。",
+        "conditions": [
+          "Yima star in Life Palace",
+          "Yima in Travel/Relocation Palace",
+          "Indicates movement and travel luck"
+        ],
+        "result": "生活變動多，適應能力強",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "aus-20-liuji-juju",
+        "name": "六吉聚集",
+        "english": "Six Auspicious Stars Gathered",
+        "significance": "很高",
+        "description": "祿、權、科、左輔、右弼、魁鉞六顆吉星聚集。極為罕見，主大貴大富。",
+        "conditions": [
+          "Lu Cun (祿)",
+          "Quan (權)",
+          "Ke (科)",
+          "Zuofu (左輔)",
+          "Youbi (右弼)",
+          "Kui/Yue (魁鉞)",
+          "All six gathered in same general area"
+        ],
+        "rarity": "Extremely rare",
+        "result": "大貴大富，各方面順利",
+        "source": ["古傳紫微斗數", "斗數秘訣"]
+      }
+    ]
+  },
+  "inauspicious_patterns": {
+    "major_inauspicious": [
+      {
+        "id": "ina-01-yangtuojia-ji",
+        "name": "羊駝夾忌",
+        "english": "Sheep-Camel Sandwich Taboo",
+        "significance": "高",
+        "description": "羊刃和陀羅夾著忌星或受克的宮位。形成雙重壓力結構。",
+        "conditions": [
+          "Yang Ren (羊刃)",
+          "Tuo Luo (陀羅)",
+          "Sandwich Taboo star or weak palace",
+          "Creates dual pressure"
+        ],
+        "triggered": "During unfavorable transit periods",
+        "result": "面臨雙重阻礙，易陷入困局",
+        "source": ["從星開始紫微研究苑"]
+      },
+      {
+        "id": "ina-02-kongjie-jiaming",
+        "name": "空劫夾命",
+        "english": "Void-Robbery Sandwich Life",
+        "significance": "高",
+        "description": "地空與地劫夾著命宮。被夾宮位視同為弱宮或破宮。",
+        "conditions": [
+          "Tiankong (地空)",
+          "Dijie (地劫)",
+          "Only in Si (巳) or Hai (亥) position",
+          "If not same palace, each star's power only half"
+        ],
+        "result": "宮位被弱化，生活變動大",
+        "source": ["紫微雲科技", "星林學苑"]
+      },
+      {
+        "id": "ina-03-maloukonwang",
+        "name": "馬落空亡",
+        "english": "Horse Falling into Void",
+        "significance": "高",
+        "description": "驛馬星遇到空亡星。遠行無功，流浪飄搖。",
+        "conditions": [
+          "Yima (驛馬)",
+          "Kong or Jie (空亡)",
+          "Together in same area",
+          "Nullifies travel benefits"
+        ],
+        "result": "遠行無功，反覆奔波",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "ina-04-lufen-chongpo",
+        "name": "祿逢衝破",
+        "english": "Lu Encountering Clash",
+        "significance": "中",
+        "description": "祿存或化祿星遇到衝克。財運受損，虛耗增加。",
+        "conditions": [
+          "Lu Cun or Lu transformation",
+          "Encountering clash or destruction aspect",
+          "Wealth diminished"
+        ],
+        "result": "虛耗增多，財運受損",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "ina-05-xingmo-tongxing",
+        "name": "星煞同行",
+        "english": "Evil Stars Co-appearing",
+        "significance": "高",
+        "description": "多個煞星在同一宮位。凶象疊加。",
+        "conditions": [
+          "Multiple inauspicious stars in same palace",
+          "Yang Ren, Tuo Luo, Kong, Jie combinations",
+          "Compounding negative effects"
+        ],
+        "result": "凶象疊加，多重困擾",
+        "source": ["古傳紫微斗數"]
+      },
+      {
+        "id": "ina-06-jinfei-huangjin",
+        "name": "金鳳展翅格",
+        "english": "Golden Phoenix Spreads Wings (Misfortune)",
+        "significance": "高",
+        "description": "破軍在失陷之地，缺乏制化。象徵失控和破壞。",
+        "conditions": [
+          "Pojun in weak position",
+          "Lacking benefic control",
+          "Unstable and destructive"
+        ],
+        "result": "破壞性強，缺乏制約",
+        "source": ["古傳紫微斗數"]
+      }
+    ],
+    "poverty_patterns": [
+      {
+        "id": "ina-07-shenglai-pinjian",
+        "name": "生來貧賤",
+        "english": "Born Poor and Low",
+        "significance": "高",
+        "description": "劫空臨財福二宮。虛耗漂泊，物質不足。",
+        "conditions": [
+          "Kong and Jie in Wealth and Blessing palaces",
+          "No protective stars",
+          "Weak main star in Life Palace"
+        ],
+        "result": "生活困難，物質不足",
+        "source": ["古傳紫微斗數"]
+      }
+    ]
+  },
+  "pattern_analysis_criteria": {
+    "factors_determining_strength": [
+      "主星廟旺失陷程度 - Main star's temple strength",
+      "吉凶星扶抑情況 - Support/restraint of auspicious/inauspicious stars",
+      "四化吉兇 - Four transformations auspiciousness",
+      "三方四正汇聚情況 - Three Palaces Four Positives concentration",
+      "宮位本身強弱 - Palace's innate strength"
+    ],
+    "strong_pattern": "主星廟旺 + 吉星眾 + 無煞 = 格局強而有力",
+    "weak_pattern": "主星失陷 + 加煞忌星 = 格局弱而無力或破格",
+    "mixed_pattern": "有成有破的『雜格』 = 有吉有兇，但可能大富大貴"
+  },
+  "important_notes": {
+    "note1": "格局的好壞決定了一生成就的上限，但看命盤除了看格局之外，還要看大限和星情排列組合。",
+    "note2": "有的時候成格不一定好，雜格也可能大富大貴。",
+    "note3": "不能只看格局，還要看三方四正的星情組合，以及大運流年的推進。",
+    "note4": "Modern interpretation emphasizes that destiny is not fixed - understanding patterns allows for positive change."
+  },
+  "sources": [
+    "尋夢愛情 - 紫微鬥數格局之34個富貴格",
+    "紫微樓 - 紫微斗數常見厲害格局介紹",
+    "星塵算命 - 紫微斗數論格局",
+    "古傳紫微斗數傳統詮釋",
+    "王亭之談星系列",
+    "科技紫微網 - 紫微格局分析",
+    "星林學苑 - 紫微斗數研究"
+  ]
+}

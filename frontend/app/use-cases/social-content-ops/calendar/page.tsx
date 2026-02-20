@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useAutosave } from '@/lib/useAutosave';
 import {
   Calendar, AlertCircle, Plus, ChevronLeft, ChevronRight,
   LayoutGrid, Table, Loader2, Sparkles, Filter, X,
@@ -132,6 +133,42 @@ export default function ContentCalendarPage() {
   // Drafts state
   const [drafts, setDrafts] = useState<any[]>([]);
   const [loadingDrafts] = useState(false);
+
+  // Autosave
+  const isMounted = useRef(false);
+  const { autosave, manualSave, status: saveStatus } = useAutosave({
+    onSave: async (data) => {
+      if (!selectedBrand) return;
+      await fetch(`/api/social/calendar/${selectedBrand.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ posts: data }),
+      });
+    },
+  });
+
+  // Load saved calendar from API on brand change
+  useEffect(() => {
+    if (!selectedBrand) return;
+    isMounted.current = false;
+    async function load() {
+      try {
+        const res = await fetch(`/api/social/calendar/${selectedBrand!.id}`);
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data && data.length > 0) setPosts(data);
+        }
+      } catch { }
+      isMounted.current = true;
+    }
+    load();
+  }, [selectedBrand?.id]);
+
+  // Auto-save posts when they change
+  useEffect(() => {
+    if (!isMounted.current || !selectedBrand) return;
+    autosave(posts);
+  }, [posts, selectedBrand?.id, autosave]);
 
   const filteredPosts = filterPillar ? posts.filter(p => p.pillar === filterPillar) : posts;
 
@@ -313,6 +350,22 @@ IMPORTANT: Return ONLY the JSON array, no other text.`,
             title="Master Table"
           >
             <Table className="w-4 h-4" />
+          </button>
+          <button
+            onClick={manualSave}
+            className="p-2 rounded-lg text-xs transition-colors text-slate-400 hover:bg-slate-800 flex items-center gap-1"
+            title="Save calendar"
+          >
+            {saveStatus.isSaving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : saveStatus.hasUnsaved ? (
+              <span className="text-amber-400 text-xs font-medium">Unsaved...</span>
+            ) : (
+              <>
+                <span className="text-emerald-400">✓</span>
+                <span className="text-emerald-400 text-xs">Autosaved</span>
+              </>
+            )}
           </button>
         </div>
       </div>

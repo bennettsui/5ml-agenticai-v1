@@ -156,6 +156,15 @@ export default function VibeDemoPage() {
       color: 'from-purple-600 to-pink-600',
       tags: ['PR & Marketing', 'Integrated Agency', 'Hong Kong', 'Communications'],
     },
+    {
+      id: 'recruitai',
+      title: 'RecruitAIStudio',
+      titleZh: '中小企 AI 自動化平台',
+      description: 'Hong Kong SME AI automation platform with an interactive 3D carnival hero — explore 5 AI booths with WASD controls, destroy & rebuild mechanics, and learn how AI transforms your business',
+      href: '/vibe-demo/recruitai',
+      color: 'from-blue-600 to-blue-800',
+      tags: ['AI Platform', '3D Three.js', 'Hong Kong SME', 'Interactive Carnival'],
+    },
   ];
 
   return (

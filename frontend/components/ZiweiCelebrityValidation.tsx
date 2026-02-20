@@ -49,108 +49,13 @@ export default function ZiweiCelebrityValidation() {
   const loadCelebrityData = async () => {
     setLoading(true);
     try {
-      // Simulate loading celebrity validation data
-      const celebrity: CelebrityChart = {
-        id: 'celebrity_001',
-        name: 'Steve Jobs',
-        birthDate: '1955-02-24',
-        birthPlace: 'San Francisco, USA',
-        profession: 'Tech Entrepreneur',
-        gender: '男',
-        generatedDate: new Date().toISOString(),
-        chart: {
-          palaces: Array(12).fill({name: 'Palace', majorStars: [], branch: '寅'}),
-          lifeHouse: 0,
-        },
-      };
-
-      setTodaysCelebrity(celebrity);
-      setSelectedCelebrity(celebrity);
-
-      // Historical events for validation
-      setHistoricalEvents([
-        {
-          year: 1976,
-          description: 'Co-founded Apple Computer with Wozniak',
-          category: 'career',
-          verified: true,
-          wikiSource: 'Apple Inc. history',
-        },
-        {
-          year: 1985,
-          description: 'Ousted from Apple due to management conflicts',
-          category: 'career',
-          verified: true,
-          wikiSource: 'Apple leadership history',
-        },
-        {
-          year: 1997,
-          description: 'Returned to Apple as interim CEO',
-          category: 'career',
-          verified: true,
-          wikiSource: 'Apple history timeline',
-        },
-        {
-          year: 2004,
-          description: 'Diagnosed with cancer',
-          category: 'health',
-          verified: true,
-          wikiSource: 'Steve Jobs biography',
-        },
-        {
-          year: 2007,
-          description: 'Launched the first iPhone',
-          category: 'career',
-          verified: true,
-          wikiSource: 'iPhone history',
-        },
-        {
-          year: 2011,
-          description: 'Died of cancer',
-          category: 'health',
-          verified: true,
-          wikiSource: 'Steve Jobs death',
-        },
-      ]);
-
-      // Sample validation results
-      setValidationResults([
-        {
-          prediction: 'Major career milestone or crisis around age 30',
-          actualOutcome: 'Ousted from Apple at age 30 (1985)',
-          matches: true,
-          accuracy: 95,
-          confidence: 92,
-          notes: 'Prediction matched precisely with company records',
-        },
-        {
-          prediction: 'Health challenges in 50s decade',
-          actualOutcome: 'Cancer diagnosis at 52 (2004)',
-          matches: true,
-          accuracy: 88,
-          confidence: 85,
-          notes: 'Correctly predicted period, though specific timing slightly off',
-        },
-        {
-          prediction: 'Success in creative/innovative ventures',
-          actualOutcome: 'iPhone launch (2007) and continued innovation',
-          matches: true,
-          accuracy: 92,
-          confidence: 90,
-          notes: 'Perfectly aligned with career pattern analysis',
-        },
-        {
-          prediction: 'Leadership role around year 22-25',
-          actualOutcome: 'Co-founded Apple at 20, leadership by 25',
-          matches: true,
-          accuracy: 94,
-          confidence: 88,
-          notes: 'Accurately predicted emergence of leadership qualities',
-        },
-      ]);
-
-      setOverallAccuracy(92.3);
-      setAllCelebrities([celebrity]);
+      // No demo data - empty state
+      setTodaysCelebrity(null);
+      setSelectedCelebrity(null);
+      setHistoricalEvents([]);
+      setValidationResults([]);
+      setOverallAccuracy(0);
+      setAllCelebrities([]);
     } catch (err) {
       console.error('Error loading celebrity data:', err);
     } finally {

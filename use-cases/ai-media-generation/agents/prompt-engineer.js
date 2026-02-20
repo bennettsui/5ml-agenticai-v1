@@ -36,8 +36,10 @@ Return ONLY JSON — no explanation, no markdown.
 
 Schema:
 {
-  "positive": "string",
-  "negative": "string",
+  "positive": "string — detailed visual description for image generation",
+  "negative": "string — artifacts and elements to avoid",
+  "headline": "string (optional) — short headline/title to overlay on image (max 10 words)",
+  "ctaCopy": "string (optional) — call-to-action text for image (max 5 words, e.g. 'Learn More', 'Shop Now', 'Discover')",
   "styleTokens": ["string — short reusable tags for this style"],
   "suggestedSampler": "string",
   "suggestedCfg": number,
@@ -49,7 +51,11 @@ Schema:
   "notes": "string"
 }`;
 
-    const userContent = `Generate an image prompt for this deliverable spec:\n${JSON.stringify(spec, null, 2)}`;
+    const userContent = `Generate an image prompt for this deliverable spec:\n${JSON.stringify(spec, null, 2)}
+
+IMPORTANT: If the spec includes headline, tagline, or call-to-action copy, generate appropriate "headline" and "ctaCopy" values (optional fields).
+Headline should be short enough to fit on the generated image.
+CTA copy should be a brief action phrase.`;
     return await this._callLLM(systemPrompt, userContent);
   }
 

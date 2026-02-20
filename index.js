@@ -5,6 +5,9 @@ const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
 const zwEngine = require('./services/ziwei-chart-engine');
+const { asyncHandler, errorHandler, AppError } = require('./middleware/errorHandler');
+const ziweiValidation = require('./validation/ziweiValidation');
+const ziweiV1Router = require('./routes/v1/ziwei');
 require('dotenv').config();
 
 const app = express();
@@ -58,7 +61,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar, createContact, getContactsByClient, getContact, updateContact, deleteContact, linkContactToProject, getProjectContacts, unlinkContactFromProject } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -245,6 +248,11 @@ async function testService(id) {
   }
 }
 
+// ==========================================
+// API V1 ROUTES (Versioned with validation)
+// ==========================================
+app.use('/api/v1/ziwei', ziweiV1Router);
+
 app.get('/api/health/services', async (req, res) => {
   const results = [];
   for (const id of Object.keys(SERVICE_TESTS)) {
@@ -380,6 +388,182 @@ app.get('/api/ziwei/search', (req, res) => {
       keyword,
       count,
       results
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// KNOWLEDGE BASE API ENDPOINTS
+// ==========================================
+
+/**
+ * Get knowledge base statistics from JSON files
+ */
+app.get('/api/ziwei/knowledge/stats', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    // Load all knowledge base files
+    const kbPath = path.join(__dirname, 'data');
+    const files = {
+      curriculum: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8')),
+      combinations: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8')),
+      palaces: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-12-palaces.json'), 'utf8')),
+      sources: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-combinations-sources.json'), 'utf8'))
+    };
+
+    // Calculate stats
+    const stats = {
+      totalConcepts: Object.keys(files.curriculum.level_1_foundations?.core_topics || {}).length,
+      totalCombinations: Object.keys(files.combinations?.combinations || {}).length,
+      totalPalaces: Object.keys(files.palaces?.palaces || {}).length,
+      totalSources: Object.keys(files.sources?.sources || {}).length,
+      curriculumLevels: 6,
+      lastUpdated: new Date().toISOString(),
+      knowledgeFiles: {
+        curriculum: files.curriculum.title,
+        combinations: files.combinations.title || 'Ziwei Star Combinations',
+        palaces: files.palaces.title || 'Ziwei 12 Palaces',
+        sources: files.sources.title || 'Knowledge Sources'
+      }
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get all knowledge base content
+ */
+app.get('/api/ziwei/knowledge/all', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    const kbPath = path.join(__dirname, 'data');
+    const knowledge = {
+      curriculum: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8')),
+      combinations: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8')),
+      palaces: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-12-palaces.json'), 'utf8')),
+      learning: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-learning-guide.json'), 'utf8')),
+      sources: JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-combinations-sources.json'), 'utf8'))
+    };
+
+    res.json({
+      success: true,
+      data: knowledge
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get curriculum by level
+ */
+app.get('/api/ziwei/knowledge/curriculum/:level', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const level = `level_${req.params.level}`;
+
+    const kbPath = path.join(__dirname, 'data');
+    const curriculum = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8'));
+
+    if (!curriculum[level]) {
+      return res.status(404).json({ success: false, error: `Level ${req.params.level} not found` });
+    }
+
+    res.json({
+      success: true,
+      level: req.params.level,
+      data: curriculum[level]
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Get combinations by category
+ */
+app.get('/api/ziwei/knowledge/combinations/:category', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    const kbPath = path.join(__dirname, 'data');
+    const combinations = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8'));
+
+    const category = req.params.category;
+    const results = combinations.combinations.filter(c => c.category === category);
+
+    res.json({
+      success: true,
+      category,
+      count: results.length,
+      data: results
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Search knowledge base
+ */
+app.get('/api/ziwei/knowledge/search', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const query = (req.query.q || '').toLowerCase();
+
+    if (!query) {
+      return res.status(400).json({ success: false, error: 'Query parameter "q" required' });
+    }
+
+    const kbPath = path.join(__dirname, 'data');
+    const curriculum = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-curriculum-enhanced.json'), 'utf8'));
+    const combinations = JSON.parse(fs.readFileSync(path.join(kbPath, 'ziwei-star-combinations.json'), 'utf8'));
+
+    const results = {
+      curriculum_matches: [],
+      combination_matches: []
+    };
+
+    // Search curriculum
+    Object.entries(curriculum).forEach(([level, content]) => {
+      if (typeof content === 'object' && content !== null) {
+        const str = JSON.stringify(content).toLowerCase();
+        if (str.includes(query)) {
+          results.curriculum_matches.push({
+            level,
+            title: content.name || level
+          });
+        }
+      }
+    });
+
+    // Search combinations
+    if (combinations.combinations) {
+      results.combination_matches = combinations.combinations.filter(c =>
+        JSON.stringify(c).toLowerCase().includes(query)
+      );
+    }
+
+    res.json({
+      success: true,
+      query,
+      total_results: results.curriculum_matches.length + results.combination_matches.length,
+      data: results
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -1266,6 +1450,68 @@ app.post('/api/brands', async (req, res) => {
   } catch (err) {
     console.error('Error creating brand:', err);
     res.status(500).json({ error: 'Failed to create brand' });
+  }
+});
+
+// POST /api/brands/setup-complete — Brand Setup → CRM sync
+// Auto-creates brand in CRM from setup wizard
+app.post('/api/brands/setup-complete', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  try {
+    const { brandName, industry, markets, voiceTone, brandPersonality, colorPalette, visualStyle, strategy } = req.body;
+
+    if (!brandName) {
+      return res.status(400).json({ error: 'Brand name is required' });
+    }
+
+    // 1. Check if brand already exists
+    const existing = await pool.query('SELECT id FROM crm_clients WHERE name = $1', [brandName]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Brand already exists' });
+    }
+
+    // 2. Create brand in CRM
+    const brandResult = await pool.query(
+      `INSERT INTO crm_clients (name, industry, region, status, health_score)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, name`,
+      [
+        brandName,
+        JSON.stringify(Array.isArray(industry) ? [industry] : (industry ? [industry] : [])),
+        JSON.stringify(markets || []),
+        'active', // Default to active when created from setup
+        75, // Default health score
+      ]
+    );
+
+    const crmBrandId = brandResult.rows[0].id;
+
+    // 3. Also save to social-content-ops brands table with full profile
+    await saveBrand(brandName, {
+      industry: industry,
+      brand_info: {
+        profile: {
+          brandName,
+          industry,
+          markets: markets || [],
+          voiceTone,
+          brandPersonality,
+          colorPalette,
+          visualStyle,
+        },
+        strategy: strategy,
+      },
+    });
+
+    res.json({
+      success: true,
+      brand_id: crmBrandId,
+      redirect: `/use-cases/crm/brands/detail?id=${crmBrandId}`,
+    });
+  } catch (err) {
+    console.error('Error in setup-complete:', err);
+    res.status(500).json({ error: 'Failed to create brand in CRM' });
   }
 });
 
@@ -2197,12 +2443,18 @@ app.post('/api/social/chat', async (req, res) => {
 When asked about brand research, competitive analysis, or audience insights, provide structured, actionable insights.
 ${brand_name ? `Brand: ${brand_name}` : ''}
 
-Format your response clearly with sections for:
-- Business Overview
-- Mission/Vision
-- Competitors Analysis
-- Audience Segments
-- Product/Service Overview
+Return ONLY valid JSON with this exact structure:
+{
+  "businessOverview": "Brand positioning, market fit, and unique value proposition",
+  "mission": "Company mission and core values",
+  "competitors": [
+    { "name": "Competitor Name", "strengths": "What they do well", "weaknesses": "Where they fall short", "threat_level": "High|Medium|Low" }
+  ],
+  "audienceSegments": [
+    { "name": "Segment Name", "size": "Market size estimate", "pain_points": "Key problems", "preferences": "What they value" }
+  ],
+  "products": "Overview of key products/services and market positioning"
+}
 
 Be specific, data-driven, and actionable.
 ${ragContext ? `\n${ragContext}` : ''}`;
@@ -2217,8 +2469,56 @@ ${ragContext ? `\n${ragContext}` : ''}`;
             )
             : await llm.chat('haiku', messages, { system: systemPrompt, maxTokens: 2000 });
 
+          const responseText = result.content || result.text;
+          let researchData = null;
+
+          // Try to parse JSON from response
+          try {
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              researchData = JSON.parse(jsonMatch[0]);
+            }
+          } catch { }
+
+          // If parsed successfully, persist to database
+          if (researchData) {
+            try {
+              // Save business overview
+              if (researchData.businessOverview || researchData.mission) {
+                await saveResearchBusiness(brand_id, {
+                  business_overview: researchData.businessOverview || '',
+                  mission: researchData.mission || ''
+                });
+              }
+
+              // Save competitors
+              if (researchData.competitors && researchData.competitors.length > 0) {
+                await saveResearchCompetitors(brand_id, researchData.competitors);
+              }
+
+              // Save audience and segments
+              if (researchData.audienceSegments) {
+                const audienceResult = await saveResearchAudience(brand_id, {
+                  positioning: researchData.audienceSegments[0]?.preferences || ''
+                });
+                if (researchData.audienceSegments.length > 0) {
+                  await saveResearchSegments(audienceResult.audience_id, researchData.audienceSegments);
+                }
+              }
+
+              // Save products
+              if (researchData.products) {
+                await saveResearchProducts(brand_id, researchData.products);
+              }
+            } catch (persistErr) {
+              console.error('Error persisting research data:', persistErr);
+              // Don't fail the response if persistence fails - still return the data
+            }
+          }
+
           return res.json({
-            message: result.content || result.text,
+            message: responseText,
+            data: researchData || null,
             model: result.model || 'research-analyzer',
             node: 'research_analyzer',
             status: 'COMPLETED'
@@ -2757,6 +3057,498 @@ app.delete('/api/research/:brandId/products/:productId', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// CRM Contacts (with LinkedIn + Research)
+// ==========================================
+
+// POST /api/crm/contacts/:clientId — create contact
+app.post('/api/crm/contacts/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const contact = await createContact(clientId, req.body);
+    res.json({ success: true, contact });
+  } catch (err) {
+    console.error('[POST /api/crm/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/contacts/:clientId — list client contacts
+app.get('/api/crm/contacts/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const contacts = await getContactsByClient(clientId);
+    res.json({ contacts });
+  } catch (err) {
+    console.error('[GET /api/crm/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/contacts/:clientId/:contactId — get contact details
+app.get('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const contact = await getContact(contactId);
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+    res.json(contact);
+  } catch (err) {
+    console.error('[GET /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/crm/contacts/:clientId/:contactId — update contact
+app.put('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const contact = await updateContact(contactId, req.body);
+    res.json({ success: true, contact });
+  } catch (err) {
+    console.error('[PUT /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/crm/contacts/:clientId/:contactId — delete contact
+app.delete('/api/crm/contacts/:clientId/:contactId', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    await deleteContact(contactId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/crm/contacts/:id] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/crm/contacts/:contactId/link-project — link contact to project
+app.post('/api/crm/contacts/:contactId/link-project', async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { projectId, role } = req.body;
+    const link = await linkContactToProject(contactId, projectId, role);
+    res.json({ success: true, link });
+  } catch (err) {
+    console.error('[POST /api/crm/contacts/:id/link-project] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/crm/projects/:projectId/contacts — get project contacts
+app.get('/api/crm/projects/:projectId/contacts', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const contacts = await getProjectContacts(projectId);
+    res.json({ contacts });
+  } catch (err) {
+    console.error('[GET /api/crm/projects/:id/contacts] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/crm/contacts/:contactId/unlink-project — unlink contact from project
+app.delete('/api/crm/contacts/:contactId/unlink-project/:projectId', async (req, res) => {
+  try {
+    const { contactId, projectId } = req.params;
+    await unlinkContactFromProject(contactId, projectId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/crm/contacts/:id/unlink-project/:projectId] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Contact Intelligence (LinkedIn + Research)
+// ==========================================
+
+// Lazy-load services
+let linkedinFetcher = null;
+let contactResearch = null;
+
+function getLinkedInFetcher() {
+  if (!linkedinFetcher) {
+    const LinkedInProfileFetcher = require('./services/linkedinProfileFetcher');
+    linkedinFetcher = new LinkedInProfileFetcher();
+  }
+  return linkedinFetcher;
+}
+
+function getContactResearchService() {
+  if (!contactResearch) {
+    const ContactResearchService = require('./services/contactResearchService');
+    contactResearch = new ContactResearchService();
+  }
+  return contactResearch;
+}
+
+// POST /api/linkedin/profile — fetch LinkedIn profile data
+app.post('/api/linkedin/profile', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'LinkedIn URL required' });
+
+    const fetcher = getLinkedInFetcher();
+    const profile = await fetcher.getProfileSummary(url);
+
+    res.json({ success: true, data: profile });
+  } catch (err) {
+    console.error('[POST /api/linkedin/profile] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/contacts/:contactId/research — conduct online research
+app.post('/api/contacts/:contactId/research', async (req, res) => {
+  try {
+    const { name, title, company, linkedinUrl } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name required' });
+
+    const researchService = getContactResearchService();
+    const research = await researchService.comprehensiveResearch(name, title, company, linkedinUrl);
+
+    // Update contact with research data
+    const contactId = req.params.contactId;
+    // Find contact's client ID - query all contacts
+    const contactResult = await pool.query('SELECT * FROM crm_contacts WHERE id = $1', [contactId]);
+    if (contactResult.rows[0]) {
+      const contact = contactResult.rows[0];
+      await updateContact(contactId, {
+        ...contact,
+        research_data: research,
+      });
+    }
+
+    res.json({ success: true, research });
+  } catch (err) {
+    console.error('[POST /api/contacts/:id/research] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Strategy
+// ==========================================
+
+// POST /api/social/strategy/:brandId — save strategy
+app.post('/api/social/strategy/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, objectives, targetAudiences, channelMix, contentPillars, postingCadence, mediaApproach, kpis, assumptions, risks } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_strategy (brand_id, project_id, objectives, target_audiences, channel_mix, content_pillars, posting_cadence, media_approach, kpis, assumptions, risks)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (brand_id) DO UPDATE SET
+         objectives = $3, target_audiences = $4, channel_mix = $5, content_pillars = $6,
+         posting_cadence = $7, media_approach = $8, kpis = $9, assumptions = $10, risks = $11,
+         updated_at = NOW()`,
+      [brandId, projectId, objectives, targetAudiences, channelMix, contentPillars, postingCadence, mediaApproach, kpis, assumptions, risks]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/strategy/:brandId — get strategy
+app.get('/api/social/strategy/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_strategy WHERE brand_id = $1', [brandId]);
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Interactive Content
+// ==========================================
+
+// POST /api/social/interactive/:brandId — save interactive content
+app.post('/api/social/interactive/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, title, contentType, description, platforms, engagementGoal, expectedMetrics, launchDate } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_interactive_content (brand_id, project_id, title, content_type, description, platforms, engagement_goal, expected_metrics, launch_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [brandId, projectId, title, contentType, description, platforms, engagementGoal, expectedMetrics, launchDate]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/interactive/:brandId — list interactive content
+app.get('/api/social/interactive/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_interactive_content WHERE brand_id = $1 ORDER BY created_at DESC', [brandId]);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Trend Research
+// ==========================================
+
+// POST /api/social/trends/:brandId — save trend research
+app.post('/api/social/trends/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, trendName, category, description, platforms, contentIdeas, launchIdeas, relevanceScore } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_trend_research (brand_id, project_id, trend_name, category, description, platforms, content_ideas, launch_ideas, relevance_score)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [brandId, projectId, trendName, category, description, platforms, contentIdeas, launchIdeas, relevanceScore]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/trends/:brandId — list trends
+app.get('/api/social/trends/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_trend_research WHERE brand_id = $1 ORDER BY relevance_score DESC, created_at DESC', [brandId]);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Social Monitoring
+// ==========================================
+
+// POST /api/social/monitoring/:brandId — save monitoring data
+app.post('/api/social/monitoring/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, platform, keyword, sentimentTrend, engagementRate, mentionCount, topMentions, actionItems } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_monitoring (brand_id, project_id, platform, keyword, sentiment_trend, engagement_rate, mention_count, top_mentions, action_items)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [brandId, projectId, platform, keyword, sentimentTrend, engagementRate, mentionCount, topMentions, actionItems]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/monitoring/:brandId — get monitoring data
+app.get('/api/social/monitoring/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_monitoring WHERE brand_id = $1 ORDER BY created_at DESC LIMIT 10', [brandId]);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Community Management
+// ==========================================
+
+// POST /api/social/community/:brandId — save community management guidelines
+app.post('/api/social/community/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { projectId, platform, contentGuideline, responseTemplates, escalationRules, moderationPolicies, engagementStrategies, faqContent } = req.body;
+
+    await pool.query(
+      `INSERT INTO social_community_management (brand_id, project_id, platform, content_guideline, response_templates, escalation_rules, moderation_policies, engagement_strategies, faq_content)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (brand_id) DO UPDATE SET
+         platform = $3, content_guideline = $4, response_templates = $5, escalation_rules = $6,
+         moderation_policies = $7, engagement_strategies = $8, faq_content = $9, updated_at = NOW()`,
+      [brandId, projectId, platform, contentGuideline, responseTemplates, escalationRules, moderationPolicies, engagementStrategies, faqContent]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/community/:brandId — get community management data
+app.get('/api/social/community/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const result = await pool.query('SELECT * FROM social_community_management WHERE brand_id = $1', [brandId]);
+    res.json({ data: result.rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Content Development
+// ==========================================
+
+// POST /api/social/content-dev/:brandId — save content draft
+app.post('/api/social/content-dev/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    await saveSocialContentDraft(brandId, req.body);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/content-dev/:brandId — get content drafts
+app.get('/api/social/content-dev/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const data = await getSocialContentDraft(brandId);
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Social Content Ops: Content Calendar
+// ==========================================
+
+// POST /api/social/calendar/:brandId — save calendar posts
+app.post('/api/social/calendar/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { posts, projectId } = req.body;
+    await saveSocialCalendar(brandId, posts.map((p) => ({ ...p, projectId })));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/social/calendar/:brandId — get calendar posts
+app.get('/api/social/calendar/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const data = await getSocialCalendar(brandId);
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/social/compliance/check — check content against brand profile
+app.post('/api/social/compliance/check', async (req, res) => {
+  try {
+    const { brand_id, copy, colors, brand_profile } = req.body;
+
+    if (!brand_id) {
+      return res.status(400).json({ error: 'brand_id is required' });
+    }
+
+    const { checkBrandCompliance } = require('./services/complianceChecker');
+    const complianceScore = await checkBrandCompliance(
+      brand_id,
+      { copy, colors },
+      brand_profile
+    );
+
+    res.json({
+      compliance: complianceScore,
+      can_proceed: complianceScore.can_proceed,
+      action: complianceScore.action,
+    });
+  } catch (err) {
+    console.error('Error checking compliance:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/brands/guidelines/upload — upload brand guidelines PDF/image
+app.post('/api/brands/guidelines/upload', async (req, res) => {
+  try {
+    const { brandId } = req.body;
+
+    if (!brandId) {
+      return res.status(400).json({ error: 'brandId is required' });
+    }
+
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const file = req.files.file;
+    const allowedMimes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+
+    if (!allowedMimes.includes(file.mimetype)) {
+      return res.status(400).json({ error: 'Invalid file type' });
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File too large (max 10MB)' });
+    }
+
+    // Store file path (in production, would use cloud storage like S3)
+    const fileName = `${brandId}-guidelines-${Date.now()}.${file.name.split('.').pop()}`;
+    const uploadDir = `${__dirname}/uploads/guidelines`;
+
+    // Create directory if it doesn't exist
+    const fs = require('fs');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const filePath = `${uploadDir}/${fileName}`;
+    await file.mv(filePath);
+
+    // Store URL in brand profile
+    const guidelineUrl = `/uploads/guidelines/${fileName}`;
+
+    res.json({
+      success: true,
+      url: guidelineUrl,
+      fileName: file.name,
+    });
+  } catch (err) {
+    console.error('Error uploading guidelines:', err);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// POST /api/brands/guidelines/delete — delete brand guidelines
+app.post('/api/brands/guidelines/delete', async (req, res) => {
+  try {
+    const { brandId, url } = req.body;
+
+    if (!url) {
+      return res.status(400).json({ error: 'url is required' });
+    }
+
+    // Delete file
+    const fs = require('fs');
+    const filePath = `${__dirname}${url}`;
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting guidelines:', err);
+    res.status(500).json({ error: 'Delete failed' });
   }
 });
 
@@ -3448,7 +4240,7 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
 const { calcBaseChart } = require('./services/ziwei-chart-engine');
 
 // POST /api/ziwei/calculate - Calculate a birth chart
-app.post('/api/ziwei/calculate', async (req, res) => {
+app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, asyncHandler(async (req, res) => {
   try {
     const { lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch, gender, name } = req.body;
 
@@ -3503,7 +4295,7 @@ app.post('/api/ziwei/calculate', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // GET /api/ziwei/charts - List saved charts
 app.get('/api/ziwei/charts', async (req, res) => {
@@ -3564,7 +4356,7 @@ app.get('/api/ziwei/charts/:id', async (req, res) => {
 });
 
 // POST /api/ziwei/interpret - Generate interpretations for a chart
-app.post('/api/ziwei/interpret', async (req, res) => {
+app.post('/api/ziwei/interpret', ziweiValidation.validateChartInterpretation, asyncHandler(async (req, res) => {
   try {
     const { chart, chartId, consensusLevel = 'consensus' } = req.body;
 
@@ -3625,7 +4417,7 @@ app.post('/api/ziwei/interpret', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // ==========================================
 // Step 4: Enhanced Interpretation with DeepSeek LLM
@@ -4124,6 +4916,179 @@ app.post('/api/ziwei/evaluate-rules', async (req, res) => {
 });
 
 // ==========================================
+// Ziwei Palace & Star Knowledge Endpoints
+// ==========================================
+
+// GET /api/ziwei/palaces - Get all palaces
+app.get('/api/ziwei/palaces', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const palaces = await db.getAllZiweiPalaces();
+
+    res.json({
+      success: true,
+      count: palaces.length,
+      palaces: palaces.map(p => ({
+        id: p.id,
+        number: p.number,
+        chinese: p.chinese,
+        english: p.english,
+        meaning: p.meaning,
+        governs: p.governs,
+        positive_indicators: p.positive_indicators,
+        negative_indicators: p.negative_indicators
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Ziwei palaces error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/palaces/:id - Get specific palace
+app.get('/api/ziwei/palaces/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const palace = await db.getZiweiPalace(req.params.id);
+
+    if (!palace) {
+      return res.status(404).json({ error: 'Palace not found' });
+    }
+
+    res.json({
+      success: true,
+      palace: {
+        id: palace.id,
+        number: palace.number,
+        chinese: palace.chinese,
+        english: palace.english,
+        meaning: palace.meaning,
+        governs: palace.governs,
+        positive_indicators: palace.positive_indicators,
+        negative_indicators: palace.negative_indicators
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ziwei palace error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/stars - Get all stars
+app.get('/api/ziwei/stars', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const stars = await db.getAllZiweiStars();
+
+    res.json({
+      success: true,
+      count: stars.length,
+      stars: stars.map(s => ({
+        id: s.id,
+        number: s.number,
+        chinese: s.chinese,
+        english: s.english,
+        meaning: s.meaning,
+        element: s.element,
+        archetype: s.archetype,
+        general_nature: s.general_nature,
+        key_traits: s.key_traits
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Ziwei stars error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/stars/:id - Get specific star
+app.get('/api/ziwei/stars/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const star = await db.getZiweiStar(req.params.id);
+
+    if (!star) {
+      return res.status(404).json({ error: 'Star not found' });
+    }
+
+    res.json({
+      success: true,
+      star: {
+        id: star.id,
+        number: star.number,
+        chinese: star.chinese,
+        english: star.english,
+        meaning: star.meaning,
+        element: star.element,
+        archetype: star.archetype,
+        general_nature: star.general_nature,
+        key_traits: star.key_traits,
+        palace_meanings: star.palace_meanings
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ziwei star error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/palace-star-meanings/:palaceId/:starId - Get star meaning in specific palace
+app.get('/api/ziwei/palace-star-meanings/:palaceId/:starId', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const palace = await db.getZiweiPalace(req.params.palaceId);
+    const star = await db.getZiweiStar(req.params.starId);
+
+    if (!palace || !star) {
+      return res.status(404).json({ error: 'Palace or star not found' });
+    }
+
+    const meaning = star.palace_meanings?.[req.params.palaceId];
+
+    res.json({
+      success: true,
+      palace: {
+        id: palace.id,
+        chinese: palace.chinese,
+        english: palace.english
+      },
+      star: {
+        id: star.id,
+        chinese: star.chinese,
+        english: star.english
+      },
+      meaning: meaning || {
+        positive: 'Information not available',
+        negative: 'Information not available'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ziwei palace-star meanings error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
@@ -4132,6 +5097,9 @@ const server = http.createServer(app);
 
 // Initialize WebSocket server
 wsServer.initialize(server);
+
+// Global error handler middleware (must be last)
+app.use(errorHandler);
 
 server.listen(port, '0.0.0.0', async () => {
   console.log(`

@@ -27,7 +27,7 @@ import {
 import BrandSetupWizard from '@/components/BrandSetupWizard';
 import StrategyPreview from '@/components/StrategyPreview';
 
-type WizardStep = 'brand-basics' | 'strategy' | 'scope' | 'team' | 'review';
+type WizardStep = 'brand-basics' | 'strategy' | 'scope' | 'team' | 'identity' | 'review';
 
 interface FormState extends Partial<BrandFormData> {
   brandName: string;
@@ -41,6 +41,15 @@ interface FormState extends Partial<BrandFormData> {
   monthlyBudgetHKD: number;
   approvalCycleDays: number;
   teamLiaison: string;
+  // Brand Identity
+  voiceTone?: string;
+  brandPersonality?: string[];
+  colorPalette?: {
+    primary: string;
+    secondary: string;
+    accent: string;
+  };
+  visualStyle?: string;
 }
 
 const INITIAL_FORM_STATE: FormState = {
@@ -55,6 +64,10 @@ const INITIAL_FORM_STATE: FormState = {
   monthlyBudgetHKD: 25000,
   approvalCycleDays: 1,
   teamLiaison: '',
+  voiceTone: undefined,
+  brandPersonality: [],
+  colorPalette: { primary: '#000000', secondary: '#666666', accent: '#0066ff' },
+  visualStyle: undefined,
 };
 
 function BrandSetupPageContent() {
@@ -172,6 +185,8 @@ function BrandSetupPageContent() {
           return formState.postsPerWeek > 0 && formState.monthlyBudgetHKD > 0;
         case 'team':
           return !!formState.teamLiaison;
+        case 'identity':
+          return true; // Optional step - always allowed to skip
         case 'review':
           return !!strategy;
         default:
@@ -188,6 +203,7 @@ function BrandSetupPageContent() {
       'strategy',
       'scope',
       'team',
+      'identity',
       'review',
     ];
     const currentIndex = steps.indexOf(currentStep);
@@ -203,6 +219,7 @@ function BrandSetupPageContent() {
       'strategy',
       'scope',
       'team',
+      'identity',
       'review',
     ];
     const currentIndex = steps.indexOf(currentStep);
@@ -226,7 +243,13 @@ function BrandSetupPageContent() {
           brand_name: strategy.brandProfile.brandName,
           industry: strategy.brandProfile.industry,
           brand_info: {
-            profile: strategy.brandProfile,
+            profile: {
+              ...strategy.brandProfile,
+              voiceTone: formState.voiceTone,
+              brandPersonality: formState.brandPersonality,
+              colorPalette: formState.colorPalette,
+              visualStyle: formState.visualStyle,
+            },
             pillars: strategy.contentPillars,
             calendar: strategy.monthlyCalendarTemplate,
             kpis: strategy.kpiTargets,
@@ -250,11 +273,59 @@ function BrandSetupPageContent() {
     }
   };
 
+  // Save to CRM - auto-creates brand in CRM system
+  const handleSaveToCRM = async () => {
+    if (!strategy) return;
+
+    setIsSaving(true);
+    setSaveStatus('idle');
+
+    try {
+      const response = await fetch('/api/brands/setup-complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandName: strategy.brandProfile.brandName,
+          industry: strategy.brandProfile.industry,
+          markets: formState.markets,
+          languages: formState.languages,
+          primaryChannels: formState.primaryChannels,
+          postsPerWeek: formState.postsPerWeek,
+          monthlyBudgetHKD: formState.monthlyBudgetHKD,
+          approvalCycleDays: formState.approvalCycleDays,
+          teamLiaison: formState.teamLiaison,
+          assetProvider: formState.assetProvider,
+          approvalAuthority: formState.approvalAuthority,
+          voiceTone: formState.voiceTone,
+          brandPersonality: formState.brandPersonality,
+          colorPalette: formState.colorPalette,
+          visualStyle: formState.visualStyle,
+          strategy: strategy,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to save brand to CRM');
+
+      const data = await response.json();
+      setSaveStatus('success');
+      setTimeout(() => {
+        // Redirect to CRM brand detail
+        window.location.href = data.redirect || `/use-cases/crm/brands/detail?id=${data.brand_id}`;
+      }, 1500);
+    } catch (error) {
+      console.error('Error saving brand to CRM:', error);
+      setSaveStatus('error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const steps: WizardStep[] = [
     'brand-basics',
     'strategy',
     'scope',
     'team',
+    'identity',
     'review',
   ];
   const stepIndex = steps.indexOf(currentStep);
@@ -344,23 +415,42 @@ function BrandSetupPageContent() {
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 ) : (
-                  <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-medium"
-                  >
-                    {isSaving ? (
-                      <>
-                        <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        Save Brand
-                      </>
-                    )}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                    >
+                      {isSaving ? (
+                        <>
+                          <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          Download Strategy
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleSaveToCRM()}
+                      disabled={isSaving}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-medium text-white"
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Saving to CRM...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4" />
+                          Save to CRM
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
 

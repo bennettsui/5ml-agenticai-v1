@@ -500,6 +500,167 @@
     }
   },
 
+  "annual_stars": {
+    "博士十二星": {
+      "博士": {
+        "element": "水",
+        "type": "auspicious",
+        "grade": "丙級",
+        "meaning": "Scholar Star - Intelligence, Broad Learning, Adaptability, Longevity and Authority. Always co-locates with 祿存.",
+        "positive": ["high intelligence and careful thinking", "broad learning and versatile talents", "leadership ambition and sociability", "longevity, authority, and noble connections", "academic and career advancement when with auspicious stars"],
+        "negative": ["limited effect in natal chart, stronger in annual/decade charts", "must be combined with main stars and 四化 to fully express"],
+        "palace_effects": {"命宮": "intelligent, broad-minded, leadership presence, long-lived and authoritative", "官祿宮": "career advancement and recognition, academic achievement", "身宮": "especially favored here, amplifies overall wisdom and talent"},
+        "combinations": {"昌曲": "mitigates 化忌inauspiciousness, enhances literary talent", "魁鉞": "noble recognition and promotion", "祿存": "always co-located, wealth and wisdom combined"},
+        "group": "博士十二星",
+        "position": 1,
+        "source": "lnka.tw, 108s.tw, jordanwwj.pixnet.net"
+      },
+      "力士": {
+        "element": "火",
+        "type": "auspicious",
+        "grade": "丙級",
+        "meaning": "Strong Man Star - Authority, Execution Power, Decisive Leadership. Brings powerful benefactors.",
+        "positive": ["strong executive and planning ability", "attracts powerful benefactors", "principled, proactive, creative, decisive", "excellent with 化權 — amplifies power greatly"],
+        "negative": ["dislikes being constrained, prone to disputes", "hardworking but laborious, must do everything personally", "stubborn and domineering at times"],
+        "palace_effects": {"命宮": "principled, proactive, ambitious but prone to arguments", "官祿宮": "powerful backing for career, promotion opportunities", "財帛宮": "financial support from influential people"},
+        "combinations": {"化權": "best combination, greatly amplifies power and authority", "破軍/貪狼/武曲/太陽化權": "enhances power effect further", "擎羊/陀羅": "highly unfavorable — power turns against self"},
+        "group": "博士十二星",
+        "position": 2,
+        "source": "lnka.tw, 108s.tw, ai5429.com"
+      },
+      "青龍": {
+        "element": "水",
+        "type": "auspicious",
+        "grade": "丙級",
+        "meaning": "Azure Dragon Star - Joy, Celebration, Social Advancement, Fortune. Brings auspicious events and can counter 白虎's negativity.",
+        "positive": ["brings celebratory events and good fortune", "best in Dragon years (辰年)", "counteracts 白虎 (lawsuits, mourning)", "with 昌曲+紅鸞+天喜: marriage or new child", "with 魁鉞+天巫: promotion and honor"],
+        "negative": ["some interpretations: water-natured, may cause tension with male relatives"],
+        "palace_effects": {"命宮": "life filled with joyful events, clever and sociable, blessed by benefactors", "官祿宮": "career advancement, rising social status", "財帛宮": "wealth arrives with celebration and joy"},
+        "combinations": {"昌曲+紅鸞+天喜": "wedding or birth celebration", "魁鉞+天巫": "promotion and social honor", "白虎沖": "neutralizes 白虎's lawsuit/mourning energy"},
+        "group": "博士十二星",
+        "position": 3,
+        "source": "lnka.tw, jordanwwj.pixnet.net, 108s.tw"
+      },
+      "小耗": {
+        "element": "火",
+        "type": "malevolent",
+        "grade": "丙級",
+        "meaning": "Small Drain Star - Minor Financial Loss, Regret, Petty Dissipation. Causes small losses and lingering regret.",
+        "positive": ["mild malevolent force, limited damage", "auspicious stars can mitigate effects"],
+        "negative": ["minor financial losses: misplacing items, buying things one regrets", "constantly losing small items (wallet, keys)", "worst with 文昌化忌/文曲化忌/飛廉", "two 小耗 overlapping greatly amplifies drain"],
+        "palace_effects": {"命宮": "scatterbrained, prone to regret, constantly losing small things", "財帛宮": "wealth doesn't accumulate, petty losses", "福德宮": "frequently loses small items, mental unease"},
+        "combinations": {"文昌化忌/文曲化忌": "most unfavorable, greatly amplifies item loss and financial drain", "飛廉": "malevolence compounds", "歲前小耗疊": "drain doubles in strength"},
+        "group": "博士十二星",
+        "position": 4,
+        "source": "lnka.tw, jordanwwj.pixnet.net, ai5429.com"
+      },
+      "將軍": {
+        "element": "木",
+        "type": "auspicious",
+        "grade": "丙級",
+        "meaning": "General Star - Martial Valor, Prestige, Honor, Dignity. Brings a sense of glory and commanding presence.",
+        "positive": ["commanding dignity and martial presence", "strong sense of honor and glory", "best with 化科 (especially 紫微/太陽/武曲化科)", "with 天巫+魁鉞: attracted patronage from high-status people"],
+        "negative": ["when with 忌 stars: brings overconfidence leading to jealousy", "prioritizes face-saving over substance", "worst with 文曲化忌: silent suffering, surface glory but internal loss"],
+        "palace_effects": {"命宮": "commanding, honor-focused, heroic personality with martial bearing", "官祿宮": "career with prestigious visible face, values reputation", "遷移宮": "respected and dignified when abroad or in public"},
+        "combinations": {"紫微/太陽/武曲化科": "honor greatly amplified — best combinations", "天巫+魁鉞": "patronage from high-status individuals, promotion", "文曲化忌": "most unfavorable — silent suffering, hollow glory"},
+        "group": "博士十二星",
+        "position": 5,
+        "source": "jordanwwj.pixnet.net, ai5429.com, 108s.tw"
+      },
+      "奏書": {
+        "element": "金",
+        "type": "auspicious",
+        "grade": "丙級",
+        "meaning": "Memorial Writer Star - Literary Fortune, Document Blessings, News, Favorable in Lawsuits. Brings text-related good fortune.",
+        "positive": ["literary talent and document-related blessings", "favorable in lawsuits when with auspicious stars", "even with many malevolent stars, punishments are lighter than expected", "information flows well, suited for clerical/official work"],
+        "negative": ["only brings text-related fortune, not broad social elevation", "機月同梁格 + 煞: backfires — causes self-initiated losing lawsuits"],
+        "palace_effects": {"命宮": "skilled in writing, good at communication, favorable in legal matters", "官祿宮": "suited for writing, administration, law-related careers", "福德宮": "rich spiritual life, literary inclination, joyful document events"},
+        "combinations": {"昌曲+化科": "outstanding literary talent, enhanced reputation", "魁鉞+解神+華蓋+昌曲 (no 化忌)": "guaranteed lawsuit victory", "機月同梁+煞": "backfires — self-initiated losing litigation"},
+        "group": "博士十二星",
+        "position": 6,
+        "source": "jordanwwj.pixnet.net, lnka.tw, 108s.tw"
+      },
+      "飛廉": {
+        "element": "火",
+        "type": "malevolent",
+        "grade": "丙級",
+        "meaning": "Flying Kite Star - Gossip, Slander, Isolation, Hidden Defamation. Brings backstabbing and damaging rumors.",
+        "positive": ["limited force compared to 乙級 stars", "auspicious stars can partially mitigate"],
+        "negative": ["gossip, slander, and behind-the-back defamation", "causes isolation and loneliness", "worst with 天刑+文曲化忌: major lawsuits and disputes", "in 疾厄宮: slow draining illness", "in 田宅宮: hidden infestation/erosion of property", "in 命宮: buys useless things, isolated nature"],
+        "palace_effects": {"命宮": "isolated personality, prone to gossip, impulse purchases of useless items", "疾厄宮": "chronic draining illnesses, slow-onset conditions", "田宅宮": "hidden structural/infestation problems in property"},
+        "combinations": {"天刑+文曲化忌": "most unfavorable, major lawsuit and dispute risk", "大耗": "compounds malevolence, gossip plus financial drain", "天姚": "prone to salacious gossip and inappropriate talk"},
+        "group": "博士十二星",
+        "position": 7,
+        "source": "lnka.tw, jordanwwj.pixnet.net, ai5429.com"
+      },
+      "喜神": {
+        "element": "火",
+        "type": "auspicious",
+        "grade": "丙級",
+        "meaning": "Joyful Spirit Star - Life Extension, Continuation, Celebration, Marriage and Children. Key trait: prolonging and extending outcomes.",
+        "positive": ["extends lifespan and good fortune", "brings weddings, births, celebrations", "with 昌曲: visible ceremonial celebrations (wedding, promotion, graduation)", "romance stars present: relationship events"],
+        "negative": ["in 疾厄宮: prolongs illness, disease lingers and refuses to heal", "alone in 命宮 without 昌曲: delays all achievements and promotions", "文曲化忌: delays worsen significantly"],
+        "palace_effects": {"命宮": "life filled with celebrations, but without 昌曲, achievements perpetually delayed", "疾厄宮": "most unfavorable — illness becomes chronic and hard to cure", "夫妻宮": "relationship continues and extends, but may delay marriage timing"},
+        "combinations": {"昌曲": "ceremonial celebrations manifest visibly and clearly", "桃花星": "relationship events, but timing often delayed", "文曲化忌": "delays worsen across all areas"},
+        "group": "博士十二星",
+        "position": 8,
+        "source": "lnka.tw, 108s.tw, jordanwwj.pixnet.net"
+      },
+      "病符": {
+        "element": "水",
+        "type": "malevolent",
+        "grade": "丙級",
+        "meaning": "Illness Talisman Star - Minor Illness, Misfortune, Dispute, Lethargy. Often co-occurs with gossip and disputes.",
+        "positive": ["in 財帛宮/官祿宮: favorable for medical/healthcare careers"],
+        "negative": ["minor illness and health problems, listlessness", "worst with 天月: greatly amplifies illness meaning", "worst with 天刑: amplifies surgical/medical procedure risk", "流年: if overall chart unfavorable, marks period of illness"],
+        "palace_effects": {"命宮": "weak constitution, prone to illness, easily fatigued", "疾厄宮": "illness amplified — most unfavorable placement", "財帛宮/官祿宮": "unfavorable for most, but suited for medical industry work"},
+        "combinations": {"天月": "most unfavorable, illness greatly amplified", "天刑": "increases surgical/medical intervention probability", "煞忌": "risk of lawsuits, infectious disease, disasters"},
+        "group": "博士十二星",
+        "position": 9,
+        "source": "lnka.tw, jordanwwj.pixnet.net, shenjige.cn"
+      },
+      "大耗": {
+        "element": "火",
+        "type": "malevolent",
+        "grade": "丙級",
+        "meaning": "Large Drain Star - Major Financial Loss, Inherited Property Decline, Dissipation. Unlike 年支大耗, has NO romance/peach blossom quality — pure drain.",
+        "positive": ["auspicious stars can partially reduce drain effects"],
+        "negative": ["major financial loss, inherited wealth declines", "in 命宮: scatterbrained, poor at accumulating", "with romance stars: loss through romantic entanglements", "worst combination: 貪狼+文曲化忌 = compulsive gambling leading to ruin", "in 疾厄宮: draining/depleting illness (night sweats, delirium)"],
+        "palace_effects": {"命宮": "scatterbrained, wealth disperses, dissipating tendencies", "財帛宮": "wealth comes and goes, major financial drain", "疾厄宮": "depleting conditions — night sweats, consumptive illness types"},
+        "combinations": {"天機/太陰": "amplifies instability and drain", "貪狼+文曲化忌": "compulsive gambling leading to financial ruin", "桃花星": "financial loss through romantic relationships", "年支大耗疊/沖": "drain and romance elements both amplify"},
+        "group": "博士十二星",
+        "position": 10,
+        "source": "jordanwwj.pixnet.net, lnka.tw, ai5429.com"
+      },
+      "伏兵": {
+        "element": "火",
+        "type": "malevolent",
+        "grade": "丙級",
+        "meaning": "Hidden Soldiers Star - Covert Threats, Ambush, Intrigue, Delays. Concealed crises in every palace it enters.",
+        "positive": ["develops sensitivity and strategic thinking", "deep city (城府), patient and calculating under pressure", "good at enduring and waiting for opportunity", "suited for strategy, planning, and design work"],
+        "negative": ["covert attacks, backstabbing, hidden enemies", "delays and obstruction to legitimate matters", "with 天姚: manipulative schemes, controlled by political intrigue", "with 陀羅: everything drags on endlessly", "裂歲前官符/病符 同度or沖: prolonged lawsuits or illness"],
+        "palace_effects": {"命宮": "deep personality, strategic but prone to gossip/disputes, life has hidden undercurrents", "夫妻宮": "hidden relationship crisis, don't rush decisions in this decade", "官祿宮": "concealed career risks, decisions carry latent dangers"},
+        "combinations": {"天姚": "manipulative schemes, life dominated by political intrigue", "陀羅": "everything drags on, further compounded by 鈴星 or 空劫", "歲前官符沖/同": "prolonged lawsuit and disputes", "歲前病符沖/同": "prolonged illness difficult to cure"},
+        "group": "博士十二星",
+        "position": 11,
+        "source": "lnka.tw, jordanwwj.pixnet.net, 108s.tw"
+      },
+      "官符": {
+        "element": "火",
+        "type": "malevolent",
+        "grade": "丙級",
+        "meaning": "Official Talisman Star - Lawsuits, Disputes, Punishment, Financial Loss. Always co-located with 擎羊 or 陀羅, inherently carries dispute energy. Can express as authority (吉宮) or as legal trouble (凶宮).",
+        "positive": ["in 命宮: magnanimous, direct, frank, good leadership presence", "principled and transparent, selfless in big matters", "in auspicious palaces: transforms to authority and official power (官府)"],
+        "negative": ["lawsuits, punishment, financial loss", "worst with 巨門化忌/武曲化忌: major legal disputes", "worst with 天梁+天刑+擎羊: career/official matters extremely unfavorable", "always inherits dispute energy from permanent 擎羊/陀羅 co-location", "流年/流月: prone to being forced to leave home or face exile"],
+        "palace_effects": {"命宮": "magnanimous leader type, but high stress, isolated, prone to legal exposure", "官祿宮": "unfavorable — lawsuits, official censure, career disruptions", "財帛宮": "unfavorable — disputes over money, financial penalties"},
+        "combinations": {"龍德+奏書": "can resolve 官符's negativity", "巨門化忌/武曲化忌": "most unfavorable, major lawsuit risk", "天梁+天刑+擎羊": "extremely unfavorable for career and authority", "忌星諸煞": "punishment, financial loss, entangled lawsuits"},
+        "group": "博士十二星",
+        "position": 12,
+        "source": "lnka.tw, ziwei.my, jordanwwj.pixnet.net"
+      }
+    }
+  },
+
   "notes": {
     "total_documented": 84,
     "remaining_to_research": 20,

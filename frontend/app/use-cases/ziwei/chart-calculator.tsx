@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { Sparkles, Loader, Brain } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Sparkles, Loader, Brain, ChevronDown } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { ZiweiCustomSelect } from '@/components/ZiweiCustomSelect';
 import { ZiweiTimeSelector } from '@/components/ZiweiTimeSelector';
-import { ZiweiChartCanvas } from '@/components/ZiweiChartCanvas';
+import { ZiweiChartGrid } from '@/components/ZiweiChartGrid';
+import ZiweiChartSummary from '@/components/ZiweiChartSummary';
 
 interface ChartInput {
   lunarYear: number;
@@ -53,15 +55,18 @@ const TIMEZONES: Record<string, string> = {
 };
 
 export function ChartCalculator() {
+  const searchParams = useSearchParams();
+  const chartId = searchParams?.get('chartId');
+
   const [input, setInput] = useState<ChartInput>({
-    lunarYear: 1990,
-    lunarMonth: 6,
-    lunarDay: 15,
-    hourBranch: '午',
-    gender: '女',
-    name: 'Sample',
-    placeOfBirth: 'Hong Kong',
-    timezone: 'Asia/Hong_Kong',
+    lunarYear: new Date().getFullYear(),
+    lunarMonth: 1,
+    lunarDay: 1,
+    hourBranch: '子',
+    gender: '男',
+    name: '',
+    placeOfBirth: '',
+    timezone: 'UTC',
     calendarType: 'lunar'
   });
 
@@ -72,8 +77,65 @@ export function ChartCalculator() {
   const [interpretLoading, setInterpretLoading] = useState(false);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadedChartData, setLoadedChartData] = useState<any>(null);
+  const [showSummary, setShowSummary] = useState(true);
 
   const currentAge = calculateAge(input.lunarYear);
+
+  // Load chart data from URL parameter
+  useEffect(() => {
+    if (chartId) {
+      loadChartData(chartId);
+    }
+  }, [chartId]);
+
+  const loadChartData = async (id: string) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/ziwei/charts/${id}`);
+      if (!response.ok) throw new Error('Failed to load chart');
+
+      const data = await response.json();
+      const chartData = data.chart; // API wraps in 'chart' object
+      setLoadedChartData(chartData);
+
+      // Parse birth_info if it's a string (from database)
+      const birthInfo = typeof chartData.birth_info === 'string'
+        ? JSON.parse(chartData.birth_info)
+        : chartData.birth_info;
+
+      // Pre-fill the form with the loaded chart data
+      if (birthInfo) {
+        setInput({
+          lunarYear: birthInfo.lunarYear,
+          lunarMonth: birthInfo.lunarMonth,
+          lunarDay: birthInfo.lunarDay,
+          hourBranch: birthInfo.hourBranch,
+          gender: birthInfo.gender,
+          name: chartData.name || birthInfo.name,
+          placeOfBirth: birthInfo.placeOfBirth,
+          timezone: birthInfo.timezone,
+          calendarType: birthInfo.calendarType
+        });
+      }
+
+      // Load the chart automatically - parse chart_data if it's a string
+      if (chartData.chart_data) {
+        const chartDataParsed = typeof chartData.chart_data === 'string'
+          ? JSON.parse(chartData.chart_data)
+          : chartData.chart_data;
+        setChart(chartDataParsed);
+        // Auto-generate interpretations
+        await generateInterpretations(chartDataParsed, id);
+        await evaluateRules(chartDataParsed);
+      }
+    } catch (err: any) {
+      console.error('Error loading chart:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCalculate = async () => {
     setLoading(true);
@@ -336,14 +398,40 @@ export function ChartCalculator() {
         )}
       </div>
 
+      {/* Chart Summary (When loaded from library) */}
+      {loadedChartData && showSummary && (
+        <div className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-white">📊 Chart Summary</h3>
+            <button
+              onClick={() => setShowSummary(false)}
+              className="text-slate-400 hover:text-white transition-colors p-1"
+            >
+              <ChevronDown className="w-5 h-5" />
+            </button>
+          </div>
+          <ZiweiChartSummary
+            name={loadedChartData.name || input.name}
+            lunarYear={input.lunarYear}
+            lunarMonth={input.lunarMonth}
+            lunarDay={input.lunarDay}
+            hourBranch={input.hourBranch}
+            gender={input.gender}
+            placeOfBirth={input.placeOfBirth}
+            gan_zhi={loadedChartData.gan_zhi}
+            created_at={loadedChartData.created_at}
+          />
+        </div>
+      )}
+
       {/* Chart Display - Canvas-Based Rendering */}
       {chart && (
         <div className="rounded-xl border border-slate-700/50 bg-slate-900/80 p-8">
           <h3 className="text-xl font-bold text-white mb-8">命盤 Birth Chart (紫微斗數排盤)</h3>
 
-          {/* Canvas Chart Display */}
-          <div className="bg-slate-800/50 rounded-lg p-8 border border-slate-700/30 flex flex-col items-center">
-            <ZiweiChartCanvas
+          {/* Grid Chart Display */}
+          <div className="bg-slate-800/50 rounded-lg p-8 border border-slate-700/30 overflow-x-auto">
+            <ZiweiChartGrid
               houses={chart.houses}
               lifeHouseIndex={chart.lifeHouseIndex}
               personName={input.name}
@@ -351,7 +439,6 @@ export function ChartCalculator() {
               hourBranch={input.hourBranch}
               gender={input.gender}
               fiveElementBureau={chart.fiveElementBureau}
-              starCount={Object.keys(chart.starPositions).length}
             />
           </div>
 

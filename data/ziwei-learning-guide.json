@@ -1,0 +1,585 @@
+{
+  "title": "Ziwei Doushu - Complete Learning Guide & Curriculum",
+  "date_updated": "2026-02-19",
+  "language": "zh-Hant",
+  "introduction": "紫微斗數 is a complex metaphysical system requiring systematic learning from fundamentals to advanced interpretation. This guide outlines the typical curriculum and learning progression used by major educational institutions.",
+  "learning_framework": {
+    "beginner_foundation": "0-3 months",
+    "intermediate": "3-6 months",
+    "advanced": "6-12 months",
+    "professional": "12+ months"
+  },
+  "curriculum_levels": {
+    "level_1_foundations": {
+      "name": "Level 1: Foundations (基礎)",
+      "duration": "4-6 weeks",
+      "description": "Absolute beginner foundations needed before learning Ziwei system",
+      "topics": [
+        {
+          "topic": "陰陽理論 (Yin-Yang Theory)",
+          "subtopics": [
+            "太極生兩儀 (Tai Chi generates Yin-Yang)",
+            "陰陽的特性和應用",
+            "陰陽在命盤的體現"
+          ],
+          "learning_hours": 2,
+          "resources": ["陰陽理論基礎", "古代經典文獻"]
+        },
+        {
+          "topic": "五行論 (Five Elements)",
+          "subtopics": [
+            "木火土金水的特性",
+            "五行相生相剋",
+            "五行在紫微的應用",
+            "十干十二支中的五行屬性"
+          ],
+          "learning_hours": 4,
+          "resources": ["五行生克表", "十干十二支五行對應表"]
+        },
+        {
+          "topic": "天干地支 (Heavenly Stems & Earthly Branches)",
+          "subtopics": [
+            "十天干 (10 Heavenly Stems): 甲乙丙丁戊己庚辛壬癸",
+            "十二地支 (12 Earthly Branches): 子丑寅卯辰巳午未申酉戌亥",
+            "干支組合與循環",
+            "干支與五行、陰陽的對應"
+          ],
+          "learning_hours": 4,
+          "resources": ["天干地支表", "干支循環圖"]
+        },
+        {
+          "topic": "農曆與國曆轉換",
+          "subtopics": [
+            "認識農曆月份",
+            "國曆轉農曆的方法",
+            "真太陽時計算",
+            "閏月的理解"
+          ],
+          "learning_hours": 2,
+          "resources": ["農曆轉換表", "真太陽時計算工具"]
+        }
+      ],
+      "skills_acquired": [
+        "Understand Yin-Yang and Five Elements",
+        "Recognize Heavenly Stems and Earthly Branches",
+        "Convert calendar dates",
+        "Calculate birth time corrections"
+      ]
+    },
+    "level_2_basic_system": {
+      "name": "Level 2: Basic Ziwei System (紫微基礎)",
+      "duration": "8-10 weeks",
+      "description": "Learn the core structure of Ziwei Doushu",
+      "topics": [
+        {
+          "topic": "十二宮位 (12 Palaces)",
+          "subtopics": [
+            "命宮 (Life Palace) - The center of destiny",
+            "兄弟宮 (Siblings Palace)",
+            "夫妻宮 (Marriage Palace)",
+            "子女宮 (Children Palace)",
+            "財帛宮 (Wealth Palace)",
+            "疾厄宮 (Health Palace)",
+            "遷移宮 (Travel Palace)",
+            "僕役宮 (Friends Palace)",
+            "官祿宮 (Career Palace)",
+            "田宅宮 (Property Palace)",
+            "福德宮 (Fortune Palace)",
+            "父母宮 (Parents Palace)"
+          ],
+          "learning_hours": 6,
+          "resources": [
+            "紫微斗數12宮位詳解",
+            "Palace function and relationships",
+            "宮位互動的重要性"
+          ]
+        },
+        {
+          "topic": "十四主星 (14 Main Stars)",
+          "subtopics": [
+            "紫微 (Ziwei) - Emperor Star",
+            "天府 (Tianfu) - Treasury",
+            "太陽 (Taiyang) - Sun",
+            "武曲 (Wuqu) - Warrior Star",
+            "天同 (Tiantong) - Companionship",
+            "廉貞 (Lianzhen) - Integrity",
+            "破軍 (Pojun) - Breakthrough",
+            "貪狼 (Tanlang) - Greed Wolf",
+            "天梁 (Tianliang) - Heavenly Beam",
+            "七殺 (Qisha) - Seven Killing",
+            "天機 (Tianji) - Heavenly Mechanism",
+            "巨門 (Jumen) - Giant Gate",
+            "太陰 (Taiyin) - Moon",
+            "天相 (Tianxiang) - Heavenly Minister"
+          ],
+          "learning_hours": 10,
+          "resources": [
+            "14 Main Stars characteristics",
+            "星性詳解",
+            "Personality traits per star",
+            "Stars in different palaces"
+          ]
+        },
+        {
+          "topic": "星盤排盤基礎 (Chart Construction Basics)",
+          "subtopics": [
+            "定陰陽 (Determine Yin/Yang)",
+            "定命宮 (Determine Life Palace)",
+            "定五行局 (Determine Five Elements Structure)",
+            "安十四主星 (Place 14 Main Stars)",
+            "安輔星煞化 (Place Assistant/Affliction Stars)"
+          ],
+          "learning_hours": 6,
+          "resources": [
+            "排盤手冊",
+            "Chart construction software",
+            "Ziwei-Yun and other tools"
+          ]
+        },
+        {
+          "topic": "三方四正 (Three Palaces Four Positives)",
+          "subtopics": [
+            "理解三方四正的概念",
+            "看主星的三方四正位置",
+            "輔星和煞星的作用",
+            "吉凶判斷的基礎"
+          ],
+          "learning_hours": 3,
+          "resources": [
+            "三方四正關係圖",
+            "宮位互動詳解"
+          ]
+        }
+      ],
+      "skills_acquired": [
+        "Understand all 12 palaces and their meanings",
+        "Recognize all 14 main stars",
+        "Understand basic chart construction",
+        "Identify palace relationships"
+      ],
+      "milestone": "Can generate and understand basic chart structure"
+    },
+    "level_3_auxiliary_stars": {
+      "name": "Level 3: Auxiliary Stars & Systems (輔星系統)",
+      "duration": "6-8 weeks",
+      "description": "Learn supporting star systems that enhance main star interpretations",
+      "topics": [
+        {
+          "topic": "六吉星 (Six Auspicious Stars)",
+          "subtopics": [
+            "文昌 (Wenchang - Literary)",
+            "文曲 (Wenqu - Artistic)",
+            "左輔 (Zuofu - Left Assistant)",
+            "右弼 (Youbi - Right Assistant)",
+            "天魁 (Kuixing - Heaven Excellence)",
+            "天鉞 (Yuexing - Heaven Excellence)"
+          ],
+          "learning_hours": 4,
+          "resources": ["六吉星詳解"]
+        },
+        {
+          "topic": "六煞星 (Six Inauspicious Stars)",
+          "subtopics": [
+            "火星 (Huoxing - Fire Affliction)",
+            "鈴星 (Lingxing - Bell Affliction)",
+            "羊刃 (Yangxing - Sheep Blade)",
+            "陀羅 (Tuoluo - Tuo Luo)",
+            "地空 (Tiankong - Void)",
+            "地劫 (Dijie - Robbery)"
+          ],
+          "learning_hours": 4,
+          "resources": ["六煞星詳解", "煞星組合分析"]
+        },
+        {
+          "topic": "時系四星 (Time System Four Stars)",
+          "subtopics": [
+            "紅鸞 (Hongluan)",
+            "天喜 (Tianxi)",
+            "天姚 (Tianyao)",
+            "咸池 (Xianchi)"
+          ],
+          "learning_hours": 2,
+          "resources": ["時系星詳解"]
+        },
+        {
+          "topic": "其他輔星 (Other Auxiliary Stars)",
+          "subtopics": [
+            "祿存 (Lucun - Wealth Preservation)",
+            "天府星系相關星曜",
+            "驛馬、華蓋等"
+          ],
+          "learning_hours": 2,
+          "resources": ["輔星百科"]
+        }
+      ],
+      "skills_acquired": [
+        "Recognize all auxiliary star systems",
+        "Understand star combinations",
+        "See how auxiliary stars modify main star meanings",
+        "Read complex star arrangements"
+      ]
+    },
+    "level_4_four_transformations": {
+      "name": "Level 4: Four Transformations (四化星)",
+      "duration": "8-10 weeks",
+      "description": "Master the most powerful predictive tool in Ziwei - the four transformations",
+      "topics": [
+        {
+          "topic": "四化理論基礎 (Four Transformations Fundamentals)",
+          "subtopics": [
+            "什麼是四化 (What are Four Transformations)",
+            "四化的來源 (Origin from Heavenly Stems)",
+            "十天干四化 (Four Transformations per Heavenly Stem)"
+          ],
+          "learning_hours": 3,
+          "resources": ["四化理論", "天干四化表"]
+        },
+        {
+          "topic": "化祿 (Lu Transformation - Wealth/Benefit)",
+          "subtopics": [
+            "化祿的含義",
+            "化祿的正面表現",
+            "化祿在各宮位的解釋",
+            "化祿與財運的關係"
+          ],
+          "learning_hours": 3,
+          "resources": ["化祿詳解", "案例分析"]
+        },
+        {
+          "topic": "化權 (Quan Transformation - Power/Control)",
+          "subtopics": [
+            "化權的含義",
+            "化權的控制力特性",
+            "化權在各宮位的表現",
+            "化權與事業權力的關係"
+          ],
+          "learning_hours": 3,
+          "resources": ["化權詳解"]
+        },
+        {
+          "topic": "化科 (Ke Transformation - Talent/Reputation)",
+          "subtopics": [
+            "化科的含義",
+            "化科與名譽的關係",
+            "化科在各宮位的表現",
+            "化科與學問功名"
+          ],
+          "learning_hours": 3,
+          "resources": ["化科詳解"]
+        },
+        {
+          "topic": "化忌 (Ji Transformation - Taboo/Obstacle)",
+          "subtopics": [
+            "化忌的含義",
+            "化忌的困擾特性",
+            "化忌在各宮位的困擾",
+            "化忌如何應對"
+          ],
+          "learning_hours": 3,
+          "resources": ["化忌詳解", "化忌解決方案"]
+        },
+        {
+          "topic": "四化組合應用 (Four Transformations Combinations)",
+          "subtopics": [
+            "化祿化權組合 (Wealth + Power)",
+            "化祿化科組合 (Wealth + Talent)",
+            "化權化科組合 (Power + Talent)",
+            "化祿遇化忌 (Wealth meets Obstacle)",
+            "複雜組合判斷"
+          ],
+          "learning_hours": 4,
+          "resources": ["四化組合案例", "組合分析表"]
+        }
+      ],
+      "skills_acquired": [
+        "Calculate four transformations for any birth data",
+        "Interpret each transformation independently",
+        "Understand transformation combinations",
+        "Apply to chart analysis and prediction"
+      ],
+      "importance": "四化是紫微斗數最強大的預測工具，掌握它是進階的關鍵"
+    },
+    "level_5_patterns_analysis": {
+      "name": "Level 5: Pattern Analysis (格局論)",
+      "duration": "10-12 weeks",
+      "description": "Learn to recognize famous patterns and combinations",
+      "topics": [
+        {
+          "topic": "吉格 (Auspicious Patterns)",
+          "subtopics": [
+            "紫府朝垣格 (Ziwei-Tianfu Facing Court)",
+            "府相朝垣格 (Tianfu-Tianxiang Facing Court)",
+            "日照雷門格 (Sun Illuminates)",
+            "將星得地格 (General Star Well-Placed)",
+            "四正同臨格 (Four Positions Concurrent)",
+            "水木清華格 (Water-Wood Purity)",
+            "蟾宮折桂格 (Moon Palace Laurel)",
+            "其他20+吉格"
+          ],
+          "learning_hours": 8,
+          "resources": [
+            "34個富貴格完整詳解",
+            "吉格案例分析"
+          ]
+        },
+        {
+          "topic": "凶格 (Inauspicious Patterns)",
+          "subtopics": [
+            "羊駝夾忌 (Sheep-Camel Sandwich)",
+            "空劫夾命 (Void-Robbery Sandwich)",
+            "馬落空亡 (Horse in Void)",
+            "祿逢衝破 (Lu Clash)",
+            "其他凶格"
+          ],
+          "learning_hours": 4,
+          "resources": ["凶格特性", "凶格應對"]
+        },
+        {
+          "topic": "夾格系統 (Sandwich Patterns)",
+          "subtopics": [
+            "夾的含義",
+            "常見夾格組合",
+            "夾格的吉凶判斷",
+            "被夾宮位的弱化"
+          ],
+          "learning_hours": 3,
+          "resources": ["夾格詳解"]
+        },
+        {
+          "topic": "朝垣格系統 (Facing Court Patterns)",
+          "subtopics": [
+            "朝垣的含義",
+            "三方四正朝拱",
+            "朝垣格的判斷標準"
+          ],
+          "learning_hours": 3,
+          "resources": ["朝垣格詳解"]
+        }
+      ],
+      "skills_acquired": [
+        "Recognize major auspicious and inauspicious patterns",
+        "Understand how patterns form",
+        "Judge pattern strength",
+        "Apply pattern analysis to readings"
+      ],
+      "milestone": "Can identify and analyze chart patterns"
+    },
+    "level_6_practical_reading": {
+      "name": "Level 6: Practical Reading Skills (實務解盤)",
+      "duration": "12+ weeks",
+      "description": "Learn to synthesize all knowledge into actual chart readings",
+      "topics": [
+        {
+          "topic": "命盤整體分析法 (Holistic Chart Analysis)",
+          "subtopics": [
+            "From main star to supporting stars",
+            "Integration of four transformations",
+            "Pattern recognition in context",
+            "Overall life trajectory assessment"
+          ],
+          "learning_hours": 6,
+          "resources": ["解盤分析步驟"]
+        },
+        {
+          "topic": "各宮位詳細解讀 (Detailed Palace Interpretation)",
+          "subtopics": [
+            "命宮解讀與性格分析",
+            "婚姻宮感情分析",
+            "財帛宮財運分析",
+            "官祿宮事業分析",
+            "其他宮位應用"
+          ],
+          "learning_hours": 10,
+          "resources": ["宮位解讀案例集"]
+        },
+        {
+          "topic": "大限流年分析 (Major Cycle & Annual Analysis)",
+          "subtopics": [
+            "大限的計算和含義",
+            "流年的計算和含義",
+            "大限與流年的關係",
+            "預測運勢變化"
+          ],
+          "learning_hours": 6,
+          "resources": ["大限流年教程"]
+        },
+        {
+          "topic": "實戰案例分析 (Real Case Studies)",
+          "subtopics": [
+            "Complete chart reading examples",
+            "Multiple chart comparisons",
+            "Prediction accuracy verification",
+            "Learning from famous readings"
+          ],
+          "learning_hours": 8,
+          "resources": ["案例集", "名家解盤"]
+        }
+      ],
+      "skills_acquired": [
+        "Perform complete chart readings",
+        "Integrate all learned concepts",
+        "Provide meaningful interpretations",
+        "Predict life trends accurately"
+      ]
+    }
+  },
+  "learning_paths": {
+    "self_study_path": {
+      "name": "Self-Study Path (自學路線)",
+      "duration": "12-18 months",
+      "approach": "Independent learning with books and online resources",
+      "resources": [
+        {
+          "name": "《零基礎到了解紫微斗數的二十五堂課》",
+          "publisher": "博客來",
+          "type": "Book",
+          "level": "Beginner to Intermediate",
+          "url": "https://www.books.com.tw/products/0010770394"
+        },
+        {
+          "name": "《紫微四化：藉由紫微斗數預測能力，掌握未來趨勢變化》",
+          "publisher": "博客來",
+          "type": "Book",
+          "level": "Intermediate",
+          "url": "https://www.books.com.tw/products/0010769687"
+        },
+        {
+          "name": "紫微斗數線上排盤工具",
+          "type": "Software",
+          "examples": ["Ziwei-Yun", "科技紫微網", "子由排盤"]
+        }
+      ],
+      "pros": ["自由時間安排", "成本低", "按自己步速學習"],
+      "cons": ["需要自律", "容易有理解偏差", "無專人指導"]
+    },
+    "online_course_path": {
+      "name": "Online Course Path (線上課程路線)",
+      "duration": "6-12 months",
+      "approach": "Structured online courses with instructors",
+      "platforms": [
+        {
+          "name": "菜鳥救星LIVE學堂",
+          "url": "https://live.rookiesavior.net/course/ziwei",
+          "features": ["Structured curriculum", "Live instruction", "Practice examples"],
+          "level": "Beginner to Advanced"
+        },
+        {
+          "name": "科技紫微網",
+          "url": "https://www.click108.com.tw/course/index.php",
+          "features": ["入門到專業班", "Complete progression"],
+          "level": "All levels"
+        },
+        {
+          "name": "紫微師範學院",
+          "url": "https://www.ziweischool.com.tw/",
+          "features": ["Professional training", "Certification programs"],
+          "level": "Professional"
+        }
+      ],
+      "pros": ["結構化課程", "有專家指導", "互動學習", "進度監督"],
+      "cons": ["成本較高", "時間固定", "需要投資時間和金錢"]
+    },
+    "tutor_path": {
+      "name": "One-on-One Tutor Path (一對一家教路線)",
+      "duration": "6-12 months",
+      "approach": "Personalized instruction with private tutor",
+      "platforms": [
+        {
+          "name": "AmazingTalker",
+          "url": "https://tw.amazingtalker.com/tutors/emotional_healing/ziwei_dou_shu",
+          "price": "Starting from $200/hour (TWD)",
+          "level": "All levels"
+        }
+      ],
+      "pros": ["完全個性化", "快速進度", "實時解答", "符合自己進度"],
+      "cons": ["成本最高", "需要主動參與", "依賴老師質量"]
+    }
+  },
+  "key_resources": {
+    "textbooks": [
+      {
+        "title": "零基礎到了解紫微斗數的二十五堂課",
+        "description": "零基礎入門首選，圖解詳細，循序漸進",
+        "level": "Beginner"
+      },
+      {
+        "title": "紫微四化：藉由紫微斗數預測能力，掌握未來趨勢變化",
+        "description": "四化專題深入，預測應用豐富",
+        "level": "Intermediate"
+      }
+    ],
+    "online_tools": [
+      {
+        "name": "Ziwei-Yun Plate",
+        "url": "https://plate.ziwei-yun.com/plate.php",
+        "type": "Chart Generator"
+      },
+      {
+        "name": "科技紫微網排盤",
+        "url": "https://www.click108.com.tw/",
+        "type": "Chart Generator + Educational"
+      },
+      {
+        "name": "子由線上排盤",
+        "url": "http://www.ziyou.math.ncu.edu.tw/~ziyou/ziwei/",
+        "type": "Chart Generator"
+      }
+    ],
+    "learning_communities": [
+      {
+        "name": "星林學苑 (Xinglin Academy)",
+        "url": "https://www.108s.tw/",
+        "type": "Educational platform with articles"
+      },
+      {
+        "name": "科技紫微網",
+        "url": "https://news.click108.com.tw/",
+        "type": "Educational platform with teaching"
+      }
+    ]
+  },
+  "common_misconceptions": [
+    {
+      "misconception": "紫微斗數是宿命論，命運不可改變",
+      "truth": "Modern interpretation emphasizes that understanding patterns allows you to make better choices and change outcomes"
+    },
+    {
+      "misconception": "只看主星就能判斷命運",
+      "truth": "Must consider entire system: palaces, auxiliary stars, transformations, patterns, and major/annual cycles"
+    },
+    {
+      "misconception": "凶格就一定不好",
+      "truth": "Many 'mixed' patterns with both auspicious and inauspicious elements can still lead to great achievement"
+    },
+    {
+      "misconception": "排盤是最重要的技能",
+      "truth": "Chart generation is easy with modern software; interpretation skill is what matters"
+    }
+  ],
+  "recommended_study_sequence": [
+    "1. Complete Level 1 Foundations (陰陽五行天干地支)",
+    "2. Complete Level 2 Basic System (12宮、14主星、排盤)",
+    "3. Learn practical chart reading before diving into deep theory",
+    "4. Complete Level 3 Auxiliary Stars",
+    "5. Master Level 4 Four Transformations",
+    "6. Understand Level 5 Pattern Analysis through case studies",
+    "7. Develop Level 6 Practical Reading Skills with many real charts",
+    "8. Continuous study of major/annual cycles and advanced patterns"
+  ],
+  "time_commitment": {
+    "beginner_basics": "100-150 hours",
+    "intermediate_skills": "150-250 hours",
+    "advanced_competency": "300-500 hours",
+    "professional_level": "1000+ hours"
+  },
+  "sources": [
+    "博客來 - 零基礎到了解紫微斗數的二十五堂課",
+    "菜鳥救星LIVE學堂 - Ziwei course",
+    "科技紫微網 - 線上課程",
+    "紫微師範學院",
+    "星林學苑 - 紫微斗數研究",
+    "AmazingTalker - Ziwei Tutors",
+    "Vocus - 紫微斗數課程系列",
+    "Click108 - 紫微教學"
+  ]
+}

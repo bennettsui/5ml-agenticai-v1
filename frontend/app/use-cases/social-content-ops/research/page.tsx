@@ -4,9 +4,10 @@ import { useState, useCallback, useEffect } from 'react';
 import {
   Search, AlertCircle, Building2, Users, ShoppingBag,
   Loader2, Sparkles, Globe, TrendingUp, Target, Package,
-  ChevronDown, ChevronUp, Plus, Trash2, Edit3, Save, X,
+  ChevronDown, ChevronUp, Plus, Trash2, Edit3, Save, X, CheckCircle,
 } from 'lucide-react';
 import { useBrandProject } from '@/lib/brand-context';
+import { useAutosave } from '@/lib/useAutosave';
 
 /* ── Types ──────────────────────────────── */
 
@@ -111,6 +112,73 @@ export default function ResearchPage() {
   // Loading state for data persistence
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+
+  // Autosave hook
+  const { autosave: autosaveData, manualSave, status } = useAutosave({
+    onSave: async (data: unknown) => {
+      const research = data as {
+        businessOverview?: string;
+        mission?: string;
+        positioning?: string;
+        competitors?: CompetitorEntry[];
+        segments?: AudienceSegment[];
+        products?: ProductEntry[];
+      };
+
+      if (!selectedBrand?.id) return;
+
+      // Save business data
+      if (research.businessOverview !== undefined || research.mission !== undefined) {
+        await fetch(`/api/research/${selectedBrand.id}/business`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessOverview: research.businessOverview ?? businessOverview,
+            mission: research.mission ?? mission,
+          }),
+        });
+      }
+
+      // Save competitors
+      if (research.competitors !== undefined) {
+        await fetch(`/api/research/${selectedBrand.id}/competitors`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ competitors: research.competitors }),
+        });
+      }
+
+      // Save audience/segments
+      if (research.positioning !== undefined || research.segments !== undefined) {
+        await fetch(`/api/research/${selectedBrand.id}/audience`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            positioning: research.positioning ?? positioning,
+            segments: research.segments ?? segments,
+          }),
+        });
+      }
+
+      // Save products
+      if (research.products !== undefined) {
+        await fetch(`/api/research/${selectedBrand.id}/products`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products: research.products }),
+        });
+      }
+    },
+    debounceMs: 1500,
+    onSuccess: (msg) => {
+      setSaveMessage(msg || 'Autosaved');
+      setTimeout(() => setSaveMessage(''), 3000);
+    },
+    onError: (err) => {
+      console.error('Autosave failed:', err);
+    },
+  });
 
   /* ── Load research data from database ──────────── */
 
@@ -258,13 +326,34 @@ export default function ResearchPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Autosave Status */}
+          {status.lastSaved && !status.hasUnsaved && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-xs text-emerald-400">Autosaved</span>
+            </div>
+          )}
+          {status.hasUnsaved && (
+            <div className="text-xs text-amber-400 px-2">Unsaved changes...</div>
+          )}
+
+          {/* Save Button */}
           <button
-            disabled={!selectedBrand || saving}
-            onClick={saveResearchData}
+            disabled={!selectedBrand || status.isSaving}
+            onClick={manualSave}
             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-colors flex items-center gap-1.5"
           >
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            {saving ? 'Saving...' : 'Save'}
+            {status.isSaving ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-3.5 h-3.5" />
+                Save
+              </>
+            )}
           </button>
           <button
             disabled={!selectedBrand || generating}
@@ -319,7 +408,10 @@ export default function ResearchPage() {
             </div>
             <textarea
               value={businessOverview}
-              onChange={e => setBusinessOverview(e.target.value)}
+              onChange={e => {
+                setBusinessOverview(e.target.value);
+                autosaveData({ businessOverview: e.target.value });
+              }}
               placeholder="Describe the business: what they do, their market position, key differentiators, and brand story..."
               rows={4}
               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/30 resize-none"
@@ -334,7 +426,10 @@ export default function ResearchPage() {
             </div>
             <textarea
               value={mission}
-              onChange={e => setMission(e.target.value)}
+              onChange={e => {
+                setMission(e.target.value);
+                autosaveData({ mission: e.target.value });
+              }}
               placeholder="Mission statement, brand vision, core values, and brand personality..."
               rows={3}
               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/30 resize-none"
@@ -350,10 +445,11 @@ export default function ResearchPage() {
                 <span className="text-[10px] px-1.5 py-0.5 bg-slate-700/50 text-slate-400 rounded">{competitors.length}</span>
               </div>
               <button
-                onClick={() => setCompetitors([...competitors, {
-                  id: Date.now().toString(), name: '', website: '',
-                  strengths: '', weaknesses: '', socialPresence: '', notes: '',
-                }])}
+                onClick={() => {
+                  const c = [...competitors, { id: Date.now().toString(), name: '', website: '', strengths: '', weaknesses: '', socialPresence: '', notes: '' }];
+                  setCompetitors(c);
+                  autosaveData({ competitors: c });
+                }}
                 className="px-2.5 py-1 text-xs rounded-lg border border-blue-700/30 bg-blue-500/10 text-blue-400 hover:opacity-80 flex items-center gap-1"
               >
                 <Plus className="w-3 h-3" /> Add Competitor
@@ -380,7 +476,7 @@ export default function ResearchPage() {
                             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Name</label>
                             <input
                               value={comp.name}
-                              onChange={e => { const c = [...competitors]; c[idx] = { ...c[idx], name: e.target.value }; setCompetitors(c); }}
+                              onChange={e => { const c = [...competitors]; c[idx] = { ...c[idx], name: e.target.value }; setCompetitors(c); autosaveData({ competitors: c }); }}
                               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/30"
                               placeholder="Competitor name"
                             />
@@ -389,7 +485,7 @@ export default function ResearchPage() {
                             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Website</label>
                             <input
                               value={comp.website}
-                              onChange={e => { const c = [...competitors]; c[idx] = { ...c[idx], website: e.target.value }; setCompetitors(c); }}
+                              onChange={e => { const c = [...competitors]; c[idx] = { ...c[idx], website: e.target.value }; setCompetitors(c); autosaveData({ competitors: c }); }}
                               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/30"
                               placeholder="https://..."
                             />
@@ -399,7 +495,7 @@ export default function ResearchPage() {
                           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Social Presence</label>
                           <input
                             value={comp.socialPresence}
-                            onChange={e => { const c = [...competitors]; c[idx] = { ...c[idx], socialPresence: e.target.value }; setCompetitors(c); }}
+                            onChange={e => { const c = [...competitors]; c[idx] = { ...c[idx], socialPresence: e.target.value }; setCompetitors(c); autosaveData({ competitors: c }); }}
                             className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/30"
                             placeholder="IG: 50K, FB: 30K, LinkedIn: 10K"
                           />
@@ -409,7 +505,7 @@ export default function ResearchPage() {
                             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Strengths</label>
                             <textarea
                               value={comp.strengths}
-                              onChange={e => { const c = [...competitors]; c[idx] = { ...c[idx], strengths: e.target.value }; setCompetitors(c); }}
+                              onChange={e => { const c = [...competitors]; c[idx] = { ...c[idx], strengths: e.target.value }; setCompetitors(c); autosaveData({ competitors: c }); }}
                               rows={2}
                               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/30 resize-none"
                               placeholder="Key strengths..."
@@ -419,7 +515,7 @@ export default function ResearchPage() {
                             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Weaknesses</label>
                             <textarea
                               value={comp.weaknesses}
-                              onChange={e => { const c = [...competitors]; c[idx] = { ...c[idx], weaknesses: e.target.value }; setCompetitors(c); }}
+                              onChange={e => { const c = [...competitors]; c[idx] = { ...c[idx], weaknesses: e.target.value }; setCompetitors(c); autosaveData({ competitors: c }); }}
                               rows={2}
                               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/30 resize-none"
                               placeholder="Key weaknesses..."
@@ -430,7 +526,7 @@ export default function ResearchPage() {
                           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Notes</label>
                           <textarea
                             value={comp.notes}
-                            onChange={e => { const c = [...competitors]; c[idx] = { ...c[idx], notes: e.target.value }; setCompetitors(c); }}
+                            onChange={e => { const c = [...competitors]; c[idx] = { ...c[idx], notes: e.target.value }; setCompetitors(c); autosaveData({ competitors: c }); }}
                             rows={2}
                             className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/30 resize-none"
                             placeholder="Posting frequency, content style, engagement patterns..."
@@ -472,7 +568,10 @@ export default function ResearchPage() {
             </div>
             <textarea
               value={positioning}
-              onChange={e => setPositioning(e.target.value)}
+              onChange={e => {
+                setPositioning(e.target.value);
+                autosaveData({ positioning: e.target.value });
+              }}
               placeholder="For [target audience] who [need/want], [brand] is a [category] that [key benefit]. Unlike [competitors], we [unique differentiator]."
               rows={3}
               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500/30 resize-none"
@@ -488,10 +587,11 @@ export default function ResearchPage() {
                 <span className="text-[10px] px-1.5 py-0.5 bg-slate-700/50 text-slate-400 rounded">{segments.length}</span>
               </div>
               <button
-                onClick={() => setSegments([...segments, {
-                  id: Date.now().toString(), name: '', demographics: '',
-                  psychographics: '', painPoints: '', channels: '', size: '',
-                }])}
+                onClick={() => {
+                  const s = [...segments, { id: Date.now().toString(), name: '', demographics: '', psychographics: '', painPoints: '', channels: '', size: '' }];
+                  setSegments(s);
+                  autosaveData({ segments: s });
+                }}
                 className="px-2.5 py-1 text-xs rounded-lg border border-emerald-700/30 bg-emerald-500/10 text-emerald-400 hover:opacity-80 flex items-center gap-1"
               >
                 <Plus className="w-3 h-3" /> Add Segment
@@ -518,7 +618,7 @@ export default function ResearchPage() {
                             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Segment Name</label>
                             <input
                               value={seg.name}
-                              onChange={e => { const s = [...segments]; s[idx] = { ...s[idx], name: e.target.value }; setSegments(s); }}
+                              onChange={e => { const s = [...segments]; s[idx] = { ...s[idx], name: e.target.value }; setSegments(s); autosaveData({ segments: s }); }}
                               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/30"
                               placeholder="e.g. Growth-minded SMB Owners"
                             />
@@ -527,7 +627,7 @@ export default function ResearchPage() {
                             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Est. Size</label>
                             <input
                               value={seg.size}
-                              onChange={e => { const s = [...segments]; s[idx] = { ...s[idx], size: e.target.value }; setSegments(s); }}
+                              onChange={e => { const s = [...segments]; s[idx] = { ...s[idx], size: e.target.value }; setSegments(s); autosaveData({ segments: s }); }}
                               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/30"
                               placeholder="e.g. 15,000 in HK"
                             />
@@ -537,7 +637,7 @@ export default function ResearchPage() {
                           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Demographics</label>
                           <textarea
                             value={seg.demographics}
-                            onChange={e => { const s = [...segments]; s[idx] = { ...s[idx], demographics: e.target.value }; setSegments(s); }}
+                            onChange={e => { const s = [...segments]; s[idx] = { ...s[idx], demographics: e.target.value }; setSegments(s); autosaveData({ segments: s }); }}
                             rows={2}
                             className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/30 resize-none"
                             placeholder="Age, location, language, income, education..."
@@ -547,7 +647,7 @@ export default function ResearchPage() {
                           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Psychographics</label>
                           <textarea
                             value={seg.psychographics}
-                            onChange={e => { const s = [...segments]; s[idx] = { ...s[idx], psychographics: e.target.value }; setSegments(s); }}
+                            onChange={e => { const s = [...segments]; s[idx] = { ...s[idx], psychographics: e.target.value }; setSegments(s); autosaveData({ segments: s }); }}
                             rows={2}
                             className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/30 resize-none"
                             placeholder="Values, interests, lifestyle, attitudes..."
@@ -557,7 +657,7 @@ export default function ResearchPage() {
                           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Pain Points</label>
                           <textarea
                             value={seg.painPoints}
-                            onChange={e => { const s = [...segments]; s[idx] = { ...s[idx], painPoints: e.target.value }; setSegments(s); }}
+                            onChange={e => { const s = [...segments]; s[idx] = { ...s[idx], painPoints: e.target.value }; setSegments(s); autosaveData({ segments: s }); }}
                             rows={2}
                             className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/30 resize-none"
                             placeholder="What problems do they face that your brand solves?"
@@ -567,7 +667,7 @@ export default function ResearchPage() {
                           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Preferred Channels</label>
                           <input
                             value={seg.channels}
-                            onChange={e => { const s = [...segments]; s[idx] = { ...s[idx], channels: e.target.value }; setSegments(s); }}
+                            onChange={e => { const s = [...segments]; s[idx] = { ...s[idx], channels: e.target.value }; setSegments(s); autosaveData({ segments: s }); }}
                             className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500/30"
                             placeholder="Instagram, LinkedIn, WhatsApp, YouTube..."
                           />
@@ -609,11 +709,11 @@ export default function ResearchPage() {
                 <span className="text-[10px] px-1.5 py-0.5 bg-slate-700/50 text-slate-400 rounded">{products.length}</span>
               </div>
               <button
-                onClick={() => setProducts([...products, {
-                  id: Date.now().toString(), name: '', category: '',
-                  description: '', keyFeatures: '', priceRange: '',
-                  targetSegment: '', usp: '',
-                }])}
+                onClick={() => {
+                  const p = [...products, { id: Date.now().toString(), name: '', category: '', description: '', keyFeatures: '', priceRange: '', targetSegment: '', usp: '' }];
+                  setProducts(p);
+                  autosaveData({ products: p });
+                }}
                 className="px-2.5 py-1 text-xs rounded-lg border border-amber-700/30 bg-amber-500/10 text-amber-400 hover:opacity-80 flex items-center gap-1"
               >
                 <Plus className="w-3 h-3" /> Add Product/Service
@@ -643,7 +743,7 @@ export default function ResearchPage() {
                             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Name</label>
                             <input
                               value={prod.name}
-                              onChange={e => { const p = [...products]; p[idx] = { ...p[idx], name: e.target.value }; setProducts(p); }}
+                              onChange={e => { const p = [...products]; p[idx] = { ...p[idx], name: e.target.value }; setProducts(p); autosaveData({ products: p }); }}
                               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/30"
                               placeholder="Product or service name"
                             />
@@ -652,7 +752,7 @@ export default function ResearchPage() {
                             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Category</label>
                             <input
                               value={prod.category}
-                              onChange={e => { const p = [...products]; p[idx] = { ...p[idx], category: e.target.value }; setProducts(p); }}
+                              onChange={e => { const p = [...products]; p[idx] = { ...p[idx], category: e.target.value }; setProducts(p); autosaveData({ products: p }); }}
                               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/30"
                               placeholder="Service / Product / Package"
                             />
@@ -662,7 +762,7 @@ export default function ResearchPage() {
                           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Description</label>
                           <textarea
                             value={prod.description}
-                            onChange={e => { const p = [...products]; p[idx] = { ...p[idx], description: e.target.value }; setProducts(p); }}
+                            onChange={e => { const p = [...products]; p[idx] = { ...p[idx], description: e.target.value }; setProducts(p); autosaveData({ products: p }); }}
                             rows={2}
                             className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/30 resize-none"
                             placeholder="What is this product/service?"
@@ -672,7 +772,7 @@ export default function ResearchPage() {
                           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Key Features</label>
                           <textarea
                             value={prod.keyFeatures}
-                            onChange={e => { const p = [...products]; p[idx] = { ...p[idx], keyFeatures: e.target.value }; setProducts(p); }}
+                            onChange={e => { const p = [...products]; p[idx] = { ...p[idx], keyFeatures: e.target.value }; setProducts(p); autosaveData({ products: p }); }}
                             rows={2}
                             className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/30 resize-none"
                             placeholder="Main features, capabilities, deliverables..."
@@ -683,7 +783,7 @@ export default function ResearchPage() {
                             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Price Range</label>
                             <input
                               value={prod.priceRange}
-                              onChange={e => { const p = [...products]; p[idx] = { ...p[idx], priceRange: e.target.value }; setProducts(p); }}
+                              onChange={e => { const p = [...products]; p[idx] = { ...p[idx], priceRange: e.target.value }; setProducts(p); autosaveData({ products: p }); }}
                               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/30"
                               placeholder="HK$X,XXX - XX,XXX/mo"
                             />
@@ -692,7 +792,7 @@ export default function ResearchPage() {
                             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Target Segment</label>
                             <input
                               value={prod.targetSegment}
-                              onChange={e => { const p = [...products]; p[idx] = { ...p[idx], targetSegment: e.target.value }; setProducts(p); }}
+                              onChange={e => { const p = [...products]; p[idx] = { ...p[idx], targetSegment: e.target.value }; setProducts(p); autosaveData({ products: p }); }}
                               className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/30"
                               placeholder="Which audience segment is this for?"
                             />
@@ -702,7 +802,7 @@ export default function ResearchPage() {
                           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Unique Selling Proposition (USP)</label>
                           <textarea
                             value={prod.usp}
-                            onChange={e => { const p = [...products]; p[idx] = { ...p[idx], usp: e.target.value }; setProducts(p); }}
+                            onChange={e => { const p = [...products]; p[idx] = { ...p[idx], usp: e.target.value }; setProducts(p); autosaveData({ products: p }); }}
                             rows={2}
                             className="w-full bg-white/[0.02] border border-slate-700/30 rounded-lg p-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/30 resize-none"
                             placeholder="What makes this uniquely valuable compared to competitors?"

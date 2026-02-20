@@ -348,6 +348,38 @@ async function initDatabase() {
         updated_at TIMESTAMP DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS crm_contacts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID REFERENCES crm_clients(id) ON DELETE CASCADE,
+        name VARCHAR(300) NOT NULL,
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        title VARCHAR(200),
+        department VARCHAR(100),
+        linkedin_url VARCHAR(500),
+        linkedin_data JSONB DEFAULT '{}',
+        research_data JSONB DEFAULT '{}',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_client ON crm_contacts(client_id);
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_email ON crm_contacts(email);
+      CREATE INDEX IF NOT EXISTS idx_crm_contacts_linkedin ON crm_contacts(linkedin_url);
+
+      CREATE TABLE IF NOT EXISTS crm_contact_project_links (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        contact_id UUID REFERENCES crm_contacts(id) ON DELETE CASCADE,
+        project_id UUID REFERENCES crm_projects(id) ON DELETE CASCADE,
+        role VARCHAR(100),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_contact_project_links_contact ON crm_contact_project_links(contact_id);
+      CREATE INDEX IF NOT EXISTS idx_crm_contact_project_links_project ON crm_contact_project_links(project_id);
+
       -- ==========================================
       -- Ziwei Astrology Tables (中州派紫微斗數)
       -- ==========================================
@@ -748,12 +780,150 @@ async function initDatabase() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_research_products_brand ON research_products(brand_id);
+
+      -- Strategy
+      CREATE TABLE IF NOT EXISTS social_strategy (
+        id SERIAL PRIMARY KEY,
+        strategy_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        objectives TEXT,
+        target_audiences TEXT,
+        channel_mix TEXT,
+        content_pillars TEXT,
+        posting_cadence TEXT,
+        media_approach TEXT,
+        kpis TEXT,
+        assumptions TEXT,
+        risks TEXT,
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_strategy FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_strategy_brand ON social_strategy(brand_id);
+      CREATE INDEX IF NOT EXISTS idx_strategy_project ON social_strategy(project_id);
+
+      -- Interactive Content
+      CREATE TABLE IF NOT EXISTS social_interactive_content (
+        id SERIAL PRIMARY KEY,
+        content_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        title VARCHAR(500) NOT NULL,
+        content_type VARCHAR(100),
+        description TEXT,
+        platforms TEXT,
+        engagement_goal VARCHAR(255),
+        expected_metrics TEXT,
+        launch_date DATE,
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_interactive FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_interactive_brand ON social_interactive_content(brand_id);
+
+      -- Content Calendar
+      CREATE TABLE IF NOT EXISTS social_calendar (
+        id SERIAL PRIMARY KEY,
+        post_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        date DATE NOT NULL,
+        platform VARCHAR(50),
+        format VARCHAR(50),
+        pillar VARCHAR(100),
+        campaign VARCHAR(255),
+        title VARCHAR(500),
+        objective VARCHAR(255),
+        key_message TEXT,
+        visual_type VARCHAR(100),
+        caption_status VARCHAR(50) DEFAULT 'Draft',
+        visual_status VARCHAR(50) DEFAULT 'Draft',
+        boost_plan VARCHAR(100),
+        link TEXT,
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'Draft',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_calendar FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_calendar_brand ON social_calendar(brand_id);
+      CREATE INDEX IF NOT EXISTS idx_calendar_date ON social_calendar(date);
+
+      -- Trend Research
+      CREATE TABLE IF NOT EXISTS social_trend_research (
+        id SERIAL PRIMARY KEY,
+        trend_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        trend_name VARCHAR(500) NOT NULL,
+        category VARCHAR(100),
+        description TEXT,
+        relevance_score INT,
+        platforms TEXT,
+        content_ideas TEXT,
+        launch_ideas TEXT,
+        status VARCHAR(50) DEFAULT 'research',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_trend FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_trend_brand ON social_trend_research(brand_id);
+
+      -- Social Monitoring
+      CREATE TABLE IF NOT EXISTS social_monitoring (
+        id SERIAL PRIMARY KEY,
+        monitor_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        platform VARCHAR(100),
+        keyword VARCHAR(500),
+        sentiment_trend TEXT,
+        engagement_rate DECIMAL(5, 2),
+        mention_count INT,
+        top_mentions TEXT,
+        action_items TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_monitoring FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_monitoring_brand ON social_monitoring(brand_id);
+
+      -- Community Management
+      CREATE TABLE IF NOT EXISTS social_community_management (
+        id SERIAL PRIMARY KEY,
+        community_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        brand_id UUID NOT NULL,
+        project_id UUID,
+        platform VARCHAR(100),
+        content_guideline TEXT,
+        response_templates TEXT,
+        escalation_rules TEXT,
+        moderation_policies TEXT,
+        engagement_strategies TEXT,
+        faq_content TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_brand_id_community FOREIGN KEY(brand_id) REFERENCES brands(brand_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_community_brand ON social_community_management(brand_id);
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');
 
-    // Seed Ziwei interpretation rules
+    // Seed Ziwei knowledge
     await seedZiweiRules();
+    await seedZiweiPalacesAndStars();
   } catch (error) {
     console.error('❌ Database initialization error:', error.message);
     console.error('Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
@@ -1674,6 +1844,77 @@ async function seedZiweiRules() {
   }
 }
 
+async function seedZiweiPalacesAndStars() {
+  try {
+    const palacesAndStars = require('./knowledge/ziwei-palaces-stars-seed');
+
+    let palaceCount = 0;
+    let starCount = 0;
+
+    // Seed palaces
+    for (const palace of palacesAndStars.palaces) {
+      const existing = await pool.query(
+        `SELECT id FROM ziwei_palaces WHERE id = $1 LIMIT 1`,
+        [palace.id]
+      );
+
+      if (existing.rows.length === 0) {
+        await pool.query(
+          `INSERT INTO ziwei_palaces
+           (id, number, chinese, english, meaning, governs, positive_indicators, negative_indicators)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            palace.id,
+            palace.number,
+            palace.chinese,
+            palace.english,
+            palace.meaning,
+            JSON.stringify(palace.governs),
+            palace.positive_indicators,
+            palace.negative_indicators
+          ]
+        );
+        palaceCount++;
+      }
+    }
+
+    // Seed stars
+    for (const star of palacesAndStars.stars) {
+      const existing = await pool.query(
+        `SELECT id FROM ziwei_stars WHERE id = $1 LIMIT 1`,
+        [star.id]
+      );
+
+      if (existing.rows.length === 0) {
+        await pool.query(
+          `INSERT INTO ziwei_stars
+           (id, number, chinese, english, meaning, element, archetype, general_nature, key_traits, palace_meanings)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            star.id,
+            star.number,
+            star.chinese,
+            star.english,
+            star.meaning,
+            star.element,
+            star.archetype,
+            star.general_nature,
+            JSON.stringify(star.key_traits),
+            JSON.stringify(star.palace_meanings)
+          ]
+        );
+        starCount++;
+      }
+    }
+
+    console.log(`✅ Ziwei knowledge seeded: ${palaceCount} palaces, ${starCount} stars`);
+    return { palaceCount, starCount };
+  } catch (error) {
+    console.error('⚠️ Ziwei knowledge seeding error:', error.message);
+    return { palaceCount: 0, starCount: 0 };
+  }
+}
+
 async function getZiweiRules(filters = {}) {
   try {
     let query = `SELECT * FROM ziwei_interpretation_rules WHERE status = 'active'`;
@@ -1695,6 +1936,56 @@ async function getZiweiRules(filters = {}) {
     return result.rows;
   } catch (error) {
     console.error('Error fetching Ziwei rules:', error);
+    throw error;
+  }
+}
+
+async function getZiweiPalace(palaceId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_palaces WHERE id = $1`,
+      [palaceId]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching palace:', error);
+    throw error;
+  }
+}
+
+async function getAllZiweiPalaces() {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_palaces ORDER BY number ASC`
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching palaces:', error);
+    throw error;
+  }
+}
+
+async function getZiweiStar(starId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_stars WHERE id = $1`,
+      [starId]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching star:', error);
+    throw error;
+  }
+}
+
+async function getAllZiweiStars() {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ziwei_stars ORDER BY number ASC`
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching stars:', error);
     throw error;
   }
 }
@@ -2730,6 +3021,250 @@ async function deleteResearchProduct(productId) {
   }
 }
 
+// ── Social Content Development ──────────────────────────────────────────────
+
+async function saveSocialContentDraft(brandId, data) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO social_content_drafts (brand_id, post_id, platform, format, title, pillar, objective, key_message, copy_hook, cta, caption, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ON CONFLICT (post_id) DO UPDATE SET
+         platform = $3, format = $4, title = $5, pillar = $6, objective = $7, key_message = $8, copy_hook = $9, cta = $10, caption = $11, status = $12, updated_at = NOW()`,
+      [brandId, data.postId || data.id, data.platform, data.format, data.title, data.pillar, data.objective, data.keyMessage, data.hook?.join(',') || '', data.cta, data.caption, data.status || 'Draft']
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving content draft:', error);
+    throw error;
+  }
+}
+
+async function getSocialContentDraft(brandId) {
+  try {
+    const result = await pool.query('SELECT * FROM social_content_drafts WHERE brand_id = $1 ORDER BY updated_at DESC LIMIT 50', [brandId]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting content drafts:', error);
+    throw error;
+  }
+}
+
+// ── Social Interactive Content ────────────────────────────────────────────────
+
+async function saveSocialInteractive(brandId, data) {
+  try {
+    await pool.query(
+      `INSERT INTO social_interactive_content (brand_id, project_id, title, content_type, description, platforms, engagement_goal, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (content_id) DO UPDATE SET
+         title = $3, content_type = $4, description = $5, platforms = $6, engagement_goal = $7, status = $8, updated_at = NOW()`,
+      [brandId, data.projectId, data.name, data.type, data.description, data.platform, data.objective, data.status || 'Draft']
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving interactive content:', error);
+    throw error;
+  }
+}
+
+async function getSocialInteractive(brandId) {
+  try {
+    const result = await pool.query('SELECT * FROM social_interactive_content WHERE brand_id = $1 ORDER BY updated_at DESC', [brandId]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting interactive content:', error);
+    throw error;
+  }
+}
+
+// ── Social Content Calendar ──────────────────────────────────────────────────
+
+async function saveSocialCalendar(brandId, posts) {
+  try {
+    for (const post of posts) {
+      await pool.query(
+        `INSERT INTO social_calendar (brand_id, project_id, date, platform, format, pillar, campaign, title, objective, key_message, visual_type, caption_status, visual_status, boost_plan, link, notes, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+         ON CONFLICT (post_id) DO UPDATE SET
+           date = $3, platform = $4, format = $5, pillar = $6, campaign = $7, title = $8, objective = $9, key_message = $10, visual_type = $11, caption_status = $12, visual_status = $13, boost_plan = $14, link = $15, notes = $16, status = $17, updated_at = NOW()`,
+        [brandId, post.projectId, post.date, post.platform, post.format, post.pillar, post.campaign, post.title, post.objective, post.keyMessage, post.visualType, post.captionStatus || 'Draft', post.visualStatus || 'Draft', post.boostPlan || 'Organic only', post.link || '', post.notes || '', post.status || 'Draft']
+      );
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving calendar posts:', error);
+    throw error;
+  }
+}
+
+async function getSocialCalendar(brandId) {
+  try {
+    const result = await pool.query('SELECT * FROM social_calendar WHERE brand_id = $1 ORDER BY date ASC', [brandId]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting calendar posts:', error);
+    throw error;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// CRM Contacts
+// ──────────────────────────────────────────────────────────────────────
+
+async function createContact(clientId, contactData) {
+  try {
+    const {
+      name,
+      email,
+      phone,
+      title,
+      department,
+      linkedin_url,
+      linkedin_data,
+      research_data,
+      notes,
+    } = contactData;
+
+    const result = await pool.query(
+      `INSERT INTO crm_contacts (client_id, name, email, phone, title, department, linkedin_url, linkedin_data, research_data, notes, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+       RETURNING *`,
+      [
+        clientId,
+        name,
+        email || null,
+        phone || null,
+        title || null,
+        department || null,
+        linkedin_url || null,
+        JSON.stringify(linkedin_data || {}),
+        JSON.stringify(research_data || {}),
+        notes || null,
+      ]
+    );
+    return result.rows[0];
+  } catch (err) {
+    console.error('[createContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function getContactsByClient(clientId) {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM crm_contacts WHERE client_id = $1 ORDER BY created_at DESC',
+      [clientId]
+    );
+    return result.rows;
+  } catch (err) {
+    console.error('[getContactsByClient] error:', err.message);
+    throw err;
+  }
+}
+
+async function getContact(contactId) {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM crm_contacts WHERE id = $1',
+      [contactId]
+    );
+    return result.rows[0] || null;
+  } catch (err) {
+    console.error('[getContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function updateContact(contactId, contactData) {
+  try {
+    const {
+      name,
+      email,
+      phone,
+      title,
+      department,
+      linkedin_url,
+      linkedin_data,
+      research_data,
+      notes,
+    } = contactData;
+
+    const result = await pool.query(
+      `UPDATE crm_contacts
+       SET name = COALESCE($1, name),
+           email = COALESCE($2, email),
+           phone = COALESCE($3, phone),
+           title = COALESCE($4, title),
+           department = COALESCE($5, department),
+           linkedin_url = COALESCE($6, linkedin_url),
+           linkedin_data = COALESCE($7, linkedin_data),
+           research_data = COALESCE($8, research_data),
+           notes = COALESCE($9, notes),
+           updated_at = NOW()
+       WHERE id = $10
+       RETURNING *`,
+      [name, email, phone, title, department, linkedin_url, linkedin_data ? JSON.stringify(linkedin_data) : null, research_data ? JSON.stringify(research_data) : null, notes, contactId]
+    );
+    return result.rows[0] || null;
+  } catch (err) {
+    console.error('[updateContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function deleteContact(contactId) {
+  try {
+    await pool.query('DELETE FROM crm_contacts WHERE id = $1', [contactId]);
+  } catch (err) {
+    console.error('[deleteContact] error:', err.message);
+    throw err;
+  }
+}
+
+async function linkContactToProject(contactId, projectId, role = null) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO crm_contact_project_links (contact_id, project_id, role, created_at, updated_at)
+       VALUES ($1, $2, $3, NOW(), NOW())
+       ON CONFLICT (contact_id, project_id) DO UPDATE SET role = $3, updated_at = NOW()
+       RETURNING *`,
+      [contactId, projectId, role || null]
+    );
+    return result.rows[0];
+  } catch (err) {
+    console.error('[linkContactToProject] error:', err.message);
+    throw err;
+  }
+}
+
+async function getProjectContacts(projectId) {
+  try {
+    const result = await pool.query(
+      `SELECT c.*, l.role FROM crm_contacts c
+       JOIN crm_contact_project_links l ON c.id = l.contact_id
+       WHERE l.project_id = $1
+       ORDER BY c.name ASC`,
+      [projectId]
+    );
+    return result.rows;
+  } catch (err) {
+    console.error('[getProjectContacts] error:', err.message);
+    throw err;
+  }
+}
+
+async function unlinkContactFromProject(contactId, projectId) {
+  try {
+    await pool.query(
+      'DELETE FROM crm_contact_project_links WHERE contact_id = $1 AND project_id = $2',
+      [contactId, projectId]
+    );
+  } catch (err) {
+    console.error('[unlinkContactFromProject] error:', err.message);
+    throw err;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -2780,7 +3315,12 @@ module.exports = {
   getEdmById,
   // Ziwei Astrology
   seedZiweiRules,
+  seedZiweiPalacesAndStars,
   getZiweiRules,
+  getZiweiPalace,
+  getAllZiweiPalaces,
+  getZiweiStar,
+  getAllZiweiStars,
   saveZiweiRuleFeedback,
   updateZiweiRuleStatistics,
   // Ziwei Step 4-6 (LLM Enhancement)
@@ -2844,4 +3384,20 @@ module.exports = {
   saveResearchProducts,
   getResearchProducts,
   deleteResearchProduct,
+  // Content Development, Interactive, Calendar
+  saveSocialContentDraft,
+  getSocialContentDraft,
+  saveSocialInteractive,
+  getSocialInteractive,
+  saveSocialCalendar,
+  getSocialCalendar,
+  // CRM Contacts
+  createContact,
+  getContactsByClient,
+  getContact,
+  updateContact,
+  deleteContact,
+  linkContactToProject,
+  getProjectContacts,
+  unlinkContactFromProject,
 };
