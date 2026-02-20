@@ -26,7 +26,17 @@ interface PromptRecord {
   status: 'draft' | 'approved' | 'archived';
   version: string;
   prompt_json: {
-    image?: { positive: string; negative: string; suggestedSampler?: string; suggestedCfg?: number; suggestedSteps?: number };
+    image?: {
+      positive: string;
+      negative: string;
+      headline?: string;
+      ctaCopy?: string;
+      suggestedSampler?: string;
+      suggestedCfg?: number;
+      suggestedSteps?: number;
+      styleTokens?: string[];
+      notes?: string;
+    };
     video?: { positive: string; negative: string; motionKeywords?: string[]; recommendedFrames?: number; recommendedFps?: number };
   };
   image_workflow_json: Record<string, unknown> | null;
@@ -157,6 +167,31 @@ function PromptCard({ prompt, onApprove, projectId }: {
                 {img.suggestedSteps   && <span>Steps: <span className="text-slate-300">{img.suggestedSteps}</span></span>}
                 {img.suggestedCfg    && <span>CFG: <span className="text-slate-300">{img.suggestedCfg}</span></span>}
               </div>
+
+              {/* Headline & CTA Copy (optional) */}
+              {(img.headline || img.ctaCopy) && (
+                <div className="mt-3 space-y-2 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                  <p className="text-[10px] font-semibold text-blue-300 uppercase tracking-wide">Text Overlay</p>
+                  {img.headline && (
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-xs">
+                        <p className="text-blue-400/80">📝 Headline:</p>
+                        <p className="text-blue-300 font-medium mt-0.5">{img.headline}</p>
+                      </div>
+                      <CopyButton text={img.headline} />
+                    </div>
+                  )}
+                  {img.ctaCopy && (
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-xs">
+                        <p className="text-blue-400/80">🎯 CTA Copy:</p>
+                        <p className="text-blue-300 font-medium mt-0.5">{img.ctaCopy}</p>
+                      </div>
+                      <CopyButton text={img.ctaCopy} />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -182,6 +217,19 @@ function PromptCard({ prompt, onApprove, projectId }: {
                 {vid.recommendedFrames && <span>Frames: <span className="text-slate-300">{vid.recommendedFrames}</span></span>}
                 {vid.recommendedFps    && <span>FPS: <span className="text-slate-300">{vid.recommendedFps}</span></span>}
               </div>
+            </div>
+          )}
+
+          {/* Image Generation Status */}
+          {img && (
+            <div className="mt-3 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+              <p className="text-[10px] font-semibold text-amber-300 uppercase tracking-wide mb-2">⚙️ Image Generation</p>
+              <p className="text-xs text-amber-200 mb-2">
+                {prompt.image_workflow_json ? '✓ Workflow configured - Ready to generate' : '○ Awaiting generation'}
+              </p>
+              <button className="text-[10px] px-2.5 py-1 rounded-lg bg-amber-600/20 text-amber-400 border border-amber-500/30 hover:bg-amber-600/30 transition-colors">
+                {prompt.image_workflow_json ? 'Regenerate Image' : 'Generate Image'}
+              </button>
             </div>
           )}
 
