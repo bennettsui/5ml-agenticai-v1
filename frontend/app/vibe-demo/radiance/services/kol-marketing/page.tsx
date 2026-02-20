@@ -14,7 +14,7 @@ export default function KOLMarketingServicePage() {
 
       <main id="main-content" className="flex-1 pt-20">
         {/* Breadcrumb */}
-        <section className="py-6 px-6">
+        <section className="py-3 px-6">
           <div className="max-w-6xl mx-auto">
             <Breadcrumb items={[
               { label: 'Home', href: '/vibe-demo/radiance' },
@@ -31,7 +31,7 @@ export default function KOLMarketingServicePage() {
             <div
               ref={parallaxRef}
               className="absolute inset-0 w-full h-[130%] -top-[15%] bg-cover bg-center will-change-transform"
-              style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1588702547923-7093a6c3ba33?auto=format&fit=crop&w=1920&q=80)' }}
+              style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1611162617474-5b21e879e113?auto=format&fit=crop&w=1920&q=80)' }}
             />
             <div className="absolute inset-0 bg-slate-950/75" />
           </div>

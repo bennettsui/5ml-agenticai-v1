@@ -14,7 +14,7 @@ export default function EventManagementServicePage() {
 
       <main id="main-content" className="flex-1 pt-20">
         {/* Breadcrumb */}
-        <section className="py-6 px-6">
+        <section className="py-3 px-6">
           <div className="max-w-6xl mx-auto">
             <Breadcrumb items={[
               { label: 'Home', href: '/vibe-demo/radiance' },

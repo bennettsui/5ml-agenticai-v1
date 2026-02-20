@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { ShoppingBag, Cpu, Heart, Palette, TrendingUp, BookOpen } from 'lucide-react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { ServicesShowcase } from './components/ServicesShowcase';
@@ -198,14 +199,16 @@ export default function RadiancePage() {
 
         <div className="relative z-10 text-center px-6 max-w-5xl mx-auto">
           {/* Rotating tagline */}
-          <div className="relative h-[1.2em] md:h-[1.15em] overflow-hidden mb-8">
+          <div className="relative mb-8">
             {heroSlides.map((slide, i) => (
               <h1
                 key={i}
-                className="absolute inset-x-0 text-5xl md:text-7xl font-bold leading-tight text-white transition-all duration-700"
+                className="text-5xl md:text-7xl font-bold leading-tight text-white transition-all duration-700"
                 style={{
                   opacity: i === activeSlide ? 1 : 0,
                   transform: i === activeSlide ? 'translateY(0)' : 'translateY(24px)',
+                  position: i === activeSlide ? 'relative' : 'absolute',
+                  inset: i === activeSlide ? 'auto' : '0',
                 }}
               >
                 {slide.tagline}
@@ -214,7 +217,7 @@ export default function RadiancePage() {
           </div>
 
           {/* Rotating subtitle */}
-          <div className="relative overflow-hidden mb-10 min-h-[60px]">
+          <div className="relative mb-10 min-h-[80px] md:min-h-[60px]">
             {heroSlides.map((slide, i) => (
               <p
                 key={i}
@@ -258,19 +261,29 @@ export default function RadiancePage() {
         </div>
       </section>
 
-      {/* ── Trust strip ── */}
-      <section className="py-16 px-6 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/50">
+      {/* ── Industries We Serve ── */}
+      <section className="py-20 px-6 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/50">
         <div className="max-w-6xl mx-auto">
-          <p className="text-center text-slate-400 dark:text-slate-500 mb-10 text-xs uppercase tracking-widest font-medium">
-            {lang === 'zh' ? '深受各行業領先品牌信賴' : 'Trusted by leading brands across sectors'}
-          </p>
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-            {(lang === 'zh'
-              ? ['消費品', '科技', '非牟利', '文化藝術', '金融', '教育']
-              : ['Consumer', 'Technology', 'NGOs', 'Culture & Arts', 'Finance', 'Education']
-            ).map((item) => (
-              <div key={item} className="py-2 border border-slate-100 dark:border-slate-800 rounded">
-                {item}
+          <div className="text-center mb-12">
+            <p className="text-xs font-semibold uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-3">
+              {lang === 'zh' ? '深受各行業品牌信賴' : 'Trusted Across Industries'}
+            </p>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
+              {lang === 'zh' ? '跨界豐富經驗' : 'Built on Cross-Industry Depth'}
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+            {[
+              { icon: ShoppingBag, label: lang === 'zh' ? '消費品' : 'Consumer', color: 'text-amber-500' },
+              { icon: Cpu, label: lang === 'zh' ? '科技' : 'Technology', color: 'text-sky-500' },
+              { icon: Heart, label: lang === 'zh' ? '非牟利' : 'NGOs & Social', color: 'text-rose-500' },
+              { icon: Palette, label: lang === 'zh' ? '文化藝術' : 'Culture & Arts', color: 'text-purple-500' },
+              { icon: TrendingUp, label: lang === 'zh' ? '金融' : 'Finance', color: 'text-emerald-500' },
+              { icon: BookOpen, label: lang === 'zh' ? '教育' : 'Education', color: 'text-indigo-500' },
+            ].map(({ icon: Icon, label, color }) => (
+              <div key={label} className="flex flex-col items-center gap-3 p-6 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-purple-200 dark:hover:border-purple-800 transition-colors group">
+                <Icon className={`w-8 h-8 ${color} group-hover:scale-110 transition-transform`} />
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 text-center">{label}</span>
               </div>
             ))}
           </div>

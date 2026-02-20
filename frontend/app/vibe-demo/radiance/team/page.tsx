@@ -12,7 +12,7 @@ export default function TeamPage() {
 
       <main id="main-content" className="flex-1">
         {/* Breadcrumb */}
-        <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800">
+        <section className="py-3 px-6 border-b border-slate-200 dark:border-slate-800">
           <div className="max-w-6xl mx-auto">
             <Breadcrumb items={[
               { label: 'Home', href: '/vibe-demo/radiance' },

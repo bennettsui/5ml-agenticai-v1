@@ -523,17 +523,21 @@ export default function BlogArticle({ params }: { params: { slug: string } }) {
 
       <main className="flex-1 pt-20">
         {/* Hero Section */}
-        <section className="py-16 px-6 bg-gradient-to-br from-purple-50 to-slate-50 dark:from-slate-800 dark:to-slate-900">
-          <div className="max-w-4xl mx-auto">
+        <section className="relative py-20 px-6 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-800" />
+          <div className="relative z-10 max-w-6xl mx-auto">
+            <Link href="/vibe-demo/radiance/blog" className="inline-flex items-center gap-2 text-purple-400 hover:text-purple-300 text-sm font-medium mb-6 transition-colors">
+              ← Back to Blog
+            </Link>
             <div className="mb-4">
-              <span className="text-sm font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide">
+              <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider bg-purple-900/30 px-3 py-1 rounded-full">
                 {article.category}
               </span>
             </div>
-            <h1 className="text-5xl font-bold text-slate-900 dark:text-white mb-6 leading-tight">
+            <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight max-w-4xl">
               {article.title}
             </h1>
-            <div className="flex items-center gap-4 text-slate-600 dark:text-slate-400">
+            <div className="flex items-center gap-4 text-slate-400 text-sm">
               <span>{article.date}</span>
               <span>•</span>
               <span>{article.readTime}</span>
@@ -542,20 +546,22 @@ export default function BlogArticle({ params }: { params: { slug: string } }) {
         </section>
 
         {/* Article Content */}
-        <article className="py-16 px-6 max-w-3xl mx-auto">
+        <article className="py-20 px-6 max-w-3xl mx-auto">
           <div
             className="prose prose-slate dark:prose-invert max-w-none
-              prose-h2:text-2xl prose-h2:font-bold prose-h2:text-slate-900 dark:prose-h2:text-white prose-h2:mt-8 prose-h2:mb-4
-              prose-p:text-lg prose-p:text-slate-600 dark:prose-p:text-slate-400 prose-p:leading-relaxed prose-p:mb-4
-              prose-strong:text-slate-900 dark:prose-strong:text-white
-              prose-a:text-purple-600 dark:prose-a:text-purple-400 hover:prose-a:underline"
+              prose-h2:text-2xl prose-h2:font-bold prose-h2:text-slate-900 dark:prose-h2:text-white
+              prose-h2:mt-12 prose-h2:mb-5 prose-h2:pb-2 prose-h2:border-b prose-h2:border-slate-100 dark:prose-h2:border-slate-800
+              prose-p:text-lg prose-p:text-slate-600 dark:prose-p:text-slate-400 prose-p:leading-[1.85] prose-p:mb-6
+              prose-strong:text-slate-800 dark:prose-strong:text-slate-200 prose-strong:font-semibold
+              prose-a:text-purple-600 dark:prose-a:text-purple-400 hover:prose-a:underline
+              prose-section:mb-8"
             dangerouslySetInnerHTML={{ __html: article.content }}
           />
         </article>
 
         {/* Related Articles */}
         <section className="py-16 px-6 bg-slate-50 dark:bg-slate-900/30 border-t border-slate-200 dark:border-slate-800">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-8">Related Articles</h2>
             <div className="grid md:grid-cols-2 gap-6">
               <Link
@@ -579,20 +585,22 @@ export default function BlogArticle({ params }: { params: { slug: string } }) {
         </section>
 
         {/* CTA */}
-        <section className="py-16 px-6 max-w-4xl mx-auto">
-          <div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg p-8 text-center">
-            <h3 className="text-2xl font-bold text-white mb-4">
-              Ready to apply these strategies to your brand?
-            </h3>
-            <p className="text-purple-100 mb-8 leading-relaxed max-w-2xl mx-auto">
-              Let's discuss how integrated PR, events and digital strategies can drive real results for your organisation.
-            </p>
-            <Link
-              href="/vibe-demo/radiance/lead-gen"
-              className="inline-block px-6 py-3 bg-white text-purple-600 font-semibold rounded-lg hover:bg-purple-50 transition-colors"
-            >
-              Schedule Your Free Strategy Session →
-            </Link>
+        <section className="py-16 px-6">
+          <div className="max-w-6xl mx-auto">
+            <div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg p-8 text-center">
+              <h3 className="text-2xl font-bold text-white mb-4">
+                Ready to apply these strategies to your brand?
+              </h3>
+              <p className="text-purple-100 mb-8 leading-relaxed max-w-2xl mx-auto">
+                Let&apos;s discuss how integrated PR, events and digital strategies can drive real results for your organisation.
+              </p>
+              <Link
+                href="/vibe-demo/radiance/lead-gen"
+                className="inline-block px-6 py-3 bg-white text-purple-600 font-semibold rounded-lg hover:bg-purple-50 transition-colors"
+              >
+                Schedule Your Free Strategy Session →
+              </Link>
+            </div>
           </div>
         </section>
       </main>

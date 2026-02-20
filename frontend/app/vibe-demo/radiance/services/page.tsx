@@ -107,7 +107,7 @@ export default function ServicesPage() {
       <Header />
 
       {/* Breadcrumb */}
-      <section className="py-6 px-6 border-b border-slate-200 dark:border-slate-800 pt-24">
+      <section className="py-3 px-6 border-b border-slate-200 dark:border-slate-800 pt-24">
         <div className="max-w-6xl mx-auto">
           <Breadcrumb items={[
             { label: lang === 'zh' ? '首頁' : 'Home', href: '/vibe-demo/radiance' },
