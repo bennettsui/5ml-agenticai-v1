@@ -4,6 +4,9 @@ const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
 const zwEngine = require('./services/ziwei-chart-engine');
+const { asyncHandler, errorHandler, AppError } = require('./middleware/errorHandler');
+const ziweiValidation = require('./validation/ziweiValidation');
+const ziweiV1Router = require('./routes/v1/ziwei');
 require('dotenv').config();
 
 const app = express();
@@ -232,6 +235,11 @@ async function testService(id) {
     return { id, name: svc.name, status: 'error', latencyMs: Date.now() - start, error: err.message };
   }
 }
+
+// ==========================================
+// API V1 ROUTES (Versioned with validation)
+// ==========================================
+app.use('/api/v1/ziwei', ziweiV1Router);
 
 app.get('/api/health/services', async (req, res) => {
   const results = [];
@@ -2684,7 +2692,7 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
 const { calcBaseChart } = require('./services/ziwei-chart-engine');
 
 // POST /api/ziwei/calculate - Calculate a birth chart
-app.post('/api/ziwei/calculate', async (req, res) => {
+app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, asyncHandler(async (req, res) => {
   try {
     const { lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch, gender, name } = req.body;
 
@@ -2739,7 +2747,7 @@ app.post('/api/ziwei/calculate', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // GET /api/ziwei/charts - List saved charts
 app.get('/api/ziwei/charts', async (req, res) => {
@@ -2800,7 +2808,7 @@ app.get('/api/ziwei/charts/:id', async (req, res) => {
 });
 
 // POST /api/ziwei/interpret - Generate interpretations for a chart
-app.post('/api/ziwei/interpret', async (req, res) => {
+app.post('/api/ziwei/interpret', ziweiValidation.validateChartInterpretation, asyncHandler(async (req, res) => {
   try {
     const { chart, chartId, consensusLevel = 'consensus' } = req.body;
 
@@ -2861,7 +2869,7 @@ app.post('/api/ziwei/interpret', async (req, res) => {
       details: error.message
     });
   }
-});
+}));
 
 // ==========================================
 // Step 4: Enhanced Interpretation with DeepSeek LLM
@@ -3368,6 +3376,9 @@ const server = http.createServer(app);
 
 // Initialize WebSocket server
 wsServer.initialize(server);
+
+// Global error handler middleware (must be last)
+app.use(errorHandler);
 
 server.listen(port, '0.0.0.0', async () => {
   console.log(`
