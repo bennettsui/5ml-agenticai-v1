@@ -5,6 +5,7 @@ import {
   Image, Film, Sparkles, FileText, CheckCircle2, Clock,
   ChevronRight, Plus, Trash2, Loader2, Copy, CheckCheck,
   Wand2, Play, Eye, Upload, AlertCircle, RefreshCw, Pencil, X, Save,
+  Zap, ImagePlus,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -96,6 +97,9 @@ function PromptCard({ prompt, onApprove, onEdit }: {
   const [expanded, setExpanded] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState('');
   const img = prompt.prompt_json?.image;
   const vid = prompt.prompt_json?.video;
 
@@ -103,6 +107,22 @@ function PromptCard({ prompt, onApprove, onEdit }: {
   const [editPos, setEditPos] = useState(img?.positive || '');
   const [editNeg, setEditNeg] = useState(img?.negative || '');
   const [editVidPos, setEditVidPos] = useState(vid?.positive || '');
+
+  const handleGenerateImage = async () => {
+    setGenerating(true);
+    setGenerateError('');
+    setExpanded(true);
+    try {
+      const resp = await fetch(`/api/media/prompts/${prompt.id}/generate-image`, { method: 'POST' });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Generation failed');
+      setGeneratedImage(data.imageUrl);
+    } catch (err: unknown) {
+      setGenerateError(err instanceof Error ? err.message : 'Generation failed');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -153,6 +173,20 @@ function PromptCard({ prompt, onApprove, onEdit }: {
               className="text-[10px] px-2.5 py-1 rounded-lg bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition-colors"
             >
               Approve
+            </button>
+          )}
+          {!editMode && (
+            <button
+              onClick={handleGenerateImage}
+              disabled={generating}
+              className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors disabled:opacity-50"
+              title="Generate a preview image from this prompt"
+            >
+              {generating
+                ? <Loader2 className="w-3 h-3 animate-spin" />
+                : <Zap className="w-3 h-3" />
+              }
+              {generating ? 'Generating…' : 'Generate Image'}
             </button>
           )}
           {!editMode ? (
@@ -284,6 +318,44 @@ function PromptCard({ prompt, onApprove, onEdit }: {
             </>
           )}
 
+          {/* Generated image preview */}
+          {generateError && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {generateError}
+            </div>
+          )}
+          {generatedImage && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-violet-400 uppercase tracking-wider flex items-center gap-1">
+                <Zap className="w-3 h-3" /> Generated Preview
+              </p>
+              {generatedImage.startsWith('data:') || generatedImage.startsWith('http') ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={generatedImage}
+                  alt="Generated preview"
+                  className="w-full rounded-lg border border-slate-700/50 max-h-80 object-contain bg-slate-900"
+                />
+              ) : null}
+              <div className="flex gap-2">
+                <a
+                  href={generatedImage}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] px-2.5 py-1 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors"
+                >
+                  Open full size
+                </a>
+                <button
+                  onClick={() => setGeneratedImage(null)}
+                  className="text-[10px] px-2.5 py-1 rounded-lg text-slate-500 border border-slate-700/30 hover:text-white transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Workflow config */}
           {prompt.image_workflow_json && (
             <details className="group">
@@ -348,6 +420,8 @@ export default function MediaGenerationWorkflow() {
     vidPositive: '',
   });
   const [manualSaving, setManualSaving] = useState(false);
+  const [aiAssistDesc, setAiAssistDesc] = useState('');
+  const [aiAssisting, setAiAssisting] = useState(false);
 
   // Register asset form
   const [assetForm, setAssetForm] = useState({ type: 'image', url: '' });
@@ -476,6 +550,38 @@ export default function MediaGenerationWorkflow() {
       await selectProject(selectedProject.project.id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save prompt');
+    }
+  };
+
+  // ── AI prompt assist ─────────────────────────────────────────────────────
+  const runAiAssist = async () => {
+    if (!aiAssistDesc.trim()) return;
+    setAiAssisting(true);
+    setError('');
+    try {
+      const resp = await fetch('/api/media/prompt-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: aiAssistDesc,
+          type: manualForm.deliverable_type,
+          format: manualForm.format,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'AI assist failed');
+      setManualForm(f => ({
+        ...f,
+        positive: data.positive || f.positive,
+        negative: data.negative || f.negative,
+      }));
+      if (manualForm.deliverable_type === 'video' && data.positive) {
+        setManualForm(f => ({ ...f, vidPositive: data.positive }));
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'AI assist failed');
+    } finally {
+      setAiAssisting(false);
     }
   };
 
@@ -886,6 +992,31 @@ Mood: Aspirational, high-energy summer.`}
                             <option value="custom">Custom</option>
                           </select>
                         </div>
+                      </div>
+
+                      {/* AI Prompt Assist */}
+                      <div className="rounded-lg bg-violet-500/5 border border-violet-500/20 p-3 space-y-2">
+                        <p className="text-[11px] font-semibold text-violet-400 flex items-center gap-1.5">
+                          <Zap className="w-3 h-3" /> AI Prompt Generator
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            value={aiAssistDesc}
+                            onChange={e => setAiAssistDesc(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runAiAssist(); } }}
+                            placeholder="Describe what you want, e.g. 'product shot of running shoes on white background'"
+                            className="flex-1 bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-violet-500/50"
+                          />
+                          <button
+                            onClick={runAiAssist}
+                            disabled={aiAssisting || !aiAssistDesc.trim()}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30 transition-colors text-sm disabled:opacity-50 whitespace-nowrap"
+                          >
+                            {aiAssisting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                            {aiAssisting ? 'Writing…' : 'Write Prompt'}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-600">AI will fill in the positive and negative prompts below</p>
                       </div>
 
                       <div className="space-y-1">

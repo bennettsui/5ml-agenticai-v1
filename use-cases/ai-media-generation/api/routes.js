@@ -3,6 +3,7 @@
 
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk').default;
+const axios = require('axios');
 const { pool } = require('../../../db');
 const MediaGenerationOrchestrator = require('../agents/orchestrator');
 
@@ -445,6 +446,113 @@ router.post('/chat', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('[MediaGeneration] chat error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/media/prompt-assist — AI expands a plain description into a full SD prompt
+router.post('/prompt-assist', async (req, res) => {
+  try {
+    const { description, type = 'image', style, format } = req.body;
+    if (!description) return res.status(400).json({ error: '"description" is required' });
+
+    const orch = getOrchestrator();
+    const systemPrompt = `You are a Stable Diffusion / SDXL prompt engineer.
+Given a plain-English description, produce a detailed, optimised prompt.
+Return ONLY JSON with this schema (no markdown, no explanation):
+{
+  "positive": "full detailed SD positive prompt",
+  "negative": "negative prompt (always include: worst quality, low quality, blurry, deformed, watermark, text, signature)",
+  "suggestedSampler": "DPM++ 2M Karras",
+  "suggestedCfg": 7,
+  "suggestedSteps": 25
+}`;
+    const userContent = `Create an SD prompt for: "${description}"${style ? `\nStyle: ${style}` : ''}${format ? `\nFormat: ${format}` : ''}${type === 'video' ? '\nThis is for video/AnimateDiff — add motion descriptors at the end of the positive prompt.' : ''}`;
+
+    const resp = await orch.anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      messages: [{ role: 'user', content: userContent }],
+      system: systemPrompt,
+    });
+
+    const text = resp.content[0]?.text || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AI did not return a valid prompt JSON');
+    const result = JSON.parse(jsonMatch[0]);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[MediaGeneration] prompt-assist error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/media/prompts/:id/generate-image — generate a preview image via DALL-E or HF
+router.post('/prompts/:id/generate-image', async (req, res) => {
+  try {
+    const promptResult = await pool.query(
+      'SELECT * FROM media_prompts WHERE id = $1',
+      [req.params.id]
+    );
+    const record = promptResult.rows[0];
+    if (!record) return res.status(404).json({ error: 'Prompt not found' });
+
+    const positivePrompt = record.prompt_json?.image?.positive || record.prompt_json?.video?.positive;
+    if (!positivePrompt) return res.status(400).json({ error: 'No positive prompt found on this record' });
+
+    // Try DALL-E 3 (OpenAI) if key is available
+    if (process.env.OPENAI_API_KEY) {
+      const dalleResp = await axios.post(
+        'https://api.openai.com/v1/images/generations',
+        {
+          model: 'dall-e-3',
+          prompt: positivePrompt.substring(0, 4000),
+          n: 1,
+          size: '1024x1024',
+          response_format: 'url',
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 60000,
+        }
+      );
+      const imageUrl = dalleResp.data?.data?.[0]?.url;
+      if (!imageUrl) throw new Error('DALL-E did not return an image URL');
+
+      // Register as asset
+      const asset = await getOrchestrator().registerAsset(record.project_id, {
+        promptId: record.id,
+        type: 'image',
+        url: imageUrl,
+        metadata: { generator: 'dall-e-3', auto: true },
+      });
+      return res.json({ success: true, imageUrl, asset, provider: 'dall-e-3' });
+    }
+
+    // Fallback: HuggingFace free inference (SDXL-Turbo — no token needed for limited use)
+    const hfResp = await axios.post(
+      'https://api-inference.huggingface.co/models/stabilityai/sdxl-turbo',
+      { inputs: positivePrompt.substring(0, 500) },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        responseType: 'arraybuffer',
+        timeout: 60000,
+      }
+    );
+    if (!hfResp.data || hfResp.data.byteLength < 1000) {
+      throw new Error('Image generation failed — configure OPENAI_API_KEY for DALL-E, or run ComfyUI locally.');
+    }
+    const b64 = Buffer.from(hfResp.data).toString('base64');
+    const dataUrl = `data:image/jpeg;base64,${b64}`;
+    res.json({ success: true, imageUrl: dataUrl, provider: 'huggingface-sdxl-turbo' });
+  } catch (err) {
+    if (err.response?.status === 503) {
+      return res.status(503).json({ error: 'Image model is loading (HuggingFace cold start). Try again in 20s, or configure OPENAI_API_KEY for DALL-E.' });
+    }
+    console.error('[MediaGeneration] generate-image error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
