@@ -4,8 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight, CheckCircle, ChevronDown, ChevronUp,
-  ArrowLeft, Send, Clock, Users, Zap, TrendingUp,
+  Send, Clock, Users,
 } from 'lucide-react';
+import RecruitNav from './RecruitNav';
 
 const API_BASE = (() => {
   if (typeof window === 'undefined') return '';
@@ -154,31 +155,62 @@ function UseCaseCard({ uc, index }: { uc: UseCase; index: number }) {
       </button>
       {open && (
         <div className="border-t border-slate-100 px-6 pb-6">
-          {/* Workflow */}
-          <div className="mt-5 mb-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">AI 工作流程</p>
-            <div className="space-y-0">
+          {/* Workflow — horizontal flowchart (desktop), vertical list (mobile) */}
+          <div className="mt-5 mb-6">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-5">AI 工作流程</p>
+
+            {/* Mobile: vertical steps */}
+            <div className="flex flex-col gap-0 sm:hidden">
               {uc.workflow.map((step, i) => (
-                <div key={i} className="flex gap-3 pb-4">
+                <div key={i} className="flex gap-3">
                   <div className="flex flex-col items-center flex-none">
-                    <div className="w-8 h-8 rounded-full bg-blue-50 border-2 border-blue-200 flex items-center justify-center text-xs font-bold text-blue-700">
-                      {i + 1}
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-base shadow-sm">
+                      {step.icon}
                     </div>
-                    {i < uc.workflow.length - 1 && <div className="w-0.5 flex-1 bg-blue-100 mt-1" />}
+                    {i < uc.workflow.length - 1 && (
+                      <div className="w-0.5 h-6 bg-blue-100 my-1" />
+                    )}
                   </div>
-                  <div className="pt-1 pb-2">
-                    <p className="text-sm font-semibold text-slate-800">{step.icon} {step.title}</p>
-                    <p className="text-sm text-slate-500 mt-0.5 leading-relaxed">{step.detail}</p>
+                  <div className={`pb-5 pt-1.5 ${i < uc.workflow.length - 1 ? '' : ''}`}>
+                    <p className="text-sm font-semibold text-slate-800 leading-none mb-1">{step.title}</p>
+                    <p className="text-xs text-slate-500 leading-relaxed">{step.detail}</p>
                   </div>
                 </div>
               ))}
             </div>
+
+            {/* Desktop: horizontal flowchart */}
+            <div className="hidden sm:flex items-start gap-0 overflow-x-auto pb-2">
+              {uc.workflow.map((step, i) => (
+                <div key={i} className="flex items-start flex-none">
+                  {/* Step card */}
+                  <div className="flex flex-col items-center w-36 lg:w-40">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-2xl shadow-md mb-3">
+                      {step.icon}
+                    </div>
+                    <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold mb-2">
+                      {i + 1}
+                    </div>
+                    <p className="text-xs font-semibold text-slate-800 text-center leading-snug mb-1">{step.title}</p>
+                    <p className="text-[11px] text-slate-500 text-center leading-relaxed">{step.detail}</p>
+                  </div>
+                  {/* Arrow connector */}
+                  {i < uc.workflow.length - 1 && (
+                    <div className="flex items-center mt-5 mx-1 flex-none">
+                      <div className="w-6 h-0.5 bg-blue-200" />
+                      <div className="w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-l-[8px] border-l-blue-300" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
+
           {/* KPIs */}
-          <div className="grid grid-cols-3 gap-3 bg-slate-50 rounded-xl p-4">
+          <div className="grid grid-cols-3 gap-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 border border-blue-100">
             {uc.kpis.map((kpi, i) => (
               <div key={i} className="text-center">
-                <p className="text-lg font-extrabold text-slate-900">{kpi.value}</p>
+                <p className="text-lg font-extrabold text-blue-700">{kpi.value}</p>
                 <p className="text-xs text-slate-500 mt-0.5">{kpi.label}</p>
               </div>
             ))}
@@ -194,22 +226,7 @@ function UseCaseCard({ uc, index }: { uc: UseCase; index: number }) {
 export default function ModulePage({ config }: { config: ModuleConfig }) {
   return (
     <div className="min-h-screen bg-white font-sans">
-      {/* Nav */}
-      <nav className="fixed top-0 inset-x-0 z-50 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/vibe-demo/recruitai" className="flex items-center gap-2 text-slate-500 hover:text-blue-600 transition-colors text-sm font-medium">
-            <ArrowLeft className="w-4 h-4" /> RecruitAI Studio
-          </Link>
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:block text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              {config.moduleEmoji} {config.moduleName}
-            </span>
-            <a href="#lead-form" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors">
-              免費評估
-            </a>
-          </div>
-        </div>
-      </nav>
+      <RecruitNav />
 
       {/* Hero */}
       <section className={`pt-16 bg-gradient-to-br ${config.heroGrad} text-white`}>
@@ -337,7 +354,7 @@ export default function ModulePage({ config }: { config: ModuleConfig }) {
 
       {/* Footer */}
       <footer className="py-8 px-4 bg-slate-900 text-center">
-        <p className="text-slate-500 text-sm mb-2">© 2024 RecruitAI Studio by 5 Miles Lab</p>
+        <p className="text-slate-500 text-sm mb-2">© 2026 RecruitAI Studio by 5 Miles Lab</p>
         <Link href="/vibe-demo/recruitai" className="text-blue-400 hover:text-blue-300 text-sm">返回主頁 →</Link>
       </footer>
     </div>

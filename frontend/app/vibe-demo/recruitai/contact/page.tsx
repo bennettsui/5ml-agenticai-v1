@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Send, CheckCircle, Mail, Phone, MessageCircle, MapPin, Clock } from 'lucide-react';
+import { Send, CheckCircle, Mail, Phone, MessageCircle, MapPin, Clock } from 'lucide-react';
+import RecruitNav from '../components/RecruitNav';
 
 const API_BASE = (() => {
   if (typeof window === 'undefined') return '';
@@ -53,15 +54,7 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-screen bg-white font-sans">
-      {/* Nav */}
-      <nav className="fixed top-0 inset-x-0 z-50 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/vibe-demo/recruitai" className="flex items-center gap-2 text-slate-500 hover:text-blue-600 transition-colors text-sm font-medium">
-            <ArrowLeft className="w-4 h-4" /> RecruitAI Studio
-          </Link>
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">聯絡我們</span>
-        </div>
-      </nav>
+      <RecruitNav />
 
       <div className="pt-16">
         {/* Hero */}
