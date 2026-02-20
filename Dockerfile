@@ -41,6 +41,8 @@ COPY swagger.js .
 COPY agents/ ./agents/
 COPY lib/ ./lib/
 COPY routes/ ./routes/
+COPY middleware/ ./middleware/
+COPY validation/ ./validation/
 COPY services/ ./services/
 COPY utils/ ./utils/
 COPY tools/ ./tools/
