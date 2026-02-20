@@ -4869,6 +4869,42 @@ router.get('/fb-ig-page-data', async (req, res) => {
 });
 
 /**
+ * GET /meta/pages
+ * Discover Pages accessible by the current Meta user token
+ */
+router.get('/meta/pages', async (req, res) => {
+  try {
+    const token = req.query.access_token || process.env.META_ACCESS_TOKEN;
+    if (!token) {
+      return res.status(400).json({ error: 'META_ACCESS_TOKEN is required (set as env var or pass as ?access_token=)' });
+    }
+
+    const url =
+      `${META_API_BASE}/me/accounts?` +
+      new URLSearchParams({
+        fields: [
+          'id',
+          'name',
+          'category',
+          'category_list',
+          'fan_count',
+          'followers_count',
+          'instagram_business_account',
+        ].join(','),
+        limit: '100',
+        access_token: token,
+      }).toString();
+
+    const data = await fetchMetaJson(url, 'page_discovery');
+    res.json({ success: true, data: data.data || [] });
+  } catch (error) {
+    const meta = error && error.meta ? error.meta : undefined;
+    console.error('[Meta Page Discovery] Error:', error.message, meta ? meta : '');
+    res.status(500).json({ error: error.message, meta });
+  }
+});
+
+/**
  * GET /debug/llm-status
  * Diagnostic endpoint to check LLM API key status
  */
