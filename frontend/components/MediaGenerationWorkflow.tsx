@@ -481,6 +481,37 @@ function PromptCard({ prompt, onApprove, onEdit }: {
         </div>
       </div>
 
+      {/* ── Always-visible: progress + error (outside collapsed body) ── */}
+      {generating && (
+        <div className="border-t border-violet-500/10 px-4 py-4 space-y-3 bg-slate-900/50">
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-4 h-4 text-violet-400 animate-spin shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-white font-medium">{generatingStep || 'Starting generation…'}</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Elapsed: <span className="text-slate-300 font-mono">{elapsed}s</span>
+                <span className="mx-2 text-slate-700">·</span>
+                <span className="text-violet-300">{IMAGE_MODELS.find(m => m.id === selectedModel)?.label || selectedModel}</span>
+              </p>
+            </div>
+          </div>
+          <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-violet-600 to-rose-500 rounded-full transition-all duration-1000"
+              style={{ width: `${Math.min(95, 5 + (elapsed / 90) * 90)}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-slate-600">Downloading from Pollinations.ai server-side — auto-updates when ready</p>
+        </div>
+      )}
+
+      {generateError && !generating && (
+        <div className="border-t border-red-500/20 px-4 py-3 flex items-start gap-2 bg-red-500/5 text-red-400 text-xs">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>{generateError}</span>
+        </div>
+      )}
+
       {/* Expanded body */}
       {expanded && (
         <div className="p-4 space-y-4">
@@ -617,43 +648,6 @@ function PromptCard({ prompt, onApprove, onEdit }: {
             </>
           )}
 
-          {/* Generated image preview */}
-          {generateError && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {generateError}
-            </div>
-          )}
-
-          {/* Live progress skeleton while generating */}
-          {generating && (
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold text-violet-400 uppercase tracking-wider flex items-center gap-1">
-                <Zap className="w-3 h-3" /> Image Generation
-              </p>
-              <div className="w-full rounded-xl bg-slate-900 border border-violet-500/20 p-5 flex flex-col items-center gap-4">
-                <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
-                <div className="text-center space-y-1 w-full">
-                  <p className="text-sm text-white font-medium">{generatingStep || 'Starting…'}</p>
-                  <p className="text-xs text-slate-500">
-                    Elapsed: <span className="text-slate-300 font-mono">{elapsed}s</span>
-                    <span className="mx-2 text-slate-700">·</span>
-                    Model: <span className="text-violet-300">{IMAGE_MODELS.find(m => m.id === selectedModel)?.label || selectedModel}</span>
-                  </p>
-                </div>
-                {/* Animated progress bar */}
-                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-violet-600 to-rose-500 rounded-full transition-all duration-1000"
-                    style={{ width: `${Math.min(95, 5 + (elapsed / 90) * 90)}%` }}
-                  />
-                </div>
-                <p className="text-[10px] text-slate-600 text-center">
-                  Pollinations.ai renders server-side — typically 20–60 s. Page will update automatically.
-                </p>
-              </div>
-            </div>
-          )}
-
           {generatedImage && (
             <div className="space-y-2">
               <p className="text-[11px] font-semibold text-violet-400 uppercase tracking-wider flex items-center gap-1">
@@ -706,19 +700,6 @@ function PromptCard({ prompt, onApprove, onEdit }: {
                   Clear
                 </button>
               </div>
-            </div>
-          )}
-
-          {/* Image Generation Status */}
-          {img && (
-            <div className="mt-3 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
-              <p className="text-[10px] font-semibold text-amber-300 uppercase tracking-wide mb-2">⚙️ Image Generation</p>
-              <p className="text-xs text-amber-200 mb-2">
-                {prompt.image_workflow_json ? '✓ Workflow configured - Ready to generate' : '○ Awaiting generation'}
-              </p>
-              <button className="text-[10px] px-2.5 py-1 rounded-lg bg-amber-600/20 text-amber-400 border border-amber-500/30 hover:bg-amber-600/30 transition-colors">
-                {prompt.image_workflow_json ? 'Regenerate Image' : 'Generate Image'}
-              </button>
             </div>
           )}
 
