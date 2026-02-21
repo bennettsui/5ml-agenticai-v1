@@ -1,3 +1,5 @@
+require('./instrument.js');
+
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs');

@@ -35,6 +35,7 @@ WORKDIR /usr/src/app
 
 # Copy application code
 COPY index.js .
+COPY instrument.js .
 COPY webhook.js .
 COPY db.js .
 COPY swagger.js .
