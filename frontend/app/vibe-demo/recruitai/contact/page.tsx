@@ -19,6 +19,7 @@ export default function ContactPage() {
   const [form, setForm] = useState({
     name: '',
     email: '',
+    phone: '',
     company: '',
     headcount: '',
     industry: '',
@@ -173,15 +174,27 @@ export default function ContactPage() {
                           </div>
                         </div>
 
-                        {/* Company */}
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">公司名稱</label>
-                          <input
-                            value={form.company}
-                            onChange={e => set('company', e.target.value)}
-                            placeholder="ABC 有限公司"
-                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-sm"
-                          />
+                        {/* Phone + Company */}
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">手機號碼</label>
+                            <input
+                              type="tel"
+                              value={form.phone}
+                              onChange={e => set('phone', e.target.value)}
+                              placeholder="+852 XXXX XXXX"
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">公司名稱</label>
+                            <input
+                              value={form.company}
+                              onChange={e => set('company', e.target.value)}
+                              placeholder="ABC 有限公司"
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-sm"
+                            />
+                          </div>
                         </div>
 
                         {/* Industry + Headcount */}
