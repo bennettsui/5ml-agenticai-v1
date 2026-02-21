@@ -55,7 +55,7 @@ export default function ZiweiPage() {
     { id: 'charts',       label: '✨ Charts',      icon: Sparkles },
     { id: 'analysis',     label: '🔍 Analysis',   icon: Brain },
     { id: 'predictions',  label: '🔮 Predictions',icon: TrendingUp },
-    { id: 'knowledge',    label: '📚 Knowledge',  icon: BookOpen },
+    { id: 'knowledge',    label: '🧠 Intelligence', icon: BookOpen },
     { id: 'celebrity',    label: '⭐ Celebrity',  icon: Star },
     { id: 'blog',         label: '📝 Blog',       icon: Newspaper },
   ];
@@ -136,7 +136,7 @@ export default function ZiweiPage() {
                     with Empirical Accuracy
                   </span>
                 </h2>
-                <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-10">
+                <p className="text-lg text-slate-400 max-w-3xl mx-auto mb-10">
                   Three-agent system for calculating 排盤 (birth charts), generating AI interpretations,
                   and tracking rule accuracy across traditional Chinese astrology with empirical validation.
                 </p>
@@ -153,7 +153,7 @@ export default function ZiweiPage() {
                     className={`inline-flex items-center gap-2 px-6 py-3 ${P.ghostBtn} rounded-xl font-medium transition-colors`}
                   >
                     <BookOpen className="w-4 h-4" />
-                    Knowledge Base
+                    Ziwei Intelligence
                   </button>
                 </div>
               </section>
