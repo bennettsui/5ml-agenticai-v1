@@ -15,7 +15,6 @@ import ZiweiKnowledgeManagement from '@/components/ZiweiKnowledgeManagement';
 import ZiweiCelebrityValidation from '@/components/ZiweiCelebrityValidation';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import ZiweiTabErrorBoundary from '@/components/ZiweiTabErrorBoundary';
-import { BirthData } from '@/types/ziwei';
 
 // ── Purple theme tokens ──────────────────────────────────────────────────────
 const P = {
@@ -47,32 +46,9 @@ export default function ZiweiPage() {
     return p && valid.includes(p) ? p : 'overview';
   };
   const [activeTab, setActiveTab] = useState<ZiweiTab>(getInitialTab());
-  const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleGenerate = async (birthData: BirthData) => {
-    setIsGenerating(true);
-    try {
-      await fetch('/api/ziwei/calculate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lunarYear: birthData.yearGregorian,
-          lunarMonth: birthData.monthLunar,
-          lunarDay: birthData.dayLunar,
-          hourBranch: birthData.hour,
-          gender: birthData.gender || 'M',
-          name: birthData.name || '',
-          placeOfBirth: birthData.location || '',
-        }),
-      });
-      // After generation, navigate to analysis tab
-      setActiveTab('analysis');
-    } catch (err) {
-      console.error('Generation error:', err);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
+  // Called by GenerationPanel after a successful chart save + generate
+  const handleGenerate = () => setActiveTab('analysis');
 
   const tabs: { id: ZiweiTab; label: string; icon: typeof Activity }[] = [
     { id: 'overview',     label: 'Overview',      icon: Activity },
@@ -372,7 +348,7 @@ export default function ZiweiPage() {
           {/* ============================================================ */}
           {activeTab === 'charts' && (
             <ZiweiTabErrorBoundary tabName="Charts">
-              <GenerationPanel onGenerate={handleGenerate} isLoading={isGenerating} />
+              <GenerationPanel onGenerate={handleGenerate} />
             </ZiweiTabErrorBoundary>
           )}
 
