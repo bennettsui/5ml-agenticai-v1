@@ -51,12 +51,12 @@ ZIWEI_SYSTEM_STARS = {
 # 天府系順布: 天府為錨點，太陰起一順數，依次為貪狼、巨門、天相、天梁、七殺，破軍在+10位
 TIANFU_SYSTEM_STARS = {
     "天府": 0,      # Anchor star
-    "太陰": 1,      # Clockwise 1 (順布)
-    "貪狼": 2,      # Clockwise 2
-    "巨門": 3,      # Clockwise 3
-    "天相": 4,      # Clockwise 4
-    "天梁": 5,      # Clockwise 5
-    "七殺": 6,      # Clockwise 6
+    "太陰": -1,     # Counter-clockwise 1 from 天府 (逆布)
+    "貪狼": -2,     # Counter-clockwise 2
+    "巨門": 1,      # Clockwise 1 (順布)
+    "天相": 2,      # Clockwise 2
+    "天梁": 3,      # Clockwise 3
+    "七殺": 6,      # Clockwise 6 (opposite 天府)
     "破軍": 10      # Clockwise 10
 }
 
@@ -186,55 +186,45 @@ FIVE_TIGER_ESCAPING = {
 # Based on the 60 Jiazi Nayin system
 # https://zh.wikipedia.org/wiki/納音五行
 NAYIN_TO_BUREAU = {
-    # 水二局 (Water/Metal - Bureau 2)
-    "甲子": 2, "乙丑": 2,  # 海中金 (Sea Gold)
-    "壬寅": 2, "癸卯": 2,  # 金箔金 (Gold Foil)
-    "壬申": 2, "癸酉": 2,  # 劍鋒金 (Sword Metal)
-    "庚申": 2, "辛酉": 2,  # 石榴木 -> Earth/Water
+    # 水二局 (Bureau 2) — 7 Nayin pairs
+    "甲子": 2, "乙丑": 2,  # 海中金 (special case: Gold nayin → Bureau 2)
+    "丙子": 2, "丁丑": 2,  # 澗下水
+    "甲申": 2, "乙酉": 2,  # 泉中水
+    "壬辰": 2, "癸巳": 2,  # 長流水
+    "丙午": 2, "丁未": 2,  # 天河水
+    "甲寅": 2, "乙卯": 2,  # 大溪水
+    "壬戌": 2, "癸亥": 2,  # 大海水
 
-    # 木三局 (Wood - Bureau 3)
-    "甲寅": 3, "乙卯": 3,  # 大溪水 -> Wood/Water mix
-    "丙寅": 6,  # 爐中火 (Furnace Fire) - Bureau 6
+    # 木三局 (Bureau 3) — 6 Nayin pairs
+    "戊辰": 3, "己巳": 3,  # 大林木
+    "壬午": 3, "癸未": 3,  # 楊柳木
+    "庚寅": 3, "辛卯": 3,  # 松柏木
+    "戊戌": 3, "己亥": 3,  # 平地木
+    "壬子": 3, "癸丑": 3,  # 桑柘木
+    "庚申": 3, "辛酉": 3,  # 石榴木
 
-    # 金四局 (Metal - Bureau 4)
-    "甲申": 4, "乙酉": 4,  # 泉中水 -> Metal/Water
-    "丙申": 4, "丁酉": 4,  # 山下火 -> Metal/Fire
-    "戊申": 4, "己酉": 4,  # 大驛土 -> Metal/Earth
-    "辛亥": 4,  # 鈎釧金 (Hook-Ring Metal) - Bureau 4
+    # 金四局 (Bureau 4) — 5 Nayin pairs
+    "壬申": 4, "癸酉": 4,  # 劍鋒金
+    "庚辰": 4, "辛巳": 4,  # 白蠟金
+    "甲午": 4, "乙未": 4,  # 沙中金
+    "壬寅": 4, "癸卯": 4,  # 金箔金
+    "庚戌": 4, "辛亥": 4,  # 釵釧金
 
-    # 土五局 (Earth - Bureau 5)
-    "丙辰": 5, "丁巳": 5,  # 沙中土 (Sand Earth)
-    "戊辰": 5, "己巳": 5,  # 大林木 -> Earth/Wood mix
-    "辛未": 5,  # 路旁土 (Roadside Earth) - Bureau 5
-    "己卯": 5,  # 城頭土 (City Wall Earth) - Bureau 5
-    "己亥": 5,  # 平地木 -> Earth/Wood
+    # 土五局 (Bureau 5) — 6 Nayin pairs
+    "庚午": 5, "辛未": 5,  # 路旁土
+    "戊寅": 5, "己卯": 5,  # 城頭土
+    "丙戌": 5, "丁亥": 5,  # 屋上土
+    "庚子": 5, "辛丑": 5,  # 壁上土
+    "戊申": 5, "己酉": 5,  # 大驛土
+    "丙辰": 5, "丁巳": 5,  # 沙中土
 
-    # 火六局 (Fire - Bureau 6)
-    "丁丑": 6,  # 洞下水 -> Fire/Water
-    "丁未": 6,  # 天河水 -> Fire/Water
-    "丁卯": 6,  # 爐中火 variant
-    "己未": 6,  # 天上火 (Heaven Fire)
-    "戊寅": 6,  # 城頭土 -> Fire variant
-
-    # Additional complete mappings for all 60 combinations
-    "壬辰": 2,  # 長流水 (Flowing Water) - Bureau 2
-    "癸巳": 2,  # 長流水
-    "甲午": 6,  # 沙中金 -> Fire variant
-    "乙未": 6,  # 沙中金
-    "庚子": 2,  # 壁上土 -> Water variant
-    "辛丑": 2,  # 壁上土
-    "甲辰": 5,  # 覆燈火 -> Earth/Fire
-    "乙巳": 5,  # 覆燈火
-    "丙午": 6,  # 天河水 variant
-    "丁未": 6,  # 天河水
-    "戊午": 6,  # 天上火
-    "己未": 6,  # 天上火
-    "庚寅": 3,  # 松柏木 (Pine Wood)
-    "辛卯": 3,  # 松柏木
-    "庚戌": 3,  # 釵釧金 variant
-    "辛亥": 4,  # 鈎釧金 (Hook-Ring Metal)
-    "甲申": 4,  # 泉中水
-    "乙酉": 4,  # 泉中水
+    # 火六局 (Bureau 6) — 6 Nayin pairs
+    "丙寅": 6, "丁卯": 6,  # 爐中火
+    "甲戌": 6, "乙亥": 6,  # 山頭火
+    "戊子": 6, "己丑": 6,  # 霹靂火
+    "甲辰": 6, "乙巳": 6,  # 覆燈火
+    "丙申": 6, "丁酉": 6,  # 山下火
+    "戊午": 6, "己未": 6,  # 天上火
 }
 
 # Tianfu position mapping (天府位置對應表)
@@ -378,19 +368,11 @@ def calculate_five_element_bureau(stem_branch: str) -> int:
     Returns:
         Bureau number (2-6)
     """
-    # Simplified: would need complete NAYIN_TO_BUREAU mapping
-    # For now, return based on stem-branch patterns
     if stem_branch in NAYIN_TO_BUREAU:
         return NAYIN_TO_BUREAU[stem_branch]
 
-    # Fallback calculation based on stem-branch cycle
-    # This would need the complete 60-year mapping
-    stem_index = STEMS.index(stem_branch[0])
-    branch_index = BRANCHES.index(stem_branch[1])
-    combined_index = (stem_index * 12 + branch_index) % 60
-
-    # Map 60-year cycle to bureaus (2-6)
-    return (combined_index % 5) + 2
+    # Should not reach here with complete 60-jiazi table; default to Bureau 2
+    return 2
 
 
 # ============================================================
@@ -745,7 +727,7 @@ def place_14_major_stars(
                 palace.major_stars = []
             palace.major_stars.append(star_name)
 
-    # TIANFU SYSTEM (8 stars — clockwise/順布 from Tianfu)
+    # TIANFU SYSTEM (8 stars — mixed direction from Tianfu; 太陰/貪狼逆, 巨門/天相/天梁順)
     for star_name, offset in TIANFU_SYSTEM_STARS.items():
         star_index = (tianfu_index + offset) % 12
         star_branch = BRANCHES[star_index]

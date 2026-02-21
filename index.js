@@ -125,10 +125,14 @@ const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAl
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
-  initDatabase().catch(err => {
-    console.error('⚠️ Database initialization failed:', err.message);
-    console.log('⚠️ App will continue running without database');
-  });
+  // Core schema first, then tender intelligence schema (auto-seeds sources if registry is empty)
+  const { initTenderSchema } = require('./services/tender-intel-service');
+  initDatabase()
+    .then(() => initTenderSchema(pool))
+    .catch(err => {
+      console.error('⚠️ Database initialization failed:', err.message);
+      console.log('⚠️ App will continue running without database');
+    });
   console.log('📊 Database initialization started');
 } else {
   console.log('⚠️ DATABASE_URL not set - running without database');
@@ -336,6 +340,43 @@ app.get('/api/health/services/:id', async (req, res) => {
   const result = await testService(req.params.id);
   if (!result) return res.status(404).json({ error: 'Unknown service' });
   res.json({ timestamp: new Date().toISOString(), service: result });
+});
+
+// ── Database status — checks schema and tender registry ───────────────────────
+app.get('/api/admin/db-status', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.json({ ok: false, error: 'DATABASE_URL not set', hint: 'Run: fly postgres attach <cluster> --app 5ml-agenticai-v1' });
+  }
+  try {
+    const tables = ['tender_source_registry', 'tenders', 'tender_evaluations',
+      'tender_decisions', 'tender_agent_run_logs', 'tender_daily_digests'];
+    const status = {};
+    for (const t of tables) {
+      try {
+        const { rows } = await pool.query(`SELECT COUNT(*) AS n FROM ${t}`);
+        status[t] = { exists: true, rows: parseInt(rows[0].n, 10) };
+      } catch (_) {
+        status[t] = { exists: false, rows: 0 };
+      }
+    }
+    // Check pgvector
+    let vectorEnabled = false;
+    try {
+      await pool.query(`SELECT 'test'::vector(3)`);
+      vectorEnabled = true;
+    } catch (_) {}
+
+    const allExist = tables.every(t => status[t].exists);
+    res.json({
+      ok: allExist,
+      databaseUrl: process.env.DATABASE_URL.replace(/:\/\/[^@]+@/, '://<credentials>@'),
+      vectorEnabled,
+      tables: status,
+      hint: allExist ? null : 'Some tables missing — restart the app with DATABASE_URL set to auto-create them',
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ==========================================
@@ -3767,9 +3808,24 @@ try {
 try {
   const tedxXinyiRoutes = require('./use-cases/tedx-xinyi/api/routes');
   app.use('/api/tedx-xinyi', tedxXinyiRoutes);
-  // Admin shortcut: /tedxxinyi/admin → upload page
-  app.get('/tedxxinyi/admin', (req, res) => res.redirect('/api/tedx-xinyi/upload'));
-  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /tedxxinyi/admin');
+  // Admin media library — password-protected
+  const ADMIN_PASS = process.env.TEDX_ADMIN_PASS || '5milesLab01@';
+  // Password check API
+  app.post('/api/tedx-xinyi/auth', express.json(), (req, res) => {
+    if (req.body?.password === ADMIN_PASS) return res.json({ ok: true, token: ADMIN_PASS });
+    res.status(401).json({ error: 'Incorrect password' });
+  });
+  // Protect media API endpoints
+  app.use('/api/tedx-xinyi/media', (req, res, next) => {
+    const token = req.headers['x-admin-token'];
+    if (token === ADMIN_PASS) return next();
+    return res.status(401).json({ error: 'Unauthorized' });
+  });
+  // Admin UI serves at /vibe-demo/tedx-xinyi/admin
+  app.get('/vibe-demo/tedx-xinyi/admin', (req, res) => res.redirect('/api/tedx-xinyi/upload'));
+  // Legacy redirect
+  app.get('/tedxxinyi/admin', (req, res) => res.redirect('/vibe-demo/tedx-xinyi/admin'));
+  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /vibe-demo/tedx-xinyi/admin');
 } catch (error) {
   console.warn('⚠️ TEDxXinyi routes not loaded:', error.message);
 }
@@ -6541,21 +6597,34 @@ app.post('/api/sme/campaign-review', async (req, res) => {
     res.end();
   });
 
-  // POST /api/tender-intel/ingest  — manual trigger (for testing)
+  // POST /api/tender-intel/ingest  — manual trigger, SSE streaming progress
+  // Manual trigger always runs all sources (skipRecentHours=0).
   app.post('/api/tender-intel/ingest', async (req, res) => {
-    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ error: 'DATABASE_URL not set' });
+    }
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const emit = (data) => {
+      try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch (_) {}
+    };
+
     try {
       scheduleRegistry.markRunning('tender-intel:daily-ingestion');
-      const summary = await tenderIntel.runIngestion(pool);
+      const summary = await tenderIntel.runIngestion(pool, emit, 0); // 0 = run all, no skip
       scheduleRegistry.markCompleted('tender-intel:daily-ingestion', {
-        result: `${summary.newRawCaptures} new captures`,
+        result: `${summary.newRawCaptures} new captures, ${summary.tendersInserted} tenders`,
         durationMs: summary.durationMs,
       });
-      res.json({ success: true, summary });
     } catch (err) {
       scheduleRegistry.markFailed('tender-intel:daily-ingestion', err.message);
-      res.status(500).json({ error: err.message });
+      emit({ type: 'error', error: err.message });
     }
+    res.end();
   });
 
   // POST /api/tender-intel/chat  — AI chat assistant used by frontend layout
