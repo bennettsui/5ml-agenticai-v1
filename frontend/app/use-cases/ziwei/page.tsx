@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight, Sparkles, CheckCircle, AlertCircle } from 'lucide-react';
 import GenerationPanel from '@/components/GenerationPanel';
 import NatalChartView from '@/components/NatalChartView';
 import { NatalChart, BirthData, ZiweiTab } from '@/types/ziwei';
@@ -16,12 +16,21 @@ export default function ZiweiPage() {
   const [activeTab, setActiveTab] = useState<MainTab>('generation');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const [currentChart, setCurrentChart] = useState<NatalChart>({
     birth: demoBirthData,
     layer: demoNatalLayer,
     calculatedAt: Date.now(),
     version: '1.0.0',
   });
+
+  // Auto-hide success notification after 3 seconds
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
 
   const handleGenerate = async (birthData: BirthData) => {
     try {
@@ -70,6 +79,7 @@ export default function ZiweiPage() {
       };
 
       setCurrentChart(newChart);
+      setSuccess(true);
       // Auto-switch to analysis tab to show the generated chart
       setActiveTab('analysis');
     } catch (err) {
@@ -143,11 +153,28 @@ export default function ZiweiPage() {
         {/* GENERATION TAB */}
         {activeTab === 'generation' && (
           <div className="space-y-6">
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-                <p className="text-red-300 text-sm">{error}</p>
+            {/* Success Notification */}
+            {success && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-green-300 text-sm font-medium">命盤生成成功</p>
+                  <p className="text-green-300/70 text-xs mt-1">已自動切換至分析頁面</p>
+                </div>
               </div>
             )}
+
+            {/* Error Notification */}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-red-300 text-sm font-medium">生成失敗</p>
+                  <p className="text-red-300/70 text-xs mt-1">{error}</p>
+                </div>
+              </div>
+            )}
+
             <GenerationPanel onGenerate={handleGenerate} isLoading={isLoading} />
           </div>
         )}
