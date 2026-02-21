@@ -35,7 +35,7 @@ function mapApiTender(t: any): Tender {
   };
   const currency = t.currency || (t.jurisdiction === 'SG' ? 'SGD' : 'HKD');
   return {
-    id:            String(t.id || t.tender_ref),
+    id:            String(t.tender_id || t.tender_ref),  // tender_id is the UUID PK
     tender_ref:    t.tender_ref || '',
     jurisdiction:  (t.jurisdiction as 'HK' | 'SG') || 'HK',
     title:         t.title || '',
@@ -49,7 +49,7 @@ function mapApiTender(t: any): Tender {
     status:        (t.status as 'open' | 'closed') || 'open',
     label:         labelMap[t.label] || 'Consider',
     overall_score: t.overall_score ?? 0,
-    source:        t.source_id || '',
+    source:        t.source_url || '',
   };
 }
 
@@ -228,10 +228,17 @@ export default function TendersPage() {
                             </span>
                           ))}
                         </div>
-                        <button className="text-xs text-teal-400 hover:text-teal-300 flex items-center gap-1 transition-colors mt-1">
-                          <ExternalLink className="w-3 h-3" />
-                          View source
-                        </button>
+                        {t.source && (
+                          <a
+                            href={t.source}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-teal-400 hover:text-teal-300 flex items-center gap-1 transition-colors mt-1"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            View on government portal
+                          </a>
+                        )}
                       </td>
                     </tr>
                   )}

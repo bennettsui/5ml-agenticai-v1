@@ -1043,8 +1043,8 @@ async function runEvaluation(pool, profileOverride) {
   try {
     const decidedResult = await pool.query(
       `SELECT DISTINCT t.agency FROM tender_decisions d
-       JOIN tenders t ON t.id = d.tender_id
-       WHERE d.action = 'track' AND t.agency IS NOT NULL`
+       JOIN tenders t ON t.tender_id = d.tender_id
+       WHERE d.decision = 'track' AND t.agency IS NOT NULL`
     );
     profile.knownAgencies = decidedResult.rows.map(r => r.agency).filter(Boolean);
   } catch (_) {}
