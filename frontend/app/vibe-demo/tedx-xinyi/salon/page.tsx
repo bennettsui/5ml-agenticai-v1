@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY } from '../components';
+import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY, WARM_AMBER } from '../components';
 
 const SPEAKER_DOMAINS = [
   { domain: 'AI 趨勢', sub: '科技與演算法的邊界' },
@@ -76,6 +76,92 @@ export default function SalonPage() {
             <p className="text-white/50 text-xs tracking-[0.2em] mt-4" lang="zh-TW">
               #2026首波沙龍論壇　#在AI時代學會看懂趨勢
             </p>
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* ==================== KEY VISUAL / POSTER ==================== */}
+      <section className="bg-neutral-950 py-20 md:py-28">
+        <div className="max-w-5xl mx-auto px-6">
+          <FadeIn>
+            <div className="flex flex-col md:flex-row items-center gap-12 md:gap-16">
+
+              {/* Poster card */}
+              <div className="w-full max-w-[300px] md:max-w-[340px] mx-auto flex-shrink-0">
+                <div className="relative rounded-2xl overflow-hidden shadow-2xl" style={{ aspectRatio: '4/5' }}>
+                  {/* nanobanana background */}
+                  <img
+                    src="/tedx-xinyi/poster-dark.png"
+                    alt="We are Becoming — TEDxXinyi 2026 key visual poster"
+                    loading="lazy"
+                    className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  {/* Gradient fallback + always-on darken at bottom for text legibility */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-[#0b1628] via-[#0f1a3a] to-black" />
+                  <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 38%, rgba(79,70,229,0.18) 0%, transparent 65%)' }} />
+                  <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/80 to-transparent" />
+
+                  {/* Text overlay */}
+                  <div className="absolute inset-0 flex flex-col justify-between p-5 z-10">
+                    {/* Top: logo */}
+                    <div className="text-center">
+                      <span className="text-white/60 text-xs font-light tracking-[0.2em] uppercase">TEDx</span>
+                      <span className="font-black text-base tracking-tight ml-0.5" style={{ color: TED_RED }}>Xinyi</span>
+                    </div>
+
+                    {/* Middle: main title + subtitle */}
+                    <div className="text-center" style={{ textShadow: '0 2px 24px rgba(0,0,0,0.9)' }}>
+                      <p className="text-white font-black text-[1.6rem] leading-tight tracking-tight mb-4">
+                        WE ARE<br />BECOMING
+                      </p>
+                      <p className="text-white/95 font-black text-base leading-snug" lang="zh-TW">
+                        你和 AI 的距離
+                      </p>
+                      <p className="text-white/95 font-black text-base leading-snug mb-3" lang="zh-TW">
+                        決定你和自己的樣子
+                      </p>
+                      <p className="text-white/35 text-[10px] tracking-wider" lang="zh-TW">
+                        #2026首波沙龍論壇　#在AI時代學會看懂趨勢
+                      </p>
+                    </div>
+
+                    {/* Bottom: date + closing */}
+                    <div className="text-center">
+                      <p className="font-black text-sm mb-0.5" style={{ color: WARM_AMBER }} lang="zh-TW">
+                        2026 / 3 / 31（二）
+                      </p>
+                      <p className="text-white/55 text-xs mb-3" lang="zh-TW">
+                        台北藝術表演中心．藍盒子
+                      </p>
+                      <p className="text-white/30 text-[10px] leading-relaxed" lang="zh-TW">
+                        在 TEDx Xinyi，一起面對我們與 AI 的未來。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="text-white text-center md:text-left">
+                <SectionLabel dark>KEY VISUAL 2026</SectionLabel>
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-6 text-white leading-tight" lang="zh-TW">
+                  站在星系邊緣，<br />看見自己。
+                </h2>
+                <p className="text-white/55 text-base leading-[1.9] mb-6" lang="zh-TW">
+                  這張主視覺試著呈現一個古老的感受：<br />
+                  站在宇宙面前，人有多小，但也多完整。<br />
+                  AI 就像那片星系——龐大、沉默、充滿資訊，<br />
+                  而我們，就在邊緣，決定要走多近。
+                </p>
+                <p className="text-white/30 text-sm leading-relaxed" lang="zh-TW">
+                  你和 AI 的距離，是技術問題，也是人的問題。<br />
+                  TEDxXinyi 2026，從這裡出發。
+                </p>
+              </div>
+
+            </div>
           </FadeIn>
         </div>
       </section>
