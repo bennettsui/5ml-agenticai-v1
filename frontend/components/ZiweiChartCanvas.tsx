@@ -2,12 +2,13 @@
 
 import { useEffect, useRef } from 'react';
 
+// Matches Python format_chart_output (snake_case)
 interface PalaceData {
-  name: string;
-  branch: string;
-  majorStars: string[];
-  transformations: string[];
-  index: number;
+  palace_id:      number;
+  palace_name:    string;
+  branch:         string;
+  major_stars:    string[];
+  transformations: Record<string, string>;
 }
 
 interface ZiweiChartCanvasProps {
@@ -98,16 +99,19 @@ export function ZiweiChartCanvas({
       const labelY = centerY + Math.sin(angle + Math.PI / 12) * labelRadius;
 
       const palace = houses[i];
-      const isLifePalace = i === lifeHouseIndex;
+      if (!palace) continue;
+      const isLifePalace = palace.palace_id === lifeHouseIndex;
+      const majorStars    = palace.major_stars ?? [];
+      const huaTypes      = Object.values(palace.transformations ?? {});
 
       // Palace name
       ctx.fillStyle = isLifePalace ? '#fbbf24' : '#cbd5e1';
       ctx.font = 'bold 12px Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(palace.name, labelX, labelY);
+      ctx.fillText(palace.palace_name, labelX, labelY);
 
-      // Branch (heavenly stem)
+      // Branch
       ctx.fillStyle = '#94a3b8';
       ctx.font = '10px Arial, sans-serif';
       ctx.fillText(palace.branch, labelX, labelY + 14);
@@ -116,34 +120,32 @@ export function ZiweiChartCanvas({
       const starsY = centerY + Math.sin(angle + Math.PI / 12) * (middleRadius - 20);
       const starsX = centerX + Math.cos(angle + Math.PI / 12) * (middleRadius - 20);
 
-      if (palace.majorStars.length > 0) {
+      if (majorStars.length > 0) {
         ctx.fillStyle = '#93c5fd';
         ctx.font = '10px Arial, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Display up to 3 stars
-        const displayStars = palace.majorStars.slice(0, 3);
-        displayStars.forEach((star, idx) => {
+        majorStars.slice(0, 3).forEach((star, idx) => {
           const offset = (idx - 1) * 12;
           ctx.fillText(star, starsX, starsY + offset);
         });
 
-        if (palace.majorStars.length > 3) {
+        if (majorStars.length > 3) {
           ctx.fillStyle = '#cbd5e1';
           ctx.font = '8px Arial, sans-serif';
-          ctx.fillText(`+${palace.majorStars.length - 3}`, starsX, starsY + 24);
+          ctx.fillText(`+${majorStars.length - 3}`, starsX, starsY + 24);
         }
       }
 
       // Transformations (small indicators)
-      if (palace.transformations.length > 0) {
+      if (huaTypes.length > 0) {
         ctx.fillStyle = '#fbbf24';
         ctx.font = '8px Arial, sans-serif';
         ctx.textAlign = 'center';
         const transY = centerY + Math.sin(angle + Math.PI / 12) * (middleRadius + 15);
         const transX = centerX + Math.cos(angle + Math.PI / 12) * (middleRadius + 15);
-        ctx.fillText(`四化: ${palace.transformations.join(',')}`, transX, transY);
+        ctx.fillText(`四化: ${huaTypes.join(',')}`, transX, transY);
       }
     }
 

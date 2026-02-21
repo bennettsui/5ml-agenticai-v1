@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, ChevronDown, TrendingUp, Heart, Briefcase, Activity, Eye, EyeOff } from 'lucide-react';
+import { Loader2, ChevronDown, TrendingUp, Heart, Briefcase, Activity, Eye, Bug } from 'lucide-react';
 import { ZiweiChartGrid } from './ZiweiChartGrid';
 import { ZiweiChartCanvas } from './ZiweiChartCanvas';
 
@@ -27,6 +27,7 @@ export default function ZiweiChartAnalysis() {
   const [activeDimension, setActiveDimension] = useState<LifeDimension>('career');
   const [expandedPalaces, setExpandedPalaces] = useState<Record<string, boolean>>({});
   const [chartViewMode, setChartViewMode] = useState<'grid' | 'circular'>('grid');
+  const [showDebug, setShowDebug] = useState(false);
 
   // Load saved charts on mount
   useEffect(() => {
@@ -145,6 +146,60 @@ export default function ZiweiChartAnalysis() {
         </div>
       )}
 
+      {/* Debug panel */}
+      <div className="rounded-xl border border-slate-700/40 bg-slate-900/40 overflow-hidden">
+        <button
+          onClick={() => setShowDebug(s => !s)}
+          className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-800/40 transition-colors"
+        >
+          <span className="flex items-center gap-1.5"><Bug className="w-3.5 h-3.5" /> Debug Info</span>
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showDebug ? 'rotate-180' : ''}`} />
+        </button>
+        {showDebug && (
+          <div className="px-4 pb-4 space-y-2 text-[11px] font-mono">
+            <div className="text-slate-400">
+              <span className="text-slate-500">charts loaded: </span>
+              <span className="text-cyan-300">{charts.length}</span>
+              <span className="text-slate-500 ml-4">selected id: </span>
+              <span className="text-cyan-300">{selectedChartId ?? 'none'}</span>
+              <span className="text-slate-500 ml-4">loading: </span>
+              <span className="text-cyan-300">{String(loading || analysisLoading)}</span>
+            </div>
+            {selectedChart && (
+              <>
+                <div className="text-slate-400">
+                  <span className="text-slate-500">base_chart keys: </span>
+                  <span className="text-emerald-300">{Object.keys(selectedChart.base_chart ?? {}).join(', ') || 'none'}</span>
+                </div>
+                <div className="text-slate-400">
+                  <span className="text-slate-500">palaces count: </span>
+                  <span className="text-emerald-300">{selectedChart.base_chart?.palaces?.length ?? 'N/A'}</span>
+                  <span className="text-slate-500 ml-4">five_element_bureau: </span>
+                  <span className="text-emerald-300">{String(selectedChart.base_chart?.five_element_bureau ?? 'N/A')}</span>
+                </div>
+                {selectedChart.base_chart?.palaces?.[0] && (
+                  <div className="text-slate-400">
+                    <span className="text-slate-500">palace[0] keys: </span>
+                    <span className="text-amber-300">{Object.keys(selectedChart.base_chart.palaces[0]).join(', ')}</span>
+                  </div>
+                )}
+                {selectedChart.base_chart?.palaces?.[0] && (
+                  <div className="text-slate-400">
+                    <span className="text-slate-500">palace[0] sample: </span>
+                    <span className="text-amber-300 break-all">
+                      {JSON.stringify(selectedChart.base_chart.palaces[0]).slice(0, 200)}
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+            {!selectedChart && !loading && !analysisLoading && (
+              <div className="text-rose-400">No chart loaded yet</div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Loading analysis */}
       {analysisLoading && (
         <div className="flex items-center justify-center py-10 gap-2">
@@ -212,12 +267,19 @@ export default function ZiweiChartAnalysis() {
           {chartViewMode === 'grid' && selectedChart?.base_chart && (
             <ZiweiChartGrid
               houses={selectedChart.base_chart.palaces || []}
-              lifeHouseIndex={0}
+              lifeHouseIndex={selectedChart.base_chart.life_palace?.palace_id ?? 0}
               personName={selectedChart.name || 'Unknown'}
-              birthDate={`${birthInfo?.lunarYear}/${birthInfo?.lunarMonth}/${birthInfo?.lunarDay}`}
-              hourBranch={birthInfo?.hourBranch || ''}
-              gender={birthInfo?.gender || ''}
-              fiveElementBureau="Unknown"
+              lunarDate={[
+                birthInfo?.lunarYear  ? `${birthInfo.lunarYear}年` : '',
+                birthInfo?.lunarMonth ? `${birthInfo.lunarMonth}月` : '',
+                birthInfo?.lunarDay   ? `${birthInfo.lunarDay}日`   : '',
+                birthInfo?.hourBranch ? `${birthInfo.hourBranch}時` : '',
+              ].filter(Boolean).join(' ')}
+              gender={birthInfo?.gender === 'M' ? '男' : birthInfo?.gender === 'F' ? '女' : '—'}
+              fiveElementBureau={selectedChart.base_chart.five_element_bureau ?? 'Unknown'}
+              lifeHouseStem={selectedChart.base_chart.life_palace?.stem}
+              lifeHouseBranch={selectedChart.base_chart.life_palace?.branch}
+              yearStemBranch={birthInfo ? `${selectedChart.gan_zhi?.yearStem ?? ''}${selectedChart.gan_zhi?.yearBranch ?? ''}` : undefined}
             />
           )}
 
@@ -228,12 +290,16 @@ export default function ZiweiChartAnalysis() {
               <div className="flex justify-center overflow-auto max-h-[600px]">
                 <ZiweiChartCanvas
                   houses={selectedChart.base_chart.palaces || []}
-                  lifeHouseIndex={0}
+                  lifeHouseIndex={selectedChart.base_chart.life_palace?.palace_id ?? 0}
                   personName={selectedChart.name || 'Unknown'}
-                  birthDate={`${birthInfo?.lunarYear}/${birthInfo?.lunarMonth}/${birthInfo?.lunarDay}`}
+                  birthDate={[
+                    birthInfo?.lunarYear  ? `${birthInfo.lunarYear}年` : '',
+                    birthInfo?.lunarMonth ? `${birthInfo.lunarMonth}月` : '',
+                    birthInfo?.lunarDay   ? `${birthInfo.lunarDay}日`   : '',
+                  ].filter(Boolean).join(' ')}
                   hourBranch={birthInfo?.hourBranch || ''}
-                  gender={birthInfo?.gender || ''}
-                  fiveElementBureau="Unknown"
+                  gender={birthInfo?.gender === 'M' ? '男' : birthInfo?.gender === 'F' ? '女' : '—'}
+                  fiveElementBureau={String(selectedChart.base_chart.five_element_bureau ?? 'Unknown')}
                   starCount={0}
                 />
               </div>
