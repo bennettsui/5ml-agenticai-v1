@@ -3,14 +3,31 @@
 import Link from 'next/link';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY, WARM_AMBER } from '../components';
 
-const SPEAKER_DOMAINS = [
-  { domain: 'AI 趨勢', sub: '科技與演算法的邊界' },
-  { domain: '情商與人性', sub: '在機器時代，成為更好的人' },
-  { domain: '法律與社會', sub: 'AI 時代的專注力與公共空間' },
-  { domain: '大腦科學', sub: 'ChatGPT 之後，人類怎麼學習' },
-  { domain: '海洋生態', sub: '碳排、環境與未來世代' },
-  { domain: '說故事力量', sub: '創意與敘事如何陪我們往前走' },
-  { domain: '飲食文化', sub: '在 AI 時代，讓一杯酒更有意識' },
+const SPEAKERS = [
+  {
+    name: '程世嘉',
+    role: 'iKala 共同創辦人暨執行長',
+    bio: 'Stanford CS 碩士、前 Google 軟體工程師。2011 年創辦 AI 跨國企業 iKala，專注 AI 技術與數位轉型。',
+    image: null,
+  },
+  {
+    name: '林東良',
+    role: '講者',
+    bio: '',
+    image: null, // TODO: add /tedx-xinyi/speakers/lin-dong-liang.jpg
+  },
+  {
+    name: '楊士毅',
+    role: '剪紙藝術家・攝影師・導演',
+    bio: '曾為 Apple 台北 101 旗艦店創作 75 公尺剪紙作品《有閒來坐》，作品橫跨公共藝術、攝影與影像導演。',
+    image: null, // TODO: add /tedx-xinyi/speakers/yang-shi-yi.jpg
+  },
+  {
+    name: '玻璃兄弟',
+    role: 'Podcast 主持人・華夏玻璃',
+    bio: 'Richard 與 Winston 兩兄弟經營家族企業華夏玻璃，同時主持商業管理與 ESG podcast「玻科客」。',
+    image: null,
+  },
 ];
 
 const VALUE_BULLETS = [
@@ -64,7 +81,7 @@ export default function SalonPage() {
           <FadeIn>
             <SectionLabel dark>SALON</SectionLabel>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-4" lang="zh-TW">
-              <span className="font-handwriting text-4xl sm:text-5xl md:text-6xl">We are Becoming</span> – AI趨勢沙龍
+              <span className="font-handwriting text-4xl sm:text-5xl md:text-6xl">We are Becoming</span> – AI時代趨勢沙龍
             </h1>
           </FadeIn>
           <FadeIn delay={200}>
@@ -257,23 +274,34 @@ export default function SalonPage() {
         </FadeIn>
         <FadeIn delay={100}>
           <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-10 max-w-3xl" lang="zh-TW">
-            我們邀請了來自 AI、法律、人文、海洋、故事創作、飲食等不同領域的講者，<br />
-            一起打開 AI 與人性、社會、環境之間的各種縫隙。
+            我們邀請了來自 AI、藝術、商業與文化等不同領域的講者，<br />
+            一起打開 AI 與人性、創造力、社會之間的各種縫隙。
           </p>
         </FadeIn>
 
-        <FadeIn delay={150}>
-          <p className="text-xs font-bold tracking-[0.2em] uppercase text-neutral-400 mb-6" lang="zh-TW">
-            橫跨領域（講者名單陸續公布）
-          </p>
-        </FadeIn>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
-          {SPEAKER_DOMAINS.map((item, i) => (
-            <FadeIn key={i} delay={i * 50}>
-              <div className="rounded-xl p-4 border border-neutral-100 hover:border-neutral-200 hover:shadow-sm transition-all h-full" style={{ backgroundColor: WARM_GRAY }}>
-                <p className="font-black text-sm mb-1" lang="zh-TW">{item.domain}</p>
-                <p className="text-neutral-400 text-xs leading-relaxed" lang="zh-TW">{item.sub}</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
+          {SPEAKERS.map((speaker, i) => (
+            <FadeIn key={i} delay={i * 80}>
+              <div className="text-center">
+                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full mx-auto mb-4 overflow-hidden bg-neutral-100 border-2 border-neutral-100">
+                  {speaker.image ? (
+                    <img
+                      src={speaker.image}
+                      alt={speaker.name}
+                      loading="lazy"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-300">
+                      <span className="text-2xl font-black text-neutral-400">{speaker.name[0]}</span>
+                    </div>
+                  )}
+                </div>
+                <p className="font-black text-base mb-1" lang="zh-TW">{speaker.name}</p>
+                <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">{speaker.role}</p>
+                {speaker.bio && (
+                  <p className="text-neutral-400 text-xs leading-relaxed mt-2 max-w-[200px] mx-auto" lang="zh-TW">{speaker.bio}</p>
+                )}
               </div>
             </FadeIn>
           ))}
@@ -281,7 +309,7 @@ export default function SalonPage() {
 
         <FadeIn delay={200}>
           <p className="text-xs text-neutral-400 mb-10" lang="zh-TW">
-            完整講者陣容將於活動前透過電子報與社群陸續公布。
+            更多講者與嘉賓陸續公布中。
           </p>
         </FadeIn>
 

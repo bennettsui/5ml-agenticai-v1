@@ -59,6 +59,7 @@ export default function SpeakersPage() {
                   <img
                     src={speaker.image}
                     alt={speaker.name}
+                    loading="lazy"
                     className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
                   />
                 </div>
@@ -69,16 +70,6 @@ export default function SpeakersPage() {
                 <div className="mt-3">
                   <p className="font-black text-sm mb-0.5" lang="zh-TW">{speaker.name}</p>
                   <p className="text-neutral-400 text-xs" lang="zh-TW">{speaker.role}</p>
-                  <span
-                    className="text-xs font-bold mt-2 inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ color: TED_RED }}
-                    lang="zh-TW"
-                  >
-                    觀看 Talk
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M5 12h14M12 5l7 7-7 7" />
-                    </svg>
-                  </span>
                 </div>
               </div>
             </FadeIn>

@@ -193,16 +193,6 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
               )}
             </Link>
           ))}
-          <Link
-            href="/vibe-demo"
-            className={`ml-3 px-3 py-1.5 text-xs rounded-full border transition-colors ${
-              showDark
-                ? 'text-white/60 border-white/20 hover:text-white hover:border-white/50'
-                : 'text-neutral-400 border-neutral-200 hover:text-neutral-700 hover:border-neutral-400'
-            }`}
-          >
-            Demo Hub
-          </Link>
         </div>
 
         {/* Mobile toggle */}
@@ -245,11 +235,6 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
               {item.label}
             </Link>
           ))}
-          <div className="px-6 pt-3 border-t border-neutral-100 mt-2">
-            <Link href="/vibe-demo" className="text-xs text-neutral-400 hover:text-neutral-600">
-              ← Demo Hub
-            </Link>
-          </div>
         </div>
       )}
     </nav>
