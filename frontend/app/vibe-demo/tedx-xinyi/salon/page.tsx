@@ -111,8 +111,8 @@ export default function SalonPage() {
                   <div className="absolute inset-0 flex flex-col justify-between p-5" style={{ zIndex: 10 }}>
                     {/* Top: logo */}
                     <div className="text-center">
-                      <span className="text-white/60 text-xs font-light tracking-[0.2em] uppercase">TEDx</span>
-                      <span className="font-black text-base tracking-tight ml-0.5" style={{ color: TED_RED }}>Xinyi</span>
+                      <span className="font-black text-base tracking-tight" style={{ color: TED_RED }}>TEDx</span>
+                      <span className="text-white/80 text-sm font-light tracking-tight ml-0.5">Xinyi</span>
                     </div>
 
                     {/* Middle: main title + subtitle */}
@@ -174,9 +174,12 @@ export default function SalonPage() {
       <Section bg="white">
         <FadeIn>
           <SectionLabel>EVENT</SectionLabel>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-8" lang="zh-TW">
-            2026Q1 TEDxXinyi <span className="font-handwriting text-3xl sm:text-4xl md:text-5xl">We are Becoming</span> – AI趨勢沙龍
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-2" lang="zh-TW">
+            <span className="font-handwriting text-3xl sm:text-4xl md:text-5xl">We are Becoming</span>
           </h2>
+          <p className="text-lg sm:text-xl md:text-2xl font-black text-neutral-600 mb-8" lang="zh-TW">
+            AI時代趨勢沙龍
+          </p>
         </FadeIn>
 
         <FadeIn delay={100}>
@@ -347,7 +350,77 @@ export default function SalonPage() {
         </FadeIn>
       </Section>
 
-      {/* ==================== BLOCK E — CTA ==================== */}
+      {/* ==================== BLOCK E — VENUE ==================== */}
+      <Section bg="white">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div>
+            <FadeIn>
+              <SectionLabel>VENUE</SectionLabel>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-6" lang="zh-TW">
+                台北表演藝術中心<br />
+                <span className="text-neutral-500">藍盒子 Blue Box</span>
+              </h2>
+            </FadeIn>
+            <FadeIn delay={150}>
+              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-6" lang="zh-TW">
+                我們刻意選擇了一個不像「會議」的場地。<br />
+                台北表演藝術中心是亞洲最具實驗精神的劇場建築之一，<br />
+                而藍盒子是其中最靈活、最親密的黑盒子劇場空間。
+              </p>
+            </FadeIn>
+            <FadeIn delay={250}>
+              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-6" lang="zh-TW">
+                當我們把 AI 的對話，從飯店會議室搬進劇場，<br />
+                空間本身就是一種態度：<br />
+                讓技術回到文化場域，讓趨勢對話發生在公共空間裡。
+              </p>
+            </FadeIn>
+            <FadeIn delay={350}>
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ backgroundColor: TED_RED }} />
+                  <p className="text-neutral-500 text-sm leading-relaxed" lang="zh-TW">
+                    <span className="font-black text-neutral-700">靈活的劇場空間</span> — 可容納 Talks、工作坊、市集與 networking 同步進行，打破單一舞台的限制
+                  </p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ backgroundColor: TED_RED }} />
+                  <p className="text-neutral-500 text-sm leading-relaxed" lang="zh-TW">
+                    <span className="font-black text-neutral-700">公共文化場域</span> — 不是封閉的企業空間，而是屬於城市的劇場，讓每一位參與者都像走進一場演出
+                  </p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ backgroundColor: TED_RED }} />
+                  <p className="text-neutral-500 text-sm leading-relaxed" lang="zh-TW">
+                    <span className="font-black text-neutral-700">沉浸式體驗</span> — 藍盒子的燈光與聲學設計，讓每一段演講、每一場對話都更有臨場感
+                  </p>
+                </div>
+              </div>
+            </FadeIn>
+          </div>
+
+          <FadeIn delay={200}>
+            <div className="space-y-4">
+              <div className="aspect-[4/3] rounded-xl overflow-hidden bg-neutral-100">
+                <img
+                  src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Taipei_Performing_Arts_Center_20220821.jpg/1280px-Taipei_Performing_Arts_Center_20220821.jpg"
+                  alt="台北表演藝術中心外觀"
+                  loading="lazy"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="rounded-xl p-5 border border-neutral-100" style={{ backgroundColor: WARM_GRAY }}>
+                <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2" lang="zh-TW">地點資訊</p>
+                <p className="font-black text-sm mb-1" lang="zh-TW">台北表演藝術中心．藍盒子（Blue Box）</p>
+                <p className="text-neutral-500 text-xs" lang="zh-TW">台北市士林區劍潭路 1 號</p>
+                <p className="text-neutral-400 text-xs mt-1" lang="zh-TW">捷運劍潭站 1 號出口步行約 5 分鐘</p>
+              </div>
+            </div>
+          </FadeIn>
+        </div>
+      </Section>
+
+      {/* ==================== BLOCK F — CTA ==================== */}
       <section className="py-20 md:py-28 text-white" style={{ backgroundColor: TED_RED }}>
         <div className="max-w-3xl mx-auto px-6 text-center">
           <FadeIn>
@@ -369,12 +442,6 @@ export default function SalonPage() {
                 lang="zh-TW"
               >
                 我有興趣加入這場沙龍
-              </button>
-              <button
-                className="px-8 py-3.5 font-bold text-sm rounded-full border-2 border-white/40 text-white/80 hover:text-white hover:border-white transition-all"
-                lang="zh-TW"
-              >
-                收到最新講者與活動更新
               </button>
             </div>
           </FadeIn>
