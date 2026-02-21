@@ -34,15 +34,16 @@ const tianfuByZiweiBranch = {
   "申": "寅", "酉": "卯", "戌": "辰", "亥": "巳"
 };
 
-// TODO: 根據實際星系表補足所有主星
+// ✅ 十四主星分布（相對紫微/天府位置，順時針為正）
+// 經典組合驗證：機梁同宮(紫微-1)、陽巨同宮(紫微-3)、紫殺同宮、武破同宮(紫微+1)
 const majorStarOffsetsFromZiwei = {
-  "紫微": 0, "天機": 1, "太陽": 2, "武曲": -1,
-  "天同": -2, "廉貞": 3
+  "紫微": 0, "天機": -1, "太陽": -3, "武曲": 1,
+  "天同": 2, "廉貞": 4
 };
 
 const majorStarOffsetsFromTianfu = {
-  "天府": 0, "太陰": -1, "貪狼": -2, "巨門": 1,
-  "天相": 2, "天梁": 3, "七殺": -3, "破軍": -4
+  "天府": 0, "太陰": 1, "貪狼": 2, "巨門": 3,
+  "天相": 4, "天梁": 5, "七殺": 6, "破軍": 7
 };
 
 // ✅ 天魁、天鉞表格（由生年天干決定）
@@ -253,8 +254,25 @@ function initializeHouses(lifeHouseAbsoluteIndex) {
   return houses;
 }
 
-function calculateFiveElementBureau(yearStem) {
-  return fiveElementBureauTable[yearStem];
+// ✅ 五虎遁年法：由年干推算寅宮起干，再順推至命宮地支，得命宮天干
+function getLifeHouseStem(yearStem, lifeHouseBranch) {
+  const yinStartStem = {
+    "甲": "丙", "己": "丙",
+    "乙": "戊", "庚": "戊",
+    "丙": "庚", "辛": "庚",
+    "丁": "壬", "壬": "壬",
+    "戊": "甲", "癸": "甲"
+  };
+  const stems = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"];
+  const startStem = yinStartStem[yearStem];
+  const startStemIndex = stems.indexOf(startStem);
+  // branchOrder starts at 寅, so branchOffset 0=寅, 1=卯, ...
+  const branchOffset = branchOrder.indexOf(lifeHouseBranch);
+  return stems[(startStemIndex + branchOffset) % 10];
+}
+
+function calculateFiveElementBureau(lifeHouseStem) {
+  return fiveElementBureauTable[lifeHouseStem];
 }
 
 function getZiweiPosition(lunarDay, bureau) {
@@ -308,7 +326,10 @@ function calcBaseChart(input) {
   const houses = initializeHouses(lifeHouseIndex);
 
   // 🔴 **Step 2: Calculate five element bureau (五行局)**
-  const fiveElementBureau = calculateFiveElementBureau(yearStem);
+  // 五行局由命宮天干決定，命宮天干以五虎遁年法從年干推算
+  const lifeHouseBranch = branchOrder[lifeHouseIndex];
+  const lifeHouseStem = getLifeHouseStem(yearStem, lifeHouseBranch);
+  const fiveElementBureau = calculateFiveElementBureau(lifeHouseStem);
 
   // 🔴 **Step 3: Place Ziwei (紫微)**
   const starPositions = {};
@@ -449,6 +470,9 @@ function calcBaseChart(input) {
     lifeHouseIndex: 0,  // Always 0 in this array structure
     bodyHouseIndex,
     fiveElementBureau,
+    lifeHouseStem,       // 命宮天干（五虎遁年法）
+    lifeHouseBranch,     // 命宮地支
+    ziweiLifeBranch,     // 紫微所在地支
     baseFourTransformations,
     starPositions,
     genderType,
