@@ -444,8 +444,10 @@ export default function RecruitAIPage() {
 
       {/* ── Hero ── */}
       <section className="pt-16">
-        <div className="py-20 px-4 bg-gradient-to-br from-blue-700 to-blue-900 text-white">
-          <div className="max-w-4xl mx-auto text-center">
+        <div className="py-32 lg:py-48 px-4 bg-gradient-to-br from-blue-700 via-blue-800 to-indigo-900 text-white relative overflow-hidden">
+          {/* subtle radial glow */}
+          <div className="absolute inset-0 pointer-events-none" style={{background:'radial-gradient(ellipse 80% 60% at 50% 40%, rgba(99,179,237,0.18) 0%, transparent 70%)'}} />
+          <div className="max-w-4xl mx-auto text-center relative z-10">
             <p className="text-xs font-semibold text-blue-200 uppercase tracking-widest mb-4">
               香港中小企 AI 自動化平台
             </p>
@@ -1297,6 +1299,69 @@ export default function RecruitAIPage() {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Carnival Teaser ── */}
+      <section className="py-20 px-4 bg-gradient-to-br from-slate-900 to-slate-950 relative overflow-hidden">
+        {/* Animated confetti dots */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {['bg-yellow-400','bg-blue-400','bg-pink-400','bg-emerald-400','bg-orange-400'].map((c, i) => (
+            <div key={i} className={`absolute rounded-full opacity-20 animate-pulse ${c}`}
+              style={{ width: 12 + i*6, height: 12 + i*6, top: `${15 + i*14}%`, left: `${8 + i*18}%`, animationDelay: `${i*0.4}s` }}
+            />
+          ))}
+        </div>
+
+        <div className="max-w-5xl mx-auto relative z-10">
+          <div className="rounded-3xl border border-yellow-400/30 bg-white/[0.03] overflow-hidden">
+            <div className="grid lg:grid-cols-2 gap-0">
+              {/* Left — text */}
+              <div className="p-10 lg:p-14 flex flex-col justify-center">
+                <div className="text-5xl mb-4 select-none">🎪</div>
+                <p className="text-xs font-bold text-yellow-400 uppercase tracking-widest mb-3">限定互動體驗</p>
+                <h2 className="text-3xl sm:text-4xl font-black text-white mb-4 leading-tight">
+                  RecruitAI
+                  <span className="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400">
+                    嘉年華 3D 世界
+                  </span>
+                </h2>
+                <p className="text-slate-400 text-lg leading-relaxed mb-8">
+                  化身機器人 RAIBOT，漫遊香港風格 3D 嘉年華場景，探索 5 個 AI 展位。
+                  叮叮電車穿梭、獅子頭舞動、AI 代理逐一揭秘——用遊戲方式了解業務自動化的真正威力。
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href="/vibe-demo/recruitai/carnival"
+                    className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-300 hover:to-orange-400 text-slate-900 font-black rounded-2xl text-lg shadow-xl shadow-yellow-400/20 hover:scale-105 transition-all duration-200"
+                  >
+                    🚀 進入 3D 世界
+                  </Link>
+                  <span className="inline-flex items-center text-slate-500 text-sm">
+                    無需下載 · 瀏覽器即玩
+                  </span>
+                </div>
+              </div>
+
+              {/* Right — feature tiles */}
+              <div className="p-8 lg:p-10 border-t lg:border-t-0 lg:border-l border-white/[0.06] flex flex-col justify-center gap-4">
+                {[
+                  { emoji: '🤖', title: 'RAIBOT 角色扮演', desc: 'WASD 或方向鍵操控 AI 機器人自由漫遊' },
+                  { emoji: '🎠', title: '5 個 AI 展位', desc: '發票忍者、客服咖啡館、BI 水晶球等主題展位' },
+                  { emoji: '🦁', title: '香港元素', desc: '叮叮電車、霓虹招牌、獅子頭舞、竹棚點綴場景' },
+                  { emoji: '🎉', title: '探索全部有驚喜', desc: '集齊 5 個展位解鎖限定慶祝動畫' },
+                ].map(f => (
+                  <div key={f.title} className="flex items-start gap-3.5 p-4 rounded-2xl bg-white/[0.04] border border-white/[0.06]">
+                    <span className="text-2xl mt-0.5 shrink-0">{f.emoji}</span>
+                    <div>
+                      <p className="text-sm font-semibold text-white mb-0.5">{f.title}</p>
+                      <p className="text-xs text-slate-400 leading-relaxed">{f.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>

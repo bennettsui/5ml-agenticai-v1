@@ -20,12 +20,42 @@ const TEAM_SIZE_OPTIONS = [
 ];
 
 const PAIN_POINTS = [
-  { id: 'invoice', label: '📄 發票 / 收據處理太費時' },
-  { id: 'customer', label: '💬 客戶服務回覆不及時' },
-  { id: 'bi', label: '📊 缺乏業務數據分析洞察' },
-  { id: 'workflow', label: '🔄 重複性工作佔用太多人手' },
-  { id: 'scale', label: '🚀 業務增長難以規模化' },
-  { id: 'cost', label: '💰 人力成本持續上升' },
+  {
+    id: 'invoice', label: '📄 發票 / 收據處理太費時',
+    module: 'business-ops', moduleLabel: '業務運營', moduleEmoji: '⚙️',
+    moduleHref: '/vibe-demo/recruitai/modules/business-ops',
+    moduleCls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-700/50',
+  },
+  {
+    id: 'customer', label: '💬 客戶服務回覆不及時',
+    module: 'customer-service', moduleLabel: '客戶服務', moduleEmoji: '💬',
+    moduleHref: '/vibe-demo/recruitai/modules/customer-service',
+    moduleCls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700/50',
+  },
+  {
+    id: 'bi', label: '📊 缺乏業務數據分析洞察',
+    module: 'analytics', moduleLabel: '業務分析', moduleEmoji: '📊',
+    moduleHref: '/vibe-demo/recruitai/modules/analytics',
+    moduleCls: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 border-indigo-200 dark:border-indigo-700/50',
+  },
+  {
+    id: 'workflow', label: '🔄 重複性工作佔用太多人手',
+    module: 'business-ops', moduleLabel: '業務運營', moduleEmoji: '⚙️',
+    moduleHref: '/vibe-demo/recruitai/modules/business-ops',
+    moduleCls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-700/50',
+  },
+  {
+    id: 'scale', label: '🚀 業務增長難以規模化',
+    module: 'growth', moduleLabel: '增長模組', moduleEmoji: '🚀',
+    moduleHref: '/vibe-demo/recruitai/modules/growth',
+    moduleCls: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-700/50',
+  },
+  {
+    id: 'cost', label: '💰 人力成本持續上升',
+    module: 'business-ops', moduleLabel: '業務運營', moduleEmoji: '⚙️',
+    moduleHref: '/vibe-demo/recruitai/modules/business-ops',
+    moduleCls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-700/50',
+  },
 ];
 
 type Step = 1 | 2 | 3;
@@ -82,7 +112,20 @@ export default function ConsultationPage() {
   };
 
   const canProceed1 = form.name && form.company && form.email;
-  const canProceed2 = form.industry && form.teamSize && form.painPoints.length > 0;
+  // Pain points are optional — only industry + team size are required for step 2
+  const canProceed2 = form.industry && form.teamSize;
+
+  // Derive recommended modules from selected pain points (deduplicated)
+  const recommendedModules = form.painPoints.length > 0
+    ? Array.from(
+        new Map(
+          form.painPoints
+            .map(id => PAIN_POINTS.find(p => p.id === id)!)
+            .filter(Boolean)
+            .map(p => [p.module, p])
+        ).values()
+      )
+    : [];
 
   if (submitted) {
     return (
@@ -114,15 +157,16 @@ export default function ConsultationPage() {
               <Users className="w-4 h-4" />
               <span>團隊規模：{form.teamSize}</span>
             </div>
-            <div className="flex items-start gap-2 text-blue-100 text-sm">
-              <Zap className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>
-                主要痛點：
-                {form.painPoints.map(id =>
-                  PAIN_POINTS.find(p => p.id === id)?.label
-                ).join('、')}
-              </span>
-            </div>
+            {form.painPoints.length > 0 && (
+              <div className="flex items-start gap-2 text-blue-100 text-sm">
+                <Zap className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>
+                  主要痛點：{form.painPoints.map(id =>
+                    PAIN_POINTS.find(p => p.id === id)?.label
+                  ).join('、')}
+                </span>
+              </div>
+            )}
           </div>
           <div className="flex gap-3 justify-center">
             <Link
@@ -365,28 +409,74 @@ export default function ConsultationPage() {
                         </div>
                       </div>
 
-                      {/* Pain points */}
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                          主要業務痛點 <span className="text-red-500">*</span>
-                          <span className="text-slate-400 font-normal ml-1">（可多選）</span>
-                        </label>
-                        <div className="grid sm:grid-cols-2 gap-2">
-                          {PAIN_POINTS.map(p => (
+                      {/* Pain points — optional */}
+                      <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-4 bg-slate-50/50 dark:bg-white/[0.02]">
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            主要業務痛點
+                            <span className="ml-2 text-xs font-normal text-slate-400 dark:text-slate-500">可選 · 選後自動推薦適合模組</span>
+                          </label>
+                          {form.painPoints.length > 0 && (
                             <button
-                              key={p.id}
                               type="button"
-                              onClick={() => togglePainPoint(p.id)}
-                              className={`text-left px-3 py-2.5 rounded-lg text-xs border transition-all ${
-                                form.painPoints.includes(p.id)
-                                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-200 border-blue-400 dark:border-blue-600'
-                                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-blue-300'
-                              }`}
+                              onClick={() => update('painPoints', [])}
+                              className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                             >
-                              {p.label}
+                              清除
                             </button>
-                          ))}
+                          )}
                         </div>
+
+                        <div className="grid sm:grid-cols-2 gap-2">
+                          {PAIN_POINTS.map(p => {
+                            const selected = form.painPoints.includes(p.id);
+                            return (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => togglePainPoint(p.id)}
+                                className={`text-left px-3 py-2.5 rounded-lg text-xs border transition-all ${
+                                  selected
+                                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-200 border-blue-400 dark:border-blue-600'
+                                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-blue-300'
+                                }`}
+                              >
+                                <div className="font-medium mb-1">{p.label}</div>
+                                {selected && (
+                                  <div className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border ${p.moduleCls}`}>
+                                    {p.moduleEmoji} {p.moduleLabel}
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Recommended modules panel */}
+                        {recommendedModules.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50">
+                            <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-2.5 uppercase tracking-wide">
+                              根據您的痛點，推薦以下模組：
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {recommendedModules.map(m => (
+                                <a
+                                  key={m.module}
+                                  href={m.moduleHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-opacity hover:opacity-80 ${m.moduleCls}`}
+                                >
+                                  {m.moduleEmoji} {m.moduleLabel}
+                                  <ChevronRight className="w-3 h-3" />
+                                </a>
+                              ))}
+                            </div>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2">
+                              點擊模組查看詳情，我們的顧問將在諮詢中重點介紹以上方案。
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -438,16 +528,30 @@ export default function ConsultationPage() {
                         <span className="text-slate-500 w-20 flex-shrink-0">團隊：</span>
                         <span className="text-slate-900 dark:text-white font-medium">{form.teamSize}</span>
                       </div>
-                      <div className="flex gap-2 text-sm">
-                        <span className="text-slate-500 w-20 flex-shrink-0">痛點：</span>
-                        <div className="flex flex-wrap gap-1">
-                          {form.painPoints.map(id => (
-                            <span key={id} className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
-                              {PAIN_POINTS.find(p => p.id === id)?.label}
-                            </span>
-                          ))}
+                      {form.painPoints.length > 0 && (
+                        <div className="flex gap-2 text-sm">
+                          <span className="text-slate-500 w-20 flex-shrink-0 pt-0.5">痛點：</span>
+                          <div className="flex flex-col gap-2 flex-1">
+                            <div className="flex flex-wrap gap-1">
+                              {form.painPoints.map(id => (
+                                <span key={id} className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
+                                  {PAIN_POINTS.find(p => p.id === id)?.label}
+                                </span>
+                              ))}
+                            </div>
+                            {recommendedModules.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                <span className="text-[10px] text-slate-400 self-center">推薦模組：</span>
+                                {recommendedModules.map(m => (
+                                  <span key={m.module} className={`text-[10px] px-2 py-0.5 rounded border font-medium ${m.moduleCls}`}>
+                                    {m.moduleEmoji} {m.moduleLabel}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
 
                     {/* Preferred time */}
