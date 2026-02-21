@@ -9,6 +9,14 @@ import {
 } from 'lucide-react';
 import RecruitNav from '../components/RecruitNav';
 
+const API_BASE = (() => {
+  if (typeof window === 'undefined') return '';
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  return isLocal
+    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
+    : (process.env.NEXT_PUBLIC_API_URL || '');
+})();
+
 const INDUSTRY_OPTIONS = [
   '零售 Retail', '餐飲 F&B', '金融服務 Financial Services',
   '物流 Logistics', '貿易 Trading', 'IT 服務 IT Services',

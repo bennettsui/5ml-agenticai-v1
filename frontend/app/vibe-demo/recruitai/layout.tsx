@@ -69,7 +69,7 @@ export default function RecruitAILayout({
   children: React.ReactNode;
 }) {
   return (
-    <>
+    <div className="dark">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -101,6 +101,6 @@ export default function RecruitAILayout({
       />
       {children}
       <RecruitChatbot />
-    </>
+    </div>
   );
 }

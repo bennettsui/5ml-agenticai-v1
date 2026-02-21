@@ -52,7 +52,7 @@ export default function ContactPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white font-sans">
+    <div className="min-h-screen bg-white dark:bg-slate-950 font-sans">
       <RecruitNav />
 
       <div className="pt-16">
@@ -76,7 +76,7 @@ export default function ContactPage() {
               {/* Left: Contact Info */}
               <div className="lg:col-span-2 space-y-8">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900 mb-6">聯絡方式</h2>
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">聯絡方式</h2>
                   <div className="space-y-5">
                     {[
                       {
@@ -97,11 +97,11 @@ export default function ContactPage() {
                           <Icon className="w-5 h-5 text-blue-600" />
                         </div>
                         <div>
-                          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-0.5">{label}</p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold uppercase tracking-wider mb-0.5">{label}</p>
                           {href ? (
-                            <a href={href} className="text-slate-700 hover:text-blue-600 transition-colors font-medium">{value}</a>
+                            <a href={href} className="text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors font-medium">{value}</a>
                           ) : (
-                            <p className="text-slate-700 font-medium">{value}</p>
+                            <p className="text-slate-700 dark:text-slate-300 font-medium">{value}</p>
                           )}
                         </div>
                       </div>
@@ -111,7 +111,7 @@ export default function ContactPage() {
 
                 {/* Quick Links */}
                 <div>
-                  <h3 className="font-bold text-slate-900 mb-4">快速連結</h3>
+                  <h3 className="font-bold text-slate-900 dark:text-white mb-4">快速連結</h3>
                   <div className="space-y-2">
                     {[
                       { label: '預約免費 30 分鐘諮詢', href: '/vibe-demo/recruitai/consultation' },
@@ -129,14 +129,14 @@ export default function ContactPage() {
 
               {/* Right: Enquiry Form */}
               <div className="lg:col-span-3">
-                <div className="bg-white rounded-3xl border border-slate-200 shadow-lg p-8">
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700/50 shadow-lg p-8">
                   {status === 'success' ? (
                     <div className="text-center py-12">
                       <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-5">
                         <CheckCircle className="w-10 h-10 text-emerald-600" />
                       </div>
-                      <h3 className="text-2xl font-bold text-slate-900 mb-2">收到您的查詢！</h3>
-                      <p className="text-slate-500 mb-6">我們會在 1 個工作天內與您聯絡。</p>
+                      <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">收到您的查詢！</h3>
+                      <p className="text-slate-500 dark:text-slate-400 mb-6">我們會在 1 個工作天內與您聯絡。</p>
                       <Link href="/vibe-demo/recruitai"
                         className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors">
                         返回主頁
@@ -144,54 +144,54 @@ export default function ContactPage() {
                     </div>
                   ) : (
                     <>
-                      <h2 className="text-xl font-bold text-slate-900 mb-2">發送查詢</h2>
-                      <p className="text-slate-500 text-sm mb-6">填寫以下表格，我們盡快與您聯絡。</p>
+                      <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">發送查詢</h2>
+                      <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">填寫以下表格，我們盡快與您聯絡。</p>
 
                       <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Name + Email */}
                         <div className="grid sm:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">姓名 *</label>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">姓名 *</label>
                             <input
                               required
                               value={form.name}
                               onChange={e => set('name', e.target.value)}
                               placeholder="陳先生 / 陳女士"
-                              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white text-sm"
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-sm"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">電郵 *</label>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">電郵 *</label>
                             <input
                               required
                               type="email"
                               value={form.email}
                               onChange={e => set('email', e.target.value)}
                               placeholder="your@company.com"
-                              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white text-sm"
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-sm"
                             />
                           </div>
                         </div>
 
                         {/* Company */}
                         <div>
-                          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">公司名稱</label>
+                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">公司名稱</label>
                           <input
                             value={form.company}
                             onChange={e => set('company', e.target.value)}
                             placeholder="ABC 有限公司"
-                            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white text-sm"
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-sm"
                           />
                         </div>
 
                         {/* Industry + Headcount */}
                         <div className="grid sm:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">業務類型</label>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">業務類型</label>
                             <select
                               value={form.industry}
                               onChange={e => set('industry', e.target.value)}
-                              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white text-sm"
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-sm"
                             >
                               <option value="">請選擇</option>
                               {['零售 / 電商', '餐飲 / 食品', '金融 / 保險', '物流 / 貿易', '專業服務', '醫療 / 健康', '教育', '其他'].map(o => (
@@ -200,11 +200,11 @@ export default function ContactPage() {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">員工人數</label>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">員工人數</label>
                             <select
                               value={form.headcount}
                               onChange={e => set('headcount', e.target.value)}
-                              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white text-sm"
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-sm"
                             >
                               <option value="">請選擇</option>
                               {['1–5 人', '6–15 人', '16–30 人', '31–50 人', '50 人以上'].map(o => (
@@ -216,11 +216,11 @@ export default function ContactPage() {
 
                         {/* Interest */}
                         <div>
-                          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">感興趣的功能模組</label>
+                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">感興趣的功能模組</label>
                           <select
                             value={form.interest}
                             onChange={e => set('interest', e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white text-sm"
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-sm"
                           >
                             <option value="">請選擇</option>
                             {[
@@ -239,13 +239,13 @@ export default function ContactPage() {
 
                         {/* Message */}
                         <div>
-                          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">查詢內容 / 目前最大痛點</label>
+                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">查詢內容 / 目前最大痛點</label>
                           <textarea
                             rows={4}
                             value={form.message}
                             onChange={e => set('message', e.target.value)}
                             placeholder="例如：我們每月要人手整理大量報告，想了解 AI 如何自動化這個流程..."
-                            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white text-sm resize-none"
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-sm resize-none"
                           />
                         </div>
 
@@ -263,7 +263,7 @@ export default function ContactPage() {
                           )}
                         </button>
 
-                        <p className="text-center text-xs text-slate-400">
+                        <p className="text-center text-xs text-slate-400 dark:text-slate-500">
                           提交即代表您同意我們聯絡您以了解業務需求 · 不會用於任何推廣用途
                         </p>
                       </form>
@@ -278,7 +278,7 @@ export default function ContactPage() {
 
         {/* Footer */}
         <footer className="py-8 px-4 bg-slate-900 text-center">
-          <p className="text-slate-500 text-sm mb-2">© 2026 RecruitAI Studio by 5 Miles Lab</p>
+          <p className="text-slate-500 dark:text-slate-500 text-sm mb-2">© 2026 RecruitAI Studio by 5 Miles Lab</p>
           <Link href="/vibe-demo/recruitai" className="text-blue-400 hover:text-blue-300 text-sm">返回主頁 →</Link>
         </footer>
       </div>
