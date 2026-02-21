@@ -11,13 +11,13 @@ export const OFF_WHITE = '#FAF9F6';
 export const WARM_GRAY = '#F3F1EC';
 
 export const NAV_ITEMS = [
-  { label: 'Home', href: '/vibe-demo/tedx-xinyi' },
-  { label: 'About', href: '/vibe-demo/tedx-xinyi/about' },
-  { label: 'Salon', href: '/vibe-demo/tedx-xinyi/salon' },
-  { label: 'Speakers & Talks', href: '/vibe-demo/tedx-xinyi/speakers' },
-  { label: 'Sustainability', href: '/vibe-demo/tedx-xinyi/sustainability' },
-  { label: 'Community', href: '/vibe-demo/tedx-xinyi/community' },
-  { label: 'Blog', href: '/vibe-demo/tedx-xinyi/blog' },
+  { label: '首頁', href: '/vibe-demo/tedx-xinyi' },
+  { label: '關於我們', href: '/vibe-demo/tedx-xinyi/about' },
+  { label: '沙龍活動', href: '/vibe-demo/tedx-xinyi/salon' },
+  { label: '講者與演講', href: '/vibe-demo/tedx-xinyi/speakers' },
+  { label: '永續設計', href: '/vibe-demo/tedx-xinyi/sustainability' },
+  { label: '社群', href: '/vibe-demo/tedx-xinyi/community' },
+  { label: '文章', href: '/vibe-demo/tedx-xinyi/blog' },
 ];
 
 export const FOOTER_LINKS = [
