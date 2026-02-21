@@ -2158,6 +2158,29 @@ app.get('/stats', async (req, res) => {
           },
         },
         {
+          id: 'hk-sg-tender-intelligence',
+          name: 'HK+SG Tender Intelligence',
+          description: 'Daily discovery, ingestion, evaluation & digest for HK+SG government tenders',
+          agentCount: 10,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: 'Daily pipeline: ingestion (40+ sources) + evaluation (avg 30 new tenders) + digest generation',
+              modelCalls: [
+                { model: 'DeepSeek Reasoner (evaluation)', calls: 30, avgTokensIn: 1500, avgTokensOut: 800, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'DeepSeek Reasoner (digest narrative)', calls: 1, avgTokensIn: 3000, avgTokensOut: 600, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku (HTML scraping edge cases)', calls: 10, avgTokensIn: 1000, avgTokensOut: 300, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'Claude Haiku (normalisation fallback)', calls: 10, avgTokensIn: 800, avgTokensOut: 400, costPerMillion: { input: 0.25, output: 1.25 } },
+              ],
+              totalTokens: { input: 58000, output: 29600 },
+              estimatedCost: 0.059, // USD per day
+              notes: 'RSS/XML ingestion and CSV processing require no LLM. Weekly source discovery + feedback learning add ~$0.05/week.',
+            },
+            daily: { runsPerDay: 1, estimatedCost: 0.059 },
+            monthly: { runsPerMonth: 30, estimatedCost: 1.80, notes: 'Includes weekly discovery (~$0.05/week) and feedback learning (~$0.005/week)' },
+          },
+        },
+        {
           id: 'crm',
           name: 'Client CRM + KB',
           description: 'AI-powered client CRM with knowledge base',
@@ -2197,7 +2220,8 @@ app.get('/stats', async (req, res) => {
         crm: 0.30,
         aiImageGeneration: 0.66,
         aiVideoGeneration: 0.88,
-        totalBase: 26.58,
+        hkSgTenderIntelligence: 1.80,
+        totalBase: 28.38,
         notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). All estimates assume typical usage patterns.',
       },
       databaseTables: [
