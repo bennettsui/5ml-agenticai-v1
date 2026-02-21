@@ -301,13 +301,18 @@ function scanAllImages() {
       }
     }
   }
-  // Speakers sub-dir
-  if (fs.existsSync(SPEAKERS_DIR)) {
-    for (const f of fs.readdirSync(SPEAKERS_DIR)) {
-      const full = path.join(SPEAKERS_DIR, f);
-      if (fs.statSync(full).isFile() && imgRe.test(f)) {
-        const stat = fs.statSync(full);
-        images.push({ filename: f, folder: 'speakers', path: `/tedx-xinyi/speakers/${f}`, size: stat.size, modified: stat.mtime.toISOString(), source: 'uploaded', description: '' });
+  // Scan all subdirectories (speakers, etc.)
+  if (fs.existsSync(OUTPUT_DIR)) {
+    for (const dir of fs.readdirSync(OUTPUT_DIR)) {
+      const dirPath = path.join(OUTPUT_DIR, dir);
+      if (fs.statSync(dirPath).isDirectory()) {
+        for (const f of fs.readdirSync(dirPath)) {
+          const full = path.join(dirPath, f);
+          if (fs.statSync(full).isFile() && imgRe.test(f)) {
+            const stat = fs.statSync(full);
+            images.push({ filename: f, folder: dir, path: `/tedx-xinyi/${dir}/${f}`, size: stat.size, modified: stat.mtime.toISOString(), source: 'uploaded', description: '' });
+          }
+        }
       }
     }
   }
@@ -650,11 +655,12 @@ function renderGrid() {
     const sizeKb = (img.size / 1024).toFixed(0);
     const src = img.folder ? '/tedx-xinyi/' + img.folder + '/' + img.filename : '/tedx-xinyi/' + img.filename;
     const tag = img.source === 'generated' ? '<span class="tag tag-gen">Generated</span>' : img.folder === 'speakers' ? '<span class="tag tag-spk">Speaker</span>' : '<span class="tag tag-up">Uploaded</span>';
+    const v = img.size;
     return '<div class="card' + sel + '" data-key="' + key + '">' +
       '<div class="card-check" onclick="toggleSelect(event,\\'' + key + '\\')">' +
         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' +
       '</div>' +
-      '<div class="card-img"><img src="' + src + '?t=' + Date.now() + '" onerror="this.style.display=\\'none\\';this.nextElementSibling.style.display=\\'flex\\'"><div class="placeholder" style="display:none">?</div></div>' +
+      '<div class="card-img"><img src="' + src + '?v=' + v + '" onerror="this.style.display=\\'none\\';this.nextElementSibling.style.display=\\'flex\\'"><div class="placeholder" style="display:none">?</div></div>' +
       '<div class="card-body">' +
         '<div class="card-filename">' + img.filename + ' ' + tag + '</div>' +
         '<div class="card-meta"><span>' + sizeKb + ' KB</span></div>' +
