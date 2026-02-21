@@ -8,7 +8,7 @@ import NatalChartView from '@/components/NatalChartView';
 import { NatalChart, BirthData, ZiweiTab } from '@/types/ziwei';
 import { demoNatalLayer, demoBirthData } from '@/config/demoNatalLayer';
 import { defaultStarVisualConfig } from '@/config/starVisualConfig';
-import { convertBirthDataToAPI } from '@/utils/ziweiConvert';
+import { convertBirthDataToAPI, convertAPIResponseToChartLayer } from '@/utils/ziweiConvert';
 
 type MainTab = 'generation' | 'analysis';
 
@@ -61,9 +61,10 @@ export default function ZiweiPage() {
       }
 
       // Transform API response to frontend format
+      const chartLayer = convertAPIResponseToChartLayer(result.chart);
       const newChart: NatalChart = {
         birth: birthData,
-        layer: demoNatalLayer, // TODO: Transform API palaces to ChartLayer
+        layer: chartLayer,
         calculatedAt: Date.now(),
         version: '1.0.0',
       };

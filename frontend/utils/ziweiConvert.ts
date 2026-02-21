@@ -3,6 +3,8 @@
  * Converts between frontend format and API format
  */
 
+import { ChartLayer, PalaceState, StarInstance, HuaType } from '@/types/ziwei';
+
 // 60-year Jiazi (甲子) cycle starting from 1924
 const JIAZI_CYCLE = [
   // 1924-1933
@@ -34,6 +36,41 @@ const HOUR_BRANCHES = [
   '戌', '戌', // 20-21 (19:00-21:00)
   '亥', '亥', // 22-23 (21:00-23:00)
 ];
+
+// Palace ID mappings (Chinese name to ID)
+const PALACE_ID_MAP: Record<string, string> = {
+  '命宮': 'ming',
+  '兄弟宮': 'xiongdi',
+  '夫妻宮': 'fuqi',
+  '子女宮': 'zinv',
+  '財帛宮': 'caibao',
+  '疾厄宮': 'jie',
+  '遷移宮': 'qianyi',
+  '交友宮': 'jiaoyu',
+  '官祿宮': 'guanlu',
+  '田宅宮': 'tianzhai',
+  '福德宮': 'fude',
+  '父母宮': 'fumu',
+};
+
+// Transformation type conversion (API format to frontend format)
+function convertTransformationType(apiType: string): HuaType | null {
+  const mapping: Record<string, HuaType> = {
+    'hua_lu': 'lu',
+    'hua_quan': 'quan',
+    'hua_ke': 'ke',
+    'hua_ji': 'ji',
+  };
+  return mapping[apiType] || null;
+}
+
+// Star ID generation from star name
+function getStarId(starName: string): string {
+  // Remove the 星 suffix if present
+  const clean = starName.replace(/星$/, '');
+  // Convert to pinyin-like ID (simplified version)
+  return clean.toLowerCase();
+}
 
 /**
  * Get year stem and branch from Gregorian year
@@ -94,5 +131,61 @@ export function convertBirthDataToAPI(birthData: any): {
     gender: birthData.gender || 'M',
     name: birthData.name,
     location: birthData.location,
+  };
+}
+
+/**
+ * Convert API response to ChartLayer format
+ */
+export function convertAPIResponseToChartLayer(apiChart: any): ChartLayer {
+  const palaces: PalaceState[] = apiChart.palaces.map((palace: any) => {
+    const stars: StarInstance[] = [];
+
+    // Add Ziwei star if present
+    if (palace.ziwei_star) {
+      stars.push({
+        starId: getStarId(palace.ziwei_star),
+        magnitude: 3, // Major star
+        hua: palace.transformations?.[palace.ziwei_star?.replace(/星$/, '')]
+          ? [convertTransformationType(palace.transformations[palace.ziwei_star?.replace(/星$/, '')])!].filter(Boolean)
+          : undefined,
+      });
+    }
+
+    // Add Tianfu star if present
+    if (palace.tianfu_star) {
+      stars.push({
+        starId: getStarId(palace.tianfu_star),
+        magnitude: 3, // Major star
+        hua: palace.transformations?.[palace.tianfu_star?.replace(/星$/, '')]
+          ? [convertTransformationType(palace.transformations[palace.tianfu_star?.replace(/星$/, '')])!].filter(Boolean)
+          : undefined,
+      });
+    }
+
+    // Add major stars
+    if (palace.major_stars && Array.isArray(palace.major_stars)) {
+      palace.major_stars.forEach((starName: string) => {
+        stars.push({
+          starId: getStarId(starName),
+          magnitude: 2, // Medium importance
+          hua: palace.transformations?.[starName]
+            ? [convertTransformationType(palace.transformations[starName])!].filter(Boolean)
+            : undefined,
+        });
+      });
+    }
+
+    return {
+      palaceId: PALACE_ID_MAP[palace.palace_name] || palace.palace_name.toLowerCase(),
+      nameZh: palace.palace_name,
+      stars,
+    };
+  });
+
+  return {
+    layerId: 'mingpan',
+    labelZh: '命盤',
+    palaces,
   };
 }
