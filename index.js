@@ -115,7 +115,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar, createContact, getContactsByClient, getContact, updateContact, deleteContact, linkContactToProject, getProjectContacts, unlinkContactFromProject } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar, createContact, getContactsByClient, getContact, updateContact, deleteContact, linkContactToProject, getProjectContacts, unlinkContactFromProject, saveRadianceEnquiry, getRadianceEnquiries } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
@@ -4221,6 +4221,19 @@ const radianceUpload = multer({
 
 const RADIANCE_ADMIN_PW = 'radiance2026happyday!';
 
+// Simple in-memory rate limiter: max 5 submissions per IP per 15 min
+const _radianceRateLimitMap = new Map();
+function checkRadianceRateLimit(ip) {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const max = 5;
+  const entry = _radianceRateLimitMap.get(ip) || { count: 0, resetAt: now + windowMs };
+  if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + windowMs; }
+  entry.count += 1;
+  _radianceRateLimitMap.set(ip, entry);
+  return entry.count <= max;
+}
+
 // POST /api/radiance/contact — save enquiry to DB + send email alert
 app.post('/api/radiance/contact', async (req, res) => {
   try {
@@ -4314,26 +4327,28 @@ app.post('/api/radiance/contact', async (req, res) => {
       });
     }
 
-    // Store contact submission (in-memory for now, can be extended to database)
-    const submission = {
-      id: Date.now().toString(),
-      ...clean,
-      submittedAt: new Date().toISOString(),
-      ip,
-      userAgent: req.get('user-agent')
-    };
-
-    // Log submission ID only — no PII in server logs
-    console.log('📧 New Radiance contact submission:', {
-      id: submission.id,
-      submittedAt: submission.submittedAt,
+    // Save enquiry to DB
+    const saved = await saveRadianceEnquiry({
+      name: clean.name,
+      email: clean.email,
+      phone: clean.phone || null,
+      company: clean.company || null,
+      industry: clean.industry || null,
+      serviceInterest: clean.serviceInterest || null,
+      message: clean.message,
+      sourceLang: req.body.sourceLang || 'en',
+      ipAddress: ip,
+      userAgent: req.get('user-agent'),
     });
 
+    console.log('📧 New Radiance contact submission:', { enquiryId: saved.enquiry_id });
+
     // Send email alert (non-blocking — don't fail the response if email fails)
-    sendRadianceEnquiryAlert(enquiryData).catch(err =>
+    sendRadianceEnquiryAlert({ ...clean, serviceInterest: clean.serviceInterest }).catch(err =>
       console.error('📧 [Radiance] Alert email error:', err.message)
     );
 
+    const sourceLang = req.body.sourceLang || 'en';
     const successMsg = sourceLang === 'zh'
       ? '感謝您的查詢，我們將於兩個工作天內回覆您。'
       : "Thank you for your enquiry. We'll be in touch within 2 business days.";
