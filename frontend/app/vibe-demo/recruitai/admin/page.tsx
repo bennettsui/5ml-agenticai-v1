@@ -5,12 +5,16 @@ import Link from 'next/link';
 import {
   ArrowLeft, Lock, RefreshCw, ChevronDown, ChevronUp,
   Users, MessageSquare, Mail, Phone, Building2, Clock,
-  CheckCircle, Search,
+  CheckCircle, Search, Pencil, Trash2, X, Save,
 } from 'lucide-react';
 
-const API_BASE = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
-  : 'http://localhost:8080';
+const API_BASE = (() => {
+  if (typeof window === 'undefined') return '';
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  return isLocal
+    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
+    : (process.env.NEXT_PUBLIC_API_URL || '');
+})();
 const ADMIN_PASSWORD = '5milesLab01@';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -29,6 +33,7 @@ interface Lead {
   utm_source: string | null;
   utm_medium: string | null;
   utm_campaign: string | null;
+  ip_address: string | null;
   created_at: string;
 }
 
@@ -56,6 +61,21 @@ interface ChatMessage {
   content: string;
   turn_number: number;
   created_at: string;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function SourceBadge({ page }: { page: string | null }) {
+  if (!page) return <span className="text-slate-600 text-xs">—</span>;
+  const map: Record<string, { label: string; cls: string }> = {
+    '/contact':      { label: '聯絡表格', cls: 'bg-blue-900/40 text-blue-300 border-blue-800/50' },
+    '/consultation': { label: '諮詢預約', cls: 'bg-violet-900/40 text-violet-300 border-violet-800/50' },
+  };
+  const m = Object.entries(map).find(([k]) => page.includes(k));
+  if (m) return (
+    <span className={`text-xs px-2 py-0.5 rounded-full border ${m[1].cls}`}>{m[1].label}</span>
+  );
+  return <span className="text-slate-500 text-xs">{page}</span>;
 }
 
 // ─── Password Gate ────────────────────────────────────────────────────────────
@@ -93,17 +113,12 @@ function PasswordGate({ onAuth }: { onAuth: () => void }) {
             className="w-full px-4 py-3 rounded-xl bg-slate-700 border border-slate-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-500"
           />
           {error && <p className="text-red-400 text-sm">{error}</p>}
-          <button
-            type="submit"
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
-          >
+          <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors">
             進入
           </button>
         </form>
         <div className="mt-6 text-center">
-          <Link href="/vibe-demo/recruitai" className="text-slate-500 hover:text-slate-400 text-xs">
-            ← 返回主頁
-          </Link>
+          <Link href="/vibe-demo/recruitai" className="text-slate-500 hover:text-slate-400 text-xs">← 返回主頁</Link>
         </div>
       </div>
     </div>
@@ -112,50 +127,187 @@ function PasswordGate({ onAuth }: { onAuth: () => void }) {
 
 // ─── Lead Row ─────────────────────────────────────────────────────────────────
 
-function LeadRow({ lead }: { lead: Lead }) {
+function LeadRow({
+  lead,
+  onUpdate,
+  onDelete,
+}: {
+  lead: Lead;
+  onUpdate: (id: number, fields: Partial<Lead>) => void;
+  onDelete: (id: number) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [draft, setDraft] = useState({
+    name: lead.name ?? '',
+    email: lead.email ?? '',
+    phone: lead.phone ?? '',
+    company: lead.company ?? '',
+    industry: lead.industry ?? '',
+    headcount: lead.headcount ?? '',
+    message: lead.message ?? '',
+  });
+
+  const upd = (k: keyof typeof draft, v: string) => setDraft(p => ({ ...p, [k]: v }));
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/recruitai/admin/leads/${lead.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: ADMIN_PASSWORD, ...draft }),
+      });
+      if (res.ok) {
+        onUpdate(lead.id, draft);
+        setEditing(false);
+      }
+    } finally { setSaving(false); }
+  }
+
+  async function handleDelete() {
+    if (!confirm(`確認刪除 ${lead.name || lead.email} 的詢問記錄？此操作無法撤銷。`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/recruitai/admin/leads/${lead.id}?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
+        { method: 'DELETE' }
+      );
+      if (res.ok) onDelete(lead.id);
+    } finally { setDeleting(false); }
+  }
+
+  const fieldCls = 'w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500';
+
   return (
     <>
       <tr
         className="border-b border-slate-700/50 hover:bg-slate-800/40 cursor-pointer transition-colors"
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => { if (!editing) setExpanded(!expanded); }}
       >
-        <td className="px-4 py-3 text-slate-300 text-sm">{lead.name}</td>
-        <td className="px-4 py-3 text-slate-300 text-sm">
+        <td className="px-4 py-3 text-slate-300 text-sm font-medium">{lead.name || '—'}</td>
+        <td className="px-4 py-3 text-sm">
           <a href={`mailto:${lead.email}`} className="text-blue-400 hover:text-blue-300" onClick={e => e.stopPropagation()}>
             {lead.email}
           </a>
         </td>
         <td className="px-4 py-3 text-slate-400 text-sm">{lead.phone || '—'}</td>
-        <td className="px-4 py-3 text-slate-400 text-sm">{lead.industry || '—'}</td>
         <td className="px-4 py-3 text-slate-400 text-sm">{lead.company || '—'}</td>
-        <td className="px-4 py-3 text-slate-500 text-xs">
+        <td className="px-4 py-3 text-slate-400 text-sm">{lead.industry || '—'}</td>
+        <td className="px-4 py-3 text-slate-400 text-sm">{lead.headcount || '—'}</td>
+        <td className="px-4 py-3"><SourceBadge page={lead.source_page} /></td>
+        <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
           {new Date(lead.created_at).toLocaleDateString('zh-HK', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
         </td>
-        <td className="px-4 py-3 text-slate-500">
-          {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => { setExpanded(true); setEditing(true); }}
+              className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400 transition-colors"
+              title="編輯"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-red-400 transition-colors"
+              title="刪除"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => { if (!editing) setExpanded(!expanded); }} className="p-1.5 text-slate-500">
+              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
         </td>
       </tr>
+
       {expanded && (
-        <tr className="bg-slate-800/60">
-          <td colSpan={7} className="px-4 py-4">
-            <div className="grid sm:grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">訊息</p>
-                <p className="text-slate-300 leading-relaxed">{lead.message || '(空)'}</p>
-              </div>
-              <div className="space-y-2">
+        <tr className="bg-slate-800/60 border-b border-slate-700/50">
+          <td colSpan={9} className="px-4 py-5">
+            {editing ? (
+              <div className="space-y-4">
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">姓名</label>
+                    <input value={draft.name} onChange={e => upd('name', e.target.value)} className={fieldCls} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">電郵</label>
+                    <input type="email" value={draft.email} onChange={e => upd('email', e.target.value)} className={fieldCls} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">電話</label>
+                    <input value={draft.phone} onChange={e => upd('phone', e.target.value)} placeholder="+852 XXXX XXXX" className={fieldCls} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">公司</label>
+                    <input value={draft.company} onChange={e => upd('company', e.target.value)} className={fieldCls} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">行業</label>
+                    <input value={draft.industry} onChange={e => upd('industry', e.target.value)} className={fieldCls} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">員工人數</label>
+                    <input value={draft.headcount} onChange={e => upd('headcount', e.target.value)} className={fieldCls} />
+                  </div>
+                </div>
                 <div>
-                  <p className="text-slate-500 text-xs">人數：{lead.headcount || '—'}</p>
-                  <p className="text-slate-500 text-xs">來源頁面：{lead.source_page || '—'}</p>
-                  {(lead.utm_source || lead.utm_medium || lead.utm_campaign) && (
-                    <p className="text-slate-500 text-xs">
-                      UTM: {[lead.utm_source, lead.utm_medium, lead.utm_campaign].filter(Boolean).join(' / ')}
-                    </p>
-                  )}
+                  <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">訊息 / 痛點</label>
+                  <textarea rows={3} value={draft.message} onChange={e => upd('message', e.target.value)} className={`${fieldCls} resize-none`} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {saving ? '儲存中...' : '儲存'}
+                  </button>
+                  <button
+                    onClick={() => { setEditing(false); setDraft({ name: lead.name ?? '', email: lead.email ?? '', phone: lead.phone ?? '', company: lead.company ?? '', industry: lead.industry ?? '', headcount: lead.headcount ?? '', message: lead.message ?? '' }); }}
+                    className="flex items-center gap-1.5 px-4 py-2 border border-slate-600 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    取消
+                  </button>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3 text-sm">
+                <div>
+                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">電話</p>
+                  <p className="text-slate-300">{lead.phone || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">員工人數</p>
+                  <p className="text-slate-300">{lead.headcount || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">來源</p>
+                  <SourceBadge page={lead.source_page} />
+                </div>
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">訊息 / 痛點</p>
+                  <p className="text-slate-300 whitespace-pre-line leading-relaxed">{lead.message || '(空)'}</p>
+                </div>
+                {(lead.utm_source || lead.utm_medium || lead.utm_campaign) && (
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">UTM</p>
+                    <p className="text-slate-500 text-xs">{[lead.utm_source, lead.utm_medium, lead.utm_campaign].filter(Boolean).join(' / ')}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Lead ID</p>
+                  <p className="text-slate-600 text-xs font-mono">{lead.lead_id}</p>
+                </div>
+              </div>
+            )}
           </td>
         </tr>
       )}
@@ -198,9 +350,7 @@ function SessionRow({ session, password }: { session: Session; password: string 
               <CheckCircle className="w-3 h-3" /> 已捕獲
             </span>
           ) : (
-            <span className="text-xs text-slate-500 px-2 py-1 rounded-full bg-slate-700/40 border border-slate-600/40">
-              進行中
-            </span>
+            <span className="text-xs text-slate-500 px-2 py-1 rounded-full bg-slate-700/40 border border-slate-600/40">進行中</span>
           )}
         </td>
         <td className="px-4 py-3 text-slate-300 text-sm">{session.captured_name || session.visitor_id?.slice(0, 8) || '匿名'}</td>
@@ -211,6 +361,7 @@ function SessionRow({ session, password }: { session: Session; password: string 
             </a>
           ) : '—'}
         </td>
+        <td className="px-4 py-3 text-slate-400 text-sm">{session.captured_phone || '—'}</td>
         <td className="px-4 py-3 text-slate-400 text-sm">{session.industry || '—'}</td>
         <td className="px-4 py-3 text-center">
           <span className="text-slate-300 text-sm font-medium">{session.turn_count}</span>
@@ -224,8 +375,8 @@ function SessionRow({ session, password }: { session: Session; password: string 
         </td>
       </tr>
       {expanded && (
-        <tr className="bg-slate-800/60">
-          <td colSpan={7} className="px-4 py-4">
+        <tr className="bg-slate-800/60 border-b border-slate-700/50">
+          <td colSpan={8} className="px-4 py-4">
             {loadingMessages ? (
               <p className="text-slate-400 text-sm text-center py-4">載入中...</p>
             ) : (
@@ -235,9 +386,7 @@ function SessionRow({ session, password }: { session: Session; password: string 
                 ) : (
                   messages.map(m => (
                     <div key={m.id} className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      {m.role === 'assistant' && (
-                        <span className="text-xs text-blue-400 flex-none mt-1 font-semibold">AI</span>
-                      )}
+                      {m.role === 'assistant' && <span className="text-xs text-blue-400 flex-none mt-1 font-semibold">AI</span>}
                       <div className={`max-w-[75%] px-3 py-2 rounded-xl text-xs leading-relaxed whitespace-pre-line ${
                         m.role === 'user'
                           ? 'bg-blue-900/40 text-blue-100 border border-blue-800/40'
@@ -245,9 +394,7 @@ function SessionRow({ session, password }: { session: Session; password: string 
                       }`}>
                         {m.content}
                       </div>
-                      {m.role === 'user' && (
-                        <span className="text-xs text-slate-500 flex-none mt-1 font-semibold">用戶</span>
-                      )}
+                      {m.role === 'user' && <span className="text-xs text-slate-500 flex-none mt-1 font-semibold">用戶</span>}
                     </div>
                   ))
                 )}
@@ -272,16 +419,11 @@ export default function AdminPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    if (localStorage.getItem('recruitai_admin_auth') === '1') {
-      setAuthed(true);
-    }
+    if (localStorage.getItem('recruitai_admin_auth') === '1') setAuthed(true);
   }, []);
 
   useEffect(() => {
-    if (authed) {
-      loadLeads();
-      loadSessions();
-    }
+    if (authed) { loadLeads(); loadSessions(); }
   }, [authed]); // eslint-disable-line
 
   async function loadLeads() {
@@ -302,19 +444,19 @@ export default function AdminPage() {
     } catch { /* ignore */ }
   }
 
-  function handleRefresh() {
-    loadLeads();
-    loadSessions();
+  function handleUpdate(id: number, fields: Partial<Lead>) {
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, ...fields } : l));
   }
 
-  if (!authed) {
-    return <PasswordGate onAuth={() => setAuthed(true)} />;
+  function handleDelete(id: number) {
+    setLeads(prev => prev.filter(l => l.id !== id));
   }
+
+  if (!authed) return <PasswordGate onAuth={() => setAuthed(true)} />;
 
   const filteredLeads = leads.filter(l =>
     !search || [l.name, l.email, l.phone, l.company, l.industry].some(v => v?.toLowerCase().includes(search.toLowerCase()))
   );
-
   const filteredSessions = sessions.filter(s =>
     !search || [s.captured_name, s.captured_email, s.industry, s.captured_phone].some(v => v?.toLowerCase().includes(search.toLowerCase()))
   );
@@ -342,7 +484,7 @@ export default function AdminPage() {
               />
             </div>
             <button
-              onClick={handleRefresh}
+              onClick={() => { loadLeads(); loadSessions(); }}
               disabled={loading}
               className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-slate-300 transition-colors"
             >
@@ -359,13 +501,13 @@ export default function AdminPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Stats Bar */}
+        {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
-            { icon: Users, label: '總詢問數', value: leads.length, color: 'text-blue-400' },
-            { icon: MessageSquare, label: '對話次數', value: sessions.length, color: 'text-violet-400' },
-            { icon: CheckCircle, label: '捕獲聯絡', value: sessions.filter(s => s.contact_captured).length, color: 'text-emerald-400' },
-            { icon: Clock, label: '本週詢問', value: leads.filter(l => new Date(l.created_at) > new Date(Date.now() - 7 * 86400000)).length, color: 'text-amber-400' },
+            { icon: Users,        label: '總詢問數',  value: leads.length,                                                              color: 'text-blue-400' },
+            { icon: MessageSquare,label: '對話次數',  value: sessions.length,                                                           color: 'text-violet-400' },
+            { icon: CheckCircle,  label: '捕獲聯絡',  value: sessions.filter(s => s.contact_captured).length,                          color: 'text-emerald-400' },
+            { icon: Clock,        label: '本週詢問',  value: leads.filter(l => new Date(l.created_at) > new Date(Date.now() - 7 * 86400000)).length, color: 'text-amber-400' },
           ].map(({ icon: Icon, label, value, color }) => (
             <div key={label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
               <Icon className={`w-5 h-5 ${color} mb-2`} />
@@ -382,9 +524,7 @@ export default function AdminPage() {
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === tab
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-300'
+                activeTab === tab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-300'
               }`}
             >
               {tab === 'leads' ? `詢問列表 (${leads.length})` : `對話記錄 (${sessions.length})`}
@@ -404,15 +544,17 @@ export default function AdminPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-slate-700/50 bg-slate-800/80">
-                      {['姓名', '電郵', '電話', '行業', '公司', '提交時間', ''].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                      {['姓名', '電郵', '電話', '公司', '行業', '人數', '來源', '提交時間', ''].map(h => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">
                           {h}
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredLeads.map(lead => <LeadRow key={lead.id} lead={lead} />)}
+                    {filteredLeads.map(lead => (
+                      <LeadRow key={lead.id} lead={lead} onUpdate={handleUpdate} onDelete={handleDelete} />
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -432,7 +574,7 @@ export default function AdminPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-slate-700/50 bg-slate-800/80">
-                      {['狀態', '訪客', '電郵', '行業', '輪數', '開始時間', ''].map(h => (
+                      {['狀態', '訪客', '電郵', '電話', '行業', '輪數', '開始時間', ''].map(h => (
                         <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
                           {h}
                         </th>

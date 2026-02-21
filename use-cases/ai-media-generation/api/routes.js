@@ -544,6 +544,7 @@ async function downloadAndSaveImage(url, destPath) {
       if (status && !RETRYABLE.has(status)) {
         // Non-retryable HTTP error — fail immediately
         const hints = {
+          401: `Pollinations.ai requires an API key (HTTP 401). Get a free key at https://enter.pollinations.ai then add POLLINATIONS_API_KEY=pk_... to your .env`,
           403: 'Pollinations.ai refused the request (403 Forbidden) — the prompt may have been blocked by content filters',
           429: 'Pollinations.ai rate limit reached (429) — wait a moment and try again',
         };
@@ -663,7 +664,8 @@ router.post('/prompts/:id/generate-image', async (req, res) => {
           const seed = Math.floor(Math.random() * 2147483647);
           const encodedPrompt = encodeURIComponent(positivePrompt.substring(0, 800));
           const { width, height } = aspectRatioDimensions(pj.image?.aspectRatio);
-          const pollinationsUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?width=${width}&height=${height}&model=${pollinationsModel}&nologo=true&seed=${seed}`;
+          const pollinationsKey = process.env.POLLINATIONS_API_KEY ? `&key=${process.env.POLLINATIONS_API_KEY}` : '';
+          const pollinationsUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?width=${width}&height=${height}&model=${pollinationsModel}&nologo=true&seed=${seed}${pollinationsKey}`;
           const filename = `media_${record.project_id}_p${record.id}_${seed}.jpg`;
           await downloadAndSaveImage(pollinationsUrl, path.join(UPLOADS_DIR, filename));
           imageUrl = `/api/media/serve/${filename}`;
@@ -711,7 +713,8 @@ router.get('/quick-test', (req, res) => {
       const seed = Math.floor(Math.random() * 2147483647);
       const encoded = encodeURIComponent(prompt.substring(0, 800));
       const { width, height } = aspectRatioDimensions(ratio);
-      const pollinationsUrl = `https://gen.pollinations.ai/image/${encoded}?width=${width}&height=${height}&model=${model}&nologo=true&seed=${seed}`;
+      const pollinationsKey = process.env.POLLINATIONS_API_KEY ? `&key=${process.env.POLLINATIONS_API_KEY}` : '';
+      const pollinationsUrl = `https://gen.pollinations.ai/image/${encoded}?width=${width}&height=${height}&model=${model}&nologo=true&seed=${seed}${pollinationsKey}`;
       await downloadAndSaveImage(pollinationsUrl, path.join(UPLOADS_DIR, `${jobId}.jpg`));
       quickTestJobs.set(jobId, { ...quickTestJobs.get(jobId), status: 'done', url: `/api/media/serve/${jobId}.jpg` });
     } catch (err) {

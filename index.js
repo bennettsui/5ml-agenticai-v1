@@ -3,7 +3,7 @@ require('./instrument.js');
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs');
-const nodemailer = require('nodemailer');
+const { spawn } = require('child_process');
 const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
@@ -94,8 +94,10 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
 }));
 
 // Serve TEDx generated visuals (runtime-generated via nanobanana API)
-app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx')));
-app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi')));
+// Cache for 1 day — images are regenerated only when prompts change
+const tedxStaticOpts = { maxAge: '1d', immutable: false };
+app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx'), tedxStaticOpts));
+app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi'), tedxStaticOpts));
 
 // Serve Radiance uploaded media
 app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
@@ -2158,6 +2160,29 @@ app.get('/stats', async (req, res) => {
           },
         },
         {
+          id: 'hk-sg-tender-intelligence',
+          name: 'HK+SG Tender Intelligence',
+          description: 'Daily discovery, ingestion, evaluation & digest for HK+SG government tenders',
+          agentCount: 10,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: 'Daily pipeline: ingestion (40+ sources) + evaluation (avg 30 new tenders) + digest generation',
+              modelCalls: [
+                { model: 'DeepSeek Reasoner (evaluation)', calls: 30, avgTokensIn: 1500, avgTokensOut: 800, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'DeepSeek Reasoner (digest narrative)', calls: 1, avgTokensIn: 3000, avgTokensOut: 600, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku (HTML scraping edge cases)', calls: 10, avgTokensIn: 1000, avgTokensOut: 300, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'Claude Haiku (normalisation fallback)', calls: 10, avgTokensIn: 800, avgTokensOut: 400, costPerMillion: { input: 0.25, output: 1.25 } },
+              ],
+              totalTokens: { input: 58000, output: 29600 },
+              estimatedCost: 0.059, // USD per day
+              notes: 'RSS/XML ingestion and CSV processing require no LLM. Weekly source discovery + feedback learning add ~$0.05/week.',
+            },
+            daily: { runsPerDay: 1, estimatedCost: 0.059 },
+            monthly: { runsPerMonth: 30, estimatedCost: 1.80, notes: 'Includes weekly discovery (~$0.05/week) and feedback learning (~$0.005/week)' },
+          },
+        },
+        {
           id: 'crm',
           name: 'Client CRM + KB',
           description: 'AI-powered client CRM with knowledge base',
@@ -2197,7 +2222,8 @@ app.get('/stats', async (req, res) => {
         crm: 0.30,
         aiImageGeneration: 0.66,
         aiVideoGeneration: 0.88,
-        totalBase: 26.58,
+        hkSgTenderIntelligence: 1.80,
+        totalBase: 28.38,
         notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). All estimates assume typical usage patterns.',
       },
       databaseTables: [
@@ -3646,7 +3672,9 @@ try {
 try {
   const tedxXinyiRoutes = require('./use-cases/tedx-xinyi/api/routes');
   app.use('/api/tedx-xinyi', tedxXinyiRoutes);
-  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi');
+  // Admin shortcut: /tedxxinyi/admin → upload page
+  app.get('/tedxxinyi/admin', (req, res) => res.redirect('/api/tedx-xinyi/upload'));
+  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /tedxxinyi/admin');
 } catch (error) {
   console.warn('⚠️ TEDxXinyi routes not loaded:', error.message);
 }
@@ -4531,7 +4559,12 @@ app.put('/api/radiance/admin/case-studies/:slug', async (req, res) => {
 // ==========================================
 
 const { Resend } = require('resend');
-const resendClient = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+let resendClient = null;
+try {
+  resendClient = new Resend(process.env.RESEND_API_KEY);
+} catch (err) {
+  console.warn('⚠️ Resend API not configured:', err.message);
+}
 
 // POST /api/recruitai/lead — save lead + send email alert
 app.post('/api/recruitai/lead', async (req, res) => {
@@ -4765,6 +4798,48 @@ app.get('/api/recruitai/admin/leads', async (req, res) => {
   }
 });
 
+// PATCH /api/recruitai/admin/leads/:id — update editable fields
+app.patch('/api/recruitai/admin/leads/:id', async (req, res) => {
+  const { password, ...fields } = req.body;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  const { id } = req.params;
+  if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
+  const EDITABLE = ['name', 'email', 'phone', 'company', 'industry', 'headcount', 'message'];
+  const sets = [], vals = [];
+  let idx = 1;
+  for (const f of EDITABLE) {
+    if (f in fields) {
+      sets.push(`${f} = $${idx++}`);
+      const isPII = PII_FIELDS.recruitai_leads.includes(f);
+      vals.push(isPII ? encrypt(fields[f] || null) : (fields[f] || null));
+    }
+  }
+  if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+  vals.push(Number(id));
+  try {
+    await pool.query(`UPDATE recruitai_leads SET ${sets.join(', ')} WHERE id = $${idx}`, vals);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ Admin lead update error:', err);
+    res.status(500).json({ error: 'Failed to update lead' });
+  }
+});
+
+// DELETE /api/recruitai/admin/leads/:id — delete a lead
+app.delete('/api/recruitai/admin/leads/:id', async (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  const { id } = req.params;
+  if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    await pool.query('DELETE FROM recruitai_leads WHERE id = $1', [Number(id)]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ Admin lead delete error:', err);
+    res.status(500).json({ error: 'Failed to delete lead' });
+  }
+});
+
 // GET /api/recruitai/admin/sessions — list all chat sessions
 app.get('/api/recruitai/admin/sessions', async (req, res) => {
   const { password } = req.query;
@@ -4815,12 +4890,65 @@ const { calcBaseChart } = require('./services/ziwei-chart-engine');
 const ziweiValidation = require('./validation/ziweiValidation');
 const asyncHandler = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
+/**
+ * Calculate Ziwei chart using Python calculator
+ * @param {Object} birthData - Birth data with year_stem, year_branch, lunar_month, lunar_day, hour_branch, gender, name, location
+ * @returns {Promise<Object>} Chart data from Python calculator
+ */
+function calculateZiweiChartPython(birthData) {
+  return new Promise((resolve, reject) => {
+    try {
+      const pythonScript = path.join(__dirname, 'services', 'ziwei-api-wrapper.py');
+
+      // Spawn Python process
+      const python = spawn('python3', [pythonScript, JSON.stringify(birthData)], {
+        timeout: 10000  // 10 second timeout
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      python.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      python.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      python.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Python process exited with code ${code}: ${stderr}`));
+          return;
+        }
+
+        try {
+          const result = JSON.parse(stdout);
+          if (result.success) {
+            resolve(result);
+          } else {
+            reject(new Error(result.error || 'Unknown error from Python calculator'));
+          }
+        } catch (parseErr) {
+          reject(new Error(`Failed to parse Python output: ${parseErr.message}`));
+        }
+      });
+
+      python.on('error', (err) => {
+        reject(new Error(`Failed to spawn Python process: ${err.message}`));
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 // POST /api/ziwei/calculate - Calculate a birth chart
 app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, asyncHandler(async (req, res) => {
   try {
     const {
       lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch,
-      gender, name, placeOfBirth, timezone, calendarType
+      gender, name, placeOfBirth, timezone, calendarType, existingChartId
     } = req.body;
 
     // Validate required fields
@@ -4830,15 +4958,17 @@ app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, async
       });
     }
 
-    // Calculate chart
-    const chart = calcBaseChart({
-      lunarYear,
-      lunarMonth,
-      lunarDay,
-      hourBranch,
-      yearStem,
-      yearBranch,
-      gender
+    // Calculate chart using Python calculator
+    console.log('📊 Calculating Ziwei chart using Python calculator...');
+    const chart = await calculateZiweiChartPython({
+      year_stem: yearStem,
+      year_branch: yearBranch,
+      lunar_month: lunarMonth,
+      lunar_day: lunarDay,
+      hour_branch: hourBranch,
+      gender: gender,
+      name: name || '',
+      location: placeOfBirth || ''
     });
 
     // Store in database if available
@@ -4858,17 +4988,49 @@ app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, async
           calendarType: calendarType || 'lunar'
         };
 
-        const result = await db.query(
-          `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
-           VALUES ($1, $2, $3, $4) RETURNING id`,
-          [
-            name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
-            JSON.stringify(birthInfo),
-            JSON.stringify({ yearStem, yearBranch }),
-            JSON.stringify(chart)
-          ]
-        );
+        let result;
+        if (existingChartId) {
+          // Update existing record — overwrite the same person's chart
+          result = await db.query(
+            `UPDATE ziwei_birth_charts
+             SET name = $1, birth_info = $2, gan_zhi = $3, base_chart = $4
+             WHERE id = $5 RETURNING id`,
+            [
+              name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
+              JSON.stringify(birthInfo),
+              JSON.stringify({ yearStem, yearBranch }),
+              JSON.stringify(chart),
+              existingChartId
+            ]
+          );
+          if (result.rows.length === 0) {
+            // Fallback: insert if id not found
+            result = await db.query(
+              `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
+               VALUES ($1, $2, $3, $4) RETURNING id`,
+              [
+                name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
+                JSON.stringify(birthInfo),
+                JSON.stringify({ yearStem, yearBranch }),
+                JSON.stringify(chart)
+              ]
+            );
+          }
+        } else {
+          // Insert new record
+          result = await db.query(
+            `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
+             VALUES ($1, $2, $3, $4) RETURNING id`,
+            [
+              name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
+              JSON.stringify(birthInfo),
+              JSON.stringify({ yearStem, yearBranch }),
+              JSON.stringify(chart)
+            ]
+          );
+        }
         chartId = result.rows[0].id;
+        console.log('✅ Chart stored in database:', chartId);
       } catch (dbErr) {
         console.warn('⚠️ Ziwei chart not stored:', dbErr.message);
       }
@@ -4943,6 +5105,30 @@ app.get('/api/ziwei/charts/:id', async (req, res) => {
       error: 'Failed to fetch chart',
       details: error.message
     });
+  }
+});
+
+// DELETE /api/ziwei/charts/:id - Delete a saved chart
+app.delete('/api/ziwei/charts/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const result = await db.query(
+      `DELETE FROM ziwei_birth_charts WHERE id = $1 RETURNING id`,
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    res.json({ success: true, deletedId: result.rows[0].id });
+  } catch (error) {
+    console.error('❌ Error deleting chart:', error);
+    res.status(500).json({ error: 'Failed to delete chart', details: error.message });
   }
 });
 
@@ -5727,9 +5913,256 @@ app.get('/api/ziwei/palace/:palace', (req, res) => {
 });
 
 // ==========================================
+// HK+SG Tender Intelligence API
+// ==========================================
+{
+  const tenderIntel = require('./services/tender-intel-service');
+  const nodeCron = require('node-cron');
+  const scheduleRegistry = require('./services/schedule-registry');
+
+  // Register schedules
+  scheduleRegistry.register({ id: 'tender-intel:daily-ingestion',  group: 'Tender Intelligence', name: 'Daily RSS/XML Ingestion',    description: 'Fetch all active RSS/XML sources, normalise into tenders', schedule: '0 3 * * *',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Daily at 03:00 HKT' });
+  scheduleRegistry.register({ id: 'tender-intel:source-discovery', group: 'Tender Intelligence', name: 'Weekly Source Discovery',    description: 'Scan hub pages for new RSS/HTML sources',                   schedule: '0 2 * * 0',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Sunday at 02:00 HKT' });
+  scheduleRegistry.register({ id: 'tender-intel:digest-generate',  group: 'Tender Intelligence', name: 'Daily Digest Generation',   description: 'Generate ranked daily digest narrative',                     schedule: '0 8 * * *',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Daily at 08:00 HKT' });
+  scheduleRegistry.register({ id: 'tender-intel:feedback-learning',group: 'Tender Intelligence', name: 'Weekly Feedback Calibration','description': 'Calibrate scoring weights from decisions',                schedule: '0 5 * * 0',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Sunday at 05:00 HKT' });
+
+  // Daily ingestion cron → 03:00 HKT
+  if (process.env.DATABASE_URL) {
+    nodeCron.schedule('0 3 * * *', async () => {
+      scheduleRegistry.markRunning('tender-intel:daily-ingestion');
+      try {
+        const summary = await tenderIntel.runIngestion(pool);
+        scheduleRegistry.markCompleted('tender-intel:daily-ingestion', {
+          result: `${summary.newRawCaptures} new captures, ${summary.tendersInserted} tenders`,
+          durationMs: summary.durationMs,
+        });
+        console.log('✅ Tender ingestion complete:', summary.newRawCaptures, 'new captures');
+      } catch (err) {
+        scheduleRegistry.markFailed('tender-intel:daily-ingestion', err.message);
+        console.error('❌ Tender ingestion failed:', err.message);
+      }
+    }, { timezone: 'Asia/Hong_Kong' });
+
+    // Daily evaluation cron → 04:00 HKT (after ingestion)
+    nodeCron.schedule('0 4 * * *', async () => {
+      scheduleRegistry.markRunning('tender-intel:digest-generate');
+      try {
+        const result = await tenderIntel.runEvaluation(pool);
+        scheduleRegistry.markCompleted('tender-intel:digest-generate', {
+          result: `${result.evaluated.length} tenders scored`,
+        });
+        console.log('✅ Tender evaluation complete:', result.evaluated.length, 'scored');
+      } catch (err) {
+        scheduleRegistry.markFailed('tender-intel:digest-generate', err.message);
+        console.error('❌ Tender evaluation failed:', err.message);
+      }
+    }, { timezone: 'Asia/Hong_Kong' });
+  }
+
+  // POST /api/tender-intel/evaluate  — manual trigger
+  app.post('/api/tender-intel/evaluate', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    try {
+      scheduleRegistry.markRunning('tender-intel:digest-generate');
+      const result = await tenderIntel.runEvaluation(pool, req.body.profile || null);
+      scheduleRegistry.markCompleted('tender-intel:digest-generate', { result: `${result.evaluated.length} scored` });
+      res.json({ success: true, ...result });
+    } catch (err) {
+      scheduleRegistry.markFailed('tender-intel:digest-generate', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/tender-intel/decision  — record founder decision (track / ignore / partner_only)
+  app.post('/api/tender-intel/decision', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    const { tenderId, action, notes } = req.body;
+    if (!tenderId || !action) return res.status(400).json({ error: 'tenderId and action required' });
+    try {
+      await tenderIntel.recordDecision(pool, { tenderId, action, notes });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/profile
+  app.get('/api/tender-intel/profile', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json(tenderIntel.DEFAULT_PROFILE);
+    try { res.json(await tenderIntel.getProfile(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // PUT /api/tender-intel/profile
+  app.put('/api/tender-intel/profile', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    try { await tenderIntel.saveProfile(pool, req.body); res.json({ success: true }); }
+    catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /api/tender-intel/digest
+  app.get('/api/tender-intel/digest', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json({ stats: { newToday:0, priority:0, closingSoon:0, sourcesOk:'0/0' }, tenders:[], lastRun:null, _mock:true });
+    try {
+      const data = await tenderIntel.getDigest(pool);
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/tenders
+  app.get('/api/tender-intel/tenders', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json({ tenders:[], total:0, _mock:true });
+    try {
+      const { jurisdiction, label, status, search, limit, offset } = req.query;
+      const data = await tenderIntel.getTenders(pool, {
+        jurisdiction, label, status, search,
+        limit: Math.min(parseInt(limit) || 50, 200),
+        offset: parseInt(offset) || 0,
+      });
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/sources
+  app.get('/api/tender-intel/sources', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    try {
+      const { jurisdiction, status } = req.query;
+      const sources = await tenderIntel.getSources(pool, { jurisdiction, status });
+      res.json(sources);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/logs
+  app.get('/api/tender-intel/logs', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    try {
+      const { limit } = req.query;
+      const logs = await tenderIntel.getLogs(pool, { limit: Math.min(parseInt(limit) || 100, 500) });
+      res.json(logs);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/tender-intel/ingest  — manual trigger (for testing)
+  app.post('/api/tender-intel/ingest', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    try {
+      scheduleRegistry.markRunning('tender-intel:daily-ingestion');
+      const summary = await tenderIntel.runIngestion(pool);
+      scheduleRegistry.markCompleted('tender-intel:daily-ingestion', {
+        result: `${summary.newRawCaptures} new captures`,
+        durationMs: summary.durationMs,
+      });
+      res.json({ success: true, summary });
+    } catch (err) {
+      scheduleRegistry.markFailed('tender-intel:daily-ingestion', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/tender-intel/chat  — AI chat assistant used by frontend layout
+  app.post('/api/tender-intel/chat', async (req, res) => {
+    const { messages } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages array required' });
+    }
+    try {
+      const Anthropic = require('@anthropic-ai/sdk');
+      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const response = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: 'You are a tender intelligence assistant for HK and Singapore government procurement. Help the user understand tenders, evaluate opportunities, find relevant sources, and plan bid responses. Be concise and practical.',
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+      });
+      res.json({ content: response.content[0]?.text || '', role: 'assistant' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+}
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
+
+// ============================================================
+// RecruitAI Studio — Lead capture + email alert
+// ============================================================
+// Resend client is created lazily inside the handler so a missing
+// RESEND_API_KEY never crashes the server on startup.
+app.post('/api/recruitai/lead', async (req, res) => {
+  try {
+    const { name, email, phone, company, industry, teamSize, painPoints, message, preferredTime } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ error: 'name and email are required' });
+    }
+
+    // ── Persist to DB if available ────────────────────────────
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.query(
+          `INSERT INTO recruitai_leads
+             (name, email, phone, company, industry, team_size, pain_points, message, preferred_time, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+           ON CONFLICT DO NOTHING`,
+          [name, email, phone || null, company || null, industry || null,
+           teamSize || null, JSON.stringify(painPoints || []), message || null, preferredTime || null]
+        );
+      } catch (dbErr) {
+        console.warn('⚠️ RecruitAI lead DB insert failed (non-fatal):', dbErr.message);
+      }
+    }
+
+    // ── Send email alert via Resend (non-fatal if not configured) ──
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const { Resend } = require('resend');
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const alertTo = process.env.RECRUITAI_ALERT_EMAIL || 'hello@5ml.ai';
+        const painList = Array.isArray(painPoints) && painPoints.length
+          ? painPoints.join(', ')
+          : '—';
+        await resend.emails.send({
+          from: 'RecruitAI Studio <noreply@5ml.ai>',
+          to: alertTo,
+          subject: `New lead: ${name} (${company || 'no company'})`,
+          html: `<h2>New RecruitAI Consultation Request</h2>
+<table cellpadding="6" style="border-collapse:collapse;font-family:sans-serif;font-size:14px">
+  <tr><td><b>Name</b></td><td>${name}</td></tr>
+  <tr><td><b>Email</b></td><td>${email}</td></tr>
+  <tr><td><b>Phone</b></td><td>${phone || '—'}</td></tr>
+  <tr><td><b>Company</b></td><td>${company || '—'}</td></tr>
+  <tr><td><b>Industry</b></td><td>${industry || '—'}</td></tr>
+  <tr><td><b>Team size</b></td><td>${teamSize || '—'}</td></tr>
+  <tr><td><b>Pain points</b></td><td>${painList}</td></tr>
+  <tr><td><b>Preferred time</b></td><td>${preferredTime || '—'}</td></tr>
+  <tr><td><b>Message</b></td><td>${message || '—'}</td></tr>
+</table>`,
+        });
+        console.log(`✅ RecruitAI lead email sent for ${email}`);
+      } catch (emailErr) {
+        console.error('⚠️ RecruitAI email send failed (non-fatal):', emailErr.message);
+      }
+    } else {
+      console.log('ℹ️  RecruitAI lead received — RESEND_API_KEY not set, skipping email');
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[RecruitAI] lead error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 const server = http.createServer(app);
 
@@ -5794,15 +6227,20 @@ server.listen(port, '0.0.0.0', async () => {
         }
       } catch { /* no manifest yet */ }
 
-      // Find visuals with new or changed definitions
-      const changed = VISUALS.filter(v => currentDefs[v.id] !== previousDefs[v.id]);
+      // Find visuals with new or changed definitions, or missing files
+      const changed = VISUALS.filter(v =>
+        currentDefs[v.id] !== previousDefs[v.id] ||
+        !tedxFs.existsSync(tedxPath.join(tedxOutputDir, v.filename))
+      );
 
       if (changed.length > 0) {
         const newIds = changed.filter(v => !previousDefs[v.id]).map(v => v.id);
-        const updatedIds = changed.filter(v => previousDefs[v.id]).map(v => v.id);
-        console.log(`🎨 TEDx: Visual definitions changed — ${newIds.length} new, ${updatedIds.length} updated`);
+        const updatedIds = changed.filter(v => previousDefs[v.id] && currentDefs[v.id] !== previousDefs[v.id]).map(v => v.id);
+        const missingIds = changed.filter(v => previousDefs[v.id] && currentDefs[v.id] === previousDefs[v.id]).map(v => v.id);
+        console.log(`🎨 TEDx: Generating ${changed.length} visuals — ${newIds.length} new, ${updatedIds.length} updated, ${missingIds.length} missing files`);
         if (newIds.length > 0) console.log(`   New: ${newIds.join(', ')}`);
         if (updatedIds.length > 0) console.log(`   Updated: ${updatedIds.join(', ')}`);
+        if (missingIds.length > 0) console.log(`   Missing: ${missingIds.join(', ')}`);
 
         // Fire-and-forget: generate only changed visuals after a short delay
         setTimeout(async () => {
@@ -5856,7 +6294,7 @@ server.listen(port, '0.0.0.0', async () => {
           }
         }, 3000);
       } else {
-        console.log(`🎨 TEDx: All ${VISUALS.length} visual definitions unchanged — skipping generation`);
+        console.log(`🎨 TEDx: All ${VISUALS.length} visuals up to date — skipping generation`);
       }
     } catch (err) {
       console.warn('⚠️ TEDx auto-generation check failed:', err.message);
@@ -5885,12 +6323,17 @@ server.listen(port, '0.0.0.0', async () => {
         }
       } catch { /* no manifest yet */ }
 
-      const xinyiChanged = XINYI_VISUALS.filter(v => xinyiDefs[v.id] !== xinyiPrevDefs[v.id]);
+      const xinyiChanged = XINYI_VISUALS.filter(v =>
+        xinyiDefs[v.id] !== xinyiPrevDefs[v.id] ||
+        !tedxFs.existsSync(tedxPath.join(xinyiOutputDir, v.filename))
+      );
 
       if (xinyiChanged.length > 0) {
         const xinyiNewIds = xinyiChanged.filter(v => !xinyiPrevDefs[v.id]).map(v => v.id);
-        const xinyiUpdatedIds = xinyiChanged.filter(v => xinyiPrevDefs[v.id]).map(v => v.id);
-        console.log(`🎨 TEDxXinyi: Visual definitions changed — ${xinyiNewIds.length} new, ${xinyiUpdatedIds.length} updated`);
+        const xinyiUpdatedIds = xinyiChanged.filter(v => xinyiPrevDefs[v.id] && xinyiDefs[v.id] !== xinyiPrevDefs[v.id]).map(v => v.id);
+        const xinyiMissingIds = xinyiChanged.filter(v => xinyiPrevDefs[v.id] && xinyiDefs[v.id] === xinyiPrevDefs[v.id]).map(v => v.id);
+        console.log(`🎨 TEDxXinyi: Generating ${xinyiChanged.length} visuals — ${xinyiNewIds.length} new, ${xinyiUpdatedIds.length} updated, ${xinyiMissingIds.length} missing files`);
+        if (xinyiMissingIds.length > 0) console.log(`   Missing: ${xinyiMissingIds.join(', ')}`);
 
         setTimeout(async () => {
           try {
@@ -5941,7 +6384,7 @@ server.listen(port, '0.0.0.0', async () => {
           }
         }, 15000); // Delay after Boundary Street generation
       } else {
-        console.log(`🎨 TEDxXinyi: All ${XINYI_VISUALS.length} visual definitions unchanged — skipping generation`);
+        console.log(`🎨 TEDxXinyi: All ${XINYI_VISUALS.length} visuals up to date — skipping generation`);
       }
     } catch (err) {
       console.warn('⚠️ TEDxXinyi auto-generation check failed:', err.message);

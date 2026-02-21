@@ -58,7 +58,7 @@ export default function TEDxXinyiLayout({
             ],
             event: {
               '@type': 'Event',
-              name: 'TEDxXinyi We are Becoming — AI趨勢沙龍',
+              name: 'TEDxXinyi We are Becoming — AI時代趨勢沙龍',
               startDate: '2026-03-31',
               location: {
                 '@type': 'Place',

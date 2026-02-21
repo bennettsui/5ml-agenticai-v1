@@ -1,0 +1,297 @@
+/**
+ * Ziwei Chart Theme & Design System
+ * CSS Variables for dark-mode analytics dashboard aesthetic
+ */
+
+:root {
+  /* ================================================================ */
+  /* BACKGROUND COLORS                                                */
+  /* ================================================================ */
+  --bg-main: #0f1419;           /* Very dark blue/charcoal (page bg) */
+  --bg-secondary: #1a1f2e;      /* Slightly lighter for contrast */
+  --bg-surface: #252d3d;        /* Surface elements */
+
+  /* Palace card backgrounds */
+  --palace-bg: rgba(30, 41, 59, 0.5);        /* Slate with transparency */
+  --palace-bg-hover: rgba(30, 41, 59, 0.7);  /* Slightly opaque on hover */
+  --palace-bg-active: rgba(59, 130, 246, 0.1); /* Subtle blue on selection */
+
+  /* ================================================================ */
+  /* BORDER & OUTLINE                                                 */
+  /* ================================================================ */
+  --palace-border: rgba(148, 163, 184, 0.2);       /* Muted slate border */
+  --palace-border-hover: rgba(148, 163, 184, 0.4); /* Stronger on hover */
+  --palace-border-active: rgba(59, 130, 246, 0.5); /* Blue on active */
+
+  /* ================================================================ */
+  /* TEXT COLORS                                                      */
+  /* ================================================================ */
+  --text-primary: #f1f5f9;      /* Main text: light slate */
+  --text-secondary: #94a3b8;    /* Secondary: muted slate */
+  --text-tertiary: #64748b;     /* Tertiary: dimmer slate */
+  --text-accent: #fbbf24;       /* Accent: amber/gold */
+
+  /* ================================================================ */
+  /* STAR CATEGORY COLORS (main, assist, minor)                      */
+  /* ================================================================ */
+  --star-main: #a78bfa;         /* Purple for main stars */
+  --star-assist: #06b6d4;       /* Cyan for assist stars */
+  --star-minor: #64748b;        /* Gray for minor stars */
+
+  /* ================================================================ */
+  /* MAGNITUDE COLORS (weak, neutral, strong, extreme)               */
+  /* ================================================================ */
+  --mag-l1: #94a3b8;            /* 弱 (weak): muted gray */
+  --mag-l2: #fbbf24;            /* 平 (neutral): amber */
+  --mag-l3: #f97316;            /* 旺 (strong): orange */
+  --mag-l4: #dc2626;            /* 極端 (extreme): red */
+
+  /* ================================================================ */
+  /* HUA BADGES (Four Transformations: 祿權科忌)                     */
+  /* ================================================================ */
+  --hua-lu: #10b981;            /* 祿 (prosperity): green */
+  --hua-quan: #8b5cf6;          /* 權 (authority): purple */
+  --hua-ke: #0ea5e9;            /* 科 (talent): sky blue */
+  --hua-ji: #f87171;            /* 忌 (obstacle): red */
+
+  /* ================================================================ */
+  /* INTERACTIVE STATES                                               */
+  /* ================================================================ */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-active: 0 10px 24px rgba(59, 130, 246, 0.3);
+
+  /* ================================================================ */
+  /* RADIUS & SPACING                                                 */
+  /* ================================================================ */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+
+  /* ================================================================ */
+  /* TRANSITIONS                                                      */
+  /* ================================================================ */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ================================================================ */
+/* GLOBAL STYLES                                                    */
+/* ================================================================ */
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ================================================================ */
+/* PALACE CARDS BASE STYLING                                        */
+/* ================================================================ */
+
+.palace-card {
+  background-color: var(--palace-bg);
+  border: 1px solid var(--palace-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm);
+  transition: all var(--transition-normal);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.palace-card:hover {
+  background-color: var(--palace-bg-hover);
+  border-color: var(--palace-border-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.palace-card.active {
+  background-color: var(--palace-bg-active);
+  border-color: var(--palace-border-active);
+  box-shadow: var(--shadow-active);
+}
+
+/* ================================================================ */
+/* STAR CHIP STYLING                                                */
+/* ================================================================ */
+
+.star-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.star-chip--pill {
+  border-radius: 12px;
+  padding-left: var(--spacing-md);
+  padding-right: var(--spacing-md);
+}
+
+.star-chip--circle {
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  justify-content: center;
+}
+
+.star-chip:hover {
+  filter: brightness(1.1);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ================================================================ */
+/* HUA BADGE STYLING                                                */
+/* ================================================================ */
+
+.hua-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: white;
+  position: relative;
+}
+
+.hua-badge--lu {
+  background-color: var(--hua-lu);
+}
+
+.hua-badge--quan {
+  background-color: var(--hua-quan);
+}
+
+.hua-badge--ke {
+  background-color: var(--hua-ke);
+}
+
+.hua-badge--ji {
+  background-color: var(--hua-ji);
+}
+
+/* ================================================================ */
+/* METRIC BAR STYLING                                               */
+/* ================================================================ */
+
+.metric-bar {
+  width: 100%;
+  height: 4px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: var(--spacing-xs);
+}
+
+.metric-bar__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--hua-lu), var(--hua-quan));
+  border-radius: 2px;
+  transition: width var(--transition-normal);
+}
+
+/* ================================================================ */
+/* TYPOGRAPHY                                                       */
+/* ================================================================ */
+
+.palace-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.star-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.star-label__zh {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.star-label__en {
+  font-size: 9px;
+  color: var(--text-secondary);
+}
+
+/* ================================================================ */
+/* GRID LAYOUT                                                      */
+/* ================================================================ */
+
+.ziwei-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: var(--spacing-md);
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--spacing-lg);
+  background-color: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--palace-border);
+  position: relative; /* needed for SVG overlay */
+}
+
+.ziwei-grid__overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ================================================================ */
+/* ACCESSIBILITY                                                    */
+/* ================================================================ */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ================================================================ */
+/* DARK MODE (DEFAULT)                                              */
+/* ================================================================ */
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-main: #f8fafc;
+    --bg-secondary: #f1f5f9;
+    --bg-surface: #e2e8f0;
+    --palace-bg: rgba(226, 232, 240, 0.5);
+    --palace-bg-hover: rgba(226, 232, 240, 0.7);
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --text-tertiary: #94a3b8;
+  }
+}
