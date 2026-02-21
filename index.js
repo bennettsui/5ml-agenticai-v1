@@ -4307,7 +4307,7 @@ const radianceUpload = multer({
   },
 });
 
-const RADIANCE_ADMIN_PW = 'radiance2026happyday!';
+const RADIANCE_ADMIN_PW = '5milesLab01@';
 
 // Simple in-memory rate limiter: max 5 submissions per IP per 15 min
 const _radianceRateLimitMap = new Map();
@@ -4453,7 +4453,7 @@ app.post('/api/radiance/contact', async (req, res) => {
 app.get('/api/radiance/contact/submissions', async (req, res) => {
   try {
     const { password } = req.query;
-    if (password !== 'radiance2026happyday!') {
+    if (password !== '5milesLab01@') {
       return res.status(401).json({ error: 'Unauthorised' });
     }
     const limit = Math.min(parseInt(req.query.limit || '50'), 200);

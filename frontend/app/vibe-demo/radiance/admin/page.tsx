@@ -11,7 +11,7 @@ import {
 const API_BASE = typeof window !== 'undefined'
   ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
   : 'http://localhost:8080';
-const ADMIN_PASSWORD = 'radiance2026happyday!';
+const ADMIN_PASSWORD = '5milesLab01@';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
