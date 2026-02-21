@@ -161,6 +161,11 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
         return;
       }
       await loadCharts();
+      // Select the newly created chart so it persists on navigation
+      if (data.chartId) {
+        setSelectedId(data.chartId.toString());
+        setIsCreating(false);
+      }
       onGenerate?.();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Network error');
@@ -169,10 +174,20 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
     }
   };
 
-  const handleDeleteVisitor = (id: string, e: React.MouseEvent) => {
+  const handleDeleteVisitor = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    // Optimistic update
     setVisitors(prev => prev.filter(v => v.id !== id));
     if (selectedId === id) { setSelectedId(null); setIsCreating(false); }
+    try {
+      const res = await fetch(`/api/ziwei/charts/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        // Rollback on failure
+        await loadCharts();
+      }
+    } catch {
+      await loadCharts();
+    }
   };
 
   const selectedVisitor = visitors.find(v => v.id === selectedId);
