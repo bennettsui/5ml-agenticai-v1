@@ -769,6 +769,7 @@ def format_chart_output(chart: NatalChart) -> Dict:
     return {
         "birth": {
             "year_stem": chart.birth.year_stem,
+            "year_branch": chart.birth.year_branch,
             "lunar_month": chart.birth.lunar_month,
             "lunar_day": chart.birth.lunar_day,
             "hour_branch": chart.birth.hour_branch,
@@ -782,6 +783,7 @@ def format_chart_output(chart: NatalChart) -> Dict:
             "stem_branch": chart.life_palace_stem_branch,
         },
         "five_element_bureau": chart.five_element_bureau,
+        "four_transformations": FOUR_TRANSFORMATIONS_BY_YEAR_STEM.get(chart.birth.year_stem, {}),
         "palaces": [
             {
                 "palace_id": p.palace_id,
@@ -789,7 +791,10 @@ def format_chart_output(chart: NatalChart) -> Dict:
                 "branch": p.branch,
                 "stem": p.stem,
                 "stem_branch": p.stem_branch,
+                "ziwei_star": p.ziwei_star,
+                "tianfu_star": p.tianfu_star,
                 "major_stars": p.major_stars or [],
+                "transformations": p.transformations or {},
             }
             for p in chart.palaces
         ]
