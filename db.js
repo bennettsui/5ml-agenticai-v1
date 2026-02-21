@@ -383,6 +383,32 @@ async function initDatabase() {
       -- ==========================================
       -- Ziwei Astrology Tables (中州派紫微斗數)
       -- ==========================================
+
+      CREATE TABLE IF NOT EXISTS ziwei_palaces (
+        id VARCHAR(50) PRIMARY KEY,
+        number INTEGER,
+        chinese VARCHAR(50),
+        english VARCHAR(100),
+        meaning TEXT,
+        governs JSONB DEFAULT '[]',
+        positive_indicators TEXT,
+        negative_indicators TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS ziwei_stars (
+        id VARCHAR(50) PRIMARY KEY,
+        chinese VARCHAR(50),
+        english VARCHAR(100),
+        star_type VARCHAR(50),
+        nature JSONB DEFAULT '[]',
+        attributes JSONB DEFAULT '{}',
+        meanings TEXT,
+        interpretation TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_palaces_number ON ziwei_palaces(number);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_stars_type ON ziwei_stars(star_type);
+
       CREATE TABLE IF NOT EXISTS ziwei_interpretation_rules (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         version INTEGER DEFAULT 1,
