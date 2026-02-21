@@ -7,6 +7,7 @@ const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./ut
 const deepseekService = require('./services/deepseekService');
 const zwEngine = require('./services/ziwei-chart-engine');
 const { encrypt, decrypt, decryptRow, PII_FIELDS } = require('./services/encryption');
+const ziweiV1Router = require('./routes/v1/ziwei');
 require('dotenv').config();
 
 // ─── Radiance Email Alert Setup ───────────────────────────────────────────────
