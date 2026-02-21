@@ -6322,21 +6322,34 @@ app.post('/api/sme/campaign-review', async (req, res) => {
     }
   });
 
-  // POST /api/tender-intel/discover  — manual source discovery trigger
+  // POST /api/tender-intel/discover  — manual source discovery (SSE streaming)
   app.post('/api/tender-intel/discover', async (req, res) => {
-    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ error: 'DATABASE_URL not set' });
+    }
+    // Server-Sent Events stream — client reads progress events in real-time
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+    res.flushHeaders();
+
+    const emit = (data) => {
+      try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch (_) {}
+    };
+
     try {
       scheduleRegistry.markRunning('tender-intel:source-discovery');
-      const result = await tenderIntel.runSourceDiscovery(pool);
+      const result = await tenderIntel.runSourceDiscovery(pool, emit);
       scheduleRegistry.markCompleted('tender-intel:source-discovery', {
         result: `${result.newSources.length} new sources from ${result.hubsScanned} hubs`,
         durationMs: result.durationMs,
       });
-      res.json({ success: true, ...result });
     } catch (err) {
       scheduleRegistry.markFailed('tender-intel:source-discovery', err.message);
-      res.status(500).json({ error: err.message });
+      emit({ type: 'error', error: err.message });
     }
+    res.end();
   });
 
   // POST /api/tender-intel/ingest  — manual trigger (for testing)
