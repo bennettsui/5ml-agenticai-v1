@@ -317,7 +317,7 @@ router.get('/upload', (req, res) => {
     <option value="glass-brothers">玻璃兄弟</option>
   </select>
 
-  <label>Photo (JPG/PNG, max 5MB)</label>
+  <label>Photo (JPG/PNG, max 25MB)</label>
   <input type="file" id="photo" accept="image/jpeg,image/png,image/webp" required>
   <img id="prev" class="preview" style="display:none">
 
@@ -351,7 +351,7 @@ document.getElementById('f').onsubmit = async function(e) {
       body: JSON.stringify({ speaker, data, filename: file.name })
     });
     const json = await resp.json();
-    if (resp.ok) { msg.innerHTML = '<div class="msg ok">Uploaded: ' + json.path + '</div>'; setTimeout(() => location.reload(), 1000); }
+    if (resp.ok) { msg.innerHTML = '<div class="msg ok">Uploaded: ' + json.path + '<br>Compressed: ' + (json.savings || '') + ' smaller (' + Math.round((json.compressedSize||0)/1024) + ' KB)</div>'; setTimeout(() => location.reload(), 1500); }
     else { msg.innerHTML = '<div class="msg err">Error: ' + json.error + '</div>'; }
   } catch (err) { msg.innerHTML = '<div class="msg err">' + err.message + '</div>'; }
   btn.disabled = false; btn.textContent = 'Upload';
@@ -360,37 +360,55 @@ document.getElementById('f').onsubmit = async function(e) {
 </body></html>`);
 });
 
-// Upload endpoint — accepts base64 image
-router.post('/upload-speaker', express.json({ limit: '10mb' }), (req, res) => {
-  const { speaker, data, filename } = req.body;
-  const validSpeakers = ['cheng-shi-jia', 'lin-dong-liang', 'yang-shi-yi', 'glass-brothers'];
+// Upload endpoint — accepts base64 image, compresses with sharp
+router.post('/upload-speaker', express.json({ limit: '50mb' }), async (req, res) => {
+  try {
+    const { speaker, data } = req.body;
+    const validSpeakers = ['cheng-shi-jia', 'lin-dong-liang', 'yang-shi-yi', 'glass-brothers'];
 
-  if (!validSpeakers.includes(speaker)) {
-    return res.status(400).json({ error: 'Invalid speaker ID' });
+    if (!validSpeakers.includes(speaker)) {
+      return res.status(400).json({ error: 'Invalid speaker ID' });
+    }
+    if (!data || !data.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'Invalid image data' });
+    }
+
+    const match = data.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
+    if (!match) {
+      return res.status(400).json({ error: 'Unsupported image format' });
+    }
+
+    const rawBuffer = Buffer.from(match[2], 'base64');
+    if (rawBuffer.length > 25 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File too large (max 25MB)' });
+    }
+
+    // Compress with sharp: resize to max 800x800, convert to JPEG quality 80
+    const sharp = require('sharp');
+    const compressed = await sharp(rawBuffer)
+      .resize(800, 800, { fit: 'cover', position: 'centre' })
+      .jpeg({ quality: 80, progressive: true })
+      .toBuffer();
+
+    const outFilename = `${speaker}.jpg`;
+    const outPath = path.join(SPEAKERS_DIR, outFilename);
+    fs.writeFileSync(outPath, compressed);
+
+    const ratio = ((1 - compressed.length / rawBuffer.length) * 100).toFixed(0);
+    console.log(`[TEDxXinyi] Speaker photo: ${outFilename} — ${(rawBuffer.length / 1024).toFixed(0)} KB → ${(compressed.length / 1024).toFixed(0)} KB (${ratio}% smaller)`);
+    res.json({
+      success: true,
+      speaker,
+      filename: outFilename,
+      path: `/tedx-xinyi/speakers/${outFilename}`,
+      originalSize: rawBuffer.length,
+      compressedSize: compressed.length,
+      savings: `${ratio}%`,
+    });
+  } catch (err) {
+    console.error('[TEDxXinyi] Upload error:', err.message);
+    res.status(500).json({ error: err.message });
   }
-  if (!data || !data.startsWith('data:image/')) {
-    return res.status(400).json({ error: 'Invalid image data' });
-  }
-
-  // Extract base64 and extension
-  const match = data.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
-  if (!match) {
-    return res.status(400).json({ error: 'Unsupported image format' });
-  }
-
-  const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
-  const buffer = Buffer.from(match[2], 'base64');
-
-  if (buffer.length > 5 * 1024 * 1024) {
-    return res.status(400).json({ error: 'File too large (max 5MB)' });
-  }
-
-  const outFilename = `${speaker}.${ext}`;
-  const outPath = path.join(SPEAKERS_DIR, outFilename);
-  fs.writeFileSync(outPath, buffer);
-
-  console.log(`[TEDxXinyi] Speaker photo uploaded: ${outFilename} (${(buffer.length / 1024).toFixed(0)} KB)`);
-  res.json({ success: true, speaker, filename: outFilename, path: `/tedx-xinyi/speakers/${outFilename}`, size: buffer.length });
 });
 
 // ==================== HELPER ====================
