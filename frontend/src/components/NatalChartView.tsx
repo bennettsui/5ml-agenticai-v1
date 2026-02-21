@@ -267,8 +267,32 @@ interface VisitorDetailsCardProps {
 }
 
 const VisitorDetailsCard: React.FC<VisitorDetailsCardProps> = ({ chart, age }) => {
-  const { birth } = chart;
+  const { birth, layer } = chart;
   const genderLabel = birth.gender === 'M' ? '男' : '女';
+
+  // Extract Ming Zhu (命主) - first star in Life Palace
+  const lifePalace = layer.palaces.find((p) => p.isLifePalace);
+  const mingZhu = lifePalace?.stars[0]?.starId || '—';
+
+  // Format Five Element Bureau (火六局, 土二局, etc.)
+  const fiveElementNames = ['—', '水二', '木三', '火六', '土五', '金四'];
+  const fiveElementBureau = (chart as any).five_element_bureau || 0;
+  const bureauLabel = fiveElementNames[fiveElementBureau] || '—';
+
+  // Format dates
+  const lunarDate = `農曆 ${birth.yearGregorian}年${String(birth.monthLunar).padStart(2, '0')}月${String(birth.dayLunar).padStart(2, '0')}日`;
+  const gregorianDate = new Date(
+    birth.yearGregorian,
+    birth.monthLunar - 1,
+    birth.dayLunar
+  ).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+
+  // Format calculation reference time
+  const calcTime = new Date(chart.calculatedAt).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 
   return (
     <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 rounded-lg p-6 border border-slate-700/50">
@@ -288,11 +312,18 @@ const VisitorDetailsCard: React.FC<VisitorDetailsCardProps> = ({ chart, age }) =
       </div>
 
       {/* Details Grid */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Date of Birth */}
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        {/* Gregorian Date */}
         <DetailItem
           icon={<Calendar className="w-4 h-4" />}
-          label="出生日期"
+          label="西曆"
+          value={gregorianDate}
+        />
+
+        {/* Lunar Date */}
+        <DetailItem
+          icon={<Calendar className="w-4 h-4" />}
+          label="農曆"
           value={`${birth.yearGregorian}年${String(birth.monthLunar).padStart(2, '0')}月${String(birth.dayLunar).padStart(2, '0')}日`}
         />
 
@@ -303,6 +334,13 @@ const VisitorDetailsCard: React.FC<VisitorDetailsCardProps> = ({ chart, age }) =
           value={`${String(birth.hour).padStart(2, '0')}:00`}
         />
 
+        {/* Five Element Bureau */}
+        <DetailItem
+          icon={<span className="text-slate-500">☰</span>}
+          label="五行局"
+          value={bureauLabel}
+        />
+
         {/* Location */}
         <DetailItem
           icon={<MapPin className="w-4 h-4" />}
@@ -311,12 +349,28 @@ const VisitorDetailsCard: React.FC<VisitorDetailsCardProps> = ({ chart, age }) =
           span2
         />
 
-        {/* Gender */}
-        <DetailItem
-          icon={<User className="w-4 h-4" />}
-          label="性別"
-          value={genderLabel}
-        />
+        {/* Gender & Ming Zhu */}
+        <div className="grid grid-cols-2 gap-3 col-span-2">
+          <DetailItem
+            icon={<User className="w-4 h-4" />}
+            label="性別"
+            value={genderLabel}
+          />
+          <DetailItem
+            icon={<span className="text-slate-500">★</span>}
+            label="命主"
+            value={mingZhu}
+          />
+        </div>
+      </div>
+
+      {/* Chart Calculation Reference */}
+      <div className="text-xs text-slate-500 px-2 py-2 bg-slate-900/30 rounded border border-slate-700/20">
+        <p>
+          <span className="text-slate-600">命盤排盤時間基準：</span>
+          {calcTime}
+          <span className="text-slate-600 ml-1">(UTC+8)</span>
+        </p>
       </div>
     </div>
   );
