@@ -31,8 +31,8 @@ const VISUALS = [
   {
     id: 'hero-home',
     filename: 'hero-home.png',
-    description: 'Home hero — Xinyi district golden hour festival',
-    prompt: 'Wide panoramic view of Taipei Xinyi district at golden hour sunset, warm amber and coral light washing over modern skyscrapers and tree-lined boulevards, slightly abstract and painterly style like a bold festival poster, lens flare, optimistic and energetic atmosphere, soft focus on background with sharp geometric building silhouettes, TED red accent streak across the sky, no text, no watermarks, no people, 16:9 aspect ratio, high contrast warm tones',
+    description: 'Home hero — dark galaxy distance cinematic banner',
+    prompt: 'Wide 16:9 cinematic banner, vast deep-space sky in dark navy and charcoal black, layered nebula clouds in rich indigo violet and magenta that look like long-exposure astrophotography mixed with painting not 3D cartoon, a clear smooth galaxy arc curves gracefully across the upper half with a softly glowing warm core surrounded by many tiny sharp stars, from the galaxy arc let a few very thin beams of light and sparse glowing data-like particles flow downward along curved paths suggesting AI as a vast quiet information system, foreground at very bottom centre a tiny solitary human figure standing on a narrow rock edge facing the galaxy occupying only 5-8% of total image height realistic adult proportions long dark coat trousers gender-neutral calm reflective pose arms relaxed head slightly tilted upward, soft realistic rim light from the galaxy outlining head shoulders and coat clearly against the darkness, around the upper body a few faint rising particles of light where data streams begin to touch this person, palette dominated by deep blues violets blacks and neutral whites with controlled warm highlights at galaxy core and figure rim light, no text no watermarks no UI HUD graphics, cinematic contrast soft bloom on brightest galaxy parts subtle film-grain overlay, mature restrained premium theatrical key art that a 40-year-old professional would comfortably share',
   },
   {
     id: 'hero-about',

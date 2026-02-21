@@ -136,10 +136,15 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
   const showDark = heroMode && !headerSolid && !mobileMenuOpen;
 
   return (
-    <header role="banner">
-    <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-neutral-900 focus:rounded-md focus:shadow-lg focus:text-sm focus:font-bold">
-      Skip to main content
-    </a>
+    <>
+      {/* Skip nav: inline style keeps it off-screen before CSS loads */}
+      <a
+        href="#main-content"
+        style={{ position: 'fixed', top: '-100px', left: '8px', zIndex: 100 }}
+        className="focus:top-2 transition-[top] duration-200 px-4 py-2 bg-white text-neutral-900 rounded-md shadow-lg text-sm font-bold"
+      >
+        Skip to main content
+      </a>
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         headerSolid || mobileMenuOpen || !heroMode
@@ -147,6 +152,7 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
           : 'bg-transparent'
       }`}
       aria-label="Primary navigation"
+      role="banner"
     >
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
@@ -243,7 +249,7 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
         </div>
       )}
     </nav>
-    </header>
+    </>
   );
 }
 

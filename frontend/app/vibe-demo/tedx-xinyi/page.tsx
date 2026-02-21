@@ -121,15 +121,15 @@ export default function TEDxXinyiHome() {
             </p>
           </FadeIn>
 
-          <FadeIn delay={300}>
-            <p className="text-white/60 text-sm sm:text-base mb-2 font-medium" lang="zh-TW">
-              2026 / 3 / 31　台北藝術表演中心 藍盒子
+          <FadeIn delay={280}>
+            <p className="text-white/90 text-lg sm:text-xl font-black leading-snug mb-4 max-w-2xl mx-auto" lang="zh-TW">
+              你和 AI 的距離，決定你和自己的樣子。
             </p>
           </FadeIn>
 
-          <FadeIn delay={380}>
-            <p className="text-white/45 text-sm sm:text-base leading-relaxed mb-12 max-w-2xl mx-auto" lang="zh-TW">
-              探究我們跟 AI 的距離，我們跟自己的距離。
+          <FadeIn delay={360}>
+            <p className="text-white/50 text-sm sm:text-base mb-12 font-medium" lang="zh-TW">
+              2026 / 3 / 31（二）　台北藝術表演中心 藍盒子
             </p>
           </FadeIn>
 
@@ -164,10 +164,10 @@ export default function TEDxXinyiHome() {
               TEDxXinyi We are Becoming – AI趨勢沙龍
             </h2>
             <p className="text-white/60 text-sm mt-1" lang="zh-TW">
-              2026/3/31｜台北藝術表演中心 藍盒子
+              2026/3/31（二）｜台北藝術表演中心 藍盒子
             </p>
             <p className="text-white/40 text-xs mt-1" lang="zh-TW">
-              探究我們跟 AI 的距離，我們跟自己的距離。
+              你和 AI 的距離，決定你和自己的樣子。
             </p>
           </div>
           <div className="flex gap-3 flex-shrink-0">
