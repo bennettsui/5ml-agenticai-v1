@@ -4834,16 +4834,28 @@ app.post('/api/recruitai/chat', async (req, res) => {
 - 用「你」稱呼對方，語氣溫暖
 - 主動提問了解需求，每次最多問一個問題
 - 適時用 emoji 增加親切感 😊
-- 第 ${turnCount + 1} 輪對話${turnCount >= 8 ? '（已聊了一段時間，可以自然地邀請對方安排免費諮詢）' : '（先了解需求，建立信任）'}
+- 第 ${turnCount + 1} 輪對話${turnCount >= 8 ? '（已聊了一段時間，請積極邀請對方留下聯絡方式安排免費諮詢）' : '（先了解需求，建立信任）'}
 
-聯絡資料收集（重要）：
-- 當對方表示感興趣或詢問價格/方案時，自然地邀請留下聯絡方式
-- 說話示範：「咁你係咪方便留個 WhatsApp / 電郵俾我？我哋可以安排個免費 30 分鐘 AI 評估 😊」
-- 一旦對話中出現任何聯絡資料（WhatsApp、手機、電郵），必須在回覆末尾加上以下標記（此行對用戶不可見，不要解釋它）：
-[CONTACT_CAPTURED: name=姓名, email=電郵地址, phone=電話號碼]
-例子：[CONTACT_CAPTURED: name=陳先生, email=chan@example.com, phone=+852 9123 4567]
-例子（只有電話）：[CONTACT_CAPTURED: phone=+852 9123 4567]
-只填已知的欄位，未知欄位省略。標記必須在回覆最後一行。`;
+【資料收集任務 — 非常重要】
+整個對話中，自然地逐步收集以下 7 項資料。每次只問一個問題，不要像填表格，要融入對話中：
+1. 姓名（稱呼）— 對話開始時問：「請問點稱呼你呀？」
+2. 公司名稱 — 了解對方業務時問
+3. 行業 — 根據公司討論引出
+4. 員工／團隊人數 — 評估規模、定制方案時問
+5. 主要痛點或希望自動化的業務範疇 — 核心需求，必問
+6. 電郵地址 — **必問，不可跳過**。話術：「方便留個電郵俾我嗎？我可以幫你發送詳細方案 📧」
+7. WhatsApp／電話 — 邀請預約時問
+
+注意：
+- 已知的資料不要重複問
+- **電郵地址係必須收集的**，不論任何情況都要問到
+- 收集到姓名 + 電郵後，邀請安排免費 30 分鐘 AI 評估
+
+【聯絡標記 — 系統指令，用戶不可見】
+每當對話中出現任何新資料（包括姓名、公司、行業、人數、電話、電郵），必須在該次回覆末尾附上完整已知資料的標記。格式如下，只填已知欄位，未知省略：
+[CONTACT_CAPTURED: name=姓名, email=電郵, phone=電話, company=公司, industry=行業, headcount=人數, message=痛點摘要]
+例子：[CONTACT_CAPTURED: name=陳先生, email=chan@abc.com, phone=+852 9123 4567, company=ABC貿易, industry=零售, headcount=20-50人, message=希望自動化客服同WhatsApp回覆]
+每次有新資料就重新附上**完整**已知欄位的標記（累積更新，不是只記新資料）。標記必須在回覆最後一行。`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -4891,36 +4903,57 @@ app.post('/api/recruitai/chat', async (req, res) => {
     const updateFields = ['turn_count = turn_count + 1', 'updated_at = NOW()'];
     const updateParams = [currentSessionId];
     if (contactCaptured) {
-      updateFields.push(`contact_captured = TRUE`);
+      if (capturedData.email) updateFields.push(`contact_captured = TRUE`);
       // Encrypt PII captured by chatbot before persisting to DB
-      if (capturedData.name)  { updateFields.push(`captured_name  = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.name)); }
-      if (capturedData.email) { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.email)); }
-      if (capturedData.phone) { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.phone)); }
+      if (capturedData.name)     { updateFields.push(`captured_name  = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.name)); }
+      if (capturedData.email)    { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.email)); }
+      if (capturedData.phone)    { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.phone)); }
+      if (capturedData.industry) { updateFields.push(`industry = $${updateParams.length + 1}`);       updateParams.push(capturedData.industry); }
     }
     await pool.query(
       `UPDATE recruitai_chat_sessions SET ${updateFields.join(', ')} WHERE session_id = $1`,
       updateParams
     );
 
-    // If contact captured, save as lead (chatbot-sourced), encrypt PII at rest
-    // Dedup by session_id (not email — emails are encrypted so plaintext comparison fails)
+    // If contact captured, upsert as lead (chatbot-sourced), encrypt PII at rest
     if (contactCaptured && capturedData.email) {
       try {
-        await pool.query(
-          `INSERT INTO recruitai_leads (name, email, phone, source_page, industry, message)
-           SELECT $1,$2,$3,$4,$5,$6
-           WHERE NOT EXISTS (
-             SELECT 1 FROM recruitai_leads WHERE source_page = $4
-           )`,
-          [
-            capturedData.name  ? encrypt(capturedData.name)  : null,
-            encrypt(capturedData.email),
-            capturedData.phone ? encrypt(capturedData.phone) : null,
-            'chatbot:' + currentSessionId,
-            industry || null,
-            encrypt(`Chat session ${currentSessionId}`),
-          ]
+        const chatSourcePage = 'chatbot:' + currentSessionId;
+        const messageText = capturedData.message || null;
+        // Try insert first; if already exists (same source_page), update with any newly collected fields
+        const existingLead = await pool.query(
+          'SELECT id FROM recruitai_leads WHERE source_page = $1', [chatSourcePage]
         );
+        if (existingLead.rows.length === 0) {
+          await pool.query(
+            `INSERT INTO recruitai_leads (name, email, phone, company, industry, headcount, message, source_page)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [
+              capturedData.name     ? encrypt(capturedData.name)     : null,
+              encrypt(capturedData.email),
+              capturedData.phone    ? encrypt(capturedData.phone)    : null,
+              capturedData.company  ? encrypt(capturedData.company)  : null,
+              capturedData.industry || industry || null,
+              capturedData.headcount || null,
+              messageText           ? encrypt(messageText)           : null,
+              chatSourcePage,
+            ]
+          );
+        } else {
+          // Update with any newly captured fields
+          const leadId = existingLead.rows[0].id;
+          const sets = [], vals = [];
+          if (capturedData.name)      { sets.push(`name=$${vals.length+1}`);      vals.push(encrypt(capturedData.name)); }
+          if (capturedData.phone)     { sets.push(`phone=$${vals.length+1}`);     vals.push(encrypt(capturedData.phone)); }
+          if (capturedData.company)   { sets.push(`company=$${vals.length+1}`);   vals.push(encrypt(capturedData.company)); }
+          if (capturedData.industry)  { sets.push(`industry=$${vals.length+1}`);  vals.push(capturedData.industry); }
+          if (capturedData.headcount) { sets.push(`headcount=$${vals.length+1}`); vals.push(capturedData.headcount); }
+          if (messageText)            { sets.push(`message=$${vals.length+1}`);   vals.push(encrypt(messageText)); }
+          if (sets.length > 0) {
+            vals.push(leadId);
+            await pool.query(`UPDATE recruitai_leads SET ${sets.join(',')} WHERE id=$${vals.length}`, vals);
+          }
+        }
       } catch (e) {
         console.error('⚠️ RecruitAI chatbot lead save failed:', e.message);
       }
@@ -4997,6 +5030,54 @@ app.delete('/api/recruitai/admin/leads/:id', async (req, res) => {
   } catch (err) {
     console.error('❌ Admin lead delete error:', err);
     res.status(500).json({ error: 'Failed to delete lead' });
+  }
+});
+
+// POST /api/recruitai/admin/leads/:id/analyze — AI analysis of a lead
+app.post('/api/recruitai/admin/leads/:id/analyze', async (req, res) => {
+  const { password } = req.body;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  const { id } = req.params;
+  if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    const result = await pool.query('SELECT * FROM recruitai_leads WHERE id = $1', [Number(id)]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Lead not found' });
+    const lead = decryptRow(result.rows[0], PII_FIELDS.recruitai_leads);
+
+    const llm = require('./lib/llm');
+    const prompt = `You are a sales analyst for RecruitAI Studio, a Hong Kong AI automation agency serving SMEs.
+
+Analyze this inbound lead and respond with ONLY valid JSON (no markdown, no extra text):
+
+Lead data:
+- Company: ${lead.company || 'Not provided'}
+- Industry: ${lead.industry || 'Not provided'}
+- Headcount: ${lead.headcount || 'Not provided'}
+- Source form: ${lead.source_page || 'Unknown'}
+- Message / pain points: ${lead.message || 'No message provided'}
+
+Return this exact JSON structure:
+{
+  "category": "one of: 招聘自動化 | 客服AI | 行銷自動化 | 後台流程 | 資料分析 | 人力資源 | 一般查詢",
+  "summary": "2-3 sentence summary in Traditional Chinese of what this company needs and their situation",
+  "evaluation": "2-3 sentence evaluation in Traditional Chinese assessing lead quality, urgency, and fit for AI automation",
+  "stars": <integer 1-5, where 1=cold/unclear, 3=warm/interested, 5=hot/high-intent with clear pain point>,
+  "star_reason": "one concise sentence in Traditional Chinese explaining the star rating"
+}`;
+
+    const aiResult = await llm.chat('haiku', [{ role: 'user', content: prompt }], { maxTokens: 600 });
+    let analysis;
+    try {
+      const text = aiResult.text.trim();
+      const jsonStr = text.startsWith('{') ? text : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+      analysis = JSON.parse(jsonStr);
+    } catch {
+      return res.status(500).json({ error: 'Failed to parse AI response' });
+    }
+    res.json({ success: true, analysis });
+  } catch (err) {
+    console.error('❌ Lead analysis error:', err);
+    res.status(500).json({ error: 'Failed to analyze lead' });
   }
 });
 

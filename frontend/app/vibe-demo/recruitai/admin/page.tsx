@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Lock, RefreshCw, ChevronDown, ChevronUp,
-  Users, MessageSquare, Mail, Phone, Building2, Clock,
+  Users, MessageSquare, Clock,
   CheckCircle, Search, Pencil, Trash2, X, Save,
+  Sparkles, Star, Tag, FileText, TrendingUp,
 } from 'lucide-react';
 
 const API_BASE = (() => {
@@ -67,6 +68,8 @@ interface ChatMessage {
 
 function SourceBadge({ page }: { page: string | null }) {
   if (!page) return <span className="text-slate-600 text-xs">—</span>;
+  if (page.startsWith('chatbot:'))
+    return <span className="text-xs px-2 py-0.5 rounded-full border bg-emerald-900/40 text-emerald-300 border-emerald-800/50">AI 聊天</span>;
   const map: Record<string, { label: string; cls: string }> = {
     '/contact':      { label: '聯絡表格', cls: 'bg-blue-900/40 text-blue-300 border-blue-800/50' },
     '/consultation': { label: '諮詢預約', cls: 'bg-violet-900/40 text-violet-300 border-violet-800/50' },
@@ -125,6 +128,42 @@ function PasswordGate({ onAuth }: { onAuth: () => void }) {
   );
 }
 
+// ─── AI Analysis types ────────────────────────────────────────────────────────
+
+interface AiAnalysis {
+  category: string;
+  summary: string;
+  evaluation: string;
+  stars: number;
+  star_reason: string;
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  '招聘自動化':  'bg-blue-900/50 text-blue-300 border-blue-700/50',
+  '客服AI':      'bg-emerald-900/50 text-emerald-300 border-emerald-700/50',
+  '行銷自動化':  'bg-violet-900/50 text-violet-300 border-violet-700/50',
+  '後台流程':    'bg-amber-900/50 text-amber-300 border-amber-700/50',
+  '資料分析':    'bg-cyan-900/50 text-cyan-300 border-cyan-700/50',
+  '人力資源':    'bg-pink-900/50 text-pink-300 border-pink-700/50',
+  '一般查詢':    'bg-slate-700/50 text-slate-300 border-slate-600/50',
+};
+
+const STAR_COLORS = ['', 'text-red-400', 'text-orange-400', 'text-yellow-400', 'text-lime-400', 'text-emerald-400'];
+const STAR_LABELS = ['', '冷門', '待觀察', '有興趣', '積極', '高潛力'];
+
+function StarRating({ stars }: { stars: number }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex gap-0.5">
+        {[1,2,3,4,5].map(i => (
+          <Star key={i} className={`w-4 h-4 ${i <= stars ? `fill-current ${STAR_COLORS[stars]}` : 'text-slate-600'}`} />
+        ))}
+      </div>
+      <span className={`text-xs font-semibold ${STAR_COLORS[stars]}`}>{STAR_LABELS[stars]}</span>
+    </div>
+  );
+}
+
 // ─── Lead Row ─────────────────────────────────────────────────────────────────
 
 function LeadRow({
@@ -140,6 +179,9 @@ function LeadRow({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [analysis, setAnalysis] = useState<AiAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState('');
   const [draft, setDraft] = useState({
     name: lead.name ?? '',
     email: lead.email ?? '',
@@ -160,10 +202,7 @@ function LeadRow({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: ADMIN_PASSWORD, ...draft }),
       });
-      if (res.ok) {
-        onUpdate(lead.id, draft);
-        setEditing(false);
-      }
+      if (res.ok) { onUpdate(lead.id, draft); setEditing(false); }
     } finally { setSaving(false); }
   }
 
@@ -179,7 +218,25 @@ function LeadRow({
     } finally { setDeleting(false); }
   }
 
+  async function handleAnalyze() {
+    setAnalyzing(true);
+    setAnalyzeError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/recruitai/admin/leads/${lead.id}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: ADMIN_PASSWORD }),
+      });
+      const data = await res.json();
+      if (data.success) setAnalysis(data.analysis);
+      else setAnalyzeError(data.error || '分析失敗');
+    } catch {
+      setAnalyzeError('請求失敗，請重試');
+    } finally { setAnalyzing(false); }
+  }
+
   const fieldCls = 'w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500';
+  const labelCls = 'block text-xs text-slate-500 uppercase tracking-wider mb-1';
 
   return (
     <>
@@ -203,19 +260,12 @@ function LeadRow({
         </td>
         <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => { setExpanded(true); setEditing(true); }}
-              className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400 transition-colors"
-              title="編輯"
-            >
+            <button onClick={() => { setExpanded(true); setEditing(true); }}
+              className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400 transition-colors" title="編輯">
               <Pencil className="w-3.5 h-3.5" />
             </button>
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-red-400 transition-colors"
-              title="刪除"
-            >
+            <button onClick={handleDelete} disabled={deleting}
+              className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-red-400 transition-colors" title="刪除">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
             <button onClick={() => { if (!editing) setExpanded(!expanded); }} className="p-1.5 text-slate-500">
@@ -227,85 +277,147 @@ function LeadRow({
 
       {expanded && (
         <tr className="bg-slate-800/60 border-b border-slate-700/50">
-          <td colSpan={9} className="px-4 py-5">
+          <td colSpan={9} className="px-5 py-5">
             {editing ? (
+              /* ── Edit mode ── */
               <div className="space-y-4">
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">姓名</label>
-                    <input value={draft.name} onChange={e => upd('name', e.target.value)} className={fieldCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">電郵</label>
-                    <input type="email" value={draft.email} onChange={e => upd('email', e.target.value)} className={fieldCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">電話</label>
-                    <input value={draft.phone} onChange={e => upd('phone', e.target.value)} placeholder="+852 XXXX XXXX" className={fieldCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">公司</label>
-                    <input value={draft.company} onChange={e => upd('company', e.target.value)} className={fieldCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">行業</label>
-                    <input value={draft.industry} onChange={e => upd('industry', e.target.value)} className={fieldCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">員工人數</label>
-                    <input value={draft.headcount} onChange={e => upd('headcount', e.target.value)} className={fieldCls} />
-                  </div>
+                  {([
+                    ['name', '姓名', 'text'],
+                    ['email', '電郵', 'email'],
+                    ['phone', '電話', 'text'],
+                    ['company', '公司', 'text'],
+                    ['industry', '行業', 'text'],
+                    ['headcount', '員工人數', 'text'],
+                  ] as [keyof typeof draft, string, string][]).map(([k, label, type]) => (
+                    <div key={k}>
+                      <label className={labelCls}>{label}</label>
+                      <input type={type} value={draft[k]} onChange={e => upd(k, e.target.value)} className={fieldCls} />
+                    </div>
+                  ))}
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase tracking-wider mb-1">訊息 / 痛點</label>
+                  <label className={labelCls}>訊息 / 痛點</label>
                   <textarea rows={3} value={draft.message} onChange={e => upd('message', e.target.value)} className={`${fieldCls} resize-none`} />
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    {saving ? '儲存中...' : '儲存'}
+                  <button onClick={handleSave} disabled={saving}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors">
+                    <Save className="w-3.5 h-3.5" />{saving ? '儲存中...' : '儲存'}
                   </button>
                   <button
                     onClick={() => { setEditing(false); setDraft({ name: lead.name ?? '', email: lead.email ?? '', phone: lead.phone ?? '', company: lead.company ?? '', industry: lead.industry ?? '', headcount: lead.headcount ?? '', message: lead.message ?? '' }); }}
-                    className="flex items-center gap-1.5 px-4 py-2 border border-slate-600 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    取消
+                    className="flex items-center gap-1.5 px-4 py-2 border border-slate-600 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg transition-colors">
+                    <X className="w-3.5 h-3.5" />取消
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3 text-sm">
+              /* ── View mode ── */
+              <div className="space-y-5">
+
+                {/* Submitted info grid */}
                 <div>
-                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">電話</p>
-                  <p className="text-slate-300">{lead.phone || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">員工人數</p>
-                  <p className="text-slate-300">{lead.headcount || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">來源</p>
-                  <SourceBadge page={lead.source_page} />
-                </div>
-                <div className="sm:col-span-2 lg:col-span-3">
-                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">訊息 / 痛點</p>
-                  <p className="text-slate-300 whitespace-pre-line leading-relaxed">{lead.message || '(空)'}</p>
-                </div>
-                {(lead.utm_source || lead.utm_medium || lead.utm_campaign) && (
-                  <div className="sm:col-span-2 lg:col-span-3">
-                    <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">UTM</p>
-                    <p className="text-slate-500 text-xs">{[lead.utm_source, lead.utm_medium, lead.utm_campaign].filter(Boolean).join(' / ')}</p>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5" /> 提交資料
+                  </p>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3 text-sm">
+                    <div><p className={labelCls}>姓名</p><p className="text-slate-200 font-medium">{lead.name || '—'}</p></div>
+                    <div><p className={labelCls}>電郵</p>
+                      <a href={`mailto:${lead.email}`} className="text-blue-400 hover:text-blue-300 text-sm">{lead.email || '—'}</a>
+                    </div>
+                    <div><p className={labelCls}>電話</p><p className="text-slate-300">{lead.phone || '—'}</p></div>
+                    <div><p className={labelCls}>公司</p><p className="text-slate-300">{lead.company || '—'}</p></div>
+                    <div><p className={labelCls}>行業</p><p className="text-slate-300">{lead.industry || '—'}</p></div>
+                    <div><p className={labelCls}>員工人數</p><p className="text-slate-300">{lead.headcount || '—'}</p></div>
+                    <div><p className={labelCls}>表單來源</p><SourceBadge page={lead.source_page} /></div>
+                    <div><p className={labelCls}>提交時間</p>
+                      <p className="text-slate-300">{new Date(lead.created_at).toLocaleString('zh-HK', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                    </div>
+                    {(lead.utm_source || lead.utm_medium || lead.utm_campaign) && (
+                      <div><p className={labelCls}>UTM</p>
+                        <p className="text-slate-500 text-xs">{[lead.utm_source, lead.utm_medium, lead.utm_campaign].filter(Boolean).join(' / ')}</p>
+                      </div>
+                    )}
+                    <div className="sm:col-span-2 lg:col-span-3">
+                      <p className={labelCls}>訊息 / 痛點</p>
+                      <p className="text-slate-200 whitespace-pre-line leading-relaxed bg-white/[0.03] rounded-lg px-3 py-2 border border-slate-700/50">{lead.message || '(未填寫)'}</p>
+                    </div>
                   </div>
-                )}
-                <div>
-                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Lead ID</p>
-                  <p className="text-slate-600 text-xs font-mono">{lead.lead_id}</p>
                 </div>
+
+                {/* Divider */}
+                <div className="border-t border-slate-700/50" />
+
+                {/* AI Analysis */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-violet-400" /> AI 分析
+                    </p>
+                    {!analysis && (
+                      <button
+                        onClick={handleAnalyze}
+                        disabled={analyzing}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-600/40 text-violet-300 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        {analyzing ? '分析中...' : '分析此詢問'}
+                      </button>
+                    )}
+                    {analysis && (
+                      <button
+                        onClick={() => { setAnalysis(null); }}
+                        className="text-slate-500 hover:text-slate-400 text-xs"
+                      >重新分析</button>
+                    )}
+                  </div>
+
+                  {analyzing && (
+                    <div className="flex items-center gap-2 text-slate-400 text-sm py-3">
+                      <div className="w-4 h-4 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                      正在分析，請稍候...
+                    </div>
+                  )}
+
+                  {analyzeError && (
+                    <p className="text-red-400 text-sm">{analyzeError}</p>
+                  )}
+
+                  {analysis && (
+                    <div className="space-y-4">
+                      {/* Category + Stars row */}
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full border ${CATEGORY_COLORS[analysis.category] ?? CATEGORY_COLORS['一般查詢']}`}>
+                          <Tag className="w-3 h-3" />{analysis.category}
+                        </span>
+                        <StarRating stars={Math.min(5, Math.max(1, analysis.stars))} />
+                      </div>
+                      <p className="text-slate-400 text-xs italic">{analysis.star_reason}</p>
+
+                      {/* Summary */}
+                      <div className="bg-white/[0.03] border border-slate-700/50 rounded-xl px-4 py-3 space-y-3">
+                        <div>
+                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                            <FileText className="w-3 h-3" /> AI 摘要
+                          </p>
+                          <p className="text-slate-200 text-sm leading-relaxed">{analysis.summary}</p>
+                        </div>
+                        <div className="border-t border-slate-700/40 pt-3">
+                          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                            <TrendingUp className="w-3 h-3" /> 潛力評估
+                          </p>
+                          <p className="text-slate-200 text-sm leading-relaxed">{analysis.evaluation}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!analysis && !analyzing && !analyzeError && (
+                    <p className="text-slate-600 text-xs">點擊「分析此詢問」以獲得 AI 分類、摘要及潛力評估。</p>
+                  )}
+                </div>
+
               </div>
             )}
           </td>
