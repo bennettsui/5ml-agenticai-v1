@@ -68,6 +68,8 @@ interface ChatMessage {
 
 function SourceBadge({ page }: { page: string | null }) {
   if (!page) return <span className="text-slate-600 text-xs">—</span>;
+  if (page.startsWith('chatbot:'))
+    return <span className="text-xs px-2 py-0.5 rounded-full border bg-emerald-900/40 text-emerald-300 border-emerald-800/50">AI 聊天</span>;
   const map: Record<string, { label: string; cls: string }> = {
     '/contact':      { label: '聯絡表格', cls: 'bg-blue-900/40 text-blue-300 border-blue-800/50' },
     '/consultation': { label: '諮詢預約', cls: 'bg-violet-900/40 text-violet-300 border-violet-800/50' },
