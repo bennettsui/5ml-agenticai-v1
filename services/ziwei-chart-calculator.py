@@ -47,17 +47,17 @@ ZIWEI_SYSTEM_STARS = {
     "廉貞": -8      # Counter-clockwise 8
 }
 
-# Tianfu System: 8 stars (all clockwise/順布 from Tianfu — Zhongzhou School 中州派)
-# 天府系順布: 天府為錨點，太陰起一順數，依次為貪狼、巨門、天相、天梁、七殺，破軍在+10位
+# Tianfu System: 8 stars — ALL counter-clockwise (逆布) from Tianfu
+# Traditional rule: 天府為錨，太陰逆一，貪狼逆二，巨門逆三，天相逆四，天梁逆五，七殺逆六，破軍逆八
 TIANFU_SYSTEM_STARS = {
     "天府": 0,      # Anchor star
-    "太陰": -1,     # Counter-clockwise 1 from 天府 (逆布)
+    "太陰": -1,     # Counter-clockwise 1 from 天府
     "貪狼": -2,     # Counter-clockwise 2
-    "巨門": 1,      # Clockwise 1 (順布)
-    "天相": 2,      # Clockwise 2
-    "天梁": 3,      # Clockwise 3
-    "七殺": 6,      # Clockwise 6 (opposite 天府)
-    "破軍": 10      # Clockwise 10
+    "巨門": -3,     # Counter-clockwise 3
+    "天相": -4,     # Counter-clockwise 4
+    "天梁": -5,     # Counter-clockwise 5
+    "七殺": -6,     # Counter-clockwise 6
+    "破軍": -8,     # Counter-clockwise 8 (skip -7)
 }
 
 # STEP 7: Auxiliary & Calamity Stars
@@ -81,11 +81,12 @@ TIAN_YUE_BY_YEAR_STEM = {
 }
 
 # Group 2: Based on Year Branch (1 star)
+# 天馬 sits at the 驛馬 position — opposite the 長生 branch of each three-harmony group
 TIAN_MA_BY_YEAR_BRANCH = {
-    "申": "申", "子": "申", "辰": "申",  # 申子辰 group → 申
-    "寅": "寅", "午": "寅", "戌": "寅",  # 寅午戌 group → 寅
-    "巳": "亥", "酉": "亥", "丑": "亥",  # 巳酉丑 group → 亥
-    "亥": "巳", "卯": "巳", "未": "巳"   # 亥卯未 group → 巳
+    "申": "寅", "子": "寅", "辰": "寅",  # 申子辰 group → 天馬在寅
+    "寅": "申", "午": "申", "戌": "申",  # 寅午戌 group → 天馬在申
+    "巳": "亥", "酉": "亥", "丑": "亥",  # 巳酉丑 group → 天馬在亥
+    "亥": "巳", "卯": "巳", "未": "巳"   # 亥卯未 group → 天馬在巳
 }
 
 # STEP 8: Four Transformations (四化) - Based on Year Stem (10 stems)
@@ -274,6 +275,8 @@ class PalaceData:
     tianfu_star: Optional[str] = None
     major_stars: List[str] = None
     transformations: Dict[str, str] = None  # Maps star_name -> transformation type (化祿/化權/化科/化忌)
+    major_limit_start: Optional[int] = None  # 大限起始年齡
+    major_limit_end: Optional[int] = None    # 大限結束年齡
 
 
 @dataclass
@@ -806,6 +809,12 @@ def calculate_natal_chart(birth: BirthData) -> NatalChart:
         palaces, birth.year_stem
     )
 
+    # STEP 9: Calculate 大限 decade cycles
+    calculate_major_limits(
+        palaces, life_palace_branch, five_element_bureau,
+        birth.year_branch, birth.gender
+    )
+
     # Create chart
     chart = NatalChart(
         birth=birth,
@@ -817,6 +826,50 @@ def calculate_natal_chart(birth: BirthData) -> NatalChart:
     )
 
     return chart
+
+
+# ============================================================
+# STEP 9: CALCULATE 大限 (MAJOR LIMIT DECADE CYCLES)
+# ============================================================
+
+# Yang year branches (陽支): 子寅辰午申戌
+_YANG_YEAR_BRANCHES = {"子", "寅", "辰", "午", "申", "戌"}
+
+# Start age (起限歲數) by 五行局 number
+_MAJOR_LIMIT_START_AGE = {2: 2, 3: 3, 4: 4, 5: 5, 6: 6}
+
+
+def calculate_major_limits(
+    palaces: List[PalaceData],
+    life_palace_branch: str,
+    five_element_bureau: int,
+    year_branch: str,
+    gender: str
+) -> None:
+    """
+    Calculate 大限 (major limit) start/end ages for each palace and write them in-place.
+
+    Direction rules:
+      陽年男 / 陰年女 → 順 (clockwise, +1 per palace)
+      陰年男 / 陽年女 → 逆 (counter-clockwise, -1 per palace)
+
+    Start age = 五行局 number (2–6).
+    Each subsequent palace adds 10 years.
+    """
+    start_age = _MAJOR_LIMIT_START_AGE.get(five_element_bureau, five_element_bureau)
+    is_yang_year = year_branch in _YANG_YEAR_BRANCHES
+    is_male = gender == "M"
+    is_forward = (is_yang_year and is_male) or (not is_yang_year and not is_male)
+
+    life_idx = BRANCHES.index(life_palace_branch)
+    for palace in palaces:
+        palace_idx = BRANCHES.index(palace.branch)
+        if is_forward:
+            distance = (palace_idx - life_idx) % 12
+        else:
+            distance = (life_idx - palace_idx) % 12
+        palace.major_limit_start = start_age + distance * 10
+        palace.major_limit_end = palace.major_limit_start + 9
 
 
 # ============================================================
@@ -890,6 +943,8 @@ def format_chart_output(chart: NatalChart) -> Dict:
                 "tianfu_star":  p.tianfu_star,
                 "major_stars":  p.major_stars or [],
                 "transformations": p.transformations or {},
+                "major_limit_start": p.major_limit_start,
+                "major_limit_end":   p.major_limit_end,
             }
             for p in chart.palaces
         ]

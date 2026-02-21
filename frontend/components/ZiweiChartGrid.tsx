@@ -13,6 +13,8 @@ interface PalaceData {
   transformations: Record<string, string>; // { starName: type } e.g. { "廉貞": "化祿" }
   ziwei_star?:    string;
   tianfu_star?:   string;
+  major_limit_start?: number;   // 大限起始年齡
+  major_limit_end?:   number;   // 大限結束年齡
 }
 
 interface ZiweiChartGridProps {
@@ -209,6 +211,13 @@ export function ZiweiChartGrid({
                         <span className="text-[10px] text-slate-500">{palace.branch}</span>
                       </div>
 
+                      {/* 大限 range */}
+                      {palace.major_limit_start !== undefined && (
+                        <div className="text-[9px] text-slate-500 leading-tight mb-0.5">
+                          {palace.major_limit_start}–{palace.major_limit_end}歲
+                        </div>
+                      )}
+
                       {/* Life/Body tags */}
                       {(isLife || isBody) && (
                         <div className="flex gap-0.5 mb-0.5">
@@ -249,6 +258,12 @@ export function ZiweiChartGrid({
                           {isLife && <span className="ml-1 text-amber-400">（命宮）</span>}
                           {isBody && <span className="ml-1 text-blue-400">（身宮）</span>}
                         </div>
+
+                        {palace.major_limit_start !== undefined && (
+                          <div className="text-slate-400 text-[11px]">
+                            大限：{palace.major_limit_start}–{palace.major_limit_end} 歲
+                          </div>
+                        )}
 
                         {stars.length > 0 && (
                           <div>
