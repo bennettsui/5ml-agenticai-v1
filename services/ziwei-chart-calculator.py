@@ -87,6 +87,21 @@ TIAN_MA_BY_YEAR_BRANCH = {
     "亥": "巳", "卯": "巳", "未": "巳"   # 亥卯未 group → 巳
 }
 
+# STEP 8: Four Transformations (四化) - Based on Year Stem (10 stems)
+# Each stem transforms specific stars into: 化祿, 化權, 化科, 化忌
+FOUR_TRANSFORMATIONS_BY_YEAR_STEM = {
+    "甲": {"hua_lu": "廉貞", "hua_quan": "破軍", "hua_ke": "武曲", "hua_ji": "太陽"},
+    "乙": {"hua_lu": "天機", "hua_quan": "天梁", "hua_ke": "紫微", "hua_ji": "太陰"},
+    "丙": {"hua_lu": "天同", "hua_quan": "天機", "hua_ke": "文昌", "hua_ji": "廉貞"},
+    "丁": {"hua_lu": "太陰", "hua_quan": "天同", "hua_ke": "天機", "hua_ji": "巨門"},
+    "戊": {"hua_lu": "貪狼", "hua_quan": "太陰", "hua_ke": "右弼", "hua_ji": "天機"},
+    "己": {"hua_lu": "武曲", "hua_quan": "貪狼", "hua_ke": "天梁", "hua_ji": "文曲"},
+    "庚": {"hua_lu": "太陽", "hua_quan": "武曲", "hua_ke": "太陰", "hua_ji": "天同"},
+    "辛": {"hua_lu": "巨門", "hua_quan": "太陽", "hua_ke": "文曲", "hua_ji": "文昌"},
+    "壬": {"hua_lu": "天梁", "hua_quan": "紫微", "hua_ke": "左輔", "hua_ji": "武曲"},
+    "癸": {"hua_lu": "破軍", "hua_quan": "巨門", "hua_ke": "太陰", "hua_ji": "貪狼"},
+}
+
 # Group 3: Based on Birth Hour (2 stars - 文昌 and 文曲)
 # 文昌: Start at 戌(8), count backward by hour (retrograde)
 WEN_CHANG_BY_HOUR = {
@@ -212,6 +227,7 @@ class PalaceData:
     ziwei_star: Optional[str] = None
     tianfu_star: Optional[str] = None
     major_stars: List[str] = None
+    transformations: Dict[str, str] = None  # Maps star_name -> transformation type (化祿/化權/化科/化忌)
 
 
 @dataclass
@@ -558,6 +574,62 @@ def place_auxiliary_calamity_stars(
     return star_positions
 
 
+def apply_natal_four_transformations(
+    palaces: List[PalaceData],
+    year_stem: str
+) -> Dict[str, str]:
+    """
+    Apply Natal Four Transformations (本命四化) to the chart
+
+    The four transformations modify specific stars based on year stem:
+    - 化祿 (Hua Lu): Transformation to Prosperity
+    - 化權 (Hua Quan): Transformation to Authority
+    - 化科 (Hua Ke): Transformation to Excellence
+    - 化忌 (Hua Ji): Transformation to Obstacle
+
+    Args:
+        palaces: List of 12 palaces
+        year_stem: Year heavenly stem (甲乙丙...)
+
+    Returns:
+        Dictionary of {star_name: transformation_type}
+    """
+    transformations = {}
+
+    # Get the transformation mapping for this year stem
+    if year_stem not in FOUR_TRANSFORMATIONS_BY_YEAR_STEM:
+        return transformations
+
+    stem_transformations = FOUR_TRANSFORMATIONS_BY_YEAR_STEM[year_stem]
+
+    # Map each transformation to its star
+    for transformation_type, star_name in stem_transformations.items():
+        transformations[star_name] = transformation_type
+
+        # Find all occurrences of this star in the palaces and mark them
+        for palace in palaces:
+            stars_in_palace = []
+
+            # Check if it's a ziwei or tianfu star (these have their own fields)
+            if palace.ziwei_star and palace.ziwei_star.replace("星", "") == star_name:
+                if not palace.transformations:
+                    palace.transformations = {}
+                palace.transformations[star_name] = transformation_type
+
+            elif palace.tianfu_star and palace.tianfu_star.replace("星", "") == star_name:
+                if not palace.transformations:
+                    palace.transformations = {}
+                palace.transformations[star_name] = transformation_type
+
+            # Check major_stars list
+            elif palace.major_stars and star_name in palace.major_stars:
+                if not palace.transformations:
+                    palace.transformations = {}
+                palace.transformations[star_name] = transformation_type
+
+    return transformations
+
+
 def place_14_major_stars(
     palaces: List[PalaceData],
     ziwei_position: str,
@@ -652,7 +724,8 @@ def calculate_natal_chart(birth: BirthData) -> NatalChart:
             branch=branch,
             stem=stem,
             stem_branch=stem + branch,
-            major_stars=[]
+            major_stars=[],
+            transformations={}
         )
         palaces.append(palace)
 
@@ -667,6 +740,11 @@ def calculate_natal_chart(birth: BirthData) -> NatalChart:
     # STEP 7: Place auxiliary & calamity stars
     auxiliary_stars_positions = place_auxiliary_calamity_stars(
         palaces, birth.year_stem, birth.year_branch, birth.hour_branch
+    )
+
+    # STEP 8: Apply natal four transformations
+    natal_four_transformations = apply_natal_four_transformations(
+        palaces, birth.year_stem
     )
 
     # Create chart
@@ -784,6 +862,14 @@ if __name__ == "__main__":
         if auxiliary_stars_pos.get(star):
             print(f"    {star}: {auxiliary_stars_pos[star]}宮")
 
+    # Get four transformations
+    four_transformations = FOUR_TRANSFORMATIONS_BY_YEAR_STEM.get(bennett.year_stem, {})
+    print(f"\nNatal Four Transformations (STEP 8) - Year Stem: {bennett.year_stem}")
+    print(f"  化祿 (Prosperity): {four_transformations.get('hua_lu', 'N/A')}")
+    print(f"  化權 (Authority): {four_transformations.get('hua_quan', 'N/A')}")
+    print(f"  化科 (Excellence): {four_transformations.get('hua_ke', 'N/A')}")
+    print(f"  化忌 (Obstacle): {four_transformations.get('hua_ji', 'N/A')}")
+
     print(f"\n12宮排列 with All Stars (逆時針 COUNTERCLOCKWISE):")
     for palace in chart.palaces:
         stars = []
@@ -794,4 +880,65 @@ if __name__ == "__main__":
         if palace.major_stars:
             stars.extend(palace.major_stars)
         star_info = f" [{', '.join(stars)}]" if stars else ""
-        print(f"  {palace.palace_name}: {palace.stem_branch}{star_info}")
+
+        # Add transformation info if present
+        transformation_info = ""
+        if palace.transformations:
+            transforms = []
+            for star_name, trans_type in palace.transformations.items():
+                trans_emoji = {"hua_lu": "祿", "hua_quan": "權", "hua_ke": "科", "hua_ji": "忌"}.get(trans_type, trans_type)
+                transforms.append(f"{star_name}化{trans_emoji}")
+            if transforms:
+                transformation_info = f" <{', '.join(transforms)}>"
+
+        print(f"  {palace.palace_name}: {palace.stem_branch}{star_info}{transformation_info}")
+
+    # ============================================================
+    # TEST WITH BRIAN (丙 Stem)
+    # ============================================================
+    print("\n" + "="*60)
+    brian = BirthData(
+        year_stem="丙",
+        year_branch="寅",
+        lunar_month=12,
+        lunar_day=17,
+        hour_branch="酉",
+        gender="M",
+        name="Brian"
+    )
+
+    chart2 = calculate_natal_chart(brian)
+    print(f"\n生成命盤: {brian.name}")
+    print(f"出生年干: {chart2.birth.year_stem}")
+
+    # Get four transformations for Brian
+    four_transformations_brian = FOUR_TRANSFORMATIONS_BY_YEAR_STEM.get(brian.year_stem, {})
+    print(f"\nNatal Four Transformations (STEP 8) - Year Stem: {brian.year_stem}")
+    print(f"  化祿 (Prosperity): {four_transformations_brian.get('hua_lu', 'N/A')}")
+    print(f"  化權 (Authority): {four_transformations_brian.get('hua_quan', 'N/A')}")
+    print(f"  化科 (Excellence): {four_transformations_brian.get('hua_ke', 'N/A')}")
+    print(f"  化忌 (Obstacle): {four_transformations_brian.get('hua_ji', 'N/A')}")
+
+    print(f"\n12宮排列 with Transformations:")
+    for palace in chart2.palaces:
+        stars = []
+        if palace.ziwei_star:
+            stars.append(palace.ziwei_star)
+        if palace.tianfu_star:
+            stars.append(palace.tianfu_star)
+        if palace.major_stars:
+            stars.extend(palace.major_stars)
+        star_info = f" [{', '.join(stars)}]" if stars else ""
+
+        # Add transformation info
+        transformation_info = ""
+        if palace.transformations:
+            transforms = []
+            for star_name, trans_type in palace.transformations.items():
+                trans_emoji = {"hua_lu": "祿", "hua_quan": "權", "hua_ke": "科", "hua_ji": "忌"}.get(trans_type, trans_type)
+                transforms.append(f"{star_name}化{trans_emoji}")
+            if transforms:
+                transformation_info = f" <{', '.join(transforms)}>"
+
+        if star_info or transformation_info:
+            print(f"  {palace.palace_name}: {palace.stem_branch}{star_info}{transformation_info}")
