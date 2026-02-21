@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle2, AlertTriangle, Clock, Activity, RefreshCw } from 'lucide-react';
 
-const RUNS = [
+// No mock data — all data comes from /api/tender-intel/logs
+
+const _PLACEHOLDER_RUNS = [
   {
     agent: 'RSSXMLIngestorAgent',
     run_id: 'ing-20260221-001',
@@ -124,34 +126,31 @@ function mapApiLog(log: any) {
 }
 
 export default function LogsPage() {
-  const [liveRuns, setLiveRuns] = useState<typeof RUNS | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [runs, setRuns] = useState<ReturnType<typeof mapApiLog>[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadLogs = () => {
     setLoading(true);
-    fetch('/api/tender-intel/logs?limit=50')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) setLiveRuns(data.map(mapApiLog));
-      })
-      .catch(() => {/* keep mock */})
+    fetch('/api/tender-intel/logs?limit=100')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setRuns(Array.isArray(data) ? data.map(mapApiLog) : []))
+      .catch(() => setRuns([]))
       .finally(() => setLoading(false));
-  }, []);
+  };
 
-  const displayRuns = liveRuns ?? RUNS;
-  const runsToday = displayRuns.length;
-  const totalItems = displayRuns.reduce((s, r) => s + r.items_processed, 0);
-  const failures = displayRuns.filter(r => r.status === 'error' || r.status === 'partial').length;
-  const newTenders = displayRuns.filter(r => r.agent.includes('Normalizer')).reduce((s, r) => s + r.items_processed, 0);
+  useEffect(() => { loadLogs(); }, []);
+
+  const totalItems = runs.reduce((s, r) => s + r.items_processed, 0);
+  const failures = runs.filter(r => r.status === 'error' || r.status === 'partial').length;
 
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight mb-1">Ingestion Log</h1>
-          <p className="text-sm text-slate-400">Agent run history{liveRuns ? ' · live' : ' · mock data'}</p>
+          <p className="text-sm text-slate-400">{loading ? 'Loading…' : `${runs.length} agent runs recorded`}</p>
         </div>
-        <button onClick={() => window.location.reload()} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 border border-slate-700/50 hover:border-slate-600 transition-colors">
+        <button onClick={loadLogs} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 border border-slate-700/50 hover:border-slate-600 transition-colors">
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </button>
@@ -160,21 +159,30 @@ export default function LogsPage() {
       {/* Summary stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Runs total', value: String(runsToday), color: 'teal' },
+          { label: 'Runs total', value: String(runs.length), color: 'teal' },
           { label: 'Items processed', value: String(totalItems), color: 'teal' },
           { label: 'Failures', value: String(failures), color: failures > 0 ? 'amber' : 'emerald' },
-          { label: 'New tenders', value: String(newTenders || displayRuns.reduce((s,r) => s + r.items_processed, 0)), color: 'teal' },
+          { label: 'Last status', value: runs[0]?.status ?? '—', color: 'teal' },
         ].map(s => (
           <div key={s.label} className={`p-3 rounded-xl border border-${s.color}-500/30 bg-white/[0.02]`}>
             <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{s.label}</div>
-            <div className={`text-2xl font-bold text-${s.color}-400`}>{s.value}</div>
+            <div className={`text-2xl font-bold text-${s.color}-400`}>{loading ? '—' : s.value}</div>
           </div>
         ))}
       </div>
 
       {/* Run log */}
       <div className="space-y-2">
-        {displayRuns.map(run => {
+        {loading && [1,2,3].map(i => (
+          <div key={i} className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-4 animate-pulse">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-slate-700 flex-shrink-0" />
+              <div className="h-3 bg-slate-700/60 rounded w-40" />
+              <div className="h-3 bg-slate-700/40 rounded w-16" />
+            </div>
+          </div>
+        ))}
+        {!loading && runs.map(run => {
           const sc = STATUS_CONFIG[run.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.success;
           const StatusIcon = sc.icon;
           return (
@@ -206,6 +214,11 @@ export default function LogsPage() {
             </div>
           );
         })}
+        {!loading && runs.length === 0 && (
+          <div className="rounded-xl border border-slate-700/30 bg-white/[0.01] p-8 text-center">
+            <p className="text-sm text-slate-500">No agent runs recorded yet. Trigger the first ingestion: <code className="text-teal-400 text-xs">POST /api/tender-intel/ingest</code></p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -728,10 +728,493 @@ async function getDigest(pool) {
   };
 }
 
+// ─── Capability Profile (default — overridable via DB settings) ───────────────
+
+const DEFAULT_PROFILE = {
+  competencies: [
+    'IT_digital', 'events_experiential', 'marketing_comms', 'consultancy_advisory',
+    'research_study', 'financial_services',
+  ],
+  trackRecordKeywords: [
+    'digital', 'marketing', 'event', 'campaign', 'media', 'communications',
+    'platform', 'system', 'consultancy', 'strategy', 'brand', 'social',
+    'experiential', 'production', 'creative', 'advisory',
+  ],
+  knownAgencies: [],   // populated from tender_decisions 'track' history
+  maxDeliveryFTE: 15,
+  primaryJurisdiction: 'HK',
+  secondaryJurisdiction: 'SG',
+  scoringWeights: {
+    capabilityFit: {
+      categoryMatch: 0.35, agencyFamiliarity: 0.15,
+      deliveryScale: 0.20, keywordOverlap: 0.20, geographicFit: 0.10,
+    },
+    businessPotential: {
+      budget: 0.30, budgetProxy: 0.15, strategicBeachhead: 0.20,
+      categoryGrowth: 0.15, timeToDeadline: 0.10, recurrencePotential: 0.10,
+    },
+    overallWeights: { capabilityFit: 0.55, businessPotential: 0.45 },
+  },
+  version: 'v1.0',
+};
+
+// Categories with growing gov spend
+const GROWTH_CATEGORIES = new Set(['IT_digital', 'events_experiential', 'marketing_comms', 'consultancy_advisory', 'research_study']);
+// Categories adjacent to our competencies
+const ADJACENT_MAP = {
+  IT_digital:          ['consultancy_advisory', 'research_study'],
+  events_experiential: ['marketing_comms'],
+  marketing_comms:     ['events_experiential', 'consultancy_advisory'],
+  consultancy_advisory:['IT_digital', 'research_study'],
+  research_study:      ['consultancy_advisory'],
+};
+
+// ─── Evaluator: pure scoring logic (no LLM) ───────────────────────────────────
+
+function scoreCapabilityFit(tender, profile) {
+  const w = profile.scoringWeights.capabilityFit;
+
+  // categoryMatch
+  const competencySet = new Set(profile.competencies);
+  const exactMatches = tender.category_tags.filter(t => competencySet.has(t));
+  const adjacentMatches = tender.category_tags.filter(t => {
+    const adj = ADJACENT_MAP[t] || [];
+    return adj.some(a => competencySet.has(a));
+  });
+  const categoryScore = exactMatches.length > 0 ? 1.0
+    : adjacentMatches.length > 0 ? 0.5
+    : 0.0;
+
+  // agencyFamiliarity
+  const knownSet = new Set((profile.knownAgencies || []).map(a => a.toLowerCase()));
+  const agencyScore = tender.agency && knownSet.has(tender.agency.toLowerCase()) ? 1.0 : 0.0;
+
+  // deliveryScale: estimate FTE from category + budget proxy
+  const budgetProxy = tender.budget_min || (tender.jurisdiction === 'HK' ? 1400000 : 300000);
+  const estimatedFTE = Math.ceil(budgetProxy / 200000);  // rough: 1 FTE / HK$200k
+  const deliveryScore = estimatedFTE <= profile.maxDeliveryFTE ? 1.0
+    : estimatedFTE <= profile.maxDeliveryFTE * 1.5 ? 0.5
+    : 0.0;
+
+  // keywordOverlap
+  const titleWords = (tender.title || '').toLowerCase().split(/\W+/);
+  const descWords  = (tender.description_snippet || '').toLowerCase().split(/\W+/);
+  const allWords   = new Set([...titleWords, ...descWords].filter(w => w.length > 3));
+  const kw         = profile.trackRecordKeywords.map(k => k.toLowerCase());
+  const matches    = kw.filter(k => allWords.has(k) || [...allWords].some(w => w.includes(k)));
+  const overlapScore = Math.min((matches.length / Math.max(kw.length * 0.3, 3)), 1.0);
+
+  // geographicFit
+  const geoScore = tender.jurisdiction === profile.primaryJurisdiction ? 1.0
+    : tender.jurisdiction === profile.secondaryJurisdiction ? 0.7
+    : 0.3;
+
+  const total = (categoryScore   * w.categoryMatch)
+              + (agencyScore     * w.agencyFamiliarity)
+              + (deliveryScore   * w.deliveryScale)
+              + (overlapScore    * w.keywordOverlap)
+              + (geoScore        * w.geographicFit);
+
+  return {
+    score: Math.min(Math.max(total, 0), 1),
+    signals: {
+      category_match:      categoryScore,
+      agency_familiarity:  agencyScore,
+      delivery_scale:      deliveryScore,
+      keyword_overlap:     overlapScore,
+      geographic_fit:      geoScore,
+    },
+  };
+}
+
+function scoreBusinessPotential(tender, profile) {
+  const w = profile.scoringWeights.businessPotential;
+  const isHK = tender.jurisdiction === 'HK';
+
+  // budget
+  const hkThresholds = { hi: 500000, mid: 100000, lo: 50000 };
+  const sgThresholds = { hi: 100000, mid: 30000,  lo: 20000 };
+  const thr = isHK ? hkThresholds : sgThresholds;
+  let budgetScore = 0;
+  if (tender.budget_source === 'stated' && tender.budget_min != null) {
+    budgetScore = tender.budget_min >= thr.hi ? 1.0 : tender.budget_min >= thr.mid ? 0.6 : 0.2;
+  }
+
+  // budgetProxy (open tender = large contract proxy)
+  const proxyBudget = tender.budget_min || (isHK ? 1400000 : 300000);
+  const proxyScore = proxyBudget >= (isHK ? 1400000 : 300000) ? 0.9
+    : proxyBudget >= (isHK ? 200000 : 50000) ? 0.7
+    : 0.3;
+
+  // strategicBeachhead
+  const knownSet = new Set((profile.knownAgencies || []).map(a => a.toLowerCase()));
+  const isKnown = tender.agency && knownSet.has(tender.agency.toLowerCase());
+  const beachheadScore = isKnown ? 0.4 : 0.8;
+
+  // categoryGrowth
+  const growthScore = tender.category_tags.some(t => GROWTH_CATEGORIES.has(t)) ? 0.9 : 0.5;
+
+  // timeToDeadline
+  const daysLeft = tender.closing_date
+    ? Math.ceil((new Date(tender.closing_date).getTime() - Date.now()) / 86400000)
+    : null;
+  const deadlineScore = !daysLeft ? 0.3 : daysLeft > 30 ? 1.0 : daysLeft >= 14 ? 0.7 : daysLeft >= 7 ? 0.4 : 0.1;
+
+  // recurrencePotential
+  const titleLower = (tender.title || '').toLowerCase();
+  const recurrenceKeywords = ['framework', 'annual', 'multi-year', 'panel', 'standing offer', 'retainer'];
+  const recurrenceScore = recurrenceKeywords.some(k => titleLower.includes(k)) ? 0.9 : 0.3;
+
+  const total = (budgetScore     * w.budget)
+              + (proxyScore      * w.budgetProxy)
+              + (beachheadScore  * w.strategicBeachhead)
+              + (growthScore     * w.categoryGrowth)
+              + (deadlineScore   * w.timeToDeadline)
+              + (recurrenceScore * w.recurrencePotential);
+
+  return {
+    score: Math.min(Math.max(total, 0), 1),
+    signals: {
+      budget:                budgetScore,
+      budget_proxy:          proxyScore,
+      strategic_beachhead:   beachheadScore,
+      category_growth:       growthScore,
+      time_to_deadline:      deadlineScore,
+      recurrence_potential:  recurrenceScore,
+    },
+  };
+}
+
+function assignLabel(overall, deliveryScale) {
+  if (deliveryScale < 0.5) return 'partner_only';
+  if (overall >= 0.70) return 'priority';
+  if (overall >= 0.50) return 'consider';
+  if (overall >= 0.35) return 'partner_only';
+  return 'ignore';
+}
+
+/**
+ * Generate a rationale for one tender using DeepSeek Reasoner.
+ * Returns a plain-English 2-3 sentence rationale.
+ */
+async function generateRationale(tender, capFit, bizPot, label) {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) return `Scored ${label}: capability fit ${(capFit.score * 100).toFixed(0)}%, business potential ${(bizPot.score * 100).toFixed(0)}%. Category: ${tender.category_tags.join(', ') || 'general'}.`;
+
+  try {
+    const resp = await axios.post(
+      'https://api.deepseek.com/chat/completions',
+      {
+        model: 'deepseek-chat',  // chat is cheaper for short rationale generation
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a tender evaluation analyst for a HK digital marketing, events, and technology agency. Write concise, factual tender evaluations.',
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              task: 'Write exactly 2-3 sentences explaining why this tender scored this label. Mention the top 2 positive signals and 1 concern. Be specific and factual.',
+              tender: {
+                title:              tender.title,
+                agency:             tender.agency,
+                jurisdiction:       tender.jurisdiction,
+                category_tags:      tender.category_tags,
+                closing_date:       tender.closing_date,
+                budget_stated:      tender.budget_min ? `${tender.currency || 'HKD'}$${tender.budget_min}` : 'not stated',
+              },
+              label:            label.toUpperCase(),
+              capability_fit:   (capFit.score * 100).toFixed(0) + '%',
+              business_potential: (bizPot.score * 100).toFixed(0) + '%',
+              top_signals: {
+                category_match:     capFit.signals.category_match,
+                keyword_overlap:    capFit.signals.keyword_overlap,
+                time_to_deadline:   bizPot.signals.time_to_deadline,
+                strategic_beachhead: bizPot.signals.strategic_beachhead,
+              },
+            }),
+          },
+        ],
+        max_tokens: 150,
+        temperature: 0.3,
+      },
+      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 20000 }
+    );
+    return resp.data?.choices?.[0]?.message?.content?.trim() || '';
+  } catch (_) {
+    return `Scored ${label}: capability fit ${(capFit.score * 100).toFixed(0)}%, business potential ${(bizPot.score * 100).toFixed(0)}%.`;
+  }
+}
+
+/**
+ * Run evaluation on all pending tenders.
+ * Returns { evaluated, errors }.
+ */
+async function runEvaluation(pool, profileOverride) {
+  const profile = profileOverride || DEFAULT_PROFILE;
+
+  // Load known agencies from past tracked decisions
+  try {
+    const decidedResult = await pool.query(
+      `SELECT DISTINCT t.agency FROM tender_decisions d
+       JOIN tenders t ON t.id = d.tender_id
+       WHERE d.action = 'track' AND t.agency IS NOT NULL`
+    );
+    profile.knownAgencies = decidedResult.rows.map(r => r.agency).filter(Boolean);
+  } catch (_) {}
+
+  // Load pending tenders
+  const { rows: pending } = await pool.query(
+    `SELECT t.id, t.jurisdiction, t.owner_type, t.title, t.agency,
+            t.category_tags, t.closing_date, t.status, t.budget_min, t.budget_max,
+            t.budget_source, t.currency, t.description_snippet, t.source_id
+     FROM tenders t
+     WHERE t.evaluation_status = 'pending' AND t.status = 'open'
+     ORDER BY t.created_at DESC
+     LIMIT 100`
+  );
+
+  const evaluated = [];
+  const errors    = [];
+
+  for (const tender of pending) {
+    try {
+      const capFit = scoreCapabilityFit(tender, profile);
+      const bizPot = scoreBusinessPotential(tender, profile);
+      const overall = (capFit.score * profile.scoringWeights.overallWeights.capabilityFit)
+                    + (bizPot.score * profile.scoringWeights.overallWeights.businessPotential);
+      const label = assignLabel(overall, capFit.signals.delivery_scale);
+
+      const rationale = await generateRationale(tender, capFit, bizPot, label);
+
+      // Upsert evaluation
+      await pool.query(
+        `INSERT INTO tender_evaluations
+           (tender_id, capability_fit, business_potential, overall_score, label,
+            reasoning_summary, signals, scoring_weights, scoring_version, is_latest, evaluated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,NOW())
+         ON CONFLICT (tender_id, is_latest) WHERE is_latest = true
+         DO UPDATE SET
+           capability_fit    = EXCLUDED.capability_fit,
+           business_potential= EXCLUDED.business_potential,
+           overall_score     = EXCLUDED.overall_score,
+           label             = EXCLUDED.label,
+           reasoning_summary = EXCLUDED.reasoning_summary,
+           signals           = EXCLUDED.signals,
+           evaluated_at      = NOW()`,
+        [
+          tender.id,
+          capFit.score, bizPot.score, overall, label,
+          rationale,
+          JSON.stringify({ capability_fit: capFit.signals, business_potential: bizPot.signals }),
+          JSON.stringify(profile.scoringWeights),
+          profile.version,
+        ]
+      );
+
+      // Update tenders table label + evaluation_status
+      await pool.query(
+        `UPDATE tenders SET label=$1, evaluation_status='scored', updated_at=NOW() WHERE id=$2`,
+        [label, tender.id]
+      );
+
+      evaluated.push({ tender_id: tender.id, label, overall });
+    } catch (err) {
+      errors.push({ tender_id: tender.id, error: err.message });
+    }
+  }
+
+  await logAgentRun(pool, {
+    agentName:       'TenderEvaluatorAgent',
+    status:          errors.length > 0 ? 'partial' : 'success',
+    itemsProcessed:  pending.length,
+    newItems:        evaluated.length,
+    durationMs:      0,
+    detail:          `${evaluated.length} tenders scored, ${errors.length} errors`,
+  });
+
+  return { evaluated, errors, profile_version: profile.version };
+}
+
+// ─── GeBIZ HTML Scraper ───────────────────────────────────────────────────────
+
+/**
+ * Scrape GeBIZ public business opportunity listing.
+ * GeBIZ uses JSF/Facelets — we fetch the HTML directly and parse with regex.
+ * Rate limited: 2s between page requests.
+ */
+async function fetchGeBIZ() {
+  const BASE_URL = 'https://www.gebiz.gov.sg/ptn/opportunity/BOListing.xhtml';
+  const items = [];
+  const errors = [];
+
+  try {
+    const resp = await axios.get(BASE_URL, {
+      timeout: 20000,
+      headers: {
+        'User-Agent': '5ML-TenderIntel/1.0 (+https://5ml.ai)',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+
+    const html = resp.data || '';
+    // Parse table rows — GeBIZ uses a data table with class "list-view-table" or similar
+    // Each row contains: Title, Category, Agency, Open Date, Close Date, Status
+    const rowRe = /<tr[^>]*class="[^"]*(?:odd|even|dataRow)[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
+    const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    const linkRe = /href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i;
+    const stripTagsRe = /<[^>]+>/g;
+
+    let rowMatch;
+    while ((rowMatch = rowRe.exec(html)) !== null) {
+      const rowHtml = rowMatch[1];
+      const cells = [];
+      let cellMatch;
+      const cellRegex = new RegExp(cellRe.source, 'gi');
+      while ((cellMatch = cellRegex.exec(rowHtml)) !== null) {
+        cells.push(cellMatch[1].replace(stripTagsRe, '').trim());
+      }
+      if (cells.length < 3) continue;
+
+      // Try to get the tender URL from the row
+      const linkMatch = linkRe.exec(rowHtml);
+      const tenderUrl = linkMatch ? `https://www.gebiz.gov.sg${linkMatch[1]}` : BASE_URL;
+      const title = cells[0] || cells[1] || '';
+      if (!title) continue;
+
+      const guid = crypto.createHash('sha1').update(title + (cells[2] || '')).digest('hex').slice(0, 16);
+      items.push({
+        guid,
+        title:       decodeHtmlEntities(title),
+        link:        tenderUrl,
+        pubDate:     cells[3] || null,   // Open Date column
+        description: cells[1] || null,   // Category column
+        rawXml:      null,
+        preExtracted: {
+          title,
+          publish_date:       cells[3] || null,
+          closing_date:       cells[4] || null,
+          agency:             cells[2] || null,
+          raw_category:       cells[1] || null,
+          description_snippet: null,
+        },
+      });
+    }
+  } catch (err) {
+    errors.push(`GeBIZ fetch error: ${err.message}`);
+  }
+
+  return { items, errors };
+}
+
+// ─── Digest Narrative Generator ───────────────────────────────────────────────
+
+/**
+ * Generate a 1-2 paragraph AI narrative summarising today's tender landscape.
+ * Falls back to a rule-based summary if DeepSeek is unavailable.
+ */
+async function generateDigestNarrative(tenders, stats, today) {
+  const topTenders = tenders
+    .filter(t => t.label !== 'ignore')
+    .sort((a, b) => (b.overall_score || 0) - (a.overall_score || 0))
+    .slice(0, 10);
+
+  if (!process.env.DEEPSEEK_API_KEY || topTenders.length === 0) {
+    const hk = tenders.filter(t => t.jurisdiction === 'HK').length;
+    const sg = tenders.filter(t => t.jurisdiction === 'SG').length;
+    const priority = tenders.filter(t => t.label === 'priority').length;
+    return `Today's digest surfaces ${tenders.length} tenders across HK (${hk}) and SG (${sg}). ${priority > 0 ? `${priority} priority opportunities identified.` : 'No priority tenders today.'} Review the full list below and mark relevant tenders for follow-up.`;
+  }
+
+  try {
+    const resp = await axios.post(
+      'https://api.deepseek.com/chat/completions',
+      {
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a senior tender intelligence analyst for a HK digital marketing and events agency. Write concise daily briefings.',
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              task: 'Write a 1-2 paragraph daily briefing (150-200 words) summarising today\'s government tender landscape. Highlight notable themes, high-value opportunities, and important deadlines. Be factual and brief.',
+              date: today,
+              stats: { hk: stats.hk, sg: stats.sg, priority: stats.priority },
+              top_tenders: topTenders.map(t => ({
+                title:       t.title,
+                agency:      t.agency,
+                jurisdiction: t.jurisdiction,
+                label:       t.label,
+                closing_date: t.closing_date,
+                score:       (t.overall_score * 100).toFixed(0) + '%',
+              })),
+            }),
+          },
+        ],
+        max_tokens: 300,
+        temperature: 0.4,
+      },
+      { headers: { Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 30000 }
+    );
+    return resp.data?.choices?.[0]?.message?.content?.trim() || '';
+  } catch (_) {
+    return `Today's tender landscape shows ${tenders.length} new opportunities across HK and SG. Review scored tenders below.`;
+  }
+}
+
+// ─── Decision Recording ───────────────────────────────────────────────────────
+
+async function recordDecision(pool, { tenderId, action, notes }) {
+  await pool.query(
+    `INSERT INTO tender_decisions (tender_id, action, notes, decided_at)
+     VALUES ($1,$2,$3,NOW())
+     ON CONFLICT (tender_id) DO UPDATE SET action=$2, notes=$3, decided_at=NOW()`,
+    [tenderId, action, notes || null]
+  );
+  // If action=track, update label to reflect decision
+  if (action === 'track') {
+    await pool.query(`UPDATE tenders SET label='priority', updated_at=NOW() WHERE id=$1`, [tenderId]);
+  } else if (action === 'ignore' || action === 'not_for_us') {
+    await pool.query(`UPDATE tenders SET label='ignore', updated_at=NOW() WHERE id=$1`, [tenderId]);
+  } else if (action === 'partner_only') {
+    await pool.query(`UPDATE tenders SET label='partner_only', updated_at=NOW() WHERE id=$1`, [tenderId]);
+  }
+}
+
+// ─── Get Capability Profile ───────────────────────────────────────────────────
+
+async function getProfile(pool) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT value FROM tender_agent_run_logs WHERE agent_name = '__capability_profile__' ORDER BY run_at DESC LIMIT 1`
+    );
+    if (rows.length > 0) return JSON.parse(rows[0].value);
+  } catch (_) {}
+  return DEFAULT_PROFILE;
+}
+
+async function saveProfile(pool, profile) {
+  // Store profile as a special log entry (reuses existing table without schema change)
+  await pool.query(
+    `INSERT INTO tender_agent_run_logs (agent_name, status, items_processed, new_items, duration_ms, detail, run_at)
+     VALUES ('__capability_profile__', 'success', 0, 0, 0, $1, NOW())`,
+    [JSON.stringify(profile)]
+  );
+}
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
   runIngestion,
+  runEvaluation,
+  fetchGeBIZ,
+  generateDigestNarrative,
+  recordDecision,
+  getProfile,
+  saveProfile,
   getTenders,
   getSources,
   getLogs,
@@ -742,4 +1225,5 @@ module.exports = {
   parseDate,
   normaliseTender,
   classifyByTitle,
+  DEFAULT_PROFILE,
 };

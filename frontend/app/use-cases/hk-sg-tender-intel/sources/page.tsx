@@ -22,7 +22,9 @@ interface Source {
   reliability_score: number;
 }
 
-const SOURCES: Source[] = [
+// No mock data — all data comes from /api/tender-intel/sources
+
+const _PLACEHOLDER: Source[] = [
   {
     source_id: 'hk-gld-etb-xml',
     name: 'GLD e-Tender Box — Open Tenders',
@@ -185,9 +187,11 @@ export default function SourceRegistryPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filterJur, setFilterJur] = useState<'All' | 'HK' | 'SG' | 'Global'>('All');
   const [filterStatus, setFilterStatus] = useState<'All' | SourceStatus>('All');
-  const [liveSources, setLiveSources] = useState<Source[] | null>(null);
+  const [sources, setSources] = useState<Source[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const fetchSources = useCallback(async () => {
+    setLoading(true);
     try {
       const params = new URLSearchParams();
       if (filterJur !== 'All') params.set('jurisdiction', filterJur);
@@ -195,30 +199,27 @@ export default function SourceRegistryPage() {
       const res = await fetch(`/api/tender-intel/sources?${params}`);
       if (!res.ok) return;
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) setLiveSources(data.map(mapApiSource));
-    } catch (_) { /* keep mock */ }
+      setSources(Array.isArray(data) ? data.map(mapApiSource) : []);
+    } catch (_) {
+      setSources([]);
+    } finally {
+      setLoading(false);
+    }
   }, [filterJur, filterStatus]);
 
   useEffect(() => { fetchSources(); }, [fetchSources]);
 
-  const SOURCE_DATA = liveSources ?? SOURCES;
-
-  const filtered = SOURCE_DATA.filter(s => {
-    if (filterJur !== 'All' && s.jurisdiction !== filterJur) return false;
-    if (filterStatus !== 'All' && s.status !== filterStatus) return false;
-    return true;
-  });
-
-  const activeCount = SOURCE_DATA.filter(s => s.status === 'active').length;
-  const pendingCount = SOURCE_DATA.filter(s => s.status === 'pending_validation').length;
-  const totalNewToday = SOURCE_DATA.reduce((sum, s) => sum + (s.new_items_today ?? 0), 0);
+  const filtered = sources;
+  const activeCount = sources.filter(s => s.status === 'active').length;
+  const pendingCount = sources.filter(s => s.status === 'pending_validation').length;
+  const totalNewToday = sources.reduce((sum, s) => sum + (s.new_items_today ?? 0), 0);
 
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight mb-1">Source Registry</h1>
-          <p className="text-sm text-slate-400">{activeCount} active · {pendingCount} pending · {totalNewToday} new items today{liveSources ? ' · live' : ' · mock'}</p>
+          <p className="text-sm text-slate-400">{loading ? 'Loading…' : `${activeCount} active · ${pendingCount} pending · ${totalNewToday} new items today`}</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={fetchSources} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 border border-slate-700/50 hover:border-slate-600 hover:text-white transition-colors">
@@ -387,6 +388,11 @@ export default function SourceRegistryPage() {
             </div>
           );
         })}
+        {!loading && filtered.length === 0 && (
+          <div className="rounded-xl border border-slate-700/30 bg-white/[0.01] p-8 text-center">
+            <p className="text-sm text-slate-500">No sources found. Seed the source registry first: <code className="text-teal-400 text-xs">node use-cases/hk-sg-tender-intelligence/scripts/seed-sources.js</code></p>
+          </div>
+        )}
       </div>
     </div>
   );

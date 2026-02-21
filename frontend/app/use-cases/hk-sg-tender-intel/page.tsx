@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   CheckCircle2, Clock, TrendingUp, Rss, ChevronRight, Star,
   BookmarkPlus, X, Users, RefreshCw, AlertTriangle, Globe,
-  Building2, Tag, Calendar, DollarSign, ExternalLink,
+  Building2, Tag, Calendar, DollarSign, ExternalLink, Loader2,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -31,189 +31,63 @@ interface Tender {
   owner_type: 'gov' | 'public_org' | 'university';
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+interface DigestStats {
+  newToday: number;
+  priority: number;
+  closingSoon: number;
+  sourcesOk: string;
+}
 
-const MOCK_NARRATIVE = `Today's digest surfaces 9 new tenders across HK (6) and SG (3).
-The standout is ISD's Creative and Events Management Services framework (HK$2.5M, 22 days) —
-our strongest category match this week. EMSD's digital signage tender and LCSD's
-transformation consultancy are also solid Priority fits. In Singapore, the MOE digital
-learning platform represents a strategic new agency relationship worth pursuing.
-One closing-soon alert: NHB Singapore event management closes in 7 days.`;
+// ─── API helpers ──────────────────────────────────────────────────────────────
 
-const HK_TENDERS: Tender[] = [
-  {
-    id: 'hk-001',
-    jurisdiction: 'HK',
-    tender_ref: 'ISD/EA/2026/001',
-    title: 'Creative and Events Management Services Framework',
-    agency: 'Information Services Department',
-    closing_date: '2026-03-15',
-    days_remaining: 22,
-    budget_display: '~HK$2.5M (open tender)',
-    category_tags: ['events_experiential', 'marketing_comms'],
-    overall_score: 0.85,
-    capability_fit: 0.91,
-    business_potential: 0.78,
-    label: 'Priority',
-    rationale: 'Perfect category fit for our events and marketing capabilities. ISD is a known agency with strong track record for us. Budget is well above threshold at ~HK$2.5M framework value.',
-    source: 'hk-gld-etb-xml',
-    owner_type: 'gov',
-  },
-  {
-    id: 'hk-002',
-    jurisdiction: 'HK',
-    tender_ref: 'EMSD(T)07/2026',
-    title: 'Provision of Digital Signage and AV Systems for Government Buildings',
-    agency: 'Electrical and Mechanical Services Department',
-    closing_date: '2026-03-04',
-    days_remaining: 11,
-    budget_display: '~HK$800k (estimated, open tender)',
-    category_tags: ['IT_digital', 'facilities_management'],
-    overall_score: 0.81,
-    capability_fit: 0.84,
-    business_potential: 0.77,
-    label: 'Priority',
-    rationale: 'Strong IT/digital fit with a familiar agency. Digital signage AV overlaps directly with our events tech capability. Budget estimated above threshold; 11 days is tight but manageable.',
-    source: 'hk-emsd-rss-tender-notices',
-    owner_type: 'gov',
-  },
-  {
-    id: 'hk-003',
-    jurisdiction: 'HK',
-    tender_ref: 'LCSD/IT/001/2026',
-    title: 'Digital Transformation Consultancy Services',
-    agency: 'Leisure and Cultural Services Department',
-    closing_date: '2026-03-10',
-    days_remaining: 17,
-    budget_display: '~HK$1.2M (estimated)',
-    category_tags: ['consultancy_advisory', 'IT_digital'],
-    overall_score: 0.79,
-    capability_fit: 0.82,
-    business_potential: 0.75,
-    label: 'Priority',
-    rationale: 'Direct match for consultancy and digital strategy. LCSD is a strategic beachhead — a new agency relationship that could open a large pipeline. 17 days is sufficient for a strong proposal.',
-    source: 'hk-gld-etb-xml',
-    owner_type: 'gov',
-  },
-  {
-    id: 'hk-004',
-    jurisdiction: 'HK',
-    tender_ref: 'HKPC/DM/003/2026',
-    title: 'Social Media Marketing and Brand Campaign Management',
-    agency: 'Hong Kong Productivity Council',
-    closing_date: '2026-03-08',
-    days_remaining: 15,
-    budget_display: 'HK$480,000',
-    category_tags: ['marketing_comms'],
-    overall_score: 0.64,
-    capability_fit: 0.71,
-    business_potential: 0.55,
-    label: 'Consider',
-    rationale: 'Solid category fit for social media and brand campaign work. Budget is below our preferred threshold at HK$480k. HKPC is an unfamiliar agency — good relationship-building opportunity but lower immediate value.',
-    source: 'hk-gld-etb-xml',
-    owner_type: 'public_org',
-  },
-  {
-    id: 'hk-005',
-    jurisdiction: 'HK',
-    tender_ref: 'PolyU/MKT/2026/02',
-    title: 'Student Recruitment Campaign — Digital and Experiential Marketing',
-    agency: 'PolyU — Communications and Public Affairs Office',
-    closing_date: '2026-03-18',
-    days_remaining: 25,
-    budget_display: '~HK$600k (estimated)',
-    category_tags: ['marketing_comms', 'events_experiential'],
-    overall_score: 0.61,
-    capability_fit: 0.68,
-    business_potential: 0.52,
-    label: 'Consider',
-    rationale: 'Good marketing and events fit. University procurement typically smaller in scale than gov. Strategic value: establishes education sector credentials. 25 days allows for a well-prepared bid.',
-    source: 'hk-polyu-procurement',
-    owner_type: 'university',
-  },
-  {
-    id: 'hk-006',
-    jurisdiction: 'HK',
-    tender_ref: 'ArchSD/T/002/2026',
-    title: 'Renovation and Fitting-out Works at Government Office',
-    agency: 'Architectural Services Department',
-    closing_date: '2026-03-20',
-    days_remaining: 27,
-    budget_display: '~HK$3.2M (estimated)',
-    category_tags: ['construction_works'],
-    overall_score: 0.19,
-    capability_fit: 0.12,
-    business_potential: 0.28,
-    label: 'Ignore',
-    rationale: 'Construction and fitting-out work is outside our core capability. Despite the high budget, delivery scale far exceeds our team capacity. Recommend auto-ignore for construction_works category.',
-    source: 'hk-archsd-rss-tender-notices',
-    owner_type: 'gov',
-  },
-];
+function daysUntil(dateStr: string | null): number {
+  if (!dateStr) return 999;
+  const diff = new Date(dateStr).getTime() - Date.now();
+  return Math.ceil(diff / 86400000);
+}
 
-const SG_TENDERS: Tender[] = [
-  {
-    id: 'sg-001',
-    jurisdiction: 'SG',
-    tender_ref: 'GeBIZ-MOE-2026-0231',
-    title: 'Digital Learning Platform Development and Implementation',
-    agency: 'Ministry of Education',
-    closing_date: '2026-03-12',
-    days_remaining: 19,
-    budget_display: 'SGD$450,000',
-    category_tags: ['IT_digital', 'consultancy_advisory'],
-    overall_score: 0.77,
-    capability_fit: 0.79,
-    business_potential: 0.74,
-    label: 'Priority',
-    rationale: 'Strong IT and digital consultancy match. MOE is a strategic beachhead in Singapore — a new government agency relationship. Budget above SG threshold at SGD$450k. 19 days is workable.',
-    source: 'sg-gebiz-public-listing',
-    owner_type: 'gov',
-  },
-  {
-    id: 'sg-002',
-    jurisdiction: 'SG',
-    tender_ref: 'GeBIZ-ESG-2026-0087',
-    title: 'Brand Campaign for Singapore Business Events and MICE Sector',
-    agency: 'Enterprise Singapore',
-    closing_date: '2026-03-07',
-    days_remaining: 14,
-    budget_display: 'SGD$280,000',
-    category_tags: ['events_experiential', 'marketing_comms'],
-    overall_score: 0.61,
-    capability_fit: 0.67,
-    business_potential: 0.54,
-    label: 'Consider',
-    rationale: 'Events and brand campaign category match. Budget is moderate at SGD$280k. EnterpriseSG is a good brand association. 14 days is tight — assess resource availability before committing.',
-    source: 'sg-gebiz-public-listing',
-    owner_type: 'gov',
-  },
-  {
-    id: 'sg-003',
-    jurisdiction: 'SG',
-    tender_ref: 'GeBIZ-NHB-2026-0014',
-    title: 'Event Management Services for National Heritage Exhibitions 2026',
-    agency: 'National Heritage Board',
-    closing_date: '2026-02-28',
-    days_remaining: 7,
-    budget_display: 'SGD$150,000',
-    category_tags: ['events_experiential'],
-    overall_score: 0.56,
-    capability_fit: 0.63,
-    business_potential: 0.47,
-    label: 'Consider',
-    rationale: 'Good events category fit. Budget is below SG threshold at SGD$150k. Closing in 7 days — only pursue if team capacity is immediately available. NHB could be a good cultural sector reference.',
-    source: 'sg-gebiz-public-listing',
-    owner_type: 'gov',
-  },
-];
+function mapLabel(raw: string): Label {
+  const map: Record<string, Label> = {
+    priority: 'Priority', consider: 'Consider',
+    partner_only: 'Partner-only', ignore: 'Ignore', unscored: 'Consider',
+  };
+  return map[raw] || 'Consider';
+}
 
-const STATS = [
-  { label: 'New Today', value: '9', sub: 'HK: 6 · SG: 3', icon: TrendingUp, color: 'teal' },
-  { label: 'Priority', value: '4', sub: 'Action recommended', icon: Star, color: 'emerald' },
-  { label: 'Closing ≤7d', value: '1', sub: 'SG NHB tender', icon: AlertTriangle, color: 'amber' },
-  { label: 'Sources OK', value: '6/7', sub: '1 pending validation', icon: Rss, color: 'slate' },
-];
+function mapOwnerType(raw: string): 'gov' | 'public_org' | 'university' {
+  if (raw === 'gov') return 'gov';
+  if (raw === 'university' || raw === 'polytechnic' || raw === 'research_institute') return 'university';
+  return 'public_org';
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapApiTender(t: any): Tender {
+  const closingDate = t.closing_date ? t.closing_date.slice(0, 10) : null;
+  const currency = t.currency || (t.jurisdiction === 'SG' ? 'SGD' : 'HKD');
+  const budgetDisplay = t.budget_min
+    ? `~${currency}$${Math.round(t.budget_min / 1000)}k`
+    : '(not stated)';
+  const label = mapLabel(t.label || 'unscored');
+
+  return {
+    id:                 String(t.id || t.tender_ref),
+    jurisdiction:       (t.jurisdiction as 'HK' | 'SG') || 'HK',
+    tender_ref:         t.tender_ref || '',
+    title:              t.title || '',
+    agency:             t.agency || t.source_name || '',
+    closing_date:       closingDate || 'TBC',
+    days_remaining:     daysUntil(closingDate),
+    budget_display:     budgetDisplay,
+    category_tags:      Array.isArray(t.category_tags) ? t.category_tags : [],
+    overall_score:      t.overall_score ?? 0,
+    capability_fit:     t.capability_fit ?? 0,
+    business_potential: t.business_potential ?? 0,
+    label,
+    rationale:          t.reasoning_summary || t.description_snippet || '',
+    source:             t.source_id || '',
+    owner_type:         mapOwnerType(t.owner_type || 'gov'),
+  };
+}
 
 // ─── Helper components ────────────────────────────────────────────────────────
 
@@ -281,7 +155,7 @@ function TenderCard({ tender, onAction }: { tender: Tender; onAction: (id: strin
           <span className="text-[10px] text-slate-500 font-mono">{tender.tender_ref}</span>
         </div>
         <a
-          href="#"
+          href={tender.source ? `#` : '#'}
           onClick={e => e.preventDefault()}
           className="flex-shrink-0 text-slate-500 hover:text-teal-400 transition-colors"
           aria-label="Open source"
@@ -302,7 +176,7 @@ function TenderCard({ tender, onAction }: { tender: Tender; onAction: (id: strin
         <div className="flex items-center gap-1.5">
           <Calendar className="w-3 h-3 text-slate-500" />
           <span className={`text-xs ${tender.days_remaining <= 7 ? 'text-amber-400 font-medium' : 'text-slate-400'}`}>
-            {tender.closing_date} · {tender.days_remaining}d
+            {tender.closing_date !== 'TBC' ? `${tender.closing_date} · ${tender.days_remaining}d` : 'Closing TBC'}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -321,7 +195,7 @@ function TenderCard({ tender, onAction }: { tender: Tender; onAction: (id: strin
       </div>
 
       {/* Score bars */}
-      {!isIgnore && (
+      {!isIgnore && tender.overall_score > 0 && (
         <div className="space-y-1.5 mb-3 p-2.5 rounded-lg bg-white/[0.02] border border-slate-700/30">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Overall</span>
@@ -341,7 +215,9 @@ function TenderCard({ tender, onAction }: { tender: Tender; onAction: (id: strin
       )}
 
       {/* Rationale */}
-      <p className="text-xs text-slate-400 leading-relaxed mb-4">{tender.rationale}</p>
+      {tender.rationale && (
+        <p className="text-xs text-slate-400 leading-relaxed mb-4">{tender.rationale}</p>
+      )}
 
       {/* Actions */}
       {!isIgnore && (
@@ -373,54 +249,13 @@ function TenderCard({ tender, onAction }: { tender: Tender; onAction: (id: strin
   );
 }
 
-// ─── API helpers ──────────────────────────────────────────────────────────────
-
-function daysUntil(dateStr: string | null): number {
-  if (!dateStr) return 999;
-  const diff = new Date(dateStr).getTime() - Date.now();
-  return Math.ceil(diff / 86400000);
-}
-
-function mapLabel(raw: string): Label {
-  const map: Record<string, Label> = {
-    priority: 'Priority', consider: 'Consider',
-    partner_only: 'Partner-only', ignore: 'Ignore', unscored: 'Consider',
-  };
-  return map[raw] || 'Consider';
-}
-
-function mapOwnerType(raw: string): 'gov' | 'public_org' | 'university' {
-  if (raw === 'gov') return 'gov';
-  if (raw === 'university' || raw === 'polytechnic' || raw === 'research_institute') return 'university';
-  return 'public_org';
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapApiTender(t: any): Tender {
-  const closingDate = t.closing_date ? t.closing_date.slice(0, 10) : null;
-  const budgetMin = t.budget_min ? Math.round(t.budget_min / 1000) + 'k' : null;
-  const currency = t.currency || 'HKD';
-  const budgetDisplay = budgetMin ? `~${currency}$${budgetMin}` : '(not stated)';
-  const label = mapLabel(t.label || 'unscored');
-
-  return {
-    id:                 String(t.id || t.tender_ref),
-    jurisdiction:       (t.jurisdiction as 'HK' | 'SG') || 'HK',
-    tender_ref:         t.tender_ref || '',
-    title:              t.title || '',
-    agency:             t.agency || t.source_name || '',
-    closing_date:       closingDate || 'TBC',
-    days_remaining:     daysUntil(closingDate),
-    budget_display:     budgetDisplay,
-    category_tags:      Array.isArray(t.category_tags) ? t.category_tags : [],
-    overall_score:      t.overall_score ?? 0.5,
-    capability_fit:     t.capability_fit ?? 0.5,
-    business_potential: t.business_potential ?? 0.5,
-    label,
-    rationale:          t.reasoning_summary || t.description_snippet || '',
-    source:             t.source_id || '',
-    owner_type:         mapOwnerType(t.owner_type || 'gov'),
-  };
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="rounded-xl border border-slate-700/30 bg-white/[0.01] p-8 text-center">
+      <Rss className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+      <p className="text-sm text-slate-500">{message}</p>
+    </div>
+  );
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -428,51 +263,55 @@ function mapApiTender(t: any): Tender {
 export default function TenderIntelDigest() {
   const [decisions, setDecisions] = useState<Record<string, Action>>({});
   const [showIgnored, setShowIgnored] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [liveTenders, setLiveTenders] = useState<Tender[] | null>(null);
-  const [liveStats, setLiveStats] = useState<typeof STATS | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tenders, setTenders] = useState<Tender[]>([]);
+  const [stats, setStats] = useState<DigestStats>({ newToday: 0, priority: 0, closingSoon: 0, sourcesOk: '—' });
+  const [narrative, setNarrative] = useState<string>('');
   const [lastRunAt, setLastRunAt] = useState<string | null>(null);
-  const [usingLiveData, setUsingLiveData] = useState(false);
 
   const fetchDigest = useCallback(async () => {
-    setRefreshing(true);
+    setLoading(true);
     try {
       const res = await fetch('/api/tender-intel/digest');
       if (!res.ok) throw new Error('non-200');
       const data = await res.json();
-      if (data.tenders && data.tenders.length > 0) {
-        setLiveTenders(data.tenders.map(mapApiTender));
-        setUsingLiveData(true);
-        if (data.stats) {
-          setLiveStats([
-            { label: 'New Today',   value: String(data.stats.newToday),   sub: 'from all sources',       icon: TrendingUp,   color: 'teal' },
-            { label: 'Priority',    value: String(data.stats.priority),   sub: 'Action recommended',     icon: Star,         color: 'emerald' },
-            { label: 'Closing ≤7d', value: String(data.stats.closingSoon), sub: 'Urgent attention',      icon: AlertTriangle, color: 'amber' },
-            { label: 'Sources OK',  value: data.stats.sourcesOk,          sub: 'Live sources',           icon: Rss,           color: 'slate' },
-          ]);
-        }
-        if (data.lastRun) setLastRunAt(data.lastRun.run_at);
-      }
+      if (data.tenders) setTenders(data.tenders.map(mapApiTender));
+      if (data.stats) setStats(data.stats);
+      if (data.narrative) setNarrative(data.narrative);
+      if (data.lastRun) setLastRunAt(data.lastRun.run_at);
     } catch (_) {
-      /* keep mock data */
+      /* server unavailable — leave empty */
     } finally {
-      setRefreshing(false);
+      setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchDigest(); }, [fetchDigest]);
-
-  function handleAction(id: string, action: Action) {
+  // Record a decision via API and update local state
+  async function handleAction(id: string, action: Action) {
     setDecisions(prev => ({ ...prev, [id]: action }));
+    try {
+      await fetch('/api/tender-intel/decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenderId: id, action }),
+      });
+    } catch (_) {}
   }
 
-  const ALL_TENDERS = liveTenders ?? [...HK_TENDERS, ...SG_TENDERS];
-  const displayStats = liveStats ?? STATS;
-  const allTenders = ALL_TENDERS;
+  useEffect(() => { fetchDigest(); }, [fetchDigest]);
+
+  const allTenders = tenders;
   const hkVisible = allTenders.filter(t => t.jurisdiction === 'HK').filter(t => showIgnored || t.label !== 'Ignore').filter(t => decisions[t.id] !== 'ignore');
   const sgVisible = allTenders.filter(t => t.jurisdiction === 'SG').filter(t => showIgnored || t.label !== 'Ignore').filter(t => decisions[t.id] !== 'ignore');
   const closingSoon = allTenders.filter(t => t.days_remaining <= 7 && t.label !== 'Ignore');
   const trackedCount = Object.values(decisions).filter(a => a === 'track').length;
+
+  const displayStats = [
+    { label: 'New Today',   value: String(stats.newToday),   sub: 'from all sources',   icon: TrendingUp,    color: 'teal'    },
+    { label: 'Priority',    value: String(stats.priority),   sub: 'Action recommended', icon: Star,          color: 'emerald' },
+    { label: 'Closing ≤7d', value: String(stats.closingSoon), sub: 'Urgent attention',  icon: AlertTriangle, color: 'amber'   },
+    { label: 'Sources OK',  value: stats.sourcesOk,          sub: 'Live sources',       icon: Rss,           color: 'slate'   },
+  ];
 
   return (
     <div className="space-y-7 max-w-4xl">
@@ -483,20 +322,16 @@ export default function TenderIntelDigest() {
           <p className="text-sm text-slate-400 flex items-center gap-1.5 flex-wrap">
             {lastRunAt
               ? `Last ingestion: ${new Date(lastRunAt).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong' })} HKT`
-              : 'Friday 21 February 2026 · 08:00 HKT'}
-            {usingLiveData
-              ? <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-teal-500/15 text-teal-400 border border-teal-500/30">Live</span>
-              : <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-slate-700/40 text-slate-500 border border-slate-600/30">Mock</span>
-            }
+              : 'Waiting for first ingestion run'}
           </p>
         </div>
         <button
           onClick={fetchDigest}
-          disabled={refreshing}
+          disabled={loading}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 border border-slate-700/50 hover:border-slate-600 hover:text-white transition-colors disabled:opacity-50"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          {refreshing ? 'Refreshing…' : 'Refresh'}
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          {loading ? 'Loading…' : 'Refresh'}
         </button>
       </div>
 
@@ -516,7 +351,7 @@ export default function TenderIntelDigest() {
                 <span className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">{s.label}</span>
                 <Icon className="w-3.5 h-3.5" />
               </div>
-              <div className="text-2xl font-bold text-white">{s.value}</div>
+              <div className="text-2xl font-bold text-white">{loading ? '—' : s.value}</div>
               <div className="text-[10px] text-slate-500 mt-0.5">{s.sub}</div>
             </div>
           );
@@ -524,22 +359,27 @@ export default function TenderIntelDigest() {
       </div>
 
       {/* Narrative summary */}
-      <div className="rounded-xl border border-slate-700/40 bg-white/[0.02] p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-1 h-4 rounded-full bg-teal-400" />
-          <span className="text-xs font-semibold text-teal-400 uppercase tracking-wider">Today's Overview</span>
-        </div>
-        <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{MOCK_NARRATIVE}</p>
-        {trackedCount > 0 && (
-          <div className="mt-3 pt-3 border-t border-slate-700/30 flex items-center gap-2">
-            <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />
-            <span className="text-xs text-teal-400 font-medium">{trackedCount} tender{trackedCount > 1 ? 's' : ''} tracked today</span>
+      {(narrative || loading) && (
+        <div className="rounded-xl border border-slate-700/40 bg-white/[0.02] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-1 h-4 rounded-full bg-teal-400" />
+            <span className="text-xs font-semibold text-teal-400 uppercase tracking-wider">Today&apos;s Overview</span>
           </div>
-        )}
-      </div>
+          {loading
+            ? <div className="h-4 bg-slate-700/40 rounded animate-pulse w-3/4" />
+            : <p className="text-sm text-slate-300 leading-relaxed">{narrative}</p>
+          }
+          {trackedCount > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-700/30 flex items-center gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />
+              <span className="text-xs text-teal-400 font-medium">{trackedCount} tender{trackedCount > 1 ? 's' : ''} tracked today</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Closing soon alert */}
-      {closingSoon.length > 0 && (
+      {!loading && closingSoon.length > 0 && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle className="w-4 h-4 text-amber-400" />
@@ -564,87 +404,73 @@ export default function TenderIntelDigest() {
         </div>
       )}
 
-      {/* Controls */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 font-medium">
-            Showing {hkVisible.length + sgVisible.length} of {allTenders.length} tenders
-          </span>
-        </div>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <div
-            className={`w-8 h-4 rounded-full transition-colors relative ${showIgnored ? 'bg-teal-500/40' : 'bg-slate-700'}`}
-            onClick={() => setShowIgnored(v => !v)}
-          >
-            <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${showIgnored ? 'translate-x-4' : 'translate-x-0.5'}`} />
-          </div>
-          <span className="text-xs text-slate-400">Show Ignore</span>
-        </label>
-      </div>
-
-      {/* HK Tenders */}
-      <section>
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-base font-bold text-white">🇭🇰 Hong Kong</span>
-          <span className="text-xs text-slate-500">— {hkVisible.length} tenders</span>
-        </div>
+      {/* Loading state */}
+      {loading && (
         <div className="space-y-3">
-          {hkVisible.map(t => (
-            <TenderCard key={t.id} tender={t} onAction={handleAction} />
-          ))}
-          {hkVisible.length === 0 && (
-            <p className="text-sm text-slate-500 py-4 text-center">No HK tenders to show.</p>
-          )}
-        </div>
-      </section>
-
-      {/* SG Tenders */}
-      <section>
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-base font-bold text-white">🇸🇬 Singapore</span>
-          <span className="text-xs text-slate-500">— {sgVisible.length} tenders</span>
-        </div>
-        <div className="space-y-3">
-          {sgVisible.map(t => (
-            <TenderCard key={t.id} tender={t} onAction={handleAction} />
-          ))}
-          {sgVisible.length === 0 && (
-            <p className="text-sm text-slate-500 py-4 text-center">No SG tenders to show.</p>
-          )}
-        </div>
-      </section>
-
-      {/* Source health footer */}
-      <div className="rounded-xl border border-slate-700/30 bg-white/[0.02] p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Rss className="w-3.5 h-3.5 text-slate-500" />
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Ingestion Summary</span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          {[
-            { source: 'GLD ETB XML', items: 23, status: 'ok' },
-            { source: 'EMSD RSS', items: 2, status: 'ok' },
-            { source: 'GeBIZ HTML', items: 8, status: 'ok' },
-            { source: 'ArchSD RSS', items: 0, status: 'pending' },
-          ].map(s => (
-            <div key={s.source} className="flex items-center gap-2">
-              <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.status === 'ok' ? 'bg-teal-400' : 'bg-amber-400'}`} />
-              <div>
-                <div className="text-slate-300 font-medium">{s.source}</div>
-                <div className="text-slate-500">{s.status === 'ok' ? `${s.items} new items` : 'Pending first run'}</div>
-              </div>
+          {[1, 2, 3].map(i => (
+            <div key={i} className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-4 animate-pulse">
+              <div className="h-3 bg-slate-700/60 rounded w-1/4 mb-3" />
+              <div className="h-4 bg-slate-700/40 rounded w-3/4 mb-2" />
+              <div className="h-3 bg-slate-700/30 rounded w-1/2" />
             </div>
           ))}
         </div>
-        <div className="mt-3 pt-3 border-t border-slate-700/30">
-          <button className="text-xs text-teal-400 hover:text-teal-300 flex items-center gap-1 transition-colors">
-            View full ingestion log
-            <ChevronRight className="w-3 h-3" />
-          </button>
-        </div>
-      </div>
+      )}
 
-      {/* Tag legend */}
+      {/* Controls */}
+      {!loading && allTenders.length > 0 && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate-500 font-medium">
+            Showing {hkVisible.length + sgVisible.length} of {allTenders.length} tenders
+          </span>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <div
+              className={`w-8 h-4 rounded-full transition-colors relative ${showIgnored ? 'bg-teal-500/40' : 'bg-slate-700'}`}
+              onClick={() => setShowIgnored(v => !v)}
+            >
+              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${showIgnored ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </div>
+            <span className="text-xs text-slate-400">Show Ignore</span>
+          </label>
+        </div>
+      )}
+
+      {/* Empty state — no tenders yet */}
+      {!loading && allTenders.length === 0 && (
+        <EmptyState message="No tenders yet. Run the ingestion pipeline to fetch live data." />
+      )}
+
+      {/* HK Tenders */}
+      {!loading && hkVisible.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-base font-bold text-white">🇭🇰 Hong Kong</span>
+            <span className="text-xs text-slate-500">— {hkVisible.length} tenders</span>
+          </div>
+          <div className="space-y-3">
+            {hkVisible.map(t => (
+              <TenderCard key={t.id} tender={t} onAction={handleAction} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* SG Tenders */}
+      {!loading && sgVisible.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-base font-bold text-white">🇸🇬 Singapore</span>
+            <span className="text-xs text-slate-500">— {sgVisible.length} tenders</span>
+          </div>
+          <div className="space-y-3">
+            {sgVisible.map(t => (
+              <TenderCard key={t.id} tender={t} onAction={handleAction} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Scoring Legend */}
       <div className="rounded-xl border border-slate-700/30 bg-white/[0.02] p-4">
         <div className="flex items-center gap-2 mb-3">
           <Tag className="w-3.5 h-3.5 text-slate-500" />
@@ -667,6 +493,15 @@ export default function TenderIntelDigest() {
         <p className="text-[10px] text-slate-600 mt-2">
           overall = (capability_fit × 0.55) + (business_potential × 0.45)
         </p>
+      </div>
+
+      {/* View full ingestion log link */}
+      <div className="flex items-center gap-2">
+        <Rss className="w-3 h-3 text-slate-600" />
+        <a href="/use-cases/hk-sg-tender-intel/logs" className="text-xs text-teal-400 hover:text-teal-300 flex items-center gap-1 transition-colors">
+          View ingestion log
+          <ChevronRight className="w-3 h-3" />
+        </a>
       </div>
     </div>
   );

@@ -5810,11 +5810,10 @@ app.get('/api/ziwei/palace/:palace', (req, res) => {
   scheduleRegistry.register({ id: 'tender-intel:digest-generate',  group: 'Tender Intelligence', name: 'Daily Digest Generation',   description: 'Generate ranked daily digest narrative',                     schedule: '0 8 * * *',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Daily at 08:00 HKT' });
   scheduleRegistry.register({ id: 'tender-intel:feedback-learning',group: 'Tender Intelligence', name: 'Weekly Feedback Calibration','description': 'Calibrate scoring weights from decisions',                schedule: '0 5 * * 0',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Sunday at 05:00 HKT' });
 
-  // Daily ingestion cron — only starts if DB is present
+  // Daily ingestion cron → 03:00 HKT
   if (process.env.DATABASE_URL) {
     nodeCron.schedule('0 3 * * *', async () => {
       scheduleRegistry.markRunning('tender-intel:daily-ingestion');
-      const start = Date.now();
       try {
         const summary = await tenderIntel.runIngestion(pool);
         scheduleRegistry.markCompleted('tender-intel:daily-ingestion', {
@@ -5827,7 +5826,62 @@ app.get('/api/ziwei/palace/:palace', (req, res) => {
         console.error('❌ Tender ingestion failed:', err.message);
       }
     }, { timezone: 'Asia/Hong_Kong' });
+
+    // Daily evaluation cron → 04:00 HKT (after ingestion)
+    nodeCron.schedule('0 4 * * *', async () => {
+      scheduleRegistry.markRunning('tender-intel:digest-generate');
+      try {
+        const result = await tenderIntel.runEvaluation(pool);
+        scheduleRegistry.markCompleted('tender-intel:digest-generate', {
+          result: `${result.evaluated.length} tenders scored`,
+        });
+        console.log('✅ Tender evaluation complete:', result.evaluated.length, 'scored');
+      } catch (err) {
+        scheduleRegistry.markFailed('tender-intel:digest-generate', err.message);
+        console.error('❌ Tender evaluation failed:', err.message);
+      }
+    }, { timezone: 'Asia/Hong_Kong' });
   }
+
+  // POST /api/tender-intel/evaluate  — manual trigger
+  app.post('/api/tender-intel/evaluate', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    try {
+      scheduleRegistry.markRunning('tender-intel:digest-generate');
+      const result = await tenderIntel.runEvaluation(pool, req.body.profile || null);
+      scheduleRegistry.markCompleted('tender-intel:digest-generate', { result: `${result.evaluated.length} scored` });
+      res.json({ success: true, ...result });
+    } catch (err) {
+      scheduleRegistry.markFailed('tender-intel:digest-generate', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/tender-intel/decision  — record founder decision (track / ignore / partner_only)
+  app.post('/api/tender-intel/decision', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    const { tenderId, action, notes } = req.body;
+    if (!tenderId || !action) return res.status(400).json({ error: 'tenderId and action required' });
+    try {
+      await tenderIntel.recordDecision(pool, { tenderId, action, notes });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/profile
+  app.get('/api/tender-intel/profile', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json(tenderIntel.DEFAULT_PROFILE);
+    try { res.json(await tenderIntel.getProfile(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // PUT /api/tender-intel/profile
+  app.put('/api/tender-intel/profile', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    try { await tenderIntel.saveProfile(pool, req.body); res.json({ success: true }); }
+    catch (err) { res.status(500).json({ error: err.message }); }
+  });
 
   // GET /api/tender-intel/digest
   app.get('/api/tender-intel/digest', async (req, res) => {
