@@ -70,7 +70,7 @@ function mapApiTender(t: any): Tender {
   const label = mapLabel(t.label || 'unscored');
 
   return {
-    id:                 String(t.id || t.tender_ref),
+    id:                 String(t.tender_id || t.tender_ref),   // tender_id is the UUID PK
     jurisdiction:       (t.jurisdiction as 'HK' | 'SG') || 'HK',
     tender_ref:         t.tender_ref || '',
     title:              t.title || '',
@@ -84,7 +84,7 @@ function mapApiTender(t: any): Tender {
     business_potential: t.business_potential ?? 0,
     label,
     rationale:          t.reasoning_summary || t.description_snippet || '',
-    source:             t.source_id || '',
+    source:             t.source_url || '',
     owner_type:         mapOwnerType(t.owner_type || 'gov'),
   };
 }
@@ -154,14 +154,18 @@ function TenderCard({ tender, onAction }: { tender: Tender; onAction: (id: strin
           </span>
           <span className="text-[10px] text-slate-500 font-mono">{tender.tender_ref}</span>
         </div>
-        <a
-          href={tender.source ? `#` : '#'}
-          onClick={e => e.preventDefault()}
-          className="flex-shrink-0 text-slate-500 hover:text-teal-400 transition-colors"
-          aria-label="Open source"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
+        {tender.source && (
+          <a
+            href={tender.source}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="flex-shrink-0 text-slate-500 hover:text-teal-400 transition-colors"
+            aria-label="Open source"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        )}
       </div>
 
       {/* Title + Agency */}

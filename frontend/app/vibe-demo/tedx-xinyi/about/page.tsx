@@ -60,9 +60,11 @@ export default function AboutPage() {
       <section className="relative min-h-[65vh] flex items-end overflow-hidden bg-neutral-900">
         {/* nanobanana-generated background */}
         <img
-          src="/tedx-xinyi/hero-about.png"
+          src="/tedx-xinyi/hero-about.webp"
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
           onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.7'; }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Save, RotateCcw, Info } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Save, RotateCcw, Info, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface WeightGroup {
   label: string;
@@ -13,11 +13,11 @@ const DEFAULT_CAPABILITY_FIT: WeightGroup = {
   label: 'Capability Fit Weights',
   description: 'How we assess whether we can deliver this tender (55% of overall score)',
   weights: [
-    { key: 'categoryMatch', label: 'Category Match', value: 0.35, description: 'How well the tender category aligns with our services' },
+    { key: 'categoryMatch',     label: 'Category Match',     value: 0.35, description: 'How well the tender category aligns with our services' },
     { key: 'agencyFamiliarity', label: 'Agency Familiarity', value: 0.15, description: 'Whether we have a prior relationship with this buyer' },
-    { key: 'deliveryScale', label: 'Delivery Scale', value: 0.20, description: 'Whether the scope fits our team capacity' },
-    { key: 'keywordOverlap', label: 'Keyword Overlap', value: 0.20, description: 'Title/description similarity to our track record' },
-    { key: 'geographicFit', label: 'Geographic Fit', value: 0.10, description: 'HK primary, SG secondary, other lower' },
+    { key: 'deliveryScale',     label: 'Delivery Scale',     value: 0.20, description: 'Whether the scope fits our team capacity' },
+    { key: 'keywordOverlap',    label: 'Keyword Overlap',    value: 0.20, description: 'Title/description similarity to our track record' },
+    { key: 'geographicFit',     label: 'Geographic Fit',     value: 0.10, description: 'HK primary, SG secondary, other lower' },
   ],
 };
 
@@ -25,30 +25,14 @@ const DEFAULT_BUSINESS_POTENTIAL: WeightGroup = {
   label: 'Business Potential Weights',
   description: 'Commercial and strategic attractiveness (45% of overall score)',
   weights: [
-    { key: 'budget', label: 'Budget (if stated)', value: 0.30, description: 'Contract value vs our thresholds' },
-    { key: 'budgetProxy', label: 'Budget Proxy', value: 0.15, description: 'Estimated value when budget not stated' },
-    { key: 'strategicBeachhead', label: 'Strategic Beachhead', value: 0.20, description: 'New agency = relationship-building opportunity' },
-    { key: 'categoryGrowth', label: 'Category Growth', value: 0.15, description: 'Categories with growing government spend' },
-    { key: 'timeToDeadline', label: 'Time to Deadline', value: 0.10, description: 'More days = more preparation time' },
-    { key: 'recurrencePotential', label: 'Recurrence Potential', value: 0.10, description: 'Framework/multi-year contracts score higher' },
+    { key: 'budget',               label: 'Budget (if stated)',   value: 0.30, description: 'Contract value vs our thresholds' },
+    { key: 'budgetProxy',          label: 'Budget Proxy',         value: 0.15, description: 'Estimated value when budget not stated' },
+    { key: 'strategicBeachhead',   label: 'Strategic Beachhead',  value: 0.20, description: 'New agency = relationship-building opportunity' },
+    { key: 'categoryGrowth',       label: 'Category Growth',      value: 0.15, description: 'Categories with growing government spend' },
+    { key: 'timeToDeadline',       label: 'Time to Deadline',     value: 0.10, description: 'More days = more preparation time' },
+    { key: 'recurrencePotential',  label: 'Recurrence Potential', value: 0.10, description: 'Framework/multi-year contracts score higher' },
   ],
 };
-
-const COMPETENCIES = [
-  'Digital Marketing & Strategy',
-  'Events & Experiential',
-  'Brand Communications',
-  'Management Consultancy',
-  'IT Systems (light — AV, signage)',
-];
-
-const KNOWN_AGENCIES = ['LCSD', 'ISD', 'EMSD', 'HK Tourism Board', 'HKTDC', 'Enterprise Singapore'];
-
-const TRACK_RECORD_KEYWORDS = [
-  'digital marketing', 'brand campaign', 'event management', 'experiential',
-  'digital transformation', 'communications strategy', 'content creation',
-  'social media', 'exhibition', 'conference',
-];
 
 function WeightSlider({
   weight,
@@ -99,7 +83,44 @@ export default function EvalSettingsPage() {
   const [capFit, setCapFit] = useState(DEFAULT_CAPABILITY_FIT.weights.map(w => ({ ...w })));
   const [bizPot, setBizPot] = useState(DEFAULT_BUSINESS_POTENTIAL.weights.map(w => ({ ...w })));
   const [overallCapWeight, setOverallCapWeight] = useState(0.55);
-  const [saved, setSaved] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [loading, setLoading] = useState(true);
+
+  // Load profile from API on mount
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/tender-intel/profile');
+      if (!res.ok) return;
+      const profile = await res.json();
+
+      const cw = profile.scoringWeights?.capabilityFit;
+      const bw = profile.scoringWeights?.businessPotential;
+      const ow = profile.scoringWeights?.overallWeights;
+
+      if (cw) {
+        setCapFit(prev => prev.map(w => ({
+          ...w,
+          value: cw[w.key] ?? w.value,
+        })));
+      }
+      if (bw) {
+        setBizPot(prev => prev.map(w => ({
+          ...w,
+          value: bw[w.key] ?? w.value,
+        })));
+      }
+      if (ow?.capabilityFit != null) {
+        setOverallCapWeight(ow.capabilityFit);
+      }
+    } catch (_) {
+      /* use defaults */
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadProfile(); }, [loadProfile]);
 
   function updateCapFit(key: string, value: number) {
     setCapFit(prev => prev.map(w => w.key === key ? { ...w, value } : w));
@@ -107,10 +128,39 @@ export default function EvalSettingsPage() {
   function updateBizPot(key: string, value: number) {
     setBizPot(prev => prev.map(w => w.key === key ? { ...w, value } : w));
   }
-  function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+
+  async function handleSave() {
+    setSaveState('saving');
+    try {
+      // Build profile object matching backend DEFAULT_PROFILE shape
+      const capFitWeights = Object.fromEntries(capFit.map(w => [w.key, w.value]));
+      const bizPotWeights = Object.fromEntries(bizPot.map(w => [w.key, w.value]));
+
+      const profile = {
+        scoringWeights: {
+          capabilityFit:    capFitWeights,
+          businessPotential: bizPotWeights,
+          overallWeights: {
+            capabilityFit:     overallCapWeight,
+            businessPotential: parseFloat((1 - overallCapWeight).toFixed(2)),
+          },
+        },
+        version: `v${Date.now()}`,
+      };
+
+      const res = await fetch('/api/tender-intel/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profile),
+      });
+      setSaveState(res.ok ? 'saved' : 'error');
+      setTimeout(() => setSaveState('idle'), 2500);
+    } catch (_) {
+      setSaveState('error');
+      setTimeout(() => setSaveState('idle'), 2500);
+    }
   }
+
   function handleReset() {
     setCapFit(DEFAULT_CAPABILITY_FIT.weights.map(w => ({ ...w })));
     setBizPot(DEFAULT_BUSINESS_POTENTIAL.weights.map(w => ({ ...w })));
@@ -122,12 +172,21 @@ export default function EvalSettingsPage() {
   const warnCapFit = Math.abs(capFitSum - 1) > 0.02;
   const warnBizPot = Math.abs(bizPotSum - 1) > 0.02;
 
+  if (loading) {
+    return (
+      <div className="flex items-center gap-3 py-10 text-slate-500">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span className="text-sm">Loading evaluation profile…</span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 max-w-2xl">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight mb-1">Evaluation Settings</h1>
-          <p className="text-sm text-slate-400">Tune scoring weights and capability profile</p>
+          <p className="text-sm text-slate-400">Tune scoring weights · changes apply on next evaluation run</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -139,10 +198,17 @@ export default function EvalSettingsPage() {
           </button>
           <button
             onClick={handleSave}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-teal-500/15 text-teal-400 border border-teal-500/30 hover:bg-teal-500/25 transition-colors"
+            disabled={saveState === 'saving'}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-60 ${
+              saveState === 'saved'  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' :
+              saveState === 'error' ? 'bg-red-500/15 text-red-400 border-red-500/30' :
+              'bg-teal-500/15 text-teal-400 border-teal-500/30 hover:bg-teal-500/25'
+            }`}
           >
-            <Save className="w-3.5 h-3.5" />
-            {saved ? 'Saved!' : 'Save changes'}
+            {saveState === 'saving' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
+             saveState === 'saved'  ? <CheckCircle2 className="w-3.5 h-3.5" /> :
+             <Save className="w-3.5 h-3.5" />}
+            {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved!' : saveState === 'error' ? 'Error' : 'Save changes'}
           </button>
         </div>
       </div>
@@ -216,89 +282,16 @@ export default function EvalSettingsPage() {
         </div>
       </div>
 
-      {/* Capability Profile */}
-      <div className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-5">
-        <h3 className="text-sm font-semibold text-white mb-4">Capability Profile</h3>
-        <div className="space-y-5">
-          {/* Competencies */}
-          <div>
-            <p className="text-xs text-slate-400 font-medium mb-2">Core Competencies</p>
-            <div className="flex flex-wrap gap-2">
-              {COMPETENCIES.map(c => (
-                <span key={c} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-teal-500/10 text-teal-400 border border-teal-500/20">
-                  {c}
-                  <button className="text-teal-600 hover:text-teal-400">×</button>
-                </span>
-              ))}
-              <button className="px-2.5 py-1 rounded-lg text-xs text-slate-500 border border-dashed border-slate-600 hover:border-slate-500 hover:text-slate-400 transition-colors">
-                + Add
-              </button>
-            </div>
-          </div>
-          {/* Known agencies */}
-          <div>
-            <p className="text-xs text-slate-400 font-medium mb-2">Known Agencies (familiarity boost)</p>
-            <div className="flex flex-wrap gap-2">
-              {KNOWN_AGENCIES.map(a => (
-                <span key={a} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  {a}
-                  <button className="text-blue-600 hover:text-blue-400">×</button>
-                </span>
-              ))}
-              <button className="px-2.5 py-1 rounded-lg text-xs text-slate-500 border border-dashed border-slate-600 hover:border-slate-500 hover:text-slate-400 transition-colors">
-                + Add
-              </button>
-            </div>
-          </div>
-          {/* Track record keywords */}
-          <div>
-            <p className="text-xs text-slate-400 font-medium mb-2">Track Record Keywords</p>
-            <div className="flex flex-wrap gap-2">
-              {TRACK_RECORD_KEYWORDS.map(k => (
-                <span key={k} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] bg-slate-700/40 text-slate-400 border border-slate-600/30">
-                  {k}
-                  <button className="text-slate-600 hover:text-slate-400">×</button>
-                </span>
-              ))}
-              <button className="px-2 py-0.5 rounded text-[10px] text-slate-500 border border-dashed border-slate-600 hover:text-slate-400 transition-colors">
-                + Add keyword
-              </button>
-            </div>
-          </div>
-          {/* Budget thresholds */}
-          <div>
-            <p className="text-xs text-slate-400 font-medium mb-2">Budget Thresholds (for scoring)</p>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: 'HK High (≥)', value: 'HK$500,000' },
-                { label: 'HK Low (≤)', value: 'HK$50,000' },
-                { label: 'SG High (≥)', value: 'SGD$100,000' },
-                { label: 'SG Low (≤)', value: 'SGD$20,000' },
-              ].map(t => (
-                <div key={t.label}>
-                  <label className="text-[10px] text-slate-500 uppercase tracking-wider">{t.label}</label>
-                  <input
-                    type="text"
-                    defaultValue={t.value}
-                    className="mt-1 w-full px-3 py-1.5 bg-slate-700/40 border border-slate-600/50 rounded-lg text-xs text-slate-200 font-mono focus:outline-none focus:border-teal-500/50"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Label thresholds */}
+      {/* Label thresholds — read-only reference */}
       <div className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-5">
         <h3 className="text-sm font-semibold text-white mb-4">Label Thresholds</h3>
         <div className="space-y-3">
-          {[
-            { label: 'Priority', min: 0.70, max: 1.0, color: 'emerald' },
-            { label: 'Consider', min: 0.50, max: 0.69, color: 'cyan' },
+          {([
+            { label: 'Priority',     min: 0.70, max: 1.0,  color: 'emerald' },
+            { label: 'Consider',     min: 0.50, max: 0.69, color: 'cyan' },
             { label: 'Partner-only', min: 0.35, max: 0.49, color: 'amber' },
-            { label: 'Ignore', min: 0.0, max: 0.34, color: 'slate' },
-          ].map(t => (
+            { label: 'Ignore',       min: 0.0,  max: 0.34, color: 'slate' },
+          ] as const).map(t => (
             <div key={t.label} className="flex items-center gap-3">
               <div className={`w-2 h-2 rounded-full bg-${t.color}-400 flex-shrink-0`} />
               <span className={`text-xs font-medium text-${t.color}-400 w-20`}>{t.label}</span>
@@ -314,6 +307,9 @@ export default function EvalSettingsPage() {
             </div>
           ))}
         </div>
+        <p className="text-[10px] text-slate-600 mt-3">
+          Partner-only is also triggered when estimated delivery scale exceeds team capacity.
+        </p>
       </div>
     </div>
   );

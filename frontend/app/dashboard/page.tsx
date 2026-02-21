@@ -12,11 +12,14 @@ import KnowledgeBase from '@/components/KnowledgeBase';
 import CostAnalysis from '@/components/CostAnalysis';
 import SecurityKB from '@/components/SecurityKB';
 import ZiweiChat from '@/components/ZiweiChat';
+import SmeGrowthEngine from '@/components/SmeGrowthEngine';
+import ImageCompression from '@/components/ImageCompression';
+import PdfCompression from '@/components/PdfCompression';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
   ChevronRight, Map, Zap, Send, Loader2, Sparkles, History,
-  Plus, Trash2, Clock, Monitor, TrendingUp, Shield,
+  Plus, Trash2, Clock, Monitor, TrendingUp, Shield, Target, FileImage, FileText,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -29,7 +32,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security' | 'sme-growth' | 'pdf-compression';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -374,7 +377,8 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security','sme-growth','image-compression'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security','sme-growth','pdf-compression'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
@@ -382,6 +386,9 @@ export default function Dashboard() {
   const tabs: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
     { id: 'control', label: 'Control Tower', icon: LayoutDashboard },
     { id: 'overview', label: 'Overview', icon: Activity },
+    { id: 'sme-growth', label: 'SME Growth Engine', icon: Target },
+    { id: 'image-compression', label: 'Image Compression', icon: FileImage },
+    { id: 'pdf-compression', label: 'PDF Compression', icon: FileText },
     { id: 'workflows', label: 'Agentic Workflows', icon: GitBranch },
     { id: 'scheduling', label: 'Scheduling & Jobs', icon: Calendar },
     { id: 'costs', label: 'Cost Analysis', icon: DollarSign },
@@ -651,6 +658,9 @@ export default function Dashboard() {
         {activeTab === 'knowledge' && <KnowledgeBase />}
         {activeTab === 'security' && <SecurityKB />}
         {activeTab === 'costs' && <CostAnalysis />}
+        {activeTab === 'sme-growth' && <SmeGrowthEngine />}
+        {activeTab === 'pdf-compression' && <PdfCompression />}
+
         {activeTab === 'workflows' && (
           <div className="bg-[#1a1b2e]">
             <AgenticWorkflows />
