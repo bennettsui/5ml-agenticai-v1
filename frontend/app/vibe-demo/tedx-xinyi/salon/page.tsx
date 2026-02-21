@@ -58,13 +58,13 @@ export default function SalonPage() {
           onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.7'; }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/30 via-neutral-900/40 to-white" />
+        <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/40 via-transparent to-neutral-900/80" />
 
         <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-32" style={{ textShadow: '0 2px 16px rgba(0,0,0,0.6), 0 1px 3px rgba(0,0,0,0.4)' }}>
           <FadeIn>
             <SectionLabel dark>SALON</SectionLabel>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-4" lang="zh-TW">
-              We are Becoming – AI趨勢沙龍
+              <span className="font-handwriting text-4xl sm:text-5xl md:text-6xl">We are Becoming</span> – AI趨勢沙龍
             </h1>
           </FadeIn>
           <FadeIn delay={200}>
@@ -89,22 +89,26 @@ export default function SalonPage() {
               {/* Poster card */}
               <div className="w-full max-w-[300px] md:max-w-[340px] mx-auto flex-shrink-0">
                 <div className="relative rounded-2xl overflow-hidden shadow-2xl" style={{ aspectRatio: '4/5' }}>
-                  {/* nanobanana background */}
+                  {/* Gradient fallback (behind image) */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-[#0b1628] via-[#0f1a3a] to-black" style={{ zIndex: 0 }} />
+                  <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 38%, rgba(79,70,229,0.18) 0%, transparent 65%)', zIndex: 0 }} />
+
+                  {/* nanobanana background (above gradient fallback) */}
                   <img
                     src="/tedx-xinyi/poster-dark.png"
                     alt="We are Becoming — TEDxXinyi 2026 key visual poster"
                     loading="lazy"
                     className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+                    style={{ zIndex: 1 }}
                     onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
-                  {/* Gradient fallback + always-on darken at bottom for text legibility */}
-                  <div className="absolute inset-0 bg-gradient-to-b from-[#0b1628] via-[#0f1a3a] to-black" />
-                  <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 38%, rgba(79,70,229,0.18) 0%, transparent 65%)' }} />
-                  <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/80 to-transparent" />
+
+                  {/* Bottom darken for text legibility */}
+                  <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/80 to-transparent" style={{ zIndex: 2 }} />
 
                   {/* Text overlay */}
-                  <div className="absolute inset-0 flex flex-col justify-between p-5 z-10">
+                  <div className="absolute inset-0 flex flex-col justify-between p-5" style={{ zIndex: 10 }}>
                     {/* Top: logo */}
                     <div className="text-center">
                       <span className="text-white/60 text-xs font-light tracking-[0.2em] uppercase">TEDx</span>
@@ -113,7 +117,7 @@ export default function SalonPage() {
 
                     {/* Middle: main title + subtitle */}
                     <div className="text-center" style={{ textShadow: '0 2px 24px rgba(0,0,0,0.9)' }}>
-                      <p className="text-white font-black text-[1.6rem] leading-tight tracking-tight mb-4">
+                      <p className="font-handwriting text-white font-bold text-[2rem] leading-tight tracking-tight mb-4">
                         WE ARE<br />BECOMING
                       </p>
                       <p className="text-white/95 font-black text-base leading-snug" lang="zh-TW">
@@ -171,7 +175,7 @@ export default function SalonPage() {
         <FadeIn>
           <SectionLabel>EVENT</SectionLabel>
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-8" lang="zh-TW">
-            2026Q1 TEDxXinyi We are Becoming – AI趨勢沙龍
+            2026Q1 TEDxXinyi <span className="font-handwriting text-3xl sm:text-4xl md:text-5xl">We are Becoming</span> – AI趨勢沙龍
           </h2>
         </FadeIn>
 
@@ -205,7 +209,7 @@ export default function SalonPage() {
               你和 AI 的距離，<br />決定你和自己的樣子。
             </p>
             <p className="text-neutral-400 text-sm" lang="zh-TW">
-              — TEDxXinyi We are Becoming 2026 核心主題
+              — TEDxXinyi <span className="font-handwriting text-base">We are Becoming</span> 2026 核心主題
             </p>
           </div>
         </FadeIn>
@@ -216,7 +220,7 @@ export default function SalonPage() {
         <FadeIn>
           <SectionLabel>WHY</SectionLabel>
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-10" lang="zh-TW">
-            為什麼是『We are Becoming』？
+            為什麼是『<span className="font-handwriting text-3xl sm:text-4xl md:text-5xl">We are Becoming</span>』？
           </h2>
         </FadeIn>
 

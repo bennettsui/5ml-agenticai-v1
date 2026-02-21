@@ -35,7 +35,7 @@ export const SOCIAL_LINKS = [
 
 // ==================== GLOBAL STYLES ====================
 export const globalStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
 
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(28px); }
@@ -54,6 +54,10 @@ export const globalStyles = `
 
   .tedx-xinyi * {
     font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  .tedx-xinyi .font-handwriting {
+    font-family: 'Caveat', cursive !important;
   }
 
   .tedx-xinyi a:focus-visible,
@@ -160,10 +164,10 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
           href="/vibe-demo/tedx-xinyi"
           className="flex items-center gap-0.5 min-h-[44px]"
         >
-          <span className={`font-light text-lg tracking-tight transition-colors ${showDark ? 'text-white' : 'text-neutral-900'}`}>
+          <span className="font-black text-lg tracking-tight" style={{ color: TED_RED }}>
             TEDx
           </span>
-          <span className="font-black text-lg tracking-tight" style={{ color: TED_RED }}>
+          <span className={`font-light text-lg tracking-tight transition-colors ${showDark ? 'text-white' : 'text-neutral-900'}`}>
             Xinyi
           </span>
         </Link>
@@ -265,8 +269,8 @@ export function SiteFooter() {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-0.5 mb-4">
-              <span className="text-white font-light text-xl tracking-tight">TEDx</span>
-              <span className="font-black text-xl tracking-tight" style={{ color: TED_RED }}>Xinyi</span>
+              <span className="font-black text-xl tracking-tight" style={{ color: TED_RED }}>TEDx</span>
+              <span className="text-white font-light text-xl tracking-tight">Xinyi</span>
             </div>
             <p className="text-white/40 text-sm leading-relaxed">
               An independently organized TEDx event<br />

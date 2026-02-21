@@ -110,7 +110,7 @@ export default function TEDxXinyiHome() {
           </FadeIn>
 
           <FadeIn delay={100}>
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-[1.1] mb-4 text-white" lang="zh-TW">
+            <h1 className="font-handwriting text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold leading-[1.1] mb-4 text-white" lang="zh-TW">
               We are Becoming
             </h1>
           </FadeIn>
@@ -141,7 +141,7 @@ export default function TEDxXinyiHome() {
                 style={{ backgroundColor: TED_RED }}
                 lang="zh-TW"
               >
-                認識 We are Becoming salon
+                認識 <span className="font-handwriting text-base">We are Becoming</span> salon
               </Link>
               <Link
                 href="/vibe-demo/tedx-xinyi/about"
@@ -161,7 +161,7 @@ export default function TEDxXinyiHome() {
           <div className="flex-1">
             <p className="text-xs font-bold tracking-[0.25em] uppercase text-white/50 mb-1">NEXT EVENT</p>
             <h2 className="text-lg sm:text-xl font-black" lang="zh-TW">
-              TEDxXinyi We are Becoming – AI趨勢沙龍
+              TEDxXinyi <span className="font-handwriting text-xl sm:text-2xl">We are Becoming</span> – AI趨勢沙龍
             </h2>
             <p className="text-white/60 text-sm mt-1" lang="zh-TW">
               2026/3/31（二）｜台北藝術表演中心 藍盒子
@@ -177,7 +177,7 @@ export default function TEDxXinyiHome() {
               style={{ backgroundColor: TED_RED }}
               lang="zh-TW"
             >
-              認識 We are Becoming salon
+              認識 <span className="font-handwriting text-base">We are Becoming</span> salon
             </Link>
             <button
               className="px-5 py-2.5 text-sm font-bold rounded-full border border-white/30 text-white/70 hover:text-white hover:border-white/60 transition-all"
@@ -244,7 +244,7 @@ export default function TEDxXinyiHome() {
             <FadeIn>
               <SectionLabel>UPCOMING SALON</SectionLabel>
               <h2 className="text-3xl md:text-4xl font-black mb-6" lang="zh-TW">
-                We are Becoming – AI趨勢沙龍
+                <span className="font-handwriting text-4xl md:text-5xl">We are Becoming</span> – AI趨勢沙龍
               </h2>
             </FadeIn>
             <FadeIn delay={150}>
@@ -252,7 +252,7 @@ export default function TEDxXinyiHome() {
                 未來不是某一天突然到來，我們早已沈浸其中。<br />
                 在 AI 世代，我們被迫，也被邀請，不斷更新自我。<br />
                 這場沙龍，從溝通、記憶、學習、願景、想像力到行動力，<br />
-                邀請你一起練習『We are Becoming』。
+                邀請你一起練習『<span className="font-handwriting text-xl">We are Becoming</span>』。
               </p>
             </FadeIn>
             <FadeIn delay={200}>
