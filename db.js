@@ -988,6 +988,46 @@ async function initDatabase() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_recruitai_messages_session ON recruitai_chat_messages(session_id);
+
+      CREATE TABLE IF NOT EXISTS radiance_media (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL,
+        original_name TEXT,
+        url TEXT NOT NULL,
+        mime_type TEXT,
+        size INTEGER,
+        uploaded_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS radiance_blog_cms (
+        slug TEXT PRIMARY KEY,
+        title_en TEXT,
+        title_zh TEXT,
+        date_en TEXT,
+        date_zh TEXT,
+        category_en TEXT,
+        category_zh TEXT,
+        read_time TEXT,
+        excerpt_en TEXT,
+        excerpt_zh TEXT,
+        hero_image TEXT,
+        content_en TEXT,
+        content_zh TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS radiance_case_study_cms (
+        slug TEXT PRIMARY KEY,
+        title_en TEXT,
+        title_zh TEXT,
+        client TEXT,
+        excerpt_en TEXT,
+        excerpt_zh TEXT,
+        featured_image TEXT,
+        content_html_en TEXT,
+        content_html_zh TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');
