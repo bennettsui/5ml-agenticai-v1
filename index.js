@@ -6000,15 +6000,20 @@ server.listen(port, '0.0.0.0', async () => {
         }
       } catch { /* no manifest yet */ }
 
-      // Find visuals with new or changed definitions
-      const changed = VISUALS.filter(v => currentDefs[v.id] !== previousDefs[v.id]);
+      // Find visuals with new or changed definitions, or missing files
+      const changed = VISUALS.filter(v =>
+        currentDefs[v.id] !== previousDefs[v.id] ||
+        !tedxFs.existsSync(tedxPath.join(tedxOutputDir, v.filename))
+      );
 
       if (changed.length > 0) {
         const newIds = changed.filter(v => !previousDefs[v.id]).map(v => v.id);
-        const updatedIds = changed.filter(v => previousDefs[v.id]).map(v => v.id);
-        console.log(`🎨 TEDx: Visual definitions changed — ${newIds.length} new, ${updatedIds.length} updated`);
+        const updatedIds = changed.filter(v => previousDefs[v.id] && currentDefs[v.id] !== previousDefs[v.id]).map(v => v.id);
+        const missingIds = changed.filter(v => previousDefs[v.id] && currentDefs[v.id] === previousDefs[v.id]).map(v => v.id);
+        console.log(`🎨 TEDx: Generating ${changed.length} visuals — ${newIds.length} new, ${updatedIds.length} updated, ${missingIds.length} missing files`);
         if (newIds.length > 0) console.log(`   New: ${newIds.join(', ')}`);
         if (updatedIds.length > 0) console.log(`   Updated: ${updatedIds.join(', ')}`);
+        if (missingIds.length > 0) console.log(`   Missing: ${missingIds.join(', ')}`);
 
         // Fire-and-forget: generate only changed visuals after a short delay
         setTimeout(async () => {
@@ -6062,7 +6067,7 @@ server.listen(port, '0.0.0.0', async () => {
           }
         }, 3000);
       } else {
-        console.log(`🎨 TEDx: All ${VISUALS.length} visual definitions unchanged — skipping generation`);
+        console.log(`🎨 TEDx: All ${VISUALS.length} visuals up to date — skipping generation`);
       }
     } catch (err) {
       console.warn('⚠️ TEDx auto-generation check failed:', err.message);
@@ -6091,12 +6096,17 @@ server.listen(port, '0.0.0.0', async () => {
         }
       } catch { /* no manifest yet */ }
 
-      const xinyiChanged = XINYI_VISUALS.filter(v => xinyiDefs[v.id] !== xinyiPrevDefs[v.id]);
+      const xinyiChanged = XINYI_VISUALS.filter(v =>
+        xinyiDefs[v.id] !== xinyiPrevDefs[v.id] ||
+        !tedxFs.existsSync(tedxPath.join(xinyiOutputDir, v.filename))
+      );
 
       if (xinyiChanged.length > 0) {
         const xinyiNewIds = xinyiChanged.filter(v => !xinyiPrevDefs[v.id]).map(v => v.id);
-        const xinyiUpdatedIds = xinyiChanged.filter(v => xinyiPrevDefs[v.id]).map(v => v.id);
-        console.log(`🎨 TEDxXinyi: Visual definitions changed — ${xinyiNewIds.length} new, ${xinyiUpdatedIds.length} updated`);
+        const xinyiUpdatedIds = xinyiChanged.filter(v => xinyiPrevDefs[v.id] && xinyiDefs[v.id] !== xinyiPrevDefs[v.id]).map(v => v.id);
+        const xinyiMissingIds = xinyiChanged.filter(v => xinyiPrevDefs[v.id] && xinyiDefs[v.id] === xinyiPrevDefs[v.id]).map(v => v.id);
+        console.log(`🎨 TEDxXinyi: Generating ${xinyiChanged.length} visuals — ${xinyiNewIds.length} new, ${xinyiUpdatedIds.length} updated, ${xinyiMissingIds.length} missing files`);
+        if (xinyiMissingIds.length > 0) console.log(`   Missing: ${xinyiMissingIds.join(', ')}`);
 
         setTimeout(async () => {
           try {
@@ -6147,7 +6157,7 @@ server.listen(port, '0.0.0.0', async () => {
           }
         }, 15000); // Delay after Boundary Street generation
       } else {
-        console.log(`🎨 TEDxXinyi: All ${XINYI_VISUALS.length} visual definitions unchanged — skipping generation`);
+        console.log(`🎨 TEDxXinyi: All ${XINYI_VISUALS.length} visuals up to date — skipping generation`);
       }
     } catch (err) {
       console.warn('⚠️ TEDxXinyi auto-generation check failed:', err.message);
