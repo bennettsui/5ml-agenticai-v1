@@ -4798,6 +4798,7 @@ app.get('/api/recruitai/admin/sessions/:sessionId/messages', async (req, res) =>
 
 const { calcBaseChart } = require('./services/ziwei-chart-engine');
 const ziweiValidation = require('./validation/ziweiValidation');
+const asyncHandler = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 // POST /api/ziwei/calculate - Calculate a birth chart
 app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, asyncHandler(async (req, res) => {
