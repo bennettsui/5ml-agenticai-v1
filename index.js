@@ -5777,6 +5777,76 @@ app.get('/api/ziwei/palace/:palace', (req, res) => {
 // ==========================================
 const port = process.env.PORT || 8080;
 
+// ============================================================
+// RecruitAI Studio — Lead capture + email alert
+// ============================================================
+// Resend client is created lazily inside the handler so a missing
+// RESEND_API_KEY never crashes the server on startup.
+app.post('/api/recruitai/lead', async (req, res) => {
+  try {
+    const { name, email, phone, company, industry, teamSize, painPoints, message, preferredTime } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ error: 'name and email are required' });
+    }
+
+    // ── Persist to DB if available ────────────────────────────
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = require('./db');
+        await db.query(
+          `INSERT INTO recruitai_leads
+             (name, email, phone, company, industry, team_size, pain_points, message, preferred_time, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+           ON CONFLICT DO NOTHING`,
+          [name, email, phone || null, company || null, industry || null,
+           teamSize || null, JSON.stringify(painPoints || []), message || null, preferredTime || null]
+        );
+      } catch (dbErr) {
+        console.warn('⚠️ RecruitAI lead DB insert failed (non-fatal):', dbErr.message);
+      }
+    }
+
+    // ── Send email alert via Resend (non-fatal if not configured) ──
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const { Resend } = require('resend');
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const alertTo = process.env.RECRUITAI_ALERT_EMAIL || 'hello@5ml.ai';
+        const painList = Array.isArray(painPoints) && painPoints.length
+          ? painPoints.join(', ')
+          : '—';
+        await resend.emails.send({
+          from: 'RecruitAI Studio <noreply@5ml.ai>',
+          to: alertTo,
+          subject: `New lead: ${name} (${company || 'no company'})`,
+          html: `<h2>New RecruitAI Consultation Request</h2>
+<table cellpadding="6" style="border-collapse:collapse;font-family:sans-serif;font-size:14px">
+  <tr><td><b>Name</b></td><td>${name}</td></tr>
+  <tr><td><b>Email</b></td><td>${email}</td></tr>
+  <tr><td><b>Phone</b></td><td>${phone || '—'}</td></tr>
+  <tr><td><b>Company</b></td><td>${company || '—'}</td></tr>
+  <tr><td><b>Industry</b></td><td>${industry || '—'}</td></tr>
+  <tr><td><b>Team size</b></td><td>${teamSize || '—'}</td></tr>
+  <tr><td><b>Pain points</b></td><td>${painList}</td></tr>
+  <tr><td><b>Preferred time</b></td><td>${preferredTime || '—'}</td></tr>
+  <tr><td><b>Message</b></td><td>${message || '—'}</td></tr>
+</table>`,
+        });
+        console.log(`✅ RecruitAI lead email sent for ${email}`);
+      } catch (emailErr) {
+        console.error('⚠️ RecruitAI email send failed (non-fatal):', emailErr.message);
+      }
+    } else {
+      console.log('ℹ️  RecruitAI lead received — RESEND_API_KEY not set, skipping email');
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[RecruitAI] lead error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const server = http.createServer(app);
 
 // Initialize WebSocket server

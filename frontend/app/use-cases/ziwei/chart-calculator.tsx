@@ -425,48 +425,38 @@ export function ChartCalculator() {
         </div>
       )}
 
-      {/* Chart Display - Canvas-Based Rendering */}
+      {/* Chart Display - Grid Layout */}
       {chart && (
-        <div className="rounded-xl border border-slate-700/50 bg-slate-900/80 p-8">
-          <h3 className="text-xl font-bold text-white mb-8">命盤 Birth Chart (紫微斗數排盤)</h3>
+        <div className="rounded-xl border border-slate-700/50 bg-slate-900/80 p-6">
+          <h3 className="text-xl font-bold text-white mb-6">命盤 Birth Chart (紫微斗數排盤)</h3>
 
-          {/* Grid Chart Display */}
-          <div className="bg-slate-800/50 rounded-lg p-8 border border-slate-700/30 overflow-x-auto">
-            <ZiweiChartGrid
-              houses={chart.houses}
-              lifeHouseIndex={chart.lifeHouseIndex}
-              personName={input.name}
-              birthDate={`${input.lunarYear}年 ${input.lunarMonth}月 ${input.lunarDay}日`}
-              hourBranch={input.hourBranch}
-              gender={input.gender}
-              fiveElementBureau={chart.fiveElementBureau}
-            />
-          </div>
+          {(() => {
+            const { stem, branch } = calculateYearStemBranch(input.lunarYear);
+            const calType = input.calendarType ?? 'lunar';
+            const lunarDate = calType === 'lunar'
+              ? `農曆 ${stem}${branch}年 ${input.lunarMonth}月 ${input.lunarDay}日 ${input.hourBranch}時`
+              : `${input.lunarYear}年${input.lunarMonth}月${input.lunarDay}日 ${input.hourBranch}時（已轉換農曆）`;
+            const solarDate = calType === 'gregorian'
+              ? `${input.lunarYear}年${input.lunarMonth}月${input.lunarDay}日`
+              : undefined;
 
-          {/* Stats */}
-          <div className="grid grid-cols-4 gap-3 mt-6">
-            <div className="rounded-lg bg-slate-900/50 p-3">
-              <div className="text-xs text-slate-500">Total Stars</div>
-              <div className="text-xl font-bold text-purple-400">{Object.keys(chart.starPositions).length}</div>
-            </div>
-            <div className="rounded-lg bg-slate-900/50 p-3">
-              <div className="text-xs text-slate-500">Life Palace</div>
-              <div className="text-sm font-bold text-blue-400">{palaceNames[chart.lifeHouseIndex]}</div>
-            </div>
-            <div className="rounded-lg bg-slate-900/50 p-3">
-              <div className="text-xs text-slate-500">Five Elements</div>
-              <div className="text-sm font-bold text-amber-400">{chart.fiveElementBureau}</div>
-            </div>
-            <div className="rounded-lg bg-slate-900/50 p-3">
-              <div className="text-xs text-slate-500">Year Stem-Branch</div>
-              <div className="text-sm font-bold text-teal-400">
-                {(() => {
-                  const { stem, branch } = calculateYearStemBranch(input.lunarYear);
-                  return `${stem}${branch}`;
-                })()}
-              </div>
-            </div>
-          </div>
+            return (
+              <ZiweiChartGrid
+                houses={chart.houses}
+                lifeHouseIndex={chart.lifeHouseIndex}
+                bodyHouseIndex={chart.bodyHouseIndex}
+                personName={input.name}
+                lunarDate={lunarDate}
+                solarDate={solarDate}
+                gender={input.gender}
+                fiveElementBureau={chart.fiveElementBureau}
+                lifeHouseStem={chart.lifeHouseStem}
+                lifeHouseBranch={chart.lifeHouseBranch}
+                ziweiLifeBranch={chart.ziweiLifeBranch}
+                yearStemBranch={`${stem}${branch}`}
+              />
+            );
+          })()}
         </div>
       )}
 

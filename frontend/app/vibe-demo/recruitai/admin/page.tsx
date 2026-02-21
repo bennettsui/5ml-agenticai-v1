@@ -8,9 +8,13 @@ import {
   CheckCircle, Search,
 } from 'lucide-react';
 
-const API_BASE = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
-  : 'http://localhost:8080';
+const API_BASE = (() => {
+  if (typeof window === 'undefined') return '';
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  return isLocal
+    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
+    : (process.env.NEXT_PUBLIC_API_URL || '');
+})();
 const ADMIN_PASSWORD = '5milesLab01@';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
