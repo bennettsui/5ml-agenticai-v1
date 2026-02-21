@@ -36,6 +36,29 @@ PALACE_NAMES = [
     "遷移宮", "交友宮", "官祿宮", "田宅宮", "福德宮", "父母宮"
 ]
 
+# 14 Major Stars (十四主星)
+# Ziwei System: 6 stars (counter-clockwise from Ziwei)
+ZIWEI_SYSTEM_STARS = {
+    "紫微": 0,      # Anchor star
+    "天機": -1,     # Counter-clockwise 1
+    "太陽": -3,     # Counter-clockwise 3
+    "武曲": -4,     # Counter-clockwise 4
+    "天同": -5,     # Counter-clockwise 5
+    "廉貞": -8      # Counter-clockwise 8
+}
+
+# Tianfu System: 8 stars (mix of clockwise/counter-clockwise from Tianfu)
+TIANFU_SYSTEM_STARS = {
+    "天府": 0,      # Anchor star
+    "太陰": -1,     # Counter-clockwise 1
+    "貪狼": -2,     # Counter-clockwise 2
+    "巨門": 1,      # Clockwise 1
+    "天相": 2,      # Clockwise 2
+    "天梁": 3,      # Clockwise 3
+    "七殺": -3,     # Counter-clockwise 3
+    "破軍": -4      # Counter-clockwise 4
+}
+
 # Five Tiger Escaping (五虎遁) - Maps year stem to stem at 寅 position
 FIVE_TIGER_ESCAPING = {
     "甲": "丙", "己": "丙",
@@ -389,6 +412,63 @@ def place_ziwei_tianfu_on_palaces(
 
 
 # ============================================================
+# STEP 6: PLACE 14 MAJOR STARS (安十四主星)
+# ============================================================
+
+def place_14_major_stars(
+    palaces: List[PalaceData],
+    ziwei_position: str,
+    tianfu_position: str
+) -> Dict[str, str]:
+    """
+    Place all 14 major stars on the palace grid
+
+    Uses two systems:
+    1. Ziwei System: 6 stars offset from Ziwei (counter-clockwise)
+    2. Tianfu System: 8 stars offset from Tianfu (mixed directions)
+
+    Args:
+        palaces: List of 12 palaces
+        ziwei_position: Ziwei star position (branch)
+        tianfu_position: Tianfu star position (branch)
+
+    Returns:
+        Dictionary of star_name -> branch_position
+    """
+    star_positions = {}
+    ziwei_index = BRANCHES.index(ziwei_position)
+    tianfu_index = BRANCHES.index(tianfu_position)
+
+    # ZIWEI SYSTEM (6 stars - counter-clockwise from Ziwei)
+    for star_name, offset in ZIWEI_SYSTEM_STARS.items():
+        star_index = (ziwei_index + offset) % 12
+        star_branch = BRANCHES[star_index]
+        star_positions[star_name] = star_branch
+
+        # Place on palace grid
+        if star_name != "紫微":  # Ziwei already placed
+            if 0 <= star_index < len(palaces):
+                if not palaces[star_index].major_stars:
+                    palaces[star_index].major_stars = []
+                palaces[star_index].major_stars.append(star_name)
+
+    # TIANFU SYSTEM (8 stars - mixed offsets from Tianfu)
+    for star_name, offset in TIANFU_SYSTEM_STARS.items():
+        star_index = (tianfu_index + offset) % 12
+        star_branch = BRANCHES[star_index]
+        star_positions[star_name] = star_branch
+
+        # Place on palace grid
+        if star_name != "天府":  # Tianfu already placed
+            if 0 <= star_index < len(palaces):
+                if not palaces[star_index].major_stars:
+                    palaces[star_index].major_stars = []
+                palaces[star_index].major_stars.append(star_name)
+
+    return star_positions
+
+
+# ============================================================
 # MAIN CALCULATION FUNCTION
 # ============================================================
 
@@ -437,6 +517,9 @@ def calculate_natal_chart(birth: BirthData) -> NatalChart:
     ziwei_position = calculate_ziwei_position(birth.lunar_day, five_element_bureau)
     tianfu_position = calculate_tianfu_position(ziwei_position)
     place_ziwei_tianfu_on_palaces(palaces, ziwei_position, tianfu_position)
+
+    # STEP 6: Place 14 major stars
+    major_stars_positions = place_14_major_stars(palaces, ziwei_position, tianfu_position)
 
     # Create chart
     chart = NatalChart(
@@ -510,19 +593,37 @@ if __name__ == "__main__":
     print(f"\n命宮: {chart.life_palace_stem_branch}")
     print(f"五行局: {chart.five_element_bureau}")
 
-    # Calculate Ziwei & Tianfu positions
+    # Get Ziwei & Tianfu positions
     ziwei_pos = calculate_ziwei_position(bennett.lunar_day, chart.five_element_bureau)
     tianfu_pos = calculate_tianfu_position(ziwei_pos)
-    print(f"\nZiwei & Tianfu:")
+    print(f"\nZiwei & Tianfu (STEP 5):")
     print(f"  紫微星 at: {ziwei_pos}宮")
     print(f"  天府星 at: {tianfu_pos}宮")
 
-    print(f"\n12宮排列 (逆時針 COUNTERCLOCKWISE):")
+    # Get 14 major stars positions from chart (already calculated in calculate_natal_chart)
+    major_stars_pos = {}
+    for star_name, offset in ZIWEI_SYSTEM_STARS.items():
+        star_index = (BRANCHES.index(ziwei_pos) + offset) % 12
+        major_stars_pos[star_name] = BRANCHES[star_index]
+    for star_name, offset in TIANFU_SYSTEM_STARS.items():
+        star_index = (BRANCHES.index(tianfu_pos) + offset) % 12
+        major_stars_pos[star_name] = BRANCHES[star_index]
+    print(f"\n14 Major Stars (STEP 6):")
+    print(f"  Ziwei System (Counter-clockwise from Ziwei):")
+    for star in ["紫微", "天機", "太陽", "武曲", "天同", "廉貞"]:
+        print(f"    {star}: {major_stars_pos[star]}宮")
+    print(f"  Tianfu System (Mixed from Tianfu):")
+    for star in ["天府", "太陰", "貪狼", "巨門", "天相", "天梁", "七殺", "破軍"]:
+        print(f"    {star}: {major_stars_pos[star]}宮")
+
+    print(f"\n12宮排列 with 14 Major Stars (逆時針 COUNTERCLOCKWISE):")
     for palace in chart.palaces:
         stars = []
         if palace.ziwei_star:
             stars.append(palace.ziwei_star)
         if palace.tianfu_star:
             stars.append(palace.tianfu_star)
+        if palace.major_stars:
+            stars.extend(palace.major_stars)
         star_info = f" [{', '.join(stars)}]" if stars else ""
         print(f"  {palace.palace_name}: {palace.stem_branch}{star_info}")
