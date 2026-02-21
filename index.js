@@ -6005,21 +6005,34 @@ app.get('/api/ziwei/palace/:palace', (req, res) => {
     res.end();
   });
 
-  // POST /api/tender-intel/ingest  — manual trigger (for testing)
+  // POST /api/tender-intel/ingest  — manual trigger, SSE streaming progress
+  // Manual trigger always runs all sources (skipRecentHours=0).
   app.post('/api/tender-intel/ingest', async (req, res) => {
-    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ error: 'DATABASE_URL not set' });
+    }
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const emit = (data) => {
+      try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch (_) {}
+    };
+
     try {
       scheduleRegistry.markRunning('tender-intel:daily-ingestion');
-      const summary = await tenderIntel.runIngestion(pool);
+      const summary = await tenderIntel.runIngestion(pool, emit, 0); // 0 = run all, no skip
       scheduleRegistry.markCompleted('tender-intel:daily-ingestion', {
-        result: `${summary.newRawCaptures} new captures`,
+        result: `${summary.newRawCaptures} new captures, ${summary.tendersInserted} tenders`,
         durationMs: summary.durationMs,
       });
-      res.json({ success: true, summary });
     } catch (err) {
       scheduleRegistry.markFailed('tender-intel:daily-ingestion', err.message);
-      res.status(500).json({ error: err.message });
+      emit({ type: 'error', error: err.message });
     }
+    res.end();
   });
 
   // POST /api/tender-intel/chat  — AI chat assistant used by frontend layout
