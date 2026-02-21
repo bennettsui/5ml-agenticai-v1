@@ -1,6 +1,7 @@
 'use client';
 
-import { CheckCircle2, AlertTriangle, Clock, Activity } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CheckCircle2, AlertTriangle, Clock, Activity, RefreshCw } from 'lucide-react';
 
 const RUNS = [
   {
@@ -106,21 +107,63 @@ function formatDuration(ms: number) {
   return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapApiLog(log: any) {
+  const runAt = log.run_at ? new Date(log.run_at) : null;
+  return {
+    agent:           log.agent_name || 'UnknownAgent',
+    run_id:          `log-${log.id}`,
+    started:         runAt ? runAt.toLocaleTimeString('en-HK', { timeZone: 'Asia/Hong_Kong', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '',
+    completed:       runAt && log.duration_ms ? new Date(runAt.getTime() + log.duration_ms).toLocaleTimeString('en-HK', { timeZone: 'Asia/Hong_Kong', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '',
+    duration_ms:     log.duration_ms || 0,
+    status:          log.status || 'success',
+    items_processed: log.items_processed || 0,
+    items_failed:    0,
+    detail:          log.detail || '',
+  };
+}
+
 export default function LogsPage() {
+  const [liveRuns, setLiveRuns] = useState<typeof RUNS | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch('/api/tender-intel/logs?limit=50')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) setLiveRuns(data.map(mapApiLog));
+      })
+      .catch(() => {/* keep mock */})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const displayRuns = liveRuns ?? RUNS;
+  const runsToday = displayRuns.length;
+  const totalItems = displayRuns.reduce((s, r) => s + r.items_processed, 0);
+  const failures = displayRuns.filter(r => r.status === 'error' || r.status === 'partial').length;
+  const newTenders = displayRuns.filter(r => r.agent.includes('Normalizer')).reduce((s, r) => s + r.items_processed, 0);
+
   return (
     <div className="space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight mb-1">Ingestion Log</h1>
-        <p className="text-sm text-slate-400">Agent run history for 21 Feb 2026</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight mb-1">Ingestion Log</h1>
+          <p className="text-sm text-slate-400">Agent run history{liveRuns ? ' · live' : ' · mock data'}</p>
+        </div>
+        <button onClick={() => window.location.reload()} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 border border-slate-700/50 hover:border-slate-600 transition-colors">
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
       </div>
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Runs today', value: '7', color: 'teal' },
-          { label: 'Items processed', value: '107', color: 'teal' },
-          { label: 'Failures', value: '0', color: 'emerald' },
-          { label: 'New tenders', value: '9', color: 'teal' },
+          { label: 'Runs total', value: String(runsToday), color: 'teal' },
+          { label: 'Items processed', value: String(totalItems), color: 'teal' },
+          { label: 'Failures', value: String(failures), color: failures > 0 ? 'amber' : 'emerald' },
+          { label: 'New tenders', value: String(newTenders || displayRuns.reduce((s,r) => s + r.items_processed, 0)), color: 'teal' },
         ].map(s => (
           <div key={s.label} className={`p-3 rounded-xl border border-${s.color}-500/30 bg-white/[0.02]`}>
             <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{s.label}</div>
@@ -131,7 +174,7 @@ export default function LogsPage() {
 
       {/* Run log */}
       <div className="space-y-2">
-        {RUNS.map(run => {
+        {displayRuns.map(run => {
           const sc = STATUS_CONFIG[run.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.success;
           const StatusIcon = sc.icon;
           return (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { CheckCircle2, AlertTriangle, Clock, RefreshCw, ChevronDown, Plus, ExternalLink } from 'lucide-react';
 
 type SourceStatus = 'active' | 'broken' | 'pending_validation' | 'deferred';
@@ -162,32 +162,68 @@ const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
 
 const PRIORITY_COLORS = { 1: 'text-emerald-400', 2: 'text-blue-400', 3: 'text-slate-500' };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapApiSource(s: any): Source {
+  return {
+    source_id:             s.source_id,
+    name:                  s.name || s.source_id,
+    organisation:          s.organisation || '',
+    jurisdiction:          (s.jurisdiction as Source['jurisdiction']) || 'HK',
+    source_type:           (s.source_type as SourceType) || 'rss_xml',
+    priority:              (s.priority as 1 | 2 | 3) || 2,
+    status:                (s.status as SourceStatus) || 'pending_validation',
+    last_checked:          s.last_checked_at ? new Date(s.last_checked_at).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong' }) : null,
+    new_items_today:       null,
+    feed_url:              s.feed_url || null,
+    category_tags_default: Array.isArray(s.category_tags_default) ? s.category_tags_default : [],
+    notes:                 s.notes || '',
+    reliability_score:     s.last_status === 'ok' ? 0.95 : s.last_status === 'error' ? 0.3 : 0.7,
+  };
+}
+
 export default function SourceRegistryPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filterJur, setFilterJur] = useState<'All' | 'HK' | 'SG' | 'Global'>('All');
   const [filterStatus, setFilterStatus] = useState<'All' | SourceStatus>('All');
+  const [liveSources, setLiveSources] = useState<Source[] | null>(null);
 
-  const filtered = SOURCES.filter(s => {
+  const fetchSources = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (filterJur !== 'All') params.set('jurisdiction', filterJur);
+      if (filterStatus !== 'All') params.set('status', filterStatus);
+      const res = await fetch(`/api/tender-intel/sources?${params}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) setLiveSources(data.map(mapApiSource));
+    } catch (_) { /* keep mock */ }
+  }, [filterJur, filterStatus]);
+
+  useEffect(() => { fetchSources(); }, [fetchSources]);
+
+  const SOURCE_DATA = liveSources ?? SOURCES;
+
+  const filtered = SOURCE_DATA.filter(s => {
     if (filterJur !== 'All' && s.jurisdiction !== filterJur) return false;
     if (filterStatus !== 'All' && s.status !== filterStatus) return false;
     return true;
   });
 
-  const activeCount = SOURCES.filter(s => s.status === 'active').length;
-  const pendingCount = SOURCES.filter(s => s.status === 'pending_validation').length;
-  const totalNewToday = SOURCES.reduce((sum, s) => sum + (s.new_items_today ?? 0), 0);
+  const activeCount = SOURCE_DATA.filter(s => s.status === 'active').length;
+  const pendingCount = SOURCE_DATA.filter(s => s.status === 'pending_validation').length;
+  const totalNewToday = SOURCE_DATA.reduce((sum, s) => sum + (s.new_items_today ?? 0), 0);
 
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight mb-1">Source Registry</h1>
-          <p className="text-sm text-slate-400">{activeCount} active · {pendingCount} pending · {totalNewToday} new items today</p>
+          <p className="text-sm text-slate-400">{activeCount} active · {pendingCount} pending · {totalNewToday} new items today{liveSources ? ' · live' : ' · mock'}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 border border-slate-700/50 hover:border-slate-600 hover:text-white transition-colors">
+          <button onClick={fetchSources} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 border border-slate-700/50 hover:border-slate-600 hover:text-white transition-colors">
             <RefreshCw className="w-3.5 h-3.5" />
-            Run discovery
+            Refresh
           </button>
           <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-teal-500/15 text-teal-400 border border-teal-500/30 hover:bg-teal-500/25 transition-colors">
             <Plus className="w-3.5 h-3.5" />

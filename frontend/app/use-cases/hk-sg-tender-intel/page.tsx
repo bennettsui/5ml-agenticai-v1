@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   CheckCircle2, Clock, TrendingUp, Rss, ChevronRight, Star,
   BookmarkPlus, X, Users, RefreshCw, AlertTriangle, Globe,
@@ -373,25 +373,104 @@ function TenderCard({ tender, onAction }: { tender: Tender; onAction: (id: strin
   );
 }
 
+// ─── API helpers ──────────────────────────────────────────────────────────────
+
+function daysUntil(dateStr: string | null): number {
+  if (!dateStr) return 999;
+  const diff = new Date(dateStr).getTime() - Date.now();
+  return Math.ceil(diff / 86400000);
+}
+
+function mapLabel(raw: string): Label {
+  const map: Record<string, Label> = {
+    priority: 'Priority', consider: 'Consider',
+    partner_only: 'Partner-only', ignore: 'Ignore', unscored: 'Consider',
+  };
+  return map[raw] || 'Consider';
+}
+
+function mapOwnerType(raw: string): 'gov' | 'public_org' | 'university' {
+  if (raw === 'gov') return 'gov';
+  if (raw === 'university' || raw === 'polytechnic' || raw === 'research_institute') return 'university';
+  return 'public_org';
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapApiTender(t: any): Tender {
+  const closingDate = t.closing_date ? t.closing_date.slice(0, 10) : null;
+  const budgetMin = t.budget_min ? Math.round(t.budget_min / 1000) + 'k' : null;
+  const currency = t.currency || 'HKD';
+  const budgetDisplay = budgetMin ? `~${currency}$${budgetMin}` : '(not stated)';
+  const label = mapLabel(t.label || 'unscored');
+
+  return {
+    id:                 String(t.id || t.tender_ref),
+    jurisdiction:       (t.jurisdiction as 'HK' | 'SG') || 'HK',
+    tender_ref:         t.tender_ref || '',
+    title:              t.title || '',
+    agency:             t.agency || t.source_name || '',
+    closing_date:       closingDate || 'TBC',
+    days_remaining:     daysUntil(closingDate),
+    budget_display:     budgetDisplay,
+    category_tags:      Array.isArray(t.category_tags) ? t.category_tags : [],
+    overall_score:      t.overall_score ?? 0.5,
+    capability_fit:     t.capability_fit ?? 0.5,
+    business_potential: t.business_potential ?? 0.5,
+    label,
+    rationale:          t.reasoning_summary || t.description_snippet || '',
+    source:             t.source_id || '',
+    owner_type:         mapOwnerType(t.owner_type || 'gov'),
+  };
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function TenderIntelDigest() {
   const [decisions, setDecisions] = useState<Record<string, Action>>({});
   const [showIgnored, setShowIgnored] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [liveTenders, setLiveTenders] = useState<Tender[] | null>(null);
+  const [liveStats, setLiveStats] = useState<typeof STATS | null>(null);
+  const [lastRunAt, setLastRunAt] = useState<string | null>(null);
+  const [usingLiveData, setUsingLiveData] = useState(false);
+
+  const fetchDigest = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const res = await fetch('/api/tender-intel/digest');
+      if (!res.ok) throw new Error('non-200');
+      const data = await res.json();
+      if (data.tenders && data.tenders.length > 0) {
+        setLiveTenders(data.tenders.map(mapApiTender));
+        setUsingLiveData(true);
+        if (data.stats) {
+          setLiveStats([
+            { label: 'New Today',   value: String(data.stats.newToday),   sub: 'from all sources',       icon: TrendingUp,   color: 'teal' },
+            { label: 'Priority',    value: String(data.stats.priority),   sub: 'Action recommended',     icon: Star,         color: 'emerald' },
+            { label: 'Closing ≤7d', value: String(data.stats.closingSoon), sub: 'Urgent attention',      icon: AlertTriangle, color: 'amber' },
+            { label: 'Sources OK',  value: data.stats.sourcesOk,          sub: 'Live sources',           icon: Rss,           color: 'slate' },
+          ]);
+        }
+        if (data.lastRun) setLastRunAt(data.lastRun.run_at);
+      }
+    } catch (_) {
+      /* keep mock data */
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchDigest(); }, [fetchDigest]);
 
   function handleAction(id: string, action: Action) {
     setDecisions(prev => ({ ...prev, [id]: action }));
   }
 
-  function handleRefresh() {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1200);
-  }
-
-  const allTenders = [...HK_TENDERS, ...SG_TENDERS];
-  const hkVisible = HK_TENDERS.filter(t => showIgnored || t.label !== 'Ignore').filter(t => decisions[t.id] !== 'ignore');
-  const sgVisible = SG_TENDERS.filter(t => showIgnored || t.label !== 'Ignore').filter(t => decisions[t.id] !== 'ignore');
+  const ALL_TENDERS = liveTenders ?? [...HK_TENDERS, ...SG_TENDERS];
+  const displayStats = liveStats ?? STATS;
+  const allTenders = ALL_TENDERS;
+  const hkVisible = allTenders.filter(t => t.jurisdiction === 'HK').filter(t => showIgnored || t.label !== 'Ignore').filter(t => decisions[t.id] !== 'ignore');
+  const sgVisible = allTenders.filter(t => t.jurisdiction === 'SG').filter(t => showIgnored || t.label !== 'Ignore').filter(t => decisions[t.id] !== 'ignore');
   const closingSoon = allTenders.filter(t => t.days_remaining <= 7 && t.label !== 'Ignore');
   const trackedCount = Object.values(decisions).filter(a => a === 'track').length;
 
@@ -401,10 +480,18 @@ export default function TenderIntelDigest() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight mb-1">Daily Digest</h1>
-          <p className="text-sm text-slate-400">Friday 21 February 2026 · 08:00 HKT</p>
+          <p className="text-sm text-slate-400 flex items-center gap-1.5 flex-wrap">
+            {lastRunAt
+              ? `Last ingestion: ${new Date(lastRunAt).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong' })} HKT`
+              : 'Friday 21 February 2026 · 08:00 HKT'}
+            {usingLiveData
+              ? <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-teal-500/15 text-teal-400 border border-teal-500/30">Live</span>
+              : <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-slate-700/40 text-slate-500 border border-slate-600/30">Mock</span>
+            }
+          </p>
         </div>
         <button
-          onClick={handleRefresh}
+          onClick={fetchDigest}
           disabled={refreshing}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 border border-slate-700/50 hover:border-slate-600 hover:text-white transition-colors disabled:opacity-50"
         >
@@ -415,7 +502,7 @@ export default function TenderIntelDigest() {
 
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {STATS.map(s => {
+        {displayStats.map(s => {
           const Icon = s.icon;
           const colorMap: Record<string, string> = {
             teal: 'border-teal-500/30 text-teal-400',
@@ -481,7 +568,7 @@ export default function TenderIntelDigest() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-500 font-medium">
-            Showing {hkVisible.length + sgVisible.length} of {HK_TENDERS.length + SG_TENDERS.length} tenders
+            Showing {hkVisible.length + sgVisible.length} of {allTenders.length} tenders
           </span>
         </div>
         <label className="flex items-center gap-2 cursor-pointer">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Search, Filter, ChevronDown, ExternalLink, Calendar, DollarSign, Building2, Globe } from 'lucide-react';
 
 type Label = 'Priority' | 'Consider' | 'Partner-only' | 'Ignore' | 'All';
@@ -125,15 +125,64 @@ const LABEL_STYLES: Record<string, string> = {
   Ignore: 'bg-slate-500/10 text-slate-500',
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapApiTender(t: any): Tender {
+  const closingDate = t.closing_date ? t.closing_date.slice(0, 10) : null;
+  const daysLeft = closingDate ? Math.ceil((new Date(closingDate).getTime() - Date.now()) / 86400000) : null;
+  const labelMap: Record<string, Tender['label']> = { priority: 'Priority', consider: 'Consider', partner_only: 'Partner-only', ignore: 'Ignore', unscored: 'Consider' };
+  return {
+    id:            String(t.id || t.tender_ref),
+    tender_ref:    t.tender_ref || '',
+    jurisdiction:  (t.jurisdiction as 'HK' | 'SG') || 'HK',
+    title:         t.title || '',
+    agency:        t.agency || t.source_name || '',
+    category_tags: Array.isArray(t.category_tags) ? t.category_tags : [],
+    publish_date:  t.publish_date ? t.publish_date.slice(0, 10) : '',
+    closing_date:  closingDate || 'TBC',
+    days_remaining: daysLeft,
+    budget_display: t.budget_min ? `~${t.currency || 'HKD'}$${Math.round(t.budget_min / 1000)}k` : '(not stated)',
+    owner_type:    t.owner_type || 'gov',
+    status:        (t.status as 'open' | 'closed') || 'open',
+    label:         labelMap[t.label] || 'Consider',
+    overall_score: t.overall_score ?? 0.5,
+    source:        t.source_id || '',
+  };
+}
+
 export default function TendersPage() {
   const [search, setSearch] = useState('');
   const [filterLabel, setFilterLabel] = useState<Label>('All');
   const [filterJur, setFilterJur] = useState<Jurisdiction>('All');
   const [filterStatus, setFilterStatus] = useState<Status>('open');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [liveTenders, setLiveTenders] = useState<Tender[] | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
+
+  const fetchTenders = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (filterJur !== 'All') params.set('jurisdiction', filterJur);
+      if (filterLabel !== 'All') params.set('label', filterLabel.toLowerCase().replace('-', '_'));
+      if (filterStatus !== 'All') params.set('status', filterStatus);
+      if (search) params.set('search', search);
+      params.set('limit', '100');
+      const res = await fetch(`/api/tender-intel/tenders?${params}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.tenders && data.tenders.length > 0) {
+        setLiveTenders(data.tenders.map(mapApiTender));
+        setTotal(data.total);
+      }
+    } catch (_) { /* keep mock */ }
+  }, [filterJur, filterLabel, filterStatus, search]);
+
+  useEffect(() => { fetchTenders(); }, [fetchTenders]);
+
+  const SOURCE_TENDERS = liveTenders ?? ALL_TENDERS;
 
   const filtered = useMemo(() => {
-    return ALL_TENDERS.filter(t => {
+    if (liveTenders) return liveTenders;  // server already filtered
+    return SOURCE_TENDERS.filter(t => {
       if (filterLabel !== 'All' && t.label !== filterLabel) return false;
       if (filterJur !== 'All' && t.jurisdiction !== filterJur) return false;
       if (filterStatus !== 'All' && t.status !== filterStatus) return false;
@@ -142,13 +191,15 @@ export default function TendersPage() {
         !t.tender_ref.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     }).sort((a, b) => b.overall_score - a.overall_score);
-  }, [search, filterLabel, filterJur, filterStatus]);
+  }, [liveTenders, SOURCE_TENDERS, search, filterLabel, filterJur, filterStatus]);
+
+  const displayCount = total ?? filtered.length;
 
   return (
     <div className="space-y-6 max-w-5xl">
       <div>
         <h1 className="text-2xl font-bold text-white tracking-tight mb-1">All Tenders</h1>
-        <p className="text-sm text-slate-400">{filtered.length} records · sorted by relevance score</p>
+        <p className="text-sm text-slate-400">{displayCount} records · sorted by relevance score{liveTenders ? ' · live data' : ' · mock data'}</p>
       </div>
 
       {/* Search + filters */}
