@@ -92,6 +92,14 @@ const TIANFU_STARS = new Set(['天府','太陰','貪狼','巨門','天相','天�
 const AUX_STARS    = new Set(['左輔','右弼','天魁','天鉞','文昌','文曲','天馬','祿存']);
 const BAD_STARS    = new Set(['擎羊','陀羅','火星','鈴星','地空','地劫']);
 
+// Verified offsets from KB (ZIWEI_ALGORITHM.md, Zhongzhou School)
+const ZIWEI_SYSTEM_OFFSETS: Record<string, number> = {
+  '紫微': 0, '天機': -1, '太陽': -3, '武曲': -4, '天同': -5, '廉貞': -8,
+};
+const TIANFU_SYSTEM_OFFSETS: Record<string, number> = {
+  '天府': 0, '太陰': -1, '貪狼': -2, '巨門': 1, '天相': 2, '天梁': 3, '七殺': 6, '破軍': 10,
+};
+
 function starColorClass(star: string): string {
   if (star === '紫微')            return 'text-violet-200 font-bold';
   if (star === '天府')            return 'text-cyan-200 font-bold';
@@ -156,7 +164,7 @@ function MiniTable({ headers, rows }: { headers: string[]; rows: (string | React
 export default function ZiweiChartSteps({ baseChart }: Props) {
   if (!baseChart) return null;
 
-  const { birth, life_palace, five_element_bureau, four_transformations, palaces, dev_steps } = baseChart;
+  const { birth, life_palace, five_element_bureau, four_transformations = {}, palaces, dev_steps } = baseChart;
 
   // Step filter: null = all open, 0 = dev mode, 1-7 = specific step
   const [activeStep, setActiveStep] = useState<number | null>(null);
@@ -391,17 +399,65 @@ export default function ZiweiChartSteps({ baseChart }: Props) {
 
       {/* ── Step 5: All major stars ──────────────────────────────────────── */}
       <Section step={5} title="安主星 Major Star Placement" isOpen={isOpen(5)} onToggle={() => toggle(5)}>
-        <p className="text-[11px] text-slate-500 mb-2">
-          紫微系逆布，天府系順布，按各星安星訣布置14顆主星及輔星於十二宮。
+        <p className="text-[11px] text-slate-500 mb-3">
+          以紫微/天府為錨點，按安星訣排布14顆主星。
+          紫微系逆布（offset −1, −3, −4, −5, −8）；天府系混布——太陰/貪狼逆（−1/−2），巨門/天相/天梁順（+1/+2/+3），七殺/破軍順（+6/+10）。
         </p>
+
+        {/* Ziwei system — 6 stars counter-clockwise */}
+        <div className="text-[10px] font-semibold text-violet-400 mb-1">紫微系 6星 — counter-clockwise from 紫微</div>
         <MiniTable
-          headers={['星曜', '地支宮', '宮位', '四化']}
-          rows={allStars.map(s => [
-            <span key={s.star} className={starColorClass(s.star)}>{s.star}</span>,
-            s.branch, s.palace_name,
-            s.huaType ? <span key={`h-${s.star}`} className={`${HUA_COLOR_CLASS[s.huaType] ?? ''} font-medium`}>{HUA_LABEL[s.huaType] ?? s.huaType}</span> : '—',
-          ])}
+          headers={['星曜', 'offset', '地支宮', '宮位', '四化']}
+          rows={allStars
+            .filter(s => ZIWEI_SYSTEM_OFFSETS[s.star] !== undefined)
+            .map(s => {
+              const off = ZIWEI_SYSTEM_OFFSETS[s.star];
+              return [
+                <span key={s.star} className={starColorClass(s.star)}>{s.star}</span>,
+                <span key={`o-${s.star}`} className="font-mono text-slate-400 text-[10px]">{off === 0 ? '0 (錨)' : String(off)}</span>,
+                s.branch, s.palace_name,
+                s.huaType ? <span key={`h-${s.star}`} className={`${HUA_COLOR_CLASS[s.huaType] ?? ''} font-medium`}>{HUA_LABEL[s.huaType] ?? s.huaType}</span> : '—',
+              ];
+            })
+          }
         />
+
+        {/* Tianfu system — 8 stars mixed direction */}
+        <div className="text-[10px] font-semibold text-cyan-400 mb-1 mt-3">天府系 8星 — mixed direction from 天府</div>
+        <MiniTable
+          headers={['星曜', 'offset', '方向', '地支宮', '宮位', '四化']}
+          rows={allStars
+            .filter(s => TIANFU_SYSTEM_OFFSETS[s.star] !== undefined)
+            .map(s => {
+              const off = TIANFU_SYSTEM_OFFSETS[s.star];
+              return [
+                <span key={s.star} className={starColorClass(s.star)}>{s.star}</span>,
+                <span key={`o-${s.star}`} className="font-mono text-slate-400 text-[10px]">{off === 0 ? '0 (錨)' : off > 0 ? `+${off}` : String(off)}</span>,
+                <span key={`d-${s.star}`} className={`text-[10px] ${off < 0 ? 'text-rose-400' : off > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>{off === 0 ? '—' : off < 0 ? '逆' : '順'}</span>,
+                s.branch, s.palace_name,
+                s.huaType ? <span key={`h-${s.star}`} className={`${HUA_COLOR_CLASS[s.huaType] ?? ''} font-medium`}>{HUA_LABEL[s.huaType] ?? s.huaType}</span> : '—',
+              ];
+            })
+          }
+        />
+
+        {/* Auxiliary & calamity stars */}
+        {allStars.filter(s => ZIWEI_SYSTEM_OFFSETS[s.star] === undefined && TIANFU_SYSTEM_OFFSETS[s.star] === undefined).length > 0 && (
+          <>
+            <div className="text-[10px] font-semibold text-emerald-400 mb-1 mt-3">輔佐煞星 — Auxiliary & Calamity</div>
+            <MiniTable
+              headers={['星曜', '地支宮', '宮位', '四化']}
+              rows={allStars
+                .filter(s => ZIWEI_SYSTEM_OFFSETS[s.star] === undefined && TIANFU_SYSTEM_OFFSETS[s.star] === undefined)
+                .map(s => [
+                  <span key={s.star} className={starColorClass(s.star)}>{s.star}</span>,
+                  s.branch, s.palace_name,
+                  s.huaType ? <span key={`h-${s.star}`} className={`${HUA_COLOR_CLASS[s.huaType] ?? ''} font-medium`}>{HUA_LABEL[s.huaType] ?? s.huaType}</span> : '—',
+                ])
+              }
+            />
+          </>
+        )}
       </Section>
 
       {/* ── Step 6: Four Transformations ────────────────────────────────── */}
