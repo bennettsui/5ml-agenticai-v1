@@ -110,7 +110,7 @@ export default function RecruitNav() {
             href="/vibe-demo/recruitai/carnival"
             className="px-3 py-2 rounded-lg text-sm font-medium text-yellow-400 hover:text-yellow-300 hover:bg-yellow-400/[0.1] transition-colors"
           >
-            🎪 嘉年華
+            🎪 AI嘉年華
           </Link>
 
           <Link
@@ -200,7 +200,7 @@ export default function RecruitNav() {
             onClick={() => setMobileOpen(false)}
             className="block px-4 py-3 rounded-xl text-sm font-medium text-yellow-400 hover:bg-yellow-400/[0.08] transition-colors"
           >
-            🎪 嘉年華 3D 互動體驗
+            🎪 AI嘉年華 3D 互動體驗
           </Link>
           <Link
             href="/vibe-demo/recruitai/contact"

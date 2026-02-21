@@ -1324,11 +1324,11 @@ export default function RecruitAIPage() {
                 <h2 className="text-3xl sm:text-4xl font-black text-white mb-4 leading-tight">
                   RecruitAI
                   <span className="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400">
-                    嘉年華 3D 世界
+                    AI嘉年華 3D 世界
                   </span>
                 </h2>
                 <p className="text-slate-400 text-lg leading-relaxed mb-8">
-                  化身機器人 RAIBOT，漫遊香港風格 3D 嘉年華場景，探索 5 個 AI 展位。
+                  化身機器人 RAIBOT，漫遊香港風格 3D AI嘉年華場景，探索 5 個 AI 展位。
                   叮叮電車穿梭、獅子頭舞動、AI 代理逐一揭秘——用遊戲方式了解業務自動化的真正威力。
                 </p>
                 <div className="flex flex-wrap gap-3">

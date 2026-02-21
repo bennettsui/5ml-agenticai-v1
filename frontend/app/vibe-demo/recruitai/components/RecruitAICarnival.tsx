@@ -755,7 +755,7 @@ export default function RecruitAICarnival() {
     archCtx.strokeRect(6, 6, 628, 148);
     archCtx.fillStyle = '#ffffff';
     archCtx.font = 'bold 54px Arial'; archCtx.textAlign = 'center'; archCtx.textBaseline = 'alphabetic';
-    archCtx.fillText('RecruitAI 嘉年華', 320, 92);
+    archCtx.fillText('RecruitAI AI嘉年華', 320, 92);
     archCtx.fillStyle = 'rgba(255,255,255,0.72)'; archCtx.font = '28px Arial';
     archCtx.fillText('探索 AI 自動化的未來', 320, 138);
     const archTex = new THREE.CanvasTexture(archCan);
@@ -1049,7 +1049,7 @@ export default function RecruitAICarnival() {
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-gradient-to-b from-blue-950/96 to-slate-900/96 backdrop-blur-sm">
           <div className="text-center max-w-md w-full px-6">
             <div className="text-7xl mb-3 select-none">🎪</div>
-            <h2 className="text-4xl font-black text-white mb-1 tracking-tight">RecruitAI 嘉年華</h2>
+            <h2 className="text-4xl font-black text-white mb-1 tracking-tight">RecruitAI AI嘉年華</h2>
             <p className="text-blue-300 text-base mb-7">探索 5 個 AI 展位，發現業務自動化的無限可能</p>
 
             <div className="bg-white/10 border border-white/20 rounded-2xl p-5 mb-7 text-left space-y-4">

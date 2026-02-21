@@ -11,7 +11,7 @@ const RecruitAICarnival = dynamic(
     <div className="w-full h-full flex items-center justify-center bg-sky-900">
       <div className="text-center">
         <div className="text-6xl mb-4 animate-bounce">🎪</div>
-        <p className="text-white text-xl font-semibold">載入嘉年華...</p>
+        <p className="text-white text-xl font-semibold">載入AI嘉年華...</p>
         <p className="text-blue-300 text-sm mt-2">Loading 3D World</p>
       </div>
     </div>
