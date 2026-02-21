@@ -69,9 +69,11 @@ export default function SalonPage() {
       {/* ==================== HERO ==================== */}
       <section id="salon-we-are-becoming-ai" className="relative min-h-[60vh] flex items-end overflow-hidden bg-neutral-900">
         <img
-          src="/tedx-xinyi/salon-hero.png"
+          src="/tedx-xinyi/salon-hero.webp"
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
           onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.7'; }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
@@ -112,7 +114,7 @@ export default function SalonPage() {
 
                   {/* nanobanana background (above gradient fallback) */}
                   <img
-                    src="/tedx-xinyi/poster-dark.png"
+                    src="/tedx-xinyi/poster-dark.webp"
                     alt="We are Becoming — TEDxXinyi 2026 key visual poster"
                     loading="lazy"
                     className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
@@ -333,7 +335,7 @@ export default function SalonPage() {
             </div>
             <div className="aspect-square max-w-sm mx-auto w-full rounded-xl overflow-hidden bg-neutral-100">
               <img
-                src="/tedx-xinyi/salon-galaxy.png"
+                src="/tedx-xinyi/salon-galaxy.webp"
                 alt=""
                 className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
                 onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
