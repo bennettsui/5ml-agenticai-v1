@@ -38,8 +38,10 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
 }));
 
 // Serve TEDx generated visuals (runtime-generated via nanobanana API)
-app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx')));
-app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi')));
+// Cache for 1 day — images are regenerated only when prompts change
+const tedxStaticOpts = { maxAge: '1d', immutable: false };
+app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx'), tedxStaticOpts));
+app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi'), tedxStaticOpts));
 
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
