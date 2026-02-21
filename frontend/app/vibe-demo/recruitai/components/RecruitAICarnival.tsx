@@ -1152,7 +1152,7 @@ export default function RecruitAICarnival() {
 
       {/* ── Mobile D-pad ──────────────────────────────────────────────────── */}
       {gameStarted && isMobile && (
-        <div className="absolute bottom-6 right-6 z-20 select-none">
+        <div className="absolute bottom-28 right-6 z-20 select-none">
           <div className="relative w-36 h-36">
             <button className="absolute top-0 left-1/2 -translate-x-1/2 w-11 h-11 bg-white/20 active:bg-white/50 rounded-xl border border-white/30 flex items-center justify-center text-white text-lg"
               onPointerDown={() => dpadStart(0,-1)} onPointerUp={dpadEnd} onPointerLeave={dpadEnd}>▲</button>
