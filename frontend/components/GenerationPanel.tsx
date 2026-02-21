@@ -237,13 +237,15 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
           lunarYear,
           lunarMonth,
           lunarDay,
-          hourBranch:   formData.hourBranch,
+          hourBranch:      formData.hourBranch,
           yearStem,
           yearBranch,
-          gender:       formData.gender,
-          name:         formData.name.trim(),
-          placeOfBirth: formData.location,
-          calendarType: formData.calendarType,
+          gender:          formData.gender,
+          name:            formData.name.trim(),
+          placeOfBirth:    formData.location,
+          calendarType:    formData.calendarType,
+          // When updating an existing visitor, overwrite the same record
+          existingChartId: !isCreating && selectedId ? selectedId : undefined,
         }),
       });
       const data = await res.json();

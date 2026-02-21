@@ -164,6 +164,8 @@ export default function ZiweiChartAnalysis() {
                       branch:          p.branch as string,
                       stem:            p.stem as string,
                       stem_branch:     p.stem_branch as string,
+                      ziwei_star:      (p.ziwei_star as string | null) ?? null,
+                      tianfu_star:     (p.tianfu_star as string | null) ?? null,
                       major_stars:     (p.major_stars as string[]) ?? [],
                       transformations: (p.transformations as Record<string, string>) ?? {},
                     })) ?? []}
@@ -220,11 +222,18 @@ export default function ZiweiChartAnalysis() {
                 onChange={e => { setSelectedId(e.target.value); setAnalysis(null); }}
                 className="w-full px-3 py-2 bg-[#071420]/80 border border-teal-800/40 rounded-lg text-white text-xs focus:outline-none focus:border-cyan-500"
               >
-                {charts.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} — {c.created_at ? new Date(c.created_at).toLocaleDateString() : '?'}
-                  </option>
-                ))}
+                {charts.map(c => {
+                  const bi = c.birth_info as Record<string, unknown> | undefined;
+                  const y  = bi?.lunarYear as number | undefined;
+                  const m  = bi?.lunarMonth as number | undefined;
+                  const d  = bi?.lunarDay   as number | undefined;
+                  const dob = (y && m && d) ? `${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}` : '—';
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {c.name} · {dob}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 

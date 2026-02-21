@@ -4929,7 +4929,7 @@ app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, async
   try {
     const {
       lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch,
-      gender, name, placeOfBirth, timezone, calendarType
+      gender, name, placeOfBirth, timezone, calendarType, existingChartId
     } = req.body;
 
     // Validate required fields
@@ -4969,16 +4969,47 @@ app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, async
           calendarType: calendarType || 'lunar'
         };
 
-        const result = await db.query(
-          `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
-           VALUES ($1, $2, $3, $4) RETURNING id`,
-          [
-            name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
-            JSON.stringify(birthInfo),
-            JSON.stringify({ yearStem, yearBranch }),
-            JSON.stringify(chart)
-          ]
-        );
+        let result;
+        if (existingChartId) {
+          // Update existing record — overwrite the same person's chart
+          result = await db.query(
+            `UPDATE ziwei_birth_charts
+             SET name = $1, birth_info = $2, gan_zhi = $3, base_chart = $4
+             WHERE id = $5 RETURNING id`,
+            [
+              name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
+              JSON.stringify(birthInfo),
+              JSON.stringify({ yearStem, yearBranch }),
+              JSON.stringify(chart),
+              existingChartId
+            ]
+          );
+          if (result.rows.length === 0) {
+            // Fallback: insert if id not found
+            result = await db.query(
+              `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
+               VALUES ($1, $2, $3, $4) RETURNING id`,
+              [
+                name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
+                JSON.stringify(birthInfo),
+                JSON.stringify({ yearStem, yearBranch }),
+                JSON.stringify(chart)
+              ]
+            );
+          }
+        } else {
+          // Insert new record
+          result = await db.query(
+            `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
+             VALUES ($1, $2, $3, $4) RETURNING id`,
+            [
+              name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
+              JSON.stringify(birthInfo),
+              JSON.stringify({ yearStem, yearBranch }),
+              JSON.stringify(chart)
+            ]
+          );
+        }
         chartId = result.rows[0].id;
         console.log('✅ Chart stored in database:', chartId);
       } catch (dbErr) {
