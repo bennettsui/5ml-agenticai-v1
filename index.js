@@ -119,10 +119,14 @@ const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAl
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
-  initDatabase().catch(err => {
-    console.error('⚠️ Database initialization failed:', err.message);
-    console.log('⚠️ App will continue running without database');
-  });
+  // Core schema first, then tender intelligence schema (auto-seeds sources if registry is empty)
+  const { initTenderSchema } = require('./services/tender-intel-service');
+  initDatabase()
+    .then(() => initTenderSchema(pool))
+    .catch(err => {
+      console.error('⚠️ Database initialization failed:', err.message);
+      console.log('⚠️ App will continue running without database');
+    });
   console.log('📊 Database initialization started');
 } else {
   console.log('⚠️ DATABASE_URL not set - running without database');
@@ -330,6 +334,43 @@ app.get('/api/health/services/:id', async (req, res) => {
   const result = await testService(req.params.id);
   if (!result) return res.status(404).json({ error: 'Unknown service' });
   res.json({ timestamp: new Date().toISOString(), service: result });
+});
+
+// ── Database status — checks schema and tender registry ───────────────────────
+app.get('/api/admin/db-status', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.json({ ok: false, error: 'DATABASE_URL not set', hint: 'Run: fly postgres attach <cluster> --app 5ml-agenticai-v1' });
+  }
+  try {
+    const tables = ['tender_source_registry', 'tenders', 'tender_evaluations',
+      'tender_decisions', 'tender_agent_run_logs', 'tender_daily_digests'];
+    const status = {};
+    for (const t of tables) {
+      try {
+        const { rows } = await pool.query(`SELECT COUNT(*) AS n FROM ${t}`);
+        status[t] = { exists: true, rows: parseInt(rows[0].n, 10) };
+      } catch (_) {
+        status[t] = { exists: false, rows: 0 };
+      }
+    }
+    // Check pgvector
+    let vectorEnabled = false;
+    try {
+      await pool.query(`SELECT 'test'::vector(3)`);
+      vectorEnabled = true;
+    } catch (_) {}
+
+    const allExist = tables.every(t => status[t].exists);
+    res.json({
+      ok: allExist,
+      databaseUrl: process.env.DATABASE_URL.replace(/:\/\/[^@]+@/, '://<credentials>@'),
+      vectorEnabled,
+      tables: status,
+      hint: allExist ? null : 'Some tables missing — restart the app with DATABASE_URL set to auto-create them',
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ==========================================
