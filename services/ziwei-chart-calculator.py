@@ -59,6 +59,49 @@ TIANFU_SYSTEM_STARS = {
     "破軍": -4      # Counter-clockwise 4
 }
 
+# STEP 7: Auxiliary & Calamity Stars
+# Group 1: Based on Year Stem (5 stars)
+LU_CUN_BY_YEAR_STEM = {
+    "甲": "寅", "乙": "卯", "丙": "巳", "丁": "午",
+    "戊": "巳", "己": "午", "庚": "申", "辛": "酉",
+    "壬": "亥", "癸": "子"
+}
+
+TIAN_KUEI_BY_YEAR_STEM = {
+    "甲": "丑", "乙": "子", "丙": "亥", "丁": "亥",
+    "戊": "丑", "己": "子", "庚": "丑", "辛": "午",
+    "壬": "卯", "癸": "卯"
+}
+
+TIAN_YUE_BY_YEAR_STEM = {
+    "甲": "未", "乙": "申", "丙": "酉", "丁": "酉",
+    "戊": "未", "己": "申", "庚": "未", "辛": "寅",
+    "壬": "巳", "癸": "巳"
+}
+
+# Group 2: Based on Year Branch (1 star)
+TIAN_MA_BY_YEAR_BRANCH = {
+    "申": "申", "子": "申", "辰": "申",  # 申子辰 group → 申
+    "寅": "寅", "午": "寅", "戌": "寅",  # 寅午戌 group → 寅
+    "巳": "亥", "酉": "亥", "丑": "亥",  # 巳酉丑 group → 亥
+    "亥": "巳", "卯": "巳", "未": "巳"   # 亥卯未 group → 巳
+}
+
+# Group 3: Based on Birth Hour (2 stars - 文昌 and 文曲)
+# 文昌: Start at 戌(8), count backward by hour (retrograde)
+WEN_CHANG_BY_HOUR = {
+    "子": "戌", "丑": "酉", "寅": "申", "卯": "未",
+    "辰": "午", "巳": "巳", "午": "辰", "未": "卯",
+    "申": "寅", "酉": "丑", "戌": "子", "亥": "亥"
+}
+
+# 文曲: Start at 辰(2), count forward by hour (prograde)
+WEN_QU_BY_HOUR = {
+    "子": "辰", "丑": "巳", "寅": "午", "卯": "未",
+    "辰": "申", "巳": "酉", "午": "戌", "未": "亥",
+    "申": "子", "酉": "丑", "戌": "寅", "亥": "卯"
+}
+
 # Five Tiger Escaping (五虎遁) - Maps year stem to stem at 寅 position
 FIVE_TIGER_ESCAPING = {
     "甲": "丙", "己": "丙",
@@ -149,6 +192,7 @@ TIANFU_MAPPING = {
 class BirthData:
     """Birth information for chart calculation"""
     year_stem: str      # Year heavenly stem (甲乙丙...)
+    year_branch: str    # Year earthly branch (子丑寅...)
     lunar_month: int    # Lunar month (1-12)
     lunar_day: int      # Lunar day (1-30)
     hour_branch: str    # Birth hour as branch (寅卯辰...)
@@ -415,6 +459,105 @@ def place_ziwei_tianfu_on_palaces(
 # STEP 6: PLACE 14 MAJOR STARS (安十四主星)
 # ============================================================
 
+# ============================================================
+# STEP 7: PLACE AUXILIARY & CALAMITY STARS (安輔佐煞曜)
+# ============================================================
+
+def calculate_auxiliary_calamity_star_positions(
+    year_stem: str,
+    year_branch: str,
+    birth_hour: str
+) -> Dict[str, str]:
+    """
+    Calculate auxiliary and calamity star positions (without placing on grid)
+
+    Three groups of stars:
+    1. Year Stem based: 祿存, 擎羊, 陀羅, 天魁, 天鉞
+    2. Year Branch based: 天馬
+    3. Birth Hour based: 文昌, 文曲
+
+    Args:
+        year_stem: Year heavenly stem (甲乙丙...)
+        year_branch: Year earthly branch (子丑寅...)
+        birth_hour: Birth hour branch (子丑寅...)
+
+    Returns:
+        Dictionary of star_name -> branch_position
+    """
+    star_positions = {}
+
+    # GROUP 1: Year Stem Based Stars (5 stars)
+    # 祿存 (Lu Cun)
+    lu_cun_branch = LU_CUN_BY_YEAR_STEM[year_stem]
+    lu_cun_index = BRANCHES.index(lu_cun_branch)
+    star_positions["祿存"] = lu_cun_branch
+
+    # 擎羊 (Qing Yang) - Lu Cun + 1
+    qing_yang_index = (lu_cun_index + 1) % 12
+    qing_yang_branch = BRANCHES[qing_yang_index]
+    star_positions["擎羊"] = qing_yang_branch
+
+    # 陀羅 (Tuo Luo) - Lu Cun - 1
+    tuo_luo_index = (lu_cun_index - 1 + 12) % 12
+    tuo_luo_branch = BRANCHES[tuo_luo_index]
+    star_positions["陀羅"] = tuo_luo_branch
+
+    # 天魁 (Tian Kuei)
+    tian_kuei_branch = TIAN_KUEI_BY_YEAR_STEM[year_stem]
+    star_positions["天魁"] = tian_kuei_branch
+
+    # 天鉞 (Tian Yue)
+    tian_yue_branch = TIAN_YUE_BY_YEAR_STEM[year_stem]
+    star_positions["天鉞"] = tian_yue_branch
+
+    # GROUP 2: Year Branch Based Stars (1 star)
+    # 天馬 (Tian Ma)
+    tian_ma_branch = TIAN_MA_BY_YEAR_BRANCH[year_branch]
+    star_positions["天馬"] = tian_ma_branch
+
+    # GROUP 3: Birth Hour Based Stars (2 stars)
+    # 文昌 (Wen Chang)
+    wen_chang_branch = WEN_CHANG_BY_HOUR[birth_hour]
+    star_positions["文昌"] = wen_chang_branch
+
+    # 文曲 (Wen Qu)
+    wen_qu_branch = WEN_QU_BY_HOUR[birth_hour]
+    star_positions["文曲"] = wen_qu_branch
+
+    return star_positions
+
+
+def place_auxiliary_calamity_stars(
+    palaces: List[PalaceData],
+    year_stem: str,
+    year_branch: str,
+    birth_hour: str
+) -> Dict[str, str]:
+    """
+    Place auxiliary and calamity stars on the palace grid
+
+    Args:
+        palaces: List of 12 palaces
+        year_stem: Year heavenly stem (甲乙丙...)
+        year_branch: Year earthly branch (子丑寅...)
+        birth_hour: Birth hour branch (子丑寅...)
+
+    Returns:
+        Dictionary of star_name -> branch_position
+    """
+    star_positions = calculate_auxiliary_calamity_star_positions(year_stem, year_branch, birth_hour)
+
+    # Place all stars on palace grid
+    for star_name, star_branch in star_positions.items():
+        star_index = BRANCHES.index(star_branch)
+        if 0 <= star_index < len(palaces):
+            if not palaces[star_index].major_stars:
+                palaces[star_index].major_stars = []
+            palaces[star_index].major_stars.append(star_name)
+
+    return star_positions
+
+
 def place_14_major_stars(
     palaces: List[PalaceData],
     ziwei_position: str,
@@ -521,6 +664,11 @@ def calculate_natal_chart(birth: BirthData) -> NatalChart:
     # STEP 6: Place 14 major stars
     major_stars_positions = place_14_major_stars(palaces, ziwei_position, tianfu_position)
 
+    # STEP 7: Place auxiliary & calamity stars
+    auxiliary_stars_positions = place_auxiliary_calamity_stars(
+        palaces, birth.year_stem, birth.year_branch, birth.hour_branch
+    )
+
     # Create chart
     chart = NatalChart(
         birth=birth,
@@ -578,6 +726,7 @@ if __name__ == "__main__":
     # Test with Bennett (甲子年 1984, 農曆12月3日, 亥時)
     bennett = BirthData(
         year_stem="甲",
+        year_branch="子",
         lunar_month=12,
         lunar_day=3,
         hour_branch="亥",
@@ -616,7 +765,26 @@ if __name__ == "__main__":
     for star in ["天府", "太陰", "貪狼", "巨門", "天相", "天梁", "七殺", "破軍"]:
         print(f"    {star}: {major_stars_pos[star]}宮")
 
-    print(f"\n12宮排列 with 14 Major Stars (逆時針 COUNTERCLOCKWISE):")
+    # Get auxiliary stars positions (already placed in calculate_natal_chart)
+    auxiliary_stars_pos = calculate_auxiliary_calamity_star_positions(
+        bennett.year_stem, bennett.year_branch, bennett.hour_branch
+    )
+
+    print(f"\nAuxiliary & Calamity Stars (STEP 7):")
+    print(f"  Year Stem based (5 stars):")
+    for star in ["祿存", "擎羊", "陀羅", "天魁", "天鉞"]:
+        if auxiliary_stars_pos.get(star):
+            print(f"    {star}: {auxiliary_stars_pos[star]}宮")
+    print(f"  Year Branch based (1 star):")
+    for star in ["天馬"]:
+        if auxiliary_stars_pos.get(star):
+            print(f"    {star}: {auxiliary_stars_pos[star]}宮")
+    print(f"  Hour based (2 stars):")
+    for star in ["文昌", "文曲"]:
+        if auxiliary_stars_pos.get(star):
+            print(f"    {star}: {auxiliary_stars_pos[star]}宮")
+
+    print(f"\n12宮排列 with All Stars (逆時針 COUNTERCLOCKWISE):")
     for palace in chart.palaces:
         stars = []
         if palace.ziwei_star:
