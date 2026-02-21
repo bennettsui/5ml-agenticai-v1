@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, ChevronDown, TrendingUp, Heart, Briefcase, Activity, Eye, EyeOff } from 'lucide-react';
+import { Loader2, ChevronDown, TrendingUp, Heart, Briefcase, Activity, Eye, Bug } from 'lucide-react';
 import { ZiweiChartGrid } from './ZiweiChartGrid';
 import { ZiweiChartCanvas } from './ZiweiChartCanvas';
 
@@ -27,6 +27,7 @@ export default function ZiweiChartAnalysis() {
   const [activeDimension, setActiveDimension] = useState<LifeDimension>('career');
   const [expandedPalaces, setExpandedPalaces] = useState<Record<string, boolean>>({});
   const [chartViewMode, setChartViewMode] = useState<'grid' | 'circular'>('grid');
+  const [showDebug, setShowDebug] = useState(false);
 
   // Load saved charts on mount
   useEffect(() => {
@@ -144,6 +145,60 @@ export default function ZiweiChartAnalysis() {
           </select>
         </div>
       )}
+
+      {/* Debug panel */}
+      <div className="rounded-xl border border-slate-700/40 bg-slate-900/40 overflow-hidden">
+        <button
+          onClick={() => setShowDebug(s => !s)}
+          className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-800/40 transition-colors"
+        >
+          <span className="flex items-center gap-1.5"><Bug className="w-3.5 h-3.5" /> Debug Info</span>
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showDebug ? 'rotate-180' : ''}`} />
+        </button>
+        {showDebug && (
+          <div className="px-4 pb-4 space-y-2 text-[11px] font-mono">
+            <div className="text-slate-400">
+              <span className="text-slate-500">charts loaded: </span>
+              <span className="text-cyan-300">{charts.length}</span>
+              <span className="text-slate-500 ml-4">selected id: </span>
+              <span className="text-cyan-300">{selectedChartId ?? 'none'}</span>
+              <span className="text-slate-500 ml-4">loading: </span>
+              <span className="text-cyan-300">{String(loading || analysisLoading)}</span>
+            </div>
+            {selectedChart && (
+              <>
+                <div className="text-slate-400">
+                  <span className="text-slate-500">base_chart keys: </span>
+                  <span className="text-emerald-300">{Object.keys(selectedChart.base_chart ?? {}).join(', ') || 'none'}</span>
+                </div>
+                <div className="text-slate-400">
+                  <span className="text-slate-500">palaces count: </span>
+                  <span className="text-emerald-300">{selectedChart.base_chart?.palaces?.length ?? 'N/A'}</span>
+                  <span className="text-slate-500 ml-4">five_element_bureau: </span>
+                  <span className="text-emerald-300">{String(selectedChart.base_chart?.five_element_bureau ?? 'N/A')}</span>
+                </div>
+                {selectedChart.base_chart?.palaces?.[0] && (
+                  <div className="text-slate-400">
+                    <span className="text-slate-500">palace[0] keys: </span>
+                    <span className="text-amber-300">{Object.keys(selectedChart.base_chart.palaces[0]).join(', ')}</span>
+                  </div>
+                )}
+                {selectedChart.base_chart?.palaces?.[0] && (
+                  <div className="text-slate-400">
+                    <span className="text-slate-500">palace[0] sample: </span>
+                    <span className="text-amber-300 break-all">
+                      {JSON.stringify(selectedChart.base_chart.palaces[0]).slice(0, 200)}
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+            {!selectedChart && !loading && !analysisLoading && (
+              <div className="text-rose-400">No chart loaded yet</div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Loading analysis */}
       {analysisLoading && (
