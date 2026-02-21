@@ -29,9 +29,8 @@ export const NatalChartView: React.FC<NatalChartViewProps> = ({
   const [selectedStar, setSelectedStar] = useState<string | null>(null);
 
   const tabs: { id: ZiweiTab; label: string }[] = [
-    { id: 'generation', label: '✨ Generation' },
+    { id: 'generation', label: '✨ Chart' },
     { id: 'analysis', label: '🔍 Analysis' },
-    { id: 'reference', label: '📖 Reference' },
     { id: 'predictions', label: '🔮 Predictions' },
   ];
 
@@ -41,95 +40,71 @@ export const NatalChartView: React.FC<NatalChartViewProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      {/* ================================================================ */}
-      {/* TOP BAR                                                           */}
-      {/* ================================================================ */}
-      <header className="bg-slate-900/80 border-b border-slate-700/50 backdrop-blur-sm sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
-              <span className="text-lg font-bold text-amber-400">紫</span>
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-white">ZI WEI ANALYTICS</h1>
-              <p className="text-xs text-slate-500">中州派紫微斗數排盤系統</p>
-            </div>
+    <div className="space-y-4">
+      {/* Visitor info bar — no standalone page header, embeddable */}
+      <div className="flex items-center justify-between p-4 rounded-xl border border-purple-800/30 bg-purple-950/30">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center flex-shrink-0">
+            <span className="text-base font-bold text-purple-300">紫</span>
           </div>
-          {/* Birth Info */}
-          <div className="text-right text-sm">
-            <div className="text-slate-300">{chart.birth.name || 'Demo Chart'}</div>
-            <div className="text-slate-500 text-xs">
-              {chart.birth.yearGregorian} · {chart.birth.location}
+          <div>
+            <div className="font-semibold text-white">{chart.birth.name || '命盤'}</div>
+            <div className="text-xs text-purple-400/70">
+              {chart.birth.yearGregorian}年 · {chart.birth.location || '中州派紫微斗數'}
             </div>
           </div>
         </div>
+        {/* Inner view tabs */}
+        <div className="flex gap-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => onTabChange?.(tab.id)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-purple-700/60 text-purple-200 border border-purple-600/50'
+                  : 'text-slate-400 hover:text-purple-300 hover:bg-purple-900/40'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {/* TAB NAVIGATION */}
-        <nav className="border-t border-slate-700/50 bg-slate-800/50">
-          <div className="max-w-6xl mx-auto px-6 flex space-x-6 overflow-x-auto">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => onTabChange?.(tab.id)}
-                className={`px-1 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'border-amber-500 text-amber-400'
-                    : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-500'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </nav>
-      </header>
+      {/* Chart content */}
+      {activeTab === 'generation' && (
+        <div>
+          <h2 className="text-base font-bold text-white mb-4">命盤 Birth Chart</h2>
+          <ZiWeiGrid
+            layer={chart.layer}
+            visualConfig={defaultStarVisualConfig}
+            onStarClick={handleStarClick}
+          />
+        </div>
+      )}
 
-      {/* ================================================================ */}
-      {/* MAIN CONTENT                                                     */}
-      {/* ================================================================ */}
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        {activeTab === 'generation' && (
-          <div>
-            <h2 className="text-xl font-bold text-white mb-6">Birth Chart (命盤)</h2>
-            <ZiWeiGrid
-              layer={chart.layer}
-              visualConfig={defaultStarVisualConfig}
-              onStarClick={handleStarClick}
-            />
-          </div>
-        )}
+      {activeTab === 'analysis' && (
+        <div className="rounded-xl border border-purple-800/30 bg-purple-950/20 p-8 text-center">
+          <p className="text-purple-300 font-medium mb-2">Analysis — In Development</p>
+          <p className="text-xs text-slate-400">Palace interpretations and relationship analysis coming soon</p>
+        </div>
+      )}
 
-        {activeTab === 'analysis' && (
-          <div className="bg-slate-800/50 rounded-lg p-8 border border-slate-700/50 text-center text-slate-400">
-            <p>Analysis panel coming soon...</p>
-            <p className="text-xs mt-2">Will include palace interpretations and relationship analysis</p>
-          </div>
-        )}
+      {activeTab === 'predictions' && (
+        <div className="rounded-xl border border-purple-800/30 bg-purple-950/20 p-8 text-center">
+          <p className="text-purple-300 font-medium mb-2">Predictions — In Development</p>
+          <p className="text-xs text-slate-400">Yearly forecasts and timing analysis coming soon</p>
+        </div>
+      )}
 
-        {activeTab === 'reference' && (
-          <div className="bg-slate-800/50 rounded-lg p-8 border border-slate-700/50 text-center text-slate-400">
-            <p>Reference guide coming soon...</p>
-            <p className="text-xs mt-2">Star meanings, palace interpretations, and traditional rules</p>
-          </div>
-        )}
-
-        {activeTab === 'predictions' && (
-          <div className="bg-slate-800/50 rounded-lg p-8 border border-slate-700/50 text-center text-slate-400">
-            <p>Predictions coming soon...</p>
-            <p className="text-xs mt-2">Yearly forecasts and timing analysis</p>
-          </div>
-        )}
-      </main>
-
-      {/* Selected Star Info (Debug) */}
+      {/* Selected Star Info */}
       {selectedStar && (
-        <div className="fixed bottom-4 right-4 bg-slate-800 border border-amber-500/30 rounded-lg p-4 text-sm text-slate-300 max-w-xs">
-          <p className="text-amber-400 font-semibold">Selected Star</p>
-          <p>{selectedStar}</p>
+        <div className="p-3 rounded-xl border border-purple-700/30 bg-purple-900/20 text-sm text-slate-300 flex items-center justify-between">
+          <span><span className="text-purple-300 font-semibold">Selected: </span>{selectedStar}</span>
           <button
             onClick={() => setSelectedStar(null)}
-            className="text-xs mt-2 px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded transition-colors"
+            className="text-xs px-2 py-1 bg-purple-900/50 hover:bg-purple-800/50 rounded transition-colors"
           >
             Clear
           </button>
