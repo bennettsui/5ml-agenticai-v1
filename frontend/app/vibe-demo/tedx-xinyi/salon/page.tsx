@@ -68,8 +68,13 @@ export default function SalonPage() {
             </h1>
           </FadeIn>
           <FadeIn delay={200}>
-            <p className="text-white/70 text-base sm:text-lg leading-relaxed max-w-2xl" lang="zh-TW">
-              探究我們跟 AI 的距離，我們跟自己的距離。
+            <p className="text-white/90 text-xl sm:text-2xl font-black leading-relaxed max-w-2xl" lang="zh-TW">
+              你和 AI 的距離，<br />決定你和自己的樣子。
+            </p>
+          </FadeIn>
+          <FadeIn delay={350}>
+            <p className="text-white/50 text-xs tracking-[0.2em] mt-4" lang="zh-TW">
+              #2026首波沙龍論壇　#在AI時代學會看懂趨勢
             </p>
           </FadeIn>
         </div>
@@ -88,7 +93,7 @@ export default function SalonPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <div className="rounded-xl p-5 border border-neutral-100" style={{ backgroundColor: WARM_GRAY }}>
               <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1" lang="zh-TW">日期</p>
-              <p className="font-black text-sm" lang="zh-TW">2026/3/31（Tue）</p>
+              <p className="font-black text-sm" lang="zh-TW">2026/3/31（二）</p>
             </div>
             <div className="rounded-xl p-5 border border-neutral-100" style={{ backgroundColor: WARM_GRAY }}>
               <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1" lang="zh-TW">時間</p>
@@ -106,6 +111,17 @@ export default function SalonPage() {
             這不是一整天都坐在椅子上的會議，<br />
             而是一個有 TEDx Talks、工作坊、趨勢市集和 networking 的 AI 趨勢實驗場。
           </p>
+        </FadeIn>
+
+        <FadeIn delay={300}>
+          <div className="mt-10 border-l-4 pl-6" style={{ borderColor: TED_RED }}>
+            <p className="text-neutral-900 text-xl sm:text-2xl font-black leading-snug mb-2" lang="zh-TW">
+              你和 AI 的距離，<br />決定你和自己的樣子。
+            </p>
+            <p className="text-neutral-400 text-sm" lang="zh-TW">
+              — TEDxXinyi We are Becoming 2026 核心主題
+            </p>
+          </div>
         </FadeIn>
       </Section>
 
@@ -246,13 +262,13 @@ export default function SalonPage() {
         <div className="max-w-3xl mx-auto px-6 text-center">
           <FadeIn>
             <h2 className="text-3xl md:text-5xl font-black mb-6" lang="zh-TW">
-              想和我們一起『becoming』？
+              在 TEDx Xinyi，一起面對<br />我們與 AI 的未來。
             </h2>
           </FadeIn>
           <FadeIn delay={150}>
             <p className="text-white/85 text-base sm:text-lg leading-[1.9] mb-8" lang="zh-TW">
-              如果你對 AI、不確定的未來、以及人與人之間的連結有很多問號，<br />
-              這場沙龍就是為你準備的。
+              你和 AI 的距離，正在決定你成為什麼樣的人。<br />
+              留一天，好好想想我們要成為誰。
             </p>
           </FadeIn>
           <FadeIn delay={250}>
