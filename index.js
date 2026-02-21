@@ -3,7 +3,7 @@ require('./instrument.js');
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs');
-const nodemailer = require('nodemailer');
+const { spawn } = require('child_process');
 const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
@@ -4516,7 +4516,12 @@ app.put('/api/radiance/admin/case-studies/:slug', async (req, res) => {
 // ==========================================
 
 const { Resend } = require('resend');
-const resendClient = new Resend(process.env.RESEND_API_KEY);
+let resendClient = null;
+try {
+  resendClient = new Resend(process.env.RESEND_API_KEY);
+} catch (err) {
+  console.warn('⚠️ Resend API not configured:', err.message);
+}
 
 // POST /api/recruitai/lead — save lead + send email alert
 app.post('/api/recruitai/lead', async (req, res) => {
@@ -4800,6 +4805,59 @@ const { calcBaseChart } = require('./services/ziwei-chart-engine');
 const ziweiValidation = require('./validation/ziweiValidation');
 const asyncHandler = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
+/**
+ * Calculate Ziwei chart using Python calculator
+ * @param {Object} birthData - Birth data with year_stem, year_branch, lunar_month, lunar_day, hour_branch, gender, name, location
+ * @returns {Promise<Object>} Chart data from Python calculator
+ */
+function calculateZiweiChartPython(birthData) {
+  return new Promise((resolve, reject) => {
+    try {
+      const pythonScript = path.join(__dirname, 'services', 'ziwei-api-wrapper.py');
+
+      // Spawn Python process
+      const python = spawn('python3', [pythonScript, JSON.stringify(birthData)], {
+        timeout: 10000  // 10 second timeout
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      python.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      python.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      python.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Python process exited with code ${code}: ${stderr}`));
+          return;
+        }
+
+        try {
+          const result = JSON.parse(stdout);
+          if (result.success) {
+            resolve(result);
+          } else {
+            reject(new Error(result.error || 'Unknown error from Python calculator'));
+          }
+        } catch (parseErr) {
+          reject(new Error(`Failed to parse Python output: ${parseErr.message}`));
+        }
+      });
+
+      python.on('error', (err) => {
+        reject(new Error(`Failed to spawn Python process: ${err.message}`));
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 // POST /api/ziwei/calculate - Calculate a birth chart
 app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, asyncHandler(async (req, res) => {
   try {
@@ -4815,15 +4873,17 @@ app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, async
       });
     }
 
-    // Calculate chart
-    const chart = calcBaseChart({
-      lunarYear,
-      lunarMonth,
-      lunarDay,
-      hourBranch,
-      yearStem,
-      yearBranch,
-      gender
+    // Calculate chart using Python calculator
+    console.log('📊 Calculating Ziwei chart using Python calculator...');
+    const chart = await calculateZiweiChartPython({
+      year_stem: yearStem,
+      year_branch: yearBranch,
+      lunar_month: lunarMonth,
+      lunar_day: lunarDay,
+      hour_branch: hourBranch,
+      gender: gender,
+      name: name || '',
+      location: placeOfBirth || ''
     });
 
     // Store in database if available
@@ -4854,6 +4914,7 @@ app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, async
           ]
         );
         chartId = result.rows[0].id;
+        console.log('✅ Chart stored in database:', chartId);
       } catch (dbErr) {
         console.warn('⚠️ Ziwei chart not stored:', dbErr.message);
       }
