@@ -510,21 +510,18 @@ def place_ziwei_tianfu_on_palaces(
     tianfu_position: str
 ) -> None:
     """
-    Place Ziwei and Tianfu stars on the palace grid
+    Place Ziwei and Tianfu stars on the palace grid.
 
-    Args:
-        palaces: List of 12 palaces
-        ziwei_position: Ziwei star position (branch)
-        tianfu_position: Tianfu star position (branch)
+    FIX: palaces[] is ordered counterclockwise from life palace, NOT by
+    branch index. We must match by palace.branch, not BRANCHES.index().
     """
-    ziwei_index = BRANCHES.index(ziwei_position)
-    tianfu_index = BRANCHES.index(tianfu_position)
+    branch_to_palace = {p.branch: p for p in palaces}
 
-    if 0 <= ziwei_index < len(palaces):
-        palaces[ziwei_index].ziwei_star = "紫微星"
+    if ziwei_position in branch_to_palace:
+        branch_to_palace[ziwei_position].ziwei_star = "紫微星"
 
-    if 0 <= tianfu_index < len(palaces):
-        palaces[tianfu_index].tianfu_star = "天府星"
+    if tianfu_position in branch_to_palace:
+        branch_to_palace[tianfu_position].tianfu_star = "天府星"
 
 
 # ============================================================
@@ -640,13 +637,15 @@ def place_auxiliary_calamity_stars(
     """
     star_positions = calculate_auxiliary_calamity_star_positions(year_stem, year_branch, birth_hour, lunar_month)
 
-    # Place all stars on palace grid
+    # FIX: build branch→palace lookup (palaces[] is NOT indexed by branch)
+    branch_to_palace = {p.branch: p for p in palaces}
+
     for star_name, star_branch in star_positions.items():
-        star_index = BRANCHES.index(star_branch)
-        if 0 <= star_index < len(palaces):
-            if not palaces[star_index].major_stars:
-                palaces[star_index].major_stars = []
-            palaces[star_index].major_stars.append(star_name)
+        if star_branch in branch_to_palace:
+            palace = branch_to_palace[star_branch]
+            if not palace.major_stars:
+                palace.major_stars = []
+            palace.major_stars.append(star_name)
 
     return star_positions
 
@@ -731,31 +730,32 @@ def place_14_major_stars(
     ziwei_index = BRANCHES.index(ziwei_position)
     tianfu_index = BRANCHES.index(tianfu_position)
 
-    # ZIWEI SYSTEM (6 stars - counter-clockwise from Ziwei)
+    # FIX: build branch→palace lookup (palaces[] is NOT indexed by branch)
+    branch_to_palace = {p.branch: p for p in palaces}
+
+    # ZIWEI SYSTEM (6 stars — counter-clockwise/逆布 from Ziwei)
     for star_name, offset in ZIWEI_SYSTEM_STARS.items():
         star_index = (ziwei_index + offset) % 12
         star_branch = BRANCHES[star_index]
         star_positions[star_name] = star_branch
 
-        # Place on palace grid
-        if star_name != "紫微":  # Ziwei already placed
-            if 0 <= star_index < len(palaces):
-                if not palaces[star_index].major_stars:
-                    palaces[star_index].major_stars = []
-                palaces[star_index].major_stars.append(star_name)
+        if star_name != "紫微" and star_branch in branch_to_palace:
+            palace = branch_to_palace[star_branch]
+            if not palace.major_stars:
+                palace.major_stars = []
+            palace.major_stars.append(star_name)
 
-    # TIANFU SYSTEM (8 stars - mixed offsets from Tianfu)
+    # TIANFU SYSTEM (8 stars — clockwise/順布 from Tianfu)
     for star_name, offset in TIANFU_SYSTEM_STARS.items():
         star_index = (tianfu_index + offset) % 12
         star_branch = BRANCHES[star_index]
         star_positions[star_name] = star_branch
 
-        # Place on palace grid
-        if star_name != "天府":  # Tianfu already placed
-            if 0 <= star_index < len(palaces):
-                if not palaces[star_index].major_stars:
-                    palaces[star_index].major_stars = []
-                palaces[star_index].major_stars.append(star_name)
+        if star_name != "天府" and star_branch in branch_to_palace:
+            palace = branch_to_palace[star_branch]
+            if not palace.major_stars:
+                palace.major_stars = []
+            palace.major_stars.append(star_name)
 
     return star_positions
 
@@ -842,35 +842,71 @@ def calculate_natal_chart(birth: BirthData) -> NatalChart:
 # ============================================================
 
 def format_chart_output(chart: NatalChart) -> Dict:
-    """Format chart data for API response"""
+    """Format chart data for API response, including step-by-step debug info."""
+    # Recompute positions for step data (chart already has results applied)
+    ziwei_pos  = calculate_ziwei_position(chart.birth.lunar_day, chart.five_element_bureau)
+    tianfu_pos = calculate_tianfu_position(ziwei_pos)
+
+    ziwei_idx  = BRANCHES.index(ziwei_pos)
+    tianfu_idx = BRANCHES.index(tianfu_pos)
+
+    # Step 5: 紫微 & 天府 positions
+    step5 = {
+        "紫微": ziwei_pos,
+        "天府": tianfu_pos,
+    }
+
+    # Step 6: all 14 main stars branch positions
+    step6_ziwei = {}
+    for star, offset in ZIWEI_SYSTEM_STARS.items():
+        step6_ziwei[star] = BRANCHES[(ziwei_idx + offset) % 12]
+
+    step6_tianfu = {}
+    for star, offset in TIANFU_SYSTEM_STARS.items():
+        step6_tianfu[star] = BRANCHES[(tianfu_idx + offset) % 12]
+
+    # Step 7: auxiliary star positions (recalculate, month arg included)
+    step7 = calculate_auxiliary_calamity_star_positions(
+        chart.birth.year_stem, chart.birth.year_branch,
+        chart.birth.hour_branch, chart.birth.lunar_month
+    )
+
     return {
         "birth": {
-            "year_stem": chart.birth.year_stem,
-            "year_branch": chart.birth.year_branch,
-            "lunar_month": chart.birth.lunar_month,
-            "lunar_day": chart.birth.lunar_day,
-            "hour_branch": chart.birth.hour_branch,
-            "gender": chart.birth.gender,
-            "location": chart.birth.location,
-            "name": chart.birth.name,
+            "year_stem":    chart.birth.year_stem,
+            "year_branch":  chart.birth.year_branch,
+            "lunar_month":  chart.birth.lunar_month,
+            "lunar_day":    chart.birth.lunar_day,
+            "hour_branch":  chart.birth.hour_branch,
+            "gender":       chart.birth.gender,
+            "location":     chart.birth.location,
+            "name":         chart.birth.name,
         },
         "life_palace": {
-            "branch": chart.life_palace_branch,
-            "stem": chart.life_palace_stem,
-            "stem_branch": chart.life_palace_stem_branch,
+            "branch":       chart.life_palace_branch,
+            "stem":         chart.life_palace_stem,
+            "stem_branch":  chart.life_palace_stem_branch,
         },
         "five_element_bureau": chart.five_element_bureau,
         "four_transformations": FOUR_TRANSFORMATIONS_BY_YEAR_STEM.get(chart.birth.year_stem, {}),
+        # Developer step data — branch positions for each calculation stage
+        "dev_steps": {
+            "step5_ziwei_tianfu": step5,
+            "step6_ziwei_system": step6_ziwei,
+            "step6_tianfu_system": step6_tianfu,
+            "step7_auxiliary": step7,
+            "step8_four_transformations": FOUR_TRANSFORMATIONS_BY_YEAR_STEM.get(chart.birth.year_stem, {}),
+        },
         "palaces": [
             {
-                "palace_id": p.palace_id,
-                "palace_name": p.palace_name,
-                "branch": p.branch,
-                "stem": p.stem,
-                "stem_branch": p.stem_branch,
-                "ziwei_star": p.ziwei_star,
-                "tianfu_star": p.tianfu_star,
-                "major_stars": p.major_stars or [],
+                "palace_id":    p.palace_id,
+                "palace_name":  p.palace_name,
+                "branch":       p.branch,
+                "stem":         p.stem,
+                "stem_branch":  p.stem_branch,
+                "ziwei_star":   p.ziwei_star,
+                "tianfu_star":  p.tianfu_star,
+                "major_stars":  p.major_stars or [],
                 "transformations": p.transformations or {},
             }
             for p in chart.palaces
