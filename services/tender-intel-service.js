@@ -1584,9 +1584,295 @@ async function runSourceDiscovery(pool, onProgress = null) {
   return { newSources, errors, hubsScanned, durationMs };
 }
 
+// ─── Schema Initialization + Auto-seed ───────────────────────────────────────
+
+/**
+ * Create all tender intelligence tables (idempotent — safe to call on every boot).
+ * Also auto-seeds source registry from seed file if it's empty.
+ * Called from index.js startup after initDatabase().
+ */
+async function initTenderSchema(pool) {
+  const steps = [];
+
+  // 1. Enable pgvector (optional — graceful skip if unavailable)
+  let vectorEnabled = false;
+  try {
+    await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+    vectorEnabled = true;
+    steps.push('pgvector: enabled');
+  } catch (_) {
+    steps.push('pgvector: not available (title_embedding will be TEXT)');
+  }
+
+  // 2. Create tables (all idempotent with IF NOT EXISTS)
+  await pool.query(`
+    -- Source Registry
+    CREATE TABLE IF NOT EXISTS tender_source_registry (
+      source_id                 TEXT PRIMARY KEY,
+      name                      TEXT NOT NULL,
+      organisation              TEXT,
+      owner_type                TEXT NOT NULL DEFAULT 'gov',
+      jurisdiction              TEXT NOT NULL,
+      source_type               TEXT NOT NULL DEFAULT 'rss_xml',
+      access                    TEXT NOT NULL DEFAULT 'public',
+      priority                  SMALLINT NOT NULL DEFAULT 2,
+      status                    TEXT NOT NULL DEFAULT 'active',
+      base_url                  TEXT,
+      feed_url                  TEXT,
+      discovery_hub_url         TEXT,
+      ingest_method             TEXT,
+      update_pattern            TEXT DEFAULT 'unknown',
+      update_times_hkt          TEXT[],
+      field_map                 JSONB,
+      parsing_notes             TEXT,
+      scraping_config           JSONB,
+      category_tags_default     TEXT[] NOT NULL DEFAULT '{}',
+      legal_notes               TEXT,
+      reliability_score         FLOAT,
+      tags                      TEXT[] DEFAULT '{}',
+      notes                     TEXT,
+      last_checked_at           TIMESTAMPTZ,
+      last_status               TEXT,
+      last_status_detail        TEXT,
+      created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tsr_jurisdiction ON tender_source_registry(jurisdiction);
+    CREATE INDEX IF NOT EXISTS idx_tsr_status ON tender_source_registry(status);
+    CREATE INDEX IF NOT EXISTS idx_tsr_source_type ON tender_source_registry(source_type);
+
+    -- Raw Capture Layer
+    CREATE TABLE IF NOT EXISTS raw_tender_captures (
+      capture_id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      source_id                 TEXT NOT NULL REFERENCES tender_source_registry(source_id),
+      raw_format                TEXT NOT NULL DEFAULT 'rss_xml',
+      raw_payload               TEXT NOT NULL,
+      pre_extracted             JSONB,
+      item_url                  TEXT,
+      item_guid                 TEXT,
+      captured_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      normalised                BOOLEAN NOT NULL DEFAULT FALSE,
+      normalised_tender_id      UUID,
+      mapping_version           TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_rtc_source_guid ON raw_tender_captures(source_id, item_guid) WHERE item_guid IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_rtc_normalised ON raw_tender_captures(normalised) WHERE normalised = FALSE;
+    CREATE INDEX IF NOT EXISTS idx_rtc_captured_at ON raw_tender_captures(captured_at DESC);
+
+    -- Tender Evaluations
+    CREATE TABLE IF NOT EXISTS tender_evaluations (
+      eval_id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tender_id                 UUID NOT NULL,
+      capability_fit_score      FLOAT NOT NULL DEFAULT 0,
+      business_potential_score  FLOAT NOT NULL DEFAULT 0,
+      overall_relevance_score   FLOAT NOT NULL DEFAULT 0,
+      is_latest                 BOOLEAN NOT NULL DEFAULT FALSE,
+      label                     TEXT NOT NULL DEFAULT 'Ignore',
+      rationale                 TEXT NOT NULL DEFAULT '',
+      signals_used              JSONB,
+      scoring_weights           JSONB,
+      model_used                TEXT,
+      evaluated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      scoring_version           TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_te_tender_id ON tender_evaluations(tender_id);
+    CREATE INDEX IF NOT EXISTS idx_te_evaluated_at ON tender_evaluations(evaluated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_te_label ON tender_evaluations(label);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_te_tender_latest ON tender_evaluations(tender_id) WHERE is_latest = TRUE;
+
+    -- Tender Decisions
+    CREATE TABLE IF NOT EXISTS tender_decisions (
+      decision_id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tender_id                 UUID NOT NULL,
+      decision                  TEXT NOT NULL DEFAULT 'track',
+      decided_by                TEXT NOT NULL DEFAULT 'founder',
+      decided_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      notes                     TEXT,
+      assigned_to               TEXT,
+      pipeline_stage            TEXT,
+      pipeline_entered_at       TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_td_tender_id ON tender_decisions(tender_id);
+    CREATE INDEX IF NOT EXISTS idx_td_decided_at ON tender_decisions(decided_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_td_decision ON tender_decisions(decision);
+
+    -- Daily Digests
+    CREATE TABLE IF NOT EXISTS tender_daily_digests (
+      digest_id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      digest_date               DATE NOT NULL UNIQUE,
+      tenders_surfaced          UUID[] DEFAULT '{}',
+      narrative_summary         TEXT,
+      hk_top_count              INT DEFAULT 0,
+      sg_top_count              INT DEFAULT 0,
+      closing_soon_count        INT DEFAULT 0,
+      new_tenders_total         INT DEFAULT 0,
+      sources_active            INT DEFAULT 0,
+      sources_with_issues       INT DEFAULT 0,
+      source_issue_details      JSONB,
+      generated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      email_sent_at             TIMESTAMPTZ
+    );
+
+    -- Agent Run Logs
+    CREATE TABLE IF NOT EXISTS tender_agent_run_logs (
+      log_id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      agent_name                TEXT NOT NULL,
+      run_id                    TEXT,
+      started_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at              TIMESTAMPTZ,
+      status                    TEXT DEFAULT 'success',
+      items_processed           INT DEFAULT 0,
+      items_failed              INT DEFAULT 0,
+      error_detail              TEXT,
+      meta                      JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_tarl_agent_name ON tender_agent_run_logs(agent_name);
+    CREATE INDEX IF NOT EXISTS idx_tarl_started_at ON tender_agent_run_logs(started_at DESC);
+
+    -- Calibration Reports
+    CREATE TABLE IF NOT EXISTS tender_calibration_reports (
+      report_id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      generated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      summary                   TEXT,
+      accuracy_precision        FLOAT,
+      accuracy_recall           FLOAT,
+      accuracy_f1               FLOAT,
+      recommendations           JSONB,
+      no_changes_needed         BOOLEAN DEFAULT FALSE,
+      approved_at               TIMESTAMPTZ,
+      approved_updates          JSONB
+    );
+  `);
+  steps.push('core tables: created / verified');
+
+  // 3. Create tenders table (handle vector column depending on pgvector availability)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tenders (
+      tender_id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      source_id                 TEXT NOT NULL REFERENCES tender_source_registry(source_id),
+      source_references         TEXT[] DEFAULT '{}',
+      raw_pointer               UUID REFERENCES raw_tender_captures(capture_id),
+      jurisdiction              TEXT NOT NULL,
+      owner_type                TEXT NOT NULL DEFAULT 'gov',
+      source_url                TEXT,
+      mapping_version           TEXT,
+      tender_ref                TEXT,
+      title                     TEXT NOT NULL,
+      description_snippet       TEXT,
+      agency                    TEXT,
+      category_tags             TEXT[] DEFAULT '{}',
+      raw_category              TEXT,
+      publish_date              DATE,
+      publish_date_estimated    BOOLEAN DEFAULT FALSE,
+      closing_date              DATE,
+      status                    TEXT NOT NULL DEFAULT 'open',
+      first_seen_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      budget_min                NUMERIC(15, 2),
+      budget_max                NUMERIC(15, 2),
+      currency                  TEXT,
+      budget_source             TEXT DEFAULT 'unknown',
+      is_canonical              BOOLEAN NOT NULL DEFAULT TRUE,
+      canonical_tender_id       UUID REFERENCES tenders(tender_id),
+      evaluation_status         TEXT NOT NULL DEFAULT 'pending',
+      label                     TEXT NOT NULL DEFAULT 'unscored',
+      created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tenders_ref_jurisdiction ON tenders(tender_ref, jurisdiction) WHERE tender_ref IS NOT NULL AND is_canonical = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_tenders_closing_date ON tenders(closing_date) WHERE status = 'open';
+    CREATE INDEX IF NOT EXISTS idx_tenders_evaluation_status ON tenders(evaluation_status);
+    CREATE INDEX IF NOT EXISTS idx_tenders_label ON tenders(label);
+    CREATE INDEX IF NOT EXISTS idx_tenders_jurisdiction ON tenders(jurisdiction);
+    CREATE INDEX IF NOT EXISTS idx_tenders_category_tags ON tenders USING GIN(category_tags);
+  `);
+
+  // Add vector embedding column only if pgvector is available
+  if (vectorEnabled) {
+    try {
+      await pool.query(`ALTER TABLE tenders ADD COLUMN IF NOT EXISTS title_embedding vector(1536)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_tenders_embedding ON tenders USING ivfflat (title_embedding vector_cosine_ops) WITH (lists = 50)`);
+      steps.push('tenders: vector(1536) embedding column ready');
+    } catch (_) {
+      steps.push('tenders: vector index skipped (table may need data first)');
+    }
+  } else {
+    await pool.query(`ALTER TABLE tenders ADD COLUMN IF NOT EXISTS title_embedding TEXT`);
+    steps.push('tenders: title_embedding stored as TEXT (no pgvector)');
+  }
+
+  // 4. Allow api_xml source type (migration)
+  try {
+    await pool.query(`
+      ALTER TABLE tender_source_registry DROP CONSTRAINT IF EXISTS tender_source_registry_source_type_check;
+      ALTER TABLE tender_source_registry ADD CONSTRAINT tender_source_registry_source_type_check
+        CHECK (source_type IN ('rss_xml', 'api_json', 'api_xml', 'csv_open_data', 'html_list', 'html_hub', 'html_reference'));
+    `);
+  } catch (_) { /* constraint already applied */ }
+  steps.push('migrations: applied');
+
+  // 5. Auto-seed source registry if empty
+  const { rows: countRows } = await pool.query('SELECT COUNT(*) AS n FROM tender_source_registry');
+  if (parseInt(countRows[0].n, 10) === 0) {
+    const seeded = await _autoSeedSources(pool);
+    steps.push(`sources: auto-seeded ${seeded} entries from registry`);
+  } else {
+    steps.push(`sources: ${countRows[0].n} entries already in registry`);
+  }
+
+  console.log(`✅ Tender schema ready: ${steps.join(' | ')}`);
+  return steps;
+}
+
+/**
+ * Load and insert sources from source-registry-seed.json.
+ * Called automatically by initTenderSchema when registry is empty.
+ */
+async function _autoSeedSources(pool) {
+  let seedData;
+  try {
+    const path = require('path');
+    seedData = require(path.join(__dirname, '../use-cases/hk-sg-tender-intelligence/data/source-registry-seed.json'));
+  } catch (_) {
+    return 0;
+  }
+
+  const sources = (seedData.sources || []).filter(
+    s => !['reference_only', 'stage_2_only'].includes(s.status)
+  );
+
+  let inserted = 0;
+  for (const src of sources) {
+    try {
+      await pool.query(
+        `INSERT INTO tender_source_registry (
+          source_id, name, organisation, owner_type, jurisdiction, source_type,
+          access, priority, status, discovery_hub_url, feed_url, ingest_method,
+          update_pattern, field_map, scraping_config, category_tags_default,
+          parsing_notes, legal_notes, notes, tags, created_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW(),NOW())
+        ON CONFLICT (source_id) DO NOTHING`,
+        [
+          src.source_id, src.name, src.organisation || null, src.owner_type,
+          src.jurisdiction, src.source_type, src.access || 'public', src.priority || 2,
+          src.status, src.discovery_hub_url || null, src.feed_url || null,
+          src.ingest_method || null, src.update_pattern || null,
+          src.field_map ? JSON.stringify(src.field_map) : null,
+          src.scraping_config ? JSON.stringify(src.scraping_config) : null,
+          src.category_tags_default || [], src.parsing_notes || null,
+          src.legal_notes || null, src.notes || null, src.tags || [],
+        ]
+      );
+      inserted++;
+    } catch (_) { /* skip individual errors */ }
+  }
+  return inserted;
+}
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
+  initTenderSchema,
   runIngestion,
   runEvaluation,
   runSourceDiscovery,
