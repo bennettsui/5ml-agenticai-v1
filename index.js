@@ -3797,6 +3797,15 @@ try {
   console.warn('⚠️ Multimedia Library routes not loaded:', error.message);
 }
 
+// Image Compression Service
+try {
+  const imageCompressionRoutes = require('./use-cases/image-compression/api/routes');
+  app.use('/api/compress', imageCompressionRoutes);
+  console.log('✅ Image Compression routes loaded: /api/compress');
+} catch (error) {
+  console.warn('⚠️ Image Compression routes not loaded:', error.message);
+}
+
 // Scheduler Service
 const scheduler = require('./services/scheduler');
 const scheduleRegistry = require('./services/schedule-registry');

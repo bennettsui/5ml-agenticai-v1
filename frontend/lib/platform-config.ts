@@ -576,6 +576,18 @@ export const USE_CASES: UseCaseConfig[] = [
     agentCount: 3,
     features: ['Image Upload (File/URL/Paste)', 'Video URL Analysis (YouTube)', 'Reverse Prompt Engineering', 'Style Template Builder', 'Canvas Annotation', 'Brand Profile Linking'],
   },
+  {
+    id: 'image-compression',
+    name: 'Image Compression',
+    description: 'Profile-driven image compression service powered by sharp: resize, re-encode to WebP/AVIF/JPEG, and enforce KB budgets for content, tender, and social agents',
+    solutionLine: 'MediaChannel',
+    status: 'live',
+    progress: 1.0,
+    priority: 'high',
+    path: '#',
+    agentCount: 0,
+    features: ['5 Compression Profiles (auto/web/lossless/thumbnail/aggressive)', 'WebP + AVIF + JPEG + PNG Output', 'Max-KB Budget Enforcement', 'Tag-based Overrides (social/tender/client_review)', 'File Upload + URL + Local Path Sources', 'Detailed Compression Logs'],
+  },
 
   // ========================================================================
   // FRONTIER VENTURES — FrontierVentures
