@@ -1,7 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle2, AlertTriangle, Clock, RefreshCw, ChevronDown, Plus, ExternalLink, Search, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  CheckCircle2, AlertTriangle, Clock, RefreshCw, ChevronDown, Plus,
+  ExternalLink, Search, Loader2, Cpu, Zap, Globe, CheckCheck, XCircle,
+} from 'lucide-react';
 
 type SourceStatus = 'active' | 'broken' | 'pending_validation' | 'deferred';
 type SourceType = 'rss_xml' | 'api_xml' | 'csv_open_data' | 'html_list' | 'html_hub';
@@ -22,21 +25,28 @@ interface Source {
   reliability_score: number;
 }
 
-// No mock data — all data comes from /api/tender-intel/sources
+// SSE event types emitted by runSourceDiscovery
+type DiscoverEvent =
+  | { type: 'init';      total: number; aiEnabled: boolean }
+  | { type: 'hub_start'; hub: string; url: string; index: number; total: number }
+  | { type: 'hub_ai';    hub: string; status: string }
+  | { type: 'hub_done';  hub: string; status: 'found' | 'known' | 'none' | 'error'; found: number; scanned?: number; aiUsed?: boolean; aiModel?: string | null; error?: string }
+  | { type: 'done';      newSources: number; hubsScanned: number; errors: number; durationMs: number }
+  | { type: 'error';     error: string };
 
 const STATUS_CONFIG: Record<SourceStatus, { label: string; icon: typeof CheckCircle2; color: string; dot: string }> = {
-  active: { label: 'Active', icon: CheckCircle2, color: 'text-teal-400', dot: 'bg-teal-400' },
-  broken: { label: 'Broken', icon: AlertTriangle, color: 'text-red-400', dot: 'bg-red-400' },
-  pending_validation: { label: 'Pending', icon: Clock, color: 'text-amber-400', dot: 'bg-amber-400' },
-  deferred: { label: 'Deferred', icon: Clock, color: 'text-slate-500', dot: 'bg-slate-600' },
+  active:             { label: 'Active',   icon: CheckCircle2,  color: 'text-teal-400',   dot: 'bg-teal-400' },
+  broken:             { label: 'Broken',   icon: AlertTriangle, color: 'text-red-400',    dot: 'bg-red-400' },
+  pending_validation: { label: 'Pending',  icon: Clock,         color: 'text-amber-400',  dot: 'bg-amber-400' },
+  deferred:           { label: 'Deferred', icon: Clock,         color: 'text-slate-500',  dot: 'bg-slate-600' },
 };
 
 const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
-  rss_xml: 'RSS/XML',
-  api_xml: 'XML API',
-  csv_open_data: 'CSV Open Data',
-  html_list: 'HTML Scrape',
-  html_hub: 'Discovery Hub',
+  rss_xml:      'RSS/XML',
+  api_xml:      'XML API',
+  csv_open_data:'CSV Open Data',
+  html_list:    'HTML Scrape',
+  html_hub:     'Discovery Hub',
 };
 
 const PRIORITY_COLORS = { 1: 'text-emerald-400', 2: 'text-blue-400', 3: 'text-slate-500' };
@@ -51,7 +61,9 @@ function mapApiSource(s: any): Source {
     source_type:           (s.source_type as SourceType) || 'rss_xml',
     priority:              (s.priority as 1 | 2 | 3) || 2,
     status:                (s.status as SourceStatus) || 'pending_validation',
-    last_checked:          s.last_checked_at ? new Date(s.last_checked_at).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong' }) : null,
+    last_checked:          s.last_checked_at
+      ? new Date(s.last_checked_at).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong' })
+      : null,
     new_items_today:       null,
     feed_url:              s.feed_url || null,
     category_tags_default: Array.isArray(s.category_tags_default) ? s.category_tags_default : [],
@@ -60,14 +72,103 @@ function mapApiSource(s: any): Source {
   };
 }
 
+// ─── Discovery Log Line ────────────────────────────────────────────────────────
+
+function LogLine({ ev }: { ev: DiscoverEvent }) {
+  if (ev.type === 'init') {
+    return (
+      <div className="flex items-center gap-2 text-slate-500">
+        <Globe className="w-3 h-3 flex-shrink-0 text-blue-400" />
+        <span>Scanning <span className="text-white">{ev.total}</span> hub pages…
+          {ev.aiEnabled
+            ? <span className="ml-2 text-[10px] text-blue-400 font-medium">AI-assisted (DeepSeek)</span>
+            : <span className="ml-2 text-[10px] text-slate-600">no AI key — regex only</span>
+          }
+        </span>
+      </div>
+    );
+  }
+  if (ev.type === 'hub_start') {
+    return (
+      <div className="flex items-center gap-2 text-slate-400">
+        <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin text-slate-500" />
+        <span className="text-slate-500">[{ev.index}/{ev.total}]</span>
+        <span className="truncate">{ev.hub}</span>
+      </div>
+    );
+  }
+  if (ev.type === 'hub_ai') {
+    return (
+      <div className="flex items-center gap-2 text-blue-400 pl-5">
+        <Cpu className="w-3 h-3 flex-shrink-0 animate-pulse" />
+        <span className="text-[11px]">Querying DeepSeek — no RSS links found by regex</span>
+      </div>
+    );
+  }
+  if (ev.type === 'hub_done') {
+    const isFound = ev.status === 'found';
+    const isKnown = ev.status === 'known';
+    const isError = ev.status === 'error';
+    return (
+      <div className={`flex items-center gap-2 pl-1 ${isError ? 'text-red-400' : isFound ? 'text-teal-400' : 'text-slate-500'}`}>
+        {isError
+          ? <XCircle className="w-3 h-3 flex-shrink-0" />
+          : isFound
+          ? <CheckCheck className="w-3 h-3 flex-shrink-0" />
+          : <span className="w-3 h-3 flex-shrink-0 text-center text-[10px]">·</span>
+        }
+        <span className="truncate font-medium">{ev.hub}</span>
+        {isError && <span className="text-[11px] text-red-400/70">— {ev.error}</span>}
+        {isFound && (
+          <span className="ml-auto flex-shrink-0 text-[11px]">
+            +{ev.found} new
+            {ev.aiUsed && (
+              <span className="ml-1.5 text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded px-1 py-0.5">
+                AI
+              </span>
+            )}
+          </span>
+        )}
+        {isKnown && <span className="ml-auto text-[11px] text-slate-600">{ev.scanned} already known</span>}
+        {!isFound && !isKnown && !isError && <span className="ml-auto text-[11px] text-slate-600">no links found</span>}
+      </div>
+    );
+  }
+  if (ev.type === 'done') {
+    return (
+      <div className="flex items-center gap-2 pt-1 mt-1 border-t border-slate-700/40 text-slate-300 font-medium">
+        <Zap className="w-3 h-3 flex-shrink-0 text-amber-400" />
+        <span>
+          Done — <span className={ev.newSources > 0 ? 'text-teal-400' : 'text-slate-400'}>{ev.newSources} new source{ev.newSources !== 1 ? 's' : ''}</span>
+          {' '}from {ev.hubsScanned} hubs
+          {ev.errors > 0 && <span className="text-amber-400 ml-2">({ev.errors} errors)</span>}
+          <span className="text-slate-600 font-normal ml-2">in {(ev.durationMs / 1000).toFixed(1)}s</span>
+        </span>
+      </div>
+    );
+  }
+  if (ev.type === 'error') {
+    return (
+      <div className="flex items-center gap-2 text-red-400">
+        <XCircle className="w-3 h-3 flex-shrink-0" />
+        <span>Error: {ev.error}</span>
+      </div>
+    );
+  }
+  return null;
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function SourceRegistryPage() {
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [filterJur, setFilterJur] = useState<'All' | 'HK' | 'SG' | 'Global'>('All');
+  const [expanded, setExpanded]       = useState<string | null>(null);
+  const [filterJur, setFilterJur]     = useState<'All' | 'HK' | 'SG' | 'Global'>('All');
   const [filterStatus, setFilterStatus] = useState<'All' | SourceStatus>('All');
-  const [sources, setSources] = useState<Source[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [sources, setSources]         = useState<Source[]>([]);
+  const [loading, setLoading]         = useState(true);
   const [discovering, setDiscovering] = useState(false);
-  const [discoverMsg, setDiscoverMsg] = useState<string | null>(null);
+  const [discoverLog, setDiscoverLog] = useState<DiscoverEvent[]>([]);
+  const logEndRef = useRef<HTMLDivElement>(null);
 
   const fetchSources = useCallback(async () => {
     setLoading(true);
@@ -88,45 +189,76 @@ export default function SourceRegistryPage() {
 
   useEffect(() => { fetchSources(); }, [fetchSources]);
 
+  // Auto-scroll log to bottom
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [discoverLog]);
+
   async function handleDiscover() {
     setDiscovering(true);
-    setDiscoverMsg(null);
+    setDiscoverLog([]);
+
     try {
-      const res = await fetch('/api/tender-intel/discover', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        const n = data.newSources?.length ?? 0;
-        setDiscoverMsg(
-          n > 0
-            ? `Found ${n} new source${n > 1 ? 's' : ''} from ${data.hubsScanned} hub pages — added as Pending`
-            : `Scanned ${data.hubsScanned} hub pages — no new sources found`
-        );
-        if (n > 0) setTimeout(() => fetchSources(), 500);
-      } else {
-        setDiscoverMsg(`Error: ${data.error || 'unknown'}`);
+      const response = await fetch('/api/tender-intel/discover', { method: 'POST' });
+      if (!response.body) throw new Error('No streaming response body');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let gotDone = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE messages are separated by \n\n
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const ev: DiscoverEvent = JSON.parse(line.slice(6));
+            setDiscoverLog(prev => [...prev, ev]);
+            if (ev.type === 'done') {
+              gotDone = true;
+              if (ev.newSources > 0) setTimeout(() => fetchSources(), 600);
+            }
+          } catch (_) { /* malformed SSE chunk */ }
+        }
       }
-    } catch {
-      setDiscoverMsg('Network error — server may be unavailable');
+
+      if (!gotDone) setDiscovering(false);
+    } catch (err) {
+      setDiscoverLog(prev => [...prev, { type: 'error', error: String(err) }]);
     } finally {
       setDiscovering(false);
-      setTimeout(() => setDiscoverMsg(null), 8000);
     }
   }
 
   const filtered = sources;
-  const activeCount = sources.filter(s => s.status === 'active').length;
+  const activeCount  = sources.filter(s => s.status === 'active').length;
   const pendingCount = sources.filter(s => s.status === 'pending_validation').length;
   const totalNewToday = sources.reduce((sum, s) => sum + (s.new_items_today ?? 0), 0);
+  const doneEvent = discoverLog.find((e): e is Extract<DiscoverEvent, {type:'done'}> => e.type === 'done');
 
   return (
     <div className="space-y-6 max-w-4xl">
+      {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight mb-1">Source Registry</h1>
-          <p className="text-sm text-slate-400">{loading ? 'Loading…' : `${activeCount} active · ${pendingCount} pending · ${totalNewToday} new items today`}</p>
+          <p className="text-sm text-slate-400">
+            {loading ? 'Loading…' : `${activeCount} active · ${pendingCount} pending · ${totalNewToday} new items today`}
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button onClick={fetchSources} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 border border-slate-700/50 hover:border-slate-600 hover:text-white transition-colors">
+          <button
+            onClick={fetchSources}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 border border-slate-700/50 hover:border-slate-600 hover:text-white transition-colors"
+          >
             <RefreshCw className="w-3.5 h-3.5" />
             Refresh
           </button>
@@ -135,7 +267,10 @@ export default function SourceRegistryPage() {
             disabled={discovering}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-colors disabled:opacity-50"
           >
-            {discovering ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+            {discovering
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <Search className="w-3.5 h-3.5" />
+            }
             {discovering ? 'Scanning…' : 'Discover sources'}
           </button>
           <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-teal-500/15 text-teal-400 border border-teal-500/30 hover:bg-teal-500/25 transition-colors">
@@ -145,23 +280,43 @@ export default function SourceRegistryPage() {
         </div>
       </div>
 
-      {/* Discovery result banner */}
-      {discoverMsg && (
-        <div className={`rounded-xl border px-4 py-3 text-xs font-medium ${
-          discoverMsg.startsWith('Error') || discoverMsg.startsWith('Network')
-            ? 'border-red-500/30 bg-red-500/5 text-red-400'
-            : discoverMsg.startsWith('Found')
-            ? 'border-teal-500/30 bg-teal-500/5 text-teal-400'
-            : 'border-slate-700/40 bg-white/[0.02] text-slate-400'
-        }`}>
-          {discoverMsg}
-          {discoverMsg.includes('Pending') && (
-            <span className="text-slate-500 font-normal ml-2">— validate each to activate it for ingestion.</span>
-          )}
+      {/* ── Discovery Log Box ── */}
+      {discoverLog.length > 0 && (
+        <div className="rounded-xl border border-slate-700/40 bg-black/40 overflow-hidden">
+          {/* Header bar */}
+          <div className="px-3 py-2 border-b border-slate-700/30 flex items-center justify-between bg-white/[0.02]">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Source Discovery</span>
+              {discovering && (
+                <span className="flex items-center gap-1 text-[10px] text-blue-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                  Running
+                </span>
+              )}
+              {doneEvent && (
+                <span className="flex items-center gap-1 text-[10px] text-teal-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                  Complete
+                </span>
+              )}
+            </div>
+            {doneEvent && (
+              <span className="text-[10px] text-slate-600">
+                DeepSeek Chat · {(doneEvent.durationMs / 1000).toFixed(1)}s
+              </span>
+            )}
+          </div>
+          {/* Log lines */}
+          <div className="p-3 font-mono text-[11px] leading-relaxed space-y-1.5 max-h-72 overflow-y-auto">
+            {discoverLog.map((ev, i) => (
+              <LogLine key={i} ev={ev} />
+            ))}
+            <div ref={logEndRef} />
+          </div>
         </div>
       )}
 
-      {/* Filters */}
+      {/* ── Filters ── */}
       <div className="flex gap-2 flex-wrap">
         {(['All', 'HK', 'SG', 'Global'] as const).map(j => (
           <button
@@ -193,7 +348,7 @@ export default function SourceRegistryPage() {
         </div>
       </div>
 
-      {/* Source cards */}
+      {/* ── Source cards ── */}
       <div className="space-y-2">
         {filtered.map(source => {
           const sc = STATUS_CONFIG[source.status];
@@ -204,13 +359,12 @@ export default function SourceRegistryPage() {
               key={source.source_id}
               className="rounded-xl border border-slate-700/50 bg-slate-800/60 overflow-hidden"
             >
-              {/* Row */}
               <button
                 className="w-full flex items-center gap-4 px-4 py-3 hover:bg-white/[0.02] transition-colors text-left"
                 onClick={() => setExpanded(isOpen ? null : source.source_id)}
               >
                 {/* Status dot */}
-                <div className="flex-shrink-0 flex items-center gap-2">
+                <div className="flex-shrink-0">
                   <div className={`w-2 h-2 rounded-full ${sc.dot} ${source.status === 'active' ? 'shadow-[0_0_6px_1px] shadow-teal-400/40' : ''}`} />
                 </div>
 
@@ -248,9 +402,14 @@ export default function SourceRegistryPage() {
                   {source.reliability_score > 0 && (
                     <div className="hidden lg:flex items-center gap-1.5 w-20">
                       <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
-                        <div className="h-full bg-teal-400 rounded-full" style={{ width: `${source.reliability_score * 100}%` }} />
+                        <div
+                          className="h-full bg-teal-400 rounded-full"
+                          style={{ width: `${source.reliability_score * 100}%` }}
+                        />
                       </div>
-                      <span className="text-[10px] text-slate-500 w-6">{(source.reliability_score * 100).toFixed(0)}</span>
+                      <span className="text-[10px] text-slate-500 w-6">
+                        {(source.reliability_score * 100).toFixed(0)}
+                      </span>
                     </div>
                   )}
                   <ChevronDown className={`w-3.5 h-3.5 text-slate-600 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -262,10 +421,14 @@ export default function SourceRegistryPage() {
                 <div className="px-4 pb-4 pt-1 border-t border-slate-700/30 bg-white/[0.01]">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
                     <div>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Feed URL</p>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Feed / Hub URL</p>
                       {source.feed_url ? (
-                        <a href={source.feed_url} target="_blank" rel="noopener noreferrer"
-                          className="text-xs text-teal-400 hover:underline flex items-center gap-1 break-all">
+                        <a
+                          href={source.feed_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-teal-400 hover:underline flex items-center gap-1 break-all"
+                        >
                           {source.feed_url}
                           <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
                         </a>
@@ -278,7 +441,10 @@ export default function SourceRegistryPage() {
                       <div className="flex flex-wrap gap-1">
                         {source.category_tags_default.length > 0
                           ? source.category_tags_default.map(t => (
-                              <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/40 text-slate-400 border border-slate-600/30">
+                              <span
+                                key={t}
+                                className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/40 text-slate-400 border border-slate-600/30"
+                              >
                                 {t.replace(/_/g, ' ')}
                               </span>
                             ))
@@ -318,7 +484,12 @@ export default function SourceRegistryPage() {
         })}
         {!loading && filtered.length === 0 && (
           <div className="rounded-xl border border-slate-700/30 bg-white/[0.01] p-8 text-center">
-            <p className="text-sm text-slate-500">No sources found. Seed the source registry first: <code className="text-teal-400 text-xs">node use-cases/hk-sg-tender-intelligence/scripts/seed-sources.js</code></p>
+            <p className="text-sm text-slate-500">
+              No sources found. Seed the source registry first:{' '}
+              <code className="text-teal-400 text-xs">
+                node use-cases/hk-sg-tender-intelligence/scripts/seed-sources.js
+              </code>
+            </p>
           </div>
         )}
       </div>

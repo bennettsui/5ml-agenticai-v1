@@ -1353,11 +1353,73 @@ async function saveProfile(pool, profile) {
 
 /**
  * Scan hub pages for new RSS/XML/HTML feed URLs.
+ * Use DeepSeek to extract RSS/tender URLs from a hub page when regex finds nothing.
+ * Sends a compact list of href values for AI analysis rather than raw HTML.
+ */
+async function extractUrlsWithAI(hub, html) {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) return { urls: [], model: null };
+
+  // Extract all hrefs from HTML — gives AI clean URL list without tag noise
+  const hrefRe = /href="([^"#][^"]*)"/gi;
+  const hrefs = [];
+  let m;
+  const searchHtml = html.slice(0, 30000);
+  while ((m = hrefRe.exec(searchHtml)) !== null) {
+    const u = m[1].trim();
+    if (u && !u.startsWith('javascript') && !u.startsWith('mailto')) hrefs.push(u);
+  }
+  // Deduplicate, keep first 150
+  const uniqueHrefs = [...new Set(hrefs)].slice(0, 150);
+  if (uniqueHrefs.length === 0) return { urls: [], model: 'deepseek-chat' };
+
+  const model = 'deepseek-chat';
+  try {
+    const resp = await axios.post(
+      'https://api.deepseek.com/chat/completions',
+      {
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You identify tender/procurement-related URLs. Respond ONLY with a JSON array of URL strings. No markdown, no explanation.',
+          },
+          {
+            role: 'user',
+            content: `These href values are from a government page at ${hub.url}.\n\nReturn a JSON array of URLs that are: RSS/XML/Atom feeds, tender listing pages, procurement opportunity listings, or quotation notice pages. Make relative URLs absolute using the base: ${new URL(hub.url).origin}\n\nIf none match, return [].\n\nHrefs:\n${uniqueHrefs.join('\n')}`,
+          },
+        ],
+        max_tokens: 600,
+        temperature: 0.0,
+      },
+      {
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        timeout: 20000,
+      }
+    );
+    const raw = resp.data?.choices?.[0]?.message?.content?.trim() || '[]';
+    const arrayMatch = raw.match(/\[[\s\S]*?\]/);
+    if (!arrayMatch) return { urls: [], model };
+    const parsed = JSON.parse(arrayMatch[0]);
+    const urls = Array.isArray(parsed)
+      ? parsed.filter(u => typeof u === 'string' && u.startsWith('http'))
+      : [];
+    return { urls, model };
+  } catch (_) {
+    return { urls: [], model };
+  }
+}
+
+/**
  * For each html_hub source in the registry, fetch its page and extract feed links.
  * New feeds are inserted into tender_source_registry with status 'pending_validation'.
- * Returns { newSources, errors, hubsScanned }.
+ *
+ * @param {Pool} pool  — pg Pool
+ * @param {function} onProgress — optional SSE callback: (eventObj) => void
+ * Returns { newSources, errors, hubsScanned, durationMs }.
  */
-async function runSourceDiscovery(pool) {
+async function runSourceDiscovery(pool, onProgress = null) {
+  const emit = (data) => { if (onProgress) onProgress(data); };
   const startTime = Date.now();
   const newSources = [];
   const errors = [];
@@ -1365,16 +1427,8 @@ async function runSourceDiscovery(pool) {
 
   // Known hub pages to scan (also pick up html_hub sources from DB)
   const STATIC_HUBS = [
-    {
-      url: 'https://www.gov.hk/en/about/rss.htm',
-      jurisdiction: 'HK',
-      label: 'GovHK RSS Directory',
-    },
-    {
-      url: 'https://www.dsd.gov.hk/EN/RSS_Feeds/index.html',
-      jurisdiction: 'HK',
-      label: 'DSD RSS Hub',
-    },
+    { url: 'https://www.gov.hk/en/about/rss.htm',              jurisdiction: 'HK', label: 'GovHK RSS Directory' },
+    { url: 'https://www.dsd.gov.hk/EN/RSS_Feeds/index.html',   jurisdiction: 'HK', label: 'DSD RSS Hub' },
   ];
 
   // Also load html_hub sources from the registry
@@ -1389,15 +1443,16 @@ async function runSourceDiscovery(pool) {
     dbHubs = rows;
   } catch (_) {}
 
-  // Build list of hub pages to scan
+  // Deduplicate by URL — DB hubs may include the STATIC_HUBS
+  const seenUrls = new Set(STATIC_HUBS.map(h => h.url));
   const hubsToScan = [
     ...STATIC_HUBS,
-    ...dbHubs.map(h => ({
-      url: h.discovery_hub_url || h.base_url,
-      jurisdiction: h.jurisdiction,
-      label: h.name,
-    })),
-  ].filter(h => h.url);
+    ...dbHubs
+      .map(h => ({ url: h.discovery_hub_url || h.base_url, jurisdiction: h.jurisdiction, label: h.name }))
+      .filter(h => h.url && !seenUrls.has(h.url) && seenUrls.add(h.url)),
+  ];
+
+  emit({ type: 'init', total: hubsToScan.length, aiEnabled: !!process.env.DEEPSEEK_API_KEY });
 
   // Get existing feed URLs to avoid re-adding known sources
   const existingUrls = new Set();
@@ -1407,17 +1462,21 @@ async function runSourceDiscovery(pool) {
   } catch (_) {}
 
   // Regex patterns to detect RSS/Atom/XML feed links in HTML
+  // Pattern 1: <link rel="alternate" type="application/rss+xml" href="...">
+  // Pattern 2: hrefs containing rss/atom/feed/xml/tender with .xml extension
+  // Pattern 3: any .xml hrefs
   const FEED_PATTERNS = [
-    // <link rel="alternate" type="application/rss+xml" href="...">
     /type="application\/(?:rss|atom)\+xml"[^>]*href="([^"]+)"/gi,
-    // <a href="...rss..."> or <a href="...atom..."> or <a href="...xml...">
-    /href="((?:https?:\/\/[^"]*)?\/[^"]*(?:rss|atom|feed|xml|tender)[^"]*\.xml[^"]*)"/gi,
-    // Plain xml links on gov sites
+    /href="((?:https?:\/\/[^"]*)?\/[^"]*(?:rss|atom|feed|tender|procurement)[^"]*\.(?:xml|rss|atom)[^"]*)"/gi,
     /href="([^"]+\.xml)"/gi,
   ];
 
-  for (const hub of hubsToScan) {
+  for (let idx = 0; idx < hubsToScan.length; idx++) {
+    const hub = hubsToScan[idx];
     hubsScanned++;
+    emit({ type: 'hub_start', hub: hub.label, url: hub.url, index: idx + 1, total: hubsToScan.length });
+
+    // ── Fetch hub page ─────────────────────────────────────────────────────
     let html;
     try {
       const resp = await axios.get(hub.url, {
@@ -1425,12 +1484,18 @@ async function runSourceDiscovery(pool) {
         headers: { 'User-Agent': '5ML-TenderIntel/1.0 (+https://5ml.ai)' },
         maxRedirects: 5,
       });
-      html = typeof resp.data === 'string' ? resp.data : '';
+      html = typeof resp.data === 'string' ? resp.data : JSON.stringify(resp.data);
     } catch (err) {
-      errors.push({ hub: hub.label, error: `fetch_error: ${err.message}` });
+      const errMsg = err.code === 'ECONNREFUSED' ? 'connection refused'
+        : err.code === 'ETIMEDOUT' ? 'timeout'
+        : err.response ? `HTTP ${err.response.status}`
+        : err.message;
+      errors.push({ hub: hub.label, error: errMsg });
+      emit({ type: 'hub_done', hub: hub.label, status: 'error', error: errMsg, found: 0, aiUsed: false });
       continue;
     }
 
+    // ── Regex scan ─────────────────────────────────────────────────────────
     const foundUrls = new Set();
     for (const pattern of FEED_PATTERNS) {
       const re = new RegExp(pattern.source, 'gi');
@@ -1438,27 +1503,43 @@ async function runSourceDiscovery(pool) {
       while ((m = re.exec(html)) !== null) {
         let url = m[1];
         if (!url) continue;
-        // Make absolute if relative
         if (url.startsWith('/')) {
           const base = new URL(hub.url);
           url = `${base.protocol}//${base.host}${url}`;
         }
         if (!url.startsWith('http')) continue;
-        if (existingUrls.has(url)) continue;
-        foundUrls.add(url);
+        if (!existingUrls.has(url)) foundUrls.add(url);
       }
     }
 
-    // For each new URL found, insert as pending_validation
+    // ── AI fallback — DeepSeek extracts URLs when regex finds nothing ──────
+    let aiUsed = false;
+    let aiModel = null;
+    if (foundUrls.size === 0) {
+      emit({ type: 'hub_ai', hub: hub.label, status: 'querying_ai' });
+      const { urls: aiUrls, model } = await extractUrlsWithAI(hub, html);
+      aiModel = model;
+      if (aiUrls.length > 0) {
+        aiUsed = true;
+        for (let u of aiUrls) {
+          if (u.startsWith('/')) { const base = new URL(hub.url); u = `${base.protocol}//${base.host}${u}`; }
+          if (u.startsWith('http') && !existingUrls.has(u)) foundUrls.add(u);
+        }
+      }
+    }
+
+    // ── Insert new sources ─────────────────────────────────────────────────
+    let inserted = 0;
     for (const feedUrl of foundUrls) {
       try {
         const sourceId = `discovered-${crypto.createHash('sha1').update(feedUrl).digest('hex').slice(0, 12)}`;
-        await pool.query(
+        const result = await pool.query(
           `INSERT INTO tender_source_registry
              (source_id, name, organisation, owner_type, jurisdiction, source_type,
               access, priority, status, feed_url, category_tags_default, notes, created_at, updated_at)
            VALUES ($1,$2,$3,'gov',$4,'rss_xml','public',3,'pending_validation',$5,'{}', $6, NOW(), NOW())
-           ON CONFLICT (source_id) DO NOTHING`,
+           ON CONFLICT (source_id) DO NOTHING
+           RETURNING source_id`,
           [
             sourceId,
             `Discovered: ${new URL(feedUrl).hostname}`,
@@ -1468,22 +1549,37 @@ async function runSourceDiscovery(pool) {
             `Auto-discovered from ${hub.label} on ${new Date().toISOString().slice(0, 10)}`,
           ]
         );
-        existingUrls.add(feedUrl);
-        newSources.push({ source_id: sourceId, feed_url: feedUrl, jurisdiction: hub.jurisdiction, hub: hub.label });
+        if (result.rowCount > 0) {
+          existingUrls.add(feedUrl);
+          newSources.push({ source_id: sourceId, feed_url: feedUrl, jurisdiction: hub.jurisdiction, hub: hub.label });
+          inserted++;
+        }
       } catch (_) { /* duplicate or constraint violation */ }
     }
+
+    emit({
+      type: 'hub_done',
+      hub: hub.label,
+      status: inserted > 0 ? 'found' : foundUrls.size > 0 ? 'known' : 'none',
+      found: inserted,
+      scanned: foundUrls.size,
+      aiUsed,
+      aiModel,
+    });
   }
 
   const durationMs = Date.now() - startTime;
 
   await logAgentRun(pool, {
     agentName:      'SourceDiscoveryAgent',
-    status:         errors.length > 0 ? 'partial' : 'success',
+    status:         errors.length > 0 && newSources.length === 0 ? 'error' : errors.length > 0 ? 'partial' : 'success',
     itemsProcessed: hubsScanned,
     newItems:       newSources.length,
     durationMs,
     detail:         `${hubsScanned} hubs scanned, ${newSources.length} new sources discovered`,
   });
+
+  emit({ type: 'done', newSources: newSources.length, hubsScanned, errors: errors.length, durationMs });
 
   return { newSources, errors, hubsScanned, durationMs };
 }
