@@ -1,3 +1,5 @@
+require('./instrument.js');
+
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs');
@@ -6,10 +8,56 @@ const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
 const zwEngine = require('./services/ziwei-chart-engine');
-const { asyncHandler, errorHandler, AppError } = require('./middleware/errorHandler');
-const ziweiValidation = require('./validation/ziweiValidation');
+const { encrypt, decrypt, decryptRow, PII_FIELDS } = require('./services/encryption');
 const ziweiV1Router = require('./routes/v1/ziwei');
 require('dotenv').config();
+
+// ─── Radiance Email Alert Setup ───────────────────────────────────────────────
+function createMailTransporter() {
+  if (!process.env.SMTP_HOST) return null;
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_PORT === '465',
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  });
+}
+
+async function sendRadianceEnquiryAlert(enquiry) {
+  const transporter = createMailTransporter();
+  if (!transporter) {
+    console.log('📧 [Radiance] SMTP not configured — enquiry logged to DB only.');
+    return;
+  }
+  const alertRecipients = 'mandy@radiancehk.com, bennet.tsui@5mileslab.com';
+  const subject = `[Radiance Enquiry] ${enquiry.name} (${enquiry.company || 'Individual'}) — ${enquiry.serviceInterest || 'General'}`;
+  const html = `<h2 style="font-family:sans-serif;">New Radiance Enquiry</h2>
+<table cellpadding="6" style="border-collapse:collapse;font-family:sans-serif;font-size:14px;">
+  <tr><td><b>Name</b></td><td>${enquiry.name}</td></tr>
+  <tr><td><b>Email</b></td><td><a href="mailto:${enquiry.email}">${enquiry.email}</a></td></tr>
+  <tr><td><b>Phone</b></td><td>${enquiry.phone || '—'}</td></tr>
+  <tr><td><b>Company</b></td><td>${enquiry.company || '—'}</td></tr>
+  <tr><td><b>Industry</b></td><td>${enquiry.industry || '—'}</td></tr>
+  <tr><td><b>Service Interest</b></td><td>${enquiry.serviceInterest || '—'}</td></tr>
+  <tr><td><b>Language</b></td><td>${enquiry.sourceLang === 'zh' ? '繁體中文' : 'English'}</td></tr>
+  <tr><td><b>Submitted</b></td><td>${new Date().toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong' })} HKT</td></tr>
+</table>
+<h3 style="font-family:sans-serif;">Message</h3>
+<p style="white-space:pre-wrap;background:#f5f5f5;padding:12px;border-radius:6px;font-family:sans-serif;">${enquiry.message}</p>
+<hr/><p style="color:#999;font-size:12px;font-family:sans-serif;">Radiance PR &amp; Martech — Enquiry System</p>`;
+  try {
+    await transporter.sendMail({
+      from: `"Radiance Enquiries" <${process.env.SMTP_USER}>`,
+      to: alertRecipients,
+      subject,
+      html,
+    });
+    console.log(`📧 [Radiance] Alert sent to ${alertRecipients}`);
+  } catch (mailErr) {
+    console.error('📧 [Radiance] Email send failed:', mailErr.message);
+  }
+}
+// ──────────────────────────────────────────────────────────────────────────────
 
 const app = express();
 const path = require('path');
@@ -24,7 +72,9 @@ app.use((req, res, next) => {
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-src https://www.google.com/recaptcha/; frame-ancestors 'none'");
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
   next();
 });
 
@@ -46,6 +96,9 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
 // Serve TEDx generated visuals (runtime-generated via nanobanana API)
 app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx')));
 app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi')));
+
+// Serve Radiance uploaded media
+app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
 
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
@@ -3931,7 +3984,7 @@ app.post('/api/agent-chat', async (req, res) => {
 
     const systemPrompt = `You are the 5ML Platform Agent Assistant — an expert on the 5ML Agentic AI Platform.
 You have deep knowledge of every agent, use case, solution line, C-Suite role, and the 7-layer architecture.
-You know 5ML is a Hong Kong-based agentic AI solutions agency competing with NDN and Fimmick.
+You know 5ML is a Hong Kong-based agentic AI solutions agency focused on helping SMEs automate and scale with AI.
 
 ${context || ''}
 ${ragContext ? `\n${ragContext}` : ''}
@@ -4144,13 +4197,100 @@ const wsServer = require('./services/websocket-server');
 // Radiance PR Contact Form API
 // ==========================================
 
-// Contact form submission endpoint
+// Multer config for Radiance media uploads
+const multer = require('multer');
+const radianceMediaStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, 'uploads', 'radiance');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const radianceUpload = multer({
+  storage: radianceMediaStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Only images allowed'));
+  },
+});
+
+const RADIANCE_ADMIN_PW = 'radiance2026happyday!';
+
+// POST /api/radiance/contact — save enquiry to DB + send email alert
 app.post('/api/radiance/contact', async (req, res) => {
   try {
-    const { name, email, phone, company, industry, serviceInterest, message } = req.body;
+    const ip = req.ip || 'unknown';
 
-    // Validation
-    if (!name || !email || !message) {
+    // Rate limiting: 5 submissions per IP per 15 minutes
+    if (!checkRadianceRateLimit(ip)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many submissions. Please try again in 15 minutes.'
+      });
+    }
+
+    const { name, email, phone, company, industry, serviceInterest, message, recaptchaToken } = req.body;
+
+    // reCAPTCHA v3 verification (only enforced when secret key is configured)
+    if (process.env.RECAPTCHA_SECRET_KEY) {
+      if (!recaptchaToken) {
+        return res.status(400).json({
+          success: false,
+          error: 'Security check failed. Please refresh the page and try again.'
+        });
+      }
+      const verifyRes = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          secret: process.env.RECAPTCHA_SECRET_KEY,
+          response: recaptchaToken,
+        }).toString(),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success || verifyData.score < 0.5) {
+        console.warn('⚠️ reCAPTCHA failed for Radiance contact:', { ip, score: verifyData.score });
+        return res.status(400).json({
+          success: false,
+          error: 'Security check failed. Please refresh the page and try again.'
+        });
+      }
+    }
+
+    // Sanitize: trim and enforce field length limits
+    const clean = {
+      name:            (name || '').trim().slice(0, 200),
+      email:           (email || '').trim().slice(0, 200),
+      phone:           (phone || '').trim().slice(0, 50),
+      company:         (company || '').trim().slice(0, 200),
+      industry:        (industry || '').trim().slice(0, 200),
+      serviceInterest: (serviceInterest || '').trim().slice(0, 200),
+      budget:          ((req.body.budget) || '').trim().slice(0, 100),
+      timeline:        ((req.body.timeline) || '').trim().slice(0, 100),
+      message:         (message || '').trim().slice(0, 5000),
+    };
+
+    // Whitelist validation for select/dropdown fields
+    const VALID_SERVICE_INTEREST = new Set(['Public Relations', 'Events', 'Social Media', 'KOL Marketing', 'Creative Production', 'Multiple Services', 'Other', '']);
+    const VALID_BUDGET    = new Set(['Under HKD 50k', 'HKD 50k - 100k', 'HKD 100k - 250k', 'HKD 250k+', '']);
+    const VALID_TIMELINE  = new Set(['Immediate (This month)', 'Short-term (1-3 months)', 'Medium-term (3-6 months)', 'Long-term (6+ months)', '']);
+    if (!VALID_SERVICE_INTEREST.has(clean.serviceInterest)) {
+      return res.status(400).json({ success: false, error: 'Invalid service selection.' });
+    }
+    if (!VALID_BUDGET.has(clean.budget)) {
+      return res.status(400).json({ success: false, error: 'Invalid budget selection.' });
+    }
+    if (!VALID_TIMELINE.has(clean.timeline)) {
+      return res.status(400).json({ success: false, error: 'Invalid timeline selection.' });
+    }
+
+    // Required field validation
+    if (!clean.name || !clean.email || !clean.message) {
       return res.status(400).json({
         success: false,
         error: 'Name, email, and message are required'
@@ -4159,7 +4299,7 @@ app.post('/api/radiance/contact', async (req, res) => {
 
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(clean.email)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid email address'
@@ -4167,70 +4307,488 @@ app.post('/api/radiance/contact', async (req, res) => {
     }
 
     // Message length validation
-    if (message.length < 10 || message.length > 5000) {
+    if (clean.message.length < 10) {
       return res.status(400).json({
         success: false,
-        error: 'Message must be between 10 and 5000 characters'
+        error: 'Message must be at least 10 characters'
       });
     }
 
     // Store contact submission (in-memory for now, can be extended to database)
     const submission = {
       id: Date.now().toString(),
-      name,
-      email,
-      phone: phone || '',
-      company: company || '',
-      industry: industry || '',
-      serviceInterest: serviceInterest || '',
-      message,
+      ...clean,
       submittedAt: new Date().toISOString(),
-      ip: req.ip,
+      ip,
       userAgent: req.get('user-agent')
     };
 
-    // Log the submission
+    // Log submission ID only — no PII in server logs
     console.log('📧 New Radiance contact submission:', {
       id: submission.id,
-      name: submission.name,
-      email: submission.email,
-      company: submission.company,
-      submittedAt: submission.submittedAt
+      submittedAt: submission.submittedAt,
     });
 
-    // TODO: Implement email notification to hello@radiancehk.com
-    // TODO: Implement database storage
-    // TODO: Implement automated response email to user
+    // Send email alert (non-blocking — don't fail the response if email fails)
+    sendRadianceEnquiryAlert(enquiryData).catch(err =>
+      console.error('📧 [Radiance] Alert email error:', err.message)
+    );
 
-    // Return success response
-    res.status(201).json({
-      success: true,
-      message: 'Thank you for your inquiry. We\'ll be in touch within 2 business days.',
-      submissionId: submission.id
-    });
+    const successMsg = sourceLang === 'zh'
+      ? '感謝您的查詢，我們將於兩個工作天內回覆您。'
+      : "Thank you for your enquiry. We'll be in touch within 2 business days.";
+
+    res.status(201).json({ success: true, message: successMsg, enquiryId: saved.enquiry_id });
 
   } catch (error) {
-    console.error('❌ Contact form submission error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to process contact form. Please try again later.'
-    });
+    console.error('❌ [Radiance] Contact form error:', error);
+    res.status(500).json({ success: false, error: 'Failed to process enquiry. Please try again.' });
   }
 });
 
-// Contact form submission history (for admin dashboard)
+// GET /api/radiance/contact/submissions — admin view of all enquiries
 app.get('/api/radiance/contact/submissions', async (req, res) => {
   try {
-    // This would typically check authentication and fetch from database
-    // For now, return a placeholder
-    res.status(501).json({
-      error: 'Not yet implemented - requires database integration'
+    const { password } = req.query;
+    if (password !== 'radiance2026happyday!') {
+      return res.status(401).json({ error: 'Unauthorised' });
+    }
+    const limit = Math.min(parseInt(req.query.limit || '50'), 200);
+    const offset = parseInt(req.query.offset || '0');
+    const submissions = await getRadianceEnquiries({ limit, offset });
+    res.json({ success: true, count: submissions.length, submissions });
+  } catch (error) {
+    console.error('❌ [Radiance] Submissions fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch submissions' });
+  }
+});
+
+// POST /api/radiance/admin/media/upload
+app.post('/api/radiance/admin/media/upload', radianceUpload.single('file'), async (req, res) => {
+  try {
+    if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const url = `/uploads/radiance/${req.file.filename}`;
+    await pool.query(
+      `INSERT INTO radiance_media (filename, original_name, url, mime_type, size) VALUES ($1,$2,$3,$4,$5)`,
+      [req.file.filename, req.file.originalname, url, req.file.mimetype, req.file.size]
+    );
+    res.json({ success: true, url, filename: req.file.filename, originalName: req.file.originalname });
+  } catch (err) {
+    console.error('Radiance media upload error:', err);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// GET /api/radiance/admin/media
+app.get('/api/radiance/admin/media', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const result = await pool.query('SELECT * FROM radiance_media ORDER BY uploaded_at DESC LIMIT 200');
+    res.json({ success: true, media: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch media' }); }
+});
+
+// DELETE /api/radiance/admin/media/:id
+app.delete('/api/radiance/admin/media/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const result = await pool.query('SELECT filename FROM radiance_media WHERE id=$1', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    const filePath = path.join(__dirname, 'uploads', 'radiance', result.rows[0].filename);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    await pool.query('DELETE FROM radiance_media WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Delete failed' }); }
+});
+
+// GET /api/radiance/blog/:slug — returns CMS override or null
+app.get('/api/radiance/blog/:slug', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM radiance_blog_cms WHERE slug=$1', [req.params.slug]);
+    if (result.rows.length === 0) return res.json({ success: true, post: null });
+    res.json({ success: true, post: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch blog post' }); }
+});
+
+// GET /api/radiance/admin/blog — list all CMS blog posts
+app.get('/api/radiance/admin/blog', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const result = await pool.query('SELECT * FROM radiance_blog_cms ORDER BY updated_at DESC');
+    res.json({ success: true, posts: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch posts' }); }
+});
+
+// PUT /api/radiance/admin/blog/:slug
+app.put('/api/radiance/admin/blog/:slug', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { title_en, title_zh, date_en, date_zh, category_en, category_zh, read_time, excerpt_en, excerpt_zh, hero_image, content_en, content_zh } = req.body;
+    await pool.query(
+      `INSERT INTO radiance_blog_cms (slug, title_en, title_zh, date_en, date_zh, category_en, category_zh, read_time, excerpt_en, excerpt_zh, hero_image, content_en, content_zh, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
+       ON CONFLICT (slug) DO UPDATE SET
+         title_en=EXCLUDED.title_en, title_zh=EXCLUDED.title_zh,
+         date_en=EXCLUDED.date_en, date_zh=EXCLUDED.date_zh,
+         category_en=EXCLUDED.category_en, category_zh=EXCLUDED.category_zh,
+         read_time=EXCLUDED.read_time, excerpt_en=EXCLUDED.excerpt_en, excerpt_zh=EXCLUDED.excerpt_zh,
+         hero_image=EXCLUDED.hero_image, content_en=EXCLUDED.content_en, content_zh=EXCLUDED.content_zh,
+         updated_at=NOW()`,
+      [req.params.slug, title_en, title_zh, date_en, date_zh, category_en, category_zh, read_time, excerpt_en, excerpt_zh, hero_image, content_en, content_zh]
+    );
+    res.json({ success: true });
+  } catch (err) { console.error('Blog CMS save error:', err); res.status(500).json({ error: 'Save failed' }); }
+});
+
+// POST /api/radiance/admin/blog/:slug/ai-format — AI formatting
+app.post('/api/radiance/admin/blog/:slug/ai-format', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { content, lang } = req.body;
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const langNote = lang === 'zh' ? 'The content is in Traditional Chinese (繁體中文). Keep it in Chinese.' : 'The content is in English.';
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: `You are an AI SEO and UX content editor. Reformat the following HTML blog content to follow AI SEO best practices. ${langNote}
+
+Rules:
+- Paragraphs: max 3 sentences, ~40-50 words each
+- H2 for major sections (keyword-rich titles). H3 for subsections.
+- Convert any numbered/bulleted items written as <p><strong>1. Item</strong> text</p> into proper <ol><li> or <ul><li> lists
+- Opening paragraph: hook + primary keyword in first 2 sentences, under 50 words
+- Add a FAQ section at the end with 3-5 Q&As using <h3> for questions and <p> for answers
+- Bold (<strong>) only the single most important phrase per section
+- Keep <section> wrappers around H2 blocks
+- Return ONLY the reformatted HTML, no explanation, no markdown code blocks
+
+Content to reformat:
+${content}`
+      }]
+    });
+    const formatted = message.content[0].type === 'text' ? message.content[0].text : content;
+    res.json({ success: true, content: formatted });
+  } catch (err) { console.error('AI format error:', err); res.status(500).json({ error: 'AI formatting failed' }); }
+});
+
+// GET /api/radiance/case-studies/:slug
+app.get('/api/radiance/case-studies/:slug', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM radiance_case_study_cms WHERE slug=$1', [req.params.slug]);
+    if (result.rows.length === 0) return res.json({ success: true, study: null });
+    res.json({ success: true, study: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// GET /api/radiance/admin/case-studies
+app.get('/api/radiance/admin/case-studies', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const result = await pool.query('SELECT * FROM radiance_case_study_cms ORDER BY updated_at DESC');
+    res.json({ success: true, studies: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// PUT /api/radiance/admin/case-studies/:slug
+app.put('/api/radiance/admin/case-studies/:slug', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { title_en, title_zh, client, excerpt_en, excerpt_zh, featured_image, content_html_en, content_html_zh } = req.body;
+    await pool.query(
+      `INSERT INTO radiance_case_study_cms (slug, title_en, title_zh, client, excerpt_en, excerpt_zh, featured_image, content_html_en, content_html_zh, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+       ON CONFLICT (slug) DO UPDATE SET
+         title_en=EXCLUDED.title_en, title_zh=EXCLUDED.title_zh, client=EXCLUDED.client,
+         excerpt_en=EXCLUDED.excerpt_en, excerpt_zh=EXCLUDED.excerpt_zh,
+         featured_image=EXCLUDED.featured_image, content_html_en=EXCLUDED.content_html_en,
+         content_html_zh=EXCLUDED.content_html_zh, updated_at=NOW()`,
+      [req.params.slug, title_en, title_zh, client, excerpt_en, excerpt_zh, featured_image, content_html_en, content_html_zh]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Save failed' }); }
+});
+
+// ==========================================
+// RecruitAI Studio API
+// ==========================================
+
+const { Resend } = require('resend');
+const resendClient = new Resend(process.env.RESEND_API_KEY);
+
+// POST /api/recruitai/lead — save lead + send email alert
+app.post('/api/recruitai/lead', async (req, res) => {
+  try {
+    const { name, email, phone, company, industry, headcount, message, sourcePage, utmSource, utmMedium, utmCampaign } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({ success: false, error: 'Name and email are required' });
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ success: false, error: 'Invalid email address' });
+    }
+
+    // Encrypt PII at rest — name, email, phone, company, message are sensitive
+    // industry/headcount/utm/source_page are business/analytics metadata, not encrypted
+    const result = await pool.query(
+      `INSERT INTO recruitai_leads (name, email, phone, company, industry, headcount, message, source_page, utm_source, utm_medium, utm_campaign, ip_address)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING lead_id, created_at`,
+      [
+        encrypt(name),
+        encrypt(email),
+        phone    ? encrypt(phone)    : null,
+        company  ? encrypt(company)  : null,
+        industry || null,
+        headcount || null,
+        message  ? encrypt(message)  : null,
+        sourcePage  || null,
+        utmSource   || null,
+        utmMedium   || null,
+        utmCampaign || null,
+        req.ip,
+      ]
+    );
+    const lead = result.rows[0];
+
+    // Send email alert via Resend
+    if (process.env.RESEND_API_KEY) {
+      try {
+        await resendClient.emails.send({
+          from: 'RecruitAI Studio <noreply@5mileslab.com>',
+          to: 'bennet.tsui@5mileslab.com',
+          subject: `🎯 New RecruitAI Lead: ${name} — ${company || industry || 'Unknown'}`,
+          html: `
+            <h2>New Lead from RecruitAI Studio</h2>
+            <table style="border-collapse:collapse;width:100%;font-family:sans-serif">
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Name</td><td style="padding:8px;border:1px solid #ddd">${name}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Email</td><td style="padding:8px;border:1px solid #ddd">${email}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Phone</td><td style="padding:8px;border:1px solid #ddd">${phone || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Company</td><td style="padding:8px;border:1px solid #ddd">${company || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Industry</td><td style="padding:8px;border:1px solid #ddd">${industry || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Headcount</td><td style="padding:8px;border:1px solid #ddd">${headcount || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Message</td><td style="padding:8px;border:1px solid #ddd">${message || '—'}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Source</td><td style="padding:8px;border:1px solid #ddd">${sourcePage || '—'} | ${utmSource || ''}/${utmMedium || ''}/${utmCampaign || ''}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #ddd;font-weight:bold">Time</td><td style="padding:8px;border:1px solid #ddd">${new Date().toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong' })}</td></tr>
+            </table>
+          `,
+        });
+      } catch (emailErr) {
+        console.warn('⚠️ RecruitAI email alert failed:', emailErr.message);
+      }
+    }
+
+    res.status(201).json({ success: true, leadId: lead.lead_id });
+  } catch (error) {
+    console.error('❌ RecruitAI lead error:', error);
+    res.status(500).json({ success: false, error: 'Failed to save lead' });
+  }
+});
+
+// POST /api/recruitai/chat — DeepSeek chatbot with session management
+app.post('/api/recruitai/chat', async (req, res) => {
+  try {
+    const { sessionId, visitorId, message, history = [], industry, sourcePage } = req.body;
+
+    if (!message) return res.status(400).json({ success: false, error: 'Message required' });
+
+    // Get or create session
+    let currentSessionId = sessionId;
+    if (!currentSessionId) {
+      const newSession = await pool.query(
+        `INSERT INTO recruitai_chat_sessions (visitor_id, industry, source_page, ip_address)
+         VALUES ($1,$2,$3,$4) RETURNING session_id`,
+        [visitorId || null, industry || null, sourcePage || null, req.ip]
+      );
+      currentSessionId = newSession.rows[0].session_id;
+    }
+
+    // Count turns
+    const turnResult = await pool.query(
+      'SELECT turn_count FROM recruitai_chat_sessions WHERE session_id=$1',
+      [currentSessionId]
+    );
+    const turnCount = turnResult.rows[0]?.turn_count || 0;
+
+    // Build DeepSeek messages
+    const systemPrompt = `你係 Nora，RecruitAI Studio 嘅 AI 顧問助手。RecruitAI Studio 係香港中小企 AI 自動化平台，提供 5 大功能模組：增長（廣告/SEO/潛客）、市場推廣（社交內容/EDM）、客戶服務（WhatsApp AI）、業務運營（發票/報告/審批）、業務分析（多渠道數據整合）。入門 HK$8,000/月起（約 3 個 AI 代理），一週部署，一個月見效。
+
+你的性格：
+- 活潑、親切、有活力，像一個聰明又友善的業務顧問
+- 偶爾用廣東話口語（係/唔係/咁/囉/啩），但保持專業
+- 懂得適時幽默，不會太正經，讓對話輕鬆愉快
+- 真誠關心對方業務痛點，不只是賣嘢
+
+對話原則：
+- 回覆簡短生動，2-4 句為主，避免大段文字
+- 用「你」稱呼對方，語氣溫暖
+- 主動提問了解需求，每次最多問一個問題
+- 適時用 emoji 增加親切感 😊
+- 第 ${turnCount + 1} 輪對話${turnCount >= 8 ? '（已聊了一段時間，可以自然地邀請對方安排免費諮詢）' : '（先了解需求，建立信任）'}
+
+聯絡資料收集（重要）：
+- 當對方表示感興趣或詢問價格/方案時，自然地邀請留下聯絡方式
+- 說話示範：「咁你係咪方便留個 WhatsApp / 電郵俾我？我哋可以安排個免費 30 分鐘 AI 評估 😊」
+- 一旦對話中出現任何聯絡資料（WhatsApp、手機、電郵），必須在回覆末尾加上以下標記（此行對用戶不可見，不要解釋它）：
+[CONTACT_CAPTURED: name=姓名, email=電郵地址, phone=電話號碼]
+例子：[CONTACT_CAPTURED: name=陳先生, email=chan@example.com, phone=+852 9123 4567]
+例子（只有電話）：[CONTACT_CAPTURED: phone=+852 9123 4567]
+只填已知的欄位，未知欄位省略。標記必須在回覆最後一行。`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-10), // Keep last 10 turns for context
+      { role: 'user', content: message }
+    ];
+
+    const response = await deepseekService.chat(messages, {
+      model: 'deepseek-chat',
+      maxTokens: 400,
+      temperature: 0.9,
+    });
+
+    let replyContent = response.content;
+    let contactCaptured = false;
+    let capturedData = {};
+
+    // Parse contact capture marker (case-insensitive)
+    const captureMatch = replyContent.match(/\[CONTACT_CAPTURED:([^\]]+)\]/i);
+    if (captureMatch) {
+      contactCaptured = true;
+      const parts = captureMatch[1].split(',');
+      parts.forEach(p => {
+        const eqIdx = p.indexOf('=');
+        if (eqIdx > 0) {
+          const k = p.slice(0, eqIdx).trim();
+          const v = p.slice(eqIdx + 1).trim();
+          if (k && v) capturedData[k] = v;
+        }
+      });
+      replyContent = replyContent.replace(/\[CONTACT_CAPTURED:[^\]]+\]/i, '').trim();
+    }
+
+    // Save messages to DB
+    await pool.query(
+      `INSERT INTO recruitai_chat_messages (session_id, role, content, turn_number) VALUES ($1,'user',$2,$3)`,
+      [currentSessionId, message, turnCount + 1]
+    );
+    await pool.query(
+      `INSERT INTO recruitai_chat_messages (session_id, role, content, turn_number) VALUES ($1,'assistant',$2,$3)`,
+      [currentSessionId, replyContent, turnCount + 1]
+    );
+
+    // Update session
+    const updateFields = ['turn_count = turn_count + 1', 'updated_at = NOW()'];
+    const updateParams = [currentSessionId];
+    if (contactCaptured) {
+      updateFields.push(`contact_captured = TRUE`);
+      // Encrypt PII captured by chatbot before persisting to DB
+      if (capturedData.name)  { updateFields.push(`captured_name  = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.name)); }
+      if (capturedData.email) { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.email)); }
+      if (capturedData.phone) { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.phone)); }
+    }
+    await pool.query(
+      `UPDATE recruitai_chat_sessions SET ${updateFields.join(', ')} WHERE session_id = $1`,
+      updateParams
+    );
+
+    // If contact captured, save as lead (chatbot-sourced), encrypt PII at rest
+    // Dedup by session_id (not email — emails are encrypted so plaintext comparison fails)
+    if (contactCaptured && capturedData.email) {
+      try {
+        await pool.query(
+          `INSERT INTO recruitai_leads (name, email, phone, source_page, industry, message)
+           SELECT $1,$2,$3,$4,$5,$6
+           WHERE NOT EXISTS (
+             SELECT 1 FROM recruitai_leads WHERE source_page = $4
+           )`,
+          [
+            capturedData.name  ? encrypt(capturedData.name)  : null,
+            encrypt(capturedData.email),
+            capturedData.phone ? encrypt(capturedData.phone) : null,
+            'chatbot:' + currentSessionId,
+            industry || null,
+            encrypt(`Chat session ${currentSessionId}`),
+          ]
+        );
+      } catch (e) {
+        console.error('⚠️ RecruitAI chatbot lead save failed:', e.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      reply: replyContent,
+      sessionId: currentSessionId,
+      turnCount: turnCount + 1,
+      contactCaptured,
     });
   } catch (error) {
-    console.error('❌ Error fetching submissions:', error);
-    res.status(500).json({
-      error: 'Failed to fetch submissions'
-    });
+    console.error('❌ RecruitAI chat error:', error);
+    res.status(500).json({ success: false, error: 'Chat service unavailable' });
+  }
+});
+
+// GET /api/recruitai/admin/leads — list all leads (password-protected)
+app.get('/api/recruitai/admin/leads', async (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const result = await pool.query(
+      'SELECT * FROM recruitai_leads ORDER BY created_at DESC LIMIT 500'
+    );
+    // Decrypt PII fields before returning to admin UI
+    const leads = result.rows.map(row => decryptRow(row, PII_FIELDS.recruitai_leads));
+    res.json({ success: true, leads });
+  } catch (error) {
+    console.error('❌ Admin leads error:', error);
+    res.status(500).json({ error: 'Failed to fetch leads' });
+  }
+});
+
+// GET /api/recruitai/admin/sessions — list all chat sessions
+app.get('/api/recruitai/admin/sessions', async (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT s.*, COUNT(m.id) as message_count
+       FROM recruitai_chat_sessions s
+       LEFT JOIN recruitai_chat_messages m ON m.session_id = s.session_id
+       GROUP BY s.id ORDER BY s.created_at DESC LIMIT 200`
+    );
+    // Decrypt any PII captured by the chatbot during conversation
+    const sessions = result.rows.map(row =>
+      decryptRow(row, ['captured_name', 'captured_email', 'captured_phone'])
+    );
+    res.json({ success: true, sessions });
+  } catch (error) {
+    console.error('❌ Admin sessions error:', error);
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+// GET /api/recruitai/admin/sessions/:sessionId/messages
+app.get('/api/recruitai/admin/sessions/:sessionId/messages', async (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const result = await pool.query(
+      'SELECT * FROM recruitai_chat_messages WHERE session_id=$1 ORDER BY created_at ASC',
+      [req.params.sessionId]
+    );
+    res.json({ success: true, messages: result.rows });
+  } catch (error) {
+    console.error('❌ Admin messages error:', error);
+    res.status(500).json({ error: 'Failed to fetch messages' });
   }
 });
 
@@ -4239,6 +4797,8 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
 // ==========================================
 
 const { calcBaseChart } = require('./services/ziwei-chart-engine');
+const ziweiValidation = require('./validation/ziweiValidation');
+const asyncHandler = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 /**
  * Calculate Ziwei chart using Python calculator

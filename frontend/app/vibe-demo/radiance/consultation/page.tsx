@@ -1,10 +1,21 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Breadcrumb } from '../components/Breadcrumb';
+
+declare global {
+  interface Window {
+    grecaptcha?: {
+      ready: (cb: () => void) => void;
+      execute: (siteKey: string, options: { action: string }) => Promise<string>;
+    };
+  }
+}
+
+const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
 
 /* ── Custom dropdown ─────────────────────────────────────── */
 function CustomSelect({
@@ -113,6 +124,26 @@ export default function ConsultationPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Load reCAPTCHA v3 script once
+  useEffect(() => {
+    if (!RECAPTCHA_SITE_KEY || document.getElementById('recaptcha-v3-script')) return;
+    const script = document.createElement('script');
+    script.id = 'recaptcha-v3-script';
+    script.src = `https://www.google.com/recaptcha/api.js?render=${RECAPTCHA_SITE_KEY}`;
+    script.async = true;
+    document.head.appendChild(script);
+  }, []);
+
+  const getRecaptchaToken = useCallback(async (): Promise<string> => {
+    if (!RECAPTCHA_SITE_KEY || !window.grecaptcha) return '';
+    return new Promise<string>(resolve => {
+      window.grecaptcha!.ready(async () => {
+        const token = await window.grecaptcha!.execute(RECAPTCHA_SITE_KEY, { action: 'consultation' });
+        resolve(token);
+      });
+    });
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -130,10 +161,11 @@ export default function ConsultationPage() {
     setError('');
 
     try {
+      const recaptchaToken = await getRecaptchaToken();
       const response = await fetch('/api/radiance/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, recaptchaToken }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to submit form');
@@ -179,7 +211,7 @@ export default function ConsultationPage() {
       <main id="main-content" className="flex-1 pt-20">
 
         {/* Breadcrumb */}
-        <section className="py-6 px-6 border-b border-slate-100 dark:border-slate-800">
+        <section className="py-3 px-6 border-b border-slate-100 dark:border-slate-800">
           <div className="max-w-6xl mx-auto">
             <Breadcrumb items={[
               { label: 'Home', href: '/vibe-demo/radiance' },
@@ -189,41 +221,54 @@ export default function ConsultationPage() {
         </section>
 
         {/* Hero */}
-        <section className="py-24 px-6 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
-          <div className="max-w-6xl mx-auto">
-            <p className="text-xs font-semibold uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-4">
-              Free Strategy Session
-            </p>
-            <h1 className="text-6xl md:text-7xl font-bold text-slate-900 dark:text-white mb-6 leading-tight">
-              Let's talk about<br />your brand
-            </h1>
-            <p className="text-xl text-slate-600 dark:text-slate-400 leading-relaxed max-w-3xl font-light mb-8">
-              A 30-minute call with our strategy team. No obligations—just honest ideas on how integrated PR and marketing can move your brand forward.
-            </p>
-            <div className="max-w-3xl mb-8">
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Common challenges we help with:</p>
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-600 dark:text-slate-400">
-                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Unclear brand positioning or messaging</span></li>
-                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Struggling to build media credibility</span></li>
-                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Disconnected PR, events, and digital efforts</span></li>
-                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Entering a competitive market</span></li>
-                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Limited budget, need strategy not just tactics</span></li>
-                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Scaling brand awareness or reputation</span></li>
-              </ul>
-            </div>
-            <div className="mt-8 flex flex-wrap gap-6 text-sm text-slate-500 dark:text-slate-400">
-              <span className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                30-minute session
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                Market audit included
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                No obligation
-              </span>
+        <section className="relative overflow-hidden border-b border-slate-200 dark:border-slate-800">
+          {/* Background image */}
+          <div className="absolute inset-0">
+            <img
+              src="https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=2070&q=80"
+              alt="Strategy consultation session"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-slate-900/72" />
+          </div>
+
+          {/* Content */}
+          <div className="relative z-10 py-24 px-6">
+            <div className="max-w-6xl mx-auto">
+              <p className="text-xs font-semibold uppercase tracking-widest text-purple-300 mb-4">
+                Free Strategy Session
+              </p>
+              <h1 className="text-6xl md:text-7xl font-bold text-white mb-6 leading-tight">
+                Let&apos;s talk about<br />your brand
+              </h1>
+              <p className="text-xl text-slate-200 leading-relaxed max-w-3xl font-light mb-8">
+                A 30-minute call with our strategy team. No obligations—just honest ideas on how integrated PR and marketing can move your brand forward.
+              </p>
+              <div className="max-w-3xl mb-8">
+                <p className="text-sm text-slate-300 mb-4">Common challenges we help with:</p>
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-200">
+                  <li className="flex gap-3"><span className="text-purple-300 flex-shrink-0">→</span><span>Unclear brand positioning or messaging</span></li>
+                  <li className="flex gap-3"><span className="text-purple-300 flex-shrink-0">→</span><span>Struggling to build media credibility</span></li>
+                  <li className="flex gap-3"><span className="text-purple-300 flex-shrink-0">→</span><span>Disconnected PR, events, and digital efforts</span></li>
+                  <li className="flex gap-3"><span className="text-purple-300 flex-shrink-0">→</span><span>Entering a competitive market</span></li>
+                  <li className="flex gap-3"><span className="text-purple-300 flex-shrink-0">→</span><span>Limited budget, need strategy not just tactics</span></li>
+                  <li className="flex gap-3"><span className="text-purple-300 flex-shrink-0">→</span><span>Scaling brand awareness or reputation</span></li>
+                </ul>
+              </div>
+              <div className="flex flex-wrap gap-6 text-sm text-slate-300">
+                <span className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                  30-minute session
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                  Market audit included
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                  No obligation
+                </span>
+              </div>
             </div>
           </div>
         </section>
@@ -384,10 +429,10 @@ export default function ConsultationPage() {
                     </div>
 
                     <div>
-                      <label htmlFor="consult-message" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Goals or challenge *</label>
+                      <label htmlFor="consult-message" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Goals or challenge</label>
                       <textarea
                         id="consult-message"
-                        name="message" value={formData.message} onChange={handleChange} required rows={4}
+                        name="message" value={formData.message} onChange={handleChange} rows={4}
                         placeholder="What are you looking to achieve? Any specific challenges we should know about?"
                         className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 text-sm"
                       />
@@ -436,8 +481,8 @@ export default function ConsultationPage() {
           <div className="max-w-6xl mx-auto text-center">
             <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
               Prefer email? Reach us at{' '}
-              <a href="mailto:hello@radiancehk.com" className="text-purple-600 dark:text-purple-400 hover:underline">
-                hello@radiancehk.com
+              <a href="mailto:mandy@radiancehk.com" className="text-purple-600 dark:text-purple-400 hover:underline">
+                mandy@radiancehk.com
               </a>
             </p>
             <Link href="/vibe-demo/radiance" className="text-sm text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">

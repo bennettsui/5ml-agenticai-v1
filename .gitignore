@@ -14,3 +14,7 @@ frontend/.next/
 
 # Nanobanana visual generation manifest (server-side state)
 frontend/public/tedx/.manifest.json
+
+# Generated media files (keep directory, ignore contents)
+uploads/media/*
+!uploads/media/.gitkeep

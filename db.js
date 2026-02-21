@@ -917,6 +917,117 @@ async function initDatabase() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_community_brand ON social_community_management(brand_id);
+
+      -- ==========================================
+      -- RecruitAI Studio Lead Capture & Chatbot
+      -- ==========================================
+
+      CREATE TABLE IF NOT EXISTS recruitai_leads (
+        id SERIAL PRIMARY KEY,
+        lead_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        name TEXT,               -- TEXT: stores AES-256-GCM ciphertext (~140-340 chars)
+        email TEXT NOT NULL,     -- TEXT: encrypted; NOT NULL enforced at app layer
+        phone TEXT,              -- TEXT: encrypted (was VARCHAR(100) — too small for ciphertext)
+        company TEXT,            -- TEXT: encrypted
+        industry VARCHAR(100),   -- not PII; kept as VARCHAR for indexing
+        headcount VARCHAR(50),
+        message TEXT,
+        source_page VARCHAR(255),
+        utm_source VARCHAR(100),
+        utm_medium VARCHAR(100),
+        utm_campaign VARCHAR(100),
+        ip_address VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Widen PII columns to TEXT on existing deployments (idempotent on TEXT columns)
+      ALTER TABLE recruitai_leads ALTER COLUMN name    TYPE TEXT;
+      ALTER TABLE recruitai_leads ALTER COLUMN email   TYPE TEXT;
+      ALTER TABLE recruitai_leads ALTER COLUMN phone   TYPE TEXT;
+      ALTER TABLE recruitai_leads ALTER COLUMN company TYPE TEXT;
+      -- Allow name to be null for chatbot-captured leads where name is unknown
+      ALTER TABLE recruitai_leads ALTER COLUMN name DROP NOT NULL;
+
+      -- email index is now on ciphertext — not searchable, kept for created_at range scans
+      CREATE INDEX IF NOT EXISTS idx_recruitai_leads_industry ON recruitai_leads(industry);
+      CREATE INDEX IF NOT EXISTS idx_recruitai_leads_created ON recruitai_leads(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS recruitai_chat_sessions (
+        id SERIAL PRIMARY KEY,
+        session_id UUID UNIQUE DEFAULT gen_random_uuid(),
+        visitor_id VARCHAR(255),
+        lead_id UUID REFERENCES recruitai_leads(lead_id) ON DELETE SET NULL,
+        industry VARCHAR(100),
+        source_page VARCHAR(255),
+        turn_count INTEGER DEFAULT 0,
+        contact_captured BOOLEAN DEFAULT FALSE,
+        captured_name TEXT,      -- TEXT: stores AES-256-GCM ciphertext
+        captured_email TEXT,     -- TEXT: encrypted
+        captured_phone TEXT,     -- TEXT: encrypted
+        summary TEXT,
+        ip_address VARCHAR(100),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Widen captured PII columns on existing deployments
+      ALTER TABLE recruitai_chat_sessions ALTER COLUMN captured_name  TYPE TEXT;
+      ALTER TABLE recruitai_chat_sessions ALTER COLUMN captured_email TYPE TEXT;
+      ALTER TABLE recruitai_chat_sessions ALTER COLUMN captured_phone TYPE TEXT;
+
+      CREATE INDEX IF NOT EXISTS idx_recruitai_sessions_visitor ON recruitai_chat_sessions(visitor_id);
+      CREATE INDEX IF NOT EXISTS idx_recruitai_sessions_created ON recruitai_chat_sessions(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS recruitai_chat_messages (
+        id SERIAL PRIMARY KEY,
+        session_id UUID NOT NULL REFERENCES recruitai_chat_sessions(session_id) ON DELETE CASCADE,
+        role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant')),
+        content TEXT NOT NULL,
+        turn_number INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_recruitai_messages_session ON recruitai_chat_messages(session_id);
+
+      CREATE TABLE IF NOT EXISTS radiance_media (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL,
+        original_name TEXT,
+        url TEXT NOT NULL,
+        mime_type TEXT,
+        size INTEGER,
+        uploaded_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS radiance_blog_cms (
+        slug TEXT PRIMARY KEY,
+        title_en TEXT,
+        title_zh TEXT,
+        date_en TEXT,
+        date_zh TEXT,
+        category_en TEXT,
+        category_zh TEXT,
+        read_time TEXT,
+        excerpt_en TEXT,
+        excerpt_zh TEXT,
+        hero_image TEXT,
+        content_en TEXT,
+        content_zh TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS radiance_case_study_cms (
+        slug TEXT PRIMARY KEY,
+        title_en TEXT,
+        title_zh TEXT,
+        client TEXT,
+        excerpt_en TEXT,
+        excerpt_zh TEXT,
+        featured_image TEXT,
+        content_html_en TEXT,
+        content_html_zh TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');
@@ -3265,6 +3376,55 @@ async function unlinkContactFromProject(contactId, projectId) {
   }
 }
 
+// ── Meta Page Tokens ───────────────────────────────────────────────────────
+
+let metaPageTokensTableReady = false;
+
+async function ensureMetaPageTokensTable() {
+  if (metaPageTokensTableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS meta_page_tokens (
+      id SERIAL PRIMARY KEY,
+      page_id VARCHAR(64) UNIQUE NOT NULL,
+      page_name VARCHAR(255),
+      access_token TEXT NOT NULL,
+      token_source VARCHAR(100),
+      fetched_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  metaPageTokensTableReady = true;
+}
+
+async function upsertMetaPageTokens(pages, tokenSource = null) {
+  try {
+    if (!Array.isArray(pages) || pages.length === 0) return 0;
+    await ensureMetaPageTokensTable();
+
+    let count = 0;
+    for (const page of pages) {
+      if (!page || !page.id || !page.access_token) continue;
+      await pool.query(
+        `INSERT INTO meta_page_tokens (page_id, page_name, access_token, token_source, fetched_at, updated_at)
+         VALUES ($1, $2, $3, $4, NOW(), NOW())
+         ON CONFLICT (page_id) DO UPDATE
+           SET page_name = EXCLUDED.page_name,
+               access_token = EXCLUDED.access_token,
+               token_source = EXCLUDED.token_source,
+               fetched_at = NOW(),
+               updated_at = NOW()`,
+        [page.id, page.name || null, page.access_token, tokenSource]
+      );
+      count += 1;
+    }
+
+    return count;
+  } catch (err) {
+    console.error('[upsertMetaPageTokens] error:', err.message);
+    throw err;
+  }
+}
+
 module.exports = {
   pool,
   query,
@@ -3400,4 +3560,27 @@ module.exports = {
   linkContactToProject,
   getProjectContacts,
   unlinkContactFromProject,
+  upsertMetaPageTokens,
 };
+
+async function saveRadianceEnquiry({ name, email, phone, company, industry, serviceInterest, message, sourceLang, ipAddress, userAgent }) {
+  const result = await pool.query(
+    `INSERT INTO radiance_enquiries
+      (name, email, phone, company, industry, service_interest, message, source_lang, ip_address, user_agent)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     RETURNING enquiry_id, created_at`,
+    [name, email, phone || null, company || null, industry || null, serviceInterest || null, message, sourceLang || 'en', ipAddress || null, userAgent || null]
+  );
+  return result.rows[0];
+}
+
+async function getRadianceEnquiries({ limit = 50, offset = 0 } = {}) {
+  const result = await pool.query(
+    `SELECT id, enquiry_id, name, email, phone, company, industry, service_interest, message, source_lang, status, created_at
+     FROM radiance_enquiries
+     ORDER BY created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  );
+  return result.rows;
+}
