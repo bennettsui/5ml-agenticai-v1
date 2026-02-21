@@ -94,45 +94,45 @@ function LeadForm({ industry, slug }: { industry: string; slug: string }) {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">您的姓名 *</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">您的姓名 *</label>
           <input
             required value={form.name} onChange={e => set('name', e.target.value)}
             placeholder="陳先生 / 陳女士"
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">電郵地址 *</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">電郵地址 *</label>
           <input
             required type="email" value={form.email} onChange={e => set('email', e.target.value)}
             placeholder="your@company.com"
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800"
           />
         </div>
       </div>
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp / 電話</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">WhatsApp / 電話</label>
           <input
             value={form.phone} onChange={e => set('phone', e.target.value)}
             placeholder="+852 XXXX XXXX"
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">公司名稱</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">公司名稱</label>
           <input
             value={form.company} onChange={e => set('company', e.target.value)}
             placeholder="您的公司名稱"
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800"
           />
         </div>
       </div>
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">團隊人數</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">團隊人數</label>
         <select
           value={form.headcount} onChange={e => set('headcount', e.target.value)}
-          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+          className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white bg-white dark:bg-slate-800"
         >
           <option value="">請選擇</option>
           {['1–5 人', '6–10 人', '11–20 人', '21–50 人', '50 人以上'].map(o => (
@@ -141,7 +141,7 @@ function LeadForm({ industry, slug }: { industry: string; slug: string }) {
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">您最大的業務挑戰是什麼？</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">您最大的業務挑戰是什麼？</label>
         <textarea
           rows={3} value={form.message} onChange={e => set('message', e.target.value)}
           placeholder="例如：每月處理大量發票好費時、WhatsApp 查詢無人回覆..."
@@ -159,7 +159,7 @@ function LeadForm({ industry, slug }: { industry: string; slug: string }) {
           <>立即預約免費 AI 評估 <ArrowRight className="w-5 h-5" /></>
         )}
       </button>
-      <p className="text-center text-xs text-slate-500">
+      <p className="text-center text-xs text-slate-500 dark:text-slate-400">
         免費諮詢，無任何義務。資料絕對保密，不作其他用途。
       </p>
     </form>
@@ -172,10 +172,10 @@ function WorkflowStep({ icon, title, detail, index }: { icon: string; title: str
   return (
     <div className="flex gap-4">
       <div className="flex-none flex flex-col items-center">
-        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-lg font-bold text-blue-700 flex-none">
+        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-lg font-bold text-blue-700 dark:text-blue-300 flex-none">
           {index + 1}
         </div>
-        <div className="w-0.5 flex-1 bg-blue-100 mt-2" />
+        <div className="w-0.5 flex-1 bg-blue-100 dark:bg-blue-900/40 mt-2" />
       </div>
       <div className="pb-6">
         <div className="flex items-center gap-2 mb-1">
@@ -205,7 +205,7 @@ function CaseStudyCard({ cs, isOpen, onToggle }: { cs: CaseStudy; isOpen: boolea
   };
 
   return (
-    <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
+    <div className="border border-slate-200 dark:border-slate-700/50 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60 shadow-sm hover:shadow-md transition-shadow">
       <button
         className="w-full text-left p-6 flex items-start justify-between gap-4"
         onClick={onToggle}
@@ -221,8 +221,8 @@ function CaseStudyCard({ cs, isOpen, onToggle }: { cs: CaseStudy; isOpen: boolea
               </span>
             ))}
           </div>
-          <p className="font-semibold text-slate-900">{cs.company}</p>
-          <p className="text-sm text-slate-500 mt-1 line-clamp-2">{cs.challenge}</p>
+          <p className="font-semibold text-slate-900 dark:text-white">{cs.company}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{cs.challenge}</p>
         </div>
         <div className="flex-none mt-1">
           {isOpen ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
@@ -230,16 +230,16 @@ function CaseStudyCard({ cs, isOpen, onToggle }: { cs: CaseStudy; isOpen: boolea
       </button>
 
       {isOpen && (
-        <div className="border-t border-slate-100 px-6 pb-6">
+        <div className="border-t border-slate-100 dark:border-slate-700/50 px-6 pb-6">
           {/* Challenge */}
           <div className="mt-5 mb-6">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">業務挑戰</h4>
-            <p className="text-slate-700 leading-relaxed">{cs.challenge}</p>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">業務挑戰</h4>
+            <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{cs.challenge}</p>
           </div>
 
           {/* Agentic Workflow */}
           <div className="mb-6">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">AI 代理工作流程</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-4">AI 代理工作流程</h4>
             <div>
               {cs.workflow.map((step, i) => (
                 <WorkflowStep key={i} icon={step.icon} title={step.title} detail={step.detail} index={i} />
@@ -248,21 +248,21 @@ function CaseStudyCard({ cs, isOpen, onToggle }: { cs: CaseStudy; isOpen: boolea
           </div>
 
           {/* Results */}
-          <div className="bg-slate-50 rounded-xl p-5 mb-5">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">實際成效</h4>
+          <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-5 mb-5">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">實際成效</h4>
             <div className="grid grid-cols-3 gap-4">
               {cs.results.map((r, i) => (
                 <div key={i} className="text-center">
-                  <div className="text-xl font-extrabold text-slate-900">{r.metric}</div>
-                  <div className="text-xs text-slate-500 mt-1">{r.label}</div>
+                  <div className="text-xl font-extrabold text-slate-900 dark:text-white">{r.metric}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{r.label}</div>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Insight */}
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-            <p className="text-sm text-blue-800 leading-relaxed italic">
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-800/40 rounded-xl p-4">
+            <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed italic">
               💡 {cs.insight}
             </p>
           </div>
@@ -278,17 +278,17 @@ export default function IndustryLandingPage({ config }: { config: IndustryConfig
   const [openCase, setOpenCase] = useState<number | null>(0);
 
   return (
-    <div className="min-h-screen bg-white font-sans">
+    <div className="min-h-screen bg-white dark:bg-slate-950 font-sans">
 
       {/* ── Nav ── */}
-      <nav className="fixed top-0 inset-x-0 z-50 bg-white/95 backdrop-blur-sm border-b border-slate-100 shadow-sm">
+      <nav className="fixed top-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800/50 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/vibe-demo/recruitai" className="flex items-center gap-2 text-slate-600 hover:text-blue-600 transition-colors text-sm font-medium">
+          <Link href="/vibe-demo/recruitai" className="flex items-center gap-2 text-slate-600 dark:text-slate-300 hover:text-blue-600 transition-colors text-sm font-medium">
             <ArrowLeft className="w-4 h-4" />
             RecruitAIStudio
           </Link>
           <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:block">
+            <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider hidden sm:block">
               {config.industry} 行業方案
             </span>
             <a
@@ -344,25 +344,25 @@ export default function IndustryLandingPage({ config }: { config: IndustryConfig
       </section>
 
       {/* ── Pain Points ── */}
-      <section className="py-20 px-4 bg-slate-50">
+      <section className="py-20 px-4 bg-slate-50 dark:bg-slate-900/50">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
-            <p className="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-3">您是否面對這些問題？</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
+            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3">您是否面對這些問題？</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
               {config.industry} 行業常見痛點
             </h2>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {config.painPoints.map(p => (
-              <div key={p.title} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+              <div key={p.title} className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-700/50 shadow-sm">
                 <div className="text-3xl mb-4">{p.icon}</div>
-                <h3 className="font-bold text-slate-900 mb-2">{p.title}</h3>
-                <p className="text-sm text-slate-600 leading-relaxed">{p.desc}</p>
+                <h3 className="font-bold text-slate-900 dark:text-white mb-2">{p.title}</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{p.desc}</p>
               </div>
             ))}
           </div>
           <div className="mt-8 text-center">
-            <p className="text-slate-500 mb-4">以上每個痛點，AI 代理都能解決。</p>
+            <p className="text-slate-500 dark:text-slate-400 mb-4">以上每個痛點，AI 代理都能解決。</p>
             <a href="#cases" className="inline-flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-700">
               看看同行如何用 AI 解決 <ArrowRight className="w-4 h-4" />
             </a>
@@ -371,11 +371,11 @@ export default function IndustryLandingPage({ config }: { config: IndustryConfig
       </section>
 
       {/* ── Case Studies ── */}
-      <section id="cases" className="py-20 px-4 bg-white">
+      <section id="cases" className="py-20 px-4 bg-white dark:bg-slate-950">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
-            <p className="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-3">真實案例</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">
+            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3">真實案例</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
               從初步嘗試到全面自動化
             </h2>
             <p className="text-slate-500 text-lg max-w-2xl mx-auto">
@@ -421,11 +421,11 @@ export default function IndustryLandingPage({ config }: { config: IndustryConfig
       </section>
 
       {/* ── Lead Form ── */}
-      <section id="lead-form" className="py-20 px-4 bg-slate-50">
+      <section id="lead-form" className="py-20 px-4 bg-slate-50 dark:bg-slate-900/50">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-10">
-            <p className="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-3">立即開始</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">
+            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3">立即開始</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
               預約免費 30 分鐘 AI 評估
             </h2>
             <p className="text-slate-600">
@@ -434,14 +434,14 @@ export default function IndustryLandingPage({ config }: { config: IndustryConfig
             </p>
           </div>
 
-          <div className="bg-white rounded-3xl shadow-xl border border-slate-100 p-8">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800/50 p-8">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-slate-100">
               {[
                 { icon: Clock, text: '30 分鐘免費' },
                 { icon: CheckCircle, text: '無任何義務' },
                 { icon: Users, text: '1 個工作天內回覆' },
               ].map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-1.5 text-xs text-slate-500">
+                <div key={text} className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                   <Icon className="w-4 h-4 text-blue-500" />
                   {text}
                 </div>

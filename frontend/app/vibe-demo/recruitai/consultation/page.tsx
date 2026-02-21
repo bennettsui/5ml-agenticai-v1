@@ -9,6 +9,14 @@ import {
 } from 'lucide-react';
 import RecruitNav from '../components/RecruitNav';
 
+const API_BASE = (() => {
+  if (typeof window === 'undefined') return '';
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  return isLocal
+    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
+    : (process.env.NEXT_PUBLIC_API_URL || '');
+})();
+
 const INDUSTRY_OPTIONS = [
   '零售 Retail', '餐飲 F&B', '金融服務 Financial Services',
   '物流 Logistics', '貿易 Trading', 'IT 服務 IT Services',
@@ -87,8 +95,34 @@ export default function ConsultationPage() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    try {
+      const params = new URLSearchParams(window.location.search);
+      await fetch(`${API_BASE}/api/recruitai/lead`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          phone: form.phone || undefined,
+          company: form.company || undefined,
+          industry: form.industry || undefined,
+          headcount: form.teamSize || undefined,
+          message: [
+            form.message,
+            form.preferredTime ? `首選時間：${form.preferredTime}` : '',
+            form.painPoints.length > 0 ? `主要痛點：${form.painPoints.join('、')}` : '',
+          ].filter(Boolean).join('\n') || undefined,
+          sourcePage: '/consultation',
+          utmSource: params.get('utm_source') || undefined,
+          utmMedium: params.get('utm_medium') || undefined,
+          utmCampaign: params.get('utm_campaign') || undefined,
+        }),
+      });
+    } catch {
+      // Silently continue even if API fails — show success to user
+    }
     setSubmitted(true);
   };
 
