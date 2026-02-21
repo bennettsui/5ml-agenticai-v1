@@ -6322,6 +6322,23 @@ app.post('/api/sme/campaign-review', async (req, res) => {
     }
   });
 
+  // POST /api/tender-intel/discover  — manual source discovery trigger
+  app.post('/api/tender-intel/discover', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    try {
+      scheduleRegistry.markRunning('tender-intel:source-discovery');
+      const result = await tenderIntel.runSourceDiscovery(pool);
+      scheduleRegistry.markCompleted('tender-intel:source-discovery', {
+        result: `${result.newSources.length} new sources from ${result.hubsScanned} hubs`,
+        durationMs: result.durationMs,
+      });
+      res.json({ success: true, ...result });
+    } catch (err) {
+      scheduleRegistry.markFailed('tender-intel:source-discovery', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // POST /api/tender-intel/ingest  — manual trigger (for testing)
   app.post('/api/tender-intel/ingest', async (req, res) => {
     if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle2, AlertTriangle, Clock, RefreshCw, ChevronDown, Plus, ExternalLink } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Clock, RefreshCw, ChevronDown, Plus, ExternalLink, Search, Loader2 } from 'lucide-react';
 
 type SourceStatus = 'active' | 'broken' | 'pending_validation' | 'deferred';
 type SourceType = 'rss_xml' | 'api_xml' | 'csv_open_data' | 'html_list' | 'html_hub';
@@ -66,6 +66,8 @@ export default function SourceRegistryPage() {
   const [filterStatus, setFilterStatus] = useState<'All' | SourceStatus>('All');
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverMsg, setDiscoverMsg] = useState<string | null>(null);
 
   const fetchSources = useCallback(async () => {
     setLoading(true);
@@ -86,6 +88,31 @@ export default function SourceRegistryPage() {
 
   useEffect(() => { fetchSources(); }, [fetchSources]);
 
+  async function handleDiscover() {
+    setDiscovering(true);
+    setDiscoverMsg(null);
+    try {
+      const res = await fetch('/api/tender-intel/discover', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        const n = data.newSources?.length ?? 0;
+        setDiscoverMsg(
+          n > 0
+            ? `Found ${n} new source${n > 1 ? 's' : ''} from ${data.hubsScanned} hub pages — added as Pending`
+            : `Scanned ${data.hubsScanned} hub pages — no new sources found`
+        );
+        if (n > 0) setTimeout(() => fetchSources(), 500);
+      } else {
+        setDiscoverMsg(`Error: ${data.error || 'unknown'}`);
+      }
+    } catch {
+      setDiscoverMsg('Network error — server may be unavailable');
+    } finally {
+      setDiscovering(false);
+      setTimeout(() => setDiscoverMsg(null), 8000);
+    }
+  }
+
   const filtered = sources;
   const activeCount = sources.filter(s => s.status === 'active').length;
   const pendingCount = sources.filter(s => s.status === 'pending_validation').length;
@@ -93,15 +120,23 @@ export default function SourceRegistryPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight mb-1">Source Registry</h1>
           <p className="text-sm text-slate-400">{loading ? 'Loading…' : `${activeCount} active · ${pendingCount} pending · ${totalNewToday} new items today`}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={fetchSources} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 border border-slate-700/50 hover:border-slate-600 hover:text-white transition-colors">
             <RefreshCw className="w-3.5 h-3.5" />
             Refresh
+          </button>
+          <button
+            onClick={handleDiscover}
+            disabled={discovering}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-colors disabled:opacity-50"
+          >
+            {discovering ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+            {discovering ? 'Scanning…' : 'Discover sources'}
           </button>
           <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-teal-500/15 text-teal-400 border border-teal-500/30 hover:bg-teal-500/25 transition-colors">
             <Plus className="w-3.5 h-3.5" />
@@ -109,6 +144,22 @@ export default function SourceRegistryPage() {
           </button>
         </div>
       </div>
+
+      {/* Discovery result banner */}
+      {discoverMsg && (
+        <div className={`rounded-xl border px-4 py-3 text-xs font-medium ${
+          discoverMsg.startsWith('Error') || discoverMsg.startsWith('Network')
+            ? 'border-red-500/30 bg-red-500/5 text-red-400'
+            : discoverMsg.startsWith('Found')
+            ? 'border-teal-500/30 bg-teal-500/5 text-teal-400'
+            : 'border-slate-700/40 bg-white/[0.02] text-slate-400'
+        }`}>
+          {discoverMsg}
+          {discoverMsg.includes('Pending') && (
+            <span className="text-slate-500 font-normal ml-2">— validate each to activate it for ingestion.</span>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap">
