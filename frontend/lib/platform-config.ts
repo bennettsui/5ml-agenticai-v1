@@ -726,6 +726,18 @@ export const USE_CASES: UseCaseConfig[] = [
   // GOVERNMENT PROCUREMENT — GovProcurement
   // ========================================================================
   {
+    id: 'hk-sg-tender-intelligence',
+    name: 'HK+SG Tender Intelligence',
+    description: 'Daily discovery, ingestion, evaluation and digest for HK+SG government tenders — 10 agents covering source discovery, XML/RSS/HTML ingestion, scoring and daily alerts',
+    solutionLine: 'GovProcurement',
+    status: 'in_progress',
+    progress: 0.35,
+    priority: 'high',
+    path: '/use-cases/hk-sg-tender-intel',
+    agentCount: 10,
+    features: ['Daily Digest', 'Source Registry', 'XML/RSS Ingestion', 'HTML Scraping', 'Capability Scoring', 'Feedback Learning', 'Daily Alerts', 'Source Discovery'],
+  },
+  {
     id: 'government-tender-ops',
     name: 'Government Tender Operations',
     description: '10-module platform for RFP tracking, bid management, and procurement pipeline with AI orchestrator, team collaboration, and win probability scoring',
