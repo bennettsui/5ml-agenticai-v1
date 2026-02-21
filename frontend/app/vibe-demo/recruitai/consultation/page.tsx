@@ -33,6 +33,8 @@ type Step = 1 | 2 | 3;
 export default function ConsultationPage() {
   const [step, setStep] = useState<Step>(1);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [form, setForm] = useState({
     name: '',
     company: '',
@@ -57,9 +59,26 @@ export default function ConsultationPage() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      const res = await fetch('/api/recruitai/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `Server error ${res.status}`);
+      }
+      setSubmitted(true);
+    } catch (err: unknown) {
+      setSubmitError(err instanceof Error ? err.message : 'Submission failed. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const canProceed1 = form.name && form.company && form.email;
@@ -475,12 +494,16 @@ export default function ConsultationPage() {
                       </button>
                       <button
                         type="submit"
-                        className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                        disabled={submitting}
+                        className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
                       >
                         <Calendar className="w-4 h-4" />
-                        確認預約免費諮詢
+                        {submitting ? '提交中…' : '確認預約免費諮詢'}
                       </button>
                     </div>
+                    {submitError && (
+                      <p className="text-red-400 text-xs text-center mt-2">{submitError}</p>
+                    )}
                   </div>
                 )}
               </div>
