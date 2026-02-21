@@ -109,6 +109,14 @@ export interface PalaceState {
   nameZh: string;
   /** English name (optional) */
   nameEn?: string;
+  /** Earthly branch of this palace position (e.g. '寅', '卯') */
+  branch?: string;
+  /** Heavenly stem of this palace position (e.g. '甲', '乙') */
+  stem?: string;
+  /** Combined stem-branch (e.g. '丙寅') */
+  stemBranch?: string;
+  /** Whether this is the Life Palace (命宮) */
+  isLifePalace?: boolean;
   /** Optional metric to display in footer (e.g., luck level, compatibility) */
   mainMetric?: MainMetric;
   /** Stars in this palace, ordered by importance */

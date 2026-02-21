@@ -251,6 +251,7 @@ body {
   background-color: var(--bg-secondary);
   border-radius: var(--radius-lg);
   border: 1px solid var(--palace-border);
+  position: relative; /* needed for SVG overlay */
 }
 
 .ziwei-grid__overlay {

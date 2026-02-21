@@ -179,6 +179,10 @@ export function convertAPIResponseToChartLayer(apiChart: any): ChartLayer {
     return {
       palaceId: PALACE_ID_MAP[palace.palace_name] || palace.palace_name.toLowerCase(),
       nameZh: palace.palace_name,
+      branch: palace.branch,
+      stem: palace.stem,
+      stemBranch: palace.stem_branch,
+      isLifePalace: palace.palace_id === 0, // palace_id 0 = 命宮
       stars,
     };
   });

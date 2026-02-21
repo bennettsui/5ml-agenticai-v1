@@ -24,11 +24,12 @@ export const PalaceCard: React.FC<PalaceCardProps> = ({
   visualConfig,
   onStarClick,
 }) => {
-  // Filter visible stars based on visualization rules
+  // Filter visible stars — show all when metadata is missing (real API data uses Chinese IDs)
   const visibleStars = useMemo(() => {
     return palace.stars.filter((star) => {
       const starMeta = visualConfig.starMeta[star.starId];
-      if (!starMeta) return false;
+      // If no metadata, show the star anyway (real API data won't be in static config)
+      if (!starMeta) return true;
 
       return visualConfig.shouldShowInOverview({
         starId: star.starId,
@@ -45,12 +46,26 @@ export const PalaceCard: React.FC<PalaceCardProps> = ({
     <div
       className="palace-card"
       data-palace-id={palace.palaceId}
+      data-branch={palace.branch}
       role="article"
       aria-label={`${palace.nameZh} Palace`}
     >
-      {/* HEADER: Palace Title */}
+      {/* HEADER: Branch + Palace Title */}
       <header className="palace-card__header mb-2">
-        <h3 className="palace-title">
+        {/* Top row: branch (left) + stem-branch (right) */}
+        <div className="flex items-center justify-between mb-1">
+          {palace.branch && (
+            <span className="text-[10px] font-mono text-slate-400 leading-none">
+              {palace.branch}
+            </span>
+          )}
+          {palace.stemBranch && (
+            <span className="text-[10px] font-mono text-slate-500 leading-none">
+              {palace.stemBranch}
+            </span>
+          )}
+        </div>
+        <h3 className={`palace-title ${palace.isLifePalace ? 'text-amber-400' : ''}`}>
           {palace.nameZh}
           {palace.nameEn && (
             <span className="text-xs text-slate-500 ml-1">({palace.nameEn})</span>
@@ -64,9 +79,16 @@ export const PalaceCard: React.FC<PalaceCardProps> = ({
           {visibleStars.length > 0 ? (
             visibleStars.map((star) => {
               const starMeta = visualConfig.starMeta[star.starId];
-              if (!starMeta) return null;
+              // Fallback for stars not in static config (Chinese-ID stars from real API)
+              const effectiveMeta = starMeta ?? {
+                id: star.starId,
+                nameZh: star.starId,
+                nameEn: '',
+                category: star.magnitude >= 3 ? 'main' : star.magnitude === 2 ? 'assist' : 'minor',
+              } as any;
 
-              const categoryStyle = visualConfig.categoryStyles[starMeta.category];
+              const categoryStyle = visualConfig.categoryStyles[effectiveMeta.category]
+                ?? visualConfig.categoryStyles['minor'];
               const magRule = visualConfig.magnitudeRules.find(
                 (r) => r.level === star.magnitude
               );
@@ -75,7 +97,7 @@ export const PalaceCard: React.FC<PalaceCardProps> = ({
                 <StarChip
                   key={star.starId}
                   starId={star.starId}
-                  starMeta={starMeta}
+                  starMeta={effectiveMeta}
                   magnitude={star.magnitude}
                   hua={star.hua}
                   categoryStyle={categoryStyle}
@@ -87,7 +109,7 @@ export const PalaceCard: React.FC<PalaceCardProps> = ({
               );
             })
           ) : (
-            <span className="text-xs text-slate-500">No major stars</span>
+            <span className="text-xs text-slate-500">—</span>
           )}
         </div>
       </div>

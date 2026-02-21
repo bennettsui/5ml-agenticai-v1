@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { ChartLayer, StarVisualConfig } from '@/types/ziwei';
+import { ChartLayer, PalaceState, StarVisualConfig } from '@/types/ziwei';
 import { PalaceCard } from './PalaceCard';
 import '@/styles/ziwei-theme.css';
 
@@ -12,46 +12,41 @@ interface ZiWeiGridProps {
 }
 
 /**
- * ZiWeiGrid Component
- * Displays 12 palaces in a traditional Ziwei rectangular layout
+ * ZiWeiGrid Component — Traditional Rectangular 4×4 Birth Chart (命盤)
  *
- * Layout (4x4 grid):
- * ┌────────┬─────────┬─────────┬────────┐
- * │  Top4  │  Top4   │  Top4   │  Top4  │  (4 palaces on top row)
- * ├────────┼─────────┼─────────┼────────┤
- * │ Mid3   │  CENTER │  CENTER │  Mid3  │  (3 left + 3 right + center)
- * │  (1)   │  (BIRTH │  (BIRTH │  (2)   │
- * │        │   DATA) │   DATA) │        │
- * ├────────┼─────────┼─────────┼────────┤
- * │ Mid3   │  CENTER │  CENTER │  Mid3  │  (3 left + 3 right + center)
- * │  (3)   │  (BIRTH │  (BIRTH │  (4)   │
- * │        │   DATA) │   DATA) │        │
- * ├────────┼─────────┼─────────┼────────┤
- * │  Bot4  │  Bot4   │  Bot4   │  Bot4  │  (4 palaces on bottom row)
- * └────────┴─────────┴─────────┴────────┘
+ * Branch positions are FIXED in the grid. Palace names (命宮, 財帛宮, …)
+ * rotate based on the life palace calculation.
+ *
+ * Layout (branch → grid position):
+ * ┌──────┬──────┬──────┬──────┐
+ * │  巳  │  午  │  未  │  申  │  ← Row 1 (top)
+ * ├──────┼──────┼──────┼──────┤
+ * │  辰  │      CENTER      │  酉  │  ← Row 2
+ * ├──────┤  (2×2 center)  ├──────┤
+ * │  卯  │                │  戌  │  ← Row 3
+ * ├──────┼──────┼──────┼──────┤
+ * │  寅  │  丑  │  子  │  亥  │  ← Row 4 (bottom)
+ * └──────┴──────┴──────┴──────┘
  */
 
-// Mapping of palace IDs to grid positions
-// This hardcoded mapping follows the traditional Ziwei rectangular layout
-const palaceGridMapping: Record<string, { row: number; col: number }> = {
-  // TOP ROW
-  ming: { row: 1, col: 1 },       // 命宮 (Life)
-  xiongdi: { row: 1, col: 2 },    // 兄弟宮 (Siblings)
-  fuqi: { row: 1, col: 3 },       // 夫妻宮 (Spouse)
-  zinv: { row: 1, col: 4 },       // 子女宮 (Children)
-
-  // SECOND ROW (LEFT & RIGHT)
-  caibo: { row: 2, col: 1 },      // 財帛宮 (Wealth) - LEFT
-  jixie: { row: 3, col: 1 },      // 疾厄宮 (Health) - LEFT
-
-  qianyi: { row: 2, col: 4 },     // 遷移宮 (Travel) - RIGHT
-  jiaoyou: { row: 3, col: 4 },    // 交友宮 (Friendship) - RIGHT
-
-  // BOTTOM ROW
-  guanlu: { row: 4, col: 4 },     // 官祿宮 (Career)
-  tian: { row: 4, col: 3 },       // 田宅宮 (Residence)
-  fude: { row: 4, col: 2 },       // 福德宮 (Virtue)
-  fumu: { row: 4, col: 1 },       // 父母宮 (Parents)
+// FIXED: Branch → grid position (traditional rectangular Ziwei layout)
+const BRANCH_GRID_MAP: Record<string, { row: number; col: number }> = {
+  // Top row (left to right)
+  '巳': { row: 1, col: 1 },
+  '午': { row: 1, col: 2 },
+  '未': { row: 1, col: 3 },
+  '申': { row: 1, col: 4 },
+  // Right column
+  '酉': { row: 2, col: 4 },
+  '戌': { row: 3, col: 4 },
+  // Bottom row (right to left)
+  '亥': { row: 4, col: 4 },
+  '子': { row: 4, col: 3 },
+  '丑': { row: 4, col: 2 },
+  '寅': { row: 4, col: 1 },
+  // Left column
+  '卯': { row: 3, col: 1 },
+  '辰': { row: 2, col: 1 },
 };
 
 export const ZiWeiGrid: React.FC<ZiWeiGridProps> = ({
@@ -59,49 +54,56 @@ export const ZiWeiGrid: React.FC<ZiWeiGridProps> = ({
   visualConfig,
   onStarClick,
 }) => {
-  // Create a map of palaces by ID for quick lookup
-  const palaceMap = useMemo(() => {
-    const map: Record<string, any> = {};
+  // Build a map of branch → palace for O(1) lookup
+  const branchToPalace = useMemo(() => {
+    const map: Record<string, PalaceState> = {};
     layer.palaces.forEach((palace) => {
-      map[palace.palaceId] = palace;
+      if (palace.branch) {
+        map[palace.branch] = palace;
+      }
     });
     return map;
   }, [layer.palaces]);
 
-  // Sort palaces by grid position for rendering
-  const sortedPalaces = useMemo(() => {
-    return Object.entries(palaceGridMapping)
-      .map(([palaceId, pos]) => ({
-        palace: palaceMap[palaceId],
-        ...pos,
-      }))
-      .filter((item) => item.palace); // Filter out unmapped palaces
-  }, [palaceMap]);
+  // Derive life-palace info for the center strip
+  const lifePalace = useMemo(
+    () => layer.palaces.find((p) => p.isLifePalace),
+    [layer.palaces]
+  );
+
+  // Collect ordered cells (12 branches in grid order)
+  const gridCells = useMemo(() => {
+    return Object.entries(BRANCH_GRID_MAP).map(([branch, pos]) => ({
+      branch,
+      palace: branchToPalace[branch] ?? null,
+      ...pos,
+    }));
+  }, [branchToPalace]);
 
   return (
     <div className="ziwei-grid-container" role="region" aria-label="Ziwei Natal Chart">
-      {/* Grid Container */}
       <div className="ziwei-grid">
-        {/* Render all palace cards with grid positioning */}
-        {sortedPalaces.map(({ palace, row, col }) => (
+        {/* ── 12 Palace Cells ── */}
+        {gridCells.map(({ branch, palace, row, col }) => (
           <div
-            key={palace.palaceId}
-            style={{
-              gridRow: row,
-              gridColumn: col,
-            }}
+            key={branch}
+            style={{ gridRow: row, gridColumn: col }}
           >
-            <PalaceCard
-              palace={palace}
-              visualConfig={visualConfig}
-              onStarClick={(starId) =>
-                onStarClick?.(palace.palaceId, starId)
-              }
-            />
+            {palace ? (
+              <PalaceCard
+                palace={palace}
+                visualConfig={visualConfig}
+                onStarClick={(starId) =>
+                  onStarClick?.(palace.palaceId, starId)
+                }
+              />
+            ) : (
+              <EmptyPalaceCell branch={branch} />
+            )}
           </div>
         ))}
 
-        {/* Central Info Strip - Placeholder for Birth Data */}
+        {/* ── Centre 2×2 — Birth Info ── */}
         <div
           style={{
             gridRow: '2 / 4',
@@ -111,17 +113,36 @@ export const ZiWeiGrid: React.FC<ZiWeiGridProps> = ({
             justifyContent: 'center',
           }}
         >
-          <CentralInfoStrip />
+          <CentralInfoStrip lifePalace={lifePalace} />
         </div>
 
-        {/* SVG Overlay for Connection Lines (Future Use) */}
+        {/* ── SVG Overlay — decorative structure lines ── */}
         <svg
           className="ziwei-grid__overlay"
-          style={{ position: 'relative' }}
-          viewBox="0 0 1000 562.5"
+          style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+          viewBox="0 0 400 400"
           preserveAspectRatio="none"
+          aria-hidden="true"
         >
-          {/* Connection lines can be drawn here later */}
+          {/* Corner accent marks on the centre box */}
+          <g stroke="rgb(251 191 36 / 0.25)" strokeWidth="1.5" fill="none">
+            {/* Top-left corner of centre */}
+            <polyline points="100,108 100,100 108,100" />
+            {/* Top-right corner of centre */}
+            <polyline points="292,108 292,100 300,100" />
+            {/* Bottom-left corner of centre */}
+            <polyline points="100,292 100,300 108,300" />
+            {/* Bottom-right corner of centre */}
+            <polyline points="292,292 292,300 300,300" />
+          </g>
+
+          {/* Thin horizontal divider inside centre */}
+          <line
+            x1="110" y1="200" x2="290" y2="200"
+            stroke="rgb(251 191 36 / 0.12)"
+            strokeWidth="0.75"
+            strokeDasharray="4,4"
+          />
         </svg>
       </div>
     </div>
@@ -129,42 +150,59 @@ export const ZiWeiGrid: React.FC<ZiWeiGridProps> = ({
 };
 
 // ============================================================
-// CENTRAL INFO STRIP SUB-COMPONENT
+// EMPTY PALACE CELL (shown when no palace data for a branch)
 // ============================================================
+const EmptyPalaceCell: React.FC<{ branch: string }> = ({ branch }) => (
+  <div className="palace-card opacity-30 flex items-start p-2">
+    <span className="text-xs text-slate-500">{branch}</span>
+  </div>
+);
 
-/**
- * Central Info Strip Component
- * Placeholder for birth data and basic chart information
- * Will be filled with real data in next phase
- */
-const CentralInfoStrip: React.FC = () => {
+// ============================================================
+// CENTRAL INFO STRIP
+// ============================================================
+interface CentralInfoStripProps {
+  lifePalace?: PalaceState | null;
+}
+
+const CentralInfoStrip: React.FC<CentralInfoStripProps> = ({ lifePalace }) => {
+  const palaceStemBranch = lifePalace?.stemBranch ?? '—';
+  const palaceName = lifePalace?.nameZh ?? '命宮';
+
+  // Find the 命主 star (主星 in life palace)
+  const lifeMainStar = lifePalace?.stars.find((s) => s.magnitude >= 3);
+  const lifeStarDisplay = lifeMainStar?.starId ?? '—';
+
   return (
-    <div className="palace-card w-full h-full flex items-center justify-center p-6">
-      <div className="text-center">
-        <h3 className="palace-title mb-3">命盤資訊</h3>
-        <div className="space-y-2 text-sm text-slate-400">
-          <div>
-            <span className="text-slate-500">出生年：</span>
-            <span className="text-slate-300">甲子年 1984</span>
-          </div>
-          <div>
-            <span className="text-slate-500">農曆日期：</span>
-            <span className="text-slate-300">農曆12月3日</span>
-          </div>
-          <div>
-            <span className="text-slate-500">出生時辰：</span>
-            <span className="text-slate-300">亥時</span>
-          </div>
-          <div>
-            <span className="text-slate-500">命主星：</span>
-            <span className="text-amber-400 font-semibold">紫微星</span>
-          </div>
+    <div className="palace-card w-full h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
+      {/* Title */}
+      <div>
+        <div className="text-amber-400 font-bold text-base tracking-wider">命盤</div>
+        <div className="text-slate-500 text-xs mt-0.5">紫微斗數</div>
+      </div>
+
+      {/* Divider */}
+      <div className="w-16 h-px bg-amber-500/20" />
+
+      {/* Life palace info */}
+      <div className="space-y-1.5 text-xs">
+        <div className="flex justify-between gap-4">
+          <span className="text-slate-500">命宮干支</span>
+          <span className="text-amber-300 font-mono font-semibold">{palaceStemBranch}</span>
         </div>
+
+        {lifeMainStar && (
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-500">命主星</span>
+            <span className="text-violet-300 font-semibold">{lifeStarDisplay}</span>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 CentralInfoStrip.displayName = 'CentralInfoStrip';
+EmptyPalaceCell.displayName = 'EmptyPalaceCell';
 
 export default ZiWeiGrid;
