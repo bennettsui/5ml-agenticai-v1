@@ -14,12 +14,14 @@ import {
   ArrowLeft,
   BarChart2,
   Lightbulb,
+  Target,
 } from 'lucide-react';
 import { GrowthArchitectProvider } from './context';
 import { ChatbotAssistant } from './components/ChatbotAssistant';
 
 const navItems = [
   { label: 'Plan Builder', href: '/use-cases/growth-architect', icon: Zap },
+  { label: 'Lead Engine', href: '/use-cases/growth-architect/lead-engine', icon: Target },
   { label: 'Asset Library', href: '/use-cases/growth-architect/assets', icon: FileText },
   { label: 'CRM & EDM', href: '/use-cases/growth-architect/crm', icon: Mail },
   { label: 'KB Browser', href: '/use-cases/growth-architect/kb', icon: BookOpen },
