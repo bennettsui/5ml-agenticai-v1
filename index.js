@@ -5722,6 +5722,11 @@ const server = http.createServer(app);
 wsServer.initialize(server);
 
 // Global error handler middleware (must be last)
+const errorHandler = (err, req, res, next) => {
+  const status = err.status || err.statusCode || 500;
+  console.error('❌ Unhandled error:', err.message || err);
+  res.status(status).json({ error: err.message || 'Internal Server Error' });
+};
 app.use(errorHandler);
 
 server.listen(port, '0.0.0.0', async () => {
