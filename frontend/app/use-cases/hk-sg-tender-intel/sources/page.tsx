@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle2, AlertTriangle, Clock, RefreshCw, ChevronDown, Plus,
-  ExternalLink, Search, Loader2, Cpu, Zap, Globe, CheckCheck, XCircle,
+  ExternalLink, Search, Loader2, Cpu, Zap, Globe, CheckCheck, XCircle, Info,
 } from 'lucide-react';
 
 type SourceStatus = 'active' | 'broken' | 'pending_validation' | 'deferred';
@@ -168,6 +168,7 @@ export default function SourceRegistryPage() {
   const [loading, setLoading]         = useState(true);
   const [discovering, setDiscovering] = useState(false);
   const [discoverLog, setDiscoverLog] = useState<DiscoverEvent[]>([]);
+  const [showPrompt, setShowPrompt] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const fetchSources = useCallback(async () => {
@@ -315,6 +316,50 @@ export default function SourceRegistryPage() {
           </div>
         </div>
       )}
+
+      {/* ── AI Prompt Viewer ── */}
+      <div className="rounded-xl border border-slate-700/40 bg-white/[0.02] overflow-hidden">
+        <button
+          onClick={() => setShowPrompt(p => !p)}
+          className="w-full flex items-center justify-between px-4 py-3 text-xs text-slate-400 hover:text-white transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Info className="w-3.5 h-3.5 text-blue-400" />
+            <span>How source discovery works (AI prompt)</span>
+          </div>
+          <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${showPrompt ? 'rotate-180' : ''}`} />
+        </button>
+        {showPrompt && (
+          <div className="px-4 pb-4 border-t border-slate-700/30 space-y-3">
+            <p className="text-[10px] text-slate-500 mt-3">
+              When <span className="text-white font-medium">Discover sources</span> is clicked, the system fetches each hub page,
+              extracts up to 150 unique href links, then—if no RSS/XML links are found by regex—sends them to DeepSeek Chat
+              with the following prompt:
+            </p>
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">System prompt</p>
+              <div className="p-3 rounded-lg bg-black/50 border border-slate-700/30 font-mono text-[11px] text-slate-200 leading-relaxed">
+                You identify tender/procurement-related URLs. Respond ONLY with a JSON array of URL strings. No markdown, no explanation.
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">User prompt template</p>
+              <div className="p-3 rounded-lg bg-black/50 border border-slate-700/30 font-mono text-[11px] text-slate-400 leading-relaxed whitespace-pre-wrap">{`These href values are from a government page at {hub_url}.
+
+Return a JSON array of URLs that are: RSS/XML/Atom feeds, tender listing pages, procurement opportunity listings, or quotation notice pages. Make relative URLs absolute using the base: {origin}
+
+If none match, return [].
+
+Hrefs:
+{up to 150 unique hrefs, one per line}`}</div>
+            </div>
+            <p className="text-[10px] text-slate-600">
+              Model: <span className="text-blue-400">deepseek-chat</span> · max_tokens: 600 · temperature: 0.0 ·
+              Only triggered when regex finds no RSS/XML links on the hub page
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* ── Filters ── */}
       <div className="flex gap-2 flex-wrap">

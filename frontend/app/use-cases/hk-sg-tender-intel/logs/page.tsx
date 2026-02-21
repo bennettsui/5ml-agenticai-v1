@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import {
   CheckCircle2, AlertTriangle, Clock, Activity, RefreshCw, Play, Loader2,
-  Zap, Globe, CheckCheck, XCircle, SkipForward, Cpu,
+  Zap, Globe, CheckCheck, XCircle, SkipForward, Cpu, ArrowRight,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -275,9 +276,19 @@ export default function LogsPage() {
             Run evaluation now
           </button>
           {evalMsg && !evaluating && (
-            <span className={`text-xs font-medium ${evalMsg.startsWith('Error') || evalMsg.startsWith('Network') ? 'text-red-400' : 'text-teal-400'}`}>
-              {evalMsg}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-medium ${evalMsg.startsWith('Error') || evalMsg.startsWith('Network') ? 'text-red-400' : 'text-teal-400'}`}>
+                {evalMsg}
+              </span>
+              {!evalMsg.startsWith('Error') && !evalMsg.startsWith('Network') && (
+                <Link
+                  href="/use-cases/hk-sg-tender-intel/tenders"
+                  className="flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 transition-colors underline underline-offset-2"
+                >
+                  View tenders <ArrowRight className="w-3 h-3" />
+                </Link>
+              )}
+            </div>
           )}
         </div>
         <p className="text-[10px] text-slate-600">
@@ -306,9 +317,17 @@ export default function LogsPage() {
               )}
             </div>
             {doneEvent && (
-              <span className="text-[10px] text-slate-600">
-                +{doneEvent.newCaptures} new · {doneEvent.tendersInserted} tenders · {(doneEvent.durationMs / 1000).toFixed(1)}s
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] text-slate-600">
+                  +{doneEvent.newCaptures} new · {doneEvent.tendersInserted} tenders · {(doneEvent.durationMs / 1000).toFixed(1)}s
+                </span>
+                <Link
+                  href="/use-cases/hk-sg-tender-intel/tenders"
+                  className="flex items-center gap-1 text-[10px] text-teal-400 hover:text-teal-300 transition-colors font-medium"
+                >
+                  View All Tenders <ArrowRight className="w-2.5 h-2.5" />
+                </Link>
+              </div>
             )}
           </div>
           <div className="p-3 font-mono text-[11px] leading-relaxed space-y-1.5 max-h-80 overflow-y-auto">

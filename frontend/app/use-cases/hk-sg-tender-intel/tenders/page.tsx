@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Search, ChevronDown, ExternalLink, Calendar, DollarSign, Building2, Globe, Loader2 } from 'lucide-react';
+import { Search, ChevronDown, ExternalLink, Calendar, DollarSign, Building2, Globe, Loader2, ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react';
 
 type Label = 'Priority' | 'Consider' | 'Partner-only' | 'Ignore' | 'All';
 type Jurisdiction = 'All' | 'HK' | 'SG';
 type Status = 'All' | 'open' | 'closed';
+type DecisionChoice = 'track' | 'ignore';
 
 interface Tender {
   id: string;
@@ -69,6 +70,8 @@ export default function TendersPage() {
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [decisions, setDecisions] = useState<Record<string, DecisionChoice>>({});
+  const [decisionLoading, setDecisionLoading] = useState<Record<string, boolean>>({});
 
   const fetchTenders = useCallback(async () => {
     setLoading(true);
@@ -92,6 +95,20 @@ export default function TendersPage() {
   }, [filterJur, filterLabel, filterStatus, search]);
 
   useEffect(() => { fetchTenders(); }, [fetchTenders]);
+
+  async function handleDecision(tenderId: string, decision: DecisionChoice) {
+    setDecisionLoading(prev => ({ ...prev, [tenderId]: true }));
+    try {
+      await fetch('/api/tender-intel/decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenderId, action: decision }),
+      });
+      setDecisions(prev => ({ ...prev, [tenderId]: decision }));
+    } catch (_) { /* silently ignore */ } finally {
+      setDecisionLoading(prev => ({ ...prev, [tenderId]: false }));
+    }
+  }
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -239,6 +256,42 @@ export default function TendersPage() {
                             View on government portal
                           </a>
                         )}
+                        {/* ── Proceed / Pass decision ── */}
+                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-700/30">
+                          {decisions[t.id] ? (
+                            <div className={`flex items-center gap-2 text-xs ${decisions[t.id] === 'track' ? 'text-emerald-400' : 'text-slate-500'}`}>
+                              {decisions[t.id] === 'track'
+                                ? <><ThumbsUp className="w-3 h-3" /><span className="font-medium">Proceeding</span></>
+                                : <><ThumbsDown className="w-3 h-3" /><span>Passed</span></>
+                              }
+                              <button
+                                onClick={e => { e.stopPropagation(); setDecisions(prev => { const d = {...prev}; delete d[t.id]; return d; }); }}
+                                className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-400 transition-colors ml-1"
+                              >
+                                <RotateCcw className="w-2.5 h-2.5" /> Undo
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                onClick={e => { e.stopPropagation(); handleDecision(t.id, 'track'); }}
+                                disabled={decisionLoading[t.id]}
+                                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors disabled:opacity-50"
+                              >
+                                {decisionLoading[t.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <ThumbsUp className="w-3 h-3" />}
+                                Proceed
+                              </button>
+                              <button
+                                onClick={e => { e.stopPropagation(); handleDecision(t.id, 'ignore'); }}
+                                disabled={decisionLoading[t.id]}
+                                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/[0.04] text-slate-400 border border-slate-700/50 hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+                              >
+                                Pass
+                              </button>
+                              <span className="text-[10px] text-slate-600">Mark your intent for this tender</span>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )}
