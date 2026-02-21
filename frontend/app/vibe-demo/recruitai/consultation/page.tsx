@@ -71,6 +71,8 @@ type Step = 1 | 2 | 3;
 export default function ConsultationPage() {
   const [step, setStep] = useState<Step>(1);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [form, setForm] = useState({
     name: '',
     company: '',
@@ -97,33 +99,24 @@ export default function ConsultationPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
+    setSubmitError('');
     try {
-      const params = new URLSearchParams(window.location.search);
-      await fetch(`${API_BASE}/api/recruitai/lead`, {
+      const res = await fetch('/api/recruitai/lead', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          phone: form.phone || undefined,
-          company: form.company || undefined,
-          industry: form.industry || undefined,
-          headcount: form.teamSize || undefined,
-          message: [
-            form.message,
-            form.preferredTime ? `首選時間：${form.preferredTime}` : '',
-            form.painPoints.length > 0 ? `主要痛點：${form.painPoints.join('、')}` : '',
-          ].filter(Boolean).join('\n') || undefined,
-          sourcePage: '/consultation',
-          utmSource: params.get('utm_source') || undefined,
-          utmMedium: params.get('utm_medium') || undefined,
-          utmCampaign: params.get('utm_campaign') || undefined,
-        }),
+        body: JSON.stringify(form),
       });
-    } catch {
-      // Silently continue even if API fails — show success to user
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `Server error ${res.status}`);
+      }
+      setSubmitted(true);
+    } catch (err: unknown) {
+      setSubmitError(err instanceof Error ? err.message : 'Submission failed. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitted(true);
   };
 
   const canProceed1 = form.name && form.company && form.email;
@@ -613,12 +606,16 @@ export default function ConsultationPage() {
                       </button>
                       <button
                         type="submit"
-                        className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                        disabled={submitting}
+                        className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
                       >
                         <Calendar className="w-4 h-4" />
-                        確認預約免費諮詢
+                        {submitting ? '提交中…' : '確認預約免費諮詢'}
                       </button>
                     </div>
+                    {submitError && (
+                      <p className="text-red-400 text-xs text-center mt-2">{submitError}</p>
+                    )}
                   </div>
                 )}
               </div>

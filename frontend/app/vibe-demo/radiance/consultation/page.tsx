@@ -221,41 +221,54 @@ export default function ConsultationPage() {
         </section>
 
         {/* Hero */}
-        <section className="py-24 px-6 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
-          <div className="max-w-6xl mx-auto">
-            <p className="text-xs font-semibold uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-4">
-              Free Strategy Session
-            </p>
-            <h1 className="text-6xl md:text-7xl font-bold text-slate-900 dark:text-white mb-6 leading-tight">
-              Let's talk about<br />your brand
-            </h1>
-            <p className="text-xl text-slate-600 dark:text-slate-400 leading-relaxed max-w-3xl font-light mb-8">
-              A 30-minute call with our strategy team. No obligations—just honest ideas on how integrated PR and marketing can move your brand forward.
-            </p>
-            <div className="max-w-3xl mb-8">
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Common challenges we help with:</p>
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-600 dark:text-slate-400">
-                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Unclear brand positioning or messaging</span></li>
-                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Struggling to build media credibility</span></li>
-                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Disconnected PR, events, and digital efforts</span></li>
-                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Entering a competitive market</span></li>
-                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Limited budget, need strategy not just tactics</span></li>
-                <li className="flex gap-3"><span className="text-purple-600 dark:text-purple-400 flex-shrink-0">→</span><span>Scaling brand awareness or reputation</span></li>
-              </ul>
-            </div>
-            <div className="mt-8 flex flex-wrap gap-6 text-sm text-slate-500 dark:text-slate-400">
-              <span className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                30-minute session
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                Market audit included
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                No obligation
-              </span>
+        <section className="relative overflow-hidden border-b border-slate-200 dark:border-slate-800">
+          {/* Background image */}
+          <div className="absolute inset-0">
+            <img
+              src="https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=2070&q=80"
+              alt="Strategy consultation session"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-slate-900/72" />
+          </div>
+
+          {/* Content */}
+          <div className="relative z-10 py-24 px-6">
+            <div className="max-w-6xl mx-auto">
+              <p className="text-xs font-semibold uppercase tracking-widest text-purple-300 mb-4">
+                Free Strategy Session
+              </p>
+              <h1 className="text-6xl md:text-7xl font-bold text-white mb-6 leading-tight">
+                Let&apos;s talk about<br />your brand
+              </h1>
+              <p className="text-xl text-slate-200 leading-relaxed max-w-3xl font-light mb-8">
+                A 30-minute call with our strategy team. No obligations—just honest ideas on how integrated PR and marketing can move your brand forward.
+              </p>
+              <div className="max-w-3xl mb-8">
+                <p className="text-sm text-slate-300 mb-4">Common challenges we help with:</p>
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-200">
+                  <li className="flex gap-3"><span className="text-purple-300 flex-shrink-0">→</span><span>Unclear brand positioning or messaging</span></li>
+                  <li className="flex gap-3"><span className="text-purple-300 flex-shrink-0">→</span><span>Struggling to build media credibility</span></li>
+                  <li className="flex gap-3"><span className="text-purple-300 flex-shrink-0">→</span><span>Disconnected PR, events, and digital efforts</span></li>
+                  <li className="flex gap-3"><span className="text-purple-300 flex-shrink-0">→</span><span>Entering a competitive market</span></li>
+                  <li className="flex gap-3"><span className="text-purple-300 flex-shrink-0">→</span><span>Limited budget, need strategy not just tactics</span></li>
+                  <li className="flex gap-3"><span className="text-purple-300 flex-shrink-0">→</span><span>Scaling brand awareness or reputation</span></li>
+                </ul>
+              </div>
+              <div className="flex flex-wrap gap-6 text-sm text-slate-300">
+                <span className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                  30-minute session
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                  Market audit included
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                  No obligation
+                </span>
+              </div>
             </div>
           </div>
         </section>

@@ -383,6 +383,66 @@ async function initDatabase() {
       -- ==========================================
       -- Ziwei Astrology Tables (中州派紫微斗數)
       -- ==========================================
+
+      CREATE TABLE IF NOT EXISTS ziwei_palaces (
+        id VARCHAR(50) PRIMARY KEY,
+        number INTEGER,
+        chinese VARCHAR(50),
+        english VARCHAR(100),
+        meaning TEXT,
+        governs JSONB DEFAULT '[]',
+        positive_indicators TEXT,
+        negative_indicators TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS ziwei_stars (
+        id VARCHAR(50) PRIMARY KEY,
+        number INTEGER,
+        chinese VARCHAR(50),
+        english VARCHAR(100),
+        star_type VARCHAR(50),
+        nature JSONB DEFAULT '[]',
+        attributes JSONB DEFAULT '{}',
+        meanings TEXT,
+        interpretation TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_palaces_number ON ziwei_palaces(number);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_stars_type ON ziwei_stars(star_type);
+
+      CREATE TABLE IF NOT EXISTS ziwei_rules (
+        id VARCHAR(100) PRIMARY KEY,
+        name VARCHAR(255),
+        rule_type VARCHAR(50),
+        scope VARCHAR(50),
+        condition JSONB DEFAULT '{}',
+        interpretation JSONB DEFAULT '{}',
+        dimension_tags JSONB DEFAULT '[]',
+        school VARCHAR(50) DEFAULT 'zhongzhou',
+        consensus_label VARCHAR(50) DEFAULT 'consensus',
+        source_refs JSONB DEFAULT '[]',
+        statistics JSONB DEFAULT '{}',
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_rules_scope ON ziwei_rules(scope);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_rules_type ON ziwei_rules(rule_type);
+      CREATE INDEX IF NOT EXISTS idx_ziwei_rules_consensus ON ziwei_rules(consensus_label);
+
+      CREATE TABLE IF NOT EXISTS ziwei_rule_evaluations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        chart_id UUID UNIQUE,
+        total_rules INTEGER DEFAULT 0,
+        matched_rules INTEGER DEFAULT 0,
+        results JSONB DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ziwei_evals_chart ON ziwei_rule_evaluations(chart_id);
+
       CREATE TABLE IF NOT EXISTS ziwei_interpretation_rules (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         version INTEGER DEFAULT 1,
@@ -988,6 +1048,46 @@ async function initDatabase() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_recruitai_messages_session ON recruitai_chat_messages(session_id);
+
+      CREATE TABLE IF NOT EXISTS radiance_media (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL,
+        original_name TEXT,
+        url TEXT NOT NULL,
+        mime_type TEXT,
+        size INTEGER,
+        uploaded_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS radiance_blog_cms (
+        slug TEXT PRIMARY KEY,
+        title_en TEXT,
+        title_zh TEXT,
+        date_en TEXT,
+        date_zh TEXT,
+        category_en TEXT,
+        category_zh TEXT,
+        read_time TEXT,
+        excerpt_en TEXT,
+        excerpt_zh TEXT,
+        hero_image TEXT,
+        content_en TEXT,
+        content_zh TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS radiance_case_study_cms (
+        slug TEXT PRIMARY KEY,
+        title_en TEXT,
+        title_zh TEXT,
+        client TEXT,
+        excerpt_en TEXT,
+        excerpt_zh TEXT,
+        featured_image TEXT,
+        content_html_en TEXT,
+        content_html_zh TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');

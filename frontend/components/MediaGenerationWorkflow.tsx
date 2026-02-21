@@ -1298,8 +1298,10 @@ export default function MediaGenerationWorkflow() {
                 <p className="font-medium">Test failed</p>
                 <p className="text-xs mt-0.5 text-red-300">{qtError}</p>
                 <p className="text-[11px] mt-1 text-slate-500">
-                  {/pollinations|5[02][024]|530|429|timeout|timed out|unreachable|dns|connectivity|attempts/i.test(qtError)
-                    ? 'All Pollinations models share the same origin — if one fails, all fail. This is an external infrastructure issue; switching models will not help. Try again in a few minutes.'
+                  {/401|api key|POLLINATIONS_API_KEY/i.test(qtError)
+                    ? 'Add POLLINATIONS_API_KEY=pk_... to your .env file. Get a free key at enter.pollinations.ai'
+                    : /5[02][024]|530|429|timeout|timed out|unreachable|dns|connectivity|attempts/i.test(qtError)
+                    ? 'All Pollinations models share the same origin — switching models will not help. This is an external infrastructure issue; try again in a few minutes.'
                     : /403|content filter|refused/i.test(qtError)
                     ? 'The prompt was blocked by Pollinations.ai content filters. Try rephrasing or removing sensitive terms.'
                     : /server|restart|jobId/i.test(qtError)
