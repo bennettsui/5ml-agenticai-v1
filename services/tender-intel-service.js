@@ -1302,11 +1302,151 @@ async function saveProfile(pool, profile) {
   );
 }
 
+// ─── Source Discovery Agent ───────────────────────────────────────────────────
+
+/**
+ * Scan hub pages for new RSS/XML/HTML feed URLs.
+ * For each html_hub source in the registry, fetch its page and extract feed links.
+ * New feeds are inserted into tender_source_registry with status 'pending_validation'.
+ * Returns { newSources, errors, hubsScanned }.
+ */
+async function runSourceDiscovery(pool) {
+  const startTime = Date.now();
+  const newSources = [];
+  const errors = [];
+  let hubsScanned = 0;
+
+  // Known hub pages to scan (also pick up html_hub sources from DB)
+  const STATIC_HUBS = [
+    {
+      url: 'https://www.gov.hk/en/about/rss.htm',
+      jurisdiction: 'HK',
+      label: 'GovHK RSS Directory',
+    },
+    {
+      url: 'https://www.dsd.gov.hk/EN/RSS_Feeds/index.html',
+      jurisdiction: 'HK',
+      label: 'DSD RSS Hub',
+    },
+  ];
+
+  // Also load html_hub sources from the registry
+  let dbHubs = [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT source_id, name, discovery_hub_url, base_url, jurisdiction
+       FROM tender_source_registry
+       WHERE source_type = 'html_hub' AND status IN ('active', 'pending_validation')
+       ORDER BY priority ASC`
+    );
+    dbHubs = rows;
+  } catch (_) {}
+
+  // Build list of hub pages to scan
+  const hubsToScan = [
+    ...STATIC_HUBS,
+    ...dbHubs.map(h => ({
+      url: h.discovery_hub_url || h.base_url,
+      jurisdiction: h.jurisdiction,
+      label: h.name,
+    })),
+  ].filter(h => h.url);
+
+  // Get existing feed URLs to avoid re-adding known sources
+  const existingUrls = new Set();
+  try {
+    const { rows } = await pool.query(`SELECT feed_url FROM tender_source_registry WHERE feed_url IS NOT NULL`);
+    rows.forEach(r => existingUrls.add(r.feed_url));
+  } catch (_) {}
+
+  // Regex patterns to detect RSS/Atom/XML feed links in HTML
+  const FEED_PATTERNS = [
+    // <link rel="alternate" type="application/rss+xml" href="...">
+    /type="application\/(?:rss|atom)\+xml"[^>]*href="([^"]+)"/gi,
+    // <a href="...rss..."> or <a href="...atom..."> or <a href="...xml...">
+    /href="((?:https?:\/\/[^"]*)?\/[^"]*(?:rss|atom|feed|xml|tender)[^"]*\.xml[^"]*)"/gi,
+    // Plain xml links on gov sites
+    /href="([^"]+\.xml)"/gi,
+  ];
+
+  for (const hub of hubsToScan) {
+    hubsScanned++;
+    let html;
+    try {
+      const resp = await axios.get(hub.url, {
+        timeout: 15000,
+        headers: { 'User-Agent': '5ML-TenderIntel/1.0 (+https://5ml.ai)' },
+        maxRedirects: 5,
+      });
+      html = typeof resp.data === 'string' ? resp.data : '';
+    } catch (err) {
+      errors.push({ hub: hub.label, error: `fetch_error: ${err.message}` });
+      continue;
+    }
+
+    const foundUrls = new Set();
+    for (const pattern of FEED_PATTERNS) {
+      const re = new RegExp(pattern.source, 'gi');
+      let m;
+      while ((m = re.exec(html)) !== null) {
+        let url = m[1];
+        if (!url) continue;
+        // Make absolute if relative
+        if (url.startsWith('/')) {
+          const base = new URL(hub.url);
+          url = `${base.protocol}//${base.host}${url}`;
+        }
+        if (!url.startsWith('http')) continue;
+        if (existingUrls.has(url)) continue;
+        foundUrls.add(url);
+      }
+    }
+
+    // For each new URL found, insert as pending_validation
+    for (const feedUrl of foundUrls) {
+      try {
+        const sourceId = `discovered-${crypto.createHash('sha1').update(feedUrl).digest('hex').slice(0, 12)}`;
+        await pool.query(
+          `INSERT INTO tender_source_registry
+             (source_id, name, organisation, owner_type, jurisdiction, source_type,
+              access, priority, status, feed_url, category_tags_default, notes, created_at, updated_at)
+           VALUES ($1,$2,$3,'gov',$4,'rss_xml','public',3,'pending_validation',$5,'{}', $6, NOW(), NOW())
+           ON CONFLICT (source_id) DO NOTHING`,
+          [
+            sourceId,
+            `Discovered: ${new URL(feedUrl).hostname}`,
+            new URL(feedUrl).hostname,
+            hub.jurisdiction,
+            feedUrl,
+            `Auto-discovered from ${hub.label} on ${new Date().toISOString().slice(0, 10)}`,
+          ]
+        );
+        existingUrls.add(feedUrl);
+        newSources.push({ source_id: sourceId, feed_url: feedUrl, jurisdiction: hub.jurisdiction, hub: hub.label });
+      } catch (_) { /* duplicate or constraint violation */ }
+    }
+  }
+
+  const durationMs = Date.now() - startTime;
+
+  await logAgentRun(pool, {
+    agentName:      'SourceDiscoveryAgent',
+    status:         errors.length > 0 ? 'partial' : 'success',
+    itemsProcessed: hubsScanned,
+    newItems:       newSources.length,
+    durationMs,
+    detail:         `${hubsScanned} hubs scanned, ${newSources.length} new sources discovered`,
+  });
+
+  return { newSources, errors, hubsScanned, durationMs };
+}
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
   runIngestion,
   runEvaluation,
+  runSourceDiscovery,
   fetchGeBIZ,
   generateDigestNarrative,
   recordDecision,
