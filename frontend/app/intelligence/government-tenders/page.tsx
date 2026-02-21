@@ -249,16 +249,18 @@ export default function GovernmentTenderIntelligence() {
               ))}
             </div>
 
-            {/* Coming Soon Banner */}
-            <div className="p-6 rounded-lg border border-amber-500/30 bg-amber-500/10">
-              <h3 className="font-semibold text-amber-400 mb-2">🚀 Coming Soon</h3>
-              <ul className="text-sm text-amber-400/80 space-y-1">
-                <li>✓ Automated tender scraping from eTender, gov.cn, and global platforms</li>
-                <li>✓ Real-time policy and regulatory change alerts</li>
-                <li>✓ Competitor bid tracking and success pattern analysis</li>
-                <li>✓ Daily/weekly digest emails with AI-powered summarization</li>
-                <li>✓ Smart filtering based on your company's capabilities</li>
-              </ul>
+            {/* Link to live module */}
+            <div className="p-5 rounded-lg border border-teal-500/30 bg-teal-500/5">
+              <h3 className="font-semibold text-teal-400 mb-2">Live: HK + SG Tender Intelligence</h3>
+              <p className="text-sm text-slate-400 mb-3">
+                Real-time RSS/XML scraping, AI evaluation, and daily digest — now operational.
+              </p>
+              <a
+                href="/use-cases/hk-sg-tender-intel"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-teal-500/15 text-teal-400 border border-teal-500/30 hover:bg-teal-500/25 transition-colors"
+              >
+                Open Tender Intelligence →
+              </a>
             </div>
           </main>
         </div>

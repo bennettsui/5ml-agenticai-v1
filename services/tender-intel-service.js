@@ -406,7 +406,7 @@ async function insertRawCaptures(pool, captures) {
            (source_id, raw_format, raw_payload, item_url, item_guid,
             captured_at, normalised, pre_extracted)
          VALUES ($1,$2,$3,$4,$5,NOW(),false,$6)
-         ON CONFLICT (item_guid) DO NOTHING`,
+         ON CONFLICT (source_id, item_guid) WHERE item_guid IS NOT NULL DO NOTHING`,
         [
           c.source_id, c.raw_format, c.raw_payload || c.rawXml || '',
           c.item_url, c.item_guid,
@@ -434,17 +434,19 @@ async function insertTenders(pool, tenders) {
           agency, category_tags, raw_category,
           publish_date, publish_date_estimated, closing_date, status,
           budget_min, budget_max, currency, budget_source,
-          is_canonical, evaluation_status, label, created_at, updated_at
+          is_canonical, evaluation_status, label, first_seen_at, last_seen_at
         ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
           $17,$18,$19,$20,$21,$22,$23,NOW(),NOW()
         )
-        ON CONFLICT (tender_ref, source_id) DO UPDATE SET
+        ON CONFLICT (tender_ref, jurisdiction)
+          WHERE tender_ref IS NOT NULL AND is_canonical = TRUE
+        DO UPDATE SET
           title            = EXCLUDED.title,
           closing_date     = EXCLUDED.closing_date,
           status           = EXCLUDED.status,
           category_tags    = EXCLUDED.category_tags,
-          updated_at       = NOW()`,
+          last_seen_at     = NOW()`,
         [
           t.source_id, t.raw_pointer, t.jurisdiction, t.owner_type, t.source_url,
           t.mapping_version, t.tender_ref, t.title, t.description_snippet,
@@ -465,11 +467,12 @@ async function insertTenders(pool, tenders) {
  */
 async function logAgentRun(pool, { agentName, status, itemsProcessed, newItems, durationMs, detail }) {
   try {
+    const meta = JSON.stringify({ new_items: newItems || 0, duration_ms: durationMs || 0 });
     await pool.query(
       `INSERT INTO tender_agent_run_logs
-         (agent_name, status, items_processed, new_items, duration_ms, detail, run_at)
-       VALUES ($1,$2,$3,$4,$5,$6,NOW())`,
-      [agentName, status, itemsProcessed || 0, newItems || 0, durationMs || 0, detail || null]
+         (agent_name, status, items_processed, error_detail, meta, started_at, completed_at)
+       VALUES ($1,$2,$3,$4,$5,NOW(),NOW())`,
+      [agentName, status, itemsProcessed || 0, detail || null, meta]
     );
   } catch (_) { /* non-fatal */ }
 }
@@ -579,6 +582,72 @@ async function runIngestion(pool) {
     });
   }
 
+  // ─── GeBIZ HTML scraping (SG html_list source) ───────────────────────────
+  // Look for an active GeBIZ source in the registry
+  let gebizSource = null;
+  try {
+    const gbResult = await pool.query(
+      `SELECT * FROM tender_source_registry WHERE source_id LIKE '%gebiz%' AND status = 'active' LIMIT 1`
+    );
+    gebizSource = gbResult.rows[0] || null;
+  } catch (_) {}
+
+  if (gebizSource) {
+    summary.sourcesProcessed++;
+    const { items: gebizItems, errors: gebizErrors } = await fetchGeBIZ();
+
+    if (gebizErrors.length > 0) {
+      summary.errors.push({ source_id: gebizSource.source_id, error: gebizErrors.join('; ') });
+      try {
+        await pool.query(
+          `UPDATE tender_source_registry SET last_status='error', last_status_detail=$1, last_checked_at=NOW() WHERE source_id=$2`,
+          [gebizErrors.join('; '), gebizSource.source_id]
+        );
+      } catch (_) {}
+    } else {
+      const newGeBIZ = gebizItems.filter(item => !existingGuids.has(item.guid));
+      summary.totalRawCaptures += gebizItems.length;
+
+      const gebizCaptures = newGeBIZ.map(item => ({
+        source_id:     gebizSource.source_id,
+        raw_format:    'html_fragment',
+        raw_payload:   JSON.stringify(item),
+        item_url:      item.link || gebizSource.feed_url,
+        item_guid:     item.guid,
+        pre_extracted: item.preExtracted || { title: item.title },
+      }));
+
+      const gbInserted = await insertRawCaptures(pool, gebizCaptures);
+      summary.newRawCaptures += gbInserted;
+
+      for (const item of newGeBIZ) existingGuids.add(item.guid);
+
+      let gbTenders = 0;
+      for (const raw of gebizCaptures) {
+        const capture = {
+          capture_id: null, source_id: raw.source_id, raw_format: raw.raw_format,
+          raw_payload: raw.raw_payload, item_url: raw.item_url, item_guid: raw.item_guid,
+          captured_at: new Date().toISOString(), pre_extracted: raw.pre_extracted,
+        };
+        const normalised = normaliseTender(capture, gebizSource);
+        if (normalised) gbTenders += await insertTenders(pool, [normalised]);
+      }
+      summary.tendersInserted += gbTenders;
+
+      try {
+        await pool.query(
+          `UPDATE tender_source_registry SET last_status='ok', last_status_detail=$1, last_checked_at=NOW() WHERE source_id=$2`,
+          [`${gbInserted} new items, ${gbTenders} tenders`, gebizSource.source_id]
+        );
+      } catch (_) {}
+
+      summary.sourceResults.push({
+        source_id: gebizSource.source_id, status: 'success',
+        newItems: gbInserted, durationMs: 0,
+      });
+    }
+  }
+
   const durationMs = Date.now() - startTime;
 
   // Log the overall run
@@ -634,7 +703,7 @@ async function getTenders(pool, { jurisdiction, label, status, search, limit = 5
      FROM tenders t
      LEFT JOIN tender_source_registry s ON t.source_id = s.source_id
      ${where}
-     ORDER BY t.publish_date DESC NULLS LAST, t.created_at DESC
+     ORDER BY t.publish_date DESC NULLS LAST, t.first_seen_at DESC
      LIMIT $${i} OFFSET $${i+1}`,
     params
   );
@@ -668,7 +737,7 @@ async function getSources(pool, { jurisdiction, status } = {}) {
 /** GET /api/tender-intel/logs — recent agent run logs */
 async function getLogs(pool, { limit = 50 } = {}) {
   const result = await pool.query(
-    `SELECT * FROM tender_agent_run_logs ORDER BY run_at DESC LIMIT $1`,
+    `SELECT * FROM tender_agent_run_logs ORDER BY started_at DESC LIMIT $1`,
     [limit]
   );
   return result.rows;
@@ -680,7 +749,7 @@ async function getDigest(pool) {
   const sevenDaysLater = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
   const newToday = await pool.query(
-    `SELECT COUNT(*) FROM tenders WHERE DATE(created_at) = $1`, [today]
+    `SELECT COUNT(*) FROM tenders WHERE DATE(first_seen_at) = $1`, [today]
   );
   const priority = await pool.query(
     `SELECT COUNT(*) FROM tenders WHERE label = 'priority' AND status = 'open'`
@@ -697,12 +766,16 @@ async function getDigest(pool) {
   );
 
   // Top tenders for digest (priority first, then consider, ordered by closing date)
-  const tenders = await pool.query(
+  const tendersResult = await pool.query(
     `SELECT t.*, s.name AS source_name, s.organisation,
-            e.overall_score, e.capability_fit, e.business_potential, e.reasoning_summary
+            e.overall_relevance_score  AS overall_score,
+            e.capability_fit_score     AS capability_fit,
+            e.business_potential_score AS business_potential,
+            e.rationale                AS reasoning_summary
      FROM tenders t
      LEFT JOIN tender_source_registry s ON t.source_id = s.source_id
-     LEFT JOIN tender_evaluations e ON t.id = e.tender_id AND e.is_latest = true
+     LEFT JOIN tender_evaluations e
+       ON t.tender_id = e.tender_id AND e.is_latest = TRUE
      WHERE t.status = 'open' AND t.label != 'ignore'
      ORDER BY
        CASE t.label WHEN 'priority' THEN 0 WHEN 'consider' THEN 1 WHEN 'partner_only' THEN 2 ELSE 3 END,
@@ -711,19 +784,32 @@ async function getDigest(pool) {
   );
 
   const lastRun = await pool.query(
-    `SELECT run_at, status FROM tender_agent_run_logs
+    `SELECT started_at AS run_at, status FROM tender_agent_run_logs
      WHERE agent_name = 'RSSXMLIngestorAgent'
-     ORDER BY run_at DESC LIMIT 1`
+     ORDER BY started_at DESC LIMIT 1`
+  );
+
+  const tenderRows = tendersResult.rows;
+  const hkCount = tenderRows.filter(t => t.jurisdiction === 'HK').length;
+  const sgCount = tenderRows.filter(t => t.jurisdiction === 'SG').length;
+  const priorityCount = parseInt(priority.rows[0].count);
+
+  // Generate AI narrative summary (DeepSeek, with fallback)
+  const narrative = await generateDigestNarrative(
+    tenderRows,
+    { hk: hkCount, sg: sgCount, priority: priorityCount },
+    today
   );
 
   return {
     stats: {
       newToday:     parseInt(newToday.rows[0].count),
-      priority:     parseInt(priority.rows[0].count),
+      priority:     priorityCount,
       closingSoon:  parseInt(closingSoon.rows[0].count),
       sourcesOk:    `${sourcesOk.rows[0].count}/${totalSources.rows[0].count}`,
     },
-    tenders:   tenders.rows,
+    tenders:   tenderRows,
+    narrative,
     lastRun:   lastRun.rows[0] || null,
   };
 }
@@ -965,17 +1051,23 @@ async function runEvaluation(pool, profileOverride) {
 
   // Load pending tenders
   const { rows: pending } = await pool.query(
-    `SELECT t.id, t.jurisdiction, t.owner_type, t.title, t.agency,
+    `SELECT t.tender_id, t.jurisdiction, t.owner_type, t.title, t.agency,
             t.category_tags, t.closing_date, t.status, t.budget_min, t.budget_max,
             t.budget_source, t.currency, t.description_snippet, t.source_id
      FROM tenders t
      WHERE t.evaluation_status = 'pending' AND t.status = 'open'
-     ORDER BY t.created_at DESC
+     ORDER BY t.first_seen_at DESC
      LIMIT 100`
   );
 
   const evaluated = [];
   const errors    = [];
+
+  // Map lowercase internal labels to display labels for tender_evaluations table
+  const EVAL_LABEL_MAP = {
+    priority: 'Priority', consider: 'Consider',
+    partner_only: 'Partner-only', ignore: 'Ignore',
+  };
 
   for (const tender of pending) {
     try {
@@ -984,27 +1076,25 @@ async function runEvaluation(pool, profileOverride) {
       const overall = (capFit.score * profile.scoringWeights.overallWeights.capabilityFit)
                     + (bizPot.score * profile.scoringWeights.overallWeights.businessPotential);
       const label = assignLabel(overall, capFit.signals.delivery_scale);
+      const evalLabel = EVAL_LABEL_MAP[label] || 'Ignore';
 
       const rationale = await generateRationale(tender, capFit, bizPot, label);
 
-      // Upsert evaluation
+      // Mark previous evaluations as not latest
+      await pool.query(
+        `UPDATE tender_evaluations SET is_latest = FALSE WHERE tender_id = $1 AND is_latest = TRUE`,
+        [tender.tender_id]
+      );
+
+      // Insert new evaluation as latest
       await pool.query(
         `INSERT INTO tender_evaluations
-           (tender_id, capability_fit, business_potential, overall_score, label,
-            reasoning_summary, signals, scoring_weights, scoring_version, is_latest, evaluated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,NOW())
-         ON CONFLICT (tender_id, is_latest) WHERE is_latest = true
-         DO UPDATE SET
-           capability_fit    = EXCLUDED.capability_fit,
-           business_potential= EXCLUDED.business_potential,
-           overall_score     = EXCLUDED.overall_score,
-           label             = EXCLUDED.label,
-           reasoning_summary = EXCLUDED.reasoning_summary,
-           signals           = EXCLUDED.signals,
-           evaluated_at      = NOW()`,
+           (tender_id, capability_fit_score, business_potential_score, overall_relevance_score,
+            label, rationale, signals_used, scoring_weights, scoring_version, is_latest, evaluated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE,NOW())`,
         [
-          tender.id,
-          capFit.score, bizPot.score, overall, label,
+          tender.tender_id,
+          capFit.score, bizPot.score, overall, evalLabel,
           rationale,
           JSON.stringify({ capability_fit: capFit.signals, business_potential: bizPot.signals }),
           JSON.stringify(profile.scoringWeights),
@@ -1014,13 +1104,13 @@ async function runEvaluation(pool, profileOverride) {
 
       // Update tenders table label + evaluation_status
       await pool.query(
-        `UPDATE tenders SET label=$1, evaluation_status='scored', updated_at=NOW() WHERE id=$2`,
-        [label, tender.id]
+        `UPDATE tenders SET label=$1, evaluation_status='scored', last_seen_at=NOW() WHERE tender_id=$2`,
+        [label, tender.tender_id]
       );
 
-      evaluated.push({ tender_id: tender.id, label, overall });
+      evaluated.push({ tender_id: tender.tender_id, label, overall });
     } catch (err) {
-      errors.push({ tender_id: tender.id, error: err.message });
+      errors.push({ tender_id: tender.tender_id, error: err.message });
     }
   }
 
@@ -1168,19 +1258,26 @@ async function generateDigestNarrative(tenders, stats, today) {
 // ─── Decision Recording ───────────────────────────────────────────────────────
 
 async function recordDecision(pool, { tenderId, action, notes }) {
+  // Map frontend action names to schema decision values
+  const decisionMap = {
+    track: 'track', ignore: 'ignore', partner_only: 'partner_needed',
+    not_for_us: 'not_for_us', assign_to_team: 'assigned',
+  };
+  const decision = decisionMap[action] || action;
+
   await pool.query(
-    `INSERT INTO tender_decisions (tender_id, action, notes, decided_at)
-     VALUES ($1,$2,$3,NOW())
-     ON CONFLICT (tender_id) DO UPDATE SET action=$2, notes=$3, decided_at=NOW()`,
-    [tenderId, action, notes || null]
+    `INSERT INTO tender_decisions (tender_id, decision, notes, decided_at)
+     VALUES ($1,$2,$3,NOW())`,
+    [tenderId, decision, notes || null]
   );
-  // If action=track, update label to reflect decision
+
+  // Update tenders label to reflect decision
   if (action === 'track') {
-    await pool.query(`UPDATE tenders SET label='priority', updated_at=NOW() WHERE id=$1`, [tenderId]);
+    await pool.query(`UPDATE tenders SET label='priority', last_seen_at=NOW() WHERE tender_id=$1`, [tenderId]);
   } else if (action === 'ignore' || action === 'not_for_us') {
-    await pool.query(`UPDATE tenders SET label='ignore', updated_at=NOW() WHERE id=$1`, [tenderId]);
+    await pool.query(`UPDATE tenders SET label='ignore', last_seen_at=NOW() WHERE tender_id=$1`, [tenderId]);
   } else if (action === 'partner_only') {
-    await pool.query(`UPDATE tenders SET label='partner_only', updated_at=NOW() WHERE id=$1`, [tenderId]);
+    await pool.query(`UPDATE tenders SET label='partner_only', last_seen_at=NOW() WHERE tender_id=$1`, [tenderId]);
   }
 }
 
@@ -1189,9 +1286,9 @@ async function recordDecision(pool, { tenderId, action, notes }) {
 async function getProfile(pool) {
   try {
     const { rows } = await pool.query(
-      `SELECT value FROM tender_agent_run_logs WHERE agent_name = '__capability_profile__' ORDER BY run_at DESC LIMIT 1`
+      `SELECT meta FROM tender_agent_run_logs WHERE agent_name = '__capability_profile__' ORDER BY started_at DESC LIMIT 1`
     );
-    if (rows.length > 0) return JSON.parse(rows[0].value);
+    if (rows.length > 0 && rows[0].meta) return JSON.parse(rows[0].meta);
   } catch (_) {}
   return DEFAULT_PROFILE;
 }
@@ -1199,8 +1296,8 @@ async function getProfile(pool) {
 async function saveProfile(pool, profile) {
   // Store profile as a special log entry (reuses existing table without schema change)
   await pool.query(
-    `INSERT INTO tender_agent_run_logs (agent_name, status, items_processed, new_items, duration_ms, detail, run_at)
-     VALUES ('__capability_profile__', 'success', 0, 0, 0, $1, NOW())`,
+    `INSERT INTO tender_agent_run_logs (agent_name, status, items_processed, items_failed, meta, started_at, completed_at)
+     VALUES ('__capability_profile__', 'success', 0, 0, $1, NOW(), NOW())`,
     [JSON.stringify(profile)]
   );
 }

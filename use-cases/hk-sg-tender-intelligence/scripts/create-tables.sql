@@ -225,3 +225,24 @@ CREATE OR REPLACE TRIGGER set_updated_at_tsr
 CREATE OR REPLACE TRIGGER set_updated_at_tenders
   BEFORE UPDATE ON tenders
   FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+-- ─── Schema Migrations (safe to re-run) ──────────────────────────────────────
+
+-- Add last_status to source registry (used by service to track per-source health)
+ALTER TABLE tender_source_registry ADD COLUMN IF NOT EXISTS last_status TEXT;
+
+-- Add pre_extracted to raw captures (stores pre-parsed fields alongside raw payload)
+ALTER TABLE raw_tender_captures ADD COLUMN IF NOT EXISTS pre_extracted JSONB;
+
+-- Add is_latest to evaluations (tracks which evaluation row is current)
+ALTER TABLE tender_evaluations ADD COLUMN IF NOT EXISTS is_latest BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_te_tender_latest ON tender_evaluations(tender_id) WHERE is_latest = TRUE;
+
+-- Allow api_xml source type (used for tabular XML sources like GLD ETB)
+ALTER TABLE tender_source_registry DROP CONSTRAINT IF EXISTS tender_source_registry_source_type_check;
+ALTER TABLE tender_source_registry ADD CONSTRAINT tender_source_registry_source_type_check
+  CHECK (source_type IN ('rss_xml', 'api_json', 'api_xml', 'csv_open_data', 'html_list', 'html_hub', 'html_reference'));
+
+-- Unique index on raw captures dedup by (source_id, item_guid)
+DROP INDEX IF EXISTS idx_rtc_source_guid;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rtc_source_guid ON raw_tender_captures(source_id, item_guid) WHERE item_guid IS NOT NULL;
