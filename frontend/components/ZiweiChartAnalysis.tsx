@@ -212,12 +212,19 @@ export default function ZiweiChartAnalysis() {
           {chartViewMode === 'grid' && selectedChart?.base_chart && (
             <ZiweiChartGrid
               houses={selectedChart.base_chart.palaces || []}
-              lifeHouseIndex={0}
+              lifeHouseIndex={selectedChart.base_chart.life_palace?.palace_id ?? 0}
               personName={selectedChart.name || 'Unknown'}
-              birthDate={`${birthInfo?.lunarYear}/${birthInfo?.lunarMonth}/${birthInfo?.lunarDay}`}
-              hourBranch={birthInfo?.hourBranch || ''}
-              gender={birthInfo?.gender || ''}
-              fiveElementBureau="Unknown"
+              lunarDate={[
+                birthInfo?.lunarYear  ? `${birthInfo.lunarYear}年` : '',
+                birthInfo?.lunarMonth ? `${birthInfo.lunarMonth}月` : '',
+                birthInfo?.lunarDay   ? `${birthInfo.lunarDay}日`   : '',
+                birthInfo?.hourBranch ? `${birthInfo.hourBranch}時` : '',
+              ].filter(Boolean).join(' ')}
+              gender={birthInfo?.gender === 'M' ? '男' : birthInfo?.gender === 'F' ? '女' : '—'}
+              fiveElementBureau={selectedChart.base_chart.five_element_bureau ?? 'Unknown'}
+              lifeHouseStem={selectedChart.base_chart.life_palace?.stem}
+              lifeHouseBranch={selectedChart.base_chart.life_palace?.branch}
+              yearStemBranch={birthInfo ? `${selectedChart.gan_zhi?.yearStem ?? ''}${selectedChart.gan_zhi?.yearBranch ?? ''}` : undefined}
             />
           )}
 
@@ -228,12 +235,16 @@ export default function ZiweiChartAnalysis() {
               <div className="flex justify-center overflow-auto max-h-[600px]">
                 <ZiweiChartCanvas
                   houses={selectedChart.base_chart.palaces || []}
-                  lifeHouseIndex={0}
+                  lifeHouseIndex={selectedChart.base_chart.life_palace?.palace_id ?? 0}
                   personName={selectedChart.name || 'Unknown'}
-                  birthDate={`${birthInfo?.lunarYear}/${birthInfo?.lunarMonth}/${birthInfo?.lunarDay}`}
+                  birthDate={[
+                    birthInfo?.lunarYear  ? `${birthInfo.lunarYear}年` : '',
+                    birthInfo?.lunarMonth ? `${birthInfo.lunarMonth}月` : '',
+                    birthInfo?.lunarDay   ? `${birthInfo.lunarDay}日`   : '',
+                  ].filter(Boolean).join(' ')}
                   hourBranch={birthInfo?.hourBranch || ''}
-                  gender={birthInfo?.gender || ''}
-                  fiveElementBureau="Unknown"
+                  gender={birthInfo?.gender === 'M' ? '男' : birthInfo?.gender === 'F' ? '女' : '—'}
+                  fiveElementBureau={String(selectedChart.base_chart.five_element_bureau ?? 'Unknown')}
                   starCount={0}
                 />
               </div>
