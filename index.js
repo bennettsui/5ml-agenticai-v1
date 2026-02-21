@@ -4779,6 +4779,48 @@ app.get('/api/recruitai/admin/leads', async (req, res) => {
   }
 });
 
+// PATCH /api/recruitai/admin/leads/:id — update editable fields
+app.patch('/api/recruitai/admin/leads/:id', async (req, res) => {
+  const { password, ...fields } = req.body;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  const { id } = req.params;
+  if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
+  const EDITABLE = ['name', 'email', 'phone', 'company', 'industry', 'headcount', 'message'];
+  const sets = [], vals = [];
+  let idx = 1;
+  for (const f of EDITABLE) {
+    if (f in fields) {
+      sets.push(`${f} = $${idx++}`);
+      const isPII = PII_FIELDS.recruitai_leads.includes(f);
+      vals.push(isPII ? encrypt(fields[f] || null) : (fields[f] || null));
+    }
+  }
+  if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+  vals.push(Number(id));
+  try {
+    await pool.query(`UPDATE recruitai_leads SET ${sets.join(', ')} WHERE id = $${idx}`, vals);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ Admin lead update error:', err);
+    res.status(500).json({ error: 'Failed to update lead' });
+  }
+});
+
+// DELETE /api/recruitai/admin/leads/:id — delete a lead
+app.delete('/api/recruitai/admin/leads/:id', async (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  const { id } = req.params;
+  if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    await pool.query('DELETE FROM recruitai_leads WHERE id = $1', [Number(id)]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ Admin lead delete error:', err);
+    res.status(500).json({ error: 'Failed to delete lead' });
+  }
+});
+
 // GET /api/recruitai/admin/sessions — list all chat sessions
 app.get('/api/recruitai/admin/sessions', async (req, res) => {
   const { password } = req.query;
