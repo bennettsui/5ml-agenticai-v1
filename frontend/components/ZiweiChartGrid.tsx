@@ -286,9 +286,6 @@ export function ZiweiChartGrid({
                             <div className="text-slate-500 mb-0.5">長生</div>
                             <div className="text-slate-400">{palace.lifeStageStars.join(' ')}</div>
                           </div>
-                        ))}
-                        {stars.length > 2 && (
-                          <div className="text-[9px] text-slate-500">+{stars.length - 2}</div>
                         )}
                         <button
                           className="text-slate-500 hover:text-slate-300 text-[10px] pt-1"
@@ -315,6 +312,8 @@ export function ZiweiChartGrid({
 
                     <ChevronDown className={`w-3 h-3 text-slate-600 mt-1 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                   </div>
+                );
+              }
 
               // Empty cell
               return <div key={key} className="aspect-square" />;
