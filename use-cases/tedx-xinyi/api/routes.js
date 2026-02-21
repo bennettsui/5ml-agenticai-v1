@@ -267,149 +267,500 @@ router.get('/visuals/:id', (req, res) => {
   res.sendFile(filePath);
 });
 
-// ==================== SPEAKER PHOTO UPLOAD ====================
+// ==================== MEDIA LIBRARY ====================
 
 const SPEAKERS_DIR = path.join(OUTPUT_DIR, 'speakers');
 if (!fs.existsSync(SPEAKERS_DIR)) {
   fs.mkdirSync(SPEAKERS_DIR, { recursive: true });
 }
 
-// Upload page UI
-router.get('/upload', (req, res) => {
-  const speakersDir = SPEAKERS_DIR;
-  const existing = fs.existsSync(speakersDir)
-    ? fs.readdirSync(speakersDir).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f))
-    : [];
+const METADATA_PATH = path.join(OUTPUT_DIR, '.media-metadata.json');
 
-  res.send(`<!DOCTYPE html>
-<html lang="zh-TW"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TEDxXinyi — Upload Speaker Photos</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #faf9f6; color: #1a1a1a; padding: 2rem; max-width: 600px; margin: 0 auto; }
-  h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
-  .sub { color: #888; font-size: 0.85rem; margin-bottom: 2rem; }
-  label { display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 0.4rem; }
-  select, input[type=file] { width: 100%; padding: 0.6rem; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem; }
-  button { background: #E62B1E; color: #fff; border: none; padding: 0.7rem 1.5rem; border-radius: 999px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .msg { margin-top: 1rem; padding: 0.8rem; border-radius: 8px; font-size: 0.85rem; }
-  .msg.ok { background: #ecfdf5; color: #065f46; }
-  .msg.err { background: #fef2f2; color: #991b1b; }
-  .existing { margin-top: 2rem; }
-  .existing h2 { font-size: 1rem; margin-bottom: 0.5rem; }
-  .existing ul { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem; }
-  .existing li { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 0.3rem 0.6rem; font-size: 0.8rem; }
-  .preview { max-width: 200px; max-height: 200px; margin-top: 0.5rem; border-radius: 8px; }
-</style>
-</head><body>
-<h1>Upload Speaker Photo</h1>
-<p class="sub">TEDxXinyi 2026 — We are Becoming salon</p>
-
-<form id="f">
-  <label>Speaker</label>
-  <select id="speaker" required>
-    <option value="">Select speaker...</option>
-    <option value="cheng-shi-jia">程世嘉</option>
-    <option value="lin-dong-liang">林東良</option>
-    <option value="yang-shi-yi">楊士毅</option>
-    <option value="glass-brothers">玻璃兄弟</option>
-  </select>
-
-  <label>Photo (JPG/PNG, max 25MB)</label>
-  <input type="file" id="photo" accept="image/jpeg,image/png,image/webp" required>
-  <img id="prev" class="preview" style="display:none">
-
-  <button type="submit" id="btn">Upload</button>
-</form>
-<div id="msg"></div>
-
-<div class="existing">
-  <h2>Uploaded photos</h2>
-  <ul>${existing.length ? existing.map(f => '<li>' + f + '</li>').join('') : '<li style="color:#999">None yet</li>'}</ul>
-</div>
-
-<script>
-document.getElementById('photo').onchange = function(e) {
-  const f = e.target.files[0];
-  if (f) { const r = new FileReader(); r.onload = ev => { const p = document.getElementById('prev'); p.src = ev.target.result; p.style.display = 'block'; }; r.readAsDataURL(f); }
-};
-document.getElementById('f').onsubmit = async function(e) {
-  e.preventDefault();
-  const btn = document.getElementById('btn');
-  const msg = document.getElementById('msg');
-  btn.disabled = true; btn.textContent = 'Uploading...'; msg.innerHTML = '';
+function loadMetadata() {
   try {
-    const file = document.getElementById('photo').files[0];
-    const speaker = document.getElementById('speaker').value;
-    const reader = new FileReader();
-    const data = await new Promise((res, rej) => { reader.onload = () => res(reader.result); reader.onerror = rej; reader.readAsDataURL(file); });
-    const resp = await fetch('/api/tedx-xinyi/upload-speaker', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ speaker, data, filename: file.name })
-    });
-    const json = await resp.json();
-    if (resp.ok) { msg.innerHTML = '<div class="msg ok">Uploaded: ' + json.path + '<br>Compressed: ' + (json.savings || '') + ' smaller (' + Math.round((json.compressedSize||0)/1024) + ' KB)</div>'; setTimeout(() => location.reload(), 1500); }
-    else { msg.innerHTML = '<div class="msg err">Error: ' + json.error + '</div>'; }
-  } catch (err) { msg.innerHTML = '<div class="msg err">' + err.message + '</div>'; }
-  btn.disabled = false; btn.textContent = 'Upload';
-};
-</script>
-</body></html>`);
+    if (fs.existsSync(METADATA_PATH)) return JSON.parse(fs.readFileSync(METADATA_PATH, 'utf8'));
+  } catch { /* ignore */ }
+  return {};
+}
+
+function saveMetadata(meta) {
+  fs.writeFileSync(METADATA_PATH, JSON.stringify(meta, null, 2));
+}
+
+function scanAllImages() {
+  const images = [];
+  const imgRe = /\.(jpg|jpeg|png|webp|gif)$/i;
+  // Root images
+  if (fs.existsSync(OUTPUT_DIR)) {
+    for (const f of fs.readdirSync(OUTPUT_DIR)) {
+      const full = path.join(OUTPUT_DIR, f);
+      if (fs.statSync(full).isFile() && imgRe.test(f)) {
+        const stat = fs.statSync(full);
+        const visual = VISUALS.find(v => v.filename === f);
+        images.push({ filename: f, folder: '', path: `/tedx-xinyi/${f}`, size: stat.size, modified: stat.mtime.toISOString(), source: visual ? 'generated' : 'uploaded', description: visual ? visual.description : '' });
+      }
+    }
+  }
+  // Speakers sub-dir
+  if (fs.existsSync(SPEAKERS_DIR)) {
+    for (const f of fs.readdirSync(SPEAKERS_DIR)) {
+      const full = path.join(SPEAKERS_DIR, f);
+      if (fs.statSync(full).isFile() && imgRe.test(f)) {
+        const stat = fs.statSync(full);
+        images.push({ filename: f, folder: 'speakers', path: `/tedx-xinyi/speakers/${f}`, size: stat.size, modified: stat.mtime.toISOString(), source: 'uploaded', description: '' });
+      }
+    }
+  }
+  return images;
+}
+
+// ---- API: list all media ----
+router.get('/media', (req, res) => {
+  const images = scanAllImages();
+  const meta = loadMetadata();
+  const result = images.map(img => {
+    const key = img.folder ? `${img.folder}/${img.filename}` : img.filename;
+    return { ...img, alt: (meta[key] && meta[key].alt) || '', customName: (meta[key] && meta[key].customName) || '' };
+  });
+  res.json({ images: result, total: result.length });
 });
 
-// Upload endpoint — accepts base64 image, compresses with sharp
-router.post('/upload-speaker', express.json({ limit: '50mb' }), async (req, res) => {
+// ---- API: update metadata (alt, customName) ----
+router.post('/media/metadata', express.json(), (req, res) => {
+  const { key, alt, customName } = req.body;
+  if (!key) return res.status(400).json({ error: 'key required' });
+  const meta = loadMetadata();
+  if (!meta[key]) meta[key] = {};
+  if (alt !== undefined) meta[key].alt = alt;
+  if (customName !== undefined) meta[key].customName = customName;
+  saveMetadata(meta);
+  res.json({ success: true, key, meta: meta[key] });
+});
+
+// ---- API: compress single image ----
+router.post('/media/compress', express.json(), async (req, res) => {
+  const { key } = req.body;
+  if (!key) return res.status(400).json({ error: 'key required' });
+  const filePath = path.join(OUTPUT_DIR, key);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
   try {
-    const { speaker, data } = req.body;
-    const validSpeakers = ['cheng-shi-jia', 'lin-dong-liang', 'yang-shi-yi', 'glass-brothers'];
-
-    if (!validSpeakers.includes(speaker)) {
-      return res.status(400).json({ error: 'Invalid speaker ID' });
-    }
-    if (!data || !data.startsWith('data:image/')) {
-      return res.status(400).json({ error: 'Invalid image data' });
-    }
-
-    const match = data.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
-    if (!match) {
-      return res.status(400).json({ error: 'Unsupported image format' });
-    }
-
-    const rawBuffer = Buffer.from(match[2], 'base64');
-    if (rawBuffer.length > 25 * 1024 * 1024) {
-      return res.status(400).json({ error: 'File too large (max 25MB)' });
-    }
-
-    // Compress with sharp: resize to max 800x800, convert to JPEG quality 80
     const sharp = require('sharp');
-    const compressed = await sharp(rawBuffer)
-      .resize(800, 800, { fit: 'cover', position: 'centre' })
-      .jpeg({ quality: 80, progressive: true })
-      .toBuffer();
+    const raw = fs.readFileSync(filePath);
+    const ext = path.extname(key).toLowerCase();
+    let compressed;
+    if (ext === '.webp') {
+      compressed = await sharp(raw).webp({ quality: 80, effort: 4 }).toBuffer();
+    } else if (ext === '.png') {
+      compressed = await sharp(raw).png({ quality: 80, compressionLevel: 9 }).toBuffer();
+    } else {
+      compressed = await sharp(raw).jpeg({ quality: 80, progressive: true }).toBuffer();
+    }
+    if (compressed.length < raw.length) {
+      fs.writeFileSync(filePath, compressed);
+      const ratio = ((1 - compressed.length / raw.length) * 100).toFixed(0);
+      console.log(`[TEDxXinyi] Compressed ${key}: ${(raw.length / 1024).toFixed(0)} KB -> ${(compressed.length / 1024).toFixed(0)} KB (${ratio}% smaller)`);
+      res.json({ success: true, key, before: raw.length, after: compressed.length, savings: `${ratio}%` });
+    } else {
+      res.json({ success: true, key, before: raw.length, after: raw.length, savings: '0%', note: 'Already optimized' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    const outFilename = `${speaker}.jpg`;
-    const outPath = path.join(SPEAKERS_DIR, outFilename);
+// ---- API: compress all images ----
+router.post('/media/compress-all', express.json(), async (req, res) => {
+  const images = scanAllImages();
+  const results = [];
+  const sharp = require('sharp');
+  for (const img of images) {
+    const key = img.folder ? `${img.folder}/${img.filename}` : img.filename;
+    const filePath = path.join(OUTPUT_DIR, key);
+    try {
+      const raw = fs.readFileSync(filePath);
+      const ext = path.extname(key).toLowerCase();
+      let compressed;
+      if (ext === '.webp') {
+        compressed = await sharp(raw).webp({ quality: 80, effort: 4 }).toBuffer();
+      } else if (ext === '.png') {
+        compressed = await sharp(raw).png({ quality: 80, compressionLevel: 9 }).toBuffer();
+      } else {
+        compressed = await sharp(raw).jpeg({ quality: 80, progressive: true }).toBuffer();
+      }
+      if (compressed.length < raw.length) {
+        fs.writeFileSync(filePath, compressed);
+        const ratio = ((1 - compressed.length / raw.length) * 100).toFixed(0);
+        results.push({ key, before: raw.length, after: compressed.length, savings: `${ratio}%` });
+      } else {
+        results.push({ key, before: raw.length, after: raw.length, savings: '0%', note: 'Already optimized' });
+      }
+    } catch (err) {
+      results.push({ key, error: err.message });
+    }
+  }
+  const totalBefore = results.reduce((s, r) => s + (r.before || 0), 0);
+  const totalAfter = results.reduce((s, r) => s + (r.after || r.before || 0), 0);
+  console.log(`[TEDxXinyi] Compress all: ${(totalBefore / 1024).toFixed(0)} KB -> ${(totalAfter / 1024).toFixed(0)} KB`);
+  res.json({ success: true, results, totalBefore, totalAfter });
+});
+
+// ---- API: upload image ----
+router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) => {
+  try {
+    const { data, filename, folder, alt } = req.body;
+    if (!data || !data.startsWith('data:image/')) return res.status(400).json({ error: 'Invalid image data' });
+    const match = data.match(/^data:image\/(jpeg|png|webp|gif);base64,(.+)$/);
+    if (!match) return res.status(400).json({ error: 'Unsupported format' });
+    const rawBuffer = Buffer.from(match[2], 'base64');
+    if (rawBuffer.length > 25 * 1024 * 1024) return res.status(400).json({ error: 'File too large (max 25MB)' });
+
+    // Sanitize filename
+    const safeName = (filename || `upload-${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase();
+    const targetDir = folder === 'speakers' ? SPEAKERS_DIR : OUTPUT_DIR;
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+    // Compress with sharp
+    const sharp = require('sharp');
+    const ext = path.extname(safeName).toLowerCase();
+    let compressed;
+    if (ext === '.webp') {
+      compressed = await sharp(rawBuffer).webp({ quality: 82, effort: 4 }).toBuffer();
+    } else if (ext === '.png') {
+      compressed = await sharp(rawBuffer).png({ quality: 80, compressionLevel: 9 }).toBuffer();
+    } else {
+      compressed = await sharp(rawBuffer).jpeg({ quality: 80, progressive: true }).toBuffer();
+    }
+
+    const outPath = path.join(targetDir, safeName);
     fs.writeFileSync(outPath, compressed);
 
+    // Save alt text if provided
+    if (alt) {
+      const meta = loadMetadata();
+      const key = folder === 'speakers' ? `speakers/${safeName}` : safeName;
+      if (!meta[key]) meta[key] = {};
+      meta[key].alt = alt;
+      saveMetadata(meta);
+    }
+
     const ratio = ((1 - compressed.length / rawBuffer.length) * 100).toFixed(0);
-    console.log(`[TEDxXinyi] Speaker photo: ${outFilename} — ${(rawBuffer.length / 1024).toFixed(0)} KB → ${(compressed.length / 1024).toFixed(0)} KB (${ratio}% smaller)`);
-    res.json({
-      success: true,
-      speaker,
-      filename: outFilename,
-      path: `/tedx-xinyi/speakers/${outFilename}`,
-      originalSize: rawBuffer.length,
-      compressedSize: compressed.length,
-      savings: `${ratio}%`,
-    });
+    const urlPath = folder === 'speakers' ? `/tedx-xinyi/speakers/${safeName}` : `/tedx-xinyi/${safeName}`;
+    console.log(`[TEDxXinyi] Upload: ${safeName} — ${(rawBuffer.length / 1024).toFixed(0)} KB -> ${(compressed.length / 1024).toFixed(0)} KB (${ratio}% smaller)`);
+    res.json({ success: true, filename: safeName, path: urlPath, originalSize: rawBuffer.length, compressedSize: compressed.length, savings: `${ratio}%` });
   } catch (err) {
     console.error('[TEDxXinyi] Upload error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
+// Legacy speaker upload endpoint (still works)
+router.post('/upload-speaker', express.json({ limit: '50mb' }), async (req, res) => {
+  try {
+    const { speaker, data } = req.body;
+    const validSpeakers = ['cheng-shi-jia', 'lin-dong-liang', 'yang-shi-yi', 'glass-brothers'];
+    if (!validSpeakers.includes(speaker)) return res.status(400).json({ error: 'Invalid speaker ID' });
+    if (!data || !data.startsWith('data:image/')) return res.status(400).json({ error: 'Invalid image data' });
+    const match = data.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
+    if (!match) return res.status(400).json({ error: 'Unsupported image format' });
+    const rawBuffer = Buffer.from(match[2], 'base64');
+    if (rawBuffer.length > 25 * 1024 * 1024) return res.status(400).json({ error: 'File too large (max 25MB)' });
+    const sharp = require('sharp');
+    const compressed = await sharp(rawBuffer).resize(800, 800, { fit: 'cover', position: 'centre' }).jpeg({ quality: 80, progressive: true }).toBuffer();
+    const outFilename = `${speaker}.jpg`;
+    fs.writeFileSync(path.join(SPEAKERS_DIR, outFilename), compressed);
+    const ratio = ((1 - compressed.length / rawBuffer.length) * 100).toFixed(0);
+    res.json({ success: true, speaker, filename: outFilename, path: `/tedx-xinyi/speakers/${outFilename}`, originalSize: rawBuffer.length, compressedSize: compressed.length, savings: `${ratio}%` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- Media Library Admin UI ----
+router.get('/upload', (req, res) => {
+  res.send(MEDIA_LIBRARY_HTML);
+});
+
+const MEDIA_LIBRARY_HTML = `<!DOCTYPE html>
+<html lang="zh-TW"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TEDxXinyi — Media Library</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#111;color:#e5e5e5;min-height:100vh}
+.header{background:#1a1a1a;border-bottom:1px solid #333;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.header h1{font-size:1.1rem;font-weight:800;display:flex;align-items:center;gap:0.5rem}
+.header h1 em{color:#E62B1E;font-style:normal}
+.header-actions{display:flex;gap:0.5rem;align-items:center}
+.toolbar{background:#1a1a1a;border-bottom:1px solid #222;padding:0.75rem 1.5rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;position:sticky;top:52px;z-index:40}
+.btn{border:none;padding:0.45rem 1rem;border-radius:6px;font-weight:600;cursor:pointer;font-size:0.8rem;transition:all 0.15s;display:inline-flex;align-items:center;gap:0.35rem}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+.btn-red{background:#E62B1E;color:#fff}.btn-red:hover:not(:disabled){background:#c42419}
+.btn-outline{background:transparent;border:1px solid #444;color:#ccc}.btn-outline:hover:not(:disabled){border-color:#888;color:#fff}
+.btn-ghost{background:transparent;color:#999;border:1px solid transparent}.btn-ghost:hover{color:#fff}
+.btn-sm{padding:0.3rem 0.6rem;font-size:0.75rem}
+.badge{background:#333;color:#aaa;padding:0.15rem 0.5rem;border-radius:99px;font-size:0.7rem;font-weight:600}
+.badge-green{background:#065f46;color:#6ee7b7}
+.stats{font-size:0.75rem;color:#666;margin-left:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;padding:1.5rem}
+.card{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;overflow:hidden;transition:all 0.15s;position:relative}
+.card:hover{border-color:#444;transform:translateY(-1px)}
+.card.selected{border-color:#E62B1E;box-shadow:0 0 0 1px #E62B1E}
+.card-check{position:absolute;top:0.5rem;left:0.5rem;z-index:5;width:20px;height:20px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);background:rgba(0,0,0,0.5);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
+.card.selected .card-check{background:#E62B1E;border-color:#E62B1E}
+.card-check svg{opacity:0;transition:opacity 0.1s}.card.selected .card-check svg{opacity:1}
+.card-img{aspect-ratio:4/3;background:#0a0a0a;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+.card-img img{width:100%;height:100%;object-fit:cover}
+.card-img .placeholder{color:#333;font-size:2rem;font-weight:900}
+.card-body{padding:0.75rem}
+.card-filename{font-size:0.8rem;font-weight:600;color:#ddd;word-break:break-all;margin-bottom:0.25rem}
+.card-meta{font-size:0.7rem;color:#666;display:flex;gap:0.5rem;margin-bottom:0.5rem}
+.card-alt{width:100%;padding:0.35rem 0.5rem;background:#111;border:1px solid #333;border-radius:5px;color:#ccc;font-size:0.75rem;margin-bottom:0.4rem;resize:none;font-family:inherit}
+.card-alt:focus{outline:none;border-color:#E62B1E}
+.card-actions{display:flex;gap:0.25rem}
+.tag{display:inline-block;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.65rem;font-weight:600}
+.tag-gen{background:#1e293b;color:#60a5fa}
+.tag-up{background:#1c1917;color:#fb923c}
+.tag-spk{background:#14532d;color:#86efac}
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:0.75rem 1rem;font-size:0.8rem;z-index:100;opacity:0;transition:opacity 0.3s;pointer-events:none}
+.toast.show{opacity:1}
+.toast.ok{border-color:#065f46;color:#6ee7b7}
+.toast.err{border-color:#991b1b;color:#fca5a5}
+/* Upload modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:60;display:none;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#1a1a1a;border:1px solid #333;border-radius:12px;padding:1.5rem;width:90%;max-width:480px}
+.modal h2{font-size:1rem;font-weight:700;margin-bottom:1rem}
+.modal label{display:block;font-size:0.8rem;font-weight:600;color:#999;margin-bottom:0.3rem}
+.modal input[type=file]{width:100%;margin-bottom:0.75rem;font-size:0.8rem}
+.modal input[type=text],.modal select,.modal textarea{width:100%;padding:0.45rem 0.6rem;background:#111;border:1px solid #333;border-radius:6px;color:#ccc;font-size:0.8rem;margin-bottom:0.75rem;font-family:inherit}
+.modal input[type=text]:focus,.modal select:focus,.modal textarea:focus{outline:none;border-color:#E62B1E}
+.modal .preview-area{aspect-ratio:16/9;background:#0a0a0a;border-radius:8px;margin-bottom:0.75rem;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.modal .preview-area img{max-width:100%;max-height:100%;object-fit:contain}
+.modal-foot{display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.5rem}
+.compress-bar{height:3px;background:#222;border-radius:2px;margin-top:0.5rem;overflow:hidden;display:none}
+.compress-bar .fill{height:100%;background:#E62B1E;transition:width 0.3s;width:0}
+</style>
+</head><body>
+
+<div class="header">
+  <h1><em>TEDx</em>Xinyi Media Library</h1>
+  <div class="header-actions">
+    <button class="btn btn-outline" onclick="loadMedia()">Refresh</button>
+  </div>
+</div>
+
+<div class="toolbar">
+  <button class="btn btn-red" onclick="openUpload()">+ Upload</button>
+  <button class="btn btn-outline" id="compressAllBtn" onclick="compressAll()">Compress All</button>
+  <button class="btn btn-outline" id="compressSelBtn" onclick="compressSelected()" disabled>Compress Selected</button>
+  <button class="btn btn-ghost btn-sm" id="selectAllBtn" onclick="toggleSelectAll()">Select All</button>
+  <div class="stats" id="stats"></div>
+</div>
+<div class="compress-bar" id="compressBar"><div class="fill" id="compressFill"></div></div>
+
+<div class="grid" id="grid"></div>
+
+<!-- Upload Modal -->
+<div class="modal-bg" id="uploadModal">
+  <div class="modal">
+    <h2>Upload Image</h2>
+    <label>File (JPG / PNG / WebP, max 25 MB)</label>
+    <input type="file" id="uploadFile" accept="image/jpeg,image/png,image/webp">
+    <div class="preview-area" id="uploadPreview"><span style="color:#444;font-size:0.85rem">Select a file</span></div>
+    <label>Save to</label>
+    <select id="uploadFolder">
+      <option value="">Root (hero / poster / salon)</option>
+      <option value="speakers">Speakers</option>
+    </select>
+    <label>Custom filename (optional)</label>
+    <input type="text" id="uploadName" placeholder="auto-detect from file">
+    <label>Alt text</label>
+    <textarea id="uploadAlt" rows="2" placeholder="Describe the image..."></textarea>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeUpload()">Cancel</button>
+      <button class="btn btn-red" id="uploadBtn" onclick="doUpload()">Upload</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let mediaItems = [];
+let selectedKeys = new Set();
+
+async function loadMedia() {
+  try {
+    const r = await fetch('/api/tedx-xinyi/media');
+    const d = await r.json();
+    mediaItems = d.images || [];
+    renderGrid();
+    updateStats();
+  } catch(e) { showToast('Failed to load: ' + e.message, true); }
+}
+
+function renderGrid() {
+  const g = document.getElementById('grid');
+  if (!mediaItems.length) { g.innerHTML = '<div style="text-align:center;padding:4rem;color:#444;grid-column:1/-1">No images found</div>'; return; }
+  g.innerHTML = mediaItems.map(img => {
+    const key = img.folder ? img.folder + '/' + img.filename : img.filename;
+    const sel = selectedKeys.has(key) ? ' selected' : '';
+    const sizeKb = (img.size / 1024).toFixed(0);
+    const src = img.folder ? '/tedx-xinyi/' + img.folder + '/' + img.filename : '/tedx-xinyi/' + img.filename;
+    const tag = img.source === 'generated' ? '<span class="tag tag-gen">Generated</span>' : img.folder === 'speakers' ? '<span class="tag tag-spk">Speaker</span>' : '<span class="tag tag-up">Uploaded</span>';
+    return '<div class="card' + sel + '" data-key="' + key + '">' +
+      '<div class="card-check" onclick="toggleSelect(event,\\'' + key + '\\')">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' +
+      '</div>' +
+      '<div class="card-img"><img src="' + src + '?t=' + Date.now() + '" onerror="this.style.display=\\'none\\';this.nextElementSibling.style.display=\\'flex\\'"><div class="placeholder" style="display:none">?</div></div>' +
+      '<div class="card-body">' +
+        '<div class="card-filename">' + img.filename + ' ' + tag + '</div>' +
+        '<div class="card-meta"><span>' + sizeKb + ' KB</span></div>' +
+        '<textarea class="card-alt" rows="1" placeholder="Alt text..." data-key="' + key + '" onfocus="this.rows=2" onblur="this.rows=1;saveAlt(this)">' + (img.alt || '') + '</textarea>' +
+        '<div class="card-actions">' +
+          '<button class="btn btn-outline btn-sm" onclick="compressOne(\\'' + key + '\\')">Compress</button>' +
+        '</div>' +
+      '</div></div>';
+  }).join('');
+}
+
+function updateStats() {
+  const total = mediaItems.length;
+  const totalSize = mediaItems.reduce((s, i) => s + i.size, 0);
+  document.getElementById('stats').textContent = total + ' images | ' + (totalSize / 1024 / 1024).toFixed(1) + ' MB total';
+  document.getElementById('compressSelBtn').disabled = selectedKeys.size === 0;
+}
+
+function toggleSelect(e, key) {
+  e.stopPropagation();
+  if (selectedKeys.has(key)) selectedKeys.delete(key); else selectedKeys.add(key);
+  const card = document.querySelector('.card[data-key="' + key + '"]');
+  if (card) card.classList.toggle('selected');
+  updateStats();
+}
+
+function toggleSelectAll() {
+  if (selectedKeys.size === mediaItems.length) {
+    selectedKeys.clear();
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+  } else {
+    mediaItems.forEach(img => { const k = img.folder ? img.folder + '/' + img.filename : img.filename; selectedKeys.add(k); });
+    document.querySelectorAll('.card').forEach(c => c.classList.add('selected'));
+  }
+  updateStats();
+}
+
+async function saveAlt(el) {
+  const key = el.dataset.key;
+  const alt = el.value.trim();
+  try {
+    await fetch('/api/tedx-xinyi/media/metadata', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key, alt }) });
+  } catch(e) { showToast('Save failed: ' + e.message, true); }
+}
+
+async function compressOne(key) {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const r = await fetch('/api/tedx-xinyi/media/compress', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key }) });
+    const d = await r.json();
+    if (d.note) showToast(key + ': already optimized'); else showToast(key + ': ' + d.savings + ' smaller');
+    loadMedia();
+  } catch(e) { showToast('Error: ' + e.message, true); }
+  btn.disabled = false; btn.textContent = 'Compress';
+}
+
+async function compressAll() {
+  const btn = document.getElementById('compressAllBtn');
+  const bar = document.getElementById('compressBar');
+  const fill = document.getElementById('compressFill');
+  btn.disabled = true; btn.textContent = 'Compressing...';
+  bar.style.display = 'block'; fill.style.width = '20%';
+  try {
+    fill.style.width = '50%';
+    const r = await fetch('/api/tedx-xinyi/media/compress-all', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+    const d = await r.json();
+    fill.style.width = '100%';
+    const saved = d.totalBefore - d.totalAfter;
+    showToast('Done! Saved ' + (saved / 1024).toFixed(0) + ' KB across ' + d.results.length + ' images');
+    loadMedia();
+  } catch(e) { showToast('Error: ' + e.message, true); }
+  btn.disabled = false; btn.textContent = 'Compress All';
+  setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0'; }, 2000);
+}
+
+async function compressSelected() {
+  if (!selectedKeys.size) return;
+  const btn = document.getElementById('compressSelBtn');
+  const bar = document.getElementById('compressBar');
+  const fill = document.getElementById('compressFill');
+  btn.disabled = true; btn.textContent = 'Compressing...';
+  bar.style.display = 'block';
+  const keys = [...selectedKeys];
+  let done = 0;
+  for (const key of keys) {
+    fill.style.width = ((done / keys.length) * 100) + '%';
+    try {
+      await fetch('/api/tedx-xinyi/media/compress', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key }) });
+    } catch(e) { /* continue */ }
+    done++;
+  }
+  fill.style.width = '100%';
+  showToast('Compressed ' + keys.length + ' images');
+  selectedKeys.clear();
+  loadMedia();
+  btn.disabled = false; btn.textContent = 'Compress Selected';
+  setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0'; }, 2000);
+}
+
+function openUpload() { document.getElementById('uploadModal').classList.add('open'); }
+function closeUpload() { document.getElementById('uploadModal').classList.remove('open'); document.getElementById('uploadPreview').innerHTML = '<span style="color:#444;font-size:0.85rem">Select a file</span>'; }
+
+document.getElementById('uploadFile').onchange = function(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => { document.getElementById('uploadPreview').innerHTML = '<img src="' + ev.target.result + '">'; };
+  r.readAsDataURL(f);
+  if (!document.getElementById('uploadName').value) {
+    document.getElementById('uploadName').value = f.name;
+  }
+};
+
+async function doUpload() {
+  const file = document.getElementById('uploadFile').files[0];
+  if (!file) return showToast('Select a file first', true);
+  const btn = document.getElementById('uploadBtn');
+  btn.disabled = true; btn.textContent = 'Uploading...';
+  try {
+    const data = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+    const filename = document.getElementById('uploadName').value || file.name;
+    const folder = document.getElementById('uploadFolder').value;
+    const alt = document.getElementById('uploadAlt').value;
+    const r = await fetch('/api/tedx-xinyi/media/upload', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data, filename, folder, alt }) });
+    const d = await r.json();
+    if (r.ok) {
+      showToast('Uploaded: ' + d.filename + ' (' + d.savings + ' smaller)');
+      closeUpload();
+      document.getElementById('uploadFile').value = '';
+      document.getElementById('uploadName').value = '';
+      document.getElementById('uploadAlt').value = '';
+      loadMedia();
+    } else { showToast('Error: ' + d.error, true); }
+  } catch(e) { showToast(e.message, true); }
+  btn.disabled = false; btn.textContent = 'Upload';
+}
+
+function showToast(msg, err) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (err ? 'err' : 'ok');
+  setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+loadMedia();
+</script>
+</body></html>`;
 
 // ==================== HELPER ====================
 
