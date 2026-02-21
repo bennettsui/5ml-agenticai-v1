@@ -337,6 +337,22 @@ router.post('/media/metadata', express.json(), (req, res) => {
   res.json({ success: true, key, meta: meta[key] });
 });
 
+// Resize + compress helper: hero/poster images → max 1920w, speakers → 800w
+async function optimizeImage(raw, key) {
+  const sharp = require('sharp');
+  const isSpeaker = key.startsWith('speakers/');
+  const maxWidth = isSpeaker ? 800 : 1920;
+  const ext = path.extname(key).toLowerCase();
+  let pipeline = sharp(raw).resize({ width: maxWidth, withoutEnlargement: true });
+  if (ext === '.webp') {
+    return pipeline.webp({ quality: 80, effort: 4 }).toBuffer();
+  } else if (ext === '.png') {
+    return pipeline.png({ quality: 80, compressionLevel: 9 }).toBuffer();
+  } else {
+    return pipeline.jpeg({ quality: 80, progressive: true }).toBuffer();
+  }
+}
+
 // ---- API: compress single image ----
 router.post('/media/compress', express.json(), async (req, res) => {
   const { key } = req.body;
@@ -344,17 +360,8 @@ router.post('/media/compress', express.json(), async (req, res) => {
   const filePath = path.join(OUTPUT_DIR, key);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
   try {
-    const sharp = require('sharp');
     const raw = fs.readFileSync(filePath);
-    const ext = path.extname(key).toLowerCase();
-    let compressed;
-    if (ext === '.webp') {
-      compressed = await sharp(raw).webp({ quality: 80, effort: 4 }).toBuffer();
-    } else if (ext === '.png') {
-      compressed = await sharp(raw).png({ quality: 80, compressionLevel: 9 }).toBuffer();
-    } else {
-      compressed = await sharp(raw).jpeg({ quality: 80, progressive: true }).toBuffer();
-    }
+    const compressed = await optimizeImage(raw, key);
     if (compressed.length < raw.length) {
       fs.writeFileSync(filePath, compressed);
       const ratio = ((1 - compressed.length / raw.length) * 100).toFixed(0);
@@ -372,21 +379,12 @@ router.post('/media/compress', express.json(), async (req, res) => {
 router.post('/media/compress-all', express.json(), async (req, res) => {
   const images = scanAllImages();
   const results = [];
-  const sharp = require('sharp');
   for (const img of images) {
     const key = img.folder ? `${img.folder}/${img.filename}` : img.filename;
     const filePath = path.join(OUTPUT_DIR, key);
     try {
       const raw = fs.readFileSync(filePath);
-      const ext = path.extname(key).toLowerCase();
-      let compressed;
-      if (ext === '.webp') {
-        compressed = await sharp(raw).webp({ quality: 80, effort: 4 }).toBuffer();
-      } else if (ext === '.png') {
-        compressed = await sharp(raw).png({ quality: 80, compressionLevel: 9 }).toBuffer();
-      } else {
-        compressed = await sharp(raw).jpeg({ quality: 80, progressive: true }).toBuffer();
-      }
+      const compressed = await optimizeImage(raw, key);
       if (compressed.length < raw.length) {
         fs.writeFileSync(filePath, compressed);
         const ratio = ((1 - compressed.length / raw.length) * 100).toFixed(0);
@@ -487,6 +485,18 @@ const MEDIA_LIBRARY_HTML = `<!DOCTYPE html>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#111;color:#e5e5e5;min-height:100vh}
+/* Login */
+.login-bg{position:fixed;inset:0;background:#111;z-index:200;display:flex;align-items:center;justify-content:center}
+.login-bg.hidden{display:none}
+.login-box{background:#1a1a1a;border:1px solid #333;border-radius:12px;padding:2rem;width:90%;max-width:360px;text-align:center}
+.login-box h1{font-size:1.1rem;margin-bottom:0.3rem}.login-box h1 em{color:#E62B1E;font-style:normal}
+.login-box .sub{color:#666;font-size:0.8rem;margin-bottom:1.5rem}
+.login-box input{width:100%;padding:0.6rem;background:#111;border:1px solid #333;border-radius:6px;color:#ccc;font-size:0.9rem;margin-bottom:1rem;text-align:center}
+.login-box input:focus{outline:none;border-color:#E62B1E}
+.login-box .err{color:#f87171;font-size:0.8rem;margin-top:0.5rem;display:none}
+/* App */
+.app{display:none}
+.app.show{display:block}
 .header{background:#1a1a1a;border-bottom:1px solid #333;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
 .header h1{font-size:1.1rem;font-weight:800;display:flex;align-items:center;gap:0.5rem}
 .header h1 em{color:#E62B1E;font-style:normal}
@@ -498,8 +508,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn-outline{background:transparent;border:1px solid #444;color:#ccc}.btn-outline:hover:not(:disabled){border-color:#888;color:#fff}
 .btn-ghost{background:transparent;color:#999;border:1px solid transparent}.btn-ghost:hover{color:#fff}
 .btn-sm{padding:0.3rem 0.6rem;font-size:0.75rem}
-.badge{background:#333;color:#aaa;padding:0.15rem 0.5rem;border-radius:99px;font-size:0.7rem;font-weight:600}
-.badge-green{background:#065f46;color:#6ee7b7}
 .stats{font-size:0.75rem;color:#666;margin-left:auto}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;padding:1.5rem}
 .card{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;overflow:hidden;transition:all 0.15s;position:relative}
@@ -508,7 +516,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .card-check{position:absolute;top:0.5rem;left:0.5rem;z-index:5;width:20px;height:20px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);background:rgba(0,0,0,0.5);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
 .card.selected .card-check{background:#E62B1E;border-color:#E62B1E}
 .card-check svg{opacity:0;transition:opacity 0.1s}.card.selected .card-check svg{opacity:1}
-.card-img{aspect-ratio:4/3;background:#0a0a0a;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+.card-img{aspect-ratio:4/3;background:#0a0a0a;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .card-img img{width:100%;height:100%;object-fit:cover}
 .card-img .placeholder{color:#333;font-size:2rem;font-weight:900}
 .card-body{padding:0.75rem}
@@ -518,14 +526,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .card-alt:focus{outline:none;border-color:#E62B1E}
 .card-actions{display:flex;gap:0.25rem}
 .tag{display:inline-block;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.65rem;font-weight:600}
-.tag-gen{background:#1e293b;color:#60a5fa}
-.tag-up{background:#1c1917;color:#fb923c}
-.tag-spk{background:#14532d;color:#86efac}
+.tag-gen{background:#1e293b;color:#60a5fa}.tag-up{background:#1c1917;color:#fb923c}.tag-spk{background:#14532d;color:#86efac}
 .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:0.75rem 1rem;font-size:0.8rem;z-index:100;opacity:0;transition:opacity 0.3s;pointer-events:none}
-.toast.show{opacity:1}
-.toast.ok{border-color:#065f46;color:#6ee7b7}
-.toast.err{border-color:#991b1b;color:#fca5a5}
-/* Upload modal */
+.toast.show{opacity:1}.toast.ok{border-color:#065f46;color:#6ee7b7}.toast.err{border-color:#991b1b;color:#fca5a5}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:60;display:none;align-items:center;justify-content:center}
 .modal-bg.open{display:flex}
 .modal{background:#1a1a1a;border:1px solid #333;border-radius:12px;padding:1.5rem;width:90%;max-width:480px}
@@ -542,23 +545,38 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </style>
 </head><body>
 
+<!-- Login Screen -->
+<div class="login-bg" id="loginScreen">
+  <div class="login-box">
+    <h1><em>TEDx</em>Xinyi Admin</h1>
+    <p class="sub">Media Library</p>
+    <form onsubmit="event.preventDefault();doLogin()">
+      <input type="password" id="loginPw" placeholder="Password" autofocus>
+      <button class="btn btn-red" type="submit" style="width:100%">Enter</button>
+    </form>
+    <p class="err" id="loginErr">Incorrect password</p>
+  </div>
+</div>
+
+<!-- Main App (hidden until logged in) -->
+<div class="app" id="app">
 <div class="header">
   <h1><em>TEDx</em>Xinyi Media Library</h1>
   <div class="header-actions">
     <button class="btn btn-outline" onclick="loadMedia()">Refresh</button>
+    <button class="btn btn-ghost btn-sm" onclick="doLogout()">Logout</button>
   </div>
 </div>
-
 <div class="toolbar">
   <button class="btn btn-red" onclick="openUpload()">+ Upload</button>
   <button class="btn btn-outline" id="compressAllBtn" onclick="compressAll()">Compress All</button>
   <button class="btn btn-outline" id="compressSelBtn" onclick="compressSelected()" disabled>Compress Selected</button>
-  <button class="btn btn-ghost btn-sm" id="selectAllBtn" onclick="toggleSelectAll()">Select All</button>
+  <button class="btn btn-ghost btn-sm" onclick="toggleSelectAll()">Select All</button>
   <div class="stats" id="stats"></div>
 </div>
 <div class="compress-bar" id="compressBar"><div class="fill" id="compressFill"></div></div>
-
 <div class="grid" id="grid"></div>
+</div>
 
 <!-- Upload Modal -->
 <div class="modal-bg" id="uploadModal">
@@ -586,12 +604,36 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="toast" id="toast"></div>
 
 <script>
+let token = sessionStorage.getItem('tedx_token') || '';
 let mediaItems = [];
 let selectedKeys = new Set();
 
+// Auth
+async function doLogin() {
+  const pw = document.getElementById('loginPw').value;
+  if (!pw) return;
+  try {
+    const r = await fetch('/api/tedx-xinyi/auth', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ password: pw }) });
+    const d = await r.json();
+    if (r.ok && d.token) { token = d.token; sessionStorage.setItem('tedx_token', token); showApp(); }
+    else { document.getElementById('loginErr').style.display = 'block'; }
+  } catch(e) { document.getElementById('loginErr').style.display = 'block'; }
+}
+function doLogout() { token = ''; sessionStorage.removeItem('tedx_token'); document.getElementById('loginScreen').classList.remove('hidden'); document.getElementById('app').classList.remove('show'); }
+function showApp() { document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('app').classList.add('show'); loadMedia(); }
+if (token) { showApp(); }
+
+// Authed fetch helper
+function authFetch(url, opts = {}) {
+  if (!opts.headers) opts.headers = {};
+  opts.headers['x-admin-token'] = token;
+  return fetch(url, opts);
+}
+
 async function loadMedia() {
   try {
-    const r = await fetch('/api/tedx-xinyi/media');
+    const r = await authFetch('/api/tedx-xinyi/media');
+    if (r.status === 401) { doLogout(); return; }
     const d = await r.json();
     mediaItems = d.images || [];
     renderGrid();
@@ -654,7 +696,7 @@ async function saveAlt(el) {
   const key = el.dataset.key;
   const alt = el.value.trim();
   try {
-    await fetch('/api/tedx-xinyi/media/metadata', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key, alt }) });
+    await authFetch('/api/tedx-xinyi/media/metadata', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ key, alt }) });
   } catch(e) { showToast('Save failed: ' + e.message, true); }
 }
 
@@ -662,7 +704,7 @@ async function compressOne(key) {
   const btn = event.target;
   btn.disabled = true; btn.textContent = '...';
   try {
-    const r = await fetch('/api/tedx-xinyi/media/compress', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key }) });
+    const r = await authFetch('/api/tedx-xinyi/media/compress', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ key }) });
     const d = await r.json();
     if (d.note) showToast(key + ': already optimized'); else showToast(key + ': ' + d.savings + ' smaller');
     loadMedia();
@@ -678,7 +720,7 @@ async function compressAll() {
   bar.style.display = 'block'; fill.style.width = '20%';
   try {
     fill.style.width = '50%';
-    const r = await fetch('/api/tedx-xinyi/media/compress-all', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+    const r = await authFetch('/api/tedx-xinyi/media/compress-all', { method:'POST', headers:{'Content-Type':'application/json'}, body: '{}' });
     const d = await r.json();
     fill.style.width = '100%';
     const saved = d.totalBefore - d.totalAfter;
@@ -701,7 +743,7 @@ async function compressSelected() {
   for (const key of keys) {
     fill.style.width = ((done / keys.length) * 100) + '%';
     try {
-      await fetch('/api/tedx-xinyi/media/compress', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key }) });
+      await authFetch('/api/tedx-xinyi/media/compress', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ key }) });
     } catch(e) { /* continue */ }
     done++;
   }
@@ -737,14 +779,11 @@ async function doUpload() {
     const filename = document.getElementById('uploadName').value || file.name;
     const folder = document.getElementById('uploadFolder').value;
     const alt = document.getElementById('uploadAlt').value;
-    const r = await fetch('/api/tedx-xinyi/media/upload', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data, filename, folder, alt }) });
+    const r = await authFetch('/api/tedx-xinyi/media/upload', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data, filename, folder, alt }) });
     const d = await r.json();
     if (r.ok) {
       showToast('Uploaded: ' + d.filename + ' (' + d.savings + ' smaller)');
-      closeUpload();
-      document.getElementById('uploadFile').value = '';
-      document.getElementById('uploadName').value = '';
-      document.getElementById('uploadAlt').value = '';
+      closeUpload(); document.getElementById('uploadFile').value = ''; document.getElementById('uploadName').value = ''; document.getElementById('uploadAlt').value = '';
       loadMedia();
     } else { showToast('Error: ' + d.error, true); }
   } catch(e) { showToast(e.message, true); }
@@ -757,8 +796,6 @@ function showToast(msg, err) {
   t.className = 'toast show ' + (err ? 'err' : 'ok');
   setTimeout(() => { t.className = 'toast'; }, 3000);
 }
-
-loadMedia();
 </script>
 </body></html>`;
 
@@ -801,16 +838,16 @@ async function generateVisual(client, prompt) {
       const imageData = part.inlineData || part.inline_data;
       if (imageData && imageData.mimeType?.startsWith('image/')) {
         const rawBuffer = Buffer.from(imageData.data, 'base64');
-        // Compress to WebP for much smaller file sizes (~60-80% smaller than PNG)
+        // Resize to max 1920px wide + compress to WebP
         try {
           const sharp = require('sharp');
           const webpBuffer = await sharp(rawBuffer)
+            .resize({ width: 1920, withoutEnlargement: true })
             .webp({ quality: 82, effort: 4 })
             .toBuffer();
-          console.log(`[TEDxXinyi] Compressed: ${(rawBuffer.length / 1024).toFixed(0)} KB PNG → ${(webpBuffer.length / 1024).toFixed(0)} KB WebP (${((1 - webpBuffer.length / rawBuffer.length) * 100).toFixed(0)}% smaller)`);
+          console.log(`[TEDxXinyi] Optimized: ${(rawBuffer.length / 1024).toFixed(0)} KB → ${(webpBuffer.length / 1024).toFixed(0)} KB WebP (${((1 - webpBuffer.length / rawBuffer.length) * 100).toFixed(0)}% smaller)`);
           return webpBuffer;
         } catch {
-          // If sharp fails, return raw buffer
           return rawBuffer;
         }
       }

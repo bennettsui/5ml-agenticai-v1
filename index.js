@@ -3804,9 +3804,24 @@ try {
 try {
   const tedxXinyiRoutes = require('./use-cases/tedx-xinyi/api/routes');
   app.use('/api/tedx-xinyi', tedxXinyiRoutes);
-  // Admin shortcut: /tedxxinyi/admin → upload page
-  app.get('/tedxxinyi/admin', (req, res) => res.redirect('/api/tedx-xinyi/upload'));
-  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /tedxxinyi/admin');
+  // Admin media library — password-protected
+  const ADMIN_PASS = process.env.TEDX_ADMIN_PASS || '5milesLab01@';
+  // Password check API
+  app.post('/api/tedx-xinyi/auth', express.json(), (req, res) => {
+    if (req.body?.password === ADMIN_PASS) return res.json({ ok: true, token: ADMIN_PASS });
+    res.status(401).json({ error: 'Incorrect password' });
+  });
+  // Protect media API endpoints
+  app.use('/api/tedx-xinyi/media', (req, res, next) => {
+    const token = req.headers['x-admin-token'];
+    if (token === ADMIN_PASS) return next();
+    return res.status(401).json({ error: 'Unauthorized' });
+  });
+  // Admin UI serves at /vibe-demo/tedx-xinyi/admin
+  app.get('/vibe-demo/tedx-xinyi/admin', (req, res) => res.redirect('/api/tedx-xinyi/upload'));
+  // Legacy redirect
+  app.get('/tedxxinyi/admin', (req, res) => res.redirect('/vibe-demo/tedx-xinyi/admin'));
+  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /vibe-demo/tedx-xinyi/admin');
 } catch (error) {
   console.warn('⚠️ TEDxXinyi routes not loaded:', error.message);
 }
