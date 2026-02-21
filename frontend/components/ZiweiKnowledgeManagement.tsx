@@ -6,6 +6,7 @@ import {
   Zap, Star, Layers, TrendingUp, Book, Lightbulb,
   ChevronDown, ChevronRight, RefreshCw, Eye,
 } from 'lucide-react';
+import ZiweiRuleManagement from './ZiweiRuleManagement';
 
 // ── Purple theme tokens ──────────────────────────────────────────────────────
 const P = {
@@ -94,7 +95,7 @@ interface SourceInventory {
   reliability: 'high' | 'medium' | 'low';
 }
 
-type KnowledgeTab = 'overview' | 'reference' | 'scraping' | 'sources' | 'accuracy';
+type KnowledgeTab = 'overview' | 'reference' | 'scraping' | 'sources' | 'accuracy' | 'rules';
 
 // ── Component ───────────────────────────────────────────────────────────────
 export default function ZiweiKnowledgeManagement() {
@@ -157,6 +158,7 @@ export default function ZiweiKnowledgeManagement() {
   const TABS: { id: KnowledgeTab; label: string }[] = [
     { id: 'overview',   label: '📊 Overview' },
     { id: 'reference',  label: '📖 Reference' },
+    { id: 'rules',      label: '🧿 Rules' },
     { id: 'scraping',   label: '🔄 Curriculum' },
     { id: 'sources',    label: '📚 Sources' },
     { id: 'accuracy',   label: '✅ Quality' },
@@ -563,6 +565,13 @@ export default function ZiweiKnowledgeManagement() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ================================================================ */}
+      {/* RULES TAB                                                         */}
+      {/* ================================================================ */}
+      {activeTab === 'rules' && (
+        <ZiweiRuleManagement />
       )}
 
       {/* ================================================================ */}

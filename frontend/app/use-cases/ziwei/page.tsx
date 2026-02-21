@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   ArrowRight, ChevronRight, Sparkles, Brain, Zap, Database,
   GitBranch, BookOpen, TrendingUp, Users, Shield, Radar,
-  Activity, Wand2, Star, Newspaper, BarChart2, Moon,
+  Activity, Star, Newspaper, BarChart2, Moon,
   Layers, Eye, Compass, Clock,
 } from 'lucide-react';
 import GenerationPanel from '@/components/GenerationPanel';
@@ -13,7 +13,6 @@ import ZiweiChartAnalysis from '@/components/ZiweiChartAnalysis';
 import ZiweiPredictions from '@/components/ZiweiPredictions';
 import ZiweiKnowledgeManagement from '@/components/ZiweiKnowledgeManagement';
 import ZiweiCelebrityValidation from '@/components/ZiweiCelebrityValidation';
-import ZiweiRuleManagement from '@/components/ZiweiRuleManagement';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import ZiweiTabErrorBoundary from '@/components/ZiweiTabErrorBoundary';
 import { BirthData } from '@/types/ziwei';
@@ -38,13 +37,13 @@ const P = {
   sectionDivider: 'border-purple-900/40',
 };
 
-type ZiweiTab = 'overview' | 'charts' | 'analysis' | 'predictions' | 'knowledge' | 'celebrity' | 'rules' | 'blog';
+type ZiweiTab = 'overview' | 'charts' | 'analysis' | 'predictions' | 'knowledge' | 'celebrity' | 'blog';
 
 export default function ZiweiPage() {
   const getInitialTab = (): ZiweiTab => {
     if (typeof window === 'undefined') return 'overview';
     const p = new URLSearchParams(window.location.search).get('tab') as ZiweiTab | null;
-    const valid: ZiweiTab[] = ['overview', 'charts', 'analysis', 'predictions', 'knowledge', 'celebrity', 'rules', 'blog'];
+    const valid: ZiweiTab[] = ['overview', 'charts', 'analysis', 'predictions', 'knowledge', 'celebrity', 'blog'];
     return p && valid.includes(p) ? p : 'overview';
   };
   const [activeTab, setActiveTab] = useState<ZiweiTab>(getInitialTab());
@@ -82,7 +81,6 @@ export default function ZiweiPage() {
     { id: 'predictions',  label: '🔮 Predictions',icon: TrendingUp },
     { id: 'knowledge',    label: '📚 Knowledge',  icon: BookOpen },
     { id: 'celebrity',    label: '⭐ Celebrity',  icon: Star },
-    { id: 'rules',        label: '🧿 Rules',      icon: Wand2 },
     { id: 'blog',         label: '📝 Blog',       icon: Newspaper },
   ];
 
@@ -320,7 +318,7 @@ export default function ZiweiPage() {
                   ))}
                 </div>
                 <button
-                  onClick={() => setActiveTab('rules')}
+                  onClick={() => setActiveTab('knowledge')}
                   className={`inline-flex items-center gap-2 px-4 py-2 ${P.primaryBtn} rounded-lg text-sm font-medium transition-colors`}
                 >
                   View Rules Database <ChevronRight className="w-4 h-4" />
@@ -411,15 +409,6 @@ export default function ZiweiPage() {
           {activeTab === 'celebrity' && (
             <ZiweiTabErrorBoundary tabName="Celebrity">
               <ZiweiCelebrityValidation />
-            </ZiweiTabErrorBoundary>
-          )}
-
-          {/* ============================================================ */}
-          {/* RULES TAB                                                     */}
-          {/* ============================================================ */}
-          {activeTab === 'rules' && (
-            <ZiweiTabErrorBoundary tabName="Rules">
-              <ZiweiRuleManagement />
             </ZiweiTabErrorBoundary>
           )}
 
