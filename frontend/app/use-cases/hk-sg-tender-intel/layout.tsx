@@ -10,17 +10,22 @@ import AiChatAssistant, { type AiChatConfig } from '@/components/AiChatAssistant
 
 const NAV_SECTIONS = [
   {
-    label: 'Intelligence',
+    label: '① Sources',
     items: [
-      { label: 'Daily Digest', href: '/use-cases/hk-sg-tender-intel', icon: Newspaper },
-      { label: 'All Tenders', href: '/use-cases/hk-sg-tender-intel/tenders', icon: Database },
+      { label: 'Source Registry', href: '/use-cases/hk-sg-tender-intel/sources', icon: Rss },
     ],
   },
   {
-    label: 'Sources',
+    label: '② Ingestion & Scoring',
     items: [
-      { label: 'Source Registry', href: '/use-cases/hk-sg-tender-intel/sources', icon: Rss },
-      { label: 'Ingestion Log', href: '/use-cases/hk-sg-tender-intel/logs', icon: Activity },
+      { label: 'Run & Monitor', href: '/use-cases/hk-sg-tender-intel/logs', icon: Activity },
+    ],
+  },
+  {
+    label: '③ Results',
+    items: [
+      { label: 'All Tenders', href: '/use-cases/hk-sg-tender-intel/tenders', icon: Database },
+      { label: 'Daily Digest', href: '/use-cases/hk-sg-tender-intel', icon: Newspaper },
     ],
   },
   {

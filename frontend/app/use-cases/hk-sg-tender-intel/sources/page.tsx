@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle2, AlertTriangle, Clock, RefreshCw, ChevronDown, Plus,
-  ExternalLink, Search, Loader2, Cpu, Zap, Globe, CheckCheck, XCircle, Info,
+  ExternalLink, Search, Loader2, Cpu, Zap, Globe, CheckCheck, XCircle, Info, Rss,
 } from 'lucide-react';
 
 type SourceStatus = 'active' | 'broken' | 'pending_validation' | 'deferred';
@@ -239,11 +239,21 @@ export default function SourceRegistryPage() {
     }
   }
 
-  const filtered = sources;
-  const activeCount  = sources.filter(s => s.status === 'active').length;
-  const pendingCount = sources.filter(s => s.status === 'pending_validation').length;
+  const hubSources    = sources.filter(s => s.source_type === 'html_hub');
+  const feedSources   = sources.filter(s => s.source_type !== 'html_hub');
+  const activeCount   = sources.filter(s => s.status === 'active').length;
+  const pendingCount  = sources.filter(s => s.status === 'pending_validation').length;
   const totalNewToday = sources.reduce((sum, s) => sum + (s.new_items_today ?? 0), 0);
-  const doneEvent = discoverLog.find((e): e is Extract<DiscoverEvent, {type:'done'}> => e.type === 'done');
+  const doneEvent     = discoverLog.find((e): e is Extract<DiscoverEvent, {type:'done'}> => e.type === 'done');
+
+  // Apply status filter to whichever list we're showing
+  function applyFilter(list: Source[]) {
+    return list.filter(s => {
+      if (filterJur !== 'All' && s.jurisdiction !== filterJur) return false;
+      if (filterStatus !== 'All' && s.status !== filterStatus) return false;
+      return true;
+    });
+  }
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -393,151 +403,162 @@ Hrefs:
         </div>
       </div>
 
-      {/* ── Source cards ── */}
-      <div className="space-y-2">
-        {filtered.map(source => {
-          const sc = STATUS_CONFIG[source.status];
-          const StatusIcon = sc.icon;
-          const isOpen = expanded === source.source_id;
-          return (
-            <div
-              key={source.source_id}
-              className="rounded-xl border border-slate-700/50 bg-slate-800/60 overflow-hidden"
-            >
-              <button
-                className="w-full flex items-center gap-4 px-4 py-3 hover:bg-white/[0.02] transition-colors text-left"
-                onClick={() => setExpanded(isOpen ? null : source.source_id)}
-              >
-                {/* Status dot */}
-                <div className="flex-shrink-0">
-                  <div className={`w-2 h-2 rounded-full ${sc.dot} ${source.status === 'active' ? 'shadow-[0_0_6px_1px] shadow-teal-400/40' : ''}`} />
-                </div>
+      {/* ── Source groups ── */}
 
-                {/* Priority */}
-                <span className={`text-[10px] font-bold ${PRIORITY_COLORS[source.priority]} w-4 text-center flex-shrink-0`}>
-                  P{source.priority}
-                </span>
+      {/* Group A: Discovery Hubs */}
+      {(applyFilter(hubSources).length > 0 || loading) && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <Globe className="w-4 h-4 text-blue-400 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-white">Discovery Hubs <span className="text-blue-400 font-normal text-xs ml-1">({applyFilter(hubSources).length} websites)</span></p>
+              <p className="text-[11px] text-slate-500">Government web pages scanned by the AI to find RSS/XML feed links. Click <span className="text-blue-400">Discover sources</span> above to scan these.</p>
+            </div>
+          </div>
+          {applyFilter(hubSources).map(source => <SourceCard key={source.source_id} source={source} expanded={expanded} setExpanded={setExpanded} />)}
+        </div>
+      )}
 
-                {/* Name + org */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-white truncate">{source.name}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 flex-shrink-0 hidden sm:inline">
-                      {SOURCE_TYPE_LABELS[source.source_type]}
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 flex-shrink-0 hidden md:inline">
-                      {source.jurisdiction}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-500 truncate mt-0.5">{source.organisation}</div>
-                </div>
+      {/* Group B: Direct Feeds */}
+      {(applyFilter(feedSources).length > 0 || loading) && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <Rss className="w-4 h-4 text-teal-400 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-white">Direct Feeds <span className="text-teal-400 font-normal text-xs ml-1">({applyFilter(feedSources).length} sources)</span></p>
+              <p className="text-[11px] text-slate-500">RSS/XML/API feeds ingested directly on each run — no discovery step needed.</p>
+            </div>
+          </div>
+          {applyFilter(feedSources).map(source => <SourceCard key={source.source_id} source={source} expanded={expanded} setExpanded={setExpanded} />)}
+        </div>
+      )}
 
-                {/* Stats */}
-                <div className="flex items-center gap-4 flex-shrink-0">
-                  {source.new_items_today !== null && (
-                    <div className="text-right hidden sm:block">
-                      <div className="text-xs font-medium text-teal-400">{source.new_items_today} new</div>
-                      <div className="text-[10px] text-slate-500">today</div>
-                    </div>
-                  )}
-                  <div className="text-right hidden md:block">
-                    <div className={`text-xs font-medium ${sc.color}`}>{sc.label}</div>
-                    <div className="text-[10px] text-slate-500">{source.last_checked ?? '—'}</div>
-                  </div>
-                  {source.reliability_score > 0 && (
-                    <div className="hidden lg:flex items-center gap-1.5 w-20">
-                      <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-teal-400 rounded-full"
-                          style={{ width: `${source.reliability_score * 100}%` }}
-                        />
-                      </div>
-                      <span className="text-[10px] text-slate-500 w-6">
-                        {(source.reliability_score * 100).toFixed(0)}
-                      </span>
-                    </div>
-                  )}
-                  <ChevronDown className={`w-3.5 h-3.5 text-slate-600 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                </div>
-              </button>
+      {!loading && sources.length === 0 && (
+        <div className="rounded-xl border border-slate-700/30 bg-white/[0.01] p-8 text-center">
+          <p className="text-sm text-slate-500">
+            No sources loaded — database may not be connected, or seed hasn&apos;t run yet.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
-              {/* Expanded detail */}
-              {isOpen && (
-                <div className="px-4 pb-4 pt-1 border-t border-slate-700/30 bg-white/[0.01]">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
-                    <div>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Feed / Hub URL</p>
-                      {source.feed_url ? (
-                        <a
-                          href={source.feed_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-teal-400 hover:underline flex items-center gap-1 break-all"
-                        >
-                          {source.feed_url}
-                          <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
-                        </a>
-                      ) : (
-                        <span className="text-xs text-slate-500 italic">Not yet configured</span>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Category defaults</p>
-                      <div className="flex flex-wrap gap-1">
-                        {source.category_tags_default.length > 0
-                          ? source.category_tags_default.map(t => (
-                              <span
-                                key={t}
-                                className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/40 text-slate-400 border border-slate-600/30"
-                              >
-                                {t.replace(/_/g, ' ')}
-                              </span>
-                            ))
-                          : <span className="text-xs text-slate-600 italic">None (discovery hub)</span>
-                        }
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Notes</p>
-                    <p className="text-xs text-slate-400">{source.notes}</p>
-                  </div>
-                  <div className="flex gap-2 mt-3">
-                    {source.status === 'pending_validation' && (
-                      <button className="text-xs px-3 py-1.5 rounded-lg bg-teal-500/15 text-teal-400 border border-teal-500/30 hover:bg-teal-500/25 transition-colors">
-                        Validate now
-                      </button>
-                    )}
-                    {source.status === 'active' && (
-                      <button className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.04] text-slate-400 border border-slate-700/50 hover:bg-white/[0.06] transition-colors">
-                        Test fetch
-                      </button>
-                    )}
-                    {source.status === 'deferred' && (
-                      <button className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.04] text-slate-400 border border-slate-700/50 hover:bg-white/[0.06] transition-colors">
-                        Configure access
-                      </button>
-                    )}
-                    <button className="text-xs px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-400 transition-colors">
-                      Edit
-                    </button>
-                  </div>
-                </div>
+// ─── Extracted source card component ─────────────────────────────────────────
+
+function SourceCard({
+  source,
+  expanded,
+  setExpanded,
+}: {
+  source: Source;
+  expanded: string | null;
+  setExpanded: (id: string | null) => void;
+}) {
+  const sc = STATUS_CONFIG[source.status];
+  const isOpen = expanded === source.source_id;
+  return (
+    <div className="rounded-xl border border-slate-700/50 bg-slate-800/60 overflow-hidden">
+      <button
+        className="w-full flex items-center gap-4 px-4 py-3 hover:bg-white/[0.02] transition-colors text-left"
+        onClick={() => setExpanded(isOpen ? null : source.source_id)}
+      >
+        <div className="flex-shrink-0">
+          <div className={`w-2 h-2 rounded-full ${sc.dot} ${source.status === 'active' ? 'shadow-[0_0_6px_1px] shadow-teal-400/40' : ''}`} />
+        </div>
+        <span className={`text-[10px] font-bold ${PRIORITY_COLORS[source.priority]} w-4 text-center flex-shrink-0`}>
+          P{source.priority}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-white truncate">{source.name}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 flex-shrink-0 hidden sm:inline">
+              {SOURCE_TYPE_LABELS[source.source_type]}
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 flex-shrink-0 hidden md:inline">
+              {source.jurisdiction}
+            </span>
+          </div>
+          <div className="text-xs text-slate-500 truncate mt-0.5">{source.organisation}</div>
+        </div>
+        <div className="flex items-center gap-4 flex-shrink-0">
+          {source.new_items_today !== null && (
+            <div className="text-right hidden sm:block">
+              <div className="text-xs font-medium text-teal-400">{source.new_items_today} new</div>
+              <div className="text-[10px] text-slate-500">today</div>
+            </div>
+          )}
+          <div className="text-right hidden md:block">
+            <div className={`text-xs font-medium ${sc.color}`}>{sc.label}</div>
+            <div className="text-[10px] text-slate-500">{source.last_checked ?? '—'}</div>
+          </div>
+          {source.reliability_score > 0 && (
+            <div className="hidden lg:flex items-center gap-1.5 w-20">
+              <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-teal-400 rounded-full" style={{ width: `${source.reliability_score * 100}%` }} />
+              </div>
+              <span className="text-[10px] text-slate-500 w-6">{(source.reliability_score * 100).toFixed(0)}</span>
+            </div>
+          )}
+          <ChevronDown className={`w-3.5 h-3.5 text-slate-600 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="px-4 pb-4 pt-1 border-t border-slate-700/30 bg-white/[0.01]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Feed / Hub URL</p>
+              {source.feed_url ? (
+                <a href={source.feed_url} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-teal-400 hover:underline flex items-center gap-1 break-all">
+                  {source.feed_url}
+                  <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
+                </a>
+              ) : (
+                <span className="text-xs text-slate-500 italic">Not yet configured</span>
               )}
             </div>
-          );
-        })}
-        {!loading && filtered.length === 0 && (
-          <div className="rounded-xl border border-slate-700/30 bg-white/[0.01] p-8 text-center">
-            <p className="text-sm text-slate-500">
-              No sources found. Seed the source registry first:{' '}
-              <code className="text-teal-400 text-xs">
-                node use-cases/hk-sg-tender-intelligence/scripts/seed-sources.js
-              </code>
-            </p>
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Category defaults</p>
+              <div className="flex flex-wrap gap-1">
+                {source.category_tags_default.length > 0
+                  ? source.category_tags_default.map(t => (
+                      <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/40 text-slate-400 border border-slate-600/30">
+                        {t.replace(/_/g, ' ')}
+                      </span>
+                    ))
+                  : <span className="text-xs text-slate-600 italic">None (discovery hub)</span>
+                }
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+          <div>
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Notes</p>
+            <p className="text-xs text-slate-400">{source.notes}</p>
+          </div>
+          <div className="flex gap-2 mt-3">
+            {source.status === 'pending_validation' && (
+              <button className="text-xs px-3 py-1.5 rounded-lg bg-teal-500/15 text-teal-400 border border-teal-500/30 hover:bg-teal-500/25 transition-colors">
+                Validate now
+              </button>
+            )}
+            {source.status === 'active' && (
+              <button className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.04] text-slate-400 border border-slate-700/50 hover:bg-white/[0.06] transition-colors">
+                Test fetch
+              </button>
+            )}
+            {source.status === 'deferred' && (
+              <button className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.04] text-slate-400 border border-slate-700/50 hover:bg-white/[0.06] transition-colors">
+                Configure access
+              </button>
+            )}
+            <button className="text-xs px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-400 transition-colors">
+              Edit
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
