@@ -2201,6 +2201,65 @@ app.get('/stats', async (req, res) => {
             monthly: { runsPerMonth: 150, estimatedCost: 0.30 },
           },
         },
+        {
+          id: 'sme-growth-engine',
+          name: 'SME Growth Engine',
+          description: '7-agent SME lead gen system: lead scoring, email nurture, campaign analytics, retargeting, CRO, demo closer, and lead intelligence',
+          agentCount: 7,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: 'Full NEW_LEAD pipeline: Score + Enrich (parallel) + 5-email nurture sequence',
+              modelCalls: [
+                { model: 'DeepSeek Reasoner (Lead Scoring — AI pass)', calls: 1, avgTokensIn: 800, avgTokensOut: 400, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'DeepSeek Reasoner (Lead Intelligence)', calls: 1, avgTokensIn: 1200, avgTokensOut: 700, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'DeepSeek Reasoner (Email Nurture 5-sequence)', calls: 1, avgTokensIn: 2500, avgTokensOut: 3000, costPerMillion: { input: 0.14, output: 0.28 } },
+              ],
+              totalTokens: { input: 4500, output: 4100 },
+              estimatedCost: 0.0018, // USD per new lead processed
+              notes: 'Rule-based scoring pass is free. AI pass adds $0.0002. Intelligence + nurture = $0.0016.',
+            },
+            perWeeklyReview: {
+              description: 'Weekly campaign review: Analytics + CRO (parallel) + Retargeting strategy (4 segments)',
+              modelCalls: [
+                { model: 'DeepSeek Reasoner (Campaign Analytics)', calls: 1, avgTokensIn: 2000, avgTokensOut: 800, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'DeepSeek Reasoner (CRO Optimizer)', calls: 1, avgTokensIn: 2500, avgTokensOut: 900, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'DeepSeek Reasoner (Retargeting — 4 segments)', calls: 4, avgTokensIn: 1500, avgTokensOut: 700, costPerMillion: { input: 0.14, output: 0.28 } },
+              ],
+              totalTokens: { input: 10500, output: 4500 },
+              estimatedCost: 0.0027, // USD per weekly review
+            },
+            monthly: {
+              leadsPerMonth: 50,
+              leadPipelineCost: 0.09,   // 50 leads × $0.0018
+              weeklyReviewCost: 0.011,  // 4 reviews × $0.0027
+              demoAssetCost: 0.06,      // ~15 demos × 4 stage assets × $0.001
+              estimatedCost: 0.16,      // Total ~$0.16/month at 50 leads
+              notes: 'Scales linearly with lead volume. 200 leads/month ≈ $0.45. Campaign review is flat $0.011/month.',
+            },
+          },
+          agents: [
+            { id: 'lead-scoring', name: 'Lead Scoring Agent', role: 'Firmographic + AI intent scoring (0–100)', model: 'DeepSeek Reasoner' },
+            { id: 'lead-intelligence', name: 'Lead Intelligence Agent', role: 'ROI estimate, deal complexity, first-touch angle', model: 'DeepSeek Reasoner' },
+            { id: 'email-nurture', name: 'Email Nurture Agent', role: '5-email personalised sequence by industry + tier', model: 'DeepSeek Reasoner' },
+            { id: 'demo-closer', name: 'Demo Closer Agent', role: 'Prep briefing, follow-up email, no-show recovery, objection handler', model: 'DeepSeek Reasoner' },
+            { id: 'campaign-analytics', name: 'Campaign Analytics Agent', role: 'UTM attribution, CPL by channel, AI recommendations', model: 'DeepSeek Reasoner' },
+            { id: 'retargeting', name: 'Retargeting Strategist Agent', role: '4-audience segmentation + ad copy variations per segment', model: 'DeepSeek Reasoner' },
+            { id: 'cro-optimizer', name: 'Conversion Optimizer Agent', role: 'Funnel drop-off analysis, A/B test design, CRO quick wins', model: 'DeepSeek Reasoner' },
+          ],
+          endpoints: [
+            'POST /api/sme/leads/process      — Full new-lead orchestration pipeline',
+            'POST /api/sme/leads/score        — Score individual lead',
+            'POST /api/sme/leads/enrich       — Enrich lead with intelligence brief',
+            'POST /api/sme/leads/nurture-sequence — Generate 5-email nurture sequence',
+            'POST /api/sme/demo/:stage        — Demo asset (prep/follow_up/no_show/objection)',
+            'POST /api/sme/analytics/campaigns — Campaign attribution + CPL analysis',
+            'GET  /api/sme/analytics/funnel   — Live funnel metrics + CRO analysis',
+            'POST /api/sme/retargeting        — Retargeting audience strategy + ad copy',
+            'POST /api/sme/cro/optimize       — CRO recommendations from funnel data',
+            'POST /api/sme/campaign-review    — Weekly campaign review orchestration',
+          ],
+        },
       ],
       // Token pricing reference (per million tokens)
       tokenPricing: {
@@ -2223,8 +2282,9 @@ app.get('/stats', async (req, res) => {
         aiImageGeneration: 0.66,
         aiVideoGeneration: 0.88,
         hkSgTenderIntelligence: 1.80,
-        totalBase: 28.38,
-        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). All estimates assume typical usage patterns.',
+        smeGrowthEngine: 0.16, // At 50 leads/month + 4 weekly reviews
+        totalBase: 28.54,
+        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). SME Growth Engine scales with lead volume (~$0.002/lead). All estimates assume typical usage patterns.',
       },
       databaseTables: [
         // Social/Marketing tables
@@ -5909,6 +5969,218 @@ app.get('/api/ziwei/palace/:palace', (req, res) => {
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================
+// SME Growth Engine — 7-Agent Lead Gen & Campaign System
+// ============================================================
+
+// Lazy-load SME growth agents (imported once on first use)
+let smeOrchestrator, leadScoringAgent, emailNurtureAgent, campaignAnalyticsAgent,
+    retargetingAgent, conversionOptimizerAgent, demoCloserAgent, leadIntelligenceAgent;
+
+function getSMEAgents() {
+  if (!smeOrchestrator) {
+    smeOrchestrator        = require('./agents/smeGrowthOrchestrator');
+    leadScoringAgent       = require('./agents/leadScoringAgent');
+    emailNurtureAgent      = require('./agents/emailNurtureAgent');
+    campaignAnalyticsAgent = require('./agents/campaignAnalyticsAgent');
+    retargetingAgent       = require('./agents/retargetingAgent');
+    conversionOptimizerAgent = require('./agents/conversionOptimizerAgent');
+    demoCloserAgent        = require('./agents/demoCloserAgent');
+    leadIntelligenceAgent  = require('./agents/leadIntelligenceAgent');
+  }
+  return {
+    smeOrchestrator, leadScoringAgent, emailNurtureAgent,
+    campaignAnalyticsAgent, retargetingAgent, conversionOptimizerAgent,
+    demoCloserAgent, leadIntelligenceAgent,
+  };
+}
+
+// POST /api/sme/leads/score — Score a single lead with Lead Scoring Agent
+app.post('/api/sme/leads/score', async (req, res) => {
+  try {
+    const { leadScoringAgent: agent } = getSMEAgents();
+    const lead = req.body;
+    if (!lead.email && !lead.lead_id) {
+      return res.status(400).json({ error: 'lead data with email or lead_id required' });
+    }
+    const result = await agent.scoreLead(lead);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME lead score error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/leads/enrich — Enrich lead with Lead Intelligence Agent
+app.post('/api/sme/leads/enrich', async (req, res) => {
+  try {
+    const { leadIntelligenceAgent: agent } = getSMEAgents();
+    const lead = req.body;
+    if (!lead.industry) {
+      return res.status(400).json({ error: 'industry field required' });
+    }
+    const result = await agent.enrichLead(lead);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME lead enrich error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/leads/nurture-sequence — Generate personalised 5-email nurture sequence
+app.post('/api/sme/leads/nurture-sequence', async (req, res) => {
+  try {
+    const { emailNurtureAgent: agent } = getSMEAgents();
+    const { lead, tier } = req.body;
+    if (!lead || !lead.industry) {
+      return res.status(400).json({ error: 'lead object with industry required' });
+    }
+    const result = await agent.generateNurtureSequence(lead, tier || 'warm');
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME nurture sequence error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/leads/process — Full NEW_LEAD orchestration pipeline
+// Runs: Score + Enrich (parallel) → Nurture Sequence
+app.post('/api/sme/leads/process', async (req, res) => {
+  try {
+    const { smeOrchestrator: orch } = getSMEAgents();
+    const lead = req.body;
+    if (!lead.email) {
+      return res.status(400).json({ error: 'email required' });
+    }
+    const result = await orch.handleNewLead(lead);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME lead process error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/demo/:stage — Demo lifecycle asset generation
+// stage: prep | follow_up | no_show | objection
+app.post('/api/sme/demo/:stage', async (req, res) => {
+  try {
+    const { smeOrchestrator: orch } = getSMEAgents();
+    const { stage } = req.params;
+    const { lead, ...stageData } = req.body;
+    const validStages = ['prep', 'follow_up', 'no_show', 'objection'];
+    if (!validStages.includes(stage)) {
+      return res.status(400).json({ error: `Invalid stage. Use: ${validStages.join(', ')}` });
+    }
+    if (!lead || !lead.industry) {
+      return res.status(400).json({ error: 'lead object with industry required' });
+    }
+    const result = await orch.handleDemoEvent(lead, stage, stageData);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error(`❌ SME demo ${req.params.stage} error:`, err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/analytics/campaigns — Campaign attribution + CPL analysis
+app.post('/api/sme/analytics/campaigns', async (req, res) => {
+  try {
+    const { campaignAnalyticsAgent: agent } = getSMEAgents();
+    const { leads, spendData, options } = req.body;
+    if (!Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({ error: 'leads array required' });
+    }
+    const result = await agent.runCampaignAnalytics(leads, spendData || {}, options || {});
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME campaign analytics error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/sme/analytics/funnel — Pull live funnel metrics from DB + analyse
+app.get('/api/sme/analytics/funnel', async (req, res) => {
+  try {
+    const { conversionOptimizerAgent: agent } = getSMEAgents();
+    // Pull aggregated funnel data from leads table
+    const funnelQuery = await pool.query(`
+      SELECT
+        COUNT(*) AS total_leads,
+        COUNT(*) FILTER (WHERE demo_requested = true) AS demos_booked,
+        COUNT(*) FILTER (WHERE demo_completed = true) AS demos_attended,
+        COUNT(*) FILTER (WHERE status = 'closed') AS closed_won
+      FROM leads
+    `).catch(() => null);
+
+    const dbMetrics = funnelQuery?.rows?.[0] || {};
+    const metrics = {
+      leads: parseInt(dbMetrics.total_leads) || 0,
+      demos_booked: parseInt(dbMetrics.demos_booked) || 0,
+      demos_attended: parseInt(dbMetrics.demos_attended) || 0,
+      closed_won: parseInt(dbMetrics.closed_won) || 0,
+      // Manual overrides via query params
+      page_visitors: parseInt(req.query.page_visitors) || 0,
+      form_starts: parseInt(req.query.form_starts) || 0,
+      total_spend_hkd: parseInt(req.query.spend) || 0,
+    };
+
+    const result = await agent.optimizeConversions(metrics, {
+      form_fields: req.query.form_fields || '6 required fields',
+      cta_text: req.query.cta_text || 'Get Your Free AI Assessment',
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME funnel analysis error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/retargeting — Generate retargeting audience strategy + ad copy
+app.post('/api/sme/retargeting', async (req, res) => {
+  try {
+    const { retargetingAgent: agent } = getSMEAgents();
+    const { industry, segments } = req.body;
+    const result = await agent.generateRetargetingStrategy({ industry, segments });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME retargeting error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/cro/optimize — CRO recommendations from funnel metrics
+app.post('/api/sme/cro/optimize', async (req, res) => {
+  try {
+    const { conversionOptimizerAgent: agent } = getSMEAgents();
+    const { metrics, currentSetup } = req.body;
+    if (!metrics) {
+      return res.status(400).json({ error: 'metrics object required' });
+    }
+    const result = await agent.optimizeConversions(metrics, currentSetup || {});
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME CRO optimize error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/campaign-review — Weekly campaign review orchestration
+// Runs: Campaign Analytics + CRO (parallel) → Retargeting strategy
+app.post('/api/sme/campaign-review', async (req, res) => {
+  try {
+    const { smeOrchestrator: orch } = getSMEAgents();
+    const { leads, funnelMetrics, spendData, options } = req.body;
+    if (!Array.isArray(leads)) {
+      return res.status(400).json({ error: 'leads array required' });
+    }
+    const result = await orch.handleCampaignReview(leads, funnelMetrics || {}, spendData || {}, options || {});
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME campaign review error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
