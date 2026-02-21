@@ -8,25 +8,25 @@ const SPEAKERS = [
     name: '程世嘉',
     role: 'iKala 共同創辦人暨執行長',
     bio: 'Stanford CS 碩士、前 Google 軟體工程師。2011 年創辦 AI 跨國企業 iKala，專注 AI 技術與數位轉型。',
-    image: null,
+    imageId: 'cheng-shi-jia',
   },
   {
     name: '林東良',
     role: '講者',
     bio: '',
-    image: null, // TODO: add /tedx-xinyi/speakers/lin-dong-liang.jpg
+    imageId: 'lin-dong-liang',
   },
   {
     name: '楊士毅',
     role: '剪紙藝術家・攝影師・導演',
     bio: '曾為 Apple 台北 101 旗艦店創作 75 公尺剪紙作品《有閒來坐》，作品橫跨公共藝術、攝影與影像導演。',
-    image: null, // TODO: add /tedx-xinyi/speakers/yang-shi-yi.jpg
+    imageId: 'yang-shi-yi',
   },
   {
     name: '玻璃兄弟',
     role: 'Podcast 主持人・華夏玻璃',
     bio: 'Richard 與 Winston 兩兄弟經營家族企業華夏玻璃，同時主持商業管理與 ESG podcast「玻科客」。',
-    image: null,
+    imageId: 'glass-brothers',
   },
 ];
 
@@ -283,19 +283,27 @@ export default function SalonPage() {
           {SPEAKERS.map((speaker, i) => (
             <FadeIn key={i} delay={i * 80}>
               <div className="text-center">
-                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full mx-auto mb-4 overflow-hidden bg-neutral-100 border-2 border-neutral-100">
-                  {speaker.image ? (
-                    <img
-                      src={speaker.image}
-                      alt={speaker.name}
-                      loading="lazy"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-300">
-                      <span className="text-2xl font-black text-neutral-400">{speaker.name[0]}</span>
-                    </div>
-                  )}
+                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full mx-auto mb-4 overflow-hidden bg-neutral-100 border-2 border-neutral-100 relative">
+                  {/* Try loading uploaded photo; show initial on error */}
+                  <img
+                    src={`/tedx-xinyi/speakers/${speaker.imageId}.jpg`}
+                    alt={speaker.name}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const el = e.target as HTMLImageElement;
+                      // Try png before giving up
+                      if (el.src.endsWith('.jpg')) {
+                        el.src = el.src.replace('.jpg', '.png');
+                      } else {
+                        el.style.display = 'none';
+                        if (el.nextElementSibling) (el.nextElementSibling as HTMLElement).style.display = 'flex';
+                      }
+                    }}
+                  />
+                  <div className="w-full h-full items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-300 absolute inset-0" style={{ display: 'none' }}>
+                    <span className="text-2xl font-black text-neutral-400">{speaker.name[0]}</span>
+                  </div>
                 </div>
                 <p className="font-black text-base mb-1" lang="zh-TW">{speaker.name}</p>
                 <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">{speaker.role}</p>

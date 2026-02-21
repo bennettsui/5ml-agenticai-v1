@@ -1845,7 +1845,9 @@ try {
 try {
   const tedxXinyiRoutes = require('./use-cases/tedx-xinyi/api/routes');
   app.use('/api/tedx-xinyi', tedxXinyiRoutes);
-  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi');
+  // Admin shortcut: /tedxxinyi/admin → upload page
+  app.get('/tedxxinyi/admin', (req, res) => res.redirect('/api/tedx-xinyi/upload'));
+  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /tedxxinyi/admin');
 } catch (error) {
   console.warn('⚠️ TEDxXinyi routes not loaded:', error.message);
 }
