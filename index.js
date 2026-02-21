@@ -5898,6 +5898,183 @@ app.get('/api/ziwei/palace/:palace', (req, res) => {
 });
 
 // ==========================================
+// HK+SG Tender Intelligence API
+// ==========================================
+{
+  const tenderIntel = require('./services/tender-intel-service');
+  const nodeCron = require('node-cron');
+  const scheduleRegistry = require('./services/schedule-registry');
+
+  // Register schedules
+  scheduleRegistry.register({ id: 'tender-intel:daily-ingestion',  group: 'Tender Intelligence', name: 'Daily RSS/XML Ingestion',    description: 'Fetch all active RSS/XML sources, normalise into tenders', schedule: '0 3 * * *',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Daily at 03:00 HKT' });
+  scheduleRegistry.register({ id: 'tender-intel:source-discovery', group: 'Tender Intelligence', name: 'Weekly Source Discovery',    description: 'Scan hub pages for new RSS/HTML sources',                   schedule: '0 2 * * 0',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Sunday at 02:00 HKT' });
+  scheduleRegistry.register({ id: 'tender-intel:digest-generate',  group: 'Tender Intelligence', name: 'Daily Digest Generation',   description: 'Generate ranked daily digest narrative',                     schedule: '0 8 * * *',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Daily at 08:00 HKT' });
+  scheduleRegistry.register({ id: 'tender-intel:feedback-learning',group: 'Tender Intelligence', name: 'Weekly Feedback Calibration','description': 'Calibrate scoring weights from decisions',                schedule: '0 5 * * 0',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Sunday at 05:00 HKT' });
+
+  // Daily ingestion cron → 03:00 HKT
+  if (process.env.DATABASE_URL) {
+    nodeCron.schedule('0 3 * * *', async () => {
+      scheduleRegistry.markRunning('tender-intel:daily-ingestion');
+      try {
+        const summary = await tenderIntel.runIngestion(pool);
+        scheduleRegistry.markCompleted('tender-intel:daily-ingestion', {
+          result: `${summary.newRawCaptures} new captures, ${summary.tendersInserted} tenders`,
+          durationMs: summary.durationMs,
+        });
+        console.log('✅ Tender ingestion complete:', summary.newRawCaptures, 'new captures');
+      } catch (err) {
+        scheduleRegistry.markFailed('tender-intel:daily-ingestion', err.message);
+        console.error('❌ Tender ingestion failed:', err.message);
+      }
+    }, { timezone: 'Asia/Hong_Kong' });
+
+    // Daily evaluation cron → 04:00 HKT (after ingestion)
+    nodeCron.schedule('0 4 * * *', async () => {
+      scheduleRegistry.markRunning('tender-intel:digest-generate');
+      try {
+        const result = await tenderIntel.runEvaluation(pool);
+        scheduleRegistry.markCompleted('tender-intel:digest-generate', {
+          result: `${result.evaluated.length} tenders scored`,
+        });
+        console.log('✅ Tender evaluation complete:', result.evaluated.length, 'scored');
+      } catch (err) {
+        scheduleRegistry.markFailed('tender-intel:digest-generate', err.message);
+        console.error('❌ Tender evaluation failed:', err.message);
+      }
+    }, { timezone: 'Asia/Hong_Kong' });
+  }
+
+  // POST /api/tender-intel/evaluate  — manual trigger
+  app.post('/api/tender-intel/evaluate', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    try {
+      scheduleRegistry.markRunning('tender-intel:digest-generate');
+      const result = await tenderIntel.runEvaluation(pool, req.body.profile || null);
+      scheduleRegistry.markCompleted('tender-intel:digest-generate', { result: `${result.evaluated.length} scored` });
+      res.json({ success: true, ...result });
+    } catch (err) {
+      scheduleRegistry.markFailed('tender-intel:digest-generate', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/tender-intel/decision  — record founder decision (track / ignore / partner_only)
+  app.post('/api/tender-intel/decision', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    const { tenderId, action, notes } = req.body;
+    if (!tenderId || !action) return res.status(400).json({ error: 'tenderId and action required' });
+    try {
+      await tenderIntel.recordDecision(pool, { tenderId, action, notes });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/profile
+  app.get('/api/tender-intel/profile', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json(tenderIntel.DEFAULT_PROFILE);
+    try { res.json(await tenderIntel.getProfile(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // PUT /api/tender-intel/profile
+  app.put('/api/tender-intel/profile', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    try { await tenderIntel.saveProfile(pool, req.body); res.json({ success: true }); }
+    catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /api/tender-intel/digest
+  app.get('/api/tender-intel/digest', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json({ stats: { newToday:0, priority:0, closingSoon:0, sourcesOk:'0/0' }, tenders:[], lastRun:null, _mock:true });
+    try {
+      const data = await tenderIntel.getDigest(pool);
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/tenders
+  app.get('/api/tender-intel/tenders', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json({ tenders:[], total:0, _mock:true });
+    try {
+      const { jurisdiction, label, status, search, limit, offset } = req.query;
+      const data = await tenderIntel.getTenders(pool, {
+        jurisdiction, label, status, search,
+        limit: Math.min(parseInt(limit) || 50, 200),
+        offset: parseInt(offset) || 0,
+      });
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/sources
+  app.get('/api/tender-intel/sources', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    try {
+      const { jurisdiction, status } = req.query;
+      const sources = await tenderIntel.getSources(pool, { jurisdiction, status });
+      res.json(sources);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/logs
+  app.get('/api/tender-intel/logs', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    try {
+      const { limit } = req.query;
+      const logs = await tenderIntel.getLogs(pool, { limit: Math.min(parseInt(limit) || 100, 500) });
+      res.json(logs);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/tender-intel/ingest  — manual trigger (for testing)
+  app.post('/api/tender-intel/ingest', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    try {
+      scheduleRegistry.markRunning('tender-intel:daily-ingestion');
+      const summary = await tenderIntel.runIngestion(pool);
+      scheduleRegistry.markCompleted('tender-intel:daily-ingestion', {
+        result: `${summary.newRawCaptures} new captures`,
+        durationMs: summary.durationMs,
+      });
+      res.json({ success: true, summary });
+    } catch (err) {
+      scheduleRegistry.markFailed('tender-intel:daily-ingestion', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/tender-intel/chat  — AI chat assistant used by frontend layout
+  app.post('/api/tender-intel/chat', async (req, res) => {
+    const { messages } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages array required' });
+    }
+    try {
+      const Anthropic = require('@anthropic-ai/sdk');
+      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const response = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: 'You are a tender intelligence assistant for HK and Singapore government procurement. Help the user understand tenders, evaluate opportunities, find relevant sources, and plan bid responses. Be concise and practical.',
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+      });
+      res.json({ content: response.content[0]?.text || '', role: 'assistant' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+}
+
+// ==========================================
 // Start Server
 // ==========================================
 const port = process.env.PORT || 8080;
