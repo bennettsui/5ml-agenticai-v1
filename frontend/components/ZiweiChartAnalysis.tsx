@@ -101,7 +101,7 @@ export default function ZiweiChartAnalysis() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-teal-400 animate-spin" />
       </div>
     );
   }
@@ -120,8 +120,8 @@ export default function ZiweiChartAnalysis() {
 
       {/* No charts state */}
       {charts.length === 0 && (
-        <div className="p-5 bg-purple-500/10 border border-purple-500/30 rounded-xl">
-          <p className="text-sm text-purple-300">
+        <div className="p-5 bg-teal-500/10 border border-teal-500/30 rounded-xl">
+          <p className="text-sm text-cyan-300">
             No saved charts found. Generate a chart in the <strong>Charts</strong> tab first.
           </p>
         </div>
@@ -129,12 +129,12 @@ export default function ZiweiChartAnalysis() {
 
       {/* Chart Selector */}
       {charts.length > 0 && (
-        <div className="rounded-xl border border-purple-800/30 bg-purple-950/30 p-4">
+        <div className="rounded-xl border border-teal-800/30 bg-teal-950/30 p-4">
           <label className="text-xs font-semibold text-slate-400 mb-2 block">Select Chart to Analyze</label>
           <select
             value={selectedChartId || ''}
             onChange={(e) => setSelectedChartId(e.target.value)}
-            className="w-full px-3 py-2.5 bg-purple-950/50 border border-purple-800/40 rounded-xl text-white text-sm focus:outline-none focus:border-purple-500"
+            className="w-full px-3 py-2.5 bg-[#071420]/80 border border-teal-800/40 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
           >
             {charts.map(chart => (
               <option key={chart.id} value={chart.id}>
@@ -148,7 +148,7 @@ export default function ZiweiChartAnalysis() {
       {/* Loading analysis */}
       {analysisLoading && (
         <div className="flex items-center justify-center py-10 gap-2">
-          <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
+          <Loader2 className="w-5 h-5 text-teal-400 animate-spin" />
           <span className="text-slate-400 text-sm">Loading analysis...</span>
         </div>
       )}
@@ -158,15 +158,15 @@ export default function ZiweiChartAnalysis() {
         <div className="space-y-5">
 
           {/* Visitor info banner */}
-          <div className="rounded-xl border border-purple-700/30 bg-gradient-to-r from-purple-900/30 to-violet-900/20 p-5">
+          <div className="rounded-xl border border-teal-700/30 bg-gradient-to-r from-teal-900/30 to-cyan-900/20 p-5">
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-xl font-bold text-purple-300 flex-shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-xl font-bold text-cyan-300 flex-shrink-0">
                   {(selectedChart.name || '?').charAt(0)}
                 </div>
                 <div>
                   <div className="text-lg font-bold text-white">{selectedChart.name || 'Unknown'}</div>
-                  <div className="text-sm text-purple-300/70">
+                  <div className="text-sm text-cyan-300/70">
                     {birthInfo?.lunarYear ? `農曆 ${birthInfo.lunarYear}年` : ''}
                     {birthInfo?.lunarMonth ? ` ${birthInfo.lunarMonth}月` : ''}
                     {birthInfo?.lunarDay ? `${birthInfo.lunarDay}日` : ''}
@@ -198,8 +198,8 @@ export default function ZiweiChartAnalysis() {
                 onClick={() => setChartViewMode(mode)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   chartViewMode === mode
-                    ? 'bg-purple-700/60 text-white border border-purple-600/50'
-                    : 'border border-purple-900/40 text-slate-400 hover:text-purple-300'
+                    ? 'bg-teal-800/60 text-white border border-teal-600/50'
+                    : 'border border-teal-900/40 text-slate-400 hover:text-cyan-300'
                 }`}
               >
                 <Eye className="w-3.5 h-3.5" />
@@ -223,7 +223,7 @@ export default function ZiweiChartAnalysis() {
 
           {/* Circular View */}
           {chartViewMode === 'circular' && selectedChart?.base_chart && (
-            <div className="rounded-xl border border-purple-800/30 bg-purple-950/20 p-6">
+            <div className="rounded-xl border border-teal-800/30 bg-teal-950/20 p-6">
               <h3 className="text-sm font-semibold text-white mb-4">命盤 Circular View</h3>
               <div className="flex justify-center overflow-auto max-h-[600px]">
                 <ZiweiChartCanvas
@@ -241,7 +241,7 @@ export default function ZiweiChartAnalysis() {
           )}
 
           {/* Life Dimension Analysis */}
-          <div className="rounded-xl border border-purple-800/30 bg-purple-950/30 p-5">
+          <div className="rounded-xl border border-teal-800/30 bg-teal-950/30 p-5">
             <h3 className="text-sm font-semibold text-white mb-4">Life Dimension Analysis</h3>
             <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
               {(Object.keys(dimensionLabels) as LifeDimension[]).map(dim => {
@@ -252,8 +252,8 @@ export default function ZiweiChartAnalysis() {
                     onClick={() => setActiveDimension(dim)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
                       activeDimension === dim
-                        ? 'bg-purple-700/60 text-white border border-purple-600/50'
-                        : 'border border-purple-900/40 text-slate-400 hover:text-purple-300'
+                        ? 'bg-teal-800/60 text-white border border-teal-600/50'
+                        : 'border border-teal-900/40 text-slate-400 hover:text-cyan-300'
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5" />
@@ -262,8 +262,8 @@ export default function ZiweiChartAnalysis() {
                 );
               })}
             </div>
-            <div className="rounded-lg bg-purple-900/20 border border-purple-800/20 p-4 min-h-[100px]">
-              <p className="text-sm font-medium text-purple-200 mb-2">{dimensionLabels[activeDimension]}</p>
+            <div className="rounded-lg bg-teal-900/20 border border-teal-800/20 p-4 min-h-[100px]">
+              <p className="text-sm font-medium text-cyan-200 mb-2">{dimensionLabels[activeDimension]}</p>
               <p className="text-xs text-slate-400 leading-relaxed">
                 {analysis?.[activeDimension] || 'Analysis data will be populated when you generate charts with the full interpretation engine.'}
               </p>
@@ -271,7 +271,7 @@ export default function ZiweiChartAnalysis() {
           </div>
 
           {/* Palace Analysis */}
-          <div className="rounded-xl border border-purple-800/30 bg-purple-950/30 p-5">
+          <div className="rounded-xl border border-teal-800/30 bg-teal-950/30 p-5">
             <h3 className="text-sm font-semibold text-white mb-4">宮位分析 Palace Analysis</h3>
             <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
               {palaceNames.map((palace, idx) => {
@@ -290,19 +290,19 @@ export default function ZiweiChartAnalysis() {
                   '父母宮': 'Parents palace — Elders, superiors, and academic life',
                 };
                 return (
-                  <div key={palace} className="border border-purple-900/30 rounded-xl overflow-hidden">
+                  <div key={palace} className="border border-teal-900/30 rounded-xl overflow-hidden">
                     <button
                       onClick={() => setExpandedPalaces(p => ({ ...p, [palace]: !p[palace] }))}
-                      className="w-full flex items-center justify-between p-3 hover:bg-purple-950/50 transition-colors"
+                      className="w-full flex items-center justify-between p-3 hover:bg-teal-950/50 transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        <ChevronDown className={`w-4 h-4 text-purple-400 transition-transform ${expandedPalaces[palace] ? 'rotate-180' : ''}`} />
+                        <ChevronDown className={`w-4 h-4 text-teal-400 transition-transform ${expandedPalaces[palace] ? 'rotate-180' : ''}`} />
                         <span className="font-medium text-sm text-white">{palace}</span>
                       </div>
                       <span className="text-xs text-slate-500">Palace {idx + 1}</span>
                     </button>
                     {expandedPalaces[palace] && (
-                      <div className="px-4 pb-3 border-t border-purple-900/30">
+                      <div className="px-4 pb-3 border-t border-teal-900/30">
                         <p className="text-xs text-slate-400 leading-relaxed pt-2 italic">
                           {PALACE_DESC[palace] || 'Interpretation coming soon'}
                         </p>
@@ -315,9 +315,9 @@ export default function ZiweiChartAnalysis() {
           </div>
 
           {/* Pattern Recognition */}
-          <div className="rounded-xl border border-purple-800/30 bg-purple-950/30 p-5">
+          <div className="rounded-xl border border-teal-800/30 bg-teal-950/30 p-5">
             <h3 className="text-sm font-semibold text-white mb-3">🔍 Major Patterns Detected</h3>
-            <div className="rounded-lg bg-purple-900/20 border border-purple-800/20 p-4 text-xs text-slate-400">
+            <div className="rounded-lg bg-teal-900/20 border border-teal-800/20 p-4 text-xs text-slate-400">
               Pattern recognition activates when full interpretation data is available from the chart engine.
             </div>
           </div>

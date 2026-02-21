@@ -3,50 +3,56 @@
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
+// Matches the Python format_chart_output palace structure (snake_case)
 interface PalaceData {
-  name: string;
-  branch: string;
-  majorStars: string[];
-  transformations: string[];
-  index: number;
+  palace_id:    number;
+  palace_name:  string;
+  branch:       string;
+  stem:         string;
+  stem_branch:  string;
+  major_stars:  string[];
+  transformations: Record<string, string>; // star_name → 化祿/化權/化科/化忌
 }
 
 interface ZiweiChartGridProps {
-  houses: PalaceData[];
-  lifeHouseIndex: number;
-  personName: string;
-  birthDate: string;
-  hourBranch: string;
-  gender: string;
+  houses:           PalaceData[];
+  lifeHouseIndex:   number;
+  personName:       string;
+  birthDate:        string;
+  hourBranch:       string;
+  gender:           string;
   fiveElementBureau: string;
 }
 
-// Logical palace order (index 0-11)
-const houseOrder = [
-  '命宮', '兄弟宮', '夫妻宮', '子女宮',
-  '財帛宮', '疾厄宮', '遷移宮', '僕役宮',
-  '官祿宮', '田宅宮', '福德宮', '父母宮'
+// Palace order display names (index 0-11 match Python's PALACE_NAMES order)
+const PALACE_ORDER_NAMES = [
+  '命宮','兄弟宮','夫妻宮','子女宮',
+  '財帛宮','疾厄宮','遷移宮','僕役宮',
+  '官祿宮','田宅宮','福德宮','父母宮',
 ];
 
-// 4x4 grid layout mapping: {row, col} for each logical index
-const gridLayout: Record<number, {row: number; col: number}> = {
-  11: {row: 0, col: 0},  // 父母宮 (top-left)
-  0:  {row: 0, col: 1},  // 命宮 (top-center-left) ← LIFE PALACE
-  1:  {row: 0, col: 2},  // 兄弟宮 (top-center-right)
-  2:  {row: 0, col: 3},  // 夫妻宮 (top-right)
+// 4×4 grid layout: palace_id → {row, col}
+const gridLayout: Record<number, { row: number; col: number }> = {
+  11: { row: 0, col: 0 }, // 父母宮
+  0:  { row: 0, col: 1 }, // 命宮 ← life palace
+  1:  { row: 0, col: 2 }, // 兄弟宮
+  2:  { row: 0, col: 3 }, // 夫妻宮
+  10: { row: 1, col: 0 }, // 福德宮
+  3:  { row: 1, col: 3 }, // 子女宮
+  9:  { row: 2, col: 0 }, // 田宅宮
+  4:  { row: 2, col: 3 }, // 財帛宮
+  8:  { row: 3, col: 0 }, // 官祿宮
+  7:  { row: 3, col: 1 }, // 僕役宮
+  6:  { row: 3, col: 2 }, // 遷移宮
+  5:  { row: 3, col: 3 }, // 疾厄宮
+};
 
-  10: {row: 1, col: 0},  // 福德宮 (middle-left)
-  // (1,1), (1,2) reserved for center
-  3:  {row: 1, col: 3},  // 子女宮 (middle-right)
-
-  9:  {row: 2, col: 0},  // 田宅宮 (lower-left)
-  // (2,1), (2,2) reserved for center
-  4:  {row: 2, col: 3},  // 財帛宮 (lower-right)
-
-  8:  {row: 3, col: 0},  // 官祿宮 (bottom-left)
-  7:  {row: 3, col: 1},  // 僕役宮 (bottom-center-left)
-  6:  {row: 3, col: 2},  // 遷移宮 (bottom-center-right)
-  5:  {row: 3, col: 3},  // 疾厄宮 (bottom-right)
+// ── Transformation label → colour ──────────────────────────────────────────
+const HUA_COLORS: Record<string, string> = {
+  '化祿': 'text-emerald-300 bg-emerald-900/30',
+  '化權': 'text-amber-300  bg-amber-900/30',
+  '化科': 'text-sky-300    bg-sky-900/30',
+  '化忌': 'text-rose-300   bg-rose-900/30',
 };
 
 export function ZiweiChartGrid({
@@ -58,172 +64,192 @@ export function ZiweiChartGrid({
   gender,
   fiveElementBureau,
 }: ZiweiChartGridProps) {
-  const [expandedPalace, setExpandedPalace] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  // Create 4x4 grid
+  // Build 4×4 grid
   const grid: (PalaceData | null | 'center')[][] = Array(4)
     .fill(null)
     .map(() => Array(4).fill(null));
 
-  // Place palaces in grid according to gridLayout
-  Object.entries(gridLayout).forEach(([logicalIdx, {row, col}]) => {
-    const idx = parseInt(logicalIdx);
-    if (houses[idx]) {
-      grid[row][col] = houses[idx];
-    }
+  Object.entries(gridLayout).forEach(([id, { row, col }]) => {
+    const palace = houses.find(h => h.palace_id === parseInt(id));
+    if (palace) grid[row][col] = palace;
   });
 
-  // Fill center (1,1), (1,2), (2,1), (2,2) with 'center' marker
-  grid[1][1] = 'center';
-  grid[1][2] = 'center';
-  grid[2][1] = 'center';
-  grid[2][2] = 'center';
+  // Fill 2×2 centre
+  grid[1][1] = grid[1][2] = grid[2][1] = grid[2][2] = 'center';
 
   return (
-    <div className="space-y-6">
-      {/* Main Grid */}
-      <div className="rounded-xl bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-700/30 p-8 overflow-auto shadow-lg shadow-black/20">
-        {/* Title */}
-        <h3 className="text-sm font-semibold text-white mb-6">命盤 (4×4 Grid Layout)</h3>
+    <div className="space-y-4">
+      {/* ── Main grid ───────────────────────────────────────────────────── */}
+      <div className="rounded-2xl bg-[#040c12] border border-teal-700/40 p-4 sm:p-6 overflow-auto shadow-xl shadow-black/40">
+        <h3 className="text-xs font-semibold text-teal-400/70 mb-4 tracking-widest uppercase">
+          命盤 · Birth Chart
+        </h3>
 
-        {/* 4x4 Grid Container */}
-        <div className="grid gap-3" style={{gridTemplateColumns: 'repeat(4, 1fr)'}}>
-          {grid.map((row, rowIdx) =>
-            row.map((cell, colIdx) => {
-              // Center cells
+        <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          {grid.map((row, ri) =>
+            row.map((cell, ci) => {
+
+              /* ── Centre cells ──────────────────────────────────────── */
               if (cell === 'center') {
                 return (
                   <div
-                    key={`center-${rowIdx}-${colIdx}`}
-                    className="aspect-square flex items-center justify-center rounded-2xl bg-gradient-to-br from-slate-800/50 to-slate-900/30 shadow-md shadow-black/10 hover:shadow-lg hover:shadow-black/20 transition-all duration-300"
+                    key={`c-${ri}-${ci}`}
+                    className="aspect-square flex items-center justify-center rounded-xl bg-[#071420]/80 border border-teal-900/40"
                   >
-                    <div className="text-center">
-                      {rowIdx === 1 && colIdx === 1 && (
+                    <div className="text-center px-1">
+                      {ri === 1 && ci === 1 && (
                         <>
-                          <div className="text-xs font-bold text-amber-300">{personName}</div>
-                          <div className="text-xs text-slate-400 mt-1">{birthDate}</div>
+                          <div className="text-xs font-bold text-cyan-300 leading-tight">{personName}</div>
+                          <div className="text-[10px] text-slate-400 mt-1 leading-tight">{birthDate}</div>
                         </>
                       )}
-                      {rowIdx === 2 && colIdx === 1 && (
+                      {ri === 2 && ci === 1 && (
                         <>
-                          <div className="text-xs text-slate-400">{hourBranch}時</div>
-                          <div className="text-xs text-slate-400">{gender}</div>
+                          <div className="text-[10px] text-slate-400 leading-tight">{hourBranch}時</div>
+                          <div className="text-[10px] text-slate-400 leading-tight">{gender === 'M' ? '男' : gender === 'F' ? '女' : gender}</div>
                         </>
                       )}
-                      {rowIdx === 2 && colIdx === 2 && (
-                        <div className="text-xs text-blue-400">五行: {fiveElementBureau}</div>
+                      {ri === 1 && ci === 2 && (
+                        <div className="text-[10px] text-teal-400 leading-tight">五行</div>
+                      )}
+                      {ri === 2 && ci === 2 && (
+                        <div className="text-[10px] text-teal-300 leading-tight font-medium">{fiveElementBureau}</div>
                       )}
                     </div>
                   </div>
                 );
               }
 
-              // Palace cells
-              if (cell && cell !== 'center') {
-                const palace = cell as PalaceData;
-                const isLifePalace = palace.index === lifeHouseIndex;
+              /* ── Empty cell ────────────────────────────────────────── */
+              if (!cell) {
+                return <div key={`e-${ri}-${ci}`} className="aspect-square" />;
+              }
 
-                return (
-                  <div
-                    key={`palace-${palace.index}`}
-                    className={`aspect-square rounded-2xl transition-all duration-300 cursor-pointer overflow-hidden ${
-                      isLifePalace
-                        ? 'bg-gradient-to-br from-amber-900/40 to-amber-950/30 shadow-lg shadow-amber-900/20 hover:shadow-xl hover:shadow-amber-900/30'
-                        : 'bg-gradient-to-br from-slate-700/30 to-slate-800/20 shadow-md shadow-black/10 hover:shadow-lg hover:shadow-slate-600/20'
-                    }`}
-                  >
-                    {/* Palace content - expandable */}
-                    <button
-                      onClick={() => setExpandedPalace(expandedPalace === palace.index ? null : palace.index)}
-                      className="w-full h-full p-3 flex flex-col items-center justify-center text-center hover:bg-white/[0.03] transition-colors duration-200"
-                    >
-                      {/* Palace Name */}
-                      <div className={`text-xs font-bold ${isLifePalace ? 'text-amber-200' : 'text-slate-100'}`}>
-                        {palace.name}
-                      </div>
+              /* ── Palace cell ───────────────────────────────────────── */
+              const palace = cell as PalaceData;
+              const stars   = palace.major_stars   || [];
+              const hua     = palace.transformations || {};
+              const huaKeys = Object.keys(hua);
+              const isLife  = palace.palace_id === lifeHouseIndex;
+              const isOpen  = expandedId === palace.palace_id;
 
-                      {/* Branch (Heavenly Stem) */}
-                      <div className="text-xs text-slate-400 mt-1">{palace.branch}</div>
+              return (
+                <div
+                  key={`p-${palace.palace_id}`}
+                  className={`aspect-square rounded-xl transition-all duration-200 relative cursor-pointer ${
+                    isLife
+                      ? 'bg-gradient-to-br from-cyan-950/70 to-teal-950/50 border border-cyan-600/60 shadow-lg shadow-cyan-900/30'
+                      : 'bg-gradient-to-br from-slate-900/60 to-slate-950/40 border border-teal-900/40 hover:border-teal-700/50'
+                  }`}
+                  onClick={() => setExpandedId(isOpen ? null : palace.palace_id)}
+                >
+                  <div className="w-full h-full p-2 flex flex-col items-center justify-center text-center">
+                    {/* Palace name */}
+                    <div className={`text-xs font-bold leading-tight ${isLife ? 'text-cyan-200' : 'text-slate-100'}`}>
+                      {palace.palace_name}
+                    </div>
 
-                      {/* Major Stars (up to 2) */}
-                      {palace.majorStars.length > 0 && (
-                        <div className="text-xs text-blue-300 mt-2 leading-tight">
-                          {palace.majorStars.slice(0, 2).map((star) => (
-                            <div key={star}>{star}</div>
-                          ))}
-                          {palace.majorStars.length > 2 && <div className="text-slate-500 text-xs mt-0.5">+{palace.majorStars.length - 2}</div>}
-                        </div>
-                      )}
+                    {/* Stem-branch */}
+                    <div className={`text-[10px] mt-0.5 ${isLife ? 'text-teal-400/80' : 'text-slate-500'}`}>
+                      {palace.stem_branch}
+                    </div>
 
-                      {/* Transformations indicator */}
-                      {palace.transformations.length > 0 && (
-                        <div className="text-xs text-amber-300 mt-1.5 px-1.5 py-0.5 rounded-full bg-amber-900/30">四化</div>
-                      )}
-
-                      {/* Expand indicator */}
-                      <ChevronDown
-                        className={`w-3 h-3 text-slate-500 mt-2 transition-transform duration-200 ${
-                          expandedPalace === palace.index ? 'rotate-180' : ''
-                        }`}
-                      />
-                    </button>
-
-                    {/* Expanded detail view */}
-                    {expandedPalace === palace.index && (
-                      <div className="absolute top-full left-0 right-0 mt-2 bg-gradient-to-br from-slate-900/95 to-slate-950/95 rounded-xl p-4 z-50 text-left text-xs space-y-2 w-56 shadow-xl shadow-black/50 border border-slate-700/30 backdrop-blur">
-                        <div>
-                          <span className="text-slate-500">All Stars:</span>
-                          <div className="text-slate-300 mt-1">{palace.majorStars.join(', ') || 'None'}</div>
-                        </div>
-                        {palace.transformations.length > 0 && (
-                          <div>
-                            <span className="text-slate-500">四化:</span>
-                            <div className="text-amber-300 mt-1">{palace.transformations.join(', ')}</div>
+                    {/* Stars (max 2 shown) */}
+                    {stars.length > 0 && (
+                      <div className="mt-1.5 space-y-0.5">
+                        {stars.slice(0, 2).map(star => (
+                          <div key={star} className={`text-[10px] leading-tight ${isLife ? 'text-cyan-300' : 'text-sky-300'}`}>
+                            {star}
                           </div>
+                        ))}
+                        {stars.length > 2 && (
+                          <div className="text-[9px] text-slate-500">+{stars.length - 2}</div>
                         )}
                       </div>
                     )}
-                  </div>
-                );
-              }
 
-              // Empty cell
-              return (
-                <div key={`empty-${rowIdx}-${colIdx}`} className="aspect-square" />
+                    {/* 四化 badges */}
+                    {huaKeys.length > 0 && (
+                      <div className="flex flex-wrap justify-center gap-0.5 mt-1">
+                        {huaKeys.slice(0, 2).map(star => (
+                          <span
+                            key={star}
+                            className={`text-[9px] px-1 py-0.5 rounded font-medium ${HUA_COLORS[hua[star]] ?? 'text-slate-400 bg-slate-800/40'}`}
+                          >
+                            {hua[star]}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <ChevronDown className={`w-3 h-3 text-slate-600 mt-1 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                  </div>
+
+                  {/* Expanded detail popup */}
+                  {isOpen && (
+                    <div
+                      className="absolute top-full left-0 mt-1 z-50 w-52 bg-[#071420] border border-teal-700/50 rounded-xl p-3 shadow-2xl shadow-black/70 text-left text-xs space-y-2 backdrop-blur"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <div className="font-bold text-cyan-300">{palace.palace_name} · {palace.stem_branch}</div>
+                      {stars.length > 0 ? (
+                        <div>
+                          <div className="text-slate-500 mb-1">Major Stars</div>
+                          <div className="flex flex-wrap gap-1">
+                            {stars.map(star => (
+                              <span key={star} className="px-1.5 py-0.5 rounded bg-sky-900/40 text-sky-300 border border-sky-800/40">{star}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-slate-600">No major stars</div>
+                      )}
+                      {huaKeys.length > 0 && (
+                        <div>
+                          <div className="text-slate-500 mb-1">四化 Transformations</div>
+                          <div className="space-y-0.5">
+                            {huaKeys.map(star => (
+                              <div key={star} className="flex justify-between">
+                                <span className="text-slate-300">{star}</span>
+                                <span className={`font-medium ${(HUA_COLORS[hua[star]] ?? '').split(' ')[0]}`}>{hua[star]}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })
           )}
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="rounded-xl bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/30 p-5 shadow-lg shadow-black/10">
-        <h4 className="text-xs font-semibold text-slate-300 mb-4">Legend</h4>
-        <div className="grid grid-cols-2 gap-4 text-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded-lg bg-gradient-to-br from-amber-900/40 to-amber-950/30 shadow-sm shadow-amber-900/20"></div>
-            <span className="text-slate-300">Life Palace (命宮)</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-4 h-4 rounded-lg bg-gradient-to-br from-slate-700/30 to-slate-800/20 shadow-sm shadow-black/10"></div>
-            <span className="text-slate-400">Regular Palace</span>
+      {/* ── Legend ──────────────────────────────────────────────────────── */}
+      <div className="rounded-xl bg-[#071420]/60 border border-teal-900/40 p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-gradient-to-br from-cyan-950/70 to-teal-950/50 border border-cyan-600/60 flex-shrink-0" />
+            <span className="text-slate-400">Life Palace 命宮</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-blue-300 text-xs">★ ★</span>
-            <span className="text-slate-400">Major Stars</span>
+            <div className="w-4 h-4 rounded bg-gradient-to-br from-slate-900/60 to-slate-950/40 border border-teal-900/40 flex-shrink-0" />
+            <span className="text-slate-500">Regular Palace</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-amber-300 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-900/30">四化</span>
-            <span className="text-slate-400">Transformations</span>
+            <span className="text-sky-300 text-xs">★</span>
+            <span className="text-slate-500">Major Star</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-300 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-900/30">化祿</span>
+            <span className="text-amber-300  text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-900/30">化權</span>
+            <span className="text-sky-300    text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sky-900/30">化科</span>
+            <span className="text-rose-300   text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-900/30">化忌</span>
           </div>
         </div>
-      </div>
-
-      {/* Info Box */}
-      <div className="rounded-xl bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/30 p-5 shadow-lg shadow-black/10">
-        <p className="text-xs text-slate-400 leading-relaxed">
-          <strong className="text-slate-300">紫微斗數:</strong> The 12 palaces form the core of destiny analysis. Click any palace to see all stars and transformations in detail.
-        </p>
       </div>
     </div>
   );
