@@ -170,26 +170,35 @@ function buildBillboard(mainText: string, subText: string, color: number): THREE
   });
 
   const can = document.createElement('canvas');
-  can.width = 640; can.height = 280;
+  can.width = 768; can.height = 320;
   const ctx = can.getContext('2d')!;
   const hex6 = '#' + color.toString(16).padStart(6, '0');
-  const bg = ctx.createLinearGradient(0, 0, 640, 280);
+  const bg = ctx.createLinearGradient(0, 0, 768, 320);
   bg.addColorStop(0, hex6); bg.addColorStop(1, '#111111');
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, 640, 280);
-  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 5;
-  ctx.strokeRect(8, 8, 624, 264);
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 96px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText(mainText, 320, 165);
-  ctx.fillStyle = 'rgba(255,255,255,0.75)';
-  ctx.font = 'bold 40px Arial';
-  ctx.fillText(subText, 320, 225);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, 768, 320);
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 6;
+  ctx.strokeRect(8, 8, 752, 304);
+  // Main text — auto-size to fit
+  ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  let fontSize = 88;
+  ctx.font = `bold ${fontSize}px Arial`;
+  while (ctx.measureText(mainText).width > 720 && fontSize > 48) {
+    fontSize -= 4; ctx.font = `bold ${fontSize}px Arial`;
+  }
+  ctx.fillText(mainText, 384, 195);
+  ctx.fillStyle = 'rgba(255,255,255,0.80)';
+  let subSize = 42;
+  ctx.font = `bold ${subSize}px Arial`;
+  while (ctx.measureText(subText).width > 720 && subSize > 26) {
+    subSize -= 2; ctx.font = `bold ${subSize}px Arial`;
+  }
+  ctx.fillText(subText, 384, 272);
   const tex = new THREE.CanvasTexture(can);
   const board = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.0, 1.75),
+    new THREE.PlaneGeometry(5.2, 2.2),
     new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }),
   );
-  board.position.y = 4.6;
+  board.position.y = 4.8;
   g.add(board);
   return g;
 }
@@ -406,6 +415,150 @@ function buildCat(gmap: THREE.DataTexture): THREE.Group {
   return g;
 }
 
+// ─── HK: 叮叮電車 (Tram) ──────────────────────────────────────────────────────
+function buildTram(gmap: THREE.DataTexture): THREE.Group {
+  const g = new THREE.Group();
+  const green = toon(0x006633, gmap);
+  const cream = toon(0xFFF8DC, gmap);
+  const red = toon(0xCC0000, gmap);
+  const darkGray = toon(0x333333, gmap);
+
+  // Chassis base
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.22, 0.9), darkGray);
+  base.position.y = 0.11; g.add(base);
+  // Wheels (4 wheels)
+  ([[-0.55, -0.38], [0.55, -0.38], [-0.55, 0.38], [0.55, 0.38]] as number[][]).forEach(([x, z]) => {
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.1, 10), darkGray);
+    wheel.rotation.x = Math.PI / 2; wheel.position.set(x, 0.14, z); g.add(wheel);
+  });
+  // Lower deck body (cream)
+  const lower = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.62, 0.85), cream);
+  lower.position.y = 0.53; g.add(lower);
+  // Lower deck windows (dark strip)
+  const lWin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.3, 0.87), toon(0x88BBDD, gmap));
+  lWin.position.y = 0.57; g.add(lWin);
+  // Mid divider
+  const mid = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.1, 0.85), green);
+  mid.position.y = 0.87; g.add(mid);
+  // Upper deck (green)
+  const upper = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.58, 0.85), green);
+  upper.position.y = 1.19; g.add(upper);
+  // Upper deck windows
+  const uWin = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.28, 0.87), toon(0xAADDFF, gmap));
+  uWin.position.y = 1.19; g.add(uWin);
+  // Roof
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.1, 0.88), cream);
+  roof.position.y = 1.52; g.add(roof);
+  // Route number board on front
+  const front = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.06), red);
+  front.position.set(0, 1.42, -0.46); g.add(front);
+  // Pantograph (overhead connector)
+  const panto = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.45, 0.06), toon(0x888888, gmap));
+  panto.position.set(0, 1.8, 0); g.add(panto);
+
+  return g;
+}
+
+// ─── HK: 霓虹招牌 (Neon sign board) ──────────────────────────────────────────
+function buildNeonSign(text: string, color: number, gmap: THREE.DataTexture): THREE.Group {
+  const g = new THREE.Group();
+  // Frame bracket arm
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.2), toon(0x555555, gmap));
+  arm.position.set(0, 0, 0.6); g.add(arm);
+  // Sign canvas
+  const can = document.createElement('canvas');
+  can.width = 128; can.height = 512;
+  const ctx = can.getContext('2d')!;
+  const hex6 = '#' + color.toString(16).padStart(6, '0');
+  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 128, 512);
+  ctx.fillStyle = hex6;
+  ctx.fillRect(6, 6, 116, 500);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 58px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  // Render each char vertically
+  const chars = text.split('');
+  chars.forEach((ch, i) => {
+    ctx.fillText(ch, 64, 20 + i * 68);
+  });
+  const tex = new THREE.CanvasTexture(can);
+  const board = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.55, 2.2),
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }),
+  );
+  board.position.set(0, -1.1, 1.2);
+  g.add(board);
+  return g;
+}
+
+// ─── HK: 竹棚 (Bamboo scaffolding) ────────────────────────────────────────────
+function buildBambooScaffolding(gmap: THREE.DataTexture): THREE.Group {
+  const g = new THREE.Group();
+  const bamboo = toon(0xB8860B, gmap);
+  // Vertical poles
+  ([[0, 0], [1.8, 0], [0, 1.8], [1.8, 1.8]] as number[][]).forEach(([x, z]) => {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 4.5, 6), bamboo);
+    pole.position.set(x, 2.25, z); g.add(pole);
+  });
+  // Horizontal bars (3 levels)
+  [1.0, 2.2, 3.5].forEach(y => {
+    const hBar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.9, 6), bamboo);
+    hBar.rotation.z = Math.PI / 2; hBar.position.set(0.9, y, 0); g.add(hBar);
+    const hBar2 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.9, 6), bamboo);
+    hBar2.rotation.z = Math.PI / 2; hBar2.position.set(0.9, y, 1.8); g.add(hBar2);
+    const dBar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.9, 6), bamboo);
+    dBar.rotation.x = Math.PI / 2; dBar.position.set(0, y, 0.9); g.add(dBar);
+    const dBar2 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.9, 6), bamboo);
+    dBar2.rotation.x = Math.PI / 2; dBar2.position.set(1.8, y, 0.9); g.add(dBar2);
+  });
+  return g;
+}
+
+// ─── HK: 獅子頭 (Lion dance head) ─────────────────────────────────────────────
+function buildLionHead(gmap: THREE.DataTexture): THREE.Group {
+  const g = new THREE.Group();
+  const red = toon(0xDD1111, gmap);
+  const yellow = toon(0xFFCC00, gmap);
+  const white = toon(0xffffff, gmap);
+  const gold = toon(0xFFAA00, gmap);
+  // Head
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.52, 10, 8), red);
+  head.scale.set(1.2, 1.0, 1.0); g.add(head);
+  // Snout
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), yellow);
+  snout.scale.set(1.0, 0.7, 0.8); snout.position.set(0, -0.12, 0.45); g.add(snout);
+  // Nostrils
+  ([[-0.1, 0.1]] as number[][]).forEach(([x]) => {
+    const n = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 4), toon(0x881100, gmap));
+    n.position.set(x, -0.1, 0.7); g.add(n);
+  });
+  // Eyes (large)
+  ([-0.22, 0.22] as number[]).forEach(x => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), white);
+    eye.position.set(x, 0.18, 0.44); g.add(eye);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 4), toon(0x111111, gmap));
+    pupil.position.set(x + 0.02, 0.18, 0.56); g.add(pupil);
+  });
+  // Forehead ornament
+  const orn = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), gold);
+  orn.position.set(0, 0.45, 0.45); g.add(orn);
+  // Ears
+  ([-0.5, 0.5] as number[]).forEach(x => {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.32, 5), yellow);
+    ear.position.set(x, 0.55, 0.1); ear.rotation.z = x > 0 ? -0.4 : 0.4; g.add(ear);
+  });
+  // Beard/mane frills
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const frill = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.35, 5), i % 2 === 0 ? red : yellow);
+    frill.position.set(Math.cos(a) * 0.65, Math.sin(a) * 0.5 - 0.1, -0.1);
+    frill.rotation.z = Math.atan2(Math.sin(a), Math.cos(a)) - Math.PI / 2 + Math.PI;
+    g.add(frill);
+  }
+  return g;
+}
+
 // ─── Particle type ────────────────────────────────────────────────────────────
 interface Particle { mesh: THREE.Mesh; vel: THREE.Vector3; life: number; }
 
@@ -496,8 +649,8 @@ export default function RecruitAICarnival() {
     // Scene & camera
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x87CEEB, 0.011);
-    const camera = new THREE.PerspectiveCamera(62, el.clientWidth / el.clientHeight, 0.1, 200);
-    camera.position.set(0, 7, 14);
+    const camera = new THREE.PerspectiveCamera(58, el.clientWidth / el.clientHeight, 0.1, 200);
+    camera.position.set(0, 4, 20);
 
     // Sky sphere
     const skyCanvas = document.createElement('canvas');
@@ -665,6 +818,55 @@ export default function RecruitAICarnival() {
       scene.add(star); stars.push({ mesh: star, phase: i * 0.62 });
     }
 
+    // ── HK Elements ──────────────────────────────────────────────────────────
+
+    // 叮叮電車 × 2 — ride along perimeter paths
+    const trams: { group: THREE.Group; angle: number; speed: number; radius: number }[] = [];
+    ([
+      { angle: 0.0, speed: 0.18, radius: 20 },
+      { angle: Math.PI, speed: -0.14, radius: 18 },
+    ]).forEach(def => {
+      const tram = buildTram(gmap);
+      tram.scale.setScalar(0.85);
+      scene.add(tram);
+      trams.push({ group: tram, ...def });
+    });
+
+    // 霓虹招牌 — vertical neon signs on lamp posts
+    const neonDefs = [
+      { text: 'AI', color: 0xFF0066, pos: [-11, 3.5, -8] as [number, number, number] },
+      { text: '自動', color: 0x00FFCC, pos: [11, 3.5, -8] as [number, number, number] },
+      { text: '智能', color: 0xFFAA00, pos: [-11, 3.5, 8] as [number, number, number] },
+      { text: '科技', color: 0x4488FF, pos: [11, 3.5, 8] as [number, number, number] },
+    ];
+    neonDefs.forEach(({ text, color, pos }) => {
+      // Lamp post
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 4.5, 8), toon(0x444444, gmap));
+      post.position.set(pos[0], 2.25, pos[2]); scene.add(post);
+      const sign = buildNeonSign(text, color, gmap);
+      sign.position.set(pos[0], pos[1], pos[2]);
+      sign.rotation.y = Math.atan2(pos[0], pos[2]);
+      scene.add(sign);
+    });
+
+    // 竹棚 — bamboo scaffolding structures at corners
+    ([
+      [-18, 0, -15, -0.3],
+      [16, 0, -17, 0.4],
+    ] as number[][]).forEach(([x, y, z, ry]) => {
+      const scaff = buildBambooScaffolding(gmap);
+      scaff.position.set(x, y, z); scaff.rotation.y = ry; scene.add(scaff);
+    });
+
+    // 獅子頭 × 3 — bobbing around the perimeter
+    const lions: { group: THREE.Group; angle: number; speed: number; radius: number; bobOff: number }[] = [];
+    [0, 2.1, 4.2].forEach((startA, i) => {
+      const lion = buildLionHead(gmap);
+      lion.scale.setScalar(0.62);
+      scene.add(lion);
+      lions.push({ group: lion, angle: startA, speed: 0.3 + i * 0.1, radius: 9 + i * 1.5, bobOff: i * 1.1 });
+    });
+
     // Particles
     const particles: Particle[] = [];
     const pGeo = new THREE.SphereGeometry(0.1, 4, 3);
@@ -740,10 +942,36 @@ export default function RecruitAICarnival() {
       }
       player.position.y = Math.sin(t * 3.5) * 0.07;
 
-      // Camera follow
-      camTarget.set(player.position.x, player.position.y + 7, player.position.z + 13);
+      // Camera follow — low 小人國 perspective
+      camTarget.set(player.position.x, player.position.y + 3.8, player.position.z + 9.5);
       camera.position.lerp(camTarget, 0.07);
-      camera.lookAt(player.position.x, player.position.y + 1.2, player.position.z);
+      camera.lookAt(player.position.x, player.position.y + 0.8, player.position.z);
+
+      // HK Trams
+      trams.forEach(tr => {
+        tr.angle += tr.speed * dt;
+        tr.group.position.set(
+          Math.cos(tr.angle) * tr.radius,
+          0,
+          Math.sin(tr.angle) * tr.radius,
+        );
+        // Face direction of travel
+        const nx = Math.cos(tr.angle + Math.sign(tr.speed) * 0.02) * tr.radius;
+        const nz = Math.sin(tr.angle + Math.sign(tr.speed) * 0.02) * tr.radius;
+        tr.group.lookAt(nx, 0, nz);
+      });
+
+      // 獅子頭 — bobbing with head wobble
+      lions.forEach(li => {
+        li.angle += li.speed * dt;
+        li.group.position.set(
+          Math.cos(li.angle) * li.radius,
+          1.8 + Math.sin(t * 3.5 + li.bobOff) * 0.3,
+          Math.sin(li.angle) * li.radius,
+        );
+        li.group.rotation.y = li.angle + Math.PI;
+        li.group.rotation.z = Math.sin(t * 4 + li.bobOff) * 0.15;
+      });
 
       // Animal walkers
       walkers.forEach(w => {

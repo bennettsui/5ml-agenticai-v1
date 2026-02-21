@@ -526,13 +526,78 @@ Return ONLY JSON with this schema (no markdown, no explanation):
 });
 
 // ─── Background image download helper ────────────────────────────────────────
+// Retries up to 2 extra times (3 total) for transient 5xx / timeout errors.
 async function downloadAndSaveImage(url, destPath) {
-  const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 90000 });
-  fs.writeFileSync(destPath, resp.data);
+  const RETRYABLE = new Set([500, 502, 503, 504, 520, 524, 530]);
+  const MAX_ATTEMPTS = 3;
+
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 90000 });
+      fs.writeFileSync(destPath, resp.data);
+      return; // success
+    } catch (err) {
+      const status = err?.response?.status;
+
+      // Translate known error codes into friendly messages
+      if (status && !RETRYABLE.has(status)) {
+        // Non-retryable HTTP error — fail immediately
+        const hints = {
+          403: 'Pollinations.ai refused the request (403 Forbidden) — the prompt may have been blocked by content filters',
+          429: 'Pollinations.ai rate limit reached (429) — wait a moment and try again',
+        };
+        throw new Error(hints[status] || `Pollinations.ai returned HTTP ${status} — external API error`);
+      }
+
+      if (err.code === 'ENOTFOUND' || err.code === 'EAI_AGAIN') {
+        throw new Error('Cannot reach Pollinations.ai — check internet connectivity or DNS');
+      }
+
+      lastErr = err;
+
+      if (attempt < MAX_ATTEMPTS) {
+        const delayMs = attempt * 6000; // 6 s, then 12 s
+        const statusStr = status ? ` (HTTP ${status})` : (err.code ? ` (${err.code})` : '');
+        console.warn(`[MediaGeneration] Pollinations attempt ${attempt} failed${statusStr}, retrying in ${delayMs / 1000}s…`);
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
+  }
+
+  // All attempts exhausted — produce a clear final error
+  const status = lastErr?.response?.status;
+  const timeoutCodes = new Set(['ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET']);
+  if (status) {
+    throw new Error(`Pollinations.ai returned HTTP ${status} after ${MAX_ATTEMPTS} attempts — their service appears to be down`);
+  }
+  if (timeoutCodes.has(lastErr?.code)) {
+    throw new Error(`Request to Pollinations.ai timed out after ${MAX_ATTEMPTS} attempts — their service may be slow or unavailable`);
+  }
+  throw lastErr;
 }
 
 // Available Pollinations models
 const POLLINATIONS_MODELS = new Set(['flux', 'flux-realism', 'flux-anime', 'flux-3d', 'turbo']);
+
+// Convert an aspect ratio string (e.g. "16:9", "9:16", "4:5") to pixel dimensions
+// Uses Pollinations-friendly sizes (multiples of 64, ~1M total pixels)
+function aspectRatioDimensions(ratio) {
+  const MAP = {
+    '1:1':   { width: 1024, height: 1024 },
+    '16:9':  { width: 1344, height: 768  },
+    '9:16':  { width: 768,  height: 1344 },
+    '4:5':   { width: 896,  height: 1120 },
+    '5:4':   { width: 1120, height: 896  },
+    '3:2':   { width: 1152, height: 768  },
+    '2:3':   { width: 768,  height: 1152 },
+    '4:3':   { width: 1024, height: 768  },
+    '3:4':   { width: 768,  height: 1024 },
+    '21:9':  { width: 1344, height: 576  },
+    '1.91:1':{ width: 1232, height: 640  },
+  };
+  return MAP[ratio] || { width: 1024, height: 1024 };
+}
 
 // GET /api/media/assets/:id — fetch single asset (for polling generation status)
 router.get('/assets/:id', async (req, res) => {
@@ -597,7 +662,8 @@ router.post('/prompts/:id/generate-image', async (req, res) => {
           const pollinationsModel = POLLINATIONS_MODELS.has(requestedModel) ? requestedModel : 'flux';
           const seed = Math.floor(Math.random() * 2147483647);
           const encodedPrompt = encodeURIComponent(positivePrompt.substring(0, 800));
-          const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=${pollinationsModel}&nologo=true&seed=${seed}`;
+          const { width, height } = aspectRatioDimensions(pj.image?.aspectRatio);
+          const pollinationsUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?width=${width}&height=${height}&model=${pollinationsModel}&nologo=true&seed=${seed}`;
           const filename = `media_${record.project_id}_p${record.id}_${seed}.jpg`;
           await downloadAndSaveImage(pollinationsUrl, path.join(UPLOADS_DIR, filename));
           imageUrl = `/api/media/serve/${filename}`;
@@ -620,6 +686,45 @@ router.post('/prompts/:id/generate-image', async (req, res) => {
     console.error('[MediaGeneration] generate-image error:', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// GET /api/media/quick-test?prompt=...&model=flux
+// Fire a one-shot test image generation with no project/prompt record needed.
+// Responds immediately; poll GET /api/media/quick-test/status/:jobId for result.
+const quickTestJobs = new Map(); // jobId → { status, url, error }
+
+router.get('/quick-test', (req, res) => {
+  const defaultPrompt = 'A professional product photograph of a premium glass perfume bottle sitting on white marble, soft studio diffused lighting from above, shallow depth of field with subtle bokeh background, warm neutral color palette, commercial advertising photography aesthetic';
+  const prompt = (req.query.prompt || defaultPrompt).trim();
+  const model = POLLINATIONS_MODELS.has(req.query.model) ? req.query.model : 'flux';
+  const ratio = req.query.ratio || '1:1';
+  const jobId = `qt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  quickTestJobs.set(jobId, { status: 'generating', url: null, error: null, prompt, model, startedAt: Date.now() });
+
+  // Respond immediately
+  res.json({ jobId, status: 'generating', prompt, model });
+
+  // Background download
+  setImmediate(async () => {
+    try {
+      const seed = Math.floor(Math.random() * 2147483647);
+      const encoded = encodeURIComponent(prompt.substring(0, 800));
+      const { width, height } = aspectRatioDimensions(ratio);
+      const pollinationsUrl = `https://gen.pollinations.ai/image/${encoded}?width=${width}&height=${height}&model=${model}&nologo=true&seed=${seed}`;
+      await downloadAndSaveImage(pollinationsUrl, path.join(UPLOADS_DIR, `${jobId}.jpg`));
+      quickTestJobs.set(jobId, { ...quickTestJobs.get(jobId), status: 'done', url: `/api/media/serve/${jobId}.jpg` });
+    } catch (err) {
+      console.error('[MediaGeneration] quick-test error:', err.message);
+      quickTestJobs.set(jobId, { ...quickTestJobs.get(jobId), status: 'error', error: err.message });
+    }
+  });
+});
+
+router.get('/quick-test/status/:jobId', (req, res) => {
+  const job = quickTestJobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  res.json(job);
 });
 
 // GET /api/media/serve/:filename — serve a locally-saved generated image

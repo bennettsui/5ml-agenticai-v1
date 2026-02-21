@@ -1,15 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import dynamic from 'next/dynamic';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   CheckCircle,
   ChevronDown,
   ChevronRight,
   ArrowRight,
-  Menu,
-  X,
   Zap,
   BarChart3,
   MessageSquare,
@@ -24,34 +21,16 @@ import {
   Trophy,
   Phone,
 } from 'lucide-react';
-
-const RecruitAICarnival = dynamic(
-  () => import('./components/RecruitAICarnival'),
-  { ssr: false, loading: () => (
-    <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-900 flex items-center justify-center">
-      <div className="text-white text-center">
-        <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-sm opacity-70">Loading AI Carnival...</p>
-      </div>
-    </div>
-  )}
-);
+import RecruitNav from './components/RecruitNav';
 
 // ─── Data ───────────────────────────────────────────────────────────────────
 
-const NAV_LINKS = [
-  { label: '功能', href: '#agents' },
-  { label: '案例', href: '#cases' },
-  { label: '整合', href: '#integrations' },
-  { label: '價格', href: '#pricing' },
-  { label: '常見問題', href: '#faq' },
-];
 
 const STATS = [
   { value: '50+', label: '香港中小企信任我們', sub: 'Hong Kong SMEs' },
-  { value: '70%', label: '節省時間成本', sub: 'Time & Cost Saved' },
-  { value: '3×', label: '平均業績增長', sub: 'Revenue Growth' },
-  { value: '<3天', label: '快速上線', sub: 'Deployment Speed' },
+  { value: '30–50%', label: '人力節省承諾', sub: 'Manpower Saving' },
+  { value: '3x+', label: 'ROAS 提升目標', sub: 'ROAS Improvement' },
+  { value: '1週', label: '完成部署 · 1個月見效', sub: 'Deploy in 1 week' },
 ];
 
 const AGENTS = [
@@ -139,7 +118,7 @@ const STEPS = [
     color: 'text-blue-600 dark:text-blue-400',
     bg: 'bg-blue-50 dark:bg-blue-950/40',
     border: 'border-blue-200 dark:border-blue-800/40',
-    title: '免費 15 分鐘諮詢',
+    title: '免費 30 分鐘諮詢',
     desc: '與我們的 AI 顧問深入了解您的業務痛點，量身定制自動化方向。完全免費，無任何義務。',
     badge: '免費',
     badgeBg: 'bg-blue-100 dark:bg-blue-900/40',
@@ -192,20 +171,21 @@ const PLANS = [
     tag: null,
     tagBg: '',
     tagText: '',
-    desc: '適合初創及小型企業，快速驗證 AI 自動化價值',
+    desc: '3 個 AI 代理起步，快速驗證 AI 自動化效益，一週內上線',
     highlighted: false,
     cardBg: 'bg-white dark:bg-slate-800/60',
     cardBorder: 'border-slate-200 dark:border-slate-700/50',
     btnClass:
       'border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white',
     features: [
-      '1 個 AI 代理（自選）',
+      '約 3 個 AI 代理（自選組合）',
       '標準工作流程配置',
       '電郵技術支援',
       '每月效能報告',
+      '一個月內見到成效保證',
       '最多 5 名用戶',
     ],
-    suitFor: '1–5 名員工',
+    suitFor: '1–10 名員工',
   },
   {
     name: '業務版',
@@ -215,22 +195,23 @@ const PLANS = [
     tag: '最受歡迎',
     tagBg: 'bg-amber-400',
     tagText: 'text-slate-900',
-    desc: '三大 AI 代理全配置，最適合快速成長中的中小企',
+    desc: '約 10 個 AI 代理全面部署，最適合快速成長中的中小企',
     highlighted: true,
     cardBg: 'bg-gradient-to-b from-blue-700 to-blue-900',
     cardBorder: 'border-blue-500',
     btnClass:
       'bg-white text-blue-700 hover:bg-blue-50 font-semibold',
     features: [
-      '3 個 AI 代理（全套）',
+      '約 10 個 AI 代理（全面配置）',
       '定制工作流程設計',
       '優先技術支援（4 小時內回覆）',
       '每週效能報告 + 洞察',
+      'ROAS 提升 3 倍以上承諾',
       '無限用戶數量',
       'API 整合（WhatsApp、ERP 等）',
       '季度策略回顧',
     ],
-    suitFor: '5–20 名員工',
+    suitFor: '10–30 名員工',
   },
   {
     name: '企業版',
@@ -441,19 +422,10 @@ const INTEGRATIONS = [
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function RecruitAIPage() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [scrolled, setScrolled] = useState(false);
   const [activeAgent, setActiveAgent] = useState(0);
   const [activeCaseStudy, setActiveCaseStudy] = useState(0);
   const [expandedWorkflow, setExpandedWorkflow] = useState<number | null>(null);
-  const heroRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 60);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   // Cycle through agents automatically
   useEffect(() => {
@@ -463,119 +435,43 @@ export default function RecruitAIPage() {
 
   const scrollTo = (id: string) => {
     document.getElementById(id.replace('#', ''))?.scrollIntoView({ behavior: 'smooth' });
-    setMobileMenuOpen(false);
   };
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
-      {/* ── Navigation ── */}
-      <nav
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          scrolled
-            ? 'bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl shadow-sm border-b border-slate-200/80 dark:border-slate-800/50'
-            : 'bg-transparent'
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
-                <Zap className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-bold text-lg text-slate-900 dark:text-white">
-                RecruitAI<span className="text-blue-600">Studio</span>
-              </span>
-              <span className="hidden sm:inline text-xs text-slate-400 ml-1">by 5ML</span>
-            </div>
+      <RecruitNav />
 
-            {/* Desktop Nav */}
-            <div className="hidden md:flex items-center gap-8">
-              {NAV_LINKS.map(link => (
-                <button
-                  key={link.label}
-                  onClick={() => scrollTo(link.href)}
-                  className="text-sm text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                >
-                  {link.label}
-                </button>
-              ))}
-            </div>
 
-            {/* CTA + Mobile Menu */}
-            <div className="flex items-center gap-3">
-              <Link
-                href="/vibe-demo/recruitai/consultation"
-                className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                免費諮詢
-                <ChevronRight className="w-4 h-4" />
-              </Link>
-              <button
-                className="md:hidden p-2 text-slate-600 dark:text-slate-400"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              >
-                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 py-4 space-y-3">
-            {NAV_LINKS.map(link => (
-              <button
-                key={link.label}
-                onClick={() => scrollTo(link.href)}
-                className="block w-full text-left text-sm text-slate-700 dark:text-slate-300 py-2"
-              >
-                {link.label}
-              </button>
-            ))}
-            <Link
-              href="/vibe-demo/recruitai/consultation"
-              className="block mt-4 px-4 py-3 bg-blue-600 text-white text-sm font-medium rounded-lg text-center"
-            >
-              免費 15 分鐘諮詢
-            </Link>
-          </div>
-        )}
-      </nav>
-
-      {/* ── Hero: 3D AI Carnival ── */}
-      <section
-        ref={heroRef}
-        className="relative overflow-hidden pt-16"
-        style={{ height: '100svh', minHeight: '600px' }}
-      >
-        {/* 3D World fills the hero */}
-        <div className="absolute inset-0 top-16">
-          <RecruitAICarnival />
-        </div>
-
-        {/* Text overlay — bottom of hero */}
-        <div className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none">
-          <div className="bg-gradient-to-t from-slate-900/90 via-slate-900/60 to-transparent pt-16 pb-8 px-6 text-center">
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight mb-3 text-white drop-shadow-lg">
+      {/* ── Hero ── */}
+      <section className="pt-16">
+        <div className="py-20 px-4 bg-gradient-to-br from-blue-700 to-blue-900 text-white">
+          <div className="max-w-4xl mx-auto text-center">
+            <p className="text-xs font-semibold text-blue-200 uppercase tracking-widest mb-4">
+              香港中小企 AI 自動化平台
+            </p>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black mb-5 leading-tight">
               讓 AI 代理為您工作
             </h1>
-            <p className="text-base sm:text-lg text-white/80 mb-4 max-w-lg mx-auto">
-              無需技術團隊 · 3 天上線 · 發票、客服、商業智能全自動
+            <p className="text-blue-100 text-lg sm:text-xl max-w-2xl mx-auto mb-3 leading-relaxed">
+              無需技術團隊 · 節省 30–50% 人力 · 發票、客服、商業智能全自動
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center pointer-events-auto">
+            <p className="text-blue-200/80 text-sm mb-8">
+              ✅ 一週內完成部署 &nbsp;·&nbsp; ✅ 一個月內見成效
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
                 href="/vibe-demo/recruitai/consultation"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-base transition-all duration-200 shadow-lg shadow-blue-900/40"
+                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white hover:bg-blue-50 text-blue-700 font-bold rounded-xl text-base transition-all duration-200 shadow-lg"
               >
                 <Phone className="w-4 h-4" />
-                免費 15 分鐘諮詢
+                免費 30 分鐘諮詢
               </Link>
               <button
-                onClick={() => scrollTo('#agents')}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-medium rounded-xl text-base transition-all duration-200 backdrop-blur-sm"
+                type="button"
+                onClick={() => scrollTo('#modules')}
+                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-medium rounded-xl text-base transition-all duration-200 backdrop-blur-sm"
               >
-                了解三大 AI 代理
+                了解各功能模組
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -634,39 +530,45 @@ export default function RecruitAIPage() {
                 emoji: '📄',
                 title: '發票處理佔用大量時間',
                 desc: '手動錄入、核對發票，一週花費 10+ 小時，錯誤率高且難以追蹤',
+                accent: 'group-hover:bg-blue-50 dark:group-hover:bg-blue-950/20',
               },
               {
                 emoji: '😓',
                 title: '客戶查詢回覆不及時',
                 desc: '非辦公時間客戶無法獲得回覆，損失訂單及客戶信任',
+                accent: 'group-hover:bg-emerald-50 dark:group-hover:bg-emerald-950/20',
               },
               {
                 emoji: '📊',
                 title: '難以掌握業務數據',
                 desc: '數據分散各處，難以整合分析，決策缺乏數據支撐',
+                accent: 'group-hover:bg-violet-50 dark:group-hover:bg-violet-950/20',
               },
               {
                 emoji: '👥',
                 title: '人力成本持續上升',
                 desc: '重複性工作消耗員工精力，但又無法縮減人手',
+                accent: 'group-hover:bg-amber-50 dark:group-hover:bg-amber-950/20',
               },
               {
                 emoji: '🔄',
                 title: '業務流程難以擴展',
                 desc: '增加業務量需要等比例增加人手，成本壓力巨大',
+                accent: 'group-hover:bg-rose-50 dark:group-hover:bg-rose-950/20',
               },
               {
                 emoji: '⏰',
                 title: '老闆親力親為所有事',
                 desc: '無法從瑣務中解脫，難以專注於核心業務策略',
+                accent: 'group-hover:bg-cyan-50 dark:group-hover:bg-cyan-950/20',
               },
             ].map(item => (
               <div
                 key={item.title}
-                className="p-5 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-slate-800/50"
+                className={`group p-5 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-slate-800/50 cursor-default transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-slate-900/50 ${item.accent}`}
               >
-                <div className="text-2xl mb-3">{item.emoji}</div>
-                <h3 className="font-semibold text-slate-900 dark:text-white mb-2">{item.title}</h3>
+                <div className="text-3xl mb-3 inline-block transition-transform duration-300 group-hover:scale-125 group-hover:-rotate-6">{item.emoji}</div>
+                <h3 className="font-semibold text-slate-900 dark:text-white mb-2 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">{item.title}</h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{item.desc}</p>
               </div>
             ))}
@@ -679,112 +581,148 @@ export default function RecruitAIPage() {
         </div>
       </section>
 
-      {/* ── AI Agents ── */}
-      <section id="agents" className="py-24 px-4 bg-slate-50/50 dark:bg-white/[0.02]">
-        <div className="max-w-6xl mx-auto">
+      {/* ── 5 Module Cards ── */}
+      <section id="modules" className="py-28 px-4 bg-white dark:bg-slate-950">
+        <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
-              三大 AI 代理，解決您的業務痛點
+            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-4">5 大功能模組</p>
+            <h2 className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white mb-6 leading-tight">
+              AI 代理為您的業務
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600">
+                全方位打工
+              </span>
             </h2>
-            <p className="text-slate-500 dark:text-slate-400 text-lg max-w-2xl mx-auto">
-              每個代理專注於一個核心業務領域，一起工作形成強大的自動化生態系統
+            <p className="text-slate-500 dark:text-slate-400 text-xl max-w-3xl mx-auto leading-relaxed">
+              5 個 AI 模組覆蓋業務全流程，每個模組均可獨立部署。
+              <strong className="text-slate-700 dark:text-slate-300"> 一週內上線，一個月內見成效。</strong>
             </p>
+            <div className="flex flex-wrap justify-center gap-10 mt-10">
+              {[
+                { v: '1 週', l: '部署上線' },
+                { v: '30–50%', l: '人力節省' },
+                { v: '3x+', l: 'ROAS 提升' },
+                { v: '200+', l: 'AI 代理可用' },
+              ].map(k => (
+                <div key={k.l} className="text-center">
+                  <div className="text-2xl font-black text-blue-600 dark:text-blue-400">{k.v}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{k.l}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Agent Tabs */}
-          <div className="flex justify-center gap-2 mb-10">
-            {AGENTS.map((agent, idx) => (
-              <button
-                key={agent.id}
-                onClick={() => setActiveAgent(idx)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  activeAgent === idx
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50 hover:border-blue-300 dark:hover:border-blue-700'
-                }`}
+          <div className="space-y-4">
+            {[
+              {
+                emoji: '🚀', name: '增長模組', nameEn: 'Growth',
+                href: '/vibe-demo/recruitai/modules/growth',
+                tagline: '讓 AI 替你搵客、追客、留客，廣告 ROAS 3 倍飆升',
+                kpi: '3x+', kpiLabel: 'ROAS 提升',
+                features: ['Google Ads 智能出價', 'SEO 落地頁自動生成', '潛在客戶 5 分鐘內跟進', 'CRM 自動記錄更新'],
+                integrations: ['Google Ads', 'GA4', 'HubSpot', 'WhatsApp'],
+                grad: 'from-blue-500 to-cyan-400',
+              },
+              {
+                emoji: '✨', name: '市場推廣', nameEn: 'Marketing',
+                href: '/vibe-demo/recruitai/modules/marketing',
+                tagline: 'AI 內容工廠每日自動生產，社交互動率提升 2.5 倍',
+                kpi: '5x', kpiLabel: '內容產出',
+                features: ['30 篇/月社交貼文自動生成', 'EDM 個性化分眾行銷', '品牌物料一鍵生成', '最佳時間自動排程發布'],
+                integrations: ['Meta Business', 'Buffer', 'Mailchimp', 'Canva'],
+                grad: 'from-violet-500 to-pink-400',
+              },
+              {
+                emoji: '💬', name: '客戶服務', nameEn: 'Customer Service',
+                href: '/vibe-demo/recruitai/modules/customer-service',
+                tagline: 'WhatsApp AI 客服 24/7 秒回，客戶滿意度提升 40%',
+                kpi: '< 30秒', kpiLabel: '平均回覆',
+                features: ['WhatsApp 全天候 AI 回覆', '多渠道統一收件管理', '智能預約自動確認提醒', '投訴情緒識別即時升級'],
+                integrations: ['WhatsApp API', 'Zendesk', 'Calendly', 'HubSpot CRM'],
+                grad: 'from-emerald-500 to-teal-400',
+              },
+              {
+                emoji: '⚙️', name: '業務運營', nameEn: 'Business Ops',
+                href: '/vibe-demo/recruitai/modules/business-ops',
+                tagline: '發票、表單、報告全自動，每月解放 100+ 小時行政時間',
+                kpi: '100+', kpiLabel: '月省工時',
+                features: ['發票 OCR 自動入帳 Xero', '審批流程自動路由', '管理層週報準時送達', '跨系統數據零誤差同步'],
+                integrations: ['Xero', 'Google Sheets', 'DocuSign', 'Zapier'],
+                grad: 'from-orange-500 to-amber-400',
+              },
+              {
+                emoji: '📊', name: '業務分析', nameEn: 'Analytics',
+                href: '/vibe-demo/recruitai/modules/analytics',
+                tagline: '整合全渠道廣告及業務數據，AI 洞察讓決策快 3 倍',
+                kpi: '實時', kpiLabel: '數據洞察',
+                features: ['全渠道 BI 儀表板實時更新', '多平台廣告數據整合', 'AI 異常警報 5 分鐘內通知', '客戶流失風險提前 30 天預測'],
+                integrations: ['Google Analytics', 'Meta Ads', 'BigQuery', 'Looker Studio'],
+                grad: 'from-slate-700 to-indigo-600',
+              },
+            ].map(mod => (
+              <Link
+                key={mod.name}
+                href={mod.href}
+                className="group block rounded-3xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/60 hover:shadow-2xl hover:border-blue-200 dark:hover:border-blue-800/50 hover:-translate-y-0.5 transition-all duration-300 overflow-hidden"
               >
-                {agent.title}
-              </button>
-            ))}
-          </div>
-
-          {/* Agent Cards */}
-          <div className="grid lg:grid-cols-3 gap-6">
-            {AGENTS.map((agent, idx) => {
-              const Icon = agent.icon;
-              const isActive = activeAgent === idx;
-              return (
-                <div
-                  key={agent.id}
-                  onClick={() => setActiveAgent(idx)}
-                  className={`relative rounded-2xl border p-8 cursor-pointer transition-all duration-300 ${
-                    isActive
-                      ? `${agent.bgLight} ${agent.bgDark} ${agent.borderColor} shadow-lg scale-[1.02]`
-                      : 'bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/50 hover:shadow-md'
-                  }`}
-                >
-                  {/* Number */}
-                  <span className="absolute top-4 right-4 text-4xl font-black text-slate-100 dark:text-white/5 select-none">
-                    {String(idx + 1).padStart(2, '0')}
-                  </span>
-
-                  {/* Icon */}
-                  <div className={`w-12 h-12 rounded-xl ${agent.iconBg} flex items-center justify-center mb-5`}>
-                    <Icon className={`w-6 h-6 ${agent.iconColor}`} />
+                <div className="flex flex-col lg:flex-row">
+                  {/* Left identity panel */}
+                  <div className={`flex-none lg:w-52 p-6 lg:p-8 bg-gradient-to-br ${mod.grad} flex lg:flex-col gap-4 items-center lg:items-start justify-between lg:justify-start`}>
+                    <div className="flex items-center lg:flex-col lg:items-start gap-3">
+                      <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-3xl shadow-sm group-hover:scale-110 transition-transform duration-300 flex-none">
+                        {mod.emoji}
+                      </div>
+                      <div className="lg:mt-4">
+                        <h3 className="text-lg font-bold text-white leading-tight">{mod.name}</h3>
+                        <p className="text-xs text-white/70 font-medium mt-0.5">{mod.nameEn}</p>
+                      </div>
+                    </div>
+                    <div className="text-right lg:text-left lg:mt-auto">
+                      <div className="text-3xl font-black text-white">{mod.kpi}</div>
+                      <div className="text-xs text-white/70 mt-0.5">{mod.kpiLabel}</div>
+                    </div>
                   </div>
 
-                  <div className={`inline-block text-xs font-semibold px-2 py-1 rounded ${agent.badgeBg} ${agent.badgeText} mb-3`}>
-                    {agent.titleEn}
-                  </div>
-
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                    {agent.title}
-                  </h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-5 leading-relaxed">
-                    {agent.description}
-                  </p>
-
-                  <ul className="space-y-2 mb-6">
-                    {agent.features.map(f => (
-                      <li key={f} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
-                        <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div className={`text-sm font-bold ${agent.statColor}`}>
-                    📈 {agent.stat}
-                  </div>
-
-                  {/* Workflow expandable */}
-                  <button
-                    onClick={e => { e.stopPropagation(); setExpandedWorkflow(expandedWorkflow === idx ? null : idx); }}
-                    className={`mt-5 w-full flex items-center justify-between text-xs font-semibold px-3 py-2 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-white/20 text-slate-700 dark:text-slate-200 hover:bg-white/30'
-                        : 'bg-slate-100 dark:bg-slate-700/40 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/60'
-                    }`}
-                  >
-                    <span>查看工作流程（如何運作？）</span>
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expandedWorkflow === idx ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {expandedWorkflow === idx && (
-                    <div className="mt-3 space-y-2">
-                      {(AGENT_WORKFLOWS[agent.id] ?? []).map((wf, wi) => (
-                        <div key={wi} className={`flex items-start gap-2.5 text-xs rounded-lg px-3 py-2 ${
-                          isActive ? 'bg-white/15 text-slate-700 dark:text-slate-200' : 'bg-slate-50 dark:bg-slate-700/30 text-slate-600 dark:text-slate-300'
-                        }`}>
-                          <span className="text-sm mt-0.5 shrink-0">{wf.icon}</span>
-                          <span className="leading-relaxed">{wf.step}</span>
+                  {/* Right content */}
+                  <div className="flex-1 p-6 lg:p-8">
+                    <p className="text-slate-700 dark:text-slate-300 font-medium mb-5 text-base leading-relaxed">{mod.tagline}</p>
+                    <div className="grid sm:grid-cols-2 gap-y-2.5 gap-x-6 mb-5">
+                      {mod.features.map(f => (
+                        <div key={f} className="flex items-center gap-2.5 text-sm text-slate-600 dark:text-slate-400">
+                          <CheckCircle className="w-4 h-4 text-emerald-500 flex-none" />
+                          {f}
                         </div>
                       ))}
                     </div>
-                  )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {mod.integrations.map(t => (
+                        <span key={t} className="text-xs px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700/40">{t}</span>
+                      ))}
+                      <span className="text-xs text-slate-400 dark:text-slate-500 ml-1">+ 更多</span>
+                    </div>
+                  </div>
+
+                  {/* Arrow CTA */}
+                  <div className="flex-none flex items-center px-6 lg:px-8 py-4 lg:py-0 border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/40">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      <span className="hidden lg:inline">詳細了解</span>
+                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
                 </div>
-              );
-            })}
+              </Link>
+            ))}
+          </div>
+
+          {/* Bottom CTA */}
+          <div className="mt-14 rounded-3xl bg-gradient-to-br from-blue-600 to-violet-600 p-8 sm:p-12 text-center text-white">
+            <h3 className="text-2xl sm:text-3xl font-bold mb-3">不確定從哪裡開始？</h3>
+            <p className="text-blue-100 mb-8 text-lg">30 分鐘免費評估，顧問為您量身推薦最適合的模組組合</p>
+            <Link
+              href="/vibe-demo/recruitai/consultation"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-white text-blue-700 font-bold rounded-2xl text-lg shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
+            >
+              免費 30 分鐘模組評估 <ArrowRight className="w-5 h-5" />
+            </Link>
           </div>
         </div>
       </section>
@@ -967,6 +905,117 @@ export default function RecruitAIPage() {
               預約諮詢，了解您行業的 AI 方案
               <ArrowRight className="w-4 h-4" />
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── AI Agents ── */}
+      <section id="agents" className="py-24 px-4 bg-slate-50/50 dark:bg-white/[0.02]">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3">AI 代理生態系統</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
+              200+ AI 代理，覆蓋業務全流程
+            </h2>
+            <p className="text-slate-500 dark:text-slate-400 text-lg max-w-2xl mx-auto">
+              200+ 個預建 AI 代理，即插即用。3 個起步，按業務成長無限擴展，永遠不需要人手重複工作
+            </p>
+          </div>
+
+          {/* Agent Tabs */}
+          <div className="flex justify-center gap-2 mb-10">
+            {AGENTS.map((agent, idx) => (
+              <button
+                key={agent.id}
+                onClick={() => setActiveAgent(idx)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeAgent === idx
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50 hover:border-blue-300 dark:hover:border-blue-700'
+                }`}
+              >
+                {agent.title}
+              </button>
+            ))}
+          </div>
+
+          {/* Agent Cards */}
+          <div className="grid lg:grid-cols-3 gap-6">
+            {AGENTS.map((agent, idx) => {
+              const Icon = agent.icon;
+              const isActive = activeAgent === idx;
+              return (
+                <div
+                  key={agent.id}
+                  onClick={() => setActiveAgent(idx)}
+                  className={`relative rounded-2xl border p-8 cursor-pointer transition-all duration-300 ${
+                    isActive
+                      ? `${agent.bgLight} ${agent.bgDark} ${agent.borderColor} shadow-lg scale-[1.02]`
+                      : 'bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/50 hover:shadow-md'
+                  }`}
+                >
+                  {/* Number */}
+                  <span className="absolute top-4 right-4 text-4xl font-black text-slate-100 dark:text-white/5 select-none">
+                    {String(idx + 1).padStart(2, '0')}
+                  </span>
+
+                  {/* Icon */}
+                  <div className={`w-12 h-12 rounded-xl ${agent.iconBg} flex items-center justify-center mb-5`}>
+                    <Icon className={`w-6 h-6 ${agent.iconColor}`} />
+                  </div>
+
+                  <div className={`inline-block text-xs font-semibold px-2 py-1 rounded ${agent.badgeBg} ${agent.badgeText} mb-3`}>
+                    {agent.titleEn}
+                  </div>
+
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                    {agent.title}
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-5 leading-relaxed">
+                    {agent.description}
+                  </p>
+
+                  <ul className="space-y-2 mb-6">
+                    {agent.features.map(f => (
+                      <li key={f} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                        <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className={`text-sm font-bold ${agent.statColor}`}>
+                    📈 {agent.stat}
+                  </div>
+
+                  {/* Workflow expandable */}
+                  <button
+                    onClick={e => { e.stopPropagation(); setExpandedWorkflow(expandedWorkflow === idx ? null : idx); }}
+                    className={`mt-5 w-full flex items-center justify-between text-xs font-semibold px-3 py-2 rounded-lg transition-colors ${
+                      isActive
+                        ? 'bg-white/20 text-slate-700 dark:text-slate-200 hover:bg-white/30'
+                        : 'bg-slate-100 dark:bg-slate-700/40 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/60'
+                    }`}
+                  >
+                    <span>查看工作流程（如何運作？）</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expandedWorkflow === idx ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {expandedWorkflow === idx && (
+                    <div className="mt-3 space-y-2">
+                      {(AGENT_WORKFLOWS[agent.id] ?? []).map((wf, wi) => (
+                        <div key={wi} className={`flex items-start gap-2.5 text-xs rounded-lg px-3 py-2 ${
+                          isActive ? 'bg-white/15 text-slate-700 dark:text-slate-200' : 'bg-slate-50 dark:bg-slate-700/30 text-slate-600 dark:text-slate-300'
+                        }`}>
+                          <span className="text-sm mt-0.5 shrink-0">{wf.icon}</span>
+                          <span className="leading-relaxed">{wf.step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -1261,7 +1310,7 @@ export default function RecruitAIPage() {
             AI 自動化之旅
           </h2>
           <p className="text-blue-100 text-xl mb-4">
-            免費 15 分鐘諮詢，了解 AI 如何為您的業務創造價值
+            免費 30 分鐘諮詢，了解 AI 如何為您的業務創造價值
           </p>
           <p className="text-blue-200/70 text-sm mb-10">
             無需信用卡 · 無義務承諾 · 即日預約即可
@@ -1316,7 +1365,7 @@ export default function RecruitAIPage() {
                 </span>
               </div>
               <p className="text-slate-400 text-sm leading-relaxed mb-4">
-                香港中小企業 AI 自動化平台。三大 AI 代理，一個平台，釋放業務潛能。
+                香港中小企業 AI 自動化平台。200+ AI 代理，5 大功能模組，一週部署，全面釋放業務潛能。
               </p>
               <p className="text-slate-500 text-xs">by 5 Miles Lab</p>
             </div>
@@ -1325,7 +1374,7 @@ export default function RecruitAIPage() {
             <div>
               <h4 className="text-white font-semibold mb-4">產品</h4>
               <ul className="space-y-2 text-sm text-slate-400">
-                <li><button onClick={() => scrollTo('#agents')} className="hover:text-white transition-colors">三大 AI 代理</button></li>
+                <li><button onClick={() => scrollTo('#modules')} className="hover:text-white transition-colors">5 大功能模組</button></li>
                 <li><button onClick={() => scrollTo('#how-it-works')} className="hover:text-white transition-colors">運作方式</button></li>
                 <li><button onClick={() => scrollTo('#pricing')} className="hover:text-white transition-colors">價格方案</button></li>
                 <li><button onClick={() => scrollTo('#faq')} className="hover:text-white transition-colors">常見問題</button></li>
@@ -1371,14 +1420,10 @@ export default function RecruitAIPage() {
 
           <div className="border-t border-slate-800 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-slate-500 text-sm">
-              © 2025 RecruitAIStudio by 5 Miles Lab. 保留所有權利。
+              © 2026 RecruitAI Studio by 5 Miles Lab. 保留所有權利。
             </p>
             <div className="flex gap-6 text-xs text-slate-500">
-              <span className="hover:text-slate-300 cursor-default transition-colors">私隱政策</span>
-              <span className="hover:text-slate-300 cursor-default transition-colors">服務條款</span>
-              <Link href="/vibe-demo" className="hover:text-slate-300 transition-colors">
-                ← Vibe Demo
-              </Link>
+              <Link href="/vibe-demo/recruitai/contact" className="hover:text-slate-300 transition-colors">聯絡我們</Link>
             </div>
           </div>
         </div>

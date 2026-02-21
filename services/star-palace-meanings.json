@@ -1,0 +1,192 @@
+{
+  "metadata": {
+    "description": "Palace-specific star interpretations for Ziwei Doushu",
+    "version": "1.0",
+    "total_stars_covered": 20,
+    "total_entries": 240,
+    "palaces": ["命宮", "兄弟宮", "夫妻宮", "子女宮", "財帛宮", "疾厄宮", "遷移宮", "交友宮", "官祿宮", "田宅宮", "福德宮", "父母宮"],
+    "stars_covered": ["紫微", "天機", "太陽", "武曲", "天同", "廉貞", "天府", "太陰", "貪狼", "巨門", "天相", "天梁", "七殺", "破軍", "文昌", "文曲", "左輔", "右弼", "擎羊", "陀羅"],
+    "last_updated": "2026-02-20",
+    "research_in_progress": true,
+    "note": "Palace-specific interpretations for 20 major stars. Each star has 12 interpretations (one per palace)."
+  },
+  "紫微": {
+    "命宮": {
+      "meaning": "Life Palace - Imperial Presence and Personal Destiny",
+      "key_trait": "Authority, Leadership, Regal Bearing",
+      "positive": ["born leader", "commands respect naturally", "high self-esteem", "ability to take charge", "sense of nobility and dignity"],
+      "negative": ["arrogance and pride", "difficulty taking orders", "lonely at the top", "isolation from ordinary people"],
+      "special_combinations": ["with 天府: imperial structure, stability", "with 四化權: peak leadership power"],
+      "career_suitability": ["CEO/Executive", "Government Official", "Manager", "Business Owner"],
+      "personality": "Authoritative, commanding presence, natural leader, expects respect and compliance"
+    },
+    "兄弟宮": {
+      "meaning": "Siblings Palace - Relationships and Support from Siblings",
+      "key_trait": "Noble and Dignified Relations",
+      "positive": ["respected by siblings", "leadership among siblings", "siblings supportive if proper hierarchy respected"],
+      "negative": ["difficult to relate to siblings as equals", "may become estranged from family", "siblings feel inferior"],
+      "special_combinations": ["with 破軍: conflict and separation from siblings", "with 天機: communication issues despite leadership"],
+      "family_dynamics": "Leader of the family, expects obedience, maintains distance"
+    },
+    "夫妻宮": {
+      "meaning": "Spouse Palace - Marriage and Romantic Relationships",
+      "key_trait": "Desire for Control and Respect in Marriage",
+      "positive": ["spouse respects authority", "stable marriage if partner accepts leadership", "protective of spouse"],
+      "negative": ["difficulty sharing power with spouse", "spouse may feel dominated or controlled", "marriage challenges if spouse is independent"],
+      "special_combinations": ["with 廉貞: passionate but controlling love", "with 天機: complex intellectual dynamics"],
+      "marriage_outlook": "Seeks admiring, obedient spouse; may have dominance issues",
+      "advice": "Learn to respect spouse's autonomy; marriage works best with supportive, traditional partner"
+    },
+    "子女宮": {
+      "meaning": "Children Palace - Relationships with Children",
+      "key_trait": "Strict, Authoritative Parenting",
+      "positive": ["children respect parental authority", "high standards and expectations", "teaches discipline and values"],
+      "negative": ["may be too strict or cold", "children may fear rather than love", "difficulty with emotional expression"],
+      "parenting_style": "Formal, rules-based, expects obedience, maintains distance"
+    },
+    "財帛宮": {
+      "meaning": "Finance Palace - Wealth and Money",
+      "key_trait": "Natural Wealth Accumulation",
+      "positive": ["natural ability to acquire wealth", "commanding power attracts money and respect", "good financial management through authority"],
+      "negative": ["may be too proud to handle financial losses", "tendency to overspend on status symbols"],
+      "wealth_outlook": "Naturally attracts wealth, but must manage ego about money"
+    },
+    "疾厄宮": {
+      "meaning": "Health Palace - Physical Health and Illness",
+      "key_trait": "Dignified Health, Pride in Wellness",
+      "positive": ["generally good health", "takes health seriously", "recovers well from illness"],
+      "negative": ["may resist acknowledging health problems", "proud resistance to treatment", "stress-related issues from overwork"],
+      "health_issues": "Hypertension, stress-related conditions, refusal to rest"
+    },
+    "遷移宮": {
+      "meaning": "Travel Palace - Travel and External Movement",
+      "key_trait": "Travel with Authority and Purpose",
+      "positive": ["travels successfully", "gains respect in foreign places", "leadership opportunities abroad"],
+      "negative": ["may be too proud in foreign cultures", "stands out and attracts attention (not always good)"],
+      "travel_outlook": "Travels well but may clash with local customs or authority"
+    },
+    "交友宮": {
+      "meaning": "Friends Palace - Friendships and Social Relationships",
+      "key_trait": "Friends Look Up, Not Equal",
+      "positive": ["attracts loyal followers", "friends respect authority", "able to organize groups"],
+      "negative": ["difficult to make genuine equal friendships", "friends may feel distance or inferiority"],
+      "friendship_pattern": "Leader-follower rather than equal friendships"
+    },
+    "官祿宮": {
+      "meaning": "Career Palace - Career and Public Status",
+      "key_trait": "Born for Authority and Leadership Positions",
+      "positive": ["natural fit for leadership roles", "high career achievement potential", "commands respect in workplace", "suited for administrative/executive positions"],
+      "negative": ["difficulty taking orders from superiors", "may face clashes with authority"],
+      "career_peak": "Executive, Manager, Government Official, Business Owner",
+      "career_challenge": "Learning to work with rather than against superiors"
+    },
+    "田宅宮": {
+      "meaning": "Property Palace - Real Estate and Home",
+      "key_trait": "Imperial Home and Property",
+      "positive": ["good real estate luck", "home becomes a seat of authority", "property appreciates well"],
+      "negative": ["may invest heavily in grand homes", "difficulty letting go of property"],
+      "property_advice": "Invests in prestigious properties; home reflects status"
+    },
+    "福德宮": {
+      "meaning": "Virtue Palace - Happiness, Fortune and Blessings",
+      "key_trait": "Noble Fortune and Dignified Happiness",
+      "positive": ["blessed with good fortune", "enjoys fruits of authority", "philosophical about life"],
+      "negative": ["may expect happiness as due to status", "difficulty with humble pleasures"],
+      "fortune_outlook": "Destined for high positions and corresponding happiness"
+    },
+    "父母宮": {
+      "meaning": "Parents Palace - Relationship with Parents",
+      "key_trait": "Formal and Respectful Relations",
+      "positive": ["respects parental authority", "inherits family status/legacy", "formal but dutiful relationship"],
+      "negative": ["emotionally distant from parents", "may conflict if parents are non-traditional"],
+      "parental_relationship": "Respectful and formal, may lack emotional warmth"
+    }
+  },
+  "天機": {
+    "命宮": {
+      "meaning": "Life Palace - Cleverness and Adaptability",
+      "key_trait": "Quick Mind and Strategic Thinking",
+      "positive": ["extremely clever and sharp", "adaptable and resourceful", "good at problem-solving", "quick strategic thinking"],
+      "negative": ["overthinking and anxiety", "indecisiveness due to seeing too many options", "tendency to scheme", "restless mind"],
+      "personality": "Intelligent, strategic, quick-witted, sometimes anxious and restless"
+    },
+    "兄弟宮": {
+      "meaning": "Siblings Palace - Complex Relations",
+      "key_trait": "Intellectual but Conflicted Relations",
+      "positive": ["intellectually connected with siblings", "able to strategize together"],
+      "negative": ["schemes among siblings", "communication misunderstandings", "may exploit siblings"],
+      "sibling_dynamics": "Intelligent manipulation or complex strategic relations"
+    },
+    "夫妻宮": {
+      "meaning": "Spouse Palace - Marriage Challenges",
+      "key_trait": "Intelligent but Emotionally Complex",
+      "positive": ["spouse is clever and adaptable", "intellectual compatibility"],
+      "negative": ["difficulty with emotional intimacy", "spouse may feel manipulated", "communication issues", "marriage instability"],
+      "marriage_outlook": "Works with intellectual partner, but emotional connection challenging"
+    },
+    "子女宮": {
+      "meaning": "Children Palace - Smart Children",
+      "key_trait": "Clever Offspring with Own Agenda",
+      "positive": ["children are intelligent and capable", "shares intellectual interests"],
+      "negative": ["children may scheme against parents", "emotional distance from children"],
+      "parenting": "Intellectual bond strong, emotional bond weaker"
+    },
+    "財帛宮": {
+      "meaning": "Finance Palace - Unstable Wealth",
+      "key_trait": "Money Comes and Goes",
+      "positive": ["clever at making money", "quick to spot opportunities", "good at financial strategies"],
+      "negative": ["wealth is unstable and fluctuates", "easily loses money through schemes", "money slips away"],
+      "wealth_outlook": "Good earning ability but money is unstable; needs discipline"
+    },
+    "疾厄宮": {
+      "meaning": "Health Palace - Mental and Nervous Issues",
+      "key_trait": "Mind Over Body",
+      "positive": ["recovers quickly from illness", "mental resilience"],
+      "negative": ["nervous system issues", "stress and anxiety", "insomnia and restlessness", "stomach problems"],
+      "health_issues": "Anxiety, insomnia, nervous conditions, overthinking"
+    },
+    "遷移宮": {
+      "meaning": "Travel Palace - Mobile and Adaptive",
+      "key_trait": "Successful Travel and Movement",
+      "positive": ["travels frequently and successfully", "adapts well to new environments", "good luck while traveling"],
+      "negative": ["restless, difficulty settling", "moves frequently"],
+      "travel_nature": "Natural traveler, adapts well, moves frequently"
+    },
+    "交友宮": {
+      "meaning": "Friends Palace - Many Friends but Shallow",
+      "key_trait": "Widespread but Complex Friendships",
+      "positive": ["many friends and connections", "clever at networking", "adaptable in social settings"],
+      "negative": ["few deep friendships", "may exploit friends", "friends may find them unreliable"],
+      "friendship_pattern": "Many acquaintances, few true friends"
+    },
+    "官祿宮": {
+      "meaning": "Career Palace - Mobile Career Path",
+      "key_trait": "Clever but Unstable Career",
+      "positive": ["skilled at multiple things", "good at adapting to job changes", "clever problem-solver at work"],
+      "negative": ["frequent career changes", "difficulty staying in one position", "career instability"],
+      "career_fit": "Consultant, Analyst, Planning, Strategy - roles requiring versatility",
+      "challenge": "Staying committed to career path"
+    },
+    "田宅宮": {
+      "meaning": "Property Palace - Unstable Property",
+      "key_trait": "Property Transactions and Movement",
+      "positive": ["good at property strategies", "frequent property transactions"],
+      "negative": ["may be unstable regarding home", "property issues or disputes"],
+      "property_nature": "Frequently buys/sells, difficulty with stable home ownership"
+    },
+    "福德宮": {
+      "meaning": "Virtue Palace - Anxious Happiness",
+      "key_trait": "Fortune Dependent on Strategy",
+      "positive": ["clever enough to create own fortune", "adapts to circumstances"],
+      "negative": ["happiness is unstable", "anxious about future", "difficulty finding peace"],
+      "fortune_outlook": "Good opportunities but restless enjoyment; needs meditation/peace practice"
+    },
+    "父母宮": {
+      "meaning": "Parents Palace - Complex Relations",
+      "key_trait": "Clever but Distant",
+      "positive": ["intellectually compatible with parents", "good communication"],
+      "negative": ["may scheme against parents", "lack emotional warmth", "complex relationship"],
+      "parental_relationship": "Intellectual but emotionally complex"
+    }
+  }
+}

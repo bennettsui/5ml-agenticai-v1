@@ -8,9 +8,13 @@ import {
   Clock, Users, Star, ArrowLeft, Send, Phone, Mail, Building2,
 } from 'lucide-react';
 
-const API_BASE = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
-  : 'http://localhost:8080';
+const API_BASE = (() => {
+  if (typeof window === 'undefined') return '';
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  return isLocal
+    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
+    : (process.env.NEXT_PUBLIC_API_URL || '');
+})();
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -449,14 +453,16 @@ export default function IndustryLandingPage({ config }: { config: IndustryConfig
       </section>
 
       {/* ── Footer ── */}
-      <footer className="py-10 px-4 bg-slate-900 text-center">
-        <div className="max-w-4xl mx-auto">
-          <p className="text-slate-400 text-sm mb-2">
-            © 2024 RecruitAIStudio by 5 Miles Lab · 專注香港中小企業 AI 自動化
+      <footer className="py-10 px-4 bg-slate-900 text-center border-t border-slate-800">
+        <div className="max-w-4xl mx-auto space-y-3">
+          <p className="text-slate-400 text-sm">
+            © 2025 RecruitAI Studio by 5 Miles Lab · 專注香港中小企業 AI 自動化
           </p>
-          <Link href="/vibe-demo/recruitai" className="text-blue-400 hover:text-blue-300 text-sm">
-            返回主頁 →
-          </Link>
+          <div className="flex justify-center gap-4 text-sm">
+            <Link href="/vibe-demo/recruitai" className="text-blue-400 hover:text-blue-300 transition">返回主頁</Link>
+            <Link href="/vibe-demo/recruitai/privacy-policy" className="text-slate-400 hover:text-slate-300 transition">私隱政策</Link>
+            <Link href="/vibe-demo/recruitai/terms" className="text-slate-400 hover:text-slate-300 transition">使用條款</Link>
+          </div>
         </div>
       </footer>
     </div>

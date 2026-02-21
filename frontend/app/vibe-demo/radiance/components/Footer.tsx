@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import { RadianceLogo } from './RadianceLogo';
 
@@ -98,9 +100,17 @@ export function Footer() {
 
         {/* Divider */}
         <div className="border-t border-slate-800 pt-8">
-          <p className="text-sm text-slate-500 text-center">
-            &copy; {currentYear} Radiance PR & Martech Limited. All rights reserved.
-          </p>
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-400">
+            <p>&copy; {currentYear} Radiance PR & Martech Limited. All rights reserved.</p>
+            <div className="flex gap-6">
+              <Link href="/vibe-demo/radiance/privacy-policy" className="hover:text-purple-400 transition">
+                私隱政策
+              </Link>
+              <Link href="/vibe-demo/radiance/terms" className="hover:text-purple-400 transition">
+                使用條款
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </footer>

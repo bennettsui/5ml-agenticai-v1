@@ -6,9 +6,7 @@ const { specs, swaggerUi } = require('./swagger');
 const { getClaudeModel, getModelDisplayName, shouldUseDeepSeek } = require('./utils/modelHelper');
 const deepseekService = require('./services/deepseekService');
 const zwEngine = require('./services/ziwei-chart-engine');
-const { asyncHandler, errorHandler, AppError } = require('./middleware/errorHandler');
-const ziweiValidation = require('./validation/ziweiValidation');
-const ziweiV1Router = require('./routes/v1/ziwei');
+const { encrypt, decrypt, decryptRow, PII_FIELDS } = require('./services/encryption');
 require('dotenv').config();
 
 // ─── Radiance Email Alert Setup ───────────────────────────────────────────────
@@ -71,7 +69,9 @@ app.use((req, res, next) => {
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-src https://www.google.com/recaptcha/; frame-ancestors 'none'");
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
   next();
 });
 
@@ -3981,7 +3981,7 @@ app.post('/api/agent-chat', async (req, res) => {
 
     const systemPrompt = `You are the 5ML Platform Agent Assistant — an expert on the 5ML Agentic AI Platform.
 You have deep knowledge of every agent, use case, solution line, C-Suite role, and the 7-layer architecture.
-You know 5ML is a Hong Kong-based agentic AI solutions agency competing with NDN and Fimmick.
+You know 5ML is a Hong Kong-based agentic AI solutions agency focused on helping SMEs automate and scale with AI.
 
 ${context || ''}
 ${ragContext ? `\n${ragContext}` : ''}
@@ -4221,34 +4221,110 @@ const RADIANCE_ADMIN_PW = 'radiance2026happyday!';
 // POST /api/radiance/contact — save enquiry to DB + send email alert
 app.post('/api/radiance/contact', async (req, res) => {
   try {
-    const { name, email, phone, company, industry, serviceInterest, message, sourceLang } = req.body;
+    const ip = req.ip || 'unknown';
 
-    if (!name || !email) {
-      return res.status(400).json({ success: false, error: 'Name and email are required' });
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ success: false, error: 'Invalid email address' });
-    }
-    if (message && message.length > 5000) {
-      return res.status(400).json({ success: false, error: 'Message must be under 5000 characters' });
+    // Rate limiting: 5 submissions per IP per 15 minutes
+    if (!checkRadianceRateLimit(ip)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many submissions. Please try again in 15 minutes.'
+      });
     }
 
-    const enquiryData = {
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      phone: phone || null,
-      company: company || null,
-      industry: industry || null,
-      serviceInterest: serviceInterest || null,
-      message: (message || '').trim(),
-      sourceLang: sourceLang || 'en',
-      ipAddress: req.ip,
-      userAgent: req.get('user-agent'),
+    const { name, email, phone, company, industry, serviceInterest, message, recaptchaToken } = req.body;
+
+    // reCAPTCHA v3 verification (only enforced when secret key is configured)
+    if (process.env.RECAPTCHA_SECRET_KEY) {
+      if (!recaptchaToken) {
+        return res.status(400).json({
+          success: false,
+          error: 'Security check failed. Please refresh the page and try again.'
+        });
+      }
+      const verifyRes = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          secret: process.env.RECAPTCHA_SECRET_KEY,
+          response: recaptchaToken,
+        }).toString(),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success || verifyData.score < 0.5) {
+        console.warn('⚠️ reCAPTCHA failed for Radiance contact:', { ip, score: verifyData.score });
+        return res.status(400).json({
+          success: false,
+          error: 'Security check failed. Please refresh the page and try again.'
+        });
+      }
+    }
+
+    // Sanitize: trim and enforce field length limits
+    const clean = {
+      name:            (name || '').trim().slice(0, 200),
+      email:           (email || '').trim().slice(0, 200),
+      phone:           (phone || '').trim().slice(0, 50),
+      company:         (company || '').trim().slice(0, 200),
+      industry:        (industry || '').trim().slice(0, 200),
+      serviceInterest: (serviceInterest || '').trim().slice(0, 200),
+      budget:          ((req.body.budget) || '').trim().slice(0, 100),
+      timeline:        ((req.body.timeline) || '').trim().slice(0, 100),
+      message:         (message || '').trim().slice(0, 5000),
     };
 
-    // Save to database
-    const saved = await saveRadianceEnquiry(enquiryData);
-    console.log(`📋 [Radiance] Enquiry saved: ${saved.enquiry_id} from ${enquiryData.name} <${enquiryData.email}>`);
+    // Whitelist validation for select/dropdown fields
+    const VALID_SERVICE_INTEREST = new Set(['Public Relations', 'Events', 'Social Media', 'KOL Marketing', 'Creative Production', 'Multiple Services', 'Other', '']);
+    const VALID_BUDGET    = new Set(['Under HKD 50k', 'HKD 50k - 100k', 'HKD 100k - 250k', 'HKD 250k+', '']);
+    const VALID_TIMELINE  = new Set(['Immediate (This month)', 'Short-term (1-3 months)', 'Medium-term (3-6 months)', 'Long-term (6+ months)', '']);
+    if (!VALID_SERVICE_INTEREST.has(clean.serviceInterest)) {
+      return res.status(400).json({ success: false, error: 'Invalid service selection.' });
+    }
+    if (!VALID_BUDGET.has(clean.budget)) {
+      return res.status(400).json({ success: false, error: 'Invalid budget selection.' });
+    }
+    if (!VALID_TIMELINE.has(clean.timeline)) {
+      return res.status(400).json({ success: false, error: 'Invalid timeline selection.' });
+    }
+
+    // Required field validation
+    if (!clean.name || !clean.email || !clean.message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name, email, and message are required'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(clean.email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email address'
+      });
+    }
+
+    // Message length validation
+    if (clean.message.length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Message must be at least 10 characters'
+      });
+    }
+
+    // Store contact submission (in-memory for now, can be extended to database)
+    const submission = {
+      id: Date.now().toString(),
+      ...clean,
+      submittedAt: new Date().toISOString(),
+      ip,
+      userAgent: req.get('user-agent')
+    };
+
+    // Log submission ID only — no PII in server logs
+    console.log('📧 New Radiance contact submission:', {
+      id: submission.id,
+      submittedAt: submission.submittedAt,
+    });
 
     // Send email alert (non-blocking — don't fail the response if email fails)
     sendRadianceEnquiryAlert(enquiryData).catch(err =>
@@ -4452,11 +4528,25 @@ app.post('/api/recruitai/lead', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid email address' });
     }
 
+    // Encrypt PII at rest — name, email, phone, company, message are sensitive
+    // industry/headcount/utm/source_page are business/analytics metadata, not encrypted
     const result = await pool.query(
       `INSERT INTO recruitai_leads (name, email, phone, company, industry, headcount, message, source_page, utm_source, utm_medium, utm_campaign, ip_address)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING lead_id, created_at`,
-      [name, email, phone || null, company || null, industry || null, headcount || null, message || null,
-       sourcePage || null, utmSource || null, utmMedium || null, utmCampaign || null, req.ip]
+      [
+        encrypt(name),
+        encrypt(email),
+        phone    ? encrypt(phone)    : null,
+        company  ? encrypt(company)  : null,
+        industry || null,
+        headcount || null,
+        message  ? encrypt(message)  : null,
+        sourcePage  || null,
+        utmSource   || null,
+        utmMedium   || null,
+        utmCampaign || null,
+        req.ip,
+      ]
     );
     const lead = result.rows[0];
 
@@ -4520,23 +4610,29 @@ app.post('/api/recruitai/chat', async (req, res) => {
     const turnCount = turnResult.rows[0]?.turn_count || 0;
 
     // Build DeepSeek messages
-    const systemPrompt = `你是 RecruitAI Studio 的 AI 銷售顧問，專門協助香港中小企業了解 AI 招聘自動化解決方案。
+    const systemPrompt = `你係 Nora，RecruitAI Studio 嘅 AI 顧問助手。RecruitAI Studio 係香港中小企 AI 自動化平台，提供 5 大功能模組：增長（廣告/SEO/潛客）、市場推廣（社交內容/EDM）、客戶服務（WhatsApp AI）、業務運營（發票/報告/審批）、業務分析（多渠道數據整合）。入門 HK$8,000/月起（約 3 個 AI 代理），一週部署，一個月見效。
 
-你的目標：
-1. 了解對方的業務需求和痛點（招聘、HR、自動化等）
-2. 簡短介紹我們如何用 AI 解決他們的問題
-3. 在 20 輪對話內自然地收集聯絡資料（姓名、電郵、電話/WhatsApp）
+你的性格：
+- 活潑、親切、有活力，像一個聰明又友善的業務顧問
+- 偶爾用廣東話口語（係/唔係/咁/囉/啩），但保持專業
+- 懂得適時幽默，不會太正經，讓對話輕鬆愉快
+- 真誠關心對方業務痛點，不只是賣嘢
 
-對話風格：
-- 回答簡短直接，最多 3 句話
-- 用繁體中文，語氣友好專業
-- 主動提問了解需求
-- 當對方表現興趣時，引導提供聯絡資料
+對話原則：
+- 回覆簡短生動，2-4 句為主，避免大段文字
+- 用「你」稱呼對方，語氣溫暖
+- 主動提問了解需求，每次最多問一個問題
+- 適時用 emoji 增加親切感 😊
+- 第 ${turnCount + 1} 輪對話${turnCount >= 8 ? '（已聊了一段時間，可以自然地邀請對方安排免費諮詢）' : '（先了解需求，建立信任）'}
 
-目前是第 ${turnCount + 1} 輪對話。${turnCount >= 15 ? '請積極邀請對方留下聯絡方式，以便安排免費諮詢。' : ''}
-
-當收集到聯絡資料時，在回應末尾加上：
-[CONTACT_CAPTURED: name=姓名, email=電郵, phone=電話]`;
+聯絡資料收集（重要）：
+- 當對方表示感興趣或詢問價格/方案時，自然地邀請留下聯絡方式
+- 說話示範：「咁你係咪方便留個 WhatsApp / 電郵俾我？我哋可以安排個免費 30 分鐘 AI 評估 😊」
+- 一旦對話中出現任何聯絡資料（WhatsApp、手機、電郵），必須在回覆末尾加上以下標記（此行對用戶不可見，不要解釋它）：
+[CONTACT_CAPTURED: name=姓名, email=電郵地址, phone=電話號碼]
+例子：[CONTACT_CAPTURED: name=陳先生, email=chan@example.com, phone=+852 9123 4567]
+例子（只有電話）：[CONTACT_CAPTURED: phone=+852 9123 4567]
+只填已知的欄位，未知欄位省略。標記必須在回覆最後一行。`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -4546,24 +4642,28 @@ app.post('/api/recruitai/chat', async (req, res) => {
 
     const response = await deepseekService.chat(messages, {
       model: 'deepseek-chat',
-      maxTokens: 300,
-      temperature: 0.8,
+      maxTokens: 400,
+      temperature: 0.9,
     });
 
     let replyContent = response.content;
     let contactCaptured = false;
     let capturedData = {};
 
-    // Parse contact capture marker
-    const captureMatch = replyContent.match(/\[CONTACT_CAPTURED:([^\]]+)\]/);
+    // Parse contact capture marker (case-insensitive)
+    const captureMatch = replyContent.match(/\[CONTACT_CAPTURED:([^\]]+)\]/i);
     if (captureMatch) {
       contactCaptured = true;
       const parts = captureMatch[1].split(',');
       parts.forEach(p => {
-        const [k, v] = p.split('=');
-        if (k && v) capturedData[k.trim()] = v.trim();
+        const eqIdx = p.indexOf('=');
+        if (eqIdx > 0) {
+          const k = p.slice(0, eqIdx).trim();
+          const v = p.slice(eqIdx + 1).trim();
+          if (k && v) capturedData[k] = v;
+        }
       });
-      replyContent = replyContent.replace(/\[CONTACT_CAPTURED:[^\]]+\]/, '').trim();
+      replyContent = replyContent.replace(/\[CONTACT_CAPTURED:[^\]]+\]/i, '').trim();
     }
 
     // Save messages to DB
@@ -4581,25 +4681,38 @@ app.post('/api/recruitai/chat', async (req, res) => {
     const updateParams = [currentSessionId];
     if (contactCaptured) {
       updateFields.push(`contact_captured = TRUE`);
-      if (capturedData.name) { updateFields.push(`captured_name = $${updateParams.length + 1}`); updateParams.push(capturedData.name); }
-      if (capturedData.email) { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(capturedData.email); }
-      if (capturedData.phone) { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(capturedData.phone); }
+      // Encrypt PII captured by chatbot before persisting to DB
+      if (capturedData.name)  { updateFields.push(`captured_name  = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.name)); }
+      if (capturedData.email) { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.email)); }
+      if (capturedData.phone) { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.phone)); }
     }
     await pool.query(
       `UPDATE recruitai_chat_sessions SET ${updateFields.join(', ')} WHERE session_id = $1`,
       updateParams
     );
 
-    // If contact captured, also save as lead
+    // If contact captured, save as lead (chatbot-sourced), encrypt PII at rest
+    // Dedup by session_id (not email — emails are encrypted so plaintext comparison fails)
     if (contactCaptured && capturedData.email) {
       try {
         await pool.query(
           `INSERT INTO recruitai_leads (name, email, phone, source_page, industry, message)
-           VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (email) DO NOTHING`,
-          [capturedData.name || null, capturedData.email, capturedData.phone || null,
-           'chatbot:' + (sourcePage || 'unknown'), industry || null, `From chatbot session ${currentSessionId}`]
+           SELECT $1,$2,$3,$4,$5,$6
+           WHERE NOT EXISTS (
+             SELECT 1 FROM recruitai_leads WHERE source_page = $4
+           )`,
+          [
+            capturedData.name  ? encrypt(capturedData.name)  : null,
+            encrypt(capturedData.email),
+            capturedData.phone ? encrypt(capturedData.phone) : null,
+            'chatbot:' + currentSessionId,
+            industry || null,
+            encrypt(`Chat session ${currentSessionId}`),
+          ]
         );
-      } catch (e) { /* ignore duplicate */ }
+      } catch (e) {
+        console.error('⚠️ RecruitAI chatbot lead save failed:', e.message);
+      }
     }
 
     res.json({
@@ -4625,7 +4738,9 @@ app.get('/api/recruitai/admin/leads', async (req, res) => {
     const result = await pool.query(
       'SELECT * FROM recruitai_leads ORDER BY created_at DESC LIMIT 500'
     );
-    res.json({ success: true, leads: result.rows });
+    // Decrypt PII fields before returning to admin UI
+    const leads = result.rows.map(row => decryptRow(row, PII_FIELDS.recruitai_leads));
+    res.json({ success: true, leads });
   } catch (error) {
     console.error('❌ Admin leads error:', error);
     res.status(500).json({ error: 'Failed to fetch leads' });
@@ -4645,7 +4760,11 @@ app.get('/api/recruitai/admin/sessions', async (req, res) => {
        LEFT JOIN recruitai_chat_messages m ON m.session_id = s.session_id
        GROUP BY s.id ORDER BY s.created_at DESC LIMIT 200`
     );
-    res.json({ success: true, sessions: result.rows });
+    // Decrypt any PII captured by the chatbot during conversation
+    const sessions = result.rows.map(row =>
+      decryptRow(row, ['captured_name', 'captured_email', 'captured_phone'])
+    );
+    res.json({ success: true, sessions });
   } catch (error) {
     console.error('❌ Admin sessions error:', error);
     res.status(500).json({ error: 'Failed to fetch sessions' });
@@ -5500,7 +5619,7 @@ app.get('/api/ziwei/stars/:id', async (req, res) => {
   }
 });
 
-// GET /api/ziwei/palace-star-meanings/:palaceId/:starId - Get star meaning in specific palace
+// GET /api/ziwei/palace-star-meanings/:palaceId/:starId - Get star meaning in specific palace (DB version)
 app.get('/api/ziwei/palace-star-meanings/:palaceId/:starId', async (req, res) => {
   try {
     if (!process.env.DATABASE_URL) {
@@ -5537,6 +5656,53 @@ app.get('/api/ziwei/palace-star-meanings/:palaceId/:starId', async (req, res) =>
   } catch (error) {
     console.error('❌ Ziwei palace-star meanings error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ziwei/star/:name/palaces - Get all 12 palace meanings for one star
+app.get('/api/ziwei/star/:name/palaces', (req, res) => {
+  try {
+    const zwEngine = require('./services/ziwei-chart-engine');
+    const result = zwEngine.getStarInAllPalaces(req.params.name);
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        error: `No palace data found for star '${req.params.name}'`,
+        note: 'Palace-specific meanings database is being compiled'
+      });
+    }
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/ziwei/star/:name/palace/:palace - Single star-palace combination
+app.get('/api/ziwei/star/:name/palace/:palace', (req, res) => {
+  try {
+    const zwEngine = require('./services/ziwei-chart-engine');
+    const result = zwEngine.getStarPalaceMeaning(req.params.name, req.params.palace);
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        error: `No data for '${req.params.name}' in palace '${req.params.palace}'`,
+        note: 'Palace-specific meanings database is being compiled'
+      });
+    }
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/ziwei/palace/:palace - All stars documented in a specific palace
+app.get('/api/ziwei/palace/:palace', (req, res) => {
+  try {
+    const zwEngine = require('./services/ziwei-chart-engine');
+    const result = zwEngine.getPalaceAllStars(req.params.palace);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
