@@ -1,0 +1,20 @@
+{
+  "id": "pdf-tender-agent",
+  "name": "Tender / Proposal Agent",
+  "description": "Compresses large tender and proposal PDFs to meet upload size limits (typically 10–20 MB) with minimal quality loss. Preserves text crispness for official submission.",
+  "trigger": "POST /api/pdf-compress",
+  "profile": "lossless",
+  "priority": "quality",
+  "tags": ["tender", "proposal", "official"],
+  "max_size_mb": 15,
+  "rationale": "Lossless profile uses pdfsizeopt with JBIG2 + PNGOUT — preserves all text and vector quality. Falls back to Ghostscript prepress if pdfsizeopt unavailable.",
+  "downstream": [
+    "hk-sg-tender-intelligence (submission tracking)",
+    "client-crm-kb (proposal archive)"
+  ],
+  "sla": {
+    "max_latency_seconds": 120,
+    "retry_on_failure": true,
+    "fallback_on_no_improvement": "return error — manual intervention required"
+  }
+}

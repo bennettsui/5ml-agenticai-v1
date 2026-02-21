@@ -2260,6 +2260,36 @@ app.get('/stats', async (req, res) => {
             'POST /api/sme/campaign-review    — Weekly campaign review orchestration',
           ],
         },
+        {
+          id: 'pdf-compression',
+          name: 'PDF Compression Service',
+          description: 'Self-hosted PDF compression pipeline — lossless, balanced, web & small profiles using pdfsizeopt, Ghostscript, pdfEasyCompress, and Paperweight',
+          agentCount: 3,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 PDF compressed (avg 5 MB input)',
+              modelCalls: [],
+              totalTokens: { input: 0, output: 0 },
+              estimatedCost: 0.00,
+              notes: 'No LLM calls — pure open-source CLI tools (Ghostscript, pdfsizeopt). Cost is compute time only (self-hosted). Approx $0.001–0.01 per file in cloud compute.',
+            },
+            daily: { runsPerDay: 50, estimatedCost: 0.00 },
+            monthly: { runsPerMonth: 1500, estimatedCost: 0.00, notes: 'Electricity / compute only. No external API costs.' },
+          },
+          agents: [
+            { id: 'ingestion-agent', name: 'PDF Ingestion Agent', role: 'Normalise PDFs before OCR / RAG — balanced profile, 150 DPI', model: 'None (CLI tools)' },
+            { id: 'tender-agent', name: 'Tender / Proposal Agent', role: 'Shrink proposals to meet upload limits — lossless profile, JBIG2', model: 'None (CLI tools)' },
+            { id: 'sharing-agent', name: 'Sharing / Distribution Agent', role: 'Compact PDFs for email / WhatsApp — web profile, 120 DPI', model: 'None (CLI tools)' },
+          ],
+          endpoints: [
+            'POST /api/pdf-compress         — Compress PDF (proxies to Python service)',
+            'GET  /api/pdf-compress/health  — Service health + tool availability',
+            'GET  /api/pdf-compress/profiles — List compression profiles',
+          ],
+          tools: ['pdfsizeopt', 'Ghostscript (pdfc)', 'pdfEasyCompress', 'Paperweight'],
+          profiles: ['lossless', 'balanced', 'web', 'small', 'auto'],
+        },
       ],
       // Token pricing reference (per million tokens)
       tokenPricing: {
@@ -2283,8 +2313,9 @@ app.get('/stats', async (req, res) => {
         aiVideoGeneration: 0.88,
         hkSgTenderIntelligence: 1.80,
         smeGrowthEngine: 0.16, // At 50 leads/month + 4 weekly reviews
+        pdfCompression: 0.00, // Self-hosted CLI tools — no LLM API costs
         totalBase: 28.54,
-        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). SME Growth Engine scales with lead volume (~$0.002/lead). All estimates assume typical usage patterns.',
+        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). SME Growth Engine scales with lead volume (~$0.002/lead). PDF Compression is zero API cost (open-source CLI tools). All estimates assume typical usage patterns.',
       },
       databaseTables: [
         // Social/Marketing tables
@@ -6183,6 +6214,76 @@ app.post('/api/sme/campaign-review', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ==========================================
+// PDF Compression Service API (proxy to Python microservice)
+// ==========================================
+{
+  const PDF_COMPRESS_URL = process.env.PDF_COMPRESSION_SERVICE_URL || 'http://localhost:8082';
+
+  // POST /api/pdf-compress — Compress a PDF via the Python microservice
+  app.post('/api/pdf-compress', async (req, res) => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 180000); // 3 min timeout
+      const response = await fetch(`${PDF_COMPRESS_URL}/compress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        res.status(504).json({ ok: false, error: 'PDF compression service timed out (3 min)' });
+      } else {
+        console.error('❌ PDF compress proxy error:', err.message);
+        res.status(503).json({
+          ok: false,
+          error: `PDF Compression Service unavailable: ${err.message}. Start it with: cd use-cases/pdf-compression && docker-compose up`,
+        });
+      }
+    }
+  });
+
+  // GET /api/pdf-compress/health — Check Python service health
+  app.get('/api/pdf-compress/health', async (req, res) => {
+    try {
+      const response = await fetch(`${PDF_COMPRESS_URL}/health`, { signal: AbortSignal.timeout(5000) });
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (err) {
+      res.status(503).json({
+        status: 'unavailable',
+        error: err.message,
+        hint: 'Start the PDF Compression Service: cd use-cases/pdf-compression && docker-compose up',
+      });
+    }
+  });
+
+  // GET /api/pdf-compress/profiles — List available compression profiles
+  app.get('/api/pdf-compress/profiles', async (req, res) => {
+    try {
+      const response = await fetch(`${PDF_COMPRESS_URL}/profiles`, { signal: AbortSignal.timeout(5000) });
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (err) {
+      // Return static profile list when service is offline
+      res.json({
+        profiles: [
+          { name: 'auto',      description: 'Auto-select based on file size',                     use_case: 'General purpose' },
+          { name: 'lossless',  description: 'Maximum quality (pdfsizeopt JBIG2/PNGOUT)',          use_case: 'Legal docs, tender submissions' },
+          { name: 'balanced',  description: 'Good quality-to-size ratio (Ghostscript default)',   use_case: 'Tenders, reports, drafts' },
+          { name: 'web',       description: 'Screen-optimised, 120 DPI (Ghostscript ebook)',      use_case: 'Email, WhatsApp, web downloads' },
+          { name: 'small',     description: 'Aggressive compression (Ghostscript screen, 96 DPI)', use_case: 'Portal uploads with size caps' },
+        ],
+        note: 'PDF Compression Service is offline — showing cached profile list',
+      });
+    }
+  });
+}
 
 // ==========================================
 // HK+SG Tender Intelligence API
