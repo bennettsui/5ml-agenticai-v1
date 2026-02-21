@@ -47,16 +47,17 @@ ZIWEI_SYSTEM_STARS = {
     "廉貞": -8      # Counter-clockwise 8
 }
 
-# Tianfu System: 8 stars (mix of clockwise/counter-clockwise from Tianfu)
+# Tianfu System: 8 stars (all clockwise/順布 from Tianfu — Zhongzhou School 中州派)
+# 天府系順布: 天府為錨點，太陰起一順數，依次為貪狼、巨門、天相、天梁、七殺，破軍在+10位
 TIANFU_SYSTEM_STARS = {
     "天府": 0,      # Anchor star
-    "太陰": -1,     # Counter-clockwise 1
-    "貪狼": -2,     # Counter-clockwise 2
-    "巨門": 1,      # Clockwise 1
-    "天相": 2,      # Clockwise 2
-    "天梁": 3,      # Clockwise 3
-    "七殺": -3,     # Counter-clockwise 3
-    "破軍": -4      # Counter-clockwise 4
+    "太陰": 1,      # Clockwise 1 (順布)
+    "貪狼": 2,      # Clockwise 2
+    "巨門": 3,      # Clockwise 3
+    "天相": 4,      # Clockwise 4
+    "天梁": 5,      # Clockwise 5
+    "七殺": 6,      # Clockwise 6
+    "破軍": 10      # Clockwise 10
 }
 
 # STEP 7: Auxiliary & Calamity Stars

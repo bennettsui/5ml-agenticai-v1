@@ -22,6 +22,82 @@ const BRANCHES = ['子','丑','寅','卯','辰','巳','午','未','申','酉','�
 const getYearStem   = (y: number) => STEMS[((y - 4) % 10 + 10) % 10];
 const getYearBranch = (y: number) => BRANCHES[((y - 4) % 12 + 12) % 12];
 
+// ── Gregorian → Lunar conversion ─────────────────────────────────────────────
+// Chinese New Year dates (Gregorian): year → [month, day]
+const CNY_DATES: Record<number, [number, number]> = {
+  1924:[2,5],  1925:[1,24], 1926:[2,13], 1927:[2,2],  1928:[1,23], 1929:[2,10],
+  1930:[1,30], 1931:[2,17], 1932:[2,6],  1933:[1,26], 1934:[2,14], 1935:[2,4],
+  1936:[1,24], 1937:[2,11], 1938:[1,31], 1939:[2,19], 1940:[2,8],  1941:[1,27],
+  1942:[2,15], 1943:[2,5],  1944:[1,25], 1945:[2,13], 1946:[2,2],  1947:[1,22],
+  1948:[2,10], 1949:[1,29], 1950:[2,17], 1951:[2,6],  1952:[1,27], 1953:[2,14],
+  1954:[2,3],  1955:[1,24], 1956:[2,12], 1957:[1,31], 1958:[2,18], 1959:[2,8],
+  1960:[1,28], 1961:[2,15], 1962:[2,5],  1963:[1,25], 1964:[2,13], 1965:[2,2],
+  1966:[1,21], 1967:[2,9],  1968:[1,30], 1969:[2,17], 1970:[2,6],  1971:[1,27],
+  1972:[2,15], 1973:[2,3],  1974:[1,23], 1975:[2,11], 1976:[1,31], 1977:[2,18],
+  1978:[2,7],  1979:[1,28], 1980:[2,16], 1981:[2,5],  1982:[1,25], 1983:[2,13],
+  1984:[2,2],  1985:[2,20], 1986:[2,9],  1987:[1,29], 1988:[2,17], 1989:[2,6],
+  1990:[1,27], 1991:[2,15], 1992:[2,4],  1993:[1,23], 1994:[2,10], 1995:[1,31],
+  1996:[2,19], 1997:[2,7],  1998:[1,28], 1999:[2,16], 2000:[2,5],  2001:[1,24],
+  2002:[2,12], 2003:[2,1],  2004:[1,22], 2005:[2,9],  2006:[1,29], 2007:[2,18],
+  2008:[2,7],  2009:[1,26], 2010:[2,14], 2011:[2,3],  2012:[1,23], 2013:[2,10],
+  2014:[1,31], 2015:[2,19], 2016:[2,8],  2017:[1,28], 2018:[2,16], 2019:[2,5],
+  2020:[1,25], 2021:[2,12], 2022:[2,1],  2023:[1,22], 2024:[2,10], 2025:[1,29],
+  2026:[2,17], 2027:[2,6],  2028:[1,26], 2029:[2,13], 2030:[2,3],
+};
+
+// Average synodic month length (days)
+const SYNODIC_MONTH = 29.530589;
+
+function toJulianDay(year: number, month: number, day: number): number {
+  const a = Math.floor((14 - month) / 12);
+  const y = year + 4800 - a;
+  const m = month + 12 * a - 3;
+  return day + Math.floor((153 * m + 2) / 5) + 365 * y
+    + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
+}
+
+interface LunarDate {
+  lunarYear:   number;
+  lunarMonth:  number;
+  lunarDay:    number;
+  yearStem:    string;
+  yearBranch:  string;
+}
+
+function gregorianToLunar(gYear: number, gMonth: number, gDay: number): LunarDate {
+  const jdn = toJulianDay(gYear, gMonth, gDay);
+
+  // Find the Chinese New Year (正月初一) on or before this date
+  let lunarYear = gYear;
+  let cnY = CNY_DATES[lunarYear];
+  if (!cnY) cnY = [2, 4]; // fallback approx
+  let cnyJdn = toJulianDay(lunarYear, cnY[0], cnY[1]);
+
+  // If before this year's CNY, step back to previous Chinese year
+  if (jdn < cnyJdn) {
+    lunarYear--;
+    cnY = CNY_DATES[lunarYear] ?? [2, 4];
+    cnyJdn = toJulianDay(lunarYear, cnY[0], cnY[1]);
+  }
+
+  const daysSinceCNY = jdn - cnyJdn;
+  // Lunar month (1-based) from CNY
+  const lunarMonth = Math.min(Math.floor(daysSinceCNY / SYNODIC_MONTH) + 1, 13);
+  // Lunar day within the month (1-based)
+  const lunarDay = Math.min(
+    Math.max(Math.round(daysSinceCNY - (lunarMonth - 1) * SYNODIC_MONTH) + 1, 1),
+    30
+  );
+
+  return {
+    lunarYear,
+    lunarMonth: Math.min(lunarMonth, 12),
+    lunarDay,
+    yearStem:   getYearStem(lunarYear),
+    yearBranch: getYearBranch(lunarYear),
+  };
+}
+
 const HOUR_BRANCHES = [
   { value: '子', label: '子時 (23:00–01:00)' },
   { value: '丑', label: '丑時 (01:00–03:00)' },
@@ -138,16 +214,32 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
     setIsLoading(true);
     setError(null);
     try {
+      // Convert Gregorian → Lunar when needed
+      let lunarYear   = formData.year;
+      let lunarMonth  = formData.month;
+      let lunarDay    = formData.day;
+      let yearStem    = getYearStem(formData.year);
+      let yearBranch  = getYearBranch(formData.year);
+
+      if (formData.calendarType === 'gregorian') {
+        const converted = gregorianToLunar(formData.year, formData.month, formData.day);
+        lunarYear  = converted.lunarYear;
+        lunarMonth = converted.lunarMonth;
+        lunarDay   = converted.lunarDay;
+        yearStem   = converted.yearStem;
+        yearBranch = converted.yearBranch;
+      }
+
       const res = await fetch('/api/ziwei/calculate', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          lunarYear:    formData.year,
-          lunarMonth:   formData.month,
-          lunarDay:     formData.day,
+          lunarYear,
+          lunarMonth,
+          lunarDay,
           hourBranch:   formData.hourBranch,
-          yearStem:     getYearStem(formData.year),
-          yearBranch:   getYearBranch(formData.year),
+          yearStem,
+          yearBranch,
           gender:       formData.gender,
           name:         formData.name.trim(),
           placeOfBirth: formData.location,
@@ -466,6 +558,25 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
                     className={`w-full px-3 py-2.5 rounded-xl text-sm ${P.inputBg}`}
                   />
                 </div>
+
+                {/* ── Gregorian → Lunar preview ────────────────────── */}
+                {formData.calendarType === 'gregorian' && formData.year >= 1924 && formData.year <= 2030 && (() => {
+                  const lunar = gregorianToLunar(formData.year, formData.month, formData.day);
+                  return (
+                    <div className="rounded-lg border border-teal-700/40 bg-teal-950/40 p-3 text-xs space-y-1">
+                      <div className="text-teal-400 font-semibold mb-1">農曆換算 Lunar Conversion</div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-slate-300">
+                        <span className="text-slate-500">農曆年</span>
+                        <span className="text-cyan-300 font-mono">{lunar.lunarYear} ({lunar.yearStem}{lunar.yearBranch})</span>
+                        <span className="text-slate-500">農曆月</span>
+                        <span className="text-cyan-300 font-mono">{lunar.lunarMonth}月</span>
+                        <span className="text-slate-500">農曆日</span>
+                        <span className="text-cyan-300 font-mono">{lunar.lunarDay}日</span>
+                      </div>
+                      <p className="text-slate-600 text-[10px] mt-1">* Approximate. Verify against an almanac for precision.</p>
+                    </div>
+                  );
+                })()}
 
                 {/* ── Error ────────────────────────────────────────── */}
                 {error && (
