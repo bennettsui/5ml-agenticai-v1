@@ -27,7 +27,7 @@ const TIMELINE = [
   },
   {
     year: '2026',
-    title: '「We are Becoming – AI趨勢沙龍」',
+    title: '「We are Becoming – AI時代趨勢沙龍」',
     date: '2026.03.31',
     link: null,
     text: '在北藝藍盒子，把 AI、未來敘事與城市生活放在同一個舞台上，邀請大家一起練習：在變動中持續 becoming。',

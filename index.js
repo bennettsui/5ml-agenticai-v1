@@ -94,8 +94,10 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
 }));
 
 // Serve TEDx generated visuals (runtime-generated via nanobanana API)
-app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx')));
-app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi')));
+// Cache for 1 day — images are regenerated only when prompts change
+const tedxStaticOpts = { maxAge: '1d', immutable: false };
+app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx'), tedxStaticOpts));
+app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi'), tedxStaticOpts));
 
 // Serve Radiance uploaded media
 app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
@@ -3670,7 +3672,9 @@ try {
 try {
   const tedxXinyiRoutes = require('./use-cases/tedx-xinyi/api/routes');
   app.use('/api/tedx-xinyi', tedxXinyiRoutes);
-  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi');
+  // Admin shortcut: /tedxxinyi/admin → upload page
+  app.get('/tedxxinyi/admin', (req, res) => res.redirect('/api/tedx-xinyi/upload'));
+  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /tedxxinyi/admin');
 } catch (error) {
   console.warn('⚠️ TEDxXinyi routes not loaded:', error.message);
 }

@@ -117,7 +117,7 @@ export default function TEDxXinyiHome() {
 
           <FadeIn delay={200}>
             <p className="text-xl sm:text-2xl md:text-3xl font-black mb-6" style={{ color: WARM_AMBER }} lang="zh-TW">
-              AI趨勢沙龍
+              AI時代趨勢沙龍
             </p>
           </FadeIn>
 
@@ -161,7 +161,7 @@ export default function TEDxXinyiHome() {
           <div className="flex-1">
             <p className="text-xs font-bold tracking-[0.25em] uppercase text-white/50 mb-1">NEXT EVENT</p>
             <h2 className="text-lg sm:text-xl font-black" lang="zh-TW">
-              TEDxXinyi <span className="font-handwriting text-xl sm:text-2xl">We are Becoming</span> – AI趨勢沙龍
+              TEDxXinyi <span className="font-handwriting text-xl sm:text-2xl">We are Becoming</span> – AI時代趨勢沙龍
             </h2>
             <p className="text-white/60 text-sm mt-1" lang="zh-TW">
               2026/3/31（二）｜台北藝術表演中心 藍盒子
@@ -244,7 +244,7 @@ export default function TEDxXinyiHome() {
             <FadeIn>
               <SectionLabel>UPCOMING SALON</SectionLabel>
               <h2 className="text-3xl md:text-4xl font-black mb-6" lang="zh-TW">
-                <span className="font-handwriting text-4xl md:text-5xl">We are Becoming</span> – AI趨勢沙龍
+                <span className="font-handwriting text-4xl md:text-5xl">We are Becoming</span> – AI時代趨勢沙龍
               </h2>
             </FadeIn>
             <FadeIn delay={150}>

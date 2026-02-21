@@ -50,7 +50,7 @@ export default function CommunityPage() {
             <FadeIn>
               <SectionLabel>CURRENT SALON</SectionLabel>
               <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-6" lang="zh-TW">
-                最新 Salon｜<span className="font-handwriting text-3xl sm:text-4xl md:text-5xl">We are Becoming</span> – AI趨勢沙龍
+                最新 Salon｜<span className="font-handwriting text-3xl sm:text-4xl md:text-5xl">We are Becoming</span> – AI時代趨勢沙龍
               </h2>
             </FadeIn>
             <FadeIn delay={150}>

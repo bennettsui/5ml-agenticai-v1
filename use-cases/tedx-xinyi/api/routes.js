@@ -267,6 +267,132 @@ router.get('/visuals/:id', (req, res) => {
   res.sendFile(filePath);
 });
 
+// ==================== SPEAKER PHOTO UPLOAD ====================
+
+const SPEAKERS_DIR = path.join(OUTPUT_DIR, 'speakers');
+if (!fs.existsSync(SPEAKERS_DIR)) {
+  fs.mkdirSync(SPEAKERS_DIR, { recursive: true });
+}
+
+// Upload page UI
+router.get('/upload', (req, res) => {
+  const speakersDir = SPEAKERS_DIR;
+  const existing = fs.existsSync(speakersDir)
+    ? fs.readdirSync(speakersDir).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f))
+    : [];
+
+  res.send(`<!DOCTYPE html>
+<html lang="zh-TW"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TEDxXinyi — Upload Speaker Photos</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #faf9f6; color: #1a1a1a; padding: 2rem; max-width: 600px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .sub { color: #888; font-size: 0.85rem; margin-bottom: 2rem; }
+  label { display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 0.4rem; }
+  select, input[type=file] { width: 100%; padding: 0.6rem; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem; }
+  button { background: #E62B1E; color: #fff; border: none; padding: 0.7rem 1.5rem; border-radius: 999px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .msg { margin-top: 1rem; padding: 0.8rem; border-radius: 8px; font-size: 0.85rem; }
+  .msg.ok { background: #ecfdf5; color: #065f46; }
+  .msg.err { background: #fef2f2; color: #991b1b; }
+  .existing { margin-top: 2rem; }
+  .existing h2 { font-size: 1rem; margin-bottom: 0.5rem; }
+  .existing ul { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .existing li { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+  .preview { max-width: 200px; max-height: 200px; margin-top: 0.5rem; border-radius: 8px; }
+</style>
+</head><body>
+<h1>Upload Speaker Photo</h1>
+<p class="sub">TEDxXinyi 2026 — We are Becoming salon</p>
+
+<form id="f">
+  <label>Speaker</label>
+  <select id="speaker" required>
+    <option value="">Select speaker...</option>
+    <option value="cheng-shi-jia">程世嘉</option>
+    <option value="lin-dong-liang">林東良</option>
+    <option value="yang-shi-yi">楊士毅</option>
+    <option value="glass-brothers">玻璃兄弟</option>
+  </select>
+
+  <label>Photo (JPG/PNG, max 5MB)</label>
+  <input type="file" id="photo" accept="image/jpeg,image/png,image/webp" required>
+  <img id="prev" class="preview" style="display:none">
+
+  <button type="submit" id="btn">Upload</button>
+</form>
+<div id="msg"></div>
+
+<div class="existing">
+  <h2>Uploaded photos</h2>
+  <ul>${existing.length ? existing.map(f => '<li>' + f + '</li>').join('') : '<li style="color:#999">None yet</li>'}</ul>
+</div>
+
+<script>
+document.getElementById('photo').onchange = function(e) {
+  const f = e.target.files[0];
+  if (f) { const r = new FileReader(); r.onload = ev => { const p = document.getElementById('prev'); p.src = ev.target.result; p.style.display = 'block'; }; r.readAsDataURL(f); }
+};
+document.getElementById('f').onsubmit = async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn');
+  const msg = document.getElementById('msg');
+  btn.disabled = true; btn.textContent = 'Uploading...'; msg.innerHTML = '';
+  try {
+    const file = document.getElementById('photo').files[0];
+    const speaker = document.getElementById('speaker').value;
+    const reader = new FileReader();
+    const data = await new Promise((res, rej) => { reader.onload = () => res(reader.result); reader.onerror = rej; reader.readAsDataURL(file); });
+    const resp = await fetch('/api/tedx-xinyi/upload-speaker', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ speaker, data, filename: file.name })
+    });
+    const json = await resp.json();
+    if (resp.ok) { msg.innerHTML = '<div class="msg ok">Uploaded: ' + json.path + '</div>'; setTimeout(() => location.reload(), 1000); }
+    else { msg.innerHTML = '<div class="msg err">Error: ' + json.error + '</div>'; }
+  } catch (err) { msg.innerHTML = '<div class="msg err">' + err.message + '</div>'; }
+  btn.disabled = false; btn.textContent = 'Upload';
+};
+</script>
+</body></html>`);
+});
+
+// Upload endpoint — accepts base64 image
+router.post('/upload-speaker', express.json({ limit: '10mb' }), (req, res) => {
+  const { speaker, data, filename } = req.body;
+  const validSpeakers = ['cheng-shi-jia', 'lin-dong-liang', 'yang-shi-yi', 'glass-brothers'];
+
+  if (!validSpeakers.includes(speaker)) {
+    return res.status(400).json({ error: 'Invalid speaker ID' });
+  }
+  if (!data || !data.startsWith('data:image/')) {
+    return res.status(400).json({ error: 'Invalid image data' });
+  }
+
+  // Extract base64 and extension
+  const match = data.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
+  if (!match) {
+    return res.status(400).json({ error: 'Unsupported image format' });
+  }
+
+  const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+  const buffer = Buffer.from(match[2], 'base64');
+
+  if (buffer.length > 5 * 1024 * 1024) {
+    return res.status(400).json({ error: 'File too large (max 5MB)' });
+  }
+
+  const outFilename = `${speaker}.${ext}`;
+  const outPath = path.join(SPEAKERS_DIR, outFilename);
+  fs.writeFileSync(outPath, buffer);
+
+  console.log(`[TEDxXinyi] Speaker photo uploaded: ${outFilename} (${(buffer.length / 1024).toFixed(0)} KB)`);
+  res.json({ success: true, speaker, filename: outFilename, path: `/tedx-xinyi/speakers/${outFilename}`, size: buffer.length });
+});
+
 // ==================== HELPER ====================
 
 async function generateVisual(client, prompt) {
