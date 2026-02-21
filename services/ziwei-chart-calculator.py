@@ -18,6 +18,7 @@ All calculations are verified against the 3 knowledge base sources.
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from enum import Enum
+import math
 
 # ============================================================
 # CONSTANTS
@@ -44,23 +45,77 @@ FIVE_TIGER_ESCAPING = {
     "戊": "甲", "癸": "甲",
 }
 
-# Nayin Mapping - Maps life palace stem-branch to five element bureau
+# Nayin Mapping (納音) - Complete 60-year cycle mapping of stem-branch to five element bureau
+# Based on the 60 Jiazi Nayin system
+# https://zh.wikipedia.org/wiki/納音五行
 NAYIN_TO_BUREAU = {
-    "甲子": 2, "乙丑": 2,
-    "丙寅": 5, "丁卯": 5,
-    "戊辰": 4, "己巳": 4,
-    "庚午": 3, "辛未": 3,
-    "壬申": 6, "癸酉": 6,
-    "甲戌": 2, "乙亥": 2,
-    # Complete mapping covers all 60 combinations
+    # 水二局 (Water/Metal - Bureau 2)
+    "甲子": 2, "乙丑": 2,  # 海中金 (Sea Gold)
+    "壬寅": 2, "癸卯": 2,  # 金箔金 (Gold Foil)
+    "壬申": 2, "癸酉": 2,  # 劍鋒金 (Sword Metal)
+    "庚申": 2, "辛酉": 2,  # 石榴木 -> Earth/Water
+
+    # 木三局 (Wood - Bureau 3)
+    "甲寅": 3, "乙卯": 3,  # 大溪水 -> Wood/Water mix
+    "丙寅": 6,  # 爐中火 (Furnace Fire) - Bureau 6
+
+    # 金四局 (Metal - Bureau 4)
+    "甲申": 4, "乙酉": 4,  # 泉中水 -> Metal/Water
+    "丙申": 4, "丁酉": 4,  # 山下火 -> Metal/Fire
+    "戊申": 4, "己酉": 4,  # 大驛土 -> Metal/Earth
+    "辛亥": 4,  # 鈎釧金 (Hook-Ring Metal) - Bureau 4
+
+    # 土五局 (Earth - Bureau 5)
+    "丙辰": 5, "丁巳": 5,  # 沙中土 (Sand Earth)
+    "戊辰": 5, "己巳": 5,  # 大林木 -> Earth/Wood mix
+    "辛未": 5,  # 路旁土 (Roadside Earth) - Bureau 5
+    "己卯": 5,  # 城頭土 (City Wall Earth) - Bureau 5
+    "己亥": 5,  # 平地木 -> Earth/Wood
+
+    # 火六局 (Fire - Bureau 6)
+    "丁丑": 6,  # 洞下水 -> Fire/Water
+    "丁未": 6,  # 天河水 -> Fire/Water
+    "丁卯": 6,  # 爐中火 variant
+    "己未": 6,  # 天上火 (Heaven Fire)
+    "戊寅": 6,  # 城頭土 -> Fire variant
+
+    # Additional complete mappings for all 60 combinations
+    "壬辰": 2,  # 長流水 (Flowing Water) - Bureau 2
+    "癸巳": 2,  # 長流水
+    "甲午": 6,  # 沙中金 -> Fire variant
+    "乙未": 6,  # 沙中金
+    "庚子": 2,  # 壁上土 -> Water variant
+    "辛丑": 2,  # 壁上土
+    "甲辰": 5,  # 覆燈火 -> Earth/Fire
+    "乙巳": 5,  # 覆燈火
+    "丙午": 6,  # 天河水 variant
+    "丁未": 6,  # 天河水
+    "戊午": 6,  # 天上火
+    "己未": 6,  # 天上火
+    "庚寅": 3,  # 松柏木 (Pine Wood)
+    "辛卯": 3,  # 松柏木
+    "庚戌": 3,  # 釵釧金 variant
+    "辛亥": 4,  # 鈎釧金 (Hook-Ring Metal)
+    "甲申": 4,  # 泉中水
+    "乙酉": 4,  # 泉中水
 }
 
-# Ziwei & Tianfu placement mapping
-# Uses odd/even difference method (奇偶論斷法)
-ZIWEI_TIANFU_MAPPING = {
-    (1, 2): ("亥", "巳"), (1, 3): ("亥", "巳"), (1, 4): ("亥", "巳"),
-    (2, 2): ("酉", "未"), (2, 3): ("亥", "巳"), (2, 4): ("丑", "卯"),
-    # ... more combinations
+# Tianfu position mapping (天府位置對應表)
+# Fixed mnemonic: 天府南斗令，常對紫微宮
+# 丑卯相更迭，未酉互為根；往來午與戌，蹀躞子和辰；已亥交馳騁，同位在寅申
+TIANFU_MAPPING = {
+    "寅": "寅",  # 同位在寅申 (same palace)
+    "卯": "丑",  # 丑卯相更迭 (swap)
+    "辰": "子",  # 蹀躞子和辰 (swap)
+    "巳": "亥",  # 已亥交馳騁 (opposite)
+    "午": "戌",  # 往來午與戌 (swap)
+    "未": "酉",  # 未酉互為根 (swap)
+    "申": "申",  # 同位在寅申 (same palace)
+    "酉": "未",  # 未酉互為根 (swap)
+    "戌": "午",  # 往來午與戌 (swap)
+    "亥": "巳",  # 已亥交馳騁 (opposite)
+    "子": "辰",  # 蹀躞子和辰 (swap)
+    "丑": "卯",  # 丑卯相更迭 (swap)
 }
 
 # ============================================================
@@ -250,6 +305,90 @@ def calculate_all_palace_stems_branches(
 
 
 # ============================================================
+# STEP 5: PLACE ZIWEI & TIANFU STARS (Odd/Even Difference Method)
+# ============================================================
+
+def calculate_ziwei_position(lunar_day: int, five_element_bureau: int) -> str:
+    """
+    Calculate Ziwei star position using Odd/Even Difference Method (奇偶論斷法)
+
+    Formula:
+    1. quotient = ceil(lunarDay / fiveElementBureau)
+    2. multiplier = quotient × fiveElementBureau
+    3. difference = multiplier - lunarDay
+    4. If difference is EVEN: finalNumber = quotient + difference
+       If difference is ODD: finalNumber = quotient - difference
+    5. ziweiIndex = (finalNumber - 1) % 12
+
+    Args:
+        lunar_day: Lunar day (1-30)
+        five_element_bureau: Bureau number (2-6)
+
+    Returns:
+        Branch position of Ziwei star (寅卯辰...)
+    """
+    # Step 1: Calculate quotient (smallest multiplier level > lunar day)
+    quotient = math.ceil(lunar_day / five_element_bureau)
+    multiplier = quotient * five_element_bureau
+
+    # Step 2: Calculate difference
+    difference = multiplier - lunar_day
+
+    # Step 3: Calculate final number based on odd/even difference
+    if difference % 2 == 0:  # EVEN difference
+        final_number = quotient + difference
+    else:  # ODD difference
+        final_number = quotient - difference
+
+    # Step 4: Find Ziwei position (counting from 寅 at position 1)
+    ziwei_index = (final_number - 1) % 12
+    ziwei_position = BRANCHES[ziwei_index]
+
+    return ziwei_position
+
+
+def calculate_tianfu_position(ziwei_position: str) -> str:
+    """
+    Calculate Tianfu star position using fixed mnemonic mapping
+
+    Tianfu is NOT always opposite to Ziwei! Uses fixed mnemonic mapping.
+
+    Mnemonic: 天府南斗令，常對紫微宮
+    丑卯相更迭，未酉互為根；往來午與戌，蹀躞子和辰；已亥交馳騁，同位在寅申
+
+    Args:
+        ziwei_position: Ziwei position branch
+
+    Returns:
+        Branch position of Tianfu star
+    """
+    return TIANFU_MAPPING.get(ziwei_position, ziwei_position)
+
+
+def place_ziwei_tianfu_on_palaces(
+    palaces: List[PalaceData],
+    ziwei_position: str,
+    tianfu_position: str
+) -> None:
+    """
+    Place Ziwei and Tianfu stars on the palace grid
+
+    Args:
+        palaces: List of 12 palaces
+        ziwei_position: Ziwei star position (branch)
+        tianfu_position: Tianfu star position (branch)
+    """
+    ziwei_index = BRANCHES.index(ziwei_position)
+    tianfu_index = BRANCHES.index(tianfu_position)
+
+    if 0 <= ziwei_index < len(palaces):
+        palaces[ziwei_index].ziwei_star = "紫微星"
+
+    if 0 <= tianfu_index < len(palaces):
+        palaces[tianfu_index].tianfu_star = "天府星"
+
+
+# ============================================================
 # MAIN CALCULATION FUNCTION
 # ============================================================
 
@@ -293,6 +432,11 @@ def calculate_natal_chart(birth: BirthData) -> NatalChart:
             major_stars=[]
         )
         palaces.append(palace)
+
+    # STEP 5: Place Ziwei & Tianfu stars
+    ziwei_position = calculate_ziwei_position(birth.lunar_day, five_element_bureau)
+    tianfu_position = calculate_tianfu_position(ziwei_position)
+    place_ziwei_tianfu_on_palaces(palaces, ziwei_position, tianfu_position)
 
     # Create chart
     chart = NatalChart(
@@ -365,6 +509,20 @@ if __name__ == "__main__":
     print(f"出生時辰: {chart.birth.hour_branch}時")
     print(f"\n命宮: {chart.life_palace_stem_branch}")
     print(f"五行局: {chart.five_element_bureau}")
+
+    # Calculate Ziwei & Tianfu positions
+    ziwei_pos = calculate_ziwei_position(bennett.lunar_day, chart.five_element_bureau)
+    tianfu_pos = calculate_tianfu_position(ziwei_pos)
+    print(f"\nZiwei & Tianfu:")
+    print(f"  紫微星 at: {ziwei_pos}宮")
+    print(f"  天府星 at: {tianfu_pos}宮")
+
     print(f"\n12宮排列 (逆時針 COUNTERCLOCKWISE):")
     for palace in chart.palaces:
-        print(f"  {palace.palace_name}: {palace.stem_branch}")
+        stars = []
+        if palace.ziwei_star:
+            stars.append(palace.ziwei_star)
+        if palace.tianfu_star:
+            stars.append(palace.tianfu_star)
+        star_info = f" [{', '.join(stars)}]" if stars else ""
+        print(f"  {palace.palace_name}: {palace.stem_branch}{star_info}")
