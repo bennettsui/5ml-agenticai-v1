@@ -95,7 +95,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
 
 // Serve TEDx generated visuals (runtime-generated via nanobanana API)
 // Cache for 1 day — images are regenerated only when prompts change
-const tedxStaticOpts = { maxAge: '1d', immutable: false };
+const tedxStaticOpts = { maxAge: '7d', immutable: false };
 app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx'), tedxStaticOpts));
 app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi'), tedxStaticOpts));
 
