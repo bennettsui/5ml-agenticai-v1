@@ -8,11 +8,14 @@ import NatalChartView from '@/components/NatalChartView';
 import { NatalChart, BirthData, ZiweiTab } from '@/types/ziwei';
 import { demoNatalLayer, demoBirthData } from '@/config/demoNatalLayer';
 import { defaultStarVisualConfig } from '@/config/starVisualConfig';
+import { convertBirthDataToAPI } from '@/utils/ziweiConvert';
 
 type MainTab = 'generation' | 'analysis';
 
 export default function ZiweiPage() {
   const [activeTab, setActiveTab] = useState<MainTab>('generation');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [currentChart, setCurrentChart] = useState<NatalChart>({
     birth: demoBirthData,
     layer: demoNatalLayer,
@@ -20,18 +23,61 @@ export default function ZiweiPage() {
     version: '1.0.0',
   });
 
-  const handleGenerate = (birthData: BirthData) => {
-    // TODO: Call backend API to calculate chart
-    // For now, update the demo chart with new birth data
-    const newChart: NatalChart = {
-      birth: birthData,
-      layer: demoNatalLayer,
-      calculatedAt: Date.now(),
-      version: '1.0.0',
-    };
-    setCurrentChart(newChart);
-    // Auto-switch to analysis tab to show the generated chart
-    setActiveTab('analysis');
+  const handleGenerate = async (birthData: BirthData) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Convert frontend format to API format
+      const apiData = convertBirthDataToAPI(birthData);
+
+      // Call the backend API
+      const response = await fetch('/api/ziwei/calculate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lunarYear: birthData.yearGregorian,
+          lunarMonth: birthData.monthLunar,
+          lunarDay: birthData.dayLunar,
+          hourBranch: apiData.hour_branch,
+          yearStem: apiData.year_stem,
+          yearBranch: apiData.year_branch,
+          gender: birthData.gender || 'M',
+          name: birthData.name || '',
+          placeOfBirth: birthData.location || '',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success || !result.chart) {
+        throw new Error('Invalid chart data from API');
+      }
+
+      // Transform API response to frontend format
+      const newChart: NatalChart = {
+        birth: birthData,
+        layer: demoNatalLayer, // TODO: Transform API palaces to ChartLayer
+        calculatedAt: Date.now(),
+        version: '1.0.0',
+      };
+
+      setCurrentChart(newChart);
+      // Auto-switch to analysis tab to show the generated chart
+      setActiveTab('analysis');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate chart';
+      setError(errorMessage);
+      console.error('Chart generation error:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -96,7 +142,12 @@ export default function ZiweiPage() {
         {/* GENERATION TAB */}
         {activeTab === 'generation' && (
           <div className="space-y-6">
-            <GenerationPanel onGenerate={handleGenerate} />
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                <p className="text-red-300 text-sm">{error}</p>
+              </div>
+            )}
+            <GenerationPanel onGenerate={handleGenerate} isLoading={isLoading} />
           </div>
         )}
 
