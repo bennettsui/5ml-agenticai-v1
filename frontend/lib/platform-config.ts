@@ -651,17 +651,6 @@ export const USE_CASES: UseCaseConfig[] = [
     features: ['QR Code Generator', 'Barcode (EAN/UPC/Code128)', 'Logo Embedding', 'Brand Colours', 'Batch Export'],
   },
   {
-    id: 'pdf-compressor',
-    name: 'PDF Compressor',
-    description: 'Compress, merge, split and optimise PDF files with configurable quality targets and metadata stripping',
-    solutionLine: 'FrontierVentures',
-    status: 'planned',
-    progress: 0,
-    priority: 'medium',
-    path: '#',
-    features: ['Compress PDF', 'Merge PDFs', 'Split Pages', 'Metadata Strip', 'Quality Presets'],
-  },
-  {
     id: 'ziwei-astrology',
     name: '紫微 Purple Star Astrology (Internal)',
     description: 'Internal Ziwei system with comprehensive rule evaluation, pattern matching, and accuracy tracking',
