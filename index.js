@@ -95,7 +95,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
 
 // Serve TEDx generated visuals (runtime-generated via nanobanana API)
 // Cache for 1 day — images are regenerated only when prompts change
-const tedxStaticOpts = { maxAge: '1d', immutable: false };
+const tedxStaticOpts = { maxAge: '7d', immutable: false };
 app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx'), tedxStaticOpts));
 app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi'), tedxStaticOpts));
 
@@ -2261,28 +2261,34 @@ app.get('/stats', async (req, res) => {
           ],
         },
         {
-          id: 'image-compression',
-          name: 'Image Compression',
-          description: 'Sharp-based image compression service: profile-driven resize, re-encode, and size enforcement for content, tender, and social agents',
-          agentCount: 0,
-          status: 'production',
+          id: 'pdf-compression',
+          name: 'PDF Compression Service',
+          description: 'Self-hosted PDF compression pipeline — lossless, balanced, web & small profiles using pdfsizeopt, Ghostscript, pdfEasyCompress, and Paperweight',
+          agentCount: 3,
+          status: 'in_progress',
           costEstimate: {
             perRun: {
-              description: '1 image compression operation (sharp is CPU-only, no LLM cost)',
+              description: '1 PDF compressed (avg 5 MB input)',
               modelCalls: [],
               totalTokens: { input: 0, output: 0 },
-              estimatedCost: 0.000, // No LLM cost — pure sharp CPU processing
-              notes: 'sharp runs on-server (CPU). No external API calls. Cost is compute only (~$0.0001/image on Fly.io).',
+              estimatedCost: 0.00,
+              notes: 'No LLM calls — pure open-source CLI tools (Ghostscript, pdfsizeopt). Cost is compute time only (self-hosted). Approx $0.001–0.01 per file in cloud compute.',
             },
-            daily: { runsPerDay: 100, estimatedCost: 0.01, notes: 'Estimate based on Fly.io CPU pricing' },
-            monthly: { runsPerMonth: 3000, estimatedCost: 0.30, notes: 'Scales with image volume; no per-image API cost' },
+            daily: { runsPerDay: 50, estimatedCost: 0.00 },
+            monthly: { runsPerMonth: 1500, estimatedCost: 0.00, notes: 'Electricity / compute only. No external API costs.' },
           },
-          agents: [],
-          endpoints: [
-            'POST /api/compress          — Compress image (JSON body with source, or multipart file upload)',
-            'GET  /api/compress/health   — Sharp service health check',
-            'GET  /api/compress/profiles — List all available compression profiles',
+          agents: [
+            { id: 'ingestion-agent', name: 'PDF Ingestion Agent', role: 'Normalise PDFs before OCR / RAG — balanced profile, 150 DPI', model: 'None (CLI tools)' },
+            { id: 'tender-agent', name: 'Tender / Proposal Agent', role: 'Shrink proposals to meet upload limits — lossless profile, JBIG2', model: 'None (CLI tools)' },
+            { id: 'sharing-agent', name: 'Sharing / Distribution Agent', role: 'Compact PDFs for email / WhatsApp — web profile, 120 DPI', model: 'None (CLI tools)' },
           ],
+          endpoints: [
+            'POST /api/pdf-compress         — Compress PDF (proxies to Python service)',
+            'GET  /api/pdf-compress/health  — Service health + tool availability',
+            'GET  /api/pdf-compress/profiles — List compression profiles',
+          ],
+          tools: ['pdfsizeopt', 'Ghostscript (pdfc)', 'pdfEasyCompress', 'Paperweight'],
+          profiles: ['lossless', 'balanced', 'web', 'small', 'auto'],
         },
       ],
       // Token pricing reference (per million tokens)
@@ -2307,9 +2313,9 @@ app.get('/stats', async (req, res) => {
         aiVideoGeneration: 0.88,
         hkSgTenderIntelligence: 1.80,
         smeGrowthEngine: 0.16, // At 50 leads/month + 4 weekly reviews
-        imageCompression: 0.30, // ~3000 images/month at Fly.io CPU cost; no LLM cost
-        totalBase: 28.84,
-        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). SME Growth Engine scales with lead volume (~$0.002/lead). Image Compression is CPU-only (no LLM). All estimates assume typical usage patterns.',
+        pdfCompression: 0.00, // Self-hosted CLI tools — no LLM API costs
+        totalBase: 28.54,
+        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). SME Growth Engine scales with lead volume (~$0.002/lead). PDF Compression is zero API cost (open-source CLI tools). All estimates assume typical usage patterns.',
       },
       databaseTables: [
         // Social/Marketing tables
@@ -4341,7 +4347,7 @@ const radianceUpload = multer({
   },
 });
 
-const RADIANCE_ADMIN_PW = 'radiance2026happyday!';
+const RADIANCE_ADMIN_PW = '5milesLab01@';
 
 // Simple in-memory rate limiter: max 5 submissions per IP per 15 min
 const _radianceRateLimitMap = new Map();
@@ -4487,7 +4493,7 @@ app.post('/api/radiance/contact', async (req, res) => {
 app.get('/api/radiance/contact/submissions', async (req, res) => {
   try {
     const { password } = req.query;
-    if (password !== 'radiance2026happyday!') {
+    if (password !== '5milesLab01@') {
       return res.status(401).json({ error: 'Unauthorised' });
     }
     const limit = Math.min(parseInt(req.query.limit || '50'), 200);
@@ -6219,6 +6225,76 @@ app.post('/api/sme/campaign-review', async (req, res) => {
 });
 
 // ==========================================
+// PDF Compression Service API (proxy to Python microservice)
+// ==========================================
+{
+  const PDF_COMPRESS_URL = process.env.PDF_COMPRESSION_SERVICE_URL || 'http://localhost:8082';
+
+  // POST /api/pdf-compress — Compress a PDF via the Python microservice
+  app.post('/api/pdf-compress', async (req, res) => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 180000); // 3 min timeout
+      const response = await fetch(`${PDF_COMPRESS_URL}/compress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        res.status(504).json({ ok: false, error: 'PDF compression service timed out (3 min)' });
+      } else {
+        console.error('❌ PDF compress proxy error:', err.message);
+        res.status(503).json({
+          ok: false,
+          error: `PDF Compression Service unavailable: ${err.message}. Start it with: cd use-cases/pdf-compression && docker-compose up`,
+        });
+      }
+    }
+  });
+
+  // GET /api/pdf-compress/health — Check Python service health
+  app.get('/api/pdf-compress/health', async (req, res) => {
+    try {
+      const response = await fetch(`${PDF_COMPRESS_URL}/health`, { signal: AbortSignal.timeout(5000) });
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (err) {
+      res.status(503).json({
+        status: 'unavailable',
+        error: err.message,
+        hint: 'Start the PDF Compression Service: cd use-cases/pdf-compression && docker-compose up',
+      });
+    }
+  });
+
+  // GET /api/pdf-compress/profiles — List available compression profiles
+  app.get('/api/pdf-compress/profiles', async (req, res) => {
+    try {
+      const response = await fetch(`${PDF_COMPRESS_URL}/profiles`, { signal: AbortSignal.timeout(5000) });
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (err) {
+      // Return static profile list when service is offline
+      res.json({
+        profiles: [
+          { name: 'auto',      description: 'Auto-select based on file size',                     use_case: 'General purpose' },
+          { name: 'lossless',  description: 'Maximum quality (pdfsizeopt JBIG2/PNGOUT)',          use_case: 'Legal docs, tender submissions' },
+          { name: 'balanced',  description: 'Good quality-to-size ratio (Ghostscript default)',   use_case: 'Tenders, reports, drafts' },
+          { name: 'web',       description: 'Screen-optimised, 120 DPI (Ghostscript ebook)',      use_case: 'Email, WhatsApp, web downloads' },
+          { name: 'small',     description: 'Aggressive compression (Ghostscript screen, 96 DPI)', use_case: 'Portal uploads with size caps' },
+        ],
+        note: 'PDF Compression Service is offline — showing cached profile list',
+      });
+    }
+  });
+}
+
+// ==========================================
 // HK+SG Tender Intelligence API
 // ==========================================
 {
@@ -6356,21 +6432,34 @@ app.post('/api/sme/campaign-review', async (req, res) => {
     }
   });
 
-  // POST /api/tender-intel/discover  — manual source discovery trigger
+  // POST /api/tender-intel/discover  — manual source discovery (SSE streaming)
   app.post('/api/tender-intel/discover', async (req, res) => {
-    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ error: 'DATABASE_URL not set' });
+    }
+    // Server-Sent Events stream — client reads progress events in real-time
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+    res.flushHeaders();
+
+    const emit = (data) => {
+      try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch (_) {}
+    };
+
     try {
       scheduleRegistry.markRunning('tender-intel:source-discovery');
-      const result = await tenderIntel.runSourceDiscovery(pool);
+      const result = await tenderIntel.runSourceDiscovery(pool, emit);
       scheduleRegistry.markCompleted('tender-intel:source-discovery', {
         result: `${result.newSources.length} new sources from ${result.hubsScanned} hubs`,
         durationMs: result.durationMs,
       });
-      res.json({ success: true, ...result });
     } catch (err) {
       scheduleRegistry.markFailed('tender-intel:source-discovery', err.message);
-      res.status(500).json({ error: err.message });
+      emit({ type: 'error', error: err.message });
     }
+    res.end();
   });
 
   // POST /api/tender-intel/ingest  — manual trigger (for testing)
