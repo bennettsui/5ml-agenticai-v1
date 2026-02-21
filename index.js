@@ -4797,6 +4797,54 @@ app.delete('/api/recruitai/admin/leads/:id', async (req, res) => {
   }
 });
 
+// POST /api/recruitai/admin/leads/:id/analyze — AI analysis of a lead
+app.post('/api/recruitai/admin/leads/:id/analyze', async (req, res) => {
+  const { password } = req.body;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  const { id } = req.params;
+  if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    const result = await pool.query('SELECT * FROM recruitai_leads WHERE id = $1', [Number(id)]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Lead not found' });
+    const lead = decryptRow(result.rows[0], PII_FIELDS.recruitai_leads);
+
+    const llm = require('./lib/llm');
+    const prompt = `You are a sales analyst for RecruitAI Studio, a Hong Kong AI automation agency serving SMEs.
+
+Analyze this inbound lead and respond with ONLY valid JSON (no markdown, no extra text):
+
+Lead data:
+- Company: ${lead.company || 'Not provided'}
+- Industry: ${lead.industry || 'Not provided'}
+- Headcount: ${lead.headcount || 'Not provided'}
+- Source form: ${lead.source_page || 'Unknown'}
+- Message / pain points: ${lead.message || 'No message provided'}
+
+Return this exact JSON structure:
+{
+  "category": "one of: 招聘自動化 | 客服AI | 行銷自動化 | 後台流程 | 資料分析 | 人力資源 | 一般查詢",
+  "summary": "2-3 sentence summary in Traditional Chinese of what this company needs and their situation",
+  "evaluation": "2-3 sentence evaluation in Traditional Chinese assessing lead quality, urgency, and fit for AI automation",
+  "stars": <integer 1-5, where 1=cold/unclear, 3=warm/interested, 5=hot/high-intent with clear pain point>,
+  "star_reason": "one concise sentence in Traditional Chinese explaining the star rating"
+}`;
+
+    const aiResult = await llm.chat('haiku', [{ role: 'user', content: prompt }], { maxTokens: 600 });
+    let analysis;
+    try {
+      const text = aiResult.text.trim();
+      const jsonStr = text.startsWith('{') ? text : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+      analysis = JSON.parse(jsonStr);
+    } catch {
+      return res.status(500).json({ error: 'Failed to parse AI response' });
+    }
+    res.json({ success: true, analysis });
+  } catch (err) {
+    console.error('❌ Lead analysis error:', err);
+    res.status(500).json({ error: 'Failed to analyze lead' });
+  }
+});
+
 // GET /api/recruitai/admin/sessions — list all chat sessions
 app.get('/api/recruitai/admin/sessions', async (req, res) => {
   const { password } = req.query;
