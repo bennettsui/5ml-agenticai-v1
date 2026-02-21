@@ -4516,7 +4516,7 @@ app.put('/api/radiance/admin/case-studies/:slug', async (req, res) => {
 // ==========================================
 
 const { Resend } = require('resend');
-const resendClient = new Resend(process.env.RESEND_API_KEY);
+const resendClient = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // POST /api/recruitai/lead — save lead + send email alert
 app.post('/api/recruitai/lead', async (req, res) => {
