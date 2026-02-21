@@ -4992,6 +4992,30 @@ app.get('/api/ziwei/charts/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/ziwei/charts/:id - Delete a saved chart
+app.delete('/api/ziwei/charts/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const result = await db.query(
+      `DELETE FROM ziwei_birth_charts WHERE id = $1 RETURNING id`,
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    res.json({ success: true, deletedId: result.rows[0].id });
+  } catch (error) {
+    console.error('❌ Error deleting chart:', error);
+    res.status(500).json({ error: 'Failed to delete chart', details: error.message });
+  }
+});
+
 // POST /api/ziwei/interpret - Generate interpretations for a chart
 app.post('/api/ziwei/interpret', ziweiValidation.validateChartInterpretation, asyncHandler(async (req, res) => {
   try {
