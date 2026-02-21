@@ -817,19 +817,66 @@ async function getDigest(pool) {
 // ─── Capability Profile (default — overridable via DB settings) ───────────────
 
 const DEFAULT_PROFILE = {
+  // 5 Miles Lab (5ML) — HK-based Agentic AI Solutions Agency
+  // Competes with NDN and Fimmick; serves enterprise and SME clients
   competencies: [
-    'IT_digital', 'events_experiential', 'marketing_comms', 'consultancy_advisory',
-    'research_study', 'financial_services',
+    'IT_digital',          // AI platforms, agentic systems, workflow automation, website health check
+    'events_experiential', // AI Photo Booth, live events, exhibitions, activations
+    'marketing_comms',     // Social media, ads performance, brand campaigns, content, PR
+    'consultancy_advisory',// Management consultancy, strategy, AI advisory, EOI responses
+    'research_study',      // Topic intelligence, market research, AI-powered analysis
+    'financial_services',  // Finance automation, receipt OCR, invoice tracking (Man's Accounting)
   ],
   trackRecordKeywords: [
-    'digital', 'marketing', 'event', 'campaign', 'media', 'communications',
-    'platform', 'system', 'consultancy', 'strategy', 'brand', 'social',
-    'experiential', 'production', 'creative', 'advisory',
+    // AI / tech
+    'AI', 'artificial intelligence', 'agentic', 'automation', 'digital', 'platform',
+    'system', 'software', 'intelligence', 'technology', 'IT', 'web', 'mobile', 'app',
+    // Events / experiential
+    'event', 'exhibition', 'experiential', 'activation', 'photo booth', 'live',
+    'performance', 'cultural', 'arts', 'festival', 'ceremony',
+    // Marketing / comms
+    'marketing', 'campaign', 'social media', 'communications', 'brand', 'content',
+    'media', 'advertising', 'promotion', 'public relations', 'PR', 'creative',
+    // Consultancy / advisory
+    'consultancy', 'advisory', 'strategy', 'consultant', 'study', 'research',
+    'assessment', 'review', 'training', 'workshop',
+    // Production
+    'production', 'design', 'video', 'photography', 'print',
   ],
-  knownAgencies: [],   // populated from tender_decisions 'track' history
+  // Agencies known to post tenders matching 5ML scope (HK & SG)
+  seedAgencies: {
+    HK: [
+      'ISD',   // Information Services Department — comms, public education, media
+      'LCSD',  // Leisure and Cultural Services — events, cultural, experiential
+      'HKTDC', // HK Trade Development Council — events, trade fairs, marketing
+      'HKTB',  // HK Tourism Board — tourism marketing, events
+      'CreateHK',   // Creative industries support — creative, content
+      'InvestHK',   // Investment promotion — marketing, communications
+      'OGCIO', // Office of Gov Chief Information Officer — IT, digital
+      'ITC',   // Innovation and Technology Commission — AI, tech
+      'HAD',   // Home Affairs — community events, cultural activities
+      'HKPC',  // HK Productivity Council — IT services, digital
+      'TID',   // Trade and Industry Department — business services
+    ],
+    SG: [
+      'GovTech',          // Government Technology Agency — IT, digital
+      'STB',              // Singapore Tourism Board — events, tourism marketing
+      'Enterprise Singapore', // Business development, marketing
+      'NAC',              // National Arts Council — events, arts, experiential
+      'IMDA',             // Info-communications Media Dev Authority — digital, media
+      'DesignSingapore',  // Design, creative, branding
+      'MTI',              // Ministry of Trade & Industry — consultancy
+    ],
+  },
+  knownAgencies: [],   // populated at runtime from tender_decisions 'track' history
   maxDeliveryFTE: 15,
   primaryJurisdiction: 'HK',
   secondaryJurisdiction: 'SG',
+  // Budget bands aligned to 5ML pricing tiers
+  budgetBands: {
+    HK: { enterprise: 500000, midMarket: 100000, sme: 30000 },
+    SG: { enterprise: 100000, midMarket: 30000, sme: 10000 },
+  },
   scoringWeights: {
     capabilityFit: {
       categoryMatch: 0.35, agencyFamiliarity: 0.15,
@@ -841,7 +888,7 @@ const DEFAULT_PROFILE = {
     },
     overallWeights: { capabilityFit: 0.55, businessPotential: 0.45 },
   },
-  version: 'v1.0',
+  version: 'v1.1',
 };
 
 // Categories with growing gov spend
