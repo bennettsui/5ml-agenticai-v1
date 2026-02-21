@@ -102,6 +102,10 @@ app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public',
 // Serve Radiance uploaded media
 app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
 
+// Serve compressed image/PDF outputs
+app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
+app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
+
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
 app.use(express.static(nextJsPath));
@@ -6290,6 +6294,81 @@ app.post('/api/sme/campaign-review', async (req, res) => {
         ],
         note: 'PDF Compression Service is offline — showing cached profile list',
       });
+    }
+  });
+
+  // POST /api/pdf-compress/upload — Accept PDF file upload, compress, return output_url
+  const pdfUploadStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(__dirname, 'uploads', 'pdfs', 'input');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.pdf';
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+    },
+  });
+  const pdfUpload = multer({
+    storage: pdfUploadStorage,
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype === 'application/pdf') cb(null, true);
+      else cb(new Error('Only PDF files are accepted'));
+    },
+  });
+
+  app.post('/api/pdf-compress/upload', pdfUpload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No PDF file uploaded' });
+
+    const { profile = 'balanced', priority = 'quality', tags = '' } = req.body;
+    const inputPath = req.file.path;
+
+    try {
+      const PDF_COMPRESS_URL = process.env.PDF_COMPRESSION_SERVICE_URL || 'http://localhost:8082';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 180000);
+
+      const response = await fetch(`${PDF_COMPRESS_URL}/compress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: inputPath,
+          profile,
+          priority,
+          tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await response.json();
+
+      // Convert server output_path to a public URL
+      if (data.ok && data.output_path) {
+        const outDir = path.join(__dirname, 'uploads', 'pdfs', 'output');
+        if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+        const outFilename = path.basename(data.output_path);
+        const publicOutPath = path.join(outDir, outFilename);
+        if (data.output_path !== publicOutPath && fs.existsSync(data.output_path)) {
+          fs.copyFileSync(data.output_path, publicOutPath);
+        }
+        data.output_url = `/uploads/pdfs/output/${outFilename}`;
+      }
+
+      // Clean up input file
+      try { fs.unlinkSync(inputPath); } catch (_) {}
+
+      res.json(data);
+    } catch (err) {
+      try { fs.unlinkSync(inputPath); } catch (_) {}
+      if (err.name === 'AbortError') {
+        res.status(504).json({ ok: false, error: 'PDF compression service timed out (3 min)' });
+      } else {
+        res.status(503).json({
+          ok: false,
+          error: `PDF Compression Service unavailable: ${err.message}. Start with: cd use-cases/pdf-compression && docker-compose up`,
+        });
+      }
     }
   });
 }
