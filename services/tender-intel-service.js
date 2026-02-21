@@ -401,7 +401,7 @@ async function insertRawCaptures(pool, captures) {
   let inserted = 0;
   for (const c of captures) {
     try {
-      await pool.query(
+      const result = await pool.query(
         `INSERT INTO raw_tender_captures
            (source_id, raw_format, raw_payload, item_url, item_guid,
             captured_at, normalised, pre_extracted)
@@ -413,7 +413,8 @@ async function insertRawCaptures(pool, captures) {
           JSON.stringify(c.pre_extracted || {}),
         ]
       );
-      inserted++;
+      // Only count rows that were actually inserted (not skipped by ON CONFLICT)
+      if (result.rowCount > 0) inserted++;
     } catch (_) { /* duplicate or constraint — skip */ }
   }
   return inserted;
@@ -484,10 +485,24 @@ async function logAgentRun(pool, { agentName, status, itemsProcessed, newItems, 
  * Called daily at 03:00 HKT or via manual trigger.
  * Returns a run summary object.
  */
-async function runIngestion(pool) {
+/**
+ * Run ingestion across all active RSS/XML sources and GeBIZ.
+ *
+ * @param {Pool}     pool        - pg Pool
+ * @param {function} onProgress  - optional SSE callback: (eventObj) => void
+ *
+ * Records are always APPENDED (ON CONFLICT DO NOTHING on raw captures;
+ * ON CONFLICT DO UPDATE SET last_seen_at on tenders — content never overwritten).
+ *
+ * To avoid re-ingesting recently checked sources in scheduled runs,
+ * pass skipRecentHours > 0. Manual triggers should pass 0 (run all).
+ */
+async function runIngestion(pool, onProgress = null, skipRecentHours = 0) {
+  const emit = (data) => { if (onProgress) onProgress(data); };
   const startTime = Date.now();
   const summary = {
     sourcesProcessed: 0,
+    sourcesSkipped:   0,
     totalRawCaptures: 0,
     newRawCaptures:   0,
     tendersInserted:  0,
@@ -503,123 +518,142 @@ async function runIngestion(pool) {
     return summary;
   }
 
-  const existingGuids = await getExistingGuids(pool);
+  // Count GeBIZ source separately
+  let gebizSource = null;
+  try {
+    const gbResult = await pool.query(
+      `SELECT * FROM tender_source_registry WHERE source_id LIKE '%gebiz%' AND source_type = 'html_list' AND status = 'active' LIMIT 1`
+    );
+    gebizSource = gbResult.rows[0] || null;
+  } catch (_) {}
 
+  const totalSources = sources.length + (gebizSource ? 1 : 0);
+  emit({
+    type: 'init',
+    total: totalSources,
+    sources: [
+      ...sources.map(s => ({ source_id: s.source_id, name: s.name || s.source_id, type: s.source_type })),
+      ...(gebizSource ? [{ source_id: gebizSource.source_id, name: 'GeBIZ (HTML Scrape)', type: 'html_list' }] : []),
+    ],
+  });
+
+  const existingGuids = await getExistingGuids(pool);
+  let sourceIndex = 0;
+
+  // ─── RSS / XML sources ────────────────────────────────────────────────────
   for (const source of sources) {
+    sourceIndex++;
     const srcStart = Date.now();
+
+    // Skip recently checked sources (for cron scheduling — not for manual triggers)
+    if (skipRecentHours > 0 && source.last_checked_at) {
+      const hoursSince = (Date.now() - new Date(source.last_checked_at).getTime()) / 3_600_000;
+      if (hoursSince < skipRecentHours) {
+        summary.sourcesSkipped++;
+        emit({
+          type: 'source_done', source: source.name || source.source_id,
+          status: 'skipped', skippedHoursAgo: hoursSince.toFixed(1),
+          found: 0, new: 0, tenders: 0,
+        });
+        continue;
+      }
+    }
+
     summary.sourcesProcessed++;
+    emit({ type: 'source_start', source: source.name || source.source_id, source_id: source.source_id, index: sourceIndex, total: totalSources });
 
     const { items, error } = await fetchRSSSource(source);
 
     if (error) {
       summary.errors.push({ source_id: source.source_id, error });
-      summary.sourceResults.push({ source_id: source.source_id, status: error.startsWith('fetch') ? 'fetch_error' : 'parse_error', newItems: 0, error });
-      // Update source status in registry
+      summary.sourceResults.push({ source_id: source.source_id, status: 'error', newItems: 0, error });
       try {
         await pool.query(
           `UPDATE tender_source_registry SET last_status='error', last_status_detail=$1, last_checked_at=NOW() WHERE source_id=$2`,
           [error, source.source_id]
         );
       } catch (_) {}
+      emit({ type: 'source_done', source: source.name || source.source_id, status: 'error', found: 0, new: 0, tenders: 0, error });
       continue;
     }
 
     const newItems = items.filter(item => !existingGuids.has(item.guid));
     summary.totalRawCaptures += items.length;
 
-    // Insert new raw captures
+    // Insert new raw captures (append-only — ON CONFLICT DO NOTHING)
     const rawCaptures = newItems.map(item => ({
       source_id:     source.source_id,
-      raw_format:    source.source_type === 'api_xml' ? 'rss_xml' : 'rss_xml',
+      raw_format:    'rss_xml',
       raw_payload:   item.rawXml || JSON.stringify(item),
       item_url:      item.link || source.feed_url,
       item_guid:     item.guid,
-      pre_extracted: item.preExtracted || { title: item.title, publish_date: item.pubDate, description_snippet: item.description },
+      pre_extracted: item.preExtracted || {
+        title: item.title, publish_date: item.pubDate, description_snippet: item.description,
+      },
     }));
 
     const inserted = await insertRawCaptures(pool, rawCaptures);
     summary.newRawCaptures += inserted;
-
-    // Add new guids to the local set so we don't re-insert within this run
     for (const item of newItems) existingGuids.add(item.guid);
 
-    // Normalise new captures
+    // Normalise + insert tenders (append-only — ON CONFLICT updates last_seen_at only)
     let tendersInserted = 0;
     for (const raw of rawCaptures) {
       const capture = {
-        capture_id:    null,
-        source_id:     raw.source_id,
-        raw_format:    raw.raw_format,
-        raw_payload:   raw.raw_payload,
-        item_url:      raw.item_url,
-        item_guid:     raw.item_guid,
-        captured_at:   new Date().toISOString(),
-        pre_extracted: raw.pre_extracted,
+        capture_id: null, source_id: raw.source_id, raw_format: raw.raw_format,
+        raw_payload: raw.raw_payload, item_url: raw.item_url, item_guid: raw.item_guid,
+        captured_at: new Date().toISOString(), pre_extracted: raw.pre_extracted,
       };
       const normalised = normaliseTender(capture, source);
-      if (normalised) {
-        const n = await insertTenders(pool, [normalised]);
-        tendersInserted += n;
-      }
+      if (normalised) tendersInserted += await insertTenders(pool, [normalised]);
     }
     summary.tendersInserted += tendersInserted;
 
-    // Update source registry last_checked_at
     try {
       await pool.query(
-        `UPDATE tender_source_registry
-         SET last_status='ok', last_status_detail=$1, last_checked_at=NOW()
-         WHERE source_id=$2`,
-        [`${inserted} new items, ${tendersInserted} tenders`, source.source_id]
+        `UPDATE tender_source_registry SET last_status='ok', last_status_detail=$1, last_checked_at=NOW() WHERE source_id=$2`,
+        [`${inserted} new captures, ${tendersInserted} tenders`, source.source_id]
       );
     } catch (_) {}
 
-    summary.sourceResults.push({
-      source_id:    source.source_id,
-      status:       'success',
-      newItems:     inserted,
-      durationMs:   Date.now() - srcStart,
+    summary.sourceResults.push({ source_id: source.source_id, status: 'success', newItems: inserted, durationMs: Date.now() - srcStart });
+    emit({
+      type: 'source_done', source: source.name || source.source_id,
+      status: 'ok', found: items.length, new: inserted, tenders: tendersInserted,
+      durationMs: Date.now() - srcStart,
     });
   }
 
   // ─── GeBIZ HTML scraping (SG html_list source) ───────────────────────────
-  // Look for an active GeBIZ source in the registry
-  let gebizSource = null;
-  try {
-    const gbResult = await pool.query(
-      `SELECT * FROM tender_source_registry WHERE source_id LIKE '%gebiz%' AND status = 'active' LIMIT 1`
-    );
-    gebizSource = gbResult.rows[0] || null;
-  } catch (_) {}
-
   if (gebizSource) {
+    sourceIndex++;
     summary.sourcesProcessed++;
+    emit({ type: 'source_start', source: 'GeBIZ (HTML Scrape)', source_id: gebizSource.source_id, index: sourceIndex, total: totalSources });
+
     const { items: gebizItems, errors: gebizErrors } = await fetchGeBIZ();
 
     if (gebizErrors.length > 0) {
-      summary.errors.push({ source_id: gebizSource.source_id, error: gebizErrors.join('; ') });
+      const errMsg = gebizErrors.join('; ');
+      summary.errors.push({ source_id: gebizSource.source_id, error: errMsg });
       try {
         await pool.query(
           `UPDATE tender_source_registry SET last_status='error', last_status_detail=$1, last_checked_at=NOW() WHERE source_id=$2`,
-          [gebizErrors.join('; '), gebizSource.source_id]
+          [errMsg, gebizSource.source_id]
         );
       } catch (_) {}
+      emit({ type: 'source_done', source: 'GeBIZ (HTML Scrape)', status: 'error', found: 0, new: 0, tenders: 0, error: errMsg });
     } else {
       const newGeBIZ = gebizItems.filter(item => !existingGuids.has(item.guid));
       summary.totalRawCaptures += gebizItems.length;
 
       const gebizCaptures = newGeBIZ.map(item => ({
-        source_id:     gebizSource.source_id,
-        raw_format:    'html_fragment',
-        raw_payload:   JSON.stringify(item),
-        item_url:      item.link || gebizSource.feed_url,
-        item_guid:     item.guid,
-        pre_extracted: item.preExtracted || { title: item.title },
+        source_id: gebizSource.source_id, raw_format: 'html_fragment',
+        raw_payload: JSON.stringify(item), item_url: item.link || gebizSource.feed_url,
+        item_guid: item.guid, pre_extracted: item.preExtracted || { title: item.title },
       }));
 
       const gbInserted = await insertRawCaptures(pool, gebizCaptures);
       summary.newRawCaptures += gbInserted;
-
       for (const item of newGeBIZ) existingGuids.add(item.guid);
 
       let gbTenders = 0;
@@ -637,27 +671,34 @@ async function runIngestion(pool) {
       try {
         await pool.query(
           `UPDATE tender_source_registry SET last_status='ok', last_status_detail=$1, last_checked_at=NOW() WHERE source_id=$2`,
-          [`${gbInserted} new items, ${gbTenders} tenders`, gebizSource.source_id]
+          [`${gbInserted} new captures, ${gbTenders} tenders`, gebizSource.source_id]
         );
       } catch (_) {}
 
-      summary.sourceResults.push({
-        source_id: gebizSource.source_id, status: 'success',
-        newItems: gbInserted, durationMs: 0,
-      });
+      summary.sourceResults.push({ source_id: gebizSource.source_id, status: 'success', newItems: gbInserted, durationMs: 0 });
+      emit({ type: 'source_done', source: 'GeBIZ (HTML Scrape)', status: 'ok', found: gebizItems.length, new: gbInserted, tenders: gbTenders });
     }
   }
 
   const durationMs = Date.now() - startTime;
 
-  // Log the overall run
   await logAgentRun(pool, {
-    agentName:       'RSSXMLIngestorAgent',
-    status:          summary.errors.length > 0 ? 'partial' : 'success',
-    itemsProcessed:  summary.totalRawCaptures,
-    newItems:        summary.newRawCaptures,
+    agentName:      'RSSXMLIngestorAgent',
+    status:         summary.errors.length > 0 ? 'partial' : 'success',
+    itemsProcessed: summary.totalRawCaptures,
+    newItems:       summary.newRawCaptures,
     durationMs,
-    detail:          `${summary.sourcesProcessed} sources, ${summary.tendersInserted} tenders inserted`,
+    detail:         `${summary.sourcesProcessed} sources, ${summary.newRawCaptures} new captures, ${summary.tendersInserted} tenders`,
+  });
+
+  emit({
+    type: 'done',
+    newCaptures: summary.newRawCaptures,
+    tendersInserted: summary.tendersInserted,
+    sources: summary.sourcesProcessed,
+    skipped: summary.sourcesSkipped,
+    errors: summary.errors.length,
+    durationMs,
   });
 
   summary.durationMs = durationMs;
@@ -1418,12 +1459,18 @@ async function extractUrlsWithAI(hub, html) {
  * @param {function} onProgress — optional SSE callback: (eventObj) => void
  * Returns { newSources, errors, hubsScanned, durationMs }.
  */
-async function runSourceDiscovery(pool, onProgress = null) {
+/**
+ * @param {Pool}     pool           - pg Pool
+ * @param {function} onProgress     - optional SSE callback
+ * @param {number}   skipRecentHours - skip hubs scanned within N hours (0 = always run)
+ */
+async function runSourceDiscovery(pool, onProgress = null, skipRecentHours = 0) {
   const emit = (data) => { if (onProgress) onProgress(data); };
   const startTime = Date.now();
   const newSources = [];
   const errors = [];
   let hubsScanned = 0;
+  let hubsSkipped = 0;
 
   // Known hub pages to scan (also pick up html_hub sources from DB)
   const STATIC_HUBS = [
@@ -1452,7 +1499,19 @@ async function runSourceDiscovery(pool, onProgress = null) {
       .filter(h => h.url && !seenUrls.has(h.url) && seenUrls.add(h.url)),
   ];
 
-  emit({ type: 'init', total: hubsToScan.length, aiEnabled: !!process.env.DEEPSEEK_API_KEY });
+  // Build lookup map: url → DB row (for last_checked_at tracking)
+  const hubUrlToDbRow = {};
+  for (const h of dbHubs) {
+    if (h.discovery_hub_url) hubUrlToDbRow[h.discovery_hub_url] = h;
+    if (h.base_url) hubUrlToDbRow[h.base_url] = h;
+  }
+
+  emit({
+    type: 'init',
+    total: hubsToScan.length,
+    aiEnabled: !!process.env.DEEPSEEK_API_KEY,
+    skipRecentHours,
+  });
 
   // Get existing feed URLs to avoid re-adding known sources
   const existingUrls = new Set();
@@ -1473,6 +1532,18 @@ async function runSourceDiscovery(pool, onProgress = null) {
 
   for (let idx = 0; idx < hubsToScan.length; idx++) {
     const hub = hubsToScan[idx];
+    const dbRow = hubUrlToDbRow[hub.url];
+
+    // Skip recently scanned hubs (for cron; manual trigger passes skipRecentHours=0)
+    if (skipRecentHours > 0 && dbRow?.last_checked_at) {
+      const hoursSince = (Date.now() - new Date(dbRow.last_checked_at).getTime()) / 3_600_000;
+      if (hoursSince < skipRecentHours) {
+        hubsSkipped++;
+        emit({ type: 'hub_done', hub: hub.label, status: 'skipped', skippedHoursAgo: hoursSince.toFixed(1), found: 0, aiUsed: false });
+        continue;
+      }
+    }
+
     hubsScanned++;
     emit({ type: 'hub_start', hub: hub.label, url: hub.url, index: idx + 1, total: hubsToScan.length });
 
@@ -1491,6 +1562,10 @@ async function runSourceDiscovery(pool, onProgress = null) {
         : err.response ? `HTTP ${err.response.status}`
         : err.message;
       errors.push({ hub: hub.label, error: errMsg });
+      // Track last check even on failure so we don't hammer broken URLs
+      if (dbRow) {
+        try { await pool.query(`UPDATE tender_source_registry SET last_checked_at=NOW(), last_status='error', last_status_detail=$1 WHERE source_id=$2`, [errMsg, dbRow.source_id]); } catch (_) {}
+      }
       emit({ type: 'hub_done', hub: hub.label, status: 'error', error: errMsg, found: 0, aiUsed: false });
       continue;
     }
@@ -1557,6 +1632,12 @@ async function runSourceDiscovery(pool, onProgress = null) {
       } catch (_) { /* duplicate or constraint violation */ }
     }
 
+    // Persist last_checked_at on the DB hub row (success path)
+    if (dbRow) {
+      const detail = inserted > 0 ? `${inserted} new feeds discovered` : foundUrls.size > 0 ? `${foundUrls.size} already known` : 'no feeds found';
+      try { await pool.query(`UPDATE tender_source_registry SET last_checked_at=NOW(), last_status='ok', last_status_detail=$1 WHERE source_id=$2`, [detail, dbRow.source_id]); } catch (_) {}
+    }
+
     emit({
       type: 'hub_done',
       hub: hub.label,
@@ -1579,7 +1660,7 @@ async function runSourceDiscovery(pool, onProgress = null) {
     detail:         `${hubsScanned} hubs scanned, ${newSources.length} new sources discovered`,
   });
 
-  emit({ type: 'done', newSources: newSources.length, hubsScanned, errors: errors.length, durationMs });
+  emit({ type: 'done', newSources: newSources.length, hubsScanned, hubsSkipped, errors: errors.length, durationMs });
 
   return { newSources, errors, hubsScanned, durationMs };
 }
