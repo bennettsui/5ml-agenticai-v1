@@ -13,11 +13,12 @@ import CostAnalysis from '@/components/CostAnalysis';
 import SecurityKB from '@/components/SecurityKB';
 import ZiweiChat from '@/components/ZiweiChat';
 import SmeGrowthEngine from '@/components/SmeGrowthEngine';
+import ImageCompression from '@/components/ImageCompression';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
   ChevronRight, Map, Zap, Send, Loader2, Sparkles, History,
-  Plus, Trash2, Clock, Monitor, TrendingUp, Shield, Target,
+  Plus, Trash2, Clock, Monitor, TrendingUp, Shield, Target, FileImage,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -30,7 +31,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security' | 'sme-growth';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security' | 'sme-growth' | 'image-compression';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -375,7 +376,7 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security','sme-growth'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security','sme-growth','image-compression'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
@@ -384,6 +385,7 @@ export default function Dashboard() {
     { id: 'control', label: 'Control Tower', icon: LayoutDashboard },
     { id: 'overview', label: 'Overview', icon: Activity },
     { id: 'sme-growth', label: 'SME Growth Engine', icon: Target },
+    { id: 'image-compression', label: 'Image Compression', icon: FileImage },
     { id: 'workflows', label: 'Agentic Workflows', icon: GitBranch },
     { id: 'scheduling', label: 'Scheduling & Jobs', icon: Calendar },
     { id: 'costs', label: 'Cost Analysis', icon: DollarSign },
@@ -654,6 +656,11 @@ export default function Dashboard() {
         {activeTab === 'security' && <SecurityKB />}
         {activeTab === 'costs' && <CostAnalysis />}
         {activeTab === 'sme-growth' && <SmeGrowthEngine />}
+        {activeTab === 'image-compression' && (
+          <div className="p-6">
+            <ImageCompression />
+          </div>
+        )}
 
         {activeTab === 'workflows' && (
           <div className="bg-[#1a1b2e]">

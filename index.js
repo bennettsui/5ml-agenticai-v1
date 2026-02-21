@@ -2260,6 +2260,30 @@ app.get('/stats', async (req, res) => {
             'POST /api/sme/campaign-review    — Weekly campaign review orchestration',
           ],
         },
+        {
+          id: 'image-compression',
+          name: 'Image Compression',
+          description: 'Sharp-based image compression service: profile-driven resize, re-encode, and size enforcement for content, tender, and social agents',
+          agentCount: 0,
+          status: 'production',
+          costEstimate: {
+            perRun: {
+              description: '1 image compression operation (sharp is CPU-only, no LLM cost)',
+              modelCalls: [],
+              totalTokens: { input: 0, output: 0 },
+              estimatedCost: 0.000, // No LLM cost — pure sharp CPU processing
+              notes: 'sharp runs on-server (CPU). No external API calls. Cost is compute only (~$0.0001/image on Fly.io).',
+            },
+            daily: { runsPerDay: 100, estimatedCost: 0.01, notes: 'Estimate based on Fly.io CPU pricing' },
+            monthly: { runsPerMonth: 3000, estimatedCost: 0.30, notes: 'Scales with image volume; no per-image API cost' },
+          },
+          agents: [],
+          endpoints: [
+            'POST /api/compress          — Compress image (JSON body with source, or multipart file upload)',
+            'GET  /api/compress/health   — Sharp service health check',
+            'GET  /api/compress/profiles — List all available compression profiles',
+          ],
+        },
       ],
       // Token pricing reference (per million tokens)
       tokenPricing: {
@@ -2283,8 +2307,9 @@ app.get('/stats', async (req, res) => {
         aiVideoGeneration: 0.88,
         hkSgTenderIntelligence: 1.80,
         smeGrowthEngine: 0.16, // At 50 leads/month + 4 weekly reviews
-        totalBase: 28.54,
-        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). SME Growth Engine scales with lead volume (~$0.002/lead). All estimates assume typical usage patterns.',
+        imageCompression: 0.30, // ~3000 images/month at Fly.io CPU cost; no LLM cost
+        totalBase: 28.84,
+        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). SME Growth Engine scales with lead volume (~$0.002/lead). Image Compression is CPU-only (no LLM). All estimates assume typical usage patterns.',
       },
       databaseTables: [
         // Social/Marketing tables
@@ -3764,6 +3789,15 @@ try {
   console.log('✅ Multimedia Library routes loaded: /api/library');
 } catch (error) {
   console.warn('⚠️ Multimedia Library routes not loaded:', error.message);
+}
+
+// Image Compression Service
+try {
+  const imageCompressionRoutes = require('./use-cases/image-compression/api/routes');
+  app.use('/api/compress', imageCompressionRoutes);
+  console.log('✅ Image Compression routes loaded: /api/compress');
+} catch (error) {
+  console.warn('⚠️ Image Compression routes not loaded:', error.message);
 }
 
 // Scheduler Service
