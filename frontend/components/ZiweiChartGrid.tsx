@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+// Matches the Python format_chart_output palace structure (snake_case)
 interface PalaceData {
   name: string;
   branch: string;
@@ -285,6 +286,9 @@ export function ZiweiChartGrid({
                             <div className="text-slate-500 mb-0.5">長生</div>
                             <div className="text-slate-400">{palace.lifeStageStars.join(' ')}</div>
                           </div>
+                        ))}
+                        {stars.length > 2 && (
+                          <div className="text-[9px] text-slate-500">+{stars.length - 2}</div>
                         )}
                         <button
                           className="text-slate-500 hover:text-slate-300 text-[10px] pt-1"
@@ -294,9 +298,23 @@ export function ZiweiChartGrid({
                         </button>
                       </div>
                     )}
+
+                    {/* 四化 badges */}
+                    {huaKeys.length > 0 && (
+                      <div className="flex flex-wrap justify-center gap-0.5 mt-1">
+                        {huaKeys.slice(0, 2).map(star => (
+                          <span
+                            key={star}
+                            className={`text-[9px] px-1 py-0.5 rounded font-medium ${HUA_COLORS[hua[star]] ?? 'text-slate-400 bg-slate-800/40'}`}
+                          >
+                            {hua[star]}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <ChevronDown className={`w-3 h-3 text-slate-600 mt-1 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                   </div>
-                );
-              }
 
               // Empty cell
               return <div key={key} className="aspect-square" />;

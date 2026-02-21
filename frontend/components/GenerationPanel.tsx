@@ -3,17 +3,17 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Clock, MapPin, Calendar, User, Trash2, Sparkles, RefreshCw } from 'lucide-react';
 
-// ── Purple theme tokens ──────────────────────────────────────────────────────
+// ── Dark teal/cyan theme tokens ───────────────────────────────────────────────
 const P = {
-  cardBg:     'bg-purple-950/30',
-  cardBorder: 'border-purple-800/30',
-  inputBg:    'bg-purple-950/50 border border-purple-800/40 text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none',
-  activeItem: 'bg-purple-700/40 border-purple-600/50 text-white',
-  hoverItem:  'border-transparent text-slate-300 hover:bg-purple-950/60 hover:text-white',
-  primaryBtn: 'bg-purple-700 hover:bg-purple-600 text-white',
-  accentText: 'text-purple-300',
-  iconBg:     'bg-purple-500/20 border-purple-500/30',
-  iconColor:  'text-purple-300',
+  cardBg:     'bg-teal-950/30',
+  cardBorder: 'border-teal-800/30',
+  inputBg:    'bg-[#071420]/80 border border-teal-800/40 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none',
+  activeItem: 'bg-teal-800/40 border-teal-600/50 text-white',
+  hoverItem:  'border-transparent text-slate-300 hover:bg-teal-950/60 hover:text-white',
+  primaryBtn: 'bg-teal-700 hover:bg-teal-600 text-white',
+  accentText: 'text-cyan-300',
+  iconBg:     'bg-cyan-500/20 border-cyan-500/30',
+  iconColor:  'text-cyan-300',
 };
 
 // ── Chinese calendar helpers ──────────────────────────────────────────────────
@@ -186,14 +186,14 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
       {/* ================================================================ */}
       <div className={`w-72 flex-shrink-0 flex flex-col rounded-2xl border ${P.cardBorder} ${P.cardBg} overflow-hidden`}>
 
-        <div className="p-4 border-b border-purple-900/40">
+        <div className="p-4 border-b border-teal-900/40">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-white">命盤記錄</h3>
             <button
               onClick={loadCharts}
               disabled={isLoadingList}
               title="Refresh"
-              className="p-1 rounded hover:bg-purple-900/40 text-slate-500 hover:text-purple-400 transition-colors"
+              className="p-1 rounded hover:bg-teal-900/40 text-slate-500 hover:text-teal-400 transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoadingList ? 'animate-spin' : ''}`} />
             </button>
@@ -214,7 +214,7 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
                 <Plus className={`w-4 h-4 ${P.iconColor}`} />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-purple-200">New Visitor</div>
+                <div className="text-sm font-medium text-cyan-200">New Visitor</div>
                 <div className="text-xs text-slate-500">Fill in the form →</div>
               </div>
             </div>
@@ -222,7 +222,7 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
 
           {visitors.length === 0 && !isCreating && (
             <div className="text-center py-8 text-slate-500 text-xs">
-              <Sparkles className="w-6 h-6 mx-auto mb-2 text-purple-700" />
+              <Sparkles className="w-6 h-6 mx-auto mb-2 text-teal-700" />
               {isLoadingList ? 'Loading…' : 'No charts yet'}
             </div>
           )}
@@ -238,7 +238,7 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
                 }`}
               >
                 <div className={`w-9 h-9 rounded-lg flex-shrink-0 flex items-center justify-center font-bold text-sm ${
-                  isActive ? 'bg-purple-600/40 text-purple-100' : 'bg-purple-900/30 text-purple-400'
+                  isActive ? 'bg-teal-700/40 text-cyan-100' : 'bg-teal-900/30 text-teal-400'
                 }`}>
                   {visitor.name.charAt(0).toUpperCase()}
                 </div>
@@ -291,7 +291,7 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
           <div className={`flex-1 flex flex-col rounded-2xl border ${P.cardBorder} ${P.cardBg} overflow-hidden`}>
 
             {/* Header */}
-            <div className="p-5 border-b border-purple-900/40">
+            <div className="p-5 border-b border-teal-900/40">
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-xl ${P.iconBg} border flex items-center justify-center flex-shrink-0`}>
                   {isCreating
@@ -303,7 +303,7 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
                   <h3 className="font-semibold text-white">
                     {isCreating ? 'New Visitor' : selectedVisitor?.name || 'Visitor Details'}
                   </h3>
-                  <p className="text-xs text-purple-400/60">
+                  <p className="text-xs text-teal-400/60">
                     {isCreating ? 'Enter birth data to generate chart' : 'Edit details and regenerate chart'}
                   </p>
                 </div>
@@ -327,8 +327,8 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
                         onClick={() => setFormData(f => ({ ...f, calendarType: opt.v }))}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                           formData.calendarType === opt.v
-                            ? 'bg-purple-700/60 text-white border border-purple-600/50'
-                            : 'border border-purple-900/40 text-slate-400 hover:text-purple-300 hover:border-purple-700/40'
+                            ? 'bg-teal-800/60 text-white border border-teal-600/50'
+                            : 'border border-teal-900/40 text-slate-400 hover:text-cyan-300 hover:border-teal-700/40'
                         }`}
                       >
                         {opt.l}
@@ -360,7 +360,7 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
                             value={opt.v}
                             checked={formData.gender === opt.v}
                             onChange={() => setFormData(f => ({ ...f, gender: opt.v }))}
-                            className="w-4 h-4 accent-purple-500"
+                            className="w-4 h-4 accent-teal-500"
                           />
                           <span className="text-sm text-slate-300">{opt.l}</span>
                         </label>
@@ -463,7 +463,7 @@ export const GenerationPanel: React.FC<GenerationPanelProps> = ({ onGenerate }) 
             </div>
 
             {/* Footer — single action button, no Cancel */}
-            <div className="p-5 border-t border-purple-900/40">
+            <div className="p-5 border-t border-teal-900/40">
               <button
                 onClick={handleSaveAndGenerate}
                 disabled={isLoading || !formData.name.trim()}

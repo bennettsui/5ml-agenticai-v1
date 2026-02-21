@@ -16,24 +16,24 @@ import ZiweiCelebrityValidation from '@/components/ZiweiCelebrityValidation';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import ZiweiTabErrorBoundary from '@/components/ZiweiTabErrorBoundary';
 
-// ── Purple theme tokens ──────────────────────────────────────────────────────
+// ── Dark teal/cyan theme tokens ───────────────────────────────────────────────
 const P = {
-  pageBg:      'bg-[#0a0515]',
-  headerBg:    'bg-purple-950/80',
-  navBg:       'bg-[#0f0720]/90',
-  cardBg:      'bg-purple-950/30',
-  cardBorder:  'border-purple-800/30',
-  activeTab:   'border-purple-400 text-purple-300',
-  inactiveTab: 'border-transparent text-slate-400 hover:text-purple-300 hover:border-purple-700/50',
-  accentText:  'text-purple-300',
-  iconBg:      'bg-purple-500/10',
-  iconBorder:  'border-purple-500/20',
-  iconColor:   'text-purple-400',
-  primaryBtn:  'bg-purple-700 hover:bg-purple-600 text-white',
-  ghostBtn:    'border border-purple-800/50 hover:border-purple-600/60 text-slate-300 hover:text-purple-200',
-  badge:       'bg-purple-500/20 text-purple-300 border border-purple-500/30',
-  progressBar: 'from-purple-500 to-violet-400',
-  sectionDivider: 'border-purple-900/40',
+  pageBg:      'bg-[#040c12]',
+  headerBg:    'bg-[#061318]/90',
+  navBg:       'bg-[#040c12]/95',
+  cardBg:      'bg-teal-950/30',
+  cardBorder:  'border-teal-800/30',
+  activeTab:   'border-cyan-400 text-cyan-300',
+  inactiveTab: 'border-transparent text-slate-400 hover:text-cyan-300 hover:border-teal-700/50',
+  accentText:  'text-cyan-300',
+  iconBg:      'bg-cyan-500/10',
+  iconBorder:  'border-cyan-500/20',
+  iconColor:   'text-cyan-400',
+  primaryBtn:  'bg-teal-700 hover:bg-teal-600 text-white',
+  ghostBtn:    'border border-teal-800/50 hover:border-teal-600/60 text-slate-300 hover:text-cyan-200',
+  badge:       'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30',
+  progressBar: 'from-teal-500 to-cyan-400',
+  sectionDivider: 'border-teal-900/40',
 };
 
 type ZiweiTab = 'overview' | 'charts' | 'analysis' | 'predictions' | 'knowledge' | 'celebrity' | 'blog';
@@ -64,7 +64,7 @@ export default function ZiweiPage() {
     <ErrorBoundary>
       <div
         className={`min-h-screen ${P.pageBg}`}
-        style={{ background: 'linear-gradient(160deg, #0a0515 0%, #130826 45%, #080311 100%)' }}
+        style={{ background: 'linear-gradient(160deg, #040c12 0%, #061a20 45%, #030e14 100%)' }}
       >
         {/* ================================================================ */}
         {/* HEADER                                                           */}
@@ -77,7 +77,7 @@ export default function ZiweiPage() {
               </div>
               <div>
                 <h1 className="text-lg font-bold text-white tracking-wide">紫微斗數 Ziwei</h1>
-                <p className="text-xs text-purple-400/60">AI-Powered Astrology • 中州派 Zhongzhou</p>
+                <p className="text-xs text-teal-400/60">AI-Powered Astrology • 中州派 Zhongzhou</p>
               </div>
             </div>
             <Link
@@ -132,7 +132,7 @@ export default function ZiweiPage() {
                 </div>
                 <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 leading-tight tracking-tight">
                   AI Birth Chart Analysis<br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-violet-400">
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-teal-400">
                     with Empirical Accuracy
                   </span>
                 </h2>
@@ -162,10 +162,10 @@ export default function ZiweiPage() {
               <section>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { label: '14', sub: 'Primary Stars', icon: Star, color: 'text-purple-300' },
-                    { label: '12', sub: 'Palaces', icon: Layers, color: 'text-violet-300' },
-                    { label: '3', sub: 'AI Agents', icon: Brain, color: 'text-indigo-300' },
-                    { label: '∞', sub: 'Timing Cycles', icon: Clock, color: 'text-fuchsia-300' },
+                    { label: '14', sub: 'Primary Stars', icon: Star,   color: 'text-cyan-300' },
+                    { label: '12', sub: 'Palaces',       icon: Layers, color: 'text-teal-300' },
+                    { label: '3',  sub: 'AI Agents',     icon: Brain,  color: 'text-sky-300' },
+                    { label: '∞',  sub: 'Timing Cycles', icon: Clock,  color: 'text-cyan-200' },
                   ].map((stat, i) => (
                     <div
                       key={i}
@@ -182,28 +182,28 @@ export default function ZiweiPage() {
               {/* Three-Agent Architecture */}
               <section>
                 <h3 className="text-2xl font-bold text-white mb-8 flex items-center gap-2">
-                  <Radar className="w-6 h-6 text-purple-400" />
+                  <Radar className="w-6 h-6 text-teal-400" />
                   Three-Agent Architecture
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
                   {[
                     {
-                      icon: Radar, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20',
+                      icon: Radar, color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20',
                       title: 'ChartEngineAgent', sub: '排盤引擎 · Birth Chart Calculation',
                       features: ['Calendar conversion (Gregorian ↔ Lunar)', 'Four Pillars (八字) calculation', 'Star placement (安星法)', 'Timing cycles (大限/流年)', 'Pattern identification'],
                     },
                     {
-                      icon: Brain, color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20',
+                      icon: Brain, color: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/20',
                       title: 'InterpretationAgent', sub: '解讀引擎 · Chart Interpretation',
                       features: ['Rule matching & filtering', 'Consensus/disputed handling', 'Life dimension grouping', 'Accuracy metadata', 'Multi-language support'],
                     },
                     {
-                      icon: TrendingUp, color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/20',
+                      icon: TrendingUp, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/20',
                       title: 'EvaluationAgent', sub: '評估引擎 · Accuracy Tracking',
                       features: ['Feedback processing', 'Statistics updates', 'Rule reviews', 'Accuracy reports', 'Continuous learning'],
                     },
                   ].map((agent, i) => (
-                    <div key={i} className={`group rounded-xl border ${P.cardBorder} ${P.cardBg} hover:bg-purple-950/50 p-6 transition-all`}>
+                    <div key={i} className={`group rounded-xl border ${P.cardBorder} ${P.cardBg} hover:bg-teal-950/50 p-6 transition-all`}>
                       <div className={`p-3 rounded-lg ${agent.bg} border ${agent.border} w-fit mb-4`}>
                         <agent.icon className={`w-6 h-6 ${agent.color}`} />
                       </div>
@@ -224,17 +224,17 @@ export default function ZiweiPage() {
                   <div className="space-y-3">
                     {[
                       [
-                        { label: 'User Input', cls: 'bg-purple-500/20 border-purple-500/30 text-purple-300' },
-                        { label: 'ChartEngine', cls: 'bg-violet-500/20 border-violet-500/30 text-violet-300' },
-                        { label: 'BirthChart', cls: 'bg-fuchsia-500/20 border-fuchsia-500/30 text-fuchsia-300' },
+                        { label: 'User Input',  cls: 'bg-teal-500/20  border-teal-500/30  text-teal-300'  },
+                        { label: 'ChartEngine', cls: 'bg-cyan-500/20  border-cyan-500/30  text-cyan-300'  },
+                        { label: 'BirthChart',  cls: 'bg-sky-500/20   border-sky-500/30   text-sky-300'   },
                       ],
                       [
-                        { label: 'Interpreter', cls: 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' },
-                        { label: 'Results', cls: 'bg-purple-500/20 border-purple-500/30 text-purple-300' },
+                        { label: 'Interpreter', cls: 'bg-teal-500/20  border-teal-500/30  text-teal-300'  },
+                        { label: 'Results',     cls: 'bg-cyan-500/20  border-cyan-500/30  text-cyan-300'  },
                       ],
                       [
-                        { label: 'User Feedback', cls: 'bg-violet-500/20 border-violet-500/30 text-violet-300' },
-                        { label: 'Evaluator', cls: 'bg-fuchsia-500/20 border-fuchsia-500/30 text-fuchsia-300' },
+                        { label: 'User Feedback', cls: 'bg-sky-500/20 border-sky-500/30 text-sky-300'  },
+                        { label: 'Evaluator',     cls: 'bg-teal-500/20 border-teal-500/30 text-teal-300' },
                       ],
                     ].map((row, ri) => (
                       <div key={ri} className={`flex items-center gap-3 text-sm ${ri > 0 ? `ml-${ri * 8}` : ''}`}>
@@ -282,10 +282,10 @@ export default function ZiweiPage() {
                 <h3 className="text-2xl font-bold text-white mb-6">Rules Confidence System</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                   {[
-                    { label: '✓ Consensus Rules', desc: 'Widely accepted interpretations (match_rate ≥ 0.80)', color: 'border-purple-500/30 bg-purple-500/5 text-purple-300' },
-                    { label: '⚠ Disputed Rules', desc: 'Different schools have alternate views (0.60–0.80)', color: 'border-violet-500/30 bg-violet-500/5 text-violet-300' },
-                    { label: '◆ Minority Views', desc: 'Small subset of teachers (0.40–0.60)', color: 'border-fuchsia-500/30 bg-fuchsia-500/5 text-fuchsia-300' },
-                    { label: '? Under Review', desc: 'Needs validation or revision (< 0.40)', color: 'border-indigo-500/30 bg-indigo-500/5 text-indigo-300' },
+                    { label: '✓ Consensus Rules', desc: 'Widely accepted interpretations (match_rate ≥ 0.80)', color: 'border-teal-500/30 bg-teal-500/5 text-teal-300' },
+                    { label: '⚠ Disputed Rules', desc: 'Different schools have alternate views (0.60–0.80)', color: 'border-cyan-500/30 bg-cyan-500/5 text-cyan-300' },
+                    { label: '◆ Minority Views', desc: 'Small subset of teachers (0.40–0.60)', color: 'border-sky-500/30 bg-sky-500/5 text-sky-300' },
+                    { label: '? Under Review', desc: 'Needs validation or revision (< 0.40)', color: 'border-slate-500/30 bg-slate-500/5 text-slate-400' },
                   ].map((r, i) => (
                     <div key={i} className={`rounded-lg border p-4 ${r.color}`}>
                       <div className="text-sm font-semibold mb-1">{r.label}</div>
@@ -327,7 +327,7 @@ export default function ZiweiPage() {
 
               {/* CTA */}
               <section>
-                <div className={`rounded-2xl border border-purple-700/30 bg-gradient-to-r from-purple-900/20 to-violet-900/20 p-10 text-center`}>
+                <div className={`rounded-2xl border border-teal-700/30 bg-gradient-to-r from-teal-900/20 to-cyan-900/20 p-10 text-center`}>
                   <h3 className="text-2xl font-bold text-white mb-3">Ready to Explore?</h3>
                   <p className="text-slate-400 mb-8 max-w-xl mx-auto">
                     Generate your birth chart and discover interpretations from our empirically-validated rule database
@@ -395,7 +395,7 @@ export default function ZiweiPage() {
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
               {/* Decorative backdrop */}
               <div className="relative mb-10">
-                <div className="absolute inset-0 rounded-full bg-purple-600/10 blur-3xl scale-150" />
+                <div className="absolute inset-0 rounded-full bg-teal-600/10 blur-3xl scale-150" />
                 <div className={`relative w-24 h-24 rounded-2xl ${P.iconBg} border ${P.iconBorder} flex items-center justify-center mx-auto`}>
                   <Newspaper className={`w-12 h-12 ${P.iconColor}`} />
                 </div>
@@ -411,7 +411,7 @@ export default function ZiweiPage() {
               <p className="text-slate-400 max-w-md mx-auto text-base mb-8 leading-relaxed">
                 Deep dives into 紫微斗數 astrology — chart interpretation guides,
                 star profiles, palace interactions, and real-world case studies.
-                <br /><span className="text-purple-400 font-medium">Coming up.</span>
+                <br /><span className="text-teal-400 font-medium">Coming up.</span>
               </p>
 
               {/* Teaser topics */}
