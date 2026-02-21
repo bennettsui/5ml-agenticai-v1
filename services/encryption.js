@@ -45,6 +45,12 @@ function getKey() {
  */
 function encrypt(plaintext) {
   if (plaintext === null || plaintext === undefined || plaintext === '') return plaintext;
+  // If ENCRYPTION_KEY is not set, store plaintext with a warning — form submissions
+  // still work; set the secret on Fly.io to enable encryption going forward.
+  if (!process.env.ENCRYPTION_KEY) {
+    console.warn('⚠️  ENCRYPTION_KEY not set — storing PII as plaintext. Run: fly secrets set ENCRYPTION_KEY=$(node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))")');
+    return String(plaintext);
+  }
   const key = getKey();
   const iv = crypto.randomBytes(12); // 96-bit IV — recommended for GCM
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
