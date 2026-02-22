@@ -102,6 +102,10 @@ app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public',
 // Serve Radiance uploaded media
 app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
 
+// Serve compressed image/PDF outputs
+app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
+app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
+
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
 app.use(express.static(nextJsPath));
@@ -121,10 +125,14 @@ const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAl
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
-  initDatabase().catch(err => {
-    console.error('⚠️ Database initialization failed:', err.message);
-    console.log('⚠️ App will continue running without database');
-  });
+  // Core schema first, then tender intelligence schema (auto-seeds sources if registry is empty)
+  const { initTenderSchema } = require('./services/tender-intel-service');
+  initDatabase()
+    .then(() => initTenderSchema(pool))
+    .catch(err => {
+      console.error('⚠️ Database initialization failed:', err.message);
+      console.log('⚠️ App will continue running without database');
+    });
   console.log('📊 Database initialization started');
 } else {
   console.log('⚠️ DATABASE_URL not set - running without database');
@@ -332,6 +340,43 @@ app.get('/api/health/services/:id', async (req, res) => {
   const result = await testService(req.params.id);
   if (!result) return res.status(404).json({ error: 'Unknown service' });
   res.json({ timestamp: new Date().toISOString(), service: result });
+});
+
+// ── Database status — checks schema and tender registry ───────────────────────
+app.get('/api/admin/db-status', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.json({ ok: false, error: 'DATABASE_URL not set', hint: 'Run: fly postgres attach <cluster> --app 5ml-agenticai-v1' });
+  }
+  try {
+    const tables = ['tender_source_registry', 'tenders', 'tender_evaluations',
+      'tender_decisions', 'tender_agent_run_logs', 'tender_daily_digests'];
+    const status = {};
+    for (const t of tables) {
+      try {
+        const { rows } = await pool.query(`SELECT COUNT(*) AS n FROM ${t}`);
+        status[t] = { exists: true, rows: parseInt(rows[0].n, 10) };
+      } catch (_) {
+        status[t] = { exists: false, rows: 0 };
+      }
+    }
+    // Check pgvector
+    let vectorEnabled = false;
+    try {
+      await pool.query(`SELECT 'test'::vector(3)`);
+      vectorEnabled = true;
+    } catch (_) {}
+
+    const allExist = tables.every(t => status[t].exists);
+    res.json({
+      ok: allExist,
+      databaseUrl: process.env.DATABASE_URL.replace(/:\/\/[^@]+@/, '://<credentials>@'),
+      vectorEnabled,
+      tables: status,
+      hint: allExist ? null : 'Some tables missing — restart the app with DATABASE_URL set to auto-create them',
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ==========================================
@@ -3763,9 +3808,24 @@ try {
 try {
   const tedxXinyiRoutes = require('./use-cases/tedx-xinyi/api/routes');
   app.use('/api/tedx-xinyi', tedxXinyiRoutes);
-  // Admin shortcut: /tedxxinyi/admin → upload page
-  app.get('/tedxxinyi/admin', (req, res) => res.redirect('/api/tedx-xinyi/upload'));
-  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /tedxxinyi/admin');
+  // Admin media library — password-protected
+  const ADMIN_PASS = process.env.TEDX_ADMIN_PASS || '5milesLab01@';
+  // Password check API
+  app.post('/api/tedx-xinyi/auth', express.json(), (req, res) => {
+    if (req.body?.password === ADMIN_PASS) return res.json({ ok: true, token: ADMIN_PASS });
+    res.status(401).json({ error: 'Incorrect password' });
+  });
+  // Protect media API endpoints
+  app.use('/api/tedx-xinyi/media', (req, res, next) => {
+    const token = req.headers['x-admin-token'];
+    if (token === ADMIN_PASS) return next();
+    return res.status(401).json({ error: 'Unauthorized' });
+  });
+  // Admin UI serves at /vibe-demo/tedx-xinyi/admin
+  app.get('/vibe-demo/tedx-xinyi/admin', (req, res) => res.redirect('/api/tedx-xinyi/upload'));
+  // Legacy redirect
+  app.get('/tedxxinyi/admin', (req, res) => res.redirect('/vibe-demo/tedx-xinyi/admin'));
+  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /vibe-demo/tedx-xinyi/admin');
 } catch (error) {
   console.warn('⚠️ TEDxXinyi routes not loaded:', error.message);
 }
@@ -4774,16 +4834,28 @@ app.post('/api/recruitai/chat', async (req, res) => {
 - 用「你」稱呼對方，語氣溫暖
 - 主動提問了解需求，每次最多問一個問題
 - 適時用 emoji 增加親切感 😊
-- 第 ${turnCount + 1} 輪對話${turnCount >= 8 ? '（已聊了一段時間，可以自然地邀請對方安排免費諮詢）' : '（先了解需求，建立信任）'}
+- 第 ${turnCount + 1} 輪對話${turnCount >= 8 ? '（已聊了一段時間，請積極邀請對方留下聯絡方式安排免費諮詢）' : '（先了解需求，建立信任）'}
 
-聯絡資料收集（重要）：
-- 當對方表示感興趣或詢問價格/方案時，自然地邀請留下聯絡方式
-- 說話示範：「咁你係咪方便留個 WhatsApp / 電郵俾我？我哋可以安排個免費 30 分鐘 AI 評估 😊」
-- 一旦對話中出現任何聯絡資料（WhatsApp、手機、電郵），必須在回覆末尾加上以下標記（此行對用戶不可見，不要解釋它）：
-[CONTACT_CAPTURED: name=姓名, email=電郵地址, phone=電話號碼]
-例子：[CONTACT_CAPTURED: name=陳先生, email=chan@example.com, phone=+852 9123 4567]
-例子（只有電話）：[CONTACT_CAPTURED: phone=+852 9123 4567]
-只填已知的欄位，未知欄位省略。標記必須在回覆最後一行。`;
+【資料收集任務 — 非常重要】
+整個對話中，自然地逐步收集以下 7 項資料。每次只問一個問題，不要像填表格，要融入對話中：
+1. 姓名（稱呼）— 對話開始時問：「請問點稱呼你呀？」
+2. 公司名稱 — 了解對方業務時問
+3. 行業 — 根據公司討論引出
+4. 員工／團隊人數 — 評估規模、定制方案時問
+5. 主要痛點或希望自動化的業務範疇 — 核心需求，必問
+6. 電郵地址 — **必問，不可跳過**。話術：「方便留個電郵俾我嗎？我可以幫你發送詳細方案 📧」
+7. WhatsApp／電話 — 邀請預約時問
+
+注意：
+- 已知的資料不要重複問
+- **電郵地址係必須收集的**，不論任何情況都要問到
+- 收集到姓名 + 電郵後，邀請安排免費 30 分鐘 AI 評估
+
+【聯絡標記 — 系統指令，用戶不可見】
+每當對話中出現任何新資料（包括姓名、公司、行業、人數、電話、電郵），必須在該次回覆末尾附上完整已知資料的標記。格式如下，只填已知欄位，未知省略：
+[CONTACT_CAPTURED: name=姓名, email=電郵, phone=電話, company=公司, industry=行業, headcount=人數, message=痛點摘要]
+例子：[CONTACT_CAPTURED: name=陳先生, email=chan@abc.com, phone=+852 9123 4567, company=ABC貿易, industry=零售, headcount=20-50人, message=希望自動化客服同WhatsApp回覆]
+每次有新資料就重新附上**完整**已知欄位的標記（累積更新，不是只記新資料）。標記必須在回覆最後一行。`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -4831,36 +4903,57 @@ app.post('/api/recruitai/chat', async (req, res) => {
     const updateFields = ['turn_count = turn_count + 1', 'updated_at = NOW()'];
     const updateParams = [currentSessionId];
     if (contactCaptured) {
-      updateFields.push(`contact_captured = TRUE`);
+      if (capturedData.email) updateFields.push(`contact_captured = TRUE`);
       // Encrypt PII captured by chatbot before persisting to DB
-      if (capturedData.name)  { updateFields.push(`captured_name  = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.name)); }
-      if (capturedData.email) { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.email)); }
-      if (capturedData.phone) { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.phone)); }
+      if (capturedData.name)     { updateFields.push(`captured_name  = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.name)); }
+      if (capturedData.email)    { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.email)); }
+      if (capturedData.phone)    { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.phone)); }
+      if (capturedData.industry) { updateFields.push(`industry = $${updateParams.length + 1}`);       updateParams.push(capturedData.industry); }
     }
     await pool.query(
       `UPDATE recruitai_chat_sessions SET ${updateFields.join(', ')} WHERE session_id = $1`,
       updateParams
     );
 
-    // If contact captured, save as lead (chatbot-sourced), encrypt PII at rest
-    // Dedup by session_id (not email — emails are encrypted so plaintext comparison fails)
+    // If contact captured, upsert as lead (chatbot-sourced), encrypt PII at rest
     if (contactCaptured && capturedData.email) {
       try {
-        await pool.query(
-          `INSERT INTO recruitai_leads (name, email, phone, source_page, industry, message)
-           SELECT $1,$2,$3,$4,$5,$6
-           WHERE NOT EXISTS (
-             SELECT 1 FROM recruitai_leads WHERE source_page = $4
-           )`,
-          [
-            capturedData.name  ? encrypt(capturedData.name)  : null,
-            encrypt(capturedData.email),
-            capturedData.phone ? encrypt(capturedData.phone) : null,
-            'chatbot:' + currentSessionId,
-            industry || null,
-            encrypt(`Chat session ${currentSessionId}`),
-          ]
+        const chatSourcePage = 'chatbot:' + currentSessionId;
+        const messageText = capturedData.message || null;
+        // Try insert first; if already exists (same source_page), update with any newly collected fields
+        const existingLead = await pool.query(
+          'SELECT id FROM recruitai_leads WHERE source_page = $1', [chatSourcePage]
         );
+        if (existingLead.rows.length === 0) {
+          await pool.query(
+            `INSERT INTO recruitai_leads (name, email, phone, company, industry, headcount, message, source_page)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [
+              capturedData.name     ? encrypt(capturedData.name)     : null,
+              encrypt(capturedData.email),
+              capturedData.phone    ? encrypt(capturedData.phone)    : null,
+              capturedData.company  ? encrypt(capturedData.company)  : null,
+              capturedData.industry || industry || null,
+              capturedData.headcount || null,
+              messageText           ? encrypt(messageText)           : null,
+              chatSourcePage,
+            ]
+          );
+        } else {
+          // Update with any newly captured fields
+          const leadId = existingLead.rows[0].id;
+          const sets = [], vals = [];
+          if (capturedData.name)      { sets.push(`name=$${vals.length+1}`);      vals.push(encrypt(capturedData.name)); }
+          if (capturedData.phone)     { sets.push(`phone=$${vals.length+1}`);     vals.push(encrypt(capturedData.phone)); }
+          if (capturedData.company)   { sets.push(`company=$${vals.length+1}`);   vals.push(encrypt(capturedData.company)); }
+          if (capturedData.industry)  { sets.push(`industry=$${vals.length+1}`);  vals.push(capturedData.industry); }
+          if (capturedData.headcount) { sets.push(`headcount=$${vals.length+1}`); vals.push(capturedData.headcount); }
+          if (messageText)            { sets.push(`message=$${vals.length+1}`);   vals.push(encrypt(messageText)); }
+          if (sets.length > 0) {
+            vals.push(leadId);
+            await pool.query(`UPDATE recruitai_leads SET ${sets.join(',')} WHERE id=$${vals.length}`, vals);
+          }
+        }
       } catch (e) {
         console.error('⚠️ RecruitAI chatbot lead save failed:', e.message);
       }
@@ -4937,6 +5030,198 @@ app.delete('/api/recruitai/admin/leads/:id', async (req, res) => {
   } catch (err) {
     console.error('❌ Admin lead delete error:', err);
     res.status(500).json({ error: 'Failed to delete lead' });
+  }
+});
+
+// POST /api/recruitai/admin/leads/:id/analyze — AI analysis of a lead
+app.post('/api/recruitai/admin/leads/:id/analyze', async (req, res) => {
+  const { password } = req.body;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  const { id } = req.params;
+  if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    const result = await pool.query('SELECT * FROM recruitai_leads WHERE id = $1', [Number(id)]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Lead not found' });
+    const lead = decryptRow(result.rows[0], PII_FIELDS.recruitai_leads);
+
+    const llm = require('./lib/llm');
+    const prompt = `You are a sales analyst for RecruitAI Studio, a Hong Kong AI automation agency serving SMEs.
+
+Analyze this inbound lead and respond with ONLY valid JSON (no markdown, no extra text):
+
+Lead data:
+- Company: ${lead.company || 'Not provided'}
+- Industry: ${lead.industry || 'Not provided'}
+- Headcount: ${lead.headcount || 'Not provided'}
+- Source form: ${lead.source_page || 'Unknown'}
+- Message / pain points: ${lead.message || 'No message provided'}
+
+Return this exact JSON structure:
+{
+  "category": "one of: 招聘自動化 | 客服AI | 行銷自動化 | 後台流程 | 資料分析 | 人力資源 | 一般查詢",
+  "summary": "2-3 sentence summary in Traditional Chinese of what this company needs and their situation",
+  "evaluation": "2-3 sentence evaluation in Traditional Chinese assessing lead quality, urgency, and fit for AI automation",
+  "stars": <integer 1-5, where 1=cold/unclear, 3=warm/interested, 5=hot/high-intent with clear pain point>,
+  "star_reason": "one concise sentence in Traditional Chinese explaining the star rating"
+}`;
+
+    const aiResult = await llm.chat('haiku', [{ role: 'user', content: prompt }], { maxTokens: 600 });
+    let analysis;
+    try {
+      const text = aiResult.text.trim();
+      const jsonStr = text.startsWith('{') ? text : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+      analysis = JSON.parse(jsonStr);
+    } catch {
+      return res.status(500).json({ error: 'Failed to parse AI response' });
+    }
+    res.json({ success: true, analysis });
+  } catch (err) {
+    console.error('❌ Lead analysis error:', err);
+    res.status(500).json({ error: 'Failed to analyze lead' });
+  }
+});
+
+// ─── Admin: Media Library ──────────────────────────────────────────────────────
+
+// GET /api/admin/media-library — aggregate all managed images across all sites
+app.get('/api/admin/media-library', (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+
+  const fs = require('fs');
+  const path = require('path');
+  const PUBLIC_DIR = path.join(__dirname, 'frontend', 'public');
+
+  // ── TEDx Boundary Street ───────────────────────────────────────────────────
+  let tedxBoundary = [];
+  try {
+    const { VISUALS } = require('./use-cases/tedx-boundary-street/api/routes');
+    const dir = path.join(PUBLIC_DIR, 'tedx');
+    tedxBoundary = (VISUALS || []).map(v => {
+      const filePath = path.join(dir, v.filename);
+      const exists = fs.existsSync(filePath);
+      return {
+        id: v.id,
+        filename: v.filename,
+        description: v.description,
+        prompt: v.prompt,
+        url: `/tedx/${v.filename}`,
+        exists,
+        size: exists ? fs.statSync(filePath).size : null,
+        modified: exists ? fs.statSync(filePath).mtime.toISOString() : null,
+        canGenerate: true,
+        site: 'tedx-boundary',
+      };
+    });
+  } catch (e) { console.warn('Media library: tedx-boundary load failed:', e.message); }
+
+  // ── TEDx Xinyi ─────────────────────────────────────────────────────────────
+  let tedxXinyi = [];
+  try {
+    const { VISUALS } = require('./use-cases/tedx-xinyi/api/routes');
+    const dir = path.join(PUBLIC_DIR, 'tedx-xinyi');
+    tedxXinyi = (VISUALS || []).map(v => {
+      const filePath = path.join(dir, v.filename);
+      const exists = fs.existsSync(filePath);
+      return {
+        id: v.id,
+        filename: v.filename,
+        description: v.description || v.id,
+        prompt: v.prompt,
+        url: `/tedx-xinyi/${v.filename}`,
+        exists,
+        size: exists ? fs.statSync(filePath).size : null,
+        modified: exists ? fs.statSync(filePath).mtime.toISOString() : null,
+        canGenerate: true,
+        site: 'tedx-xinyi',
+      };
+    });
+  } catch (e) { console.warn('Media library: tedx-xinyi load failed:', e.message); }
+
+  // ── Radiance static images ─────────────────────────────────────────────────
+  let radianceImages = [];
+  try {
+    const radianceDir = path.join(PUBLIC_DIR, 'images', 'radiance');
+    function scanDir(dir, baseUrl) {
+      const items = [];
+      if (!fs.existsSync(dir)) return items;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          items.push(...scanDir(fullPath, `${baseUrl}/${entry.name}`));
+        } else if (/\.(png|jpg|jpeg|webp|gif)$/i.test(entry.name)) {
+          const stat = fs.statSync(fullPath);
+          items.push({
+            id: `${baseUrl}/${entry.name}`.replace('/images/radiance/', '').replace(/\//g, '-').replace(/\.\w+$/, ''),
+            filename: entry.name,
+            description: entry.name.replace(/[-_]/g, ' ').replace(/\.\w+$/, ''),
+            url: `${baseUrl}/${entry.name}`,
+            exists: true,
+            size: stat.size,
+            modified: stat.mtime.toISOString(),
+            canGenerate: false,
+            site: 'radiance',
+          });
+        }
+      }
+      return items;
+    }
+    radianceImages = scanDir(radianceDir, '/images/radiance');
+  } catch (e) { console.warn('Media library: radiance scan failed:', e.message); }
+
+  const geminiAvailable = !!process.env.GEMINI_API_KEY;
+  res.json({
+    success: true,
+    geminiAvailable,
+    groups: [
+      { id: 'tedx-boundary', label: 'TEDx Boundary Street', images: tedxBoundary },
+      { id: 'tedx-xinyi',    label: 'TEDxXinyi',            images: tedxXinyi },
+      { id: 'radiance',      label: 'Radiance',              images: radianceImages },
+    ],
+  });
+});
+
+// POST /api/admin/media-library/generate — trigger Gemini generation for one image
+app.post('/api/admin/media-library/generate', async (req, res) => {
+  const { password, site, id } = req.body;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (!site || !id) return res.status(400).json({ error: 'site and id required' });
+
+  const endpointMap = {
+    'tedx-boundary': '/api/tedx/generate',
+    'tedx-xinyi':    '/api/tedx-xinyi/generate',
+  };
+  const endpoint = endpointMap[site];
+  if (!endpoint) return res.status(400).json({ error: `Unknown site: ${site}` });
+
+  try {
+    const http = require('http');
+    const postData = JSON.stringify({ id });
+    const result = await new Promise((resolve, reject) => {
+      const reqOpts = {
+        hostname: '127.0.0.1',
+        port: process.env.PORT || 8080,
+        path: endpoint,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+        timeout: 120000,
+      };
+      const innerReq = http.request(reqOpts, innerRes => {
+        let body = '';
+        innerRes.on('data', c => { body += c; });
+        innerRes.on('end', () => {
+          try { resolve({ status: innerRes.statusCode, data: JSON.parse(body) }); }
+          catch { resolve({ status: innerRes.statusCode, data: body }); }
+        });
+      });
+      innerReq.on('error', reject);
+      innerReq.write(postData);
+      innerReq.end();
+    });
+    res.status(result.status).json(result.data);
+  } catch (err) {
+    console.error('Media library generate error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -6292,6 +6577,81 @@ app.post('/api/sme/campaign-review', async (req, res) => {
       });
     }
   });
+
+  // POST /api/pdf-compress/upload — Accept PDF file upload, compress, return output_url
+  const pdfUploadStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(__dirname, 'uploads', 'pdfs', 'input');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.pdf';
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+    },
+  });
+  const pdfUpload = multer({
+    storage: pdfUploadStorage,
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype === 'application/pdf') cb(null, true);
+      else cb(new Error('Only PDF files are accepted'));
+    },
+  });
+
+  app.post('/api/pdf-compress/upload', pdfUpload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No PDF file uploaded' });
+
+    const { profile = 'balanced', priority = 'quality', tags = '' } = req.body;
+    const inputPath = req.file.path;
+
+    try {
+      const PDF_COMPRESS_URL = process.env.PDF_COMPRESSION_SERVICE_URL || 'http://localhost:8082';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 180000);
+
+      const response = await fetch(`${PDF_COMPRESS_URL}/compress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: inputPath,
+          profile,
+          priority,
+          tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await response.json();
+
+      // Convert server output_path to a public URL
+      if (data.ok && data.output_path) {
+        const outDir = path.join(__dirname, 'uploads', 'pdfs', 'output');
+        if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+        const outFilename = path.basename(data.output_path);
+        const publicOutPath = path.join(outDir, outFilename);
+        if (data.output_path !== publicOutPath && fs.existsSync(data.output_path)) {
+          fs.copyFileSync(data.output_path, publicOutPath);
+        }
+        data.output_url = `/uploads/pdfs/output/${outFilename}`;
+      }
+
+      // Clean up input file
+      try { fs.unlinkSync(inputPath); } catch (_) {}
+
+      res.json(data);
+    } catch (err) {
+      try { fs.unlinkSync(inputPath); } catch (_) {}
+      if (err.name === 'AbortError') {
+        res.status(504).json({ ok: false, error: 'PDF compression service timed out (3 min)' });
+      } else {
+        res.status(503).json({
+          ok: false,
+          error: `PDF Compression Service unavailable: ${err.message}. Start with: cd use-cases/pdf-compression && docker-compose up`,
+        });
+      }
+    }
+  });
 }
 
 // ==========================================
@@ -6462,21 +6822,34 @@ app.post('/api/sme/campaign-review', async (req, res) => {
     res.end();
   });
 
-  // POST /api/tender-intel/ingest  — manual trigger (for testing)
+  // POST /api/tender-intel/ingest  — manual trigger, SSE streaming progress
+  // Manual trigger always runs all sources (skipRecentHours=0).
   app.post('/api/tender-intel/ingest', async (req, res) => {
-    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ error: 'DATABASE_URL not set' });
+    }
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const emit = (data) => {
+      try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch (_) {}
+    };
+
     try {
       scheduleRegistry.markRunning('tender-intel:daily-ingestion');
-      const summary = await tenderIntel.runIngestion(pool);
+      const summary = await tenderIntel.runIngestion(pool, emit, 0); // 0 = run all, no skip
       scheduleRegistry.markCompleted('tender-intel:daily-ingestion', {
-        result: `${summary.newRawCaptures} new captures`,
+        result: `${summary.newRawCaptures} new captures, ${summary.tendersInserted} tenders`,
         durationMs: summary.durationMs,
       });
-      res.json({ success: true, summary });
     } catch (err) {
       scheduleRegistry.markFailed('tender-intel:daily-ingestion', err.message);
-      res.status(500).json({ error: err.message });
+      emit({ type: 'error', error: err.message });
     }
+    res.end();
   });
 
   // POST /api/tender-intel/chat  — AI chat assistant used by frontend layout

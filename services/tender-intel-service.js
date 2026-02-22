@@ -401,7 +401,7 @@ async function insertRawCaptures(pool, captures) {
   let inserted = 0;
   for (const c of captures) {
     try {
-      await pool.query(
+      const result = await pool.query(
         `INSERT INTO raw_tender_captures
            (source_id, raw_format, raw_payload, item_url, item_guid,
             captured_at, normalised, pre_extracted)
@@ -413,7 +413,8 @@ async function insertRawCaptures(pool, captures) {
           JSON.stringify(c.pre_extracted || {}),
         ]
       );
-      inserted++;
+      // Only count rows that were actually inserted (not skipped by ON CONFLICT)
+      if (result.rowCount > 0) inserted++;
     } catch (_) { /* duplicate or constraint — skip */ }
   }
   return inserted;
@@ -484,10 +485,24 @@ async function logAgentRun(pool, { agentName, status, itemsProcessed, newItems, 
  * Called daily at 03:00 HKT or via manual trigger.
  * Returns a run summary object.
  */
-async function runIngestion(pool) {
+/**
+ * Run ingestion across all active RSS/XML sources and GeBIZ.
+ *
+ * @param {Pool}     pool        - pg Pool
+ * @param {function} onProgress  - optional SSE callback: (eventObj) => void
+ *
+ * Records are always APPENDED (ON CONFLICT DO NOTHING on raw captures;
+ * ON CONFLICT DO UPDATE SET last_seen_at on tenders — content never overwritten).
+ *
+ * To avoid re-ingesting recently checked sources in scheduled runs,
+ * pass skipRecentHours > 0. Manual triggers should pass 0 (run all).
+ */
+async function runIngestion(pool, onProgress = null, skipRecentHours = 0) {
+  const emit = (data) => { if (onProgress) onProgress(data); };
   const startTime = Date.now();
   const summary = {
     sourcesProcessed: 0,
+    sourcesSkipped:   0,
     totalRawCaptures: 0,
     newRawCaptures:   0,
     tendersInserted:  0,
@@ -503,123 +518,142 @@ async function runIngestion(pool) {
     return summary;
   }
 
-  const existingGuids = await getExistingGuids(pool);
+  // Count GeBIZ source separately
+  let gebizSource = null;
+  try {
+    const gbResult = await pool.query(
+      `SELECT * FROM tender_source_registry WHERE source_id LIKE '%gebiz%' AND source_type = 'html_list' AND status = 'active' LIMIT 1`
+    );
+    gebizSource = gbResult.rows[0] || null;
+  } catch (_) {}
 
+  const totalSources = sources.length + (gebizSource ? 1 : 0);
+  emit({
+    type: 'init',
+    total: totalSources,
+    sources: [
+      ...sources.map(s => ({ source_id: s.source_id, name: s.name || s.source_id, type: s.source_type })),
+      ...(gebizSource ? [{ source_id: gebizSource.source_id, name: 'GeBIZ (HTML Scrape)', type: 'html_list' }] : []),
+    ],
+  });
+
+  const existingGuids = await getExistingGuids(pool);
+  let sourceIndex = 0;
+
+  // ─── RSS / XML sources ────────────────────────────────────────────────────
   for (const source of sources) {
+    sourceIndex++;
     const srcStart = Date.now();
+
+    // Skip recently checked sources (for cron scheduling — not for manual triggers)
+    if (skipRecentHours > 0 && source.last_checked_at) {
+      const hoursSince = (Date.now() - new Date(source.last_checked_at).getTime()) / 3_600_000;
+      if (hoursSince < skipRecentHours) {
+        summary.sourcesSkipped++;
+        emit({
+          type: 'source_done', source: source.name || source.source_id,
+          status: 'skipped', skippedHoursAgo: hoursSince.toFixed(1),
+          found: 0, new: 0, tenders: 0,
+        });
+        continue;
+      }
+    }
+
     summary.sourcesProcessed++;
+    emit({ type: 'source_start', source: source.name || source.source_id, source_id: source.source_id, index: sourceIndex, total: totalSources });
 
     const { items, error } = await fetchRSSSource(source);
 
     if (error) {
       summary.errors.push({ source_id: source.source_id, error });
-      summary.sourceResults.push({ source_id: source.source_id, status: error.startsWith('fetch') ? 'fetch_error' : 'parse_error', newItems: 0, error });
-      // Update source status in registry
+      summary.sourceResults.push({ source_id: source.source_id, status: 'error', newItems: 0, error });
       try {
         await pool.query(
           `UPDATE tender_source_registry SET last_status='error', last_status_detail=$1, last_checked_at=NOW() WHERE source_id=$2`,
           [error, source.source_id]
         );
       } catch (_) {}
+      emit({ type: 'source_done', source: source.name || source.source_id, status: 'error', found: 0, new: 0, tenders: 0, error });
       continue;
     }
 
     const newItems = items.filter(item => !existingGuids.has(item.guid));
     summary.totalRawCaptures += items.length;
 
-    // Insert new raw captures
+    // Insert new raw captures (append-only — ON CONFLICT DO NOTHING)
     const rawCaptures = newItems.map(item => ({
       source_id:     source.source_id,
-      raw_format:    source.source_type === 'api_xml' ? 'rss_xml' : 'rss_xml',
+      raw_format:    'rss_xml',
       raw_payload:   item.rawXml || JSON.stringify(item),
       item_url:      item.link || source.feed_url,
       item_guid:     item.guid,
-      pre_extracted: item.preExtracted || { title: item.title, publish_date: item.pubDate, description_snippet: item.description },
+      pre_extracted: item.preExtracted || {
+        title: item.title, publish_date: item.pubDate, description_snippet: item.description,
+      },
     }));
 
     const inserted = await insertRawCaptures(pool, rawCaptures);
     summary.newRawCaptures += inserted;
-
-    // Add new guids to the local set so we don't re-insert within this run
     for (const item of newItems) existingGuids.add(item.guid);
 
-    // Normalise new captures
+    // Normalise + insert tenders (append-only — ON CONFLICT updates last_seen_at only)
     let tendersInserted = 0;
     for (const raw of rawCaptures) {
       const capture = {
-        capture_id:    null,
-        source_id:     raw.source_id,
-        raw_format:    raw.raw_format,
-        raw_payload:   raw.raw_payload,
-        item_url:      raw.item_url,
-        item_guid:     raw.item_guid,
-        captured_at:   new Date().toISOString(),
-        pre_extracted: raw.pre_extracted,
+        capture_id: null, source_id: raw.source_id, raw_format: raw.raw_format,
+        raw_payload: raw.raw_payload, item_url: raw.item_url, item_guid: raw.item_guid,
+        captured_at: new Date().toISOString(), pre_extracted: raw.pre_extracted,
       };
       const normalised = normaliseTender(capture, source);
-      if (normalised) {
-        const n = await insertTenders(pool, [normalised]);
-        tendersInserted += n;
-      }
+      if (normalised) tendersInserted += await insertTenders(pool, [normalised]);
     }
     summary.tendersInserted += tendersInserted;
 
-    // Update source registry last_checked_at
     try {
       await pool.query(
-        `UPDATE tender_source_registry
-         SET last_status='ok', last_status_detail=$1, last_checked_at=NOW()
-         WHERE source_id=$2`,
-        [`${inserted} new items, ${tendersInserted} tenders`, source.source_id]
+        `UPDATE tender_source_registry SET last_status='ok', last_status_detail=$1, last_checked_at=NOW() WHERE source_id=$2`,
+        [`${inserted} new captures, ${tendersInserted} tenders`, source.source_id]
       );
     } catch (_) {}
 
-    summary.sourceResults.push({
-      source_id:    source.source_id,
-      status:       'success',
-      newItems:     inserted,
-      durationMs:   Date.now() - srcStart,
+    summary.sourceResults.push({ source_id: source.source_id, status: 'success', newItems: inserted, durationMs: Date.now() - srcStart });
+    emit({
+      type: 'source_done', source: source.name || source.source_id,
+      status: 'ok', found: items.length, new: inserted, tenders: tendersInserted,
+      durationMs: Date.now() - srcStart,
     });
   }
 
   // ─── GeBIZ HTML scraping (SG html_list source) ───────────────────────────
-  // Look for an active GeBIZ source in the registry
-  let gebizSource = null;
-  try {
-    const gbResult = await pool.query(
-      `SELECT * FROM tender_source_registry WHERE source_id LIKE '%gebiz%' AND status = 'active' LIMIT 1`
-    );
-    gebizSource = gbResult.rows[0] || null;
-  } catch (_) {}
-
   if (gebizSource) {
+    sourceIndex++;
     summary.sourcesProcessed++;
+    emit({ type: 'source_start', source: 'GeBIZ (HTML Scrape)', source_id: gebizSource.source_id, index: sourceIndex, total: totalSources });
+
     const { items: gebizItems, errors: gebizErrors } = await fetchGeBIZ();
 
     if (gebizErrors.length > 0) {
-      summary.errors.push({ source_id: gebizSource.source_id, error: gebizErrors.join('; ') });
+      const errMsg = gebizErrors.join('; ');
+      summary.errors.push({ source_id: gebizSource.source_id, error: errMsg });
       try {
         await pool.query(
           `UPDATE tender_source_registry SET last_status='error', last_status_detail=$1, last_checked_at=NOW() WHERE source_id=$2`,
-          [gebizErrors.join('; '), gebizSource.source_id]
+          [errMsg, gebizSource.source_id]
         );
       } catch (_) {}
+      emit({ type: 'source_done', source: 'GeBIZ (HTML Scrape)', status: 'error', found: 0, new: 0, tenders: 0, error: errMsg });
     } else {
       const newGeBIZ = gebizItems.filter(item => !existingGuids.has(item.guid));
       summary.totalRawCaptures += gebizItems.length;
 
       const gebizCaptures = newGeBIZ.map(item => ({
-        source_id:     gebizSource.source_id,
-        raw_format:    'html_fragment',
-        raw_payload:   JSON.stringify(item),
-        item_url:      item.link || gebizSource.feed_url,
-        item_guid:     item.guid,
-        pre_extracted: item.preExtracted || { title: item.title },
+        source_id: gebizSource.source_id, raw_format: 'html_fragment',
+        raw_payload: JSON.stringify(item), item_url: item.link || gebizSource.feed_url,
+        item_guid: item.guid, pre_extracted: item.preExtracted || { title: item.title },
       }));
 
       const gbInserted = await insertRawCaptures(pool, gebizCaptures);
       summary.newRawCaptures += gbInserted;
-
       for (const item of newGeBIZ) existingGuids.add(item.guid);
 
       let gbTenders = 0;
@@ -637,27 +671,34 @@ async function runIngestion(pool) {
       try {
         await pool.query(
           `UPDATE tender_source_registry SET last_status='ok', last_status_detail=$1, last_checked_at=NOW() WHERE source_id=$2`,
-          [`${gbInserted} new items, ${gbTenders} tenders`, gebizSource.source_id]
+          [`${gbInserted} new captures, ${gbTenders} tenders`, gebizSource.source_id]
         );
       } catch (_) {}
 
-      summary.sourceResults.push({
-        source_id: gebizSource.source_id, status: 'success',
-        newItems: gbInserted, durationMs: 0,
-      });
+      summary.sourceResults.push({ source_id: gebizSource.source_id, status: 'success', newItems: gbInserted, durationMs: 0 });
+      emit({ type: 'source_done', source: 'GeBIZ (HTML Scrape)', status: 'ok', found: gebizItems.length, new: gbInserted, tenders: gbTenders });
     }
   }
 
   const durationMs = Date.now() - startTime;
 
-  // Log the overall run
   await logAgentRun(pool, {
-    agentName:       'RSSXMLIngestorAgent',
-    status:          summary.errors.length > 0 ? 'partial' : 'success',
-    itemsProcessed:  summary.totalRawCaptures,
-    newItems:        summary.newRawCaptures,
+    agentName:      'RSSXMLIngestorAgent',
+    status:         summary.errors.length > 0 ? 'partial' : 'success',
+    itemsProcessed: summary.totalRawCaptures,
+    newItems:       summary.newRawCaptures,
     durationMs,
-    detail:          `${summary.sourcesProcessed} sources, ${summary.tendersInserted} tenders inserted`,
+    detail:         `${summary.sourcesProcessed} sources, ${summary.newRawCaptures} new captures, ${summary.tendersInserted} tenders`,
+  });
+
+  emit({
+    type: 'done',
+    newCaptures: summary.newRawCaptures,
+    tendersInserted: summary.tendersInserted,
+    sources: summary.sourcesProcessed,
+    skipped: summary.sourcesSkipped,
+    errors: summary.errors.length,
+    durationMs,
   });
 
   summary.durationMs = durationMs;
@@ -1418,12 +1459,18 @@ async function extractUrlsWithAI(hub, html) {
  * @param {function} onProgress — optional SSE callback: (eventObj) => void
  * Returns { newSources, errors, hubsScanned, durationMs }.
  */
-async function runSourceDiscovery(pool, onProgress = null) {
+/**
+ * @param {Pool}     pool           - pg Pool
+ * @param {function} onProgress     - optional SSE callback
+ * @param {number}   skipRecentHours - skip hubs scanned within N hours (0 = always run)
+ */
+async function runSourceDiscovery(pool, onProgress = null, skipRecentHours = 0) {
   const emit = (data) => { if (onProgress) onProgress(data); };
   const startTime = Date.now();
   const newSources = [];
   const errors = [];
   let hubsScanned = 0;
+  let hubsSkipped = 0;
 
   // Known hub pages to scan (also pick up html_hub sources from DB)
   const STATIC_HUBS = [
@@ -1452,7 +1499,19 @@ async function runSourceDiscovery(pool, onProgress = null) {
       .filter(h => h.url && !seenUrls.has(h.url) && seenUrls.add(h.url)),
   ];
 
-  emit({ type: 'init', total: hubsToScan.length, aiEnabled: !!process.env.DEEPSEEK_API_KEY });
+  // Build lookup map: url → DB row (for last_checked_at tracking)
+  const hubUrlToDbRow = {};
+  for (const h of dbHubs) {
+    if (h.discovery_hub_url) hubUrlToDbRow[h.discovery_hub_url] = h;
+    if (h.base_url) hubUrlToDbRow[h.base_url] = h;
+  }
+
+  emit({
+    type: 'init',
+    total: hubsToScan.length,
+    aiEnabled: !!process.env.DEEPSEEK_API_KEY,
+    skipRecentHours,
+  });
 
   // Get existing feed URLs to avoid re-adding known sources
   const existingUrls = new Set();
@@ -1473,6 +1532,18 @@ async function runSourceDiscovery(pool, onProgress = null) {
 
   for (let idx = 0; idx < hubsToScan.length; idx++) {
     const hub = hubsToScan[idx];
+    const dbRow = hubUrlToDbRow[hub.url];
+
+    // Skip recently scanned hubs (for cron; manual trigger passes skipRecentHours=0)
+    if (skipRecentHours > 0 && dbRow?.last_checked_at) {
+      const hoursSince = (Date.now() - new Date(dbRow.last_checked_at).getTime()) / 3_600_000;
+      if (hoursSince < skipRecentHours) {
+        hubsSkipped++;
+        emit({ type: 'hub_done', hub: hub.label, status: 'skipped', skippedHoursAgo: hoursSince.toFixed(1), found: 0, aiUsed: false });
+        continue;
+      }
+    }
+
     hubsScanned++;
     emit({ type: 'hub_start', hub: hub.label, url: hub.url, index: idx + 1, total: hubsToScan.length });
 
@@ -1491,6 +1562,10 @@ async function runSourceDiscovery(pool, onProgress = null) {
         : err.response ? `HTTP ${err.response.status}`
         : err.message;
       errors.push({ hub: hub.label, error: errMsg });
+      // Track last check even on failure so we don't hammer broken URLs
+      if (dbRow) {
+        try { await pool.query(`UPDATE tender_source_registry SET last_checked_at=NOW(), last_status='error', last_status_detail=$1 WHERE source_id=$2`, [errMsg, dbRow.source_id]); } catch (_) {}
+      }
       emit({ type: 'hub_done', hub: hub.label, status: 'error', error: errMsg, found: 0, aiUsed: false });
       continue;
     }
@@ -1557,6 +1632,12 @@ async function runSourceDiscovery(pool, onProgress = null) {
       } catch (_) { /* duplicate or constraint violation */ }
     }
 
+    // Persist last_checked_at on the DB hub row (success path)
+    if (dbRow) {
+      const detail = inserted > 0 ? `${inserted} new feeds discovered` : foundUrls.size > 0 ? `${foundUrls.size} already known` : 'no feeds found';
+      try { await pool.query(`UPDATE tender_source_registry SET last_checked_at=NOW(), last_status='ok', last_status_detail=$1 WHERE source_id=$2`, [detail, dbRow.source_id]); } catch (_) {}
+    }
+
     emit({
       type: 'hub_done',
       hub: hub.label,
@@ -1579,14 +1660,300 @@ async function runSourceDiscovery(pool, onProgress = null) {
     detail:         `${hubsScanned} hubs scanned, ${newSources.length} new sources discovered`,
   });
 
-  emit({ type: 'done', newSources: newSources.length, hubsScanned, errors: errors.length, durationMs });
+  emit({ type: 'done', newSources: newSources.length, hubsScanned, hubsSkipped, errors: errors.length, durationMs });
 
   return { newSources, errors, hubsScanned, durationMs };
+}
+
+// ─── Schema Initialization + Auto-seed ───────────────────────────────────────
+
+/**
+ * Create all tender intelligence tables (idempotent — safe to call on every boot).
+ * Also auto-seeds source registry from seed file if it's empty.
+ * Called from index.js startup after initDatabase().
+ */
+async function initTenderSchema(pool) {
+  const steps = [];
+
+  // 1. Enable pgvector (optional — graceful skip if unavailable)
+  let vectorEnabled = false;
+  try {
+    await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+    vectorEnabled = true;
+    steps.push('pgvector: enabled');
+  } catch (_) {
+    steps.push('pgvector: not available (title_embedding will be TEXT)');
+  }
+
+  // 2. Create tables (all idempotent with IF NOT EXISTS)
+  await pool.query(`
+    -- Source Registry
+    CREATE TABLE IF NOT EXISTS tender_source_registry (
+      source_id                 TEXT PRIMARY KEY,
+      name                      TEXT NOT NULL,
+      organisation              TEXT,
+      owner_type                TEXT NOT NULL DEFAULT 'gov',
+      jurisdiction              TEXT NOT NULL,
+      source_type               TEXT NOT NULL DEFAULT 'rss_xml',
+      access                    TEXT NOT NULL DEFAULT 'public',
+      priority                  SMALLINT NOT NULL DEFAULT 2,
+      status                    TEXT NOT NULL DEFAULT 'active',
+      base_url                  TEXT,
+      feed_url                  TEXT,
+      discovery_hub_url         TEXT,
+      ingest_method             TEXT,
+      update_pattern            TEXT DEFAULT 'unknown',
+      update_times_hkt          TEXT[],
+      field_map                 JSONB,
+      parsing_notes             TEXT,
+      scraping_config           JSONB,
+      category_tags_default     TEXT[] NOT NULL DEFAULT '{}',
+      legal_notes               TEXT,
+      reliability_score         FLOAT,
+      tags                      TEXT[] DEFAULT '{}',
+      notes                     TEXT,
+      last_checked_at           TIMESTAMPTZ,
+      last_status               TEXT,
+      last_status_detail        TEXT,
+      created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tsr_jurisdiction ON tender_source_registry(jurisdiction);
+    CREATE INDEX IF NOT EXISTS idx_tsr_status ON tender_source_registry(status);
+    CREATE INDEX IF NOT EXISTS idx_tsr_source_type ON tender_source_registry(source_type);
+
+    -- Raw Capture Layer
+    CREATE TABLE IF NOT EXISTS raw_tender_captures (
+      capture_id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      source_id                 TEXT NOT NULL REFERENCES tender_source_registry(source_id),
+      raw_format                TEXT NOT NULL DEFAULT 'rss_xml',
+      raw_payload               TEXT NOT NULL,
+      pre_extracted             JSONB,
+      item_url                  TEXT,
+      item_guid                 TEXT,
+      captured_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      normalised                BOOLEAN NOT NULL DEFAULT FALSE,
+      normalised_tender_id      UUID,
+      mapping_version           TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_rtc_source_guid ON raw_tender_captures(source_id, item_guid) WHERE item_guid IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_rtc_normalised ON raw_tender_captures(normalised) WHERE normalised = FALSE;
+    CREATE INDEX IF NOT EXISTS idx_rtc_captured_at ON raw_tender_captures(captured_at DESC);
+
+    -- Tender Evaluations
+    CREATE TABLE IF NOT EXISTS tender_evaluations (
+      eval_id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tender_id                 UUID NOT NULL,
+      capability_fit_score      FLOAT NOT NULL DEFAULT 0,
+      business_potential_score  FLOAT NOT NULL DEFAULT 0,
+      overall_relevance_score   FLOAT NOT NULL DEFAULT 0,
+      is_latest                 BOOLEAN NOT NULL DEFAULT FALSE,
+      label                     TEXT NOT NULL DEFAULT 'Ignore',
+      rationale                 TEXT NOT NULL DEFAULT '',
+      signals_used              JSONB,
+      scoring_weights           JSONB,
+      model_used                TEXT,
+      evaluated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      scoring_version           TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_te_tender_id ON tender_evaluations(tender_id);
+    CREATE INDEX IF NOT EXISTS idx_te_evaluated_at ON tender_evaluations(evaluated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_te_label ON tender_evaluations(label);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_te_tender_latest ON tender_evaluations(tender_id) WHERE is_latest = TRUE;
+
+    -- Tender Decisions
+    CREATE TABLE IF NOT EXISTS tender_decisions (
+      decision_id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tender_id                 UUID NOT NULL,
+      decision                  TEXT NOT NULL DEFAULT 'track',
+      decided_by                TEXT NOT NULL DEFAULT 'founder',
+      decided_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      notes                     TEXT,
+      assigned_to               TEXT,
+      pipeline_stage            TEXT,
+      pipeline_entered_at       TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_td_tender_id ON tender_decisions(tender_id);
+    CREATE INDEX IF NOT EXISTS idx_td_decided_at ON tender_decisions(decided_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_td_decision ON tender_decisions(decision);
+
+    -- Daily Digests
+    CREATE TABLE IF NOT EXISTS tender_daily_digests (
+      digest_id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      digest_date               DATE NOT NULL UNIQUE,
+      tenders_surfaced          UUID[] DEFAULT '{}',
+      narrative_summary         TEXT,
+      hk_top_count              INT DEFAULT 0,
+      sg_top_count              INT DEFAULT 0,
+      closing_soon_count        INT DEFAULT 0,
+      new_tenders_total         INT DEFAULT 0,
+      sources_active            INT DEFAULT 0,
+      sources_with_issues       INT DEFAULT 0,
+      source_issue_details      JSONB,
+      generated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      email_sent_at             TIMESTAMPTZ
+    );
+
+    -- Agent Run Logs
+    CREATE TABLE IF NOT EXISTS tender_agent_run_logs (
+      log_id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      agent_name                TEXT NOT NULL,
+      run_id                    TEXT,
+      started_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at              TIMESTAMPTZ,
+      status                    TEXT DEFAULT 'success',
+      items_processed           INT DEFAULT 0,
+      items_failed              INT DEFAULT 0,
+      error_detail              TEXT,
+      meta                      JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_tarl_agent_name ON tender_agent_run_logs(agent_name);
+    CREATE INDEX IF NOT EXISTS idx_tarl_started_at ON tender_agent_run_logs(started_at DESC);
+
+    -- Calibration Reports
+    CREATE TABLE IF NOT EXISTS tender_calibration_reports (
+      report_id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      generated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      summary                   TEXT,
+      accuracy_precision        FLOAT,
+      accuracy_recall           FLOAT,
+      accuracy_f1               FLOAT,
+      recommendations           JSONB,
+      no_changes_needed         BOOLEAN DEFAULT FALSE,
+      approved_at               TIMESTAMPTZ,
+      approved_updates          JSONB
+    );
+  `);
+  steps.push('core tables: created / verified');
+
+  // 3. Create tenders table (handle vector column depending on pgvector availability)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tenders (
+      tender_id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      source_id                 TEXT NOT NULL REFERENCES tender_source_registry(source_id),
+      source_references         TEXT[] DEFAULT '{}',
+      raw_pointer               UUID REFERENCES raw_tender_captures(capture_id),
+      jurisdiction              TEXT NOT NULL,
+      owner_type                TEXT NOT NULL DEFAULT 'gov',
+      source_url                TEXT,
+      mapping_version           TEXT,
+      tender_ref                TEXT,
+      title                     TEXT NOT NULL,
+      description_snippet       TEXT,
+      agency                    TEXT,
+      category_tags             TEXT[] DEFAULT '{}',
+      raw_category              TEXT,
+      publish_date              DATE,
+      publish_date_estimated    BOOLEAN DEFAULT FALSE,
+      closing_date              DATE,
+      status                    TEXT NOT NULL DEFAULT 'open',
+      first_seen_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      budget_min                NUMERIC(15, 2),
+      budget_max                NUMERIC(15, 2),
+      currency                  TEXT,
+      budget_source             TEXT DEFAULT 'unknown',
+      is_canonical              BOOLEAN NOT NULL DEFAULT TRUE,
+      canonical_tender_id       UUID REFERENCES tenders(tender_id),
+      evaluation_status         TEXT NOT NULL DEFAULT 'pending',
+      label                     TEXT NOT NULL DEFAULT 'unscored',
+      created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tenders_ref_jurisdiction ON tenders(tender_ref, jurisdiction) WHERE tender_ref IS NOT NULL AND is_canonical = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_tenders_closing_date ON tenders(closing_date) WHERE status = 'open';
+    CREATE INDEX IF NOT EXISTS idx_tenders_evaluation_status ON tenders(evaluation_status);
+    CREATE INDEX IF NOT EXISTS idx_tenders_label ON tenders(label);
+    CREATE INDEX IF NOT EXISTS idx_tenders_jurisdiction ON tenders(jurisdiction);
+    CREATE INDEX IF NOT EXISTS idx_tenders_category_tags ON tenders USING GIN(category_tags);
+  `);
+
+  // Add vector embedding column only if pgvector is available
+  if (vectorEnabled) {
+    try {
+      await pool.query(`ALTER TABLE tenders ADD COLUMN IF NOT EXISTS title_embedding vector(1536)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_tenders_embedding ON tenders USING ivfflat (title_embedding vector_cosine_ops) WITH (lists = 50)`);
+      steps.push('tenders: vector(1536) embedding column ready');
+    } catch (_) {
+      steps.push('tenders: vector index skipped (table may need data first)');
+    }
+  } else {
+    await pool.query(`ALTER TABLE tenders ADD COLUMN IF NOT EXISTS title_embedding TEXT`);
+    steps.push('tenders: title_embedding stored as TEXT (no pgvector)');
+  }
+
+  // 4. Allow api_xml source type (migration)
+  try {
+    await pool.query(`
+      ALTER TABLE tender_source_registry DROP CONSTRAINT IF EXISTS tender_source_registry_source_type_check;
+      ALTER TABLE tender_source_registry ADD CONSTRAINT tender_source_registry_source_type_check
+        CHECK (source_type IN ('rss_xml', 'api_json', 'api_xml', 'csv_open_data', 'html_list', 'html_hub', 'html_reference'));
+    `);
+  } catch (_) { /* constraint already applied */ }
+  steps.push('migrations: applied');
+
+  // 5. Auto-seed source registry if empty
+  const { rows: countRows } = await pool.query('SELECT COUNT(*) AS n FROM tender_source_registry');
+  if (parseInt(countRows[0].n, 10) === 0) {
+    const seeded = await _autoSeedSources(pool);
+    steps.push(`sources: auto-seeded ${seeded} entries from registry`);
+  } else {
+    steps.push(`sources: ${countRows[0].n} entries already in registry`);
+  }
+
+  console.log(`✅ Tender schema ready: ${steps.join(' | ')}`);
+  return steps;
+}
+
+/**
+ * Load and insert sources from source-registry-seed.json.
+ * Called automatically by initTenderSchema when registry is empty.
+ */
+async function _autoSeedSources(pool) {
+  let seedData;
+  try {
+    const path = require('path');
+    seedData = require(path.join(__dirname, '../use-cases/hk-sg-tender-intelligence/data/source-registry-seed.json'));
+  } catch (_) {
+    return 0;
+  }
+
+  const sources = (seedData.sources || []).filter(
+    s => !['reference_only', 'stage_2_only'].includes(s.status)
+  );
+
+  let inserted = 0;
+  for (const src of sources) {
+    try {
+      await pool.query(
+        `INSERT INTO tender_source_registry (
+          source_id, name, organisation, owner_type, jurisdiction, source_type,
+          access, priority, status, discovery_hub_url, feed_url, ingest_method,
+          update_pattern, field_map, scraping_config, category_tags_default,
+          parsing_notes, legal_notes, notes, tags, created_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW(),NOW())
+        ON CONFLICT (source_id) DO NOTHING`,
+        [
+          src.source_id, src.name, src.organisation || null, src.owner_type,
+          src.jurisdiction, src.source_type, src.access || 'public', src.priority || 2,
+          src.status, src.discovery_hub_url || null, src.feed_url || null,
+          src.ingest_method || null, src.update_pattern || null,
+          src.field_map ? JSON.stringify(src.field_map) : null,
+          src.scraping_config ? JSON.stringify(src.scraping_config) : null,
+          src.category_tags_default || [], src.parsing_notes || null,
+          src.legal_notes || null, src.notes || null, src.tags || [],
+        ]
+      );
+      inserted++;
+    } catch (_) { /* skip individual errors */ }
+  }
+  return inserted;
 }
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
+  initTenderSchema,
   runIngestion,
   runEvaluation,
   runSourceDiscovery,
