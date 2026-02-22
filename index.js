@@ -6980,7 +6980,9 @@ server.listen(port, '0.0.0.0', async () => {
 ╚════════════════════════════════════════╝
   `);
 
-  console.log('🎨 TEDx image generation: managed from admin panel — run /vibe-demo/recruitai/admin to trigger');
+  // TEDx visual generation is now triggered manually from the admin panel.
+  // Use GET /api/tedx/visuals + POST /api/tedx/generate to list and generate images.
+  console.log('🎨 TEDx visuals: auto-generation disabled — use admin panel to generate images');
 
   // Initialize scheduler for Topic Intelligence
   if (process.env.DATABASE_URL) {
