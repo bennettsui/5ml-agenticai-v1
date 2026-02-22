@@ -5081,6 +5081,150 @@ Return this exact JSON structure:
   }
 });
 
+// ─── Admin: Media Library ──────────────────────────────────────────────────────
+
+// GET /api/admin/media-library — aggregate all managed images across all sites
+app.get('/api/admin/media-library', (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+
+  const fs = require('fs');
+  const path = require('path');
+  const PUBLIC_DIR = path.join(__dirname, 'frontend', 'public');
+
+  // ── TEDx Boundary Street ───────────────────────────────────────────────────
+  let tedxBoundary = [];
+  try {
+    const { VISUALS } = require('./use-cases/tedx-boundary-street/api/routes');
+    const dir = path.join(PUBLIC_DIR, 'tedx');
+    tedxBoundary = (VISUALS || []).map(v => {
+      const filePath = path.join(dir, v.filename);
+      const exists = fs.existsSync(filePath);
+      return {
+        id: v.id,
+        filename: v.filename,
+        description: v.description,
+        prompt: v.prompt,
+        url: `/tedx/${v.filename}`,
+        exists,
+        size: exists ? fs.statSync(filePath).size : null,
+        modified: exists ? fs.statSync(filePath).mtime.toISOString() : null,
+        canGenerate: true,
+        site: 'tedx-boundary',
+      };
+    });
+  } catch (e) { console.warn('Media library: tedx-boundary load failed:', e.message); }
+
+  // ── TEDx Xinyi ─────────────────────────────────────────────────────────────
+  let tedxXinyi = [];
+  try {
+    const { VISUALS } = require('./use-cases/tedx-xinyi/api/routes');
+    const dir = path.join(PUBLIC_DIR, 'tedx-xinyi');
+    tedxXinyi = (VISUALS || []).map(v => {
+      const filePath = path.join(dir, v.filename);
+      const exists = fs.existsSync(filePath);
+      return {
+        id: v.id,
+        filename: v.filename,
+        description: v.description || v.id,
+        prompt: v.prompt,
+        url: `/tedx-xinyi/${v.filename}`,
+        exists,
+        size: exists ? fs.statSync(filePath).size : null,
+        modified: exists ? fs.statSync(filePath).mtime.toISOString() : null,
+        canGenerate: true,
+        site: 'tedx-xinyi',
+      };
+    });
+  } catch (e) { console.warn('Media library: tedx-xinyi load failed:', e.message); }
+
+  // ── Radiance static images ─────────────────────────────────────────────────
+  let radianceImages = [];
+  try {
+    const radianceDir = path.join(PUBLIC_DIR, 'images', 'radiance');
+    function scanDir(dir, baseUrl) {
+      const items = [];
+      if (!fs.existsSync(dir)) return items;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          items.push(...scanDir(fullPath, `${baseUrl}/${entry.name}`));
+        } else if (/\.(png|jpg|jpeg|webp|gif)$/i.test(entry.name)) {
+          const stat = fs.statSync(fullPath);
+          items.push({
+            id: `${baseUrl}/${entry.name}`.replace('/images/radiance/', '').replace(/\//g, '-').replace(/\.\w+$/, ''),
+            filename: entry.name,
+            description: entry.name.replace(/[-_]/g, ' ').replace(/\.\w+$/, ''),
+            url: `${baseUrl}/${entry.name}`,
+            exists: true,
+            size: stat.size,
+            modified: stat.mtime.toISOString(),
+            canGenerate: false,
+            site: 'radiance',
+          });
+        }
+      }
+      return items;
+    }
+    radianceImages = scanDir(radianceDir, '/images/radiance');
+  } catch (e) { console.warn('Media library: radiance scan failed:', e.message); }
+
+  const geminiAvailable = !!process.env.GEMINI_API_KEY;
+  res.json({
+    success: true,
+    geminiAvailable,
+    groups: [
+      { id: 'tedx-boundary', label: 'TEDx Boundary Street', images: tedxBoundary },
+      { id: 'tedx-xinyi',    label: 'TEDxXinyi',            images: tedxXinyi },
+      { id: 'radiance',      label: 'Radiance',              images: radianceImages },
+    ],
+  });
+});
+
+// POST /api/admin/media-library/generate — trigger Gemini generation for one image
+app.post('/api/admin/media-library/generate', async (req, res) => {
+  const { password, site, id } = req.body;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (!site || !id) return res.status(400).json({ error: 'site and id required' });
+
+  const endpointMap = {
+    'tedx-boundary': '/api/tedx/generate',
+    'tedx-xinyi':    '/api/tedx-xinyi/generate',
+  };
+  const endpoint = endpointMap[site];
+  if (!endpoint) return res.status(400).json({ error: `Unknown site: ${site}` });
+
+  try {
+    const http = require('http');
+    const postData = JSON.stringify({ id });
+    const result = await new Promise((resolve, reject) => {
+      const reqOpts = {
+        hostname: '127.0.0.1',
+        port: process.env.PORT || 8080,
+        path: endpoint,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+        timeout: 120000,
+      };
+      const innerReq = http.request(reqOpts, innerRes => {
+        let body = '';
+        innerRes.on('data', c => { body += c; });
+        innerRes.on('end', () => {
+          try { resolve({ status: innerRes.statusCode, data: JSON.parse(body) }); }
+          catch { resolve({ status: innerRes.statusCode, data: body }); }
+        });
+      });
+      innerReq.on('error', reject);
+      innerReq.write(postData);
+      innerReq.end();
+    });
+    res.status(result.status).json(result.data);
+  } catch (err) {
+    console.error('Media library generate error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/recruitai/admin/sessions — list all chat sessions
 app.get('/api/recruitai/admin/sessions', async (req, res) => {
   const { password } = req.query;
@@ -6836,203 +6980,7 @@ server.listen(port, '0.0.0.0', async () => {
 ╚════════════════════════════════════════╝
   `);
 
-  // Manifest-based TEDx nanobanana visual generation
-  // Only triggers when VISUALS definitions change (new entries or updated prompts),
-  // not on every deploy or when files happen to be missing.
-  if (process.env.GEMINI_API_KEY) {
-    const tedxFs = require('fs');
-    const tedxPath = require('path');
-    const crypto = require('crypto');
-    try {
-      const tedxOutputDir = tedxPath.join(__dirname, 'frontend', 'public', 'tedx');
-      const manifestPath = tedxPath.join(tedxOutputDir, '.manifest.json');
-      const tedxModule = require('./use-cases/tedx-boundary-street/api/routes');
-      const VISUALS = tedxModule.VISUALS || [];
-
-      // Ensure output dir exists
-      if (!tedxFs.existsSync(tedxOutputDir)) {
-        tedxFs.mkdirSync(tedxOutputDir, { recursive: true });
-      }
-
-      // Build current definition fingerprint: hash each visual's id + prompt
-      const currentDefs = {};
-      for (const v of VISUALS) {
-        currentDefs[v.id] = crypto.createHash('md5').update(v.prompt).digest('hex');
-      }
-
-      // Load previous manifest (if any)
-      let previousDefs = {};
-      try {
-        if (tedxFs.existsSync(manifestPath)) {
-          previousDefs = JSON.parse(tedxFs.readFileSync(manifestPath, 'utf8'));
-        }
-      } catch { /* no manifest yet */ }
-
-      // Find visuals with new or changed definitions, or missing files
-      const changed = VISUALS.filter(v =>
-        currentDefs[v.id] !== previousDefs[v.id] ||
-        !tedxFs.existsSync(tedxPath.join(tedxOutputDir, v.filename))
-      );
-
-      if (changed.length > 0) {
-        const newIds = changed.filter(v => !previousDefs[v.id]).map(v => v.id);
-        const updatedIds = changed.filter(v => previousDefs[v.id] && currentDefs[v.id] !== previousDefs[v.id]).map(v => v.id);
-        const missingIds = changed.filter(v => previousDefs[v.id] && currentDefs[v.id] === previousDefs[v.id]).map(v => v.id);
-        console.log(`🎨 TEDx: Generating ${changed.length} visuals — ${newIds.length} new, ${updatedIds.length} updated, ${missingIds.length} missing files`);
-        if (newIds.length > 0) console.log(`   New: ${newIds.join(', ')}`);
-        if (updatedIds.length > 0) console.log(`   Updated: ${updatedIds.join(', ')}`);
-        if (missingIds.length > 0) console.log(`   Missing: ${missingIds.join(', ')}`);
-
-        // Fire-and-forget: generate only changed visuals after a short delay
-        setTimeout(async () => {
-          try {
-            const http = require('http');
-            let generated = 0;
-            let failed = 0;
-
-            for (const visual of changed) {
-              try {
-                const postData = JSON.stringify({ id: visual.id });
-                await new Promise((resolve, reject) => {
-                  const req = http.request({
-                    hostname: '127.0.0.1',
-                    port: port,
-                    path: '/api/tedx/generate',
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
-                    timeout: 60000,
-                  }, (res) => {
-                    let body = '';
-                    res.on('data', (chunk) => { body += chunk; });
-                    res.on('end', () => {
-                      if (res.statusCode === 200) {
-                        generated++;
-                        // Update manifest entry on success
-                        previousDefs[visual.id] = currentDefs[visual.id];
-                        tedxFs.writeFileSync(manifestPath, JSON.stringify(previousDefs, null, 2));
-                      } else {
-                        failed++;
-                        console.error(`🎨 TEDx: Failed ${visual.id}: ${body.slice(0, 100)}`);
-                      }
-                      resolve();
-                    });
-                  });
-                  req.on('error', (err) => { failed++; console.error(`🎨 TEDx: ${visual.id} error: ${err.message}`); resolve(); });
-                  req.write(postData);
-                  req.end();
-                });
-                // Rate limit between generations
-                await new Promise(r => setTimeout(r, 2000));
-              } catch (err) {
-                failed++;
-                console.error(`🎨 TEDx: ${visual.id} error: ${err.message}`);
-              }
-            }
-
-            console.log(`🎨 TEDx auto-generation done: ${generated} generated, ${failed} failed`);
-          } catch (err) {
-            console.error('🎨 TEDx auto-generation error:', err.message);
-          }
-        }, 3000);
-      } else {
-        console.log(`🎨 TEDx: All ${VISUALS.length} visuals up to date — skipping generation`);
-      }
-    } catch (err) {
-      console.warn('⚠️ TEDx auto-generation check failed:', err.message);
-    }
-
-    // TEDxXinyi visual generation (same manifest pattern)
-    try {
-      const xinyiOutputDir = tedxPath.join(__dirname, 'frontend', 'public', 'tedx-xinyi');
-      const xinyiManifestPath = tedxPath.join(xinyiOutputDir, '.manifest.json');
-      const xinyiModule = require('./use-cases/tedx-xinyi/api/routes');
-      const XINYI_VISUALS = xinyiModule.VISUALS || [];
-
-      if (!tedxFs.existsSync(xinyiOutputDir)) {
-        tedxFs.mkdirSync(xinyiOutputDir, { recursive: true });
-      }
-
-      const xinyiDefs = {};
-      for (const v of XINYI_VISUALS) {
-        xinyiDefs[v.id] = crypto.createHash('md5').update(v.prompt).digest('hex');
-      }
-
-      let xinyiPrevDefs = {};
-      try {
-        if (tedxFs.existsSync(xinyiManifestPath)) {
-          xinyiPrevDefs = JSON.parse(tedxFs.readFileSync(xinyiManifestPath, 'utf8'));
-        }
-      } catch { /* no manifest yet */ }
-
-      const xinyiChanged = XINYI_VISUALS.filter(v =>
-        xinyiDefs[v.id] !== xinyiPrevDefs[v.id] ||
-        !tedxFs.existsSync(tedxPath.join(xinyiOutputDir, v.filename))
-      );
-
-      if (xinyiChanged.length > 0) {
-        const xinyiNewIds = xinyiChanged.filter(v => !xinyiPrevDefs[v.id]).map(v => v.id);
-        const xinyiUpdatedIds = xinyiChanged.filter(v => xinyiPrevDefs[v.id] && xinyiDefs[v.id] !== xinyiPrevDefs[v.id]).map(v => v.id);
-        const xinyiMissingIds = xinyiChanged.filter(v => xinyiPrevDefs[v.id] && xinyiDefs[v.id] === xinyiPrevDefs[v.id]).map(v => v.id);
-        console.log(`🎨 TEDxXinyi: Generating ${xinyiChanged.length} visuals — ${xinyiNewIds.length} new, ${xinyiUpdatedIds.length} updated, ${xinyiMissingIds.length} missing files`);
-        if (xinyiMissingIds.length > 0) console.log(`   Missing: ${xinyiMissingIds.join(', ')}`);
-
-        setTimeout(async () => {
-          try {
-            const http = require('http');
-            let generated = 0;
-            let failed = 0;
-
-            for (const visual of xinyiChanged) {
-              try {
-                const postData = JSON.stringify({ id: visual.id });
-                await new Promise((resolve, reject) => {
-                  const req = http.request({
-                    hostname: '127.0.0.1',
-                    port: port,
-                    path: '/api/tedx-xinyi/generate',
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
-                    timeout: 60000,
-                  }, (res) => {
-                    let body = '';
-                    res.on('data', (chunk) => { body += chunk; });
-                    res.on('end', () => {
-                      if (res.statusCode === 200) {
-                        generated++;
-                        xinyiPrevDefs[visual.id] = xinyiDefs[visual.id];
-                        tedxFs.writeFileSync(xinyiManifestPath, JSON.stringify(xinyiPrevDefs, null, 2));
-                      } else {
-                        failed++;
-                        console.error(`🎨 TEDxXinyi: Failed ${visual.id}: ${body.slice(0, 100)}`);
-                      }
-                      resolve();
-                    });
-                  });
-                  req.on('error', (err) => { failed++; console.error(`🎨 TEDxXinyi: ${visual.id} error: ${err.message}`); resolve(); });
-                  req.write(postData);
-                  req.end();
-                });
-                await new Promise(r => setTimeout(r, 2000));
-              } catch (err) {
-                failed++;
-                console.error(`🎨 TEDxXinyi: ${visual.id} error: ${err.message}`);
-              }
-            }
-
-            console.log(`🎨 TEDxXinyi auto-generation done: ${generated} generated, ${failed} failed`);
-          } catch (err) {
-            console.error('🎨 TEDxXinyi auto-generation error:', err.message);
-          }
-        }, 15000); // Delay after Boundary Street generation
-      } else {
-        console.log(`🎨 TEDxXinyi: All ${XINYI_VISUALS.length} visuals up to date — skipping generation`);
-      }
-    } catch (err) {
-      console.warn('⚠️ TEDxXinyi auto-generation check failed:', err.message);
-    }
-  } else {
-    console.log('⚠️ TEDx visuals: GEMINI_API_KEY not set — skipping auto-generation');
-  }
+  console.log('🎨 TEDx image generation: managed from admin panel — run /vibe-demo/recruitai/admin to trigger');
 
   // Initialize scheduler for Topic Intelligence
   if (process.env.DATABASE_URL) {
