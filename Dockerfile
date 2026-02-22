@@ -25,7 +25,7 @@ COPY frontend/package*.json ./frontend/
 WORKDIR /usr/src/app/frontend
 RUN npm ci
 COPY frontend/ ./
-ENV NODE_OPTIONS=--max_old_space_size=512
+ENV NODE_OPTIONS=--max_old_space_size=2048
 RUN npm run build
 ENV NODE_OPTIONS=
 RUN test -f /usr/src/app/frontend/out/index.html
@@ -35,12 +35,15 @@ WORKDIR /usr/src/app
 
 # Copy application code
 COPY index.js .
+COPY instrument.js .
 COPY webhook.js .
 COPY db.js .
 COPY swagger.js .
 COPY agents/ ./agents/
 COPY lib/ ./lib/
 COPY routes/ ./routes/
+COPY middleware/ ./middleware/
+COPY validation/ ./validation/
 COPY services/ ./services/
 COPY utils/ ./utils/
 COPY tools/ ./tools/
@@ -48,6 +51,7 @@ COPY public/ ./public/
 COPY knowledge/ ./knowledge/
 COPY infrastructure/ ./infrastructure/
 COPY use-cases/ ./use-cases/
+COPY data/ ./data/
 
 # Compile TypeScript files
 RUN npx tsc --project tsconfig.json || echo "TypeScript compilation warnings (non-critical)"

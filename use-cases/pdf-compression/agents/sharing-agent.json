@@ -1,0 +1,20 @@
+{
+  "id": "pdf-sharing-agent",
+  "name": "Sharing / Distribution Agent",
+  "description": "Generates compact PDFs optimised for email and messaging apps (WhatsApp, WeChat, client review). Targets under 5 MB for smooth delivery.",
+  "trigger": "POST /api/pdf-compress",
+  "profile": "web",
+  "priority": "size",
+  "tags": ["sharing", "email", "whatsapp", "client-review"],
+  "max_size_mb": 5,
+  "rationale": "Web profile uses Ghostscript ebook preset (120 DPI) and pdfEasyCompress image pass — drastically reduces image-heavy brochures and decks.",
+  "downstream": [
+    "email-sender (attachment delivery)",
+    "whatsapp-api (file share)"
+  ],
+  "sla": {
+    "max_latency_seconds": 30,
+    "retry_on_failure": true,
+    "fallback_on_no_improvement": "use small profile as fallback"
+  }
+}

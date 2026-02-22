@@ -151,7 +151,7 @@ export default function TopicSettingsPage() {
   const formatRecipients = (list: string[]) => list.join(', ');
 
   const saveRecipientList = async (recipientList: string[]) => {
-    const topicId = topic?.id || selectedTopicId;
+    const topicId = selectedTopicId || topic?.id;
     if (!topicId) return;
     setIsSaving(true);
     try {
@@ -171,7 +171,10 @@ export default function TopicSettingsPage() {
       const data = await response.json();
       if (data.success) {
         if (data.topic) {
-          setTopic(data.topic);
+          setTopic({
+            ...data.topic,
+            id: data.topic.topic_id || data.topic.id,
+          });
         }
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to save subscribers' });
@@ -271,7 +274,8 @@ export default function TopicSettingsPage() {
       // Parse recipients from text (comma or newline separated)
       const recipientList = parseRecipients(recipients);
 
-      const response = await fetch(`/api/intelligence/topics/${topic.id}`, {
+      const topicId = selectedTopicId || topic.id;
+      const response = await fetch(`/api/intelligence/topics/${topicId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -298,7 +302,10 @@ export default function TopicSettingsPage() {
         setMessage({ type: 'success', text: 'Settings saved successfully' });
         // Update local topic state with saved data
         if (data.topic) {
-          setTopic(data.topic);
+          setTopic({
+            ...data.topic,
+            id: data.topic.topic_id || data.topic.id,
+          });
         }
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to save settings' });

@@ -124,6 +124,7 @@ export interface PaginatedResponse<T> {
 
 export type DebugSubjectType =
   | "web_page"
+  | "website"
   | "design"
   | "video"
   | "social_post"
@@ -183,13 +184,25 @@ export interface DebugSession {
   critical_count?: number;
   major_count?: number;
   issues?: DebugIssue[];
+  page_results?: Array<{
+    url: string;
+    title: string;
+    status_code: number;
+    fetch_time_ms: number;
+    score: number;
+    issue_count: number;
+    critical_count: number;
+  }>;
   orchestration?: {
     total_cost: number;
     budget: number;
+    cost_per_page?: number;
     fetch_time_ms: number;
     modules_run: number;
     modules_skipped: number;
     layer_scores: Record<string, { total_impact: number; count: number }>;
+    pages_scanned?: number;
+    api_cost_usd?: number;
   };
 }
 
@@ -210,6 +223,7 @@ export interface DebugIssue {
   score_impact: number;
   business_impact: string | null;
   user_impact: string | null;
+  page_url?: string | null;
   resolution_status: ResolutionStatus;
   assigned_to: string | null;
   resolved_at: string | null;
@@ -319,6 +333,9 @@ export const crmApi = {
         body: JSON.stringify(data),
       });
     },
+    delete(id: string) {
+      return request<void>(`/brands/${id}`, { method: "DELETE" });
+    },
     projects(clientId: string, params?: { page?: number; size?: number }) {
       const qs = new URLSearchParams();
       if (params?.page) qs.set("page", String(params.page));
@@ -355,6 +372,9 @@ export const crmApi = {
         method: "POST",
         body: JSON.stringify(data),
       });
+    },
+    delete(id: string) {
+      return request<void>(`/projects/${id}`, { method: "DELETE" });
     },
   },
 
@@ -471,7 +491,7 @@ export const crmApi = {
 
   chat(
     messages: Array<{ role: "user" | "assistant"; content: string }>,
-    opts?: { model?: string; page_context?: Record<string, unknown> }
+    opts?: { model?: string; page_context?: Record<string, unknown>; use_case_id?: string }
   ) {
     // Chat goes to the main Express backend, not the CRM KB FastAPI
     return fetch("/api/crm/chat", {
@@ -481,6 +501,7 @@ export const crmApi = {
         messages,
         model: opts?.model,
         page_context: opts?.page_context,
+        use_case_id: opts?.use_case_id || "crm",
       }),
     }).then(async (res) => {
       const text = await res.text();

@@ -1,0 +1,51 @@
+version: "3.9"
+
+# ============================================================
+# PDF Compression Service — docker-compose
+# ============================================================
+# Start:   docker-compose up --build
+# Stop:    docker-compose down
+# ============================================================
+
+services:
+  pdf-compression:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: 5ml-pdf-compression:latest
+    container_name: pdf-compression
+    ports:
+      - "8082:8080"      # host:container — use 8082 to avoid conflict with main app
+    environment:
+      PORT: "8080"
+      TEMP_DIR: "/tmp/pdf_compress"
+      GHOSTSCRIPT_BIN: "gs"
+      PDFSIZEOPT_BIN: "pdfsizeopt"
+      MIN_REDUCTION_RATIO: "0.05"
+      # Uncomment to enable Paperweight integration:
+      # PAPERWEIGHT_URL: "http://paperweight:3000"
+    volumes:
+      # Mount a shared output directory so the Node.js orchestrator can read files
+      - pdf_outputs:/tmp/pdf_compress
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ----------------------------------------------------------------
+  # Paperweight (optional self-hosted web interface)
+  # Uncomment if you want the Paperweight adapter to work
+  # ----------------------------------------------------------------
+  # paperweight:
+  #   image: chekuhakim/paperweight:latest
+  #   container_name: paperweight
+  #   ports:
+  #     - "3030:3000"
+  #   restart: unless-stopped
+
+volumes:
+  pdf_outputs:
+    driver: local

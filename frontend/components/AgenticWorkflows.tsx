@@ -7,7 +7,13 @@ import {
   Eye, Image, QrCode, Database, Globe, Mail, TrendingUp, Layers, Bot,
   ZoomIn, ZoomOut, Maximize2, AlertTriangle, Send, Trash2, MessageSquare,
   UserCheck, Sparkles, ChevronRight, PanelRightOpen, PanelRightClose,
+  Plus,
 } from 'lucide-react';
+import {
+  createSession, getLatestSession, addMessage as persistMessage,
+  pruneExpiredSessions,
+} from '@/lib/chat-history';
+import MessageActions from '@/components/MessageActions';
 
 // ────────────────────────────────────────────
 // Types
@@ -61,70 +67,123 @@ const INITIAL_WORKFLOWS: WorkflowDef[] = [
   {
     id: 'marketing',
     title: 'CSO Marketing Agents',
-    subtitle: '9 specialized agents with conditional orchestration',
+    subtitle: '14 agents — event-driven parallel pipeline with circuit breakers',
     icon: TrendingUp,
     gradient: 'from-purple-500 to-pink-600',
-    pattern: 'Conditional Orchestration',
-    patternDesc: 'CSO orchestrator conditionally activates specialists based on brief analysis, with quality reflection loop',
+    pattern: 'Event-Driven Parallel Pipeline',
+    patternDesc: 'Budget-gated parallel research → strategy synthesis → multi-channel creative → compliance/quality gate with circuit-breaker feedback (max 2 retries)',
     trigger: 'API Request (POST /social/generate)',
-    canvasWidth: 1100,
-    canvasHeight: 520,
+    canvasWidth: 1500,
+    canvasHeight: 580,
     nodes: [
-      { id: 'cso', name: 'CSO Orchestrator', role: 'Analyzes brief, selects agents', icon: Workflow, color: '#a855f7', x: 80, y: 200 },
-      { id: 'research', name: 'Research Agent', role: 'Market research', icon: Search, color: '#3b82f6', x: 340, y: 40 },
-      { id: 'customer', name: 'Customer Agent', role: 'Persona analysis', icon: Users, color: '#06b6d4', x: 340, y: 140 },
-      { id: 'competitor', name: 'Competitor Agent', role: 'Competitive intel', icon: Target, color: '#f97316', x: 340, y: 240 },
-      { id: 'strategy', name: 'Strategy Agent', role: 'Campaign strategy', icon: Brain, color: '#22c55e', x: 340, y: 340 },
-      { id: 'seo', name: 'SEO Agent', role: 'Search optimization', icon: TrendingUp, color: '#10b981', x: 340, y: 440 },
-      { id: 'creative', name: 'Creative Agent', role: 'Ad copy & content', icon: PenTool, color: '#ec4899', x: 610, y: 140 },
-      { id: 'social', name: 'Social Agent', role: 'Social strategy', icon: Globe, color: '#6366f1', x: 610, y: 290 },
-      { id: 'sentinel', name: 'Sentinel Agent', role: 'Quality review', icon: Shield, color: '#ef4444', x: 880, y: 200 },
+      // Column 1: Entry
+      { id: 'validator', name: 'Input Validator', role: 'Sanitize & validate API requests', icon: Zap, color: '#64748b', x: 60, y: 260 },
+      // Column 2: Control
+      { id: 'cso', name: 'CSO Orchestrator', role: 'Event dispatch, strategy coordination · DeepSeek ($0.14/M)', icon: Workflow, color: '#a855f7', x: 260, y: 150 },
+      { id: 'budget', name: 'Budget Optimizer', role: 'Cost constraints, model routing · DeepSeek ($0.14/M)', icon: Target, color: '#10b981', x: 260, y: 380 },
+      // Column 3: Research Phase (parallel)
+      { id: 'research', name: 'Research Agent', role: 'Brand & market research · Haiku ($0.25/M)', icon: Search, color: '#3b82f6', x: 500, y: 50 },
+      { id: 'customer', name: 'Customer Agent', role: 'Persona & audience analysis · Haiku ($0.25/M)', icon: Users, color: '#06b6d4', x: 500, y: 190 },
+      { id: 'competitor', name: 'Competitor Agent', role: 'Competitive intel · Perplexity ($3/M)', icon: Target, color: '#f97316', x: 500, y: 330 },
+      { id: 'seo', name: 'SEO Agent', role: 'Search & keyword optimization · Haiku ($0.25/M)', icon: TrendingUp, color: '#22c55e', x: 500, y: 470 },
+      // Column 4: Strategy & Creative
+      { id: 'strategy', name: 'Strategy Agent', role: 'Campaign strategy synthesis · DeepSeek ($0.14/M)', icon: Brain, color: '#8b5cf6', x: 740, y: 130 },
+      { id: 'creative', name: 'Creative Agent', role: 'Ad copy, content, visuals · Sonnet ($3/M)', icon: PenTool, color: '#ec4899', x: 740, y: 340 },
+      // Column 5: Channels & Compliance
+      { id: 'social', name: 'Social Agent', role: 'Social strategy & scheduling · DeepSeek ($0.14/M)', icon: Globe, color: '#6366f1', x: 980, y: 70 },
+      { id: 'multichannel', name: 'Multi-Channel', role: 'Social + email + search + display · DeepSeek ($0.14/M)', icon: Mail, color: '#0ea5e9', x: 980, y: 240 },
+      { id: 'compliance', name: 'Compliance Agent', role: 'FTC, GDPR, platform policies · Haiku ($0.25/M)', icon: Eye, color: '#f59e0b', x: 980, y: 420 },
+      // Column 6: Quality & Output
+      { id: 'sentinel', name: 'Sentinel Agent', role: 'Quality gate · circuit breaker (max 2×) · DeepSeek ($0.14/M)', icon: Shield, color: '#ef4444', x: 1220, y: 150 },
+      { id: 'tracker', name: 'Performance Tracker', role: 'KPI monitoring & feedback loop · Haiku ($0.25/M)', icon: BarChart3, color: '#14b8a6', x: 1220, y: 380 },
     ],
     edges: [
-      { from: 'cso', to: 'research', label: 'if needed', type: 'conditional' },
-      { from: 'cso', to: 'customer', label: 'if needed', type: 'conditional' },
-      { from: 'cso', to: 'competitor', label: 'if needed', type: 'conditional' },
-      { from: 'cso', to: 'strategy', type: 'solid' },
-      { from: 'cso', to: 'seo', label: 'if needed', type: 'conditional' },
-      { from: 'research', to: 'creative', type: 'solid' },
-      { from: 'customer', to: 'creative', type: 'solid' },
-      { from: 'competitor', to: 'social', type: 'solid' },
-      { from: 'strategy', to: 'social', type: 'solid' },
-      { from: 'creative', to: 'sentinel', type: 'solid' },
-      { from: 'social', to: 'sentinel', type: 'solid' },
-      { from: 'sentinel', to: 'cso', label: 'reflection loop', type: 'feedback' },
+      // Entry chain
+      { from: 'validator', to: 'cso', label: 'validated', type: 'solid' },
+      { from: 'cso', to: 'budget', label: 'cost constraints', type: 'solid' },
+      // Parallel research phase
+      { from: 'budget', to: 'research', label: 'parallel', type: 'conditional' },
+      { from: 'budget', to: 'customer', label: 'parallel', type: 'conditional' },
+      { from: 'budget', to: 'competitor', label: 'parallel', type: 'conditional' },
+      { from: 'budget', to: 'seo', label: 'parallel', type: 'conditional' },
+      // Research → Strategy merge
+      { from: 'research', to: 'strategy', type: 'solid' },
+      { from: 'customer', to: 'strategy', type: 'solid' },
+      { from: 'competitor', to: 'strategy', type: 'solid' },
+      // Strategy → Creative phase
+      { from: 'strategy', to: 'creative', type: 'solid' },
+      { from: 'seo', to: 'creative', type: 'solid' },
+      // Creative → Channels
+      { from: 'creative', to: 'social', type: 'solid' },
+      { from: 'creative', to: 'multichannel', type: 'solid' },
+      { from: 'social', to: 'multichannel', type: 'solid' },
+      // Channels → Quality gate
+      { from: 'multichannel', to: 'compliance', type: 'solid' },
+      { from: 'compliance', to: 'sentinel', label: 'cleared', type: 'solid' },
+      // Output & feedback
+      { from: 'sentinel', to: 'tracker', label: 'approved', type: 'solid' },
+      { from: 'sentinel', to: 'cso', label: 'reject (max 2×)', type: 'feedback' },
     ],
   },
   {
     id: 'ads',
     title: 'Ads Performance Pipeline',
-    subtitle: '8 agents in a cron-scheduled sequential pipeline',
+    subtitle: '12 agents — orchestrated pipeline with temporal data strategy, validation & backfill',
     icon: Megaphone,
     gradient: 'from-orange-500 to-red-600',
-    pattern: 'Cron-Batch Pipeline',
-    patternDesc: 'Daily/weekly pipeline processes 5 concurrent tenants through a fixed analysis sequence',
+    pattern: 'Orchestrated Cron Pipeline',
+    patternDesc: 'Orchestrator routes cron triggers → parallel fetch with 72h priority + historical backfill → normalize → validate → anomaly/funnel analysis → budget/recommendations → internal strategy → report generation. Circuit breakers (10min timeout), quality scoring, cost-optimized model routing.',
     trigger: 'Cron (Daily 07:00, Weekly Sun 08:00 HKT)',
-    canvasWidth: 1100,
-    canvasHeight: 380,
+    canvasWidth: 1400,
+    canvasHeight: 500,
     nodes: [
-      { id: 'meta-fetch', name: 'Meta Fetcher', role: 'Pull Meta campaigns', icon: Megaphone, color: '#3b82f6', x: 60, y: 80 },
-      { id: 'google-fetch', name: 'Google Fetcher', role: 'Pull Google campaigns', icon: Globe, color: '#22c55e', x: 60, y: 230 },
-      { id: 'normalizer', name: 'Data Normalizer', role: 'Unify metrics', icon: Database, color: '#06b6d4', x: 300, y: 155 },
-      { id: 'anomaly', name: 'Anomaly Detector', role: 'Flag unusual shifts', icon: AlertTriangle, color: '#f59e0b', x: 460, y: 155 },
-      { id: 'funnel', name: 'Funnel Analyzer', role: 'Conversion analysis', icon: BarChart3, color: '#a855f7', x: 620, y: 155 },
-      { id: 'budget', name: 'Budget Planner', role: 'Budget allocation', icon: Target, color: '#10b981', x: 780, y: 80 },
-      { id: 'recommend', name: 'Recommendation Writer', role: 'Action items', icon: PenTool, color: '#ec4899', x: 780, y: 230 },
-      { id: 'internal', name: 'Internal Strategy', role: 'Cross-tenant patterns', icon: Brain, color: '#6366f1', x: 980, y: 155 },
+      // Column 1: Entry
+      { id: 'orchestrator', name: 'Pipeline Orchestrator', role: 'Trigger routing, circuit breakers, recovery · Haiku ($0.25/M)', icon: Workflow, color: '#a855f7', x: 60, y: 210 },
+      // Column 2: Data Fetch (parallel)
+      { id: 'meta-fetch', name: 'Meta Fetcher', role: '72h priority + historical backfill · DeepSeek ($0.14/M)', icon: Megaphone, color: '#3b82f6', x: 280, y: 50 },
+      { id: 'google-fetch', name: 'Google Fetcher', role: '72h priority + historical backfill · DeepSeek ($0.14/M)', icon: Globe, color: '#22c55e', x: 280, y: 210 },
+      { id: 'backfill', name: 'Backfill Manager', role: 'Historical recovery · 1 month/run · DeepSeek ($0.14/M)', icon: RefreshCw, color: '#64748b', x: 280, y: 380 },
+      // Column 3: Normalize
+      { id: 'normalizer', name: 'Data Normalizer', role: 'Unify metrics, dedupe, timezone · DeepSeek ($0.14/M)', icon: Database, color: '#06b6d4', x: 500, y: 130 },
+      // Column 4: Validate
+      { id: 'validator', name: 'Data Validator', role: 'Schema, temporal, business checks · DeepSeek ($0.14/M)', icon: Shield, color: '#ef4444', x: 660, y: 130 },
+      // Column 5: Analysis (parallel)
+      { id: 'anomaly', name: 'Anomaly Detector', role: 'Trend breaks, unusual shifts · Haiku ($0.25/M)', icon: AlertTriangle, color: '#f59e0b', x: 840, y: 50 },
+      { id: 'funnel', name: 'Funnel Analyzer', role: 'Conversion funnels, attribution · Haiku ($0.25/M)', icon: BarChart3, color: '#a855f7', x: 840, y: 250 },
+      // Column 6: Strategy (parallel)
+      { id: 'budget', name: 'Budget Planner', role: 'Allocation & forecasting · DeepSeek ($0.14/M)', icon: Target, color: '#10b981', x: 1020, y: 50 },
+      { id: 'recommend', name: 'Recommendation Writer', role: 'Action items & optimization · Haiku ($0.25/M)', icon: PenTool, color: '#ec4899', x: 1020, y: 250 },
+      // Column 7: Output
+      { id: 'internal', name: 'Internal Strategy', role: 'Cross-tenant patterns · Sonnet ($3/M)', icon: Brain, color: '#6366f1', x: 1220, y: 100 },
+      { id: 'reporter', name: 'Report Generator', role: 'Weekly/monthly reports & alerts · Haiku ($0.25/M)', icon: FileSpreadsheet, color: '#14b8a6', x: 1220, y: 310 },
     ],
     edges: [
+      // Orchestrator routing
+      { from: 'orchestrator', to: 'meta-fetch', label: 'daily/weekly', type: 'conditional' },
+      { from: 'orchestrator', to: 'google-fetch', label: 'daily/weekly', type: 'conditional' },
+      { from: 'orchestrator', to: 'backfill', label: 'if capacity', type: 'conditional' },
+      // Fetch → Normalize
       { from: 'meta-fetch', to: 'normalizer', type: 'solid' },
       { from: 'google-fetch', to: 'normalizer', type: 'solid' },
-      { from: 'normalizer', to: 'anomaly', type: 'solid' },
-      { from: 'anomaly', to: 'funnel', type: 'solid' },
+      { from: 'backfill', to: 'normalizer', label: 'historical', type: 'solid' },
+      // Normalize → Validate
+      { from: 'normalizer', to: 'validator', type: 'solid' },
+      // Validate → Analysis (parallel)
+      { from: 'validator', to: 'anomaly', label: 'pass/flag', type: 'conditional' },
+      { from: 'validator', to: 'funnel', label: 'pass/flag', type: 'conditional' },
+      // Validator feedback
+      { from: 'validator', to: 'orchestrator', label: 'block → retry', type: 'feedback' },
+      // Analysis → Strategy
+      { from: 'anomaly', to: 'budget', type: 'solid' },
       { from: 'funnel', to: 'budget', type: 'solid' },
       { from: 'funnel', to: 'recommend', type: 'solid' },
+      // Strategy → Output
       { from: 'budget', to: 'internal', label: 'weekly', type: 'conditional' },
       { from: 'recommend', to: 'internal', label: 'weekly', type: 'conditional' },
+      { from: 'recommend', to: 'reporter', type: 'solid' },
+      { from: 'internal', to: 'reporter', label: 'weekly', type: 'conditional' },
+      // Reporter feedback
+      { from: 'reporter', to: 'orchestrator', label: 'run complete', type: 'feedback' },
     ],
   },
   {
@@ -227,27 +286,81 @@ const INITIAL_WORKFLOWS: WorkflowDef[] = [
   },
   {
     id: 'crm',
-    title: 'CRM Knowledge Agents',
-    subtitle: 'Event-driven feedback analysis and knowledge extraction',
+    title: 'CRM Relationship Intelligence',
+    subtitle: '18 agents — Relationship Intelligence Platform with orchestrator, scoring & signal analysis',
     icon: BookOpen,
     gradient: 'from-emerald-500 to-teal-600',
-    pattern: 'Event-Driven Analysis',
-    patternDesc: 'Client feedback triggers analysis chain that extracts patterns and enriches future interactions',
-    trigger: 'API Request (POST /crm/feedback)',
-    canvasWidth: 900,
-    canvasHeight: 300,
+    pattern: 'Orchestrated Relationship Intelligence',
+    patternDesc: 'Relationship Orchestrator routes triggers → Phase 0 research → data collection & communication analysis → validation → Relationship Graph → pattern/scoring/connection intelligence → strategy & execution → quality gate → RAG-powered chat. Tier-based model routing with cost optimization.',
+    trigger: 'New Client / Relationship Signal / Simple Query / Quarterly Review',
+    canvasWidth: 1700,
+    canvasHeight: 680,
     nodes: [
-      { id: 'feedback', name: 'Feedback Analyzer', role: 'Sentiment & themes', icon: Brain, color: '#3b82f6', x: 60, y: 110 },
-      { id: 'pattern', name: 'Pattern Recognizer', role: 'Cross-client patterns', icon: Search, color: '#a855f7', x: 280, y: 110 },
-      { id: 'kb', name: 'KB Search Engine', role: 'Semantic search', icon: Database, color: '#06b6d4', x: 500, y: 40 },
-      { id: 'context', name: 'Context Builder', role: 'History + brand rules', icon: Layers, color: '#22c55e', x: 500, y: 200 },
-      { id: 'chat', name: 'Chat Agent', role: 'Client-facing AI', icon: Bot, color: '#10b981', x: 730, y: 110 },
+      // Entry: Relationship Orchestrator
+      { id: 'orchestrator', name: 'Rel. Orchestrator', role: 'Entry · Trigger classification & routing · Haiku ($0.25/M)', icon: Workflow, color: '#a855f7', x: 60, y: 290 },
+      // Phase 0: Pre-CRM Setup & Research
+      { id: 'brand-discover', name: 'Brand Discovery', role: 'Phase 0 · Web search, basic profile · Haiku ($0.25/M)', icon: Search, color: '#3b82f6', x: 280, y: 40 },
+      { id: 'market-research', name: 'Market Research', role: 'Phase 0 · Industry context & trends · Perplexity ($3/M)', icon: Globe, color: '#06b6d4', x: 280, y: 180 },
+      { id: 'competitor-analysis', name: 'Competitor Analysis', role: 'Phase 0 · Market position · Perplexity ($3/M)', icon: Target, color: '#f97316', x: 280, y: 320 },
+      { id: 'linkedin-analyzer', name: 'LinkedIn Analyzer', role: 'Phase 0 · Key contacts, org structure · Haiku ($0.25/M)', icon: Users, color: '#8b5cf6', x: 280, y: 460 },
+      // Phase 1: Data Ingestion & Communication
+      { id: 'brand-monitor', name: 'Brand Monitor', role: 'Phase 1 · News, mentions, social · Haiku ($0.25/M)', icon: Eye, color: '#22c55e', x: 520, y: 40 },
+      { id: 'crm-collector', name: 'CRM Data Collector', role: 'Phase 1 · Feedback, emails, forms · DeepSeek ($0.14/M)', icon: Mail, color: '#0ea5e9', x: 520, y: 200 },
+      { id: 'comm-analyzer', name: 'Comms Analyzer', role: 'Phase 1 · Tone, responsiveness, patterns · Haiku ($0.25/M)', icon: MessageSquare, color: '#f59e0b', x: 520, y: 380 },
+      // Phase 2: Validation & Normalization
+      { id: 'data-validator', name: 'Data Validator', role: 'Phase 2 · Early validation checkpoint · DeepSeek ($0.14/M)', icon: Shield, color: '#64748b', x: 730, y: 100 },
+      { id: 'normalizer', name: 'Data Normalizer', role: 'Phase 2 · Clean, dedupe, normalize', icon: Database, color: '#64748b', x: 730, y: 310 },
+      // Phase 3: Relationship Graph
+      { id: 'rel-graph', name: 'Relationship Graph', role: 'Phase 3 · Strength metrics, temporal tracking · DeepSeek ($0.14/M)', icon: Layers, color: '#a855f7', x: 940, y: 210 },
+      // Phase 4: Intelligence Layer
+      { id: 'pattern-detect', name: 'Pattern Recognizer', role: 'Phase 4 · Cross-brand patterns · DeepSeek ($0.14/M)', icon: Brain, color: '#ec4899', x: 1140, y: 60 },
+      { id: 'rel-scorer', name: 'Relationship Scorer', role: 'Phase 4 · Multi-factor scoring, at-risk detection · DeepSeek ($0.14/M)', icon: TrendingUp, color: '#10b981', x: 1140, y: 230 },
+      { id: 'connection-suggest', name: 'Connection Suggester', role: 'Phase 4 · Development opportunities · DeepSeek ($0.14/M)', icon: UserCheck, color: '#06b6d4', x: 1140, y: 400 },
+      // Phase 5-6: Strategy & Execution
+      { id: 'strategy-planner', name: 'Strategy Planner', role: 'Phase 5 · Budget, resource allocation · Sonnet ($3/M)', icon: Target, color: '#6366f1', x: 1340, y: 100 },
+      { id: 'crm-updater', name: 'CRM Updater', role: 'Phase 6 · System updates, alerts · Haiku ($0.25/M)', icon: Database, color: '#22c55e', x: 1340, y: 300 },
+      { id: 'quality-gate', name: 'Quality Gate', role: 'Phase 6 · Completeness validator · DeepSeek ($0.14/M)', icon: Shield, color: '#ef4444', x: 1340, y: 490 },
+      // Phase 7: UI & Interaction
+      { id: 'context-builder', name: 'Context Builder', role: 'Phase 7 · History + relationship rules + RAG', icon: BookOpen, color: '#06b6d4', x: 1540, y: 170 },
+      { id: 'chat-agent', name: 'CRM Chat Agent', role: 'Phase 7 · Client-facing AI · Sonnet ($3/M)', icon: Bot, color: '#10b981', x: 1540, y: 400 },
     ],
     edges: [
-      { from: 'feedback', to: 'pattern', type: 'solid' },
-      { from: 'pattern', to: 'kb', label: 'updates rules', type: 'solid' },
-      { from: 'kb', to: 'context', label: 'on query', type: 'conditional' },
-      { from: 'context', to: 'chat', type: 'solid' },
+      // Orchestrator routing (entry point)
+      { from: 'orchestrator', to: 'brand-discover', label: 'new client', type: 'conditional' },
+      { from: 'orchestrator', to: 'comm-analyzer', label: 'rel. signal', type: 'conditional' },
+      { from: 'orchestrator', to: 'chat-agent', label: 'simple query', type: 'conditional' },
+      { from: 'orchestrator', to: 'brand-monitor', label: 'quarterly', type: 'conditional' },
+      // Phase 0 parallel research → Phase 2 validation
+      { from: 'brand-discover', to: 'data-validator', type: 'solid' },
+      { from: 'market-research', to: 'data-validator', label: 'parallel', type: 'solid' },
+      { from: 'competitor-analysis', to: 'data-validator', label: 'parallel', type: 'solid' },
+      { from: 'linkedin-analyzer', to: 'normalizer', label: 'contacts', type: 'solid' },
+      // Phase 1 ongoing feeds → normalizer
+      { from: 'brand-monitor', to: 'normalizer', type: 'solid' },
+      { from: 'crm-collector', to: 'normalizer', type: 'solid' },
+      { from: 'comm-analyzer', to: 'normalizer', type: 'solid' },
+      // Phase 2 internal
+      { from: 'data-validator', to: 'normalizer', label: 'validated', type: 'solid' },
+      // Phase 2 → 3
+      { from: 'normalizer', to: 'rel-graph', type: 'solid' },
+      // Phase 3 → 4
+      { from: 'rel-graph', to: 'pattern-detect', type: 'solid' },
+      { from: 'rel-graph', to: 'rel-scorer', type: 'solid' },
+      { from: 'rel-graph', to: 'connection-suggest', type: 'solid' },
+      // Phase 4 → 5-6
+      { from: 'pattern-detect', to: 'strategy-planner', type: 'solid' },
+      { from: 'rel-scorer', to: 'strategy-planner', type: 'solid' },
+      { from: 'connection-suggest', to: 'strategy-planner', type: 'solid' },
+      { from: 'strategy-planner', to: 'crm-updater', type: 'solid' },
+      { from: 'strategy-planner', to: 'quality-gate', label: 'validate', type: 'conditional' },
+      // Quality gate feedback
+      { from: 'quality-gate', to: 'brand-discover', label: 'gaps → re-research', type: 'feedback' },
+      // Relationship scorer feedback loop
+      { from: 'rel-scorer', to: 'orchestrator', label: 'at-risk alert', type: 'feedback' },
+      // Phase 6 → 7
+      { from: 'crm-updater', to: 'context-builder', type: 'solid' },
+      { from: 'pattern-detect', to: 'context-builder', label: 'rules', type: 'conditional' },
+      { from: 'context-builder', to: 'chat-agent', type: 'solid' },
     ],
   },
 ];
@@ -313,7 +426,33 @@ export default function AgenticWorkflows() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
+  const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Prune stale empty sessions, then load previous workflow chat session on mount
+  useEffect(() => {
+    pruneExpiredSessions();
+    const prev = getLatestSession('workflow');
+    if (prev && prev.messages.length > 0) {
+      setMessages(prev.messages.map((m, i) => ({
+        id: `loaded-${i}`,
+        role: m.role,
+        content: m.content,
+        mode: m.metadata?.mode as string || 'assistant',
+        timestamp: new Date(m.timestamp),
+      })));
+      setChatSessionId(prev.id);
+    } else {
+      const fresh = createSession('workflow');
+      setChatSessionId(fresh.id);
+    }
+  }, []);
+
+  const startNewChat = useCallback(() => {
+    const fresh = createSession('workflow');
+    setChatSessionId(fresh.id);
+    setMessages([]);
+  }, []);
 
   const active = workflows.find(w => w.id === selected) || workflows[0];
   const totalAgents = workflows.reduce((sum, w) => sum + w.nodes.length, 0);
@@ -472,6 +611,9 @@ export default function AgenticWorkflows() {
     setInput('');
     setIsLoading(true);
 
+    // Persist user message
+    if (chatSessionId) persistMessage(chatSessionId, { role: 'user', content: msg, timestamp: new Date().toISOString(), metadata: { mode: chatMode } });
+
     try {
       const res = await fetch('/api/workflow-chat', {
         method: 'POST',
@@ -494,13 +636,15 @@ export default function AgenticWorkflows() {
       const data = await res.json();
 
       if (data.error) {
+        const errContent = `Error: ${data.error}`;
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: `Error: ${data.error}`,
+          content: errContent,
           mode: chatMode,
           timestamp: new Date(),
         }]);
+        if (chatSessionId) persistMessage(chatSessionId, { role: 'assistant', content: errContent, timestamp: new Date().toISOString() });
       } else {
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
@@ -509,6 +653,7 @@ export default function AgenticWorkflows() {
           mode: chatMode,
           timestamp: new Date(),
         }]);
+        if (chatSessionId) persistMessage(chatSessionId, { role: 'assistant', content: data.message, timestamp: new Date().toISOString(), metadata: { rag_used: data.rag_used } });
 
         // Apply any workflow modifications
         if (data.workflow_updates && data.workflow_updates.length > 0) {
@@ -516,17 +661,19 @@ export default function AgenticWorkflows() {
         }
       }
     } catch {
+      const failMsg = 'Failed to connect to the chat API. Please check the server is running.';
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Failed to connect to the chat API. Please check the server is running.',
+        content: failMsg,
         mode: chatMode,
         timestamp: new Date(),
       }]);
+      if (chatSessionId) persistMessage(chatSessionId, { role: 'assistant', content: failMsg, timestamp: new Date().toISOString() });
     } finally {
       setIsLoading(false);
     }
-  }, [input, isLoading, chatMode, messages, active, applyUpdates]);
+  }, [input, isLoading, chatMode, messages, active, applyUpdates, chatSessionId]);
 
   // ── Suggestions ───────────────────────────
   const suggestions = chatMode === 'business_analyst'
@@ -764,11 +911,11 @@ export default function AgenticWorkflows() {
               </div>
               {messages.length > 0 && (
                 <button
-                  onClick={() => setMessages([])}
+                  onClick={startNewChat}
                   className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-slate-300"
-                  title="Clear chat"
+                  title="New chat session"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Plus className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -846,7 +993,7 @@ export default function AgenticWorkflows() {
               </div>
             ) : (
               messages.map(msg => (
-                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} group`}>
                   <div className={`max-w-[90%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
                     msg.role === 'user'
                       ? 'bg-purple-500/20 text-purple-100 border border-purple-500/20'
@@ -864,6 +1011,7 @@ export default function AgenticWorkflows() {
                       </div>
                     )}
                     <div className="whitespace-pre-wrap">{msg.content}</div>
+                    <MessageActions content={msg.content} variant={msg.role === 'user' ? 'user' : 'assistant'} />
                   </div>
                 </div>
               ))

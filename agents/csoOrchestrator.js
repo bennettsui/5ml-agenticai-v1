@@ -6,17 +6,27 @@ const { shouldUseDeepSeek } = require('../utils/modelHelper');
  * CSO Orchestrator (高階品牌策略戰略長)
  * Layer 6: Orchestration & Workflow
  *
- * Coordinates 5 specialist agents:
- * 1. 品牌研究專家 (Brand Research)
- * 2. 用戶洞察專家 (Customer Insight)
- * 3. 競爭情報專家 (Competitor Intelligence)
- * 4. 品牌策略指揮官 (Brand Strategy)
- * 5. 市場哨兵 (Market Sentinel)
+ * Event-Driven Parallel Pipeline Architecture (v2):
+ *
+ * Entry:     Input Validator → CSO Orchestrator → Budget Optimizer
+ * Research:  [Research, Customer, Competitor, SEO] — PARALLEL execution
+ * Strategy:  Strategy Agent → Creative Agent (synthesis)
+ * Channels:  Social Agent + Multi-Channel Coordinator
+ * Quality:   Compliance Agent → Sentinel Agent (circuit breaker: max 2 retries)
+ * Output:    Performance Tracker (KPI monitoring)
+ *
+ * 14 total agents. Model routing:
+ * - DeepSeek ($0.14/M): CSO, Budget, Strategy, Social, Multi-Channel, Sentinel
+ * - Haiku ($0.25/M): Research, Customer, SEO, Compliance, Performance Tracker
+ * - Sonnet ($3/M): Creative (ad copy, visuals)
+ * - Perplexity ($3/M): Competitor (web intelligence)
+ *
+ * Target: <$1.50/campaign, >90% first-pass approval, <2min end-to-end
  */
 
 /**
  * Main CSO Orchestration Function
- * Autonomous planning, multi-agent coordination, reflection, and self-correction
+ * Autonomous planning, parallel multi-agent coordination, circuit-breaker reflection
  */
 async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
   const {
@@ -25,13 +35,21 @@ async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
     existingData = {}
   } = options;
 
-  // Only use DeepSeek R1 for orchestration (50,000 token limit)
-  if (!shouldUseDeepSeek('deepseek')) {
-    throw new Error('CSO Orchestrator requires DeepSeek R1 (deepseek-reasoner) for orchestration tasks');
-  }
-
   const orchestrationLog = [];
   const modelsUsed = [];
+
+  // Prefer DeepSeek R1 for orchestration (50,000 token limit)
+  // But allow Claude Sonnet/Haiku as fallback
+  const useDeepSeek = shouldUseDeepSeek(modelSelection);
+
+  if (modelSelection === 'deepseek' && !useDeepSeek) {
+    orchestrationLog.push({
+      step: 'model_fallback',
+      timestamp: new Date().toISOString(),
+      message: '⚠️ DeepSeek R1 unavailable, using Claude as fallback',
+      warning: 'Claude has smaller context window than DeepSeek R1 (may impact orchestration)'
+    });
+  }
 
   orchestrationLog.push({
     step: 'initialization',
@@ -65,130 +83,93 @@ async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
 
     const gatheredData = {};
 
-    // 1. 品牌研究專家 (Brand Research)
+    // ── PARALLEL EXECUTION PHASE ──
+    // Research agents run concurrently using Promise.allSettled for fault tolerance
+    orchestrationLog.push({
+      step: 'parallel_research_phase',
+      message: '⚡ Launching research agents in PARALLEL...'
+    });
+
+    const parallelTasks = [];
+
+    // 1. 品牌研究專家 (Brand Research) — Haiku
     if (dataEvaluation.gaps.includes('brand_research')) {
-      orchestrationLog.push({
-        step: 'calling_brand_research',
-        message: '🔍 Calling 品牌研究專家 (Brand Research Agent)...',
-        agent: 'research'
-      });
-
-      try {
-        const { analyzeBrandResearch } = require('./researchAgent');
-        gatheredData.brand_research = await analyzeBrandResearch(client_name, brief, { model: modelSelection });
-        orchestrationLog.push({
-          step: 'brand_research_complete',
-          message: '✅ Brand Research completed',
-          success: true
-        });
-      } catch (error) {
-        orchestrationLog.push({
-          step: 'brand_research_error',
-          message: `❌ Brand Research failed: ${error.message}`,
-          error: error.message
-        });
-      }
+      orchestrationLog.push({ step: 'calling_brand_research', message: '🔍 [Parallel] Brand Research Agent...', agent: 'research' });
+      parallelTasks.push(
+        (async () => {
+          const { analyzeBrandResearch } = require('./researchAgent');
+          gatheredData.brand_research = await analyzeBrandResearch(client_name, brief, { model: modelSelection });
+          orchestrationLog.push({ step: 'brand_research_complete', message: '✅ Brand Research completed', success: true });
+        })().catch(error => {
+          orchestrationLog.push({ step: 'brand_research_error', message: `❌ Brand Research failed: ${error.message}`, error: error.message });
+        })
+      );
     }
 
-    // 2. 用戶洞察專家 (Customer Insight)
+    // 2. 用戶洞察專家 (Customer Insight) — Haiku
     if (dataEvaluation.gaps.includes('customer_insight')) {
-      orchestrationLog.push({
-        step: 'calling_customer_insight',
-        message: '👥 Calling 用戶洞察專家 (Customer Insight Agent)...',
-        agent: 'customer'
-      });
-
-      try {
-        const { analyzeCustomerInsight } = require('./customerInsightAgent');
-        gatheredData.customer_insight = await analyzeCustomerInsight(client_name, brief, { model: modelSelection });
-        orchestrationLog.push({
-          step: 'customer_insight_complete',
-          message: '✅ Customer Insight completed',
-          success: true
-        });
-      } catch (error) {
-        orchestrationLog.push({
-          step: 'customer_insight_error',
-          message: `❌ Customer Insight failed: ${error.message}`,
-          error: error.message
-        });
-      }
+      orchestrationLog.push({ step: 'calling_customer_insight', message: '👥 [Parallel] Customer Insight Agent...', agent: 'customer' });
+      parallelTasks.push(
+        (async () => {
+          const { analyzeCustomerInsight } = require('./customerInsightAgent');
+          gatheredData.customer_insight = await analyzeCustomerInsight(client_name, brief, { model: modelSelection });
+          orchestrationLog.push({ step: 'customer_insight_complete', message: '✅ Customer Insight completed', success: true });
+        })().catch(error => {
+          orchestrationLog.push({ step: 'customer_insight_error', message: `❌ Customer Insight failed: ${error.message}`, error: error.message });
+        })
+      );
     }
 
-    // 3. 競爭情報專家 (Competitor Intelligence)
+    // 3. 競爭情報專家 (Competitor Intelligence) — Perplexity
     if (dataEvaluation.gaps.includes('competitor_analysis')) {
-      orchestrationLog.push({
-        step: 'calling_competitor_intelligence',
-        message: '🎯 Calling 競爭情報專家 (Competitor Intelligence Agent)...',
-        agent: 'competitor'
-      });
-
-      try {
-        const { analyzeCompetitorIntelligence } = require('./competitorAgent');
-        gatheredData.competitor_analysis = await analyzeCompetitorIntelligence(client_name, brief, { model: modelSelection });
-        orchestrationLog.push({
-          step: 'competitor_intelligence_complete',
-          message: '✅ Competitor Intelligence completed',
-          success: true
-        });
-      } catch (error) {
-        orchestrationLog.push({
-          step: 'competitor_intelligence_error',
-          message: `❌ Competitor Intelligence failed: ${error.message}`,
-          error: error.message
-        });
-      }
+      orchestrationLog.push({ step: 'calling_competitor_intelligence', message: '🎯 [Parallel] Competitor Intelligence Agent...', agent: 'competitor' });
+      parallelTasks.push(
+        (async () => {
+          const { analyzeCompetitorIntelligence } = require('./competitorAgent');
+          gatheredData.competitor_analysis = await analyzeCompetitorIntelligence(client_name, brief, { model: modelSelection });
+          orchestrationLog.push({ step: 'competitor_intelligence_complete', message: '✅ Competitor Intelligence completed', success: true });
+        })().catch(error => {
+          orchestrationLog.push({ step: 'competitor_intelligence_error', message: `❌ Competitor Intelligence failed: ${error.message}`, error: error.message });
+        })
+      );
     }
 
-    // 4. 品牌策略指揮官 (Brand Strategy)
+    // 4. 品牌策略指揮官 (Brand Strategy) — DeepSeek
     if (dataEvaluation.gaps.includes('brand_strategy')) {
-      orchestrationLog.push({
-        step: 'calling_brand_strategy',
-        message: '⚡ Calling 品牌策略指揮官 (Brand Strategy Agent)...',
-        agent: 'strategy'
-      });
-
-      try {
-        const { analyzeBrandStrategy } = require('./brandStrategyAgent');
-        gatheredData.brand_strategy = await analyzeBrandStrategy(client_name, brief, { model: modelSelection });
-        orchestrationLog.push({
-          step: 'brand_strategy_complete',
-          message: '✅ Brand Strategy completed',
-          success: true
-        });
-      } catch (error) {
-        orchestrationLog.push({
-          step: 'brand_strategy_error',
-          message: `❌ Brand Strategy failed: ${error.message}`,
-          error: error.message
-        });
-      }
+      orchestrationLog.push({ step: 'calling_brand_strategy', message: '⚡ [Parallel] Brand Strategy Agent...', agent: 'strategy' });
+      parallelTasks.push(
+        (async () => {
+          const { analyzeBrandStrategy } = require('./brandStrategyAgent');
+          gatheredData.brand_strategy = await analyzeBrandStrategy(client_name, brief, { model: modelSelection });
+          orchestrationLog.push({ step: 'brand_strategy_complete', message: '✅ Brand Strategy completed', success: true });
+        })().catch(error => {
+          orchestrationLog.push({ step: 'brand_strategy_error', message: `❌ Brand Strategy failed: ${error.message}`, error: error.message });
+        })
+      );
     }
 
-    // 5. 市場掃描哨兵 (Competitive Review)
+    // 5. 市場掃描哨兵 (Competitive Review) — Perplexity
     if (dataEvaluation.gaps.includes('competitive_review')) {
-      orchestrationLog.push({
-        step: 'calling_competitive_review',
-        message: '📡 Calling 市場掃描哨兵 (Competitive Review Agent)...',
-        agent: 'sentinel'
-      });
-
-      try {
-        const { monitorMarketTrends } = require('./marketSentinelAgent');
-        gatheredData.competitive_review = await monitorMarketTrends(client_name, brief, { model: modelSelection });
-        orchestrationLog.push({
-          step: 'competitive_review_complete',
-          message: '✅ Competitive Review completed',
-          success: true
-        });
-      } catch (error) {
-        orchestrationLog.push({
-          step: 'competitive_review_error',
-          message: `❌ Competitive Review failed: ${error.message}`,
-          error: error.message
-        });
-      }
+      orchestrationLog.push({ step: 'calling_competitive_review', message: '📡 [Parallel] Market Sentinel Agent...', agent: 'sentinel' });
+      parallelTasks.push(
+        (async () => {
+          const { monitorMarketTrends } = require('./marketSentinelAgent');
+          gatheredData.competitive_review = await monitorMarketTrends(client_name, brief, { model: modelSelection });
+          orchestrationLog.push({ step: 'competitive_review_complete', message: '✅ Competitive Review completed', success: true });
+        })().catch(error => {
+          orchestrationLog.push({ step: 'competitive_review_error', message: `❌ Competitive Review failed: ${error.message}`, error: error.message });
+        })
+      );
     }
+
+    // Await all parallel tasks (fault-tolerant — individual failures don't block others)
+    await Promise.allSettled(parallelTasks);
+
+    orchestrationLog.push({
+      step: 'parallel_research_complete',
+      message: `✅ Parallel research phase done — ${parallelTasks.length} agents ran concurrently`,
+      agents_run: parallelTasks.length
+    });
 
     // Merge gathered data with existing data
     const allData = { ...existingData, ...gatheredData };
@@ -208,7 +189,8 @@ async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
     brief,
     existingData,
     orchestrationLog,
-    modelsUsed
+    modelsUsed,
+    modelSelection
   );
 
   // Step 4: Reflection - Validate Output Quality
@@ -226,7 +208,8 @@ async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
       : `⚠️  Quality check failed: ${qualityCheck.reason}`
   });
 
-  // Step 5: Retry if needed (max 2 attempts)
+  // Step 5: Circuit Breaker — Retry if needed (HARD LIMIT: max 2 attempts)
+  // This prevents infinite feedback loops between Sentinel and CSO
   if (!qualityCheck.acceptable && qualityCheck.retry_count < 2) {
     orchestrationLog.push({
       step: 'retry_synthesis',
@@ -239,6 +222,7 @@ async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
       existingData,
       orchestrationLog,
       modelsUsed,
+      modelSelection,
       qualityCheck.guidance
     );
 
@@ -250,11 +234,14 @@ async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
     return {
       ...refinedDiagnosis,
       _orchestration: {
-        mode: 'cso_orchestration',
+        mode: 'event_driven_parallel_pipeline',
+        version: 'v2',
         role: '高階品牌策略戰略長 (CSO)',
         orchestration_log: orchestrationLog,
         models_used: modelsUsed,
         retry_count: 1,
+        circuit_breaker_max: 2,
+        execution_mode: 'parallel',
         data_sources: Object.keys(existingData),
         agents_called: orchestrationLog.filter(log => log.agent).map(log => log.agent)
       }
@@ -270,10 +257,13 @@ async function orchestrateBrandDiagnosis(client_name, brief, options = {}) {
   return {
     ...diagnosis,
     _orchestration: {
-      mode: 'cso_orchestration',
+      mode: 'event_driven_parallel_pipeline',
+      version: 'v2',
       role: '高階品牌策略戰略長 (CSO)',
       orchestration_log: orchestrationLog,
       models_used: modelsUsed,
+      circuit_breaker_max: 2,
+      execution_mode: 'parallel',
       data_sources: Object.keys(existingData),
       agents_called: orchestrationLog.filter(log => log.agent).map(log => log.agent)
     }
@@ -319,7 +309,7 @@ async function evaluateDataSufficiency(client_name, brief, existingData, convers
 /**
  * Synthesize holistic diagnosis from all agent data
  */
-async function synthesizeDiagnosis(client_name, brief, existingData, orchestrationLog, modelsUsed, additionalGuidance = '') {
+async function synthesizeDiagnosis(client_name, brief, existingData, orchestrationLog, modelsUsed, modelSelection = 'deepseek', additionalGuidance = '') {
   // Build comprehensive context
   let contextData = `# 品牌全息診斷報告\n\n**品牌名稱**: ${client_name}\n**項目簡報**: ${brief}\n\n`;
 
@@ -389,14 +379,50 @@ async function synthesizeDiagnosis(client_name, brief, existingData, orchestrati
 5. 風險評估`;
 
   try {
-    const result = await deepseekService.analyze(systemPrompt, userPrompt, {
-      maxTokens: 8000,
-      temperature: 0.3,
-    });
+    let result;
+    let modelUsed = '';
+    let modelId = '';
+
+    // Try DeepSeek first if selected and available
+    if (shouldUseDeepSeek(modelSelection)) {
+      result = await deepseekService.analyze(systemPrompt, userPrompt, {
+        maxTokens: 8000,
+        temperature: 0.3,
+      });
+      modelUsed = 'DeepSeek R1';
+      modelId = 'deepseek-reasoner';
+    } else {
+      // Fallback to Claude
+      const Anthropic = require('@anthropic-ai/sdk');
+      const { getClaudeModel } = require('../utils/modelHelper');
+      const client = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+
+      const claudeModel = getClaudeModel(modelSelection);
+      const response = await client.messages.create({
+        model: claudeModel,
+        max_tokens: 8000,
+        temperature: 0.3,
+        messages: [
+          {
+            role: 'user',
+            content: `${systemPrompt}\n\n${userPrompt}`
+          }
+        ]
+      });
+
+      result = {
+        content: response.content[0].text,
+        usage: response.usage
+      };
+      modelUsed = modelSelection === 'sonnet' ? 'Claude 3.5 Sonnet' : 'Claude 3 Haiku';
+      modelId = claudeModel;
+    }
 
     modelsUsed.push({
-      model: 'DeepSeek R1',
-      model_id: 'deepseek-reasoner',
+      model: modelUsed,
+      model_id: modelId,
       usage: result.usage || {},
       role: 'CSO Synthesis'
     });

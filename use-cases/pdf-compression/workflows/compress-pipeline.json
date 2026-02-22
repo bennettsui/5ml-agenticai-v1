@@ -1,0 +1,67 @@
+{
+  "id": "pdf-compress-pipeline",
+  "name": "PDF Compression Pipeline",
+  "version": "1.0.0",
+  "description": "End-to-end workflow: fetch → choose tool → compress → validate → return",
+  "trigger": {
+    "type": "http",
+    "method": "POST",
+    "path": "/api/pdf-compress"
+  },
+  "steps": [
+    {
+      "id": "fetch",
+      "name": "Fetch Source PDF",
+      "description": "Resolve source to local path. Supports local path, https://, s3://",
+      "module": "service.fetcher",
+      "function": "resolve",
+      "inputs": ["request.source"],
+      "outputs": ["input_path", "is_temporary"]
+    },
+    {
+      "id": "strategy",
+      "name": "Select Tool Chain",
+      "description": "Inspect file size and profile to determine best tool sequence",
+      "module": "service.strategy",
+      "class": "CompressionStrategy",
+      "method": "select_chain",
+      "inputs": ["input_path", "profile_dict"],
+      "outputs": ["tool_chain"]
+    },
+    {
+      "id": "compress",
+      "name": "Run Compression",
+      "description": "Execute tool chain, stop on first successful adapter",
+      "loop": "tool_chain",
+      "on_success": "validate",
+      "on_failure": "next_in_chain"
+    },
+    {
+      "id": "validate",
+      "name": "Validate Output",
+      "description": "Check PDF integrity, page count, and size improvement",
+      "module": "service.validator",
+      "function": "validate",
+      "inputs": ["input_path", "output_path"],
+      "outputs": ["validation_result"],
+      "on_failure": "return_error"
+    },
+    {
+      "id": "respond",
+      "name": "Return Response",
+      "description": "Build and return CompressResponse JSON",
+      "outputs": ["ok", "original_size_bytes", "compressed_size_bytes", "ratio", "tool_chain", "output_path", "logs"]
+    }
+  ],
+  "sequence_diagram": [
+    "Agent            → POST /compress",
+    "API (FastAPI)    → fetcher.resolve(source)",
+    "API              → strategy.select_chain(input, profile)",
+    "Strategy         → [ToolAdapter1, ToolAdapter2, ...]",
+    "API              → adapter1.compress(input, output, profile)",
+    "  adapter1       → subprocess (pdfsizeopt / gs / pdfEasyCompress)",
+    "  adapter1       → CompressResult(ok, elapsed, stdout, stderr)",
+    "API              → validator.validate(input, output)",
+    "API              ← CompressResponse(ok, ratio, tool_chain, logs)"
+  ]
+}

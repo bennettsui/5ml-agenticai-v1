@@ -24,6 +24,11 @@ import {
 } from 'lucide-react';
 import { useCrmAi } from '../context';
 import { crmApi, type ChatResponse } from '@/lib/crm-kb-api';
+import {
+  createSession, getLatestSession, addMessage as persistChatMessage,
+  pruneExpiredSessions,
+} from '@/lib/chat-history';
+import MessageActions from '@/components/MessageActions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -216,9 +221,10 @@ function MessageBubble({
 
   if (msg.role === 'user') {
     return (
-      <div className="flex justify-end mb-3">
+      <div className="flex justify-end mb-3 group">
         <div className="max-w-[85%] rounded-lg bg-emerald-600/80 px-3 py-2 text-sm text-white">
           {msg.content}
+          <MessageActions content={msg.content} variant="user" />
         </div>
       </div>
     );
@@ -237,13 +243,14 @@ function MessageBubble({
 
   // assistant or system
   return (
-    <div className="flex items-start gap-2 mb-3">
+    <div className="flex items-start gap-2 mb-3 group">
       <div className="flex-shrink-0 mt-0.5 rounded-full bg-emerald-600/20 p-1">
         <Bot size={14} className="text-emerald-400" />
       </div>
       <div className="max-w-[85%]">
         <div className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-300 whitespace-pre-wrap break-words">
           {renderContent(stripActionBlocks(msg.content))}
+          <MessageActions content={stripActionBlocks(msg.content)} variant="assistant" />
         </div>
         {msg.toolCalls?.map((tc, i) => (
           <ToolCallBadge key={i} tc={tc} />
@@ -344,6 +351,31 @@ export function AiAssistant() {
 
   // Chat history for API (no system messages)
   const chatHistoryRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [crmSessionId, setCrmSessionId] = useState<string | null>(null);
+
+  // Prune stale empty sessions, then load previous CRM session on mount
+  useEffect(() => {
+    pruneExpiredSessions();
+    const prev = getLatestSession('crm');
+    if (prev && prev.messages.length > 0) {
+      // Restore messages into UI
+      const restored: Message[] = [
+        { id: nextId(), role: 'system', content: 'How can I help you today?' },
+        ...prev.messages.map(m => ({
+          id: nextId(),
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })),
+      ];
+      setMessages(restored);
+      // Restore API history
+      chatHistoryRef.current = prev.messages.map(m => ({ role: m.role, content: m.content }));
+      setCrmSessionId(prev.id);
+    } else {
+      const fresh = createSession('crm');
+      setCrmSessionId(fresh.id);
+    }
+  }, []);
 
   // Track which form values have already triggered a suggestion
   const shownClientNamesRef = useRef<Set<string>>(new Set());
@@ -597,6 +629,11 @@ export function AiAssistant() {
         chatHistoryRef.current = [...apiMessages, { role: 'assistant', content: response.message }];
         contextSentRef.current = true;
         setMessages((prev) => [...prev, assistantMsg]);
+        // Persist to chat history
+        if (crmSessionId) {
+          persistChatMessage(crmSessionId, { role: 'user', content: prompt, timestamp: new Date().toISOString() });
+          persistChatMessage(crmSessionId, { role: 'assistant', content: response.message, timestamp: new Date().toISOString() });
+        }
       } catch (err) {
         setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
         setMessages((prev) => [...prev, {
@@ -605,7 +642,7 @@ export function AiAssistant() {
         }]);
       }
     },
-    [pageState, processAiResponse],
+    [pageState, processAiResponse, crmSessionId],
   );
 
   // -----------------------------------------------------------------------
@@ -630,6 +667,11 @@ export function AiAssistant() {
         chatHistoryRef.current = [...apiMessages, { role: 'assistant', content: response.message }];
         contextSentRef.current = true;
         setMessages((prev) => [...prev, assistantMsg]);
+        // Persist to chat history
+        if (crmSessionId) {
+          persistChatMessage(crmSessionId, { role: 'user', content: prompt, timestamp: new Date().toISOString() });
+          persistChatMessage(crmSessionId, { role: 'assistant', content: response.message, timestamp: new Date().toISOString() });
+        }
       } catch (err) {
         setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
         setMessages((prev) => [...prev, {
@@ -638,7 +680,7 @@ export function AiAssistant() {
         }]);
       }
     },
-    [pageState, processAiResponse],
+    [pageState, processAiResponse, crmSessionId],
   );
 
   // -----------------------------------------------------------------------
@@ -674,6 +716,11 @@ export function AiAssistant() {
         const assistantMsg = processAiResponse(response.message, response.tool_calls);
         setMessages((prev) => [...prev, assistantMsg]);
         chatHistoryRef.current = [...newApiMessages, { role: 'assistant', content: response.message }];
+        // Persist to chat history
+        if (crmSessionId) {
+          persistChatMessage(crmSessionId, { role: 'user', content: text, timestamp: new Date().toISOString() });
+          persistChatMessage(crmSessionId, { role: 'assistant', content: response.message, timestamp: new Date().toISOString() });
+        }
       } catch (err) {
         setMessages((prev) => prev.filter((m) => m.id !== thinkingId));
         setMessages((prev) => [...prev, {
@@ -748,13 +795,16 @@ export function AiAssistant() {
       {/* Input area */}
       <form onSubmit={handleSend} className="border-t border-slate-700 px-3 py-3">
         <div className="flex items-center gap-2">
-          <input
-            type="text"
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask me anything..."
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (input.trim() && !sending) handleSend(e as unknown as React.FormEvent); } }}
+            placeholder="Ask me anything... (Shift+Enter for new line)"
             disabled={sending}
-            className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none transition-colors focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
+            rows={1}
+            className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none transition-colors focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 resize-none"
+            style={{ maxHeight: '100px' }}
+            onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 100) + 'px'; }}
           />
           <button
             type="submit"

@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Terminal,
 } from 'lucide-react';
+import MessageActions from '@/components/MessageActions';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -266,7 +267,7 @@ Guidelines:
         {messages.map((msg, idx) => (
           <div
             key={idx}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} group`}
           >
             <div
               className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm ${
@@ -276,20 +277,7 @@ Guidelines:
               }`}
             >
               <div className="whitespace-pre-wrap text-xs leading-relaxed">{msg.content}</div>
-              {msg.role === 'assistant' && (
-                <div className="flex items-center justify-end mt-1.5 gap-1">
-                  <button
-                    onClick={() => copyToClipboard(msg.content, idx)}
-                    className="p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded transition-colors"
-                  >
-                    {copiedIndex === idx ? (
-                      <Check className="w-3 h-3 text-green-500" />
-                    ) : (
-                      <Copy className="w-3 h-3 text-slate-400" />
-                    )}
-                  </button>
-                </div>
-              )}
+              <MessageActions content={msg.content} variant={msg.role === 'user' ? 'user' : 'assistant'} />
             </div>
           </div>
         ))}

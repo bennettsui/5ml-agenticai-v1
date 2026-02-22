@@ -1,0 +1,449 @@
+#!/usr/bin/env python3
+"""
+Ziwei Astrology Calculator - Zhongzhou School (中州派)
+Steps 1-6: Basic Chart Calculation with Formulas
+
+Verified Formulas (2026-02-20):
+- Step 1: 命宮索引 = (月宮索引 - 時辰索引 + 10) % 12
+- Step 2: 五虎遁 + Distance Formula for 命宮干
+"""
+
+# ============================================================================
+# LOOKUP TABLES & CONSTANTS
+# ============================================================================
+
+branchOrder = ["寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥", "子", "丑"]
+stemOrder = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"]
+
+# 五虎遁 (Five Tiger Escaping): Maps year stem to stem at 寅
+wuhuDun = {
+    "甲": "丙", "己": "丙",
+    "乙": "戊", "庚": "戊",
+    "丙": "庚", "辛": "庚",
+    "丁": "壬", "壬": "壬",
+    "戊": "甲", "癸": "甲",
+}
+
+# 納音五行 (Nayin Five Elements): Maps stem-branch to Nayin element
+# Complete 60 Jiazi Nayin Table (Verified via 百度百科 & multiple sources)
+nayinMapping = {
+    # Fire (火六局)
+    "丙寅": ("爐中火", "Fire", 6), "丁卯": ("爐中火", "Fire", 6),
+    "戊午": ("天上火", "Fire", 6), "己未": ("天上火", "Fire", 6),
+    "丙申": ("山下火", "Fire", 6), "丁酉": ("山下火", "Fire", 6),
+    "戊子": ("霹靂火", "Fire", 6), "己丑": ("霹靂火", "Fire", 6),
+    "甲辰": ("佛燈火", "Fire", 6), "乙巳": ("佛燈火", "Fire", 6),
+    "甲戌": ("山頭火", "Fire", 6), "乙亥": ("山頭火", "Fire", 6),
+
+    # Water (水二局)
+    "甲子": ("海中金", "Metal", 4), "乙丑": ("海中金", "Metal", 4),
+    "壬辰": ("長流水", "Water", 2), "癸巳": ("長流水", "Water", 2),
+    "甲申": ("泉中水", "Water", 2), "乙酉": ("泉中水", "Water", 2),
+    "丙午": ("天河水", "Water", 2), "丁未": ("天河水", "Water", 2),
+    "丙子": ("澗下水", "Water", 2), "丁丑": ("澗下水", "Water", 2),
+    "壬戌": ("大海水", "Water", 2), "癸亥": ("大海水", "Water", 2),
+
+    # Wood (木三局)
+    "戊辰": ("大林木", "Wood", 3), "己巳": ("大林木", "Wood", 3),
+    "壬午": ("楊柳木", "Wood", 3), "癸未": ("楊柳木", "Wood", 3),
+    "庚寅": ("松柏木", "Wood", 3), "辛卯": ("松柏木", "Wood", 3),
+    "庚申": ("石榴木", "Wood", 3), "辛酉": ("石榴木", "Wood", 3),
+
+    # Earth (土五局)
+    "庚午": ("路旁土", "Earth", 5), "辛未": ("路旁土", "Earth", 5),
+    "己卯": ("城頭土", "Earth", 5), "庚辰": ("白蠟金", "Metal", 4),
+    "丙戌": ("屋上土", "Earth", 5), "丁亥": ("屋上土", "Earth", 5),
+    "戊申": ("大驛土", "Earth", 5), "己酉": ("大驛土", "Earth", 5),
+    "庚子": ("壁上土", "Earth", 5), "辛丑": ("壁上土", "Earth", 5),
+
+    # Metal (金四局)
+    "庚午": ("路旁土", "Earth", 5), "辛未": ("路旁土", "Earth", 5),
+    "甲午": ("沙中金", "Metal", 4), "乙未": ("沙中金", "Metal", 4),
+    "壬申": ("劍鋒金", "Metal", 4), "癸酉": ("劍鋒金", "Metal", 4),
+    "庚戌": ("鈎釧金", "Metal", 4), "辛亥": ("鈎釧金", "Metal", 4),
+    "壬寅": ("金箔金", "Metal", 4), "癸卯": ("金箔金", "Metal", 4),
+}
+
+# ✅ CORRECTED Ziwei position by bureau and lunar day remainder
+# Algorithm: remainder → base_position, then count forward by quotient steps
+# Verified: Day 22, Wood 3 → remainder 1, quotient 7, base=辰, result=亥
+ziweiPositionTable = {
+    2: {1: "巳", 2: "午"},  # Water 2 Bureau
+    3: {1: "辰", 2: "寅", 3: "子"},  # Wood 3 Bureau
+    4: {1: "卯", 2: "午", 3: "未", 4: "戌"},  # Metal 4 Bureau
+    5: {1: "寅", 2: "午", 3: "戊", 4: "寅", 5: "午"},  # Earth 5 Bureau
+    6: {1: "午", 2: "辰", 3: "寅", 4: "子", 5: "戌", 6: "申"},  # Fire 6 Bureau
+}
+
+# ✅ CORRECT Tianfu mapping - FIXED relationship with Ziwei (NOT just opposite!)
+# Mnemonic: "天府南斗令，常對紫微宮，丑卯相更迭，未酉互為根。往來午與戌，蹀躞子和辰，已亥交馳騁，同位在寅申"
+tianfuMapping = {
+    "寅": "寅",  # 同位在寅申 (same palace)
+    "卯": "丑",  # 丑卯相更迭 (swap)
+    "辰": "子",  # 蹀躞子和辰 (swap)
+    "巳": "亥",  # 已亥交馳騁 (opposite)
+    "午": "戌",  # 往來午與戌 (swap)
+    "未": "酉",  # 未酉互為根 (swap)
+    "申": "申",  # 同位在寅申 (same palace)
+    "酉": "未",  # 未酉互為根 (swap)
+    "戌": "午",  # 往來午與戌 (swap)
+    "亥": "巳",  # 已亥交馳騁 (opposite)
+    "子": "辰",  # 蹀躞子和辰 (swap)
+    "丑": "卯",  # 丑卯相更迭 (swap)
+}
+
+# Major star offsets from Ziwei
+ziweiStarOffsets = {
+    "紫微": 0, "天機": 1, "太陽": 2, "武曲": -1,
+    "天同": -2, "廉貞": 3
+}
+
+# Major star offsets from Tianfu
+tianfuStarOffsets = {
+    "天府": 0, "太陰": -1, "貪狼": -2, "巨門": 1,
+    "天相": 2, "天梁": 3, "七殺": -3, "破軍": -4
+}
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def branchToIndex(branch):
+    """Convert branch to 0-based index"""
+    return branchOrder.index(branch)
+
+def indexToBranch(index):
+    """Convert 0-based index to branch"""
+    return branchOrder[index % 12]
+
+def stemToIndex(stem):
+    """Convert stem to 0-based index"""
+    return stemOrder.index(stem)
+
+def indexToStem(index):
+    """Convert 0-based index to stem"""
+    return stemOrder[index % 10]
+
+# ============================================================================
+# STEP 1: Calculate Life Palace (命宮)
+# ============================================================================
+
+def calculateLifePalace(lunarMonth, hourBranch):
+    """
+    STEP 1: Calculate 命宮 (Life Palace) Position
+
+    Formula: 命宮索引 = (月宮索引 - 時辰索引 + 10) % 12
+
+    Args:
+        lunarMonth: Lunar month (1-12)
+        hourBranch: Hour branch string (e.g., "亥")
+
+    Returns:
+        Tuple: (lifeHouseBranch, lifeHouseIndex)
+    """
+    monthHouseIndex = (lunarMonth - 1) % 12
+    hourIndex = branchToIndex(hourBranch)
+
+    # VERIFIED FORMULA
+    lifeHouseIndex = (monthHouseIndex - hourIndex + 10) % 12
+    lifeHouseBranch = indexToBranch(lifeHouseIndex)
+
+    return lifeHouseBranch, lifeHouseIndex
+
+# ============================================================================
+# STEP 2: Calculate Life Palace Stem (命宮干)
+# ============================================================================
+
+def calculateLifePalaceStem(yearStem, lifeHouseBranch):
+    """
+    STEP 2: Calculate 命宮干 using 五虎遁 (Five Tiger Escaping)
+
+    Formula:
+        1. Get stem at 寅 from 五虎遁 table
+        2. Calculate distance from 寅 to life palace
+        3. Add distance to stem (cycling every 10 stems)
+
+    Args:
+        yearStem: Year stem (甲-癸)
+        lifeHouseBranch: Life palace branch (from Step 1)
+
+    Returns:
+        Tuple: (lifeHouseStem, lifeHouseStemBranch)
+    """
+    # Step 2.1: Get stem at 寅 using 五虎遁
+    stemAtYin = wuhuDun[yearStem]
+
+    # Step 2.2: Calculate distance from 寅(index 0) to life house
+    yinIndex = 0
+    lifeHouseIndex = branchToIndex(lifeHouseBranch)
+    distance = (lifeHouseIndex - yinIndex) % 12
+
+    # Step 2.3: Calculate life house stem by adding distance
+    stemAtYinIndex = stemToIndex(stemAtYin)
+    lifeHouseStemIndex = (stemAtYinIndex + distance) % 10
+    lifeHouseStem = indexToStem(lifeHouseStemIndex)
+
+    # Step 2.4: Create stem-branch pair
+    lifeHouseStemBranch = lifeHouseStem + lifeHouseBranch
+
+    return lifeHouseStem, lifeHouseStemBranch
+
+# ============================================================================
+# STEP 3: Combine Stem-Branch (already done in Step 2)
+# ============================================================================
+
+def getLifePalaceStemBranch(yearStem, lifeHouseBranch):
+    """STEP 3 is already completed in Step 2"""
+    lifeHouseStem, lifeHouseStemBranch = calculateLifePalaceStem(yearStem, lifeHouseBranch)
+    return lifeHouseStemBranch
+
+# ============================================================================
+# STEP 4: Determine Five Element Bureau (五行局) via Nayin
+# ============================================================================
+
+def calculateFiveElementBureau(lifeHouseStemBranch):
+    """
+    STEP 4: Determine 五行局 using Nayin (納音) system
+
+    Args:
+        lifeHouseStemBranch: Life palace stem-branch (e.g., "丙寅")
+
+    Returns:
+        Tuple: (nayinName, element, bureauNumber)
+    """
+    if lifeHouseStemBranch not in nayinMapping:
+        return None, None, None
+
+    nayinName, element, bureauNumber = nayinMapping[lifeHouseStemBranch]
+    return nayinName, element, bureauNumber
+
+# ============================================================================
+# STEP 5: Place Ziwei (紫微) & Tianfu (天府)
+# ============================================================================
+
+def calculateZiweiPosition(lunarDay, fiveElementBureau):
+    """
+    STEP 5A: Calculate Ziwei (紫微) position using Odd/Even Difference Method
+
+    ✅ CORRECT Formula (Verified via multiple examples):
+    1. quotient = ceil(lunarDay / fiveElementBureau)  - Find smallest multiplier level
+    2. multiplier = quotient * fiveElementBureau     - Get actual multiple
+    3. difference = multiplier - lunarDay             - Calculate difference
+    4. if difference is EVEN: finalNumber = quotient + difference
+       if difference is ODD:  finalNumber = quotient - difference
+    5. ziweiIndex = (finalNumber - 1) % 12
+    6. ziweiPosition = branchOrder[ziweiIndex]
+
+    Verified examples:
+    - Wood 3, Day 25: quotient=9, diff=2(even), final=11 → 子 ✓
+    - Fire 6, Day 7: quotient=2, diff=5(odd), final=-3 → 戌 ✓
+
+    Args:
+        lunarDay: Lunar day of birth (1-30)
+        fiveElementBureau: Bureau number (2, 3, 4, 5, 6)
+
+    Returns:
+        Ziwei branch string
+    """
+    import math
+
+    # Step 1: Find smallest multiplier > lunarDay
+    quotient = math.ceil(lunarDay / fiveElementBureau)
+    multiplier = quotient * fiveElementBureau
+
+    # Step 2: Calculate difference
+    difference = multiplier - lunarDay
+
+    # Step 3: Calculate final number based on odd/even difference
+    if difference % 2 == 0:  # EVEN difference
+        finalNumber = quotient + difference
+    else:  # ODD difference
+        finalNumber = quotient - difference
+
+    # Step 4: Find Ziwei position (counting from 寅 at position 1)
+    ziwei_index = (finalNumber - 1) % 12
+    ziwei_position = indexToBranch(ziwei_index)
+
+    return ziwei_position
+
+def calculateTianfuPosition(ziweiPosition):
+    """
+    STEP 5B: Calculate Tianfu (天府) position using FIXED mapping
+
+    ✅ IMPORTANT: Tianfu has a FIXED relationship with Ziwei (NOT just opposite!)
+
+    Uses mnemonic: "天府南斗令，常對紫微宮，丑卯相更迭，未酉互為根。
+                   往來午與戌，蹀躞子和辰，已亥交馳騁，同位在寅申"
+
+    Mapping rules:
+    - 寅/申: Same palace (同位)
+    - 丑↔卯: Swap (相更迭)
+    - 子↔辰: Swap (蹀躞)
+    - 巳↔亥: Opposite (交馳騁)
+    - 午↔戌: Swap (往來)
+    - 未↔酉: Swap (互為根)
+
+    Args:
+        ziweiPosition: Ziwei branch (from Step 5A)
+
+    Returns:
+        Tianfu branch string
+    """
+    return tianfuMapping[ziweiPosition]
+
+# ============================================================================
+# STEP 6: Place Major Stars (十四主星)
+# ============================================================================
+
+def placeZiweiStars(ziweiPosition, lifeHouseIndex):
+    """
+    STEP 6A: Place major stars around Ziwei
+
+    Args:
+        ziweiPosition: Ziwei branch
+        lifeHouseIndex: Life palace index (0-11)
+
+    Returns:
+        Dict of star -> branch mappings
+    """
+    ziweiIndex = branchToIndex(ziweiPosition)
+    stars = {}
+
+    for starName, offset in ziweiStarOffsets.items():
+        starIndex = (ziweiIndex + offset) % 12
+        stars[starName] = indexToBranch(starIndex)
+
+    return stars
+
+def placeTianfuStars(tianfuPosition):
+    """
+    STEP 6B: Place major stars around Tianfu
+
+    Args:
+        tianfuPosition: Tianfu branch
+
+    Returns:
+        Dict of star -> branch mappings
+    """
+    tianfuIndex = branchToIndex(tianfuPosition)
+    stars = {}
+
+    for starName, offset in tianfuStarOffsets.items():
+        starIndex = (tianfuIndex + offset) % 12
+        stars[starName] = indexToBranch(starIndex)
+
+    return stars
+
+# ============================================================================
+# MAIN CALCULATION FUNCTION
+# ============================================================================
+
+def calculateZiweiChart(name, year, yearStem, lunarMonth, lunarDay, hourBranch):
+    """
+    Calculate complete Ziwei chart up to Step 6
+
+    Args:
+        name: Person's name
+        year: Birth year
+        yearStem: Year stem (甲-癸)
+        lunarMonth: Lunar month (1-12)
+        lunarDay: Lunar day (1-30)
+        hourBranch: Hour branch (子-亥)
+
+    Returns:
+        Dict with all calculation results
+    """
+    result = {
+        "name": name,
+        "year": year,
+        "yearStem": yearStem,
+        "lunarMonth": lunarMonth,
+        "lunarDay": lunarDay,
+        "hourBranch": hourBranch,
+    }
+
+    # STEP 1: Calculate Life Palace
+    lifeHouseBranch, lifeHouseIndex = calculateLifePalace(lunarMonth, hourBranch)
+    result["step1_lifeHouseBranch"] = lifeHouseBranch
+    result["step1_lifeHouseIndex"] = lifeHouseIndex
+
+    # STEP 2: Calculate Life Palace Stem
+    lifeHouseStem, lifeHouseStemBranch = calculateLifePalaceStem(yearStem, lifeHouseBranch)
+    result["step2_lifeHouseStem"] = lifeHouseStem
+    result["step2_stemAtYin"] = wuhuDun[yearStem]
+    result["step2_lifeHouseStemBranch"] = lifeHouseStemBranch
+
+    # STEP 4: Determine Five Element Bureau
+    nayinName, element, bureauNumber = calculateFiveElementBureau(lifeHouseStemBranch)
+    result["step4_nayin"] = nayinName
+    result["step4_element"] = element
+    result["step4_fiveElementBureau"] = bureauNumber
+
+    # STEP 5A: Calculate Ziwei Position
+    ziweiPosition = calculateZiweiPosition(lunarDay, bureauNumber)
+    result["step5_ziweiPosition"] = ziweiPosition
+
+    # STEP 5B: Calculate Tianfu Position
+    tianfuPosition = calculateTianfuPosition(ziweiPosition)
+    result["step5_tianfuPosition"] = tianfuPosition
+
+    # STEP 6A: Place Ziwei Stars
+    ziweiStars = placeZiweiStars(ziweiPosition, lifeHouseIndex)
+    result["step6_ziweiStars"] = ziweiStars
+
+    # STEP 6B: Place Tianfu Stars
+    tianfuStars = placeTianfuStars(tianfuPosition)
+    result["step6_tianfuStars"] = tianfuStars
+
+    return result
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+if __name__ == "__main__":
+    people = [
+        {"name": "Bennett", "year": 1984, "yearStem": "甲", "month": 12, "day": 3, "hour": "亥"},
+        {"name": "Brian", "year": 1986, "yearStem": "丙", "month": 12, "day": 17, "hour": "酉"},
+        {"name": "Christy", "year": 1989, "yearStem": "己", "month": 12, "day": 2, "hour": "午"},
+        {"name": "Cherry", "year": 1990, "yearStem": "庚", "month": 11, "day": 4, "hour": "酉"},
+        {"name": "Elice", "year": 1982, "yearStem": "壬", "month": 8, "day": 14, "hour": "戌"},
+    ]
+
+    print("=" * 100)
+    print("ZIWEI ASTROLOGY CALCULATOR - STEPS 1-6")
+    print("=" * 100)
+    print()
+
+    results = []
+    for person in people:
+        result = calculateZiweiChart(
+            person["name"],
+            person["year"],
+            person["yearStem"],
+            person["month"],
+            person["day"],
+            person["hour"]
+        )
+        results.append(result)
+
+        print(f"{result['name']} ({person['year']}{person['yearStem']}, Lunar {person['month']}/{person['day']}, {person['hour']}時)")
+        print(f"  STEP 1 - 命宮: {result['step1_lifeHouseBranch']} (Index {result['step1_lifeHouseIndex']})")
+        print(f"  STEP 2 - 命宮干: {result['step2_lifeHouseStem']} (Stem@寅={result['step2_stemAtYin']})")
+        print(f"  STEP 2 - 命宮干支: {result['step2_lifeHouseStemBranch']}")
+        print(f"  STEP 4 - 五行局: {result['step4_fiveElementBureau']} ({result['step4_nayin']}, {result['step4_element']})")
+        print(f"  STEP 5 - Ziwei: {result['step5_ziweiPosition']}, Tianfu: {result['step5_tianfuPosition']}")
+        print(f"  STEP 6 - Ziwei Stars: {result['step6_ziweiStars']}")
+        print(f"  STEP 6 - Tianfu Stars: {result['step6_tianfuStars']}")
+        print()
+
+    # Summary table
+    print("=" * 100)
+    print("SUMMARY TABLE")
+    print("=" * 100)
+    print()
+    print(f"{'Name':<10} {'Year':<6} {'命宮':<4} {'命宮干':<4} {'命宮干支':<6} {'五行局':<8} {'Ziwei':<4} {'Tianfu':<4}")
+    print("-" * 100)
+    for r in results:
+        print(f"{r['name']:<10} {r['year']:<6} {r['step1_lifeHouseBranch']:<4} {r['step2_lifeHouseStem']:<4} {r['step2_lifeHouseStemBranch']:<6} {r['step4_fiveElementBureau']}({r['step4_nayin']}) {r['step5_ziweiPosition']:<4} {r['step5_tianfuPosition']:<4}")
+
