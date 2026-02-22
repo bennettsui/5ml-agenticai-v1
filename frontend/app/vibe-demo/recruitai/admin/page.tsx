@@ -7,6 +7,7 @@ import {
   Users, MessageSquare, Clock,
   CheckCircle, Search, Pencil, Trash2, X, Save,
   Sparkles, Star, Tag, FileText, TrendingUp,
+  ImageIcon, Zap, AlertCircle, FolderOpen,
 } from 'lucide-react';
 
 const API_BASE = (() => {
@@ -519,12 +520,261 @@ function SessionRow({ session, password }: { session: Session; password: string 
   );
 }
 
+// ─── Media Library ────────────────────────────────────────────────────────────
+
+interface MediaImage {
+  id: string;
+  filename: string;
+  description: string;
+  prompt?: string;
+  url: string;
+  exists: boolean;
+  size: number | null;
+  modified: string | null;
+  canGenerate: boolean;
+  site: string;
+}
+interface MediaGroup {
+  id: string;
+  label: string;
+  images: MediaImage[];
+}
+
+function fmtBytes(b: number | null) {
+  if (!b) return '';
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
+  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function MediaCard({
+  image,
+  onGenerate,
+  generating,
+}: {
+  image: MediaImage;
+  onGenerate: (site: string, id: string) => void;
+  generating: boolean;
+}) {
+  const [imgError, setImgError] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
+
+  return (
+    <div className="bg-white/[0.03] border border-slate-700/50 rounded-xl overflow-hidden flex flex-col">
+      {/* Thumbnail */}
+      <div className="relative bg-slate-800 aspect-video flex items-center justify-center">
+        {image.exists && !imgError ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image.url}
+            alt={image.description}
+            className="w-full h-full object-cover"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-1 text-slate-600">
+            <ImageIcon className="w-8 h-8" />
+            <span className="text-xs">{image.exists ? '預覽不可用' : '未生成'}</span>
+          </div>
+        )}
+        {/* Status badge */}
+        <div className="absolute top-2 right-2">
+          {image.exists ? (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-900/80 text-emerald-300 border border-emerald-700/50 backdrop-blur-sm">
+              ✓ 已生成
+            </span>
+          ) : (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700/80 text-slate-400 border border-slate-600/50 backdrop-blur-sm">
+              ✗ 未生成
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Info */}
+      <div className="p-3 flex-1 flex flex-col gap-2">
+        <div>
+          <p className="text-slate-200 text-xs font-medium leading-tight">{image.description}</p>
+          <p className="text-slate-600 text-xs mt-0.5 font-mono">{image.filename}</p>
+        </div>
+        {image.size && (
+          <p className="text-slate-600 text-xs">{fmtBytes(image.size)} · {image.modified ? new Date(image.modified).toLocaleDateString('zh-HK') : ''}</p>
+        )}
+
+        {/* Prompt preview */}
+        {image.prompt && (
+          <div>
+            <button onClick={() => setShowPrompt(!showPrompt)} className="text-xs text-slate-500 hover:text-slate-400 underline underline-offset-2">
+              {showPrompt ? '收起 Prompt' : '查看 Prompt'}
+            </button>
+            {showPrompt && (
+              <p className="mt-1 text-slate-500 text-xs leading-relaxed bg-white/[0.02] rounded-lg p-2 border border-slate-700/30 line-clamp-6">
+                {image.prompt}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Generate button */}
+        {image.canGenerate && (
+          <button
+            onClick={() => onGenerate(image.site, image.id)}
+            disabled={generating}
+            className={`mt-auto flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+              image.exists
+                ? 'border border-slate-600 text-slate-400 hover:bg-slate-700/50 hover:text-slate-300'
+                : 'bg-violet-600/20 hover:bg-violet-600/30 border border-violet-600/40 text-violet-300'
+            } disabled:opacity-40`}
+          >
+            {generating ? (
+              <><div className="w-3 h-3 border border-violet-400 border-t-transparent rounded-full animate-spin" /> 生成中...</>
+            ) : (
+              <><Zap className="w-3 h-3" />{image.exists ? '重新生成' : '生成'}</>
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MediaLibraryTab({ password }: { password: string }) {
+  const [groups, setGroups] = useState<MediaGroup[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [geminiAvailable, setGeminiAvailable] = useState(false);
+  const [generating, setGenerating] = useState<Record<string, boolean>>({});
+  const [genError, setGenError] = useState<Record<string, string>>({});
+
+  async function loadLibrary() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/media-library?password=${encodeURIComponent(password)}`);
+      const data = await res.json();
+      if (data.success) { setGroups(data.groups); setGeminiAvailable(data.geminiAvailable); }
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { loadLibrary(); }, []); // eslint-disable-line
+
+  async function handleGenerate(site: string, id: string) {
+    const key = `${site}:${id}`;
+    setGenerating(p => ({ ...p, [key]: true }));
+    setGenError(p => ({ ...p, [key]: '' }));
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/media-library/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, site, id }),
+      });
+      const data = await res.json();
+      if (!res.ok) setGenError(p => ({ ...p, [key]: data.error || '生成失敗' }));
+      else await loadLibrary(); // refresh to show new thumbnail
+    } catch (e: unknown) {
+      setGenError(p => ({ ...p, [key]: e instanceof Error ? e.message : '請求失敗' }));
+    } finally {
+      setGenerating(p => ({ ...p, [key]: false }));
+    }
+  }
+
+  async function generateAllMissing() {
+    for (const group of groups) {
+      if (!group.images.some(i => i.canGenerate && !i.exists)) continue;
+      for (const img of group.images) {
+        if (img.canGenerate && !img.exists) await handleGenerate(img.site, img.id);
+      }
+    }
+  }
+
+  const totalImages = groups.reduce((s, g) => s + g.images.length, 0);
+  const generatedCount = groups.reduce((s, g) => s + g.images.filter(i => i.exists).length, 0);
+  const missingGeneratable = groups.reduce((s, g) => s + g.images.filter(i => i.canGenerate && !i.exists).length, 0);
+
+  return (
+    <div className="space-y-6">
+      {/* Status bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${geminiAvailable ? 'bg-emerald-400' : 'bg-red-400'}`} />
+            <span className="text-xs text-slate-400">
+              Gemini {geminiAvailable ? '可用' : '不可用 (需設置 GEMINI_API_KEY)'}
+            </span>
+          </div>
+          <span className="text-xs text-slate-500">{generatedCount} / {totalImages} 已生成</span>
+          {missingGeneratable > 0 && (
+            <span className="text-xs text-amber-400">{missingGeneratable} 待生成</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {missingGeneratable > 0 && geminiAvailable && (
+            <button
+              onClick={generateAllMissing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-600/40 text-violet-300 text-xs font-medium rounded-lg transition-colors"
+            >
+              <Zap className="w-3 h-3" /> 生成所有未生成 ({missingGeneratable})
+            </button>
+          )}
+          <button
+            onClick={loadLibrary}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-700 text-slate-400 hover:text-slate-300 text-xs rounded-lg transition-colors"
+          >
+            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+            刷新
+          </button>
+        </div>
+      </div>
+
+      {/* Groups */}
+      {loading && groups.length === 0 ? (
+        <div className="text-center py-16 text-slate-500 text-sm">載入媒體庫...</div>
+      ) : (
+        groups.map(group => (
+          <div key={group.id}>
+            <div className="flex items-center gap-2 mb-3">
+              <FolderOpen className="w-4 h-4 text-slate-400" />
+              <h3 className="font-semibold text-slate-300 text-sm">{group.label}</h3>
+              <span className="text-xs text-slate-500">
+                {group.images.filter(i => i.exists).length}/{group.images.length}
+              </span>
+            </div>
+            {group.images.length === 0 ? (
+              <p className="text-slate-600 text-xs pl-6">暫無圖片</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                {group.images.map(img => {
+                  const key = `${img.site}:${img.id}`;
+                  return (
+                    <div key={img.id}>
+                      <MediaCard
+                        image={img}
+                        onGenerate={handleGenerate}
+                        generating={!!generating[key]}
+                      />
+                      {genError[key] && (
+                        <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />{genError[key]}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 // ─── Main Admin Panel ─────────────────────────────────────────────────────────
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [password] = useState(ADMIN_PASSWORD);
-  const [activeTab, setActiveTab] = useState<'leads' | 'sessions'>('leads');
+  const [activeTab, setActiveTab] = useState<'leads' | 'sessions' | 'media'>('leads');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(false);
@@ -631,15 +881,19 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-4 bg-slate-800/40 p-1 rounded-xl w-fit border border-slate-700/50">
-          {(['leads', 'sessions'] as const).map(tab => (
+          {([
+            { id: 'leads',    label: `詢問列表 (${leads.length})` },
+            { id: 'sessions', label: `對話記錄 (${sessions.length})` },
+            { id: 'media',    label: '媒體庫' },
+          ] as const).map(tab => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === tab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-300'
+                activeTab === tab.id ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-300'
               }`}
             >
-              {tab === 'leads' ? `詢問列表 (${leads.length})` : `對話記錄 (${sessions.length})`}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -671,6 +925,13 @@ export default function AdminPage() {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Media Library */}
+        {activeTab === 'media' && (
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5">
+            <MediaLibraryTab password={password} />
           </div>
         )}
 
