@@ -592,7 +592,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 <div class="toolbar">
   <button class="btn btn-red" onclick="openUpload()">+ Upload</button>
-  <button class="btn btn-outline" id="regenMissingBtn" onclick="regenAllMissing()">Regen Missing</button>
+  <button class="btn btn-outline" id="regenMissingBtn" onclick="regenAllMissing()">Generate Missing</button>
+  <button class="btn btn-outline" id="regenAllBtn" onclick="regenAll()">Generate All</button>
   <button class="btn btn-outline" id="compressAllBtn" onclick="compressAll()">Compress All</button>
   <button class="btn btn-outline" id="compressSelBtn" onclick="compressSelected()" disabled>Compress Selected</button>
   <button class="btn btn-ghost btn-sm" onclick="toggleSelectAll()">Select All</button>
@@ -677,18 +678,17 @@ function renderGrid() {
     const v = img.size;
 
     if (img.missing) {
-      // Missing file — show greyed card with Regenerate button
       const id = img.filename.replace(/\\.webp$|\\.png$|\\.jpg$/, '');
+      const desc = img.description || '';
       return '<div class="card card-missing" data-key="' + key + '">' +
-        '<div class="card-img" style="background:#0d0d0d;flex-direction:column;gap:0.5rem">' +
-          '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
-          '<span style="color:#555;font-size:0.7rem">Not on server</span>' +
+        '<div class="card-img" style="background:#0d0d0d;flex-direction:column;gap:0.4rem">' +
+          '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>' +
+          '<span style="color:#555;font-size:0.65rem;text-align:center;padding:0 0.5rem">' + (desc || 'Not generated') + '</span>' +
         '</div>' +
         '<div class="card-body">' +
-          '<div class="card-filename" style="color:#666">' + img.filename + ' ' + tag + '</div>' +
-          '<div class="card-meta" style="color:#555"><span>Missing — lost on redeploy</span></div>' +
-          '<div class="card-actions">' +
-            '<button class="btn btn-red btn-sm" onclick="regenOne(\\'' + id + '\\',this)">Regenerate</button>' +
+          '<div class="card-filename" style="color:#888">' + img.filename + ' <span class="tag" style="background:#7f1d1d;color:#fca5a5">Missing</span></div>' +
+          '<div class="card-actions" style="margin-top:0.4rem">' +
+            '<button class="btn btn-red btn-sm" onclick="regenOne(\\'' + id + '\\',this)">Generate</button>' +
           '</div>' +
         '</div></div>';
     }
@@ -738,14 +738,34 @@ async function regenAllMissing() {
   for (let i = 0; i < missing.length; i++) {
     const img = missing[i];
     const id = img.filename.replace(/\\.webp$|\\.png$|\\.jpg$/, '');
-    btn.textContent = 'Regen ' + (i+1) + '/' + missing.length + '...';
+    btn.textContent = (i+1) + '/' + missing.length + '...';
     try {
       await authFetch('/api/tedx-xinyi/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) });
     } catch(e) { /* continue */ }
     await new Promise(r => setTimeout(r, 500));
   }
-  showToast('Regenerated ' + missing.length + ' images');
-  btn.disabled = false; btn.textContent = 'Regen Missing';
+  showToast('Generated ' + missing.length + ' images');
+  btn.disabled = false; btn.textContent = 'Generate Missing';
+  loadMedia();
+}
+
+async function regenAll() {
+  const generated = mediaItems.filter(i => i.source === 'generated');
+  if (!generated.length) { showToast('No generated visuals defined'); return; }
+  if (!confirm('Regenerate all ' + generated.length + ' AI visuals? This uses Gemini API credits.')) return;
+  const btn = document.getElementById('regenAllBtn');
+  btn.disabled = true;
+  for (let i = 0; i < generated.length; i++) {
+    const img = generated[i];
+    const id = img.filename.replace(/\\.webp$|\\.png$|\\.jpg$/, '');
+    btn.textContent = (i+1) + '/' + generated.length + '...';
+    try {
+      await authFetch('/api/tedx-xinyi/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) });
+    } catch(e) { /* continue */ }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  showToast('Generated ' + generated.length + ' images');
+  btn.disabled = false; btn.textContent = 'Generate All';
   loadMedia();
 }
 
