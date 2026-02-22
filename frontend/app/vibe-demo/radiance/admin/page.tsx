@@ -947,15 +947,298 @@ function EnquiriesTab({
   );
 }
 
+// ─── Image Generation Tab ─────────────────────────────────────────────────────
+
+interface VisualItem {
+  id: string;
+  filename: string;
+  exists: boolean;
+  size?: number;
+}
+
+interface VisualsResponse {
+  success: boolean;
+  visuals: VisualItem[];
+  generatedCount: number;
+}
+
+function VisualSection({
+  title, visuals, generating, onGenerate, onGenerateAll, generatingAll, progress,
+}: {
+  title: string;
+  visuals: VisualItem[];
+  generating: Set<string>;
+  onGenerate: (id: string) => void;
+  onGenerateAll: () => void;
+  generatingAll: boolean;
+  progress: { done: number; total: number } | null;
+}) {
+  const generatedCount = visuals.filter(v => v.exists).length;
+
+  return (
+    <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-700/50">
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold text-white">{title}</h3>
+          <span className="text-xs text-slate-500">{generatedCount}/{visuals.length} generated</span>
+        </div>
+        <button
+          onClick={onGenerateAll}
+          disabled={generatingAll}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 rounded-lg transition-colors disabled:opacity-50"
+        >
+          {generatingAll ? (
+            <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> {progress ? `${progress.done}/${progress.total}` : 'Generating…'}</>
+          ) : (
+            <><Wand2 className="w-3.5 h-3.5" /> Generate All</>
+          )}
+        </button>
+      </div>
+      <div className="divide-y divide-slate-700/30">
+        {visuals.map(v => (
+          <div key={v.id} className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${v.exists ? 'bg-emerald-400' : 'bg-red-400/60'}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-white font-mono truncate">{v.id}</p>
+              <p className="text-xs text-slate-500 truncate">{v.filename}{v.size ? ` · ${(v.size / 1024).toFixed(0)} KB` : ''}</p>
+            </div>
+            <span className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${
+              v.exists
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                : 'bg-red-500/10 text-red-400 border-red-500/20'
+            }`}>
+              {v.exists ? 'Generated' : 'Missing'}
+            </span>
+            <button
+              onClick={() => onGenerate(v.id)}
+              disabled={generating.has(v.id) || generatingAll}
+              className="shrink-0 flex items-center justify-center w-20 py-1.5 text-xs font-medium bg-slate-700/60 hover:bg-slate-700 text-slate-300 border border-slate-600/50 rounded-lg transition-colors disabled:opacity-40"
+            >
+              {generating.has(v.id) ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Generate'}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ImageGenerationTab() {
+  const [bsVisuals, setBsVisuals] = useState<VisualItem[]>([]);
+  const [xinyiVisuals, setXinyiVisuals] = useState<VisualItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [bsGenerating, setBsGenerating] = useState<Set<string>>(new Set());
+  const [xinyiGenerating, setXinyiGenerating] = useState<Set<string>>(new Set());
+  const [bsGeneratingAll, setBsGeneratingAll] = useState(false);
+  const [xinyiGeneratingAll, setXinyiGeneratingAll] = useState(false);
+  const [bsProgress, setBsProgress] = useState<{ done: number; total: number } | null>(null);
+  const [xinyiProgress, setXinyiProgress] = useState<{ done: number; total: number } | null>(null);
+  const [error, setError] = useState('');
+
+  // Radiance media library
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => { loadVisuals(); loadMedia(); }, []); // eslint-disable-line
+
+  async function loadVisuals() {
+    setLoading(true);
+    setError('');
+    try {
+      const [bsRes, xinyiRes] = await Promise.all([
+        fetch(`${API_BASE}/api/tedx/visuals`),
+        fetch(`${API_BASE}/api/tedx-xinyi/visuals`),
+      ]);
+      const bsData: VisualsResponse = await bsRes.json();
+      const xinyiData: VisualsResponse = await xinyiRes.json();
+      if (bsData.success) setBsVisuals(bsData.visuals);
+      if (xinyiData.success) setXinyiVisuals(xinyiData.visuals);
+    } catch (err) {
+      setError('Failed to load visual list: ' + (err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadMedia() {
+    setMediaLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/radiance/admin/media?password=${encodeURIComponent(ADMIN_PASSWORD)}`);
+      const data = await res.json();
+      if (data.success) setMedia(data.media);
+    } catch { /* ignore */ }
+    finally { setMediaLoading(false); }
+  }
+
+  async function generateOne(site: 'bs' | 'xinyi', id: string) {
+    const endpoint = site === 'bs' ? '/api/tedx/generate' : '/api/tedx-xinyi/generate';
+    const setGen = site === 'bs' ? setBsGenerating : setXinyiGenerating;
+    const setVisuals = site === 'bs' ? setBsVisuals : setXinyiVisuals;
+
+    setGen(prev => new Set([...prev, id]));
+    try {
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        setVisuals(prev => prev.map(v => v.id === id ? { ...v, exists: true } : v));
+      }
+    } catch { /* ignore */ }
+    finally {
+      setGen(prev => { const n = new Set(prev); n.delete(id); return n; });
+    }
+  }
+
+  async function generateAll(site: 'bs' | 'xinyi') {
+    const visuals = site === 'bs' ? bsVisuals : xinyiVisuals;
+    const setGeneratingAll = site === 'bs' ? setBsGeneratingAll : setXinyiGeneratingAll;
+    const setProgress = site === 'bs' ? setBsProgress : setXinyiProgress;
+
+    setGeneratingAll(true);
+    setProgress({ done: 0, total: visuals.length });
+    for (let i = 0; i < visuals.length; i++) {
+      await generateOne(site, visuals[i].id);
+      setProgress({ done: i + 1, total: visuals.length });
+    }
+    setGeneratingAll(false);
+    setProgress(null);
+  }
+
+  function copyMediaUrl(item: MediaItem) {
+    navigator.clipboard.writeText(`${API_BASE}${item.url}`);
+    setCopiedId(item.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  async function deleteMedia(id: number) {
+    if (!confirm('Delete this image?')) return;
+    setDeletingId(id);
+    try {
+      await fetch(`${API_BASE}/api/radiance/admin/media/${id}?password=${encodeURIComponent(ADMIN_PASSWORD)}`, { method: 'DELETE' });
+      setMedia(prev => prev.filter(m => m.id !== id));
+    } catch { /* ignore */ }
+    finally { setDeletingId(null); }
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/api/radiance/admin/media/upload?password=${encodeURIComponent(ADMIN_PASSWORD)}`, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.success) await loadMedia();
+    } catch { /* ignore */ }
+    finally { setUploading(false); if (uploadRef.current) uploadRef.current.value = ''; }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* TEDx Image Generation */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-white">Image Generation</h2>
+        <button onClick={loadVisuals} disabled={loading} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/50 text-slate-400 transition-colors">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      {error && <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded-xl px-4 py-3">{error}</p>}
+
+      {loading ? (
+        <div className="text-center py-10 text-slate-500">Loading visuals…</div>
+      ) : (
+        <>
+          <VisualSection
+            title="TEDx Boundary Street"
+            visuals={bsVisuals}
+            generating={bsGenerating}
+            onGenerate={id => generateOne('bs', id)}
+            onGenerateAll={() => generateAll('bs')}
+            generatingAll={bsGeneratingAll}
+            progress={bsProgress}
+          />
+          <VisualSection
+            title="TEDx Xinyi"
+            visuals={xinyiVisuals}
+            generating={xinyiGenerating}
+            onGenerate={id => generateOne('xinyi', id)}
+            onGenerateAll={() => generateAll('xinyi')}
+            generatingAll={xinyiGeneratingAll}
+            progress={xinyiProgress}
+          />
+        </>
+      )}
+
+      {/* Radiance Media Library */}
+      <div className="pt-2 border-t border-slate-700/50">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-white">Radiance Media Library</h3>
+          <div className="flex items-center gap-2">
+            <button onClick={loadMedia} disabled={mediaLoading} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/50 text-slate-400 transition-colors">
+              <RefreshCw className={`w-4 h-4 ${mediaLoading ? 'animate-spin' : ''}`} />
+            </button>
+            <label className={`flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer text-sm font-medium transition-colors ${uploading ? 'bg-purple-800 text-purple-200' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}>
+              <Upload className="w-4 h-4" />
+              {uploading ? 'Uploading…' : 'Upload'}
+              <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+            </label>
+          </div>
+        </div>
+
+        {mediaLoading && media.length === 0 ? (
+          <div className="text-center py-10 text-slate-500">Loading…</div>
+        ) : media.length === 0 ? (
+          <div className="text-center py-10 text-slate-500">
+            <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-40" />
+            <p className="text-sm">No images uploaded yet</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {media.map(item => (
+              <div key={item.id} className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
+                <div className="aspect-square bg-slate-900">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`${API_BASE}${item.url}`} alt={item.original_name} className="w-full h-full object-cover" />
+                </div>
+                <div className="p-2 space-y-1.5">
+                  <p className="text-xs text-slate-400 truncate" title={item.original_name}>{item.original_name}</p>
+                  <p className="text-xs text-slate-600">{(item.size / 1024).toFixed(0)} KB</p>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => copyMediaUrl(item)} className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg text-xs bg-slate-700/60 hover:bg-slate-700 text-slate-300 transition-colors">
+                      {copiedId === item.id ? <><Check className="w-3 h-3 text-emerald-400" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
+                    </button>
+                    <button onClick={() => deleteMedia(item.id)} disabled={deletingId === item.id} className="p-1 rounded-lg bg-red-900/30 hover:bg-red-900/60 text-red-400 transition-colors">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Admin Panel ─────────────────────────────────────────────────────────
 
-type AdminTab = 'enquiries' | 'media' | 'blog' | 'case-studies';
+type AdminTab = 'enquiries' | 'media' | 'blog' | 'case-studies' | 'images';
 
 const NAV_ITEMS: { id: AdminTab; label: string; icon: React.ReactNode }[] = [
   { id: 'enquiries', label: 'Enquiries', icon: <Mail className="w-4 h-4" /> },
   { id: 'media', label: 'Media Library', icon: <ImageIcon className="w-4 h-4" /> },
   { id: 'blog', label: 'Blog CMS', icon: <FileText className="w-4 h-4" /> },
   { id: 'case-studies', label: 'Case Studies', icon: <BookOpen className="w-4 h-4" /> },
+  { id: 'images', label: 'Image Gen', icon: <Wand2 className="w-4 h-4" /> },
 ];
 
 export default function RadianceAdminPage() {
@@ -1046,6 +1329,7 @@ export default function RadianceAdminPage() {
           {activeTab === 'media' && <MediaLibraryTab />}
           {activeTab === 'blog' && <BlogCmsTab />}
           {activeTab === 'case-studies' && <CaseStudiesCmsTab />}
+          {activeTab === 'images' && <ImageGenerationTab />}
         </main>
       </div>
     </div>
