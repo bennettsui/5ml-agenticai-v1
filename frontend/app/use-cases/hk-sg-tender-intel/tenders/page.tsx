@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   Search, ChevronDown, ExternalLink, Calendar, DollarSign, Building2, Globe,
-  Loader2, ThumbsUp, ThumbsDown, RotateCcw, AlertCircle,
+  Loader2, ThumbsUp, ThumbsDown, RotateCcw,
 } from 'lucide-react';
 
 type Label = 'Priority' | 'Consider' | 'Partner-only' | 'Ignore' | 'All';
@@ -65,64 +65,6 @@ const LABEL_STYLES: Record<string, string> = {
   Ignore:         'bg-slate-500/10 text-slate-500',
 };
 
-// Demo entries shown when DATABASE_URL is not set
-const DEMO_TENDERS: Tender[] = [
-  {
-    id: 'demo-1', tender_ref: 'ISD/IT/2025/001', jurisdiction: 'HK',
-    title: 'Provision of AI-Powered Content Management and Digital Publishing Platform',
-    agency: 'Information Services Department', category_tags: ['IT_digital', 'AI', 'automation'],
-    publish_date: '2025-01-10', closing_date: '2025-03-15', days_remaining: null,
-    budget_display: '~HKD$800k', owner_type: 'gov', status: 'open', label: 'Priority',
-    overall_score: 0.91,
-    source: 'https://www.isd.gov.hk/eng/tenders.htm',
-  },
-  {
-    id: 'demo-2', tender_ref: 'OGCIO/2025/034', jurisdiction: 'HK',
-    title: 'Digital Government Blueprint – Citizen Engagement Portal Development',
-    agency: 'OGCIO', category_tags: ['IT_digital', 'consultancy_advisory'],
-    publish_date: '2025-01-08', closing_date: '2025-02-28', days_remaining: null,
-    budget_display: '~HKD$1,200k', owner_type: 'gov', status: 'open', label: 'Priority',
-    overall_score: 0.88,
-    source: 'https://www.ogcio.gov.hk/en/tenders/',
-  },
-  {
-    id: 'demo-3', tender_ref: 'HKTDC/MKT/2025/007', jurisdiction: 'HK',
-    title: 'Event Management and Experiential Marketing for HKTDC Electronics Fair',
-    agency: 'HKTDC', category_tags: ['events_experiential', 'marketing_comms'],
-    publish_date: '2025-01-05', closing_date: '2025-02-14', days_remaining: null,
-    budget_display: '~HKD$400k', owner_type: 'gov', status: 'open', label: 'Consider',
-    overall_score: 0.74,
-    source: 'https://www.hktdc.com/sourcing/tenders.htm',
-  },
-  {
-    id: 'demo-4', tender_ref: 'GovTech/2025/P-088', jurisdiction: 'SG',
-    title: 'Smart Nation – Agentic AI Pilot for Government Service Automation',
-    agency: 'GovTech Singapore', category_tags: ['IT_digital', 'AI', 'research_study'],
-    publish_date: '2025-01-12', closing_date: '2025-03-01', days_remaining: null,
-    budget_display: '~SGD$300k', owner_type: 'gov', status: 'open', label: 'Priority',
-    overall_score: 0.95,
-    source: 'https://www.gebiz.gov.sg/',
-  },
-  {
-    id: 'demo-5', tender_ref: 'LCSD/CUL/2025/012', jurisdiction: 'HK',
-    title: 'Provision of Photo Booth Services for Cultural Events at M+ Museum',
-    agency: 'LCSD', category_tags: ['events_experiential', 'marketing_comms'],
-    publish_date: '2025-01-03', closing_date: '2025-02-07', days_remaining: null,
-    budget_display: '~HKD$80k', owner_type: 'gov', status: 'open', label: 'Consider',
-    overall_score: 0.69,
-    source: '',
-  },
-  {
-    id: 'demo-6', tender_ref: 'STB/2025/T-044', jurisdiction: 'SG',
-    title: 'Tourism Campaign – Digital Marketing Strategy and Social Media Management',
-    agency: 'Singapore Tourism Board', category_tags: ['marketing_comms', 'research_study'],
-    publish_date: '2024-12-20', closing_date: '2025-01-31', days_remaining: null,
-    budget_display: '~SGD$150k', owner_type: 'gov', status: 'open', label: 'Partner-only',
-    overall_score: 0.55,
-    source: '',
-  },
-];
-
 export default function TendersPage() {
   const [search, setSearch] = useState('');
   const [filterLabel, setFilterLabel] = useState<Label>('All');
@@ -132,7 +74,6 @@ export default function TendersPage() {
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [isMock, setIsMock] = useState(false);
   const [decisions, setDecisions] = useState<Record<string, DecisionChoice>>({});
   const [decisionLoading, setDecisionLoading] = useState<Record<string, boolean>>({});
 
@@ -148,21 +89,8 @@ export default function TendersPage() {
       const res = await fetch(`/api/tender-intel/tenders?${params}`);
       if (!res.ok) return;
       const data = await res.json();
-      const isDemo = !!data._mock;
-      setIsMock(isDemo);
-      if (isDemo) {
-        // No DB — show demo tenders filtered by current filter state
-        let demo = DEMO_TENDERS;
-        if (filterJur !== 'All') demo = demo.filter(t => t.jurisdiction === filterJur);
-        if (filterLabel !== 'All') demo = demo.filter(t => t.label === filterLabel);
-        if (filterStatus !== 'All') demo = demo.filter(t => t.status === filterStatus);
-        if (search) demo = demo.filter(t => t.title.toLowerCase().includes(search.toLowerCase()) || t.agency.toLowerCase().includes(search.toLowerCase()));
-        setTenders(demo);
-        setTotal(demo.length);
-      } else {
-        setTenders((data.tenders || []).map(mapApiTender));
-        setTotal(data.total ?? 0);
-      }
+      setTenders((data.tenders || []).map(mapApiTender));
+      setTotal(data.total ?? 0);
     } catch (_) {
       setTenders([]);
     } finally {
@@ -194,23 +122,6 @@ export default function TendersPage() {
           {loading ? 'Loading…' : `${total} record${total !== 1 ? 's' : ''}`} · sorted by closing date
         </p>
       </div>
-
-      {/* Demo mode banner */}
-      {isMock && !loading && (
-        <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
-          <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-          <div>
-            <span className="font-semibold">Demo data</span> — database not connected. To see real tenders:{' '}
-            <Link href="/use-cases/hk-sg-tender-intel/sources" className="underline hover:text-amber-200">
-              1. Discover sources
-            </Link>{' → '}
-            <Link href="/use-cases/hk-sg-tender-intel/logs" className="underline hover:text-amber-200">
-              2. Run ingestion
-            </Link>{' → '}
-            <span>3. Come back here</span>
-          </div>
-        </div>
-      )}
 
       {/* Search + filters */}
       <div className="flex flex-wrap gap-3">

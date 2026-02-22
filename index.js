@@ -6780,6 +6780,72 @@ app.post('/api/sme/campaign-review', async (req, res) => {
     }
   });
 
+  // POST /api/tender-intel/sources/:sourceId/validate — test-fetch a source and update its status
+  app.post('/api/tender-intel/sources/:sourceId/validate', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    const { sourceId } = req.params;
+    try {
+      const { rows } = await pool.query(
+        `SELECT source_id, source_type, feed_url, discovery_hub_url FROM tender_source_registry WHERE source_id = $1`,
+        [sourceId]
+      );
+      if (!rows.length) return res.status(404).json({ error: 'Source not found' });
+      const src = rows[0];
+      const testUrl = src.feed_url || src.discovery_hub_url;
+      if (!testUrl) {
+        await pool.query(
+          `UPDATE tender_source_registry SET status='pending_validation', last_status='no_url', last_checked_at=NOW() WHERE source_id=$1`,
+          [sourceId]
+        );
+        return res.json({ ok: false, status: 'pending_validation', message: 'No URL configured — cannot test' });
+      }
+      let httpCode = null;
+      let newStatus = 'broken';
+      let message = '';
+      try {
+        const response = await axios.head(testUrl, { timeout: 10000, validateStatus: () => true });
+        httpCode = response.status;
+        if (httpCode >= 200 && httpCode < 400) {
+          newStatus = 'active';
+          message = `HTTP ${httpCode} — feed is reachable`;
+        } else {
+          message = `HTTP ${httpCode} — feed returned error`;
+        }
+      } catch (fetchErr) {
+        message = `Unreachable: ${fetchErr.message?.slice(0, 80)}`;
+      }
+      await pool.query(
+        `UPDATE tender_source_registry SET status=$1, last_status=$2, last_checked_at=NOW(), last_status_detail=$3 WHERE source_id=$4`,
+        [newStatus, newStatus === 'active' ? 'ok' : 'error', message, sourceId]
+      );
+      res.json({ ok: newStatus === 'active', status: newStatus, httpCode, message });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // PUT /api/tender-intel/sources/:sourceId — update source fields
+  app.put('/api/tender-intel/sources/:sourceId', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    const { sourceId } = req.params;
+    const { name, notes, status, feed_url, priority } = req.body;
+    const allowed = ['active', 'broken', 'pending_validation', 'deferred'];
+    if (status && !allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    try {
+      await pool.query(
+        `UPDATE tender_source_registry
+         SET name=COALESCE($1,name), notes=COALESCE($2,notes), status=COALESCE($3,status),
+             feed_url=COALESCE($4,feed_url), priority=COALESCE($5,priority), updated_at=NOW()
+         WHERE source_id=$6`,
+        [name || null, notes || null, status || null, feed_url !== undefined ? (feed_url || null) : null, priority || null, sourceId]
+      );
+      const { rows } = await pool.query(`SELECT * FROM tender_source_registry WHERE source_id=$1`, [sourceId]);
+      res.json(rows[0] || {});
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // GET /api/tender-intel/logs
   app.get('/api/tender-intel/logs', async (req, res) => {
     if (!process.env.DATABASE_URL) return res.json([]);
