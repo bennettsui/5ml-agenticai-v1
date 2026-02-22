@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: 'https://5ml-agenticai-v1.fly.dev/tedx-xinyi/hero-home.png',
+        url: 'https://5ml-agenticai-v1.fly.dev/tedx-xinyi/hero-home.webp',
         width: 1200,
         height: 630,
         alt: 'TEDxXinyi — Ideas Worth Spreading',
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     title: 'TEDxXinyi — Ideas Worth Spreading from Taipei Xinyi District',
     description:
       'TEDxXinyi is an independently organized TEDx community in Taipei\u2019s Xinyi District. Explore our salon events, speaker talks, and community gatherings.',
-    images: ['https://5ml-agenticai-v1.fly.dev/tedx-xinyi/hero-home.png'],
+    images: ['https://5ml-agenticai-v1.fly.dev/tedx-xinyi/hero-home.webp'],
   },
   alternates: {
     canonical: 'https://5ml-agenticai-v1.fly.dev/vibe-demo/tedx-xinyi',
@@ -48,7 +48,7 @@ export default function TEDxXinyiLayout({
             '@type': 'Organization',
             name: 'TEDxXinyi',
             url: 'https://5ml-agenticai-v1.fly.dev/vibe-demo/tedx-xinyi',
-            logo: 'https://5ml-agenticai-v1.fly.dev/tedx-xinyi/hero-home.png',
+            logo: 'https://5ml-agenticai-v1.fly.dev/tedx-xinyi/hero-home.webp',
             description:
               'An independently organized TEDx event in Taipei\'s Xinyi District, bringing ideas worth spreading to the local community.',
             sameAs: [
@@ -58,7 +58,7 @@ export default function TEDxXinyiLayout({
             ],
             event: {
               '@type': 'Event',
-              name: 'TEDxXinyi We are Becoming — AI趨勢沙龍',
+              name: 'TEDxXinyi We are Becoming — AI時代趨勢沙龍',
               startDate: '2026-03-31',
               location: {
                 '@type': 'Place',

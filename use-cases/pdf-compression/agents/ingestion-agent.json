@@ -1,0 +1,20 @@
+{
+  "id": "pdf-ingestion-agent",
+  "name": "PDF Ingestion Agent",
+  "description": "Normalises PDFs before OCR / RAG ingestion. Ensures consistent quality and reasonable file sizes for downstream processing.",
+  "trigger": "POST /api/pdf-compress",
+  "profile": "balanced",
+  "priority": "quality",
+  "tags": ["ingestion", "rag", "ocr"],
+  "max_size_mb": null,
+  "rationale": "Balanced profile uses Ghostscript default preset (150 DPI) — good enough for OCR while significantly reducing storage footprint. pdfsizeopt polishes the result losslessly.",
+  "downstream": [
+    "rag-service (embedding generation)",
+    "ocr-pipeline (text extraction)"
+  ],
+  "sla": {
+    "max_latency_seconds": 60,
+    "retry_on_failure": true,
+    "fallback_on_no_improvement": "use original file"
+  }
+}

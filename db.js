@@ -1088,6 +1088,23 @@ async function initDatabase() {
         content_html_zh TEXT,
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS radiance_enquiries (
+        id SERIAL PRIMARY KEY,
+        enquiry_id TEXT UNIQUE DEFAULT ('ENQ-' || to_char(NOW(), 'YYYYMMDD') || '-' || substr(md5(random()::text), 1, 6)),
+        name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        phone TEXT,
+        company TEXT,
+        industry TEXT,
+        service_interest TEXT,
+        message TEXT,
+        source_lang TEXT DEFAULT 'en',
+        status TEXT DEFAULT 'new',
+        ip_address TEXT,
+        user_agent TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');
@@ -3621,6 +3638,8 @@ module.exports = {
   getProjectContacts,
   unlinkContactFromProject,
   upsertMetaPageTokens,
+  saveRadianceEnquiry,
+  getRadianceEnquiries,
 };
 
 async function saveRadianceEnquiry({ name, email, phone, company, industry, serviceInterest, message, sourceLang, ipAddress, userAgent }) {

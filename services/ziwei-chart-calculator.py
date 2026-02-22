@@ -47,16 +47,17 @@ ZIWEI_SYSTEM_STARS = {
     "廉貞": -8      # Counter-clockwise 8
 }
 
-# Tianfu System: 8 stars (mix of clockwise/counter-clockwise from Tianfu)
+# Tianfu System: 8 stars — ALL counter-clockwise (逆布) from Tianfu
+# Traditional rule: 天府為錨，太陰逆一，貪狼逆二，巨門逆三，天相逆四，天梁逆五，七殺逆六，破軍逆八
 TIANFU_SYSTEM_STARS = {
     "天府": 0,      # Anchor star
-    "太陰": -1,     # Counter-clockwise 1
+    "太陰": -1,     # Counter-clockwise 1 from 天府
     "貪狼": -2,     # Counter-clockwise 2
-    "巨門": 1,      # Clockwise 1
-    "天相": 2,      # Clockwise 2
-    "天梁": 3,      # Clockwise 3
-    "七殺": -3,     # Counter-clockwise 3
-    "破軍": -4      # Counter-clockwise 4
+    "巨門": -3,     # Counter-clockwise 3
+    "天相": -4,     # Counter-clockwise 4
+    "天梁": -5,     # Counter-clockwise 5
+    "七殺": -6,     # Counter-clockwise 6
+    "破軍": -8,     # Counter-clockwise 8 (skip -7)
 }
 
 # STEP 7: Auxiliary & Calamity Stars
@@ -80,11 +81,12 @@ TIAN_YUE_BY_YEAR_STEM = {
 }
 
 # Group 2: Based on Year Branch (1 star)
+# 天馬 sits at the 驛馬 position — opposite the 長生 branch of each three-harmony group
 TIAN_MA_BY_YEAR_BRANCH = {
-    "申": "申", "子": "申", "辰": "申",  # 申子辰 group → 申
-    "寅": "寅", "午": "寅", "戌": "寅",  # 寅午戌 group → 寅
-    "巳": "亥", "酉": "亥", "丑": "亥",  # 巳酉丑 group → 亥
-    "亥": "巳", "卯": "巳", "未": "巳"   # 亥卯未 group → 巳
+    "申": "寅", "子": "寅", "辰": "寅",  # 申子辰 group → 天馬在寅
+    "寅": "申", "午": "申", "戌": "申",  # 寅午戌 group → 天馬在申
+    "巳": "亥", "酉": "亥", "丑": "亥",  # 巳酉丑 group → 天馬在亥
+    "亥": "巳", "卯": "巳", "未": "巳"   # 亥卯未 group → 天馬在巳
 }
 
 # STEP 8: Four Transformations (四化) - Based on Year Stem (10 stems)
@@ -185,55 +187,45 @@ FIVE_TIGER_ESCAPING = {
 # Based on the 60 Jiazi Nayin system
 # https://zh.wikipedia.org/wiki/納音五行
 NAYIN_TO_BUREAU = {
-    # 水二局 (Water/Metal - Bureau 2)
-    "甲子": 2, "乙丑": 2,  # 海中金 (Sea Gold)
-    "壬寅": 2, "癸卯": 2,  # 金箔金 (Gold Foil)
-    "壬申": 2, "癸酉": 2,  # 劍鋒金 (Sword Metal)
-    "庚申": 2, "辛酉": 2,  # 石榴木 -> Earth/Water
+    # 水二局 (Bureau 2) — 7 Nayin pairs
+    "甲子": 2, "乙丑": 2,  # 海中金 (special case: Gold nayin → Bureau 2)
+    "丙子": 2, "丁丑": 2,  # 澗下水
+    "甲申": 2, "乙酉": 2,  # 泉中水
+    "壬辰": 2, "癸巳": 2,  # 長流水
+    "丙午": 2, "丁未": 2,  # 天河水
+    "甲寅": 2, "乙卯": 2,  # 大溪水
+    "壬戌": 2, "癸亥": 2,  # 大海水
 
-    # 木三局 (Wood - Bureau 3)
-    "甲寅": 3, "乙卯": 3,  # 大溪水 -> Wood/Water mix
-    "丙寅": 6,  # 爐中火 (Furnace Fire) - Bureau 6
+    # 木三局 (Bureau 3) — 6 Nayin pairs
+    "戊辰": 3, "己巳": 3,  # 大林木
+    "壬午": 3, "癸未": 3,  # 楊柳木
+    "庚寅": 3, "辛卯": 3,  # 松柏木
+    "戊戌": 3, "己亥": 3,  # 平地木
+    "壬子": 3, "癸丑": 3,  # 桑柘木
+    "庚申": 3, "辛酉": 3,  # 石榴木
 
-    # 金四局 (Metal - Bureau 4)
-    "甲申": 4, "乙酉": 4,  # 泉中水 -> Metal/Water
-    "丙申": 4, "丁酉": 4,  # 山下火 -> Metal/Fire
-    "戊申": 4, "己酉": 4,  # 大驛土 -> Metal/Earth
-    "辛亥": 4,  # 鈎釧金 (Hook-Ring Metal) - Bureau 4
+    # 金四局 (Bureau 4) — 5 Nayin pairs
+    "壬申": 4, "癸酉": 4,  # 劍鋒金
+    "庚辰": 4, "辛巳": 4,  # 白蠟金
+    "甲午": 4, "乙未": 4,  # 沙中金
+    "壬寅": 4, "癸卯": 4,  # 金箔金
+    "庚戌": 4, "辛亥": 4,  # 釵釧金
 
-    # 土五局 (Earth - Bureau 5)
-    "丙辰": 5, "丁巳": 5,  # 沙中土 (Sand Earth)
-    "戊辰": 5, "己巳": 5,  # 大林木 -> Earth/Wood mix
-    "辛未": 5,  # 路旁土 (Roadside Earth) - Bureau 5
-    "己卯": 5,  # 城頭土 (City Wall Earth) - Bureau 5
-    "己亥": 5,  # 平地木 -> Earth/Wood
+    # 土五局 (Bureau 5) — 6 Nayin pairs
+    "庚午": 5, "辛未": 5,  # 路旁土
+    "戊寅": 5, "己卯": 5,  # 城頭土
+    "丙戌": 5, "丁亥": 5,  # 屋上土
+    "庚子": 5, "辛丑": 5,  # 壁上土
+    "戊申": 5, "己酉": 5,  # 大驛土
+    "丙辰": 5, "丁巳": 5,  # 沙中土
 
-    # 火六局 (Fire - Bureau 6)
-    "丁丑": 6,  # 洞下水 -> Fire/Water
-    "丁未": 6,  # 天河水 -> Fire/Water
-    "丁卯": 6,  # 爐中火 variant
-    "己未": 6,  # 天上火 (Heaven Fire)
-    "戊寅": 6,  # 城頭土 -> Fire variant
-
-    # Additional complete mappings for all 60 combinations
-    "壬辰": 2,  # 長流水 (Flowing Water) - Bureau 2
-    "癸巳": 2,  # 長流水
-    "甲午": 6,  # 沙中金 -> Fire variant
-    "乙未": 6,  # 沙中金
-    "庚子": 2,  # 壁上土 -> Water variant
-    "辛丑": 2,  # 壁上土
-    "甲辰": 5,  # 覆燈火 -> Earth/Fire
-    "乙巳": 5,  # 覆燈火
-    "丙午": 6,  # 天河水 variant
-    "丁未": 6,  # 天河水
-    "戊午": 6,  # 天上火
-    "己未": 6,  # 天上火
-    "庚寅": 3,  # 松柏木 (Pine Wood)
-    "辛卯": 3,  # 松柏木
-    "庚戌": 3,  # 釵釧金 variant
-    "辛亥": 4,  # 鈎釧金 (Hook-Ring Metal)
-    "甲申": 4,  # 泉中水
-    "乙酉": 4,  # 泉中水
+    # 火六局 (Bureau 6) — 6 Nayin pairs
+    "丙寅": 6, "丁卯": 6,  # 爐中火
+    "甲戌": 6, "乙亥": 6,  # 山頭火
+    "戊子": 6, "己丑": 6,  # 霹靂火
+    "甲辰": 6, "乙巳": 6,  # 覆燈火
+    "丙申": 6, "丁酉": 6,  # 山下火
+    "戊午": 6, "己未": 6,  # 天上火
 }
 
 # Tianfu position mapping (天府位置對應表)
@@ -283,6 +275,8 @@ class PalaceData:
     tianfu_star: Optional[str] = None
     major_stars: List[str] = None
     transformations: Dict[str, str] = None  # Maps star_name -> transformation type (化祿/化權/化科/化忌)
+    major_limit_start: Optional[int] = None  # 大限起始年齡
+    major_limit_end: Optional[int] = None    # 大限結束年齡
 
 
 @dataclass
@@ -377,19 +371,11 @@ def calculate_five_element_bureau(stem_branch: str) -> int:
     Returns:
         Bureau number (2-6)
     """
-    # Simplified: would need complete NAYIN_TO_BUREAU mapping
-    # For now, return based on stem-branch patterns
     if stem_branch in NAYIN_TO_BUREAU:
         return NAYIN_TO_BUREAU[stem_branch]
 
-    # Fallback calculation based on stem-branch cycle
-    # This would need the complete 60-year mapping
-    stem_index = STEMS.index(stem_branch[0])
-    branch_index = BRANCHES.index(stem_branch[1])
-    combined_index = (stem_index * 12 + branch_index) % 60
-
-    # Map 60-year cycle to bureaus (2-6)
-    return (combined_index % 5) + 2
+    # Should not reach here with complete 60-jiazi table; default to Bureau 2
+    return 2
 
 
 # ============================================================
@@ -509,21 +495,18 @@ def place_ziwei_tianfu_on_palaces(
     tianfu_position: str
 ) -> None:
     """
-    Place Ziwei and Tianfu stars on the palace grid
+    Place Ziwei and Tianfu stars on the palace grid.
 
-    Args:
-        palaces: List of 12 palaces
-        ziwei_position: Ziwei star position (branch)
-        tianfu_position: Tianfu star position (branch)
+    FIX: palaces[] is ordered counterclockwise from life palace, NOT by
+    branch index. We must match by palace.branch, not BRANCHES.index().
     """
-    ziwei_index = BRANCHES.index(ziwei_position)
-    tianfu_index = BRANCHES.index(tianfu_position)
+    branch_to_palace = {p.branch: p for p in palaces}
 
-    if 0 <= ziwei_index < len(palaces):
-        palaces[ziwei_index].ziwei_star = "紫微星"
+    if ziwei_position in branch_to_palace:
+        branch_to_palace[ziwei_position].ziwei_star = "紫微星"
 
-    if 0 <= tianfu_index < len(palaces):
-        palaces[tianfu_index].tianfu_star = "天府星"
+    if tianfu_position in branch_to_palace:
+        branch_to_palace[tianfu_position].tianfu_star = "天府星"
 
 
 # ============================================================
@@ -639,13 +622,15 @@ def place_auxiliary_calamity_stars(
     """
     star_positions = calculate_auxiliary_calamity_star_positions(year_stem, year_branch, birth_hour, lunar_month)
 
-    # Place all stars on palace grid
+    # FIX: build branch→palace lookup (palaces[] is NOT indexed by branch)
+    branch_to_palace = {p.branch: p for p in palaces}
+
     for star_name, star_branch in star_positions.items():
-        star_index = BRANCHES.index(star_branch)
-        if 0 <= star_index < len(palaces):
-            if not palaces[star_index].major_stars:
-                palaces[star_index].major_stars = []
-            palaces[star_index].major_stars.append(star_name)
+        if star_branch in branch_to_palace:
+            palace = branch_to_palace[star_branch]
+            if not palace.major_stars:
+                palace.major_stars = []
+            palace.major_stars.append(star_name)
 
     return star_positions
 
@@ -730,31 +715,32 @@ def place_14_major_stars(
     ziwei_index = BRANCHES.index(ziwei_position)
     tianfu_index = BRANCHES.index(tianfu_position)
 
-    # ZIWEI SYSTEM (6 stars - counter-clockwise from Ziwei)
+    # FIX: build branch→palace lookup (palaces[] is NOT indexed by branch)
+    branch_to_palace = {p.branch: p for p in palaces}
+
+    # ZIWEI SYSTEM (6 stars — counter-clockwise/逆布 from Ziwei)
     for star_name, offset in ZIWEI_SYSTEM_STARS.items():
         star_index = (ziwei_index + offset) % 12
         star_branch = BRANCHES[star_index]
         star_positions[star_name] = star_branch
 
-        # Place on palace grid
-        if star_name != "紫微":  # Ziwei already placed
-            if 0 <= star_index < len(palaces):
-                if not palaces[star_index].major_stars:
-                    palaces[star_index].major_stars = []
-                palaces[star_index].major_stars.append(star_name)
+        if star_name != "紫微" and star_branch in branch_to_palace:
+            palace = branch_to_palace[star_branch]
+            if not palace.major_stars:
+                palace.major_stars = []
+            palace.major_stars.append(star_name)
 
-    # TIANFU SYSTEM (8 stars - mixed offsets from Tianfu)
+    # TIANFU SYSTEM (8 stars — mixed direction from Tianfu; 太陰/貪狼逆, 巨門/天相/天梁順)
     for star_name, offset in TIANFU_SYSTEM_STARS.items():
         star_index = (tianfu_index + offset) % 12
         star_branch = BRANCHES[star_index]
         star_positions[star_name] = star_branch
 
-        # Place on palace grid
-        if star_name != "天府":  # Tianfu already placed
-            if 0 <= star_index < len(palaces):
-                if not palaces[star_index].major_stars:
-                    palaces[star_index].major_stars = []
-                palaces[star_index].major_stars.append(star_name)
+        if star_name != "天府" and star_branch in branch_to_palace:
+            palace = branch_to_palace[star_branch]
+            if not palace.major_stars:
+                palace.major_stars = []
+            palace.major_stars.append(star_name)
 
     return star_positions
 
@@ -823,6 +809,12 @@ def calculate_natal_chart(birth: BirthData) -> NatalChart:
         palaces, birth.year_stem
     )
 
+    # STEP 9: Calculate 大限 decade cycles
+    calculate_major_limits(
+        palaces, life_palace_branch, five_element_bureau,
+        birth.year_branch, birth.gender
+    )
+
     # Create chart
     chart = NatalChart(
         birth=birth,
@@ -837,40 +829,122 @@ def calculate_natal_chart(birth: BirthData) -> NatalChart:
 
 
 # ============================================================
+# STEP 9: CALCULATE 大限 (MAJOR LIMIT DECADE CYCLES)
+# ============================================================
+
+# Yang year branches (陽支): 子寅辰午申戌
+_YANG_YEAR_BRANCHES = {"子", "寅", "辰", "午", "申", "戌"}
+
+# Start age (起限歲數) by 五行局 number
+_MAJOR_LIMIT_START_AGE = {2: 2, 3: 3, 4: 4, 5: 5, 6: 6}
+
+
+def calculate_major_limits(
+    palaces: List[PalaceData],
+    life_palace_branch: str,
+    five_element_bureau: int,
+    year_branch: str,
+    gender: str
+) -> None:
+    """
+    Calculate 大限 (major limit) start/end ages for each palace and write them in-place.
+
+    Direction rules:
+      陽年男 / 陰年女 → 順 (clockwise, +1 per palace)
+      陰年男 / 陽年女 → 逆 (counter-clockwise, -1 per palace)
+
+    Start age = 五行局 number (2–6).
+    Each subsequent palace adds 10 years.
+    """
+    start_age = _MAJOR_LIMIT_START_AGE.get(five_element_bureau, five_element_bureau)
+    is_yang_year = year_branch in _YANG_YEAR_BRANCHES
+    is_male = gender == "M"
+    is_forward = (is_yang_year and is_male) or (not is_yang_year and not is_male)
+
+    life_idx = BRANCHES.index(life_palace_branch)
+    for palace in palaces:
+        palace_idx = BRANCHES.index(palace.branch)
+        if is_forward:
+            distance = (palace_idx - life_idx) % 12
+        else:
+            distance = (life_idx - palace_idx) % 12
+        palace.major_limit_start = start_age + distance * 10
+        palace.major_limit_end = palace.major_limit_start + 9
+
+
+# ============================================================
 # UTILITY FUNCTIONS
 # ============================================================
 
 def format_chart_output(chart: NatalChart) -> Dict:
-    """Format chart data for API response"""
+    """Format chart data for API response, including step-by-step debug info."""
+    # Recompute positions for step data (chart already has results applied)
+    ziwei_pos  = calculate_ziwei_position(chart.birth.lunar_day, chart.five_element_bureau)
+    tianfu_pos = calculate_tianfu_position(ziwei_pos)
+
+    ziwei_idx  = BRANCHES.index(ziwei_pos)
+    tianfu_idx = BRANCHES.index(tianfu_pos)
+
+    # Step 5: 紫微 & 天府 positions
+    step5 = {
+        "紫微": ziwei_pos,
+        "天府": tianfu_pos,
+    }
+
+    # Step 6: all 14 main stars branch positions
+    step6_ziwei = {}
+    for star, offset in ZIWEI_SYSTEM_STARS.items():
+        step6_ziwei[star] = BRANCHES[(ziwei_idx + offset) % 12]
+
+    step6_tianfu = {}
+    for star, offset in TIANFU_SYSTEM_STARS.items():
+        step6_tianfu[star] = BRANCHES[(tianfu_idx + offset) % 12]
+
+    # Step 7: auxiliary star positions (recalculate, month arg included)
+    step7 = calculate_auxiliary_calamity_star_positions(
+        chart.birth.year_stem, chart.birth.year_branch,
+        chart.birth.hour_branch, chart.birth.lunar_month
+    )
+
     return {
         "birth": {
-            "year_stem": chart.birth.year_stem,
-            "year_branch": chart.birth.year_branch,
-            "lunar_month": chart.birth.lunar_month,
-            "lunar_day": chart.birth.lunar_day,
-            "hour_branch": chart.birth.hour_branch,
-            "gender": chart.birth.gender,
-            "location": chart.birth.location,
-            "name": chart.birth.name,
+            "year_stem":    chart.birth.year_stem,
+            "year_branch":  chart.birth.year_branch,
+            "lunar_month":  chart.birth.lunar_month,
+            "lunar_day":    chart.birth.lunar_day,
+            "hour_branch":  chart.birth.hour_branch,
+            "gender":       chart.birth.gender,
+            "location":     chart.birth.location,
+            "name":         chart.birth.name,
         },
         "life_palace": {
-            "branch": chart.life_palace_branch,
-            "stem": chart.life_palace_stem,
-            "stem_branch": chart.life_palace_stem_branch,
+            "branch":       chart.life_palace_branch,
+            "stem":         chart.life_palace_stem,
+            "stem_branch":  chart.life_palace_stem_branch,
         },
         "five_element_bureau": chart.five_element_bureau,
         "four_transformations": FOUR_TRANSFORMATIONS_BY_YEAR_STEM.get(chart.birth.year_stem, {}),
+        # Developer step data — branch positions for each calculation stage
+        "dev_steps": {
+            "step5_ziwei_tianfu": step5,
+            "step6_ziwei_system": step6_ziwei,
+            "step6_tianfu_system": step6_tianfu,
+            "step7_auxiliary": step7,
+            "step8_four_transformations": FOUR_TRANSFORMATIONS_BY_YEAR_STEM.get(chart.birth.year_stem, {}),
+        },
         "palaces": [
             {
-                "palace_id": p.palace_id,
-                "palace_name": p.palace_name,
-                "branch": p.branch,
-                "stem": p.stem,
-                "stem_branch": p.stem_branch,
-                "ziwei_star": p.ziwei_star,
-                "tianfu_star": p.tianfu_star,
-                "major_stars": p.major_stars or [],
+                "palace_id":    p.palace_id,
+                "palace_name":  p.palace_name,
+                "branch":       p.branch,
+                "stem":         p.stem,
+                "stem_branch":  p.stem_branch,
+                "ziwei_star":   p.ziwei_star,
+                "tianfu_star":  p.tianfu_star,
+                "major_stars":  p.major_stars or [],
                 "transformations": p.transformations or {},
+                "major_limit_start": p.major_limit_start,
+                "major_limit_end":   p.major_limit_end,
             }
             for p in chart.palaces
         ]

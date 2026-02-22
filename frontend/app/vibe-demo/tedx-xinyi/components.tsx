@@ -11,13 +11,13 @@ export const OFF_WHITE = '#FAF9F6';
 export const WARM_GRAY = '#F3F1EC';
 
 export const NAV_ITEMS = [
-  { label: 'Home', href: '/vibe-demo/tedx-xinyi' },
-  { label: 'About', href: '/vibe-demo/tedx-xinyi/about' },
-  { label: 'Salon', href: '/vibe-demo/tedx-xinyi/salon' },
-  { label: 'Speakers & Talks', href: '/vibe-demo/tedx-xinyi/speakers' },
-  { label: 'Sustainability', href: '/vibe-demo/tedx-xinyi/sustainability' },
-  { label: 'Community', href: '/vibe-demo/tedx-xinyi/community' },
-  { label: 'Blog', href: '/vibe-demo/tedx-xinyi/blog' },
+  { label: '首頁', href: '/vibe-demo/tedx-xinyi' },
+  { label: '關於我們', href: '/vibe-demo/tedx-xinyi/about' },
+  { label: '沙龍活動', href: '/vibe-demo/tedx-xinyi/salon' },
+  { label: '講者與演講', href: '/vibe-demo/tedx-xinyi/speakers' },
+  { label: '永續設計', href: '/vibe-demo/tedx-xinyi/sustainability' },
+  { label: '社群', href: '/vibe-demo/tedx-xinyi/community' },
+  { label: '文章', href: '/vibe-demo/tedx-xinyi/blog' },
 ];
 
 export const FOOTER_LINKS = [
@@ -35,7 +35,7 @@ export const SOCIAL_LINKS = [
 
 // ==================== GLOBAL STYLES ====================
 export const globalStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
 
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(28px); }
@@ -54,6 +54,10 @@ export const globalStyles = `
 
   .tedx-xinyi * {
     font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  .tedx-xinyi .font-handwriting {
+    font-family: 'Caveat', cursive !important;
   }
 
   .tedx-xinyi a:focus-visible,
@@ -136,10 +140,15 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
   const showDark = heroMode && !headerSolid && !mobileMenuOpen;
 
   return (
-    <header role="banner">
-    <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-neutral-900 focus:rounded-md focus:shadow-lg focus:text-sm focus:font-bold">
-      Skip to main content
-    </a>
+    <>
+      {/* Skip nav: inline style keeps it off-screen before CSS loads */}
+      <a
+        href="#main-content"
+        style={{ position: 'fixed', top: '-100px', left: '8px', zIndex: 100 }}
+        className="focus:top-2 transition-[top] duration-200 px-4 py-2 bg-white text-neutral-900 rounded-md shadow-lg text-sm font-bold"
+      >
+        Skip to main content
+      </a>
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         headerSolid || mobileMenuOpen || !heroMode
@@ -147,6 +156,7 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
           : 'bg-transparent'
       }`}
       aria-label="Primary navigation"
+      role="banner"
     >
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
@@ -154,10 +164,10 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
           href="/vibe-demo/tedx-xinyi"
           className="flex items-center gap-0.5 min-h-[44px]"
         >
-          <span className={`font-light text-lg tracking-tight transition-colors ${showDark ? 'text-white' : 'text-neutral-900'}`}>
+          <span className="font-black text-lg tracking-tight" style={{ color: TED_RED }}>
             TEDx
           </span>
-          <span className="font-black text-lg tracking-tight" style={{ color: TED_RED }}>
+          <span className={`font-light text-lg tracking-tight transition-colors ${showDark ? 'text-white' : 'text-neutral-900'}`}>
             Xinyi
           </span>
         </Link>
@@ -183,16 +193,6 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
               )}
             </Link>
           ))}
-          <Link
-            href="/vibe-demo"
-            className={`ml-3 px-3 py-1.5 text-xs rounded-full border transition-colors ${
-              showDark
-                ? 'text-white/60 border-white/20 hover:text-white hover:border-white/50'
-                : 'text-neutral-400 border-neutral-200 hover:text-neutral-700 hover:border-neutral-400'
-            }`}
-          >
-            Demo Hub
-          </Link>
         </div>
 
         {/* Mobile toggle */}
@@ -235,15 +235,10 @@ export function SiteNav({ currentPath, heroMode = false }: { currentPath: string
               {item.label}
             </Link>
           ))}
-          <div className="px-6 pt-3 border-t border-neutral-100 mt-2">
-            <Link href="/vibe-demo" className="text-xs text-neutral-400 hover:text-neutral-600">
-              ← Demo Hub
-            </Link>
-          </div>
         </div>
       )}
     </nav>
-    </header>
+    </>
   );
 }
 
@@ -259,8 +254,8 @@ export function SiteFooter() {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-0.5 mb-4">
-              <span className="text-white font-light text-xl tracking-tight">TEDx</span>
-              <span className="font-black text-xl tracking-tight" style={{ color: TED_RED }}>Xinyi</span>
+              <span className="font-black text-xl tracking-tight" style={{ color: TED_RED }}>TEDx</span>
+              <span className="text-white font-light text-xl tracking-tight">Xinyi</span>
             </div>
             <p className="text-white/40 text-sm leading-relaxed">
               An independently organized TEDx event<br />

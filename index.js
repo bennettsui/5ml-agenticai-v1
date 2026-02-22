@@ -94,11 +94,17 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
 }));
 
 // Serve TEDx generated visuals (runtime-generated via nanobanana API)
-app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx')));
-app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi')));
+// Cache for 1 day — images are regenerated only when prompts change
+const tedxStaticOpts = { maxAge: '7d', immutable: false };
+app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx'), tedxStaticOpts));
+app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi'), tedxStaticOpts));
 
 // Serve Radiance uploaded media
 app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
+
+// Serve compressed image/PDF outputs
+app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
+app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
 
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
@@ -115,14 +121,18 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar, createContact, getContactsByClient, getContact, updateContact, deleteContact, linkContactToProject, getProjectContacts, unlinkContactFromProject } = require('./db');
+const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAllProjects, getAnalytics, getAgentPerformance, saveSandboxTest, getSandboxTests, clearSandboxTests, saveBrand, getBrandByName, searchBrands, updateBrandResults, getAllBrands, getBrandWithResults, saveConversation, getConversationsByBrand, getConversation, deleteConversation, deleteBrand, deleteProject, getProjectsByBrand, getConversationsByBrandAndBrief, getSocialState, upsertSocialState, deleteSocialState, saveSocialCampaign, saveArtefact, getArtefact, getAllArtefacts, saveSocialContentPosts, getSocialContentPosts, saveSocialAdCampaigns, getSocialAdCampaigns, saveSocialKPIs, getSocialKPIs, createContentDraft, getContentDrafts, updateContentDraft, deleteContentDraft, promoteContentDraftToCalendar, syncContentCalendarAndDevelopment, createProductService, getProductsServices, updateProductServiceStatus, getProductServicePortfolio, saveResearchBusiness, getResearchBusiness, saveResearchCompetitors, getResearchCompetitors, deleteResearchCompetitor, saveResearchAudience, getResearchAudience, saveResearchSegments, getResearchSegments, deleteResearchSegment, saveResearchProducts, getResearchProducts, deleteResearchProduct, saveSocialCalendar, getSocialCalendar, createContact, getContactsByClient, getContact, updateContact, deleteContact, linkContactToProject, getProjectContacts, unlinkContactFromProject, saveRadianceEnquiry, getRadianceEnquiries } = require('./db');
 
 // 啟動時初始化數據庫 (optional)
 if (process.env.DATABASE_URL) {
-  initDatabase().catch(err => {
-    console.error('⚠️ Database initialization failed:', err.message);
-    console.log('⚠️ App will continue running without database');
-  });
+  // Core schema first, then tender intelligence schema (auto-seeds sources if registry is empty)
+  const { initTenderSchema } = require('./services/tender-intel-service');
+  initDatabase()
+    .then(() => initTenderSchema(pool))
+    .catch(err => {
+      console.error('⚠️ Database initialization failed:', err.message);
+      console.log('⚠️ App will continue running without database');
+    });
   console.log('📊 Database initialization started');
 } else {
   console.log('⚠️ DATABASE_URL not set - running without database');
@@ -330,6 +340,43 @@ app.get('/api/health/services/:id', async (req, res) => {
   const result = await testService(req.params.id);
   if (!result) return res.status(404).json({ error: 'Unknown service' });
   res.json({ timestamp: new Date().toISOString(), service: result });
+});
+
+// ── Database status — checks schema and tender registry ───────────────────────
+app.get('/api/admin/db-status', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.json({ ok: false, error: 'DATABASE_URL not set', hint: 'Run: fly postgres attach <cluster> --app 5ml-agenticai-v1' });
+  }
+  try {
+    const tables = ['tender_source_registry', 'tenders', 'tender_evaluations',
+      'tender_decisions', 'tender_agent_run_logs', 'tender_daily_digests'];
+    const status = {};
+    for (const t of tables) {
+      try {
+        const { rows } = await pool.query(`SELECT COUNT(*) AS n FROM ${t}`);
+        status[t] = { exists: true, rows: parseInt(rows[0].n, 10) };
+      } catch (_) {
+        status[t] = { exists: false, rows: 0 };
+      }
+    }
+    // Check pgvector
+    let vectorEnabled = false;
+    try {
+      await pool.query(`SELECT 'test'::vector(3)`);
+      vectorEnabled = true;
+    } catch (_) {}
+
+    const allExist = tables.every(t => status[t].exists);
+    res.json({
+      ok: allExist,
+      databaseUrl: process.env.DATABASE_URL.replace(/:\/\/[^@]+@/, '://<credentials>@'),
+      vectorEnabled,
+      tables: status,
+      hint: allExist ? null : 'Some tables missing — restart the app with DATABASE_URL set to auto-create them',
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ==========================================
@@ -2158,6 +2205,29 @@ app.get('/stats', async (req, res) => {
           },
         },
         {
+          id: 'hk-sg-tender-intelligence',
+          name: 'HK+SG Tender Intelligence',
+          description: 'Daily discovery, ingestion, evaluation & digest for HK+SG government tenders',
+          agentCount: 10,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: 'Daily pipeline: ingestion (40+ sources) + evaluation (avg 30 new tenders) + digest generation',
+              modelCalls: [
+                { model: 'DeepSeek Reasoner (evaluation)', calls: 30, avgTokensIn: 1500, avgTokensOut: 800, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'DeepSeek Reasoner (digest narrative)', calls: 1, avgTokensIn: 3000, avgTokensOut: 600, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku (HTML scraping edge cases)', calls: 10, avgTokensIn: 1000, avgTokensOut: 300, costPerMillion: { input: 0.25, output: 1.25 } },
+                { model: 'Claude Haiku (normalisation fallback)', calls: 10, avgTokensIn: 800, avgTokensOut: 400, costPerMillion: { input: 0.25, output: 1.25 } },
+              ],
+              totalTokens: { input: 58000, output: 29600 },
+              estimatedCost: 0.059, // USD per day
+              notes: 'RSS/XML ingestion and CSV processing require no LLM. Weekly source discovery + feedback learning add ~$0.05/week.',
+            },
+            daily: { runsPerDay: 1, estimatedCost: 0.059 },
+            monthly: { runsPerMonth: 30, estimatedCost: 1.80, notes: 'Includes weekly discovery (~$0.05/week) and feedback learning (~$0.005/week)' },
+          },
+        },
+        {
           id: 'crm',
           name: 'Client CRM + KB',
           description: 'AI-powered client CRM with knowledge base',
@@ -2175,6 +2245,95 @@ app.get('/stats', async (req, res) => {
             daily: { runsPerDay: 5, estimatedCost: 0.01 },
             monthly: { runsPerMonth: 150, estimatedCost: 0.30 },
           },
+        },
+        {
+          id: 'sme-growth-engine',
+          name: 'SME Growth Engine',
+          description: '7-agent SME lead gen system: lead scoring, email nurture, campaign analytics, retargeting, CRO, demo closer, and lead intelligence',
+          agentCount: 7,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: 'Full NEW_LEAD pipeline: Score + Enrich (parallel) + 5-email nurture sequence',
+              modelCalls: [
+                { model: 'DeepSeek Reasoner (Lead Scoring — AI pass)', calls: 1, avgTokensIn: 800, avgTokensOut: 400, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'DeepSeek Reasoner (Lead Intelligence)', calls: 1, avgTokensIn: 1200, avgTokensOut: 700, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'DeepSeek Reasoner (Email Nurture 5-sequence)', calls: 1, avgTokensIn: 2500, avgTokensOut: 3000, costPerMillion: { input: 0.14, output: 0.28 } },
+              ],
+              totalTokens: { input: 4500, output: 4100 },
+              estimatedCost: 0.0018, // USD per new lead processed
+              notes: 'Rule-based scoring pass is free. AI pass adds $0.0002. Intelligence + nurture = $0.0016.',
+            },
+            perWeeklyReview: {
+              description: 'Weekly campaign review: Analytics + CRO (parallel) + Retargeting strategy (4 segments)',
+              modelCalls: [
+                { model: 'DeepSeek Reasoner (Campaign Analytics)', calls: 1, avgTokensIn: 2000, avgTokensOut: 800, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'DeepSeek Reasoner (CRO Optimizer)', calls: 1, avgTokensIn: 2500, avgTokensOut: 900, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'DeepSeek Reasoner (Retargeting — 4 segments)', calls: 4, avgTokensIn: 1500, avgTokensOut: 700, costPerMillion: { input: 0.14, output: 0.28 } },
+              ],
+              totalTokens: { input: 10500, output: 4500 },
+              estimatedCost: 0.0027, // USD per weekly review
+            },
+            monthly: {
+              leadsPerMonth: 50,
+              leadPipelineCost: 0.09,   // 50 leads × $0.0018
+              weeklyReviewCost: 0.011,  // 4 reviews × $0.0027
+              demoAssetCost: 0.06,      // ~15 demos × 4 stage assets × $0.001
+              estimatedCost: 0.16,      // Total ~$0.16/month at 50 leads
+              notes: 'Scales linearly with lead volume. 200 leads/month ≈ $0.45. Campaign review is flat $0.011/month.',
+            },
+          },
+          agents: [
+            { id: 'lead-scoring', name: 'Lead Scoring Agent', role: 'Firmographic + AI intent scoring (0–100)', model: 'DeepSeek Reasoner' },
+            { id: 'lead-intelligence', name: 'Lead Intelligence Agent', role: 'ROI estimate, deal complexity, first-touch angle', model: 'DeepSeek Reasoner' },
+            { id: 'email-nurture', name: 'Email Nurture Agent', role: '5-email personalised sequence by industry + tier', model: 'DeepSeek Reasoner' },
+            { id: 'demo-closer', name: 'Demo Closer Agent', role: 'Prep briefing, follow-up email, no-show recovery, objection handler', model: 'DeepSeek Reasoner' },
+            { id: 'campaign-analytics', name: 'Campaign Analytics Agent', role: 'UTM attribution, CPL by channel, AI recommendations', model: 'DeepSeek Reasoner' },
+            { id: 'retargeting', name: 'Retargeting Strategist Agent', role: '4-audience segmentation + ad copy variations per segment', model: 'DeepSeek Reasoner' },
+            { id: 'cro-optimizer', name: 'Conversion Optimizer Agent', role: 'Funnel drop-off analysis, A/B test design, CRO quick wins', model: 'DeepSeek Reasoner' },
+          ],
+          endpoints: [
+            'POST /api/sme/leads/process      — Full new-lead orchestration pipeline',
+            'POST /api/sme/leads/score        — Score individual lead',
+            'POST /api/sme/leads/enrich       — Enrich lead with intelligence brief',
+            'POST /api/sme/leads/nurture-sequence — Generate 5-email nurture sequence',
+            'POST /api/sme/demo/:stage        — Demo asset (prep/follow_up/no_show/objection)',
+            'POST /api/sme/analytics/campaigns — Campaign attribution + CPL analysis',
+            'GET  /api/sme/analytics/funnel   — Live funnel metrics + CRO analysis',
+            'POST /api/sme/retargeting        — Retargeting audience strategy + ad copy',
+            'POST /api/sme/cro/optimize       — CRO recommendations from funnel data',
+            'POST /api/sme/campaign-review    — Weekly campaign review orchestration',
+          ],
+        },
+        {
+          id: 'pdf-compression',
+          name: 'PDF Compression Service',
+          description: 'Self-hosted PDF compression pipeline — lossless, balanced, web & small profiles using pdfsizeopt, Ghostscript, pdfEasyCompress, and Paperweight',
+          agentCount: 3,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 PDF compressed (avg 5 MB input)',
+              modelCalls: [],
+              totalTokens: { input: 0, output: 0 },
+              estimatedCost: 0.00,
+              notes: 'No LLM calls — pure open-source CLI tools (Ghostscript, pdfsizeopt). Cost is compute time only (self-hosted). Approx $0.001–0.01 per file in cloud compute.',
+            },
+            daily: { runsPerDay: 50, estimatedCost: 0.00 },
+            monthly: { runsPerMonth: 1500, estimatedCost: 0.00, notes: 'Electricity / compute only. No external API costs.' },
+          },
+          agents: [
+            { id: 'ingestion-agent', name: 'PDF Ingestion Agent', role: 'Normalise PDFs before OCR / RAG — balanced profile, 150 DPI', model: 'None (CLI tools)' },
+            { id: 'tender-agent', name: 'Tender / Proposal Agent', role: 'Shrink proposals to meet upload limits — lossless profile, JBIG2', model: 'None (CLI tools)' },
+            { id: 'sharing-agent', name: 'Sharing / Distribution Agent', role: 'Compact PDFs for email / WhatsApp — web profile, 120 DPI', model: 'None (CLI tools)' },
+          ],
+          endpoints: [
+            'POST /api/pdf-compress         — Compress PDF (proxies to Python service)',
+            'GET  /api/pdf-compress/health  — Service health + tool availability',
+            'GET  /api/pdf-compress/profiles — List compression profiles',
+          ],
+          tools: ['pdfsizeopt', 'Ghostscript (pdfc)', 'pdfEasyCompress', 'Paperweight'],
+          profiles: ['lossless', 'balanced', 'web', 'small', 'auto'],
         },
       ],
       // Token pricing reference (per million tokens)
@@ -2197,8 +2356,11 @@ app.get('/stats', async (req, res) => {
         crm: 0.30,
         aiImageGeneration: 0.66,
         aiVideoGeneration: 0.88,
-        totalBase: 26.58,
-        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). All estimates assume typical usage patterns.',
+        hkSgTenderIntelligence: 1.80,
+        smeGrowthEngine: 0.16, // At 50 leads/month + 4 weekly reviews
+        pdfCompression: 0.00, // Self-hosted CLI tools — no LLM API costs
+        totalBase: 28.54,
+        notes: 'Ads cost scales with tenants. Photo booth scales with events. Image/video GPU cost is electricity (self-hosted). SME Growth Engine scales with lead volume (~$0.002/lead). PDF Compression is zero API cost (open-source CLI tools). All estimates assume typical usage patterns.',
       },
       databaseTables: [
         // Social/Marketing tables
@@ -3646,7 +3808,24 @@ try {
 try {
   const tedxXinyiRoutes = require('./use-cases/tedx-xinyi/api/routes');
   app.use('/api/tedx-xinyi', tedxXinyiRoutes);
-  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi');
+  // Admin media library — password-protected
+  const ADMIN_PASS = process.env.TEDX_ADMIN_PASS || '5milesLab01@';
+  // Password check API
+  app.post('/api/tedx-xinyi/auth', express.json(), (req, res) => {
+    if (req.body?.password === ADMIN_PASS) return res.json({ ok: true, token: ADMIN_PASS });
+    res.status(401).json({ error: 'Incorrect password' });
+  });
+  // Protect media API endpoints
+  app.use('/api/tedx-xinyi/media', (req, res, next) => {
+    const token = req.headers['x-admin-token'];
+    if (token === ADMIN_PASS) return next();
+    return res.status(401).json({ error: 'Unauthorized' });
+  });
+  // Admin UI serves at /vibe-demo/tedx-xinyi/admin
+  app.get('/vibe-demo/tedx-xinyi/admin', (req, res) => res.redirect('/api/tedx-xinyi/upload'));
+  // Legacy redirect
+  app.get('/tedxxinyi/admin', (req, res) => res.redirect('/vibe-demo/tedx-xinyi/admin'));
+  console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /vibe-demo/tedx-xinyi/admin');
 } catch (error) {
   console.warn('⚠️ TEDxXinyi routes not loaded:', error.message);
 }
@@ -3676,6 +3855,15 @@ try {
   console.log('✅ Multimedia Library routes loaded: /api/library');
 } catch (error) {
   console.warn('⚠️ Multimedia Library routes not loaded:', error.message);
+}
+
+// Image Compression Service
+try {
+  const imageCompressionRoutes = require('./use-cases/image-compression/api/routes');
+  app.use('/api/compress', imageCompressionRoutes);
+  console.log('✅ Image Compression routes loaded: /api/compress');
+} catch (error) {
+  console.warn('⚠️ Image Compression routes not loaded:', error.message);
 }
 
 // Scheduler Service
@@ -4219,7 +4407,20 @@ const radianceUpload = multer({
   },
 });
 
-const RADIANCE_ADMIN_PW = 'radiance2026happyday!';
+const RADIANCE_ADMIN_PW = '5milesLab01@';
+
+// Simple in-memory rate limiter: max 5 submissions per IP per 15 min
+const _radianceRateLimitMap = new Map();
+function checkRadianceRateLimit(ip) {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const max = 5;
+  const entry = _radianceRateLimitMap.get(ip) || { count: 0, resetAt: now + windowMs };
+  if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + windowMs; }
+  entry.count += 1;
+  _radianceRateLimitMap.set(ip, entry);
+  return entry.count <= max;
+}
 
 // POST /api/radiance/contact — save enquiry to DB + send email alert
 app.post('/api/radiance/contact', async (req, res) => {
@@ -4314,26 +4515,28 @@ app.post('/api/radiance/contact', async (req, res) => {
       });
     }
 
-    // Store contact submission (in-memory for now, can be extended to database)
-    const submission = {
-      id: Date.now().toString(),
-      ...clean,
-      submittedAt: new Date().toISOString(),
-      ip,
-      userAgent: req.get('user-agent')
-    };
-
-    // Log submission ID only — no PII in server logs
-    console.log('📧 New Radiance contact submission:', {
-      id: submission.id,
-      submittedAt: submission.submittedAt,
+    // Save enquiry to DB
+    const saved = await saveRadianceEnquiry({
+      name: clean.name,
+      email: clean.email,
+      phone: clean.phone || null,
+      company: clean.company || null,
+      industry: clean.industry || null,
+      serviceInterest: clean.serviceInterest || null,
+      message: clean.message,
+      sourceLang: req.body.sourceLang || 'en',
+      ipAddress: ip,
+      userAgent: req.get('user-agent'),
     });
 
+    console.log('📧 New Radiance contact submission:', { enquiryId: saved.enquiry_id });
+
     // Send email alert (non-blocking — don't fail the response if email fails)
-    sendRadianceEnquiryAlert(enquiryData).catch(err =>
+    sendRadianceEnquiryAlert({ ...clean, serviceInterest: clean.serviceInterest }).catch(err =>
       console.error('📧 [Radiance] Alert email error:', err.message)
     );
 
+    const sourceLang = req.body.sourceLang || 'en';
     const successMsg = sourceLang === 'zh'
       ? '感謝您的查詢，我們將於兩個工作天內回覆您。'
       : "Thank you for your enquiry. We'll be in touch within 2 business days.";
@@ -4350,7 +4553,7 @@ app.post('/api/radiance/contact', async (req, res) => {
 app.get('/api/radiance/contact/submissions', async (req, res) => {
   try {
     const { password } = req.query;
-    if (password !== 'radiance2026happyday!') {
+    if (password !== '5milesLab01@') {
       return res.status(401).json({ error: 'Unauthorised' });
     }
     const limit = Math.min(parseInt(req.query.limit || '50'), 200);
@@ -5130,7 +5333,7 @@ app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, async
   try {
     const {
       lunarYear, lunarMonth, lunarDay, hourBranch, yearStem, yearBranch,
-      gender, name, placeOfBirth, timezone, calendarType
+      gender, name, placeOfBirth, timezone, calendarType, existingChartId
     } = req.body;
 
     // Validate required fields
@@ -5170,16 +5373,47 @@ app.post('/api/ziwei/calculate', ziweiValidation.validateChartCalculation, async
           calendarType: calendarType || 'lunar'
         };
 
-        const result = await db.query(
-          `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
-           VALUES ($1, $2, $3, $4) RETURNING id`,
-          [
-            name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
-            JSON.stringify(birthInfo),
-            JSON.stringify({ yearStem, yearBranch }),
-            JSON.stringify(chart)
-          ]
-        );
+        let result;
+        if (existingChartId) {
+          // Update existing record — overwrite the same person's chart
+          result = await db.query(
+            `UPDATE ziwei_birth_charts
+             SET name = $1, birth_info = $2, gan_zhi = $3, base_chart = $4
+             WHERE id = $5 RETURNING id`,
+            [
+              name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
+              JSON.stringify(birthInfo),
+              JSON.stringify({ yearStem, yearBranch }),
+              JSON.stringify(chart),
+              existingChartId
+            ]
+          );
+          if (result.rows.length === 0) {
+            // Fallback: insert if id not found
+            result = await db.query(
+              `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
+               VALUES ($1, $2, $3, $4) RETURNING id`,
+              [
+                name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
+                JSON.stringify(birthInfo),
+                JSON.stringify({ yearStem, yearBranch }),
+                JSON.stringify(chart)
+              ]
+            );
+          }
+        } else {
+          // Insert new record
+          result = await db.query(
+            `INSERT INTO ziwei_birth_charts (name, birth_info, gan_zhi, base_chart)
+             VALUES ($1, $2, $3, $4) RETURNING id`,
+            [
+              name || `${yearStem}${yearBranch} ${lunarMonth}/${lunarDay}`,
+              JSON.stringify(birthInfo),
+              JSON.stringify({ yearStem, yearBranch }),
+              JSON.stringify(chart)
+            ]
+          );
+        }
         chartId = result.rows[0].id;
         console.log('✅ Chart stored in database:', chartId);
       } catch (dbErr) {
@@ -5256,6 +5490,30 @@ app.get('/api/ziwei/charts/:id', async (req, res) => {
       error: 'Failed to fetch chart',
       details: error.message
     });
+  }
+});
+
+// DELETE /api/ziwei/charts/:id - Delete a saved chart
+app.delete('/api/ziwei/charts/:id', async (req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(501).json({ error: 'Database not configured' });
+    }
+
+    const db = require('./db');
+    const result = await db.query(
+      `DELETE FROM ziwei_birth_charts WHERE id = $1 RETURNING id`,
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Chart not found' });
+    }
+
+    res.json({ success: true, deletedId: result.rows[0].id });
+  } catch (error) {
+    console.error('❌ Error deleting chart:', error);
+    res.status(500).json({ error: 'Failed to delete chart', details: error.message });
   }
 });
 
@@ -6038,6 +6296,583 @@ app.get('/api/ziwei/palace/:palace', (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ============================================================
+// SME Growth Engine — 7-Agent Lead Gen & Campaign System
+// ============================================================
+
+// Lazy-load SME growth agents (imported once on first use)
+let smeOrchestrator, leadScoringAgent, emailNurtureAgent, campaignAnalyticsAgent,
+    retargetingAgent, conversionOptimizerAgent, demoCloserAgent, leadIntelligenceAgent;
+
+function getSMEAgents() {
+  if (!smeOrchestrator) {
+    smeOrchestrator        = require('./agents/smeGrowthOrchestrator');
+    leadScoringAgent       = require('./agents/leadScoringAgent');
+    emailNurtureAgent      = require('./agents/emailNurtureAgent');
+    campaignAnalyticsAgent = require('./agents/campaignAnalyticsAgent');
+    retargetingAgent       = require('./agents/retargetingAgent');
+    conversionOptimizerAgent = require('./agents/conversionOptimizerAgent');
+    demoCloserAgent        = require('./agents/demoCloserAgent');
+    leadIntelligenceAgent  = require('./agents/leadIntelligenceAgent');
+  }
+  return {
+    smeOrchestrator, leadScoringAgent, emailNurtureAgent,
+    campaignAnalyticsAgent, retargetingAgent, conversionOptimizerAgent,
+    demoCloserAgent, leadIntelligenceAgent,
+  };
+}
+
+// POST /api/sme/leads/score — Score a single lead with Lead Scoring Agent
+app.post('/api/sme/leads/score', async (req, res) => {
+  try {
+    const { leadScoringAgent: agent } = getSMEAgents();
+    const lead = req.body;
+    if (!lead.email && !lead.lead_id) {
+      return res.status(400).json({ error: 'lead data with email or lead_id required' });
+    }
+    const result = await agent.scoreLead(lead);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME lead score error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/leads/enrich — Enrich lead with Lead Intelligence Agent
+app.post('/api/sme/leads/enrich', async (req, res) => {
+  try {
+    const { leadIntelligenceAgent: agent } = getSMEAgents();
+    const lead = req.body;
+    if (!lead.industry) {
+      return res.status(400).json({ error: 'industry field required' });
+    }
+    const result = await agent.enrichLead(lead);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME lead enrich error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/leads/nurture-sequence — Generate personalised 5-email nurture sequence
+app.post('/api/sme/leads/nurture-sequence', async (req, res) => {
+  try {
+    const { emailNurtureAgent: agent } = getSMEAgents();
+    const { lead, tier } = req.body;
+    if (!lead || !lead.industry) {
+      return res.status(400).json({ error: 'lead object with industry required' });
+    }
+    const result = await agent.generateNurtureSequence(lead, tier || 'warm');
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME nurture sequence error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/leads/process — Full NEW_LEAD orchestration pipeline
+// Runs: Score + Enrich (parallel) → Nurture Sequence
+app.post('/api/sme/leads/process', async (req, res) => {
+  try {
+    const { smeOrchestrator: orch } = getSMEAgents();
+    const lead = req.body;
+    if (!lead.email) {
+      return res.status(400).json({ error: 'email required' });
+    }
+    const result = await orch.handleNewLead(lead);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME lead process error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/demo/:stage — Demo lifecycle asset generation
+// stage: prep | follow_up | no_show | objection
+app.post('/api/sme/demo/:stage', async (req, res) => {
+  try {
+    const { smeOrchestrator: orch } = getSMEAgents();
+    const { stage } = req.params;
+    const { lead, ...stageData } = req.body;
+    const validStages = ['prep', 'follow_up', 'no_show', 'objection'];
+    if (!validStages.includes(stage)) {
+      return res.status(400).json({ error: `Invalid stage. Use: ${validStages.join(', ')}` });
+    }
+    if (!lead || !lead.industry) {
+      return res.status(400).json({ error: 'lead object with industry required' });
+    }
+    const result = await orch.handleDemoEvent(lead, stage, stageData);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error(`❌ SME demo ${req.params.stage} error:`, err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/analytics/campaigns — Campaign attribution + CPL analysis
+app.post('/api/sme/analytics/campaigns', async (req, res) => {
+  try {
+    const { campaignAnalyticsAgent: agent } = getSMEAgents();
+    const { leads, spendData, options } = req.body;
+    if (!Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({ error: 'leads array required' });
+    }
+    const result = await agent.runCampaignAnalytics(leads, spendData || {}, options || {});
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME campaign analytics error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/sme/analytics/funnel — Pull live funnel metrics from DB + analyse
+app.get('/api/sme/analytics/funnel', async (req, res) => {
+  try {
+    const { conversionOptimizerAgent: agent } = getSMEAgents();
+    // Pull aggregated funnel data from leads table
+    const funnelQuery = await pool.query(`
+      SELECT
+        COUNT(*) AS total_leads,
+        COUNT(*) FILTER (WHERE demo_requested = true) AS demos_booked,
+        COUNT(*) FILTER (WHERE demo_completed = true) AS demos_attended,
+        COUNT(*) FILTER (WHERE status = 'closed') AS closed_won
+      FROM leads
+    `).catch(() => null);
+
+    const dbMetrics = funnelQuery?.rows?.[0] || {};
+    const metrics = {
+      leads: parseInt(dbMetrics.total_leads) || 0,
+      demos_booked: parseInt(dbMetrics.demos_booked) || 0,
+      demos_attended: parseInt(dbMetrics.demos_attended) || 0,
+      closed_won: parseInt(dbMetrics.closed_won) || 0,
+      // Manual overrides via query params
+      page_visitors: parseInt(req.query.page_visitors) || 0,
+      form_starts: parseInt(req.query.form_starts) || 0,
+      total_spend_hkd: parseInt(req.query.spend) || 0,
+    };
+
+    const result = await agent.optimizeConversions(metrics, {
+      form_fields: req.query.form_fields || '6 required fields',
+      cta_text: req.query.cta_text || 'Get Your Free AI Assessment',
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME funnel analysis error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/retargeting — Generate retargeting audience strategy + ad copy
+app.post('/api/sme/retargeting', async (req, res) => {
+  try {
+    const { retargetingAgent: agent } = getSMEAgents();
+    const { industry, segments } = req.body;
+    const result = await agent.generateRetargetingStrategy({ industry, segments });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME retargeting error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/cro/optimize — CRO recommendations from funnel metrics
+app.post('/api/sme/cro/optimize', async (req, res) => {
+  try {
+    const { conversionOptimizerAgent: agent } = getSMEAgents();
+    const { metrics, currentSetup } = req.body;
+    if (!metrics) {
+      return res.status(400).json({ error: 'metrics object required' });
+    }
+    const result = await agent.optimizeConversions(metrics, currentSetup || {});
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME CRO optimize error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sme/campaign-review — Weekly campaign review orchestration
+// Runs: Campaign Analytics + CRO (parallel) → Retargeting strategy
+app.post('/api/sme/campaign-review', async (req, res) => {
+  try {
+    const { smeOrchestrator: orch } = getSMEAgents();
+    const { leads, funnelMetrics, spendData, options } = req.body;
+    if (!Array.isArray(leads)) {
+      return res.status(400).json({ error: 'leads array required' });
+    }
+    const result = await orch.handleCampaignReview(leads, funnelMetrics || {}, spendData || {}, options || {});
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('❌ SME campaign review error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// PDF Compression Service API (proxy to Python microservice)
+// ==========================================
+{
+  const PDF_COMPRESS_URL = process.env.PDF_COMPRESSION_SERVICE_URL || 'http://localhost:8082';
+
+  // POST /api/pdf-compress — Compress a PDF via the Python microservice
+  app.post('/api/pdf-compress', async (req, res) => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 180000); // 3 min timeout
+      const response = await fetch(`${PDF_COMPRESS_URL}/compress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        res.status(504).json({ ok: false, error: 'PDF compression service timed out (3 min)' });
+      } else {
+        console.error('❌ PDF compress proxy error:', err.message);
+        res.status(503).json({
+          ok: false,
+          error: `PDF Compression Service unavailable: ${err.message}. Start it with: cd use-cases/pdf-compression && docker-compose up`,
+        });
+      }
+    }
+  });
+
+  // GET /api/pdf-compress/health — Check Python service health
+  app.get('/api/pdf-compress/health', async (req, res) => {
+    try {
+      const response = await fetch(`${PDF_COMPRESS_URL}/health`, { signal: AbortSignal.timeout(5000) });
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (err) {
+      res.status(503).json({
+        status: 'unavailable',
+        error: err.message,
+        hint: 'Start the PDF Compression Service: cd use-cases/pdf-compression && docker-compose up',
+      });
+    }
+  });
+
+  // GET /api/pdf-compress/profiles — List available compression profiles
+  app.get('/api/pdf-compress/profiles', async (req, res) => {
+    try {
+      const response = await fetch(`${PDF_COMPRESS_URL}/profiles`, { signal: AbortSignal.timeout(5000) });
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (err) {
+      // Return static profile list when service is offline
+      res.json({
+        profiles: [
+          { name: 'auto',      description: 'Auto-select based on file size',                     use_case: 'General purpose' },
+          { name: 'lossless',  description: 'Maximum quality (pdfsizeopt JBIG2/PNGOUT)',          use_case: 'Legal docs, tender submissions' },
+          { name: 'balanced',  description: 'Good quality-to-size ratio (Ghostscript default)',   use_case: 'Tenders, reports, drafts' },
+          { name: 'web',       description: 'Screen-optimised, 120 DPI (Ghostscript ebook)',      use_case: 'Email, WhatsApp, web downloads' },
+          { name: 'small',     description: 'Aggressive compression (Ghostscript screen, 96 DPI)', use_case: 'Portal uploads with size caps' },
+        ],
+        note: 'PDF Compression Service is offline — showing cached profile list',
+      });
+    }
+  });
+
+  // POST /api/pdf-compress/upload — Accept PDF file upload, compress, return output_url
+  const pdfUploadStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(__dirname, 'uploads', 'pdfs', 'input');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.pdf';
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+    },
+  });
+  const pdfUpload = multer({
+    storage: pdfUploadStorage,
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype === 'application/pdf') cb(null, true);
+      else cb(new Error('Only PDF files are accepted'));
+    },
+  });
+
+  app.post('/api/pdf-compress/upload', pdfUpload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No PDF file uploaded' });
+
+    const { profile = 'balanced', priority = 'quality', tags = '' } = req.body;
+    const inputPath = req.file.path;
+
+    try {
+      const PDF_COMPRESS_URL = process.env.PDF_COMPRESSION_SERVICE_URL || 'http://localhost:8082';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 180000);
+
+      const response = await fetch(`${PDF_COMPRESS_URL}/compress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: inputPath,
+          profile,
+          priority,
+          tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await response.json();
+
+      // Convert server output_path to a public URL
+      if (data.ok && data.output_path) {
+        const outDir = path.join(__dirname, 'uploads', 'pdfs', 'output');
+        if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+        const outFilename = path.basename(data.output_path);
+        const publicOutPath = path.join(outDir, outFilename);
+        if (data.output_path !== publicOutPath && fs.existsSync(data.output_path)) {
+          fs.copyFileSync(data.output_path, publicOutPath);
+        }
+        data.output_url = `/uploads/pdfs/output/${outFilename}`;
+      }
+
+      // Clean up input file
+      try { fs.unlinkSync(inputPath); } catch (_) {}
+
+      res.json(data);
+    } catch (err) {
+      try { fs.unlinkSync(inputPath); } catch (_) {}
+      if (err.name === 'AbortError') {
+        res.status(504).json({ ok: false, error: 'PDF compression service timed out (3 min)' });
+      } else {
+        res.status(503).json({
+          ok: false,
+          error: `PDF Compression Service unavailable: ${err.message}. Start with: cd use-cases/pdf-compression && docker-compose up`,
+        });
+      }
+    }
+  });
+}
+
+// ==========================================
+// HK+SG Tender Intelligence API
+// ==========================================
+{
+  const tenderIntel = require('./services/tender-intel-service');
+  const nodeCron = require('node-cron');
+  const scheduleRegistry = require('./services/schedule-registry');
+
+  // Register schedules
+  scheduleRegistry.register({ id: 'tender-intel:daily-ingestion',  group: 'Tender Intelligence', name: 'Daily RSS/XML Ingestion',    description: 'Fetch all active RSS/XML sources, normalise into tenders', schedule: '0 3 * * *',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Daily at 03:00 HKT' });
+  scheduleRegistry.register({ id: 'tender-intel:source-discovery', group: 'Tender Intelligence', name: 'Weekly Source Discovery',    description: 'Scan hub pages for new RSS/HTML sources',                   schedule: '0 2 * * 0',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Sunday at 02:00 HKT' });
+  scheduleRegistry.register({ id: 'tender-intel:digest-generate',  group: 'Tender Intelligence', name: 'Daily Digest Generation',   description: 'Generate ranked daily digest narrative',                     schedule: '0 8 * * *',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Daily at 08:00 HKT' });
+  scheduleRegistry.register({ id: 'tender-intel:feedback-learning',group: 'Tender Intelligence', name: 'Weekly Feedback Calibration','description': 'Calibrate scoring weights from decisions',                schedule: '0 5 * * 0',  timezone: 'Asia/Hong_Kong', status: 'scheduled', nextRunAt: 'Sunday at 05:00 HKT' });
+
+  // Daily ingestion cron → 03:00 HKT
+  if (process.env.DATABASE_URL) {
+    nodeCron.schedule('0 3 * * *', async () => {
+      scheduleRegistry.markRunning('tender-intel:daily-ingestion');
+      try {
+        const summary = await tenderIntel.runIngestion(pool);
+        scheduleRegistry.markCompleted('tender-intel:daily-ingestion', {
+          result: `${summary.newRawCaptures} new captures, ${summary.tendersInserted} tenders`,
+          durationMs: summary.durationMs,
+        });
+        console.log('✅ Tender ingestion complete:', summary.newRawCaptures, 'new captures');
+      } catch (err) {
+        scheduleRegistry.markFailed('tender-intel:daily-ingestion', err.message);
+        console.error('❌ Tender ingestion failed:', err.message);
+      }
+    }, { timezone: 'Asia/Hong_Kong' });
+
+    // Daily evaluation cron → 04:00 HKT (after ingestion)
+    nodeCron.schedule('0 4 * * *', async () => {
+      scheduleRegistry.markRunning('tender-intel:digest-generate');
+      try {
+        const result = await tenderIntel.runEvaluation(pool);
+        scheduleRegistry.markCompleted('tender-intel:digest-generate', {
+          result: `${result.evaluated.length} tenders scored`,
+        });
+        console.log('✅ Tender evaluation complete:', result.evaluated.length, 'scored');
+      } catch (err) {
+        scheduleRegistry.markFailed('tender-intel:digest-generate', err.message);
+        console.error('❌ Tender evaluation failed:', err.message);
+      }
+    }, { timezone: 'Asia/Hong_Kong' });
+  }
+
+  // POST /api/tender-intel/evaluate  — manual trigger
+  app.post('/api/tender-intel/evaluate', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    try {
+      scheduleRegistry.markRunning('tender-intel:digest-generate');
+      const result = await tenderIntel.runEvaluation(pool, req.body.profile || null);
+      scheduleRegistry.markCompleted('tender-intel:digest-generate', { result: `${result.evaluated.length} scored` });
+      res.json({ success: true, ...result });
+    } catch (err) {
+      scheduleRegistry.markFailed('tender-intel:digest-generate', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/tender-intel/decision  — record founder decision (track / ignore / partner_only)
+  app.post('/api/tender-intel/decision', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    const { tenderId, action, notes } = req.body;
+    if (!tenderId || !action) return res.status(400).json({ error: 'tenderId and action required' });
+    try {
+      await tenderIntel.recordDecision(pool, { tenderId, action, notes });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/profile
+  app.get('/api/tender-intel/profile', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json(tenderIntel.DEFAULT_PROFILE);
+    try { res.json(await tenderIntel.getProfile(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // PUT /api/tender-intel/profile
+  app.put('/api/tender-intel/profile', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    try { await tenderIntel.saveProfile(pool, req.body); res.json({ success: true }); }
+    catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /api/tender-intel/digest
+  app.get('/api/tender-intel/digest', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json({ stats: { newToday:0, priority:0, closingSoon:0, sourcesOk:'0/0' }, tenders:[], lastRun:null, _mock:true });
+    try {
+      const data = await tenderIntel.getDigest(pool);
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/tenders
+  app.get('/api/tender-intel/tenders', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json({ tenders:[], total:0, _mock:true });
+    try {
+      const { jurisdiction, label, status, search, limit, offset } = req.query;
+      const data = await tenderIntel.getTenders(pool, {
+        jurisdiction, label, status, search,
+        limit: Math.min(parseInt(limit) || 50, 200),
+        offset: parseInt(offset) || 0,
+      });
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/sources
+  app.get('/api/tender-intel/sources', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    try {
+      const { jurisdiction, status } = req.query;
+      const sources = await tenderIntel.getSources(pool, { jurisdiction, status });
+      res.json(sources);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/tender-intel/logs
+  app.get('/api/tender-intel/logs', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.json([]);
+    try {
+      const { limit } = req.query;
+      const logs = await tenderIntel.getLogs(pool, { limit: Math.min(parseInt(limit) || 100, 500) });
+      res.json(logs);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/tender-intel/discover  — manual source discovery (SSE streaming)
+  app.post('/api/tender-intel/discover', async (req, res) => {
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ error: 'DATABASE_URL not set' });
+    }
+    // Server-Sent Events stream — client reads progress events in real-time
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+    res.flushHeaders();
+
+    const emit = (data) => {
+      try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch (_) {}
+    };
+
+    try {
+      scheduleRegistry.markRunning('tender-intel:source-discovery');
+      const result = await tenderIntel.runSourceDiscovery(pool, emit);
+      scheduleRegistry.markCompleted('tender-intel:source-discovery', {
+        result: `${result.newSources.length} new sources from ${result.hubsScanned} hubs`,
+        durationMs: result.durationMs,
+      });
+    } catch (err) {
+      scheduleRegistry.markFailed('tender-intel:source-discovery', err.message);
+      emit({ type: 'error', error: err.message });
+    }
+    res.end();
+  });
+
+  // POST /api/tender-intel/ingest  — manual trigger, SSE streaming progress
+  // Manual trigger always runs all sources (skipRecentHours=0).
+  app.post('/api/tender-intel/ingest', async (req, res) => {
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ error: 'DATABASE_URL not set' });
+    }
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const emit = (data) => {
+      try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch (_) {}
+    };
+
+    try {
+      scheduleRegistry.markRunning('tender-intel:daily-ingestion');
+      const summary = await tenderIntel.runIngestion(pool, emit, 0); // 0 = run all, no skip
+      scheduleRegistry.markCompleted('tender-intel:daily-ingestion', {
+        result: `${summary.newRawCaptures} new captures, ${summary.tendersInserted} tenders`,
+        durationMs: summary.durationMs,
+      });
+    } catch (err) {
+      scheduleRegistry.markFailed('tender-intel:daily-ingestion', err.message);
+      emit({ type: 'error', error: err.message });
+    }
+    res.end();
+  });
+
+  // POST /api/tender-intel/chat  — AI chat assistant used by frontend layout
+  app.post('/api/tender-intel/chat', async (req, res) => {
+    const { messages } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages array required' });
+    }
+    try {
+      const Anthropic = require('@anthropic-ai/sdk');
+      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const response = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: 'You are a tender intelligence assistant for HK and Singapore government procurement. Help the user understand tenders, evaluate opportunities, find relevant sources, and plan bid responses. Be concise and practical.',
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+      });
+      res.json({ content: response.content[0]?.text || '', role: 'assistant' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+}
 
 // ==========================================
 // Start Server

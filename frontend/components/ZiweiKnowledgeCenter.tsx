@@ -508,7 +508,7 @@ export default function ZiweiKnowledgeCenter() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-white mb-2">📚 Ziwei Knowledge Center</h2>
+        <h2 className="text-2xl font-bold text-white mb-2">🧠 Ziwei Intelligence</h2>
         <p className="text-slate-400">Manage knowledge gaps, scraping progress, and continuous improvement</p>
       </div>
 

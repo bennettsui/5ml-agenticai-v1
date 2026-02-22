@@ -215,6 +215,26 @@ export const USE_CASES: UseCaseConfig[] = [
     features: ['Pipeline Orchestrator', 'Temporal Fetchers', 'Data Validator', 'Backfill Manager', 'Report Generator'],
   },
   {
+    id: 'sme-growth-engine',
+    name: 'SME Growth Engine',
+    description: '7-agent lead generation system covering lead scoring, personalised email nurture, campaign analytics, retargeting strategy, CRO, demo pipeline, and lead intelligence',
+    solutionLine: 'GrowthOS',
+    status: 'in_progress',
+    progress: 0.70,
+    priority: 'high',
+    path: '#',
+    agentCount: 7,
+    features: [
+      'Lead Scoring Agent',
+      'Lead Intelligence Agent',
+      'Email Nurture Agent',
+      'Demo Closer Agent',
+      'Campaign Analytics Agent',
+      'Retargeting Strategist Agent',
+      'Conversion Optimizer Agent',
+    ],
+  },
+  {
     id: 'community-management',
     name: 'Community Management',
     description: 'Automated engagement, moderation, and community growth across platforms',
@@ -556,6 +576,18 @@ export const USE_CASES: UseCaseConfig[] = [
     agentCount: 3,
     features: ['Image Upload (File/URL/Paste)', 'Video URL Analysis (YouTube)', 'Reverse Prompt Engineering', 'Style Template Builder', 'Canvas Annotation', 'Brand Profile Linking'],
   },
+  {
+    id: 'image-compression',
+    name: 'Image Compression',
+    description: 'Profile-driven image compression service powered by sharp: resize, re-encode to WebP/AVIF/JPEG, and enforce KB budgets for content, tender, and social agents',
+    solutionLine: 'ExpLab',
+    status: 'live',
+    progress: 1.0,
+    priority: 'high',
+    path: '/dashboard?tab=image-compression',
+    agentCount: 0,
+    features: ['5 Compression Profiles (auto/web/lossless/thumbnail/aggressive)', 'WebP + AVIF + JPEG + PNG Output', 'Max-KB Budget Enforcement', 'Tag-based Overrides (social/tender/client_review)', 'File Upload + URL + Local Path Sources', 'Detailed Compression Logs'],
+  },
 
   // ========================================================================
   // FRONTIER VENTURES — FrontierVentures
@@ -652,14 +684,15 @@ export const USE_CASES: UseCaseConfig[] = [
   },
   {
     id: 'pdf-compressor',
-    name: 'PDF Compressor',
-    description: 'Compress, merge, split and optimise PDF files with configurable quality targets and metadata stripping',
-    solutionLine: 'FrontierVentures',
-    status: 'planned',
-    progress: 0,
-    priority: 'medium',
-    path: '#',
-    features: ['Compress PDF', 'Merge PDFs', 'Split Pages', 'Metadata Strip', 'Quality Presets'],
+    name: 'PDF Compression Service',
+    description: 'Self-hosted PDF compression pipeline: lossless, balanced, web & small profiles using pdfsizeopt, Ghostscript (pdfc), pdfEasyCompress, and Paperweight. Used by ingestion, tender, and sharing agents.',
+    solutionLine: 'ExpLab',
+    status: 'in_progress',
+    progress: 0.65,
+    priority: 'high',
+    path: '/dashboard?tab=pdf-compression',
+    agentCount: 3,
+    features: ['Lossless (pdfsizeopt)', 'Balanced (Ghostscript)', 'Web/Small Profiles', 'Auto Strategy', 'Tool Chain Fallback', 'JSON API', 'Docker Ready'],
   },
   {
     id: 'ziwei-astrology',
@@ -725,6 +758,18 @@ export const USE_CASES: UseCaseConfig[] = [
   // ========================================================================
   // GOVERNMENT PROCUREMENT — GovProcurement
   // ========================================================================
+  {
+    id: 'hk-sg-tender-intelligence',
+    name: 'HK+SG Tender Intelligence',
+    description: 'Daily discovery, ingestion, evaluation and digest for HK+SG government tenders — 10 agents covering source discovery, XML/RSS/HTML ingestion, scoring and daily alerts',
+    solutionLine: 'GovProcurement',
+    status: 'in_progress',
+    progress: 0.35,
+    priority: 'high',
+    path: '/use-cases/hk-sg-tender-intel',
+    agentCount: 10,
+    features: ['Daily Digest', 'Source Registry', 'XML/RSS Ingestion', 'HTML Scraping', 'Capability Scoring', 'Feedback Learning', 'Daily Alerts', 'Source Discovery'],
+  },
   {
     id: 'government-tender-ops',
     name: 'Government Tender Operations',

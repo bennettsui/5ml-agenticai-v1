@@ -20,9 +20,11 @@ export default function CommunityPage() {
       {/* ==================== HERO ==================== */}
       <section className="relative min-h-[55vh] flex items-end overflow-hidden bg-neutral-900">
         <img
-          src="/tedx-xinyi/hero-community.png"
+          src="/tedx-xinyi/hero-community.webp"
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
           onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.7'; }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
@@ -50,7 +52,7 @@ export default function CommunityPage() {
             <FadeIn>
               <SectionLabel>CURRENT SALON</SectionLabel>
               <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-6" lang="zh-TW">
-                最新 Salon｜We are Becoming – AI趨勢沙龍
+                最新 Salon｜<span className="font-handwriting text-3xl sm:text-4xl md:text-5xl">We are Becoming</span> – AI時代趨勢沙龍
               </h2>
             </FadeIn>
             <FadeIn delay={150}>
@@ -77,7 +79,7 @@ export default function CommunityPage() {
           <FadeIn delay={200}>
             <div className="aspect-video rounded-xl overflow-hidden bg-neutral-100">
               <img
-                src="/tedx-xinyi/salon-teaser.png"
+                src="/tedx-xinyi/salon-teaser.webp"
                 alt=""
                 className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
                 onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}

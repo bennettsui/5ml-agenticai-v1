@@ -1,0 +1,826 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "created": "2026-02-21",
+    "description": "Seed source registry for HK+SG Tender Intelligence Layer. Start with these; agent expands by scanning hub pages.",
+    "stages": {
+      "stage_1": "HK + SG government — these entries (priority 1-2)",
+      "stage_2": "Public orgs, NGOs, international — entries marked priority 3"
+    }
+  },
+
+  "sources": [
+
+    {
+      "source_id": "hk-gld-etb-xml",
+      "name": "GLD e-Tender Box – Open Tenders (XML)",
+      "organisation": "Government Logistics Department (GLD)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "api_xml",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://data.gov.hk/en-data/dataset/hk-gld-gldetb-gldetb-tendernotice",
+      "feed_url": "https://data.gov.hk/en-data/dataset/hk-gld-gldetb-gldetb-tendernotice/resource/16d4f5cd-45e1-496a-bcf4-f424d35e2ad1",
+      "ingest_method": "xml_download",
+      "update_pattern": "daily",
+      "update_times_hkt": ["00:05", "12:05", "14:00"],
+      "fields_in_source": [
+        "Tender Reference",
+        "Subject",
+        "Requisitioning / Issuing Department",
+        "Closing Date",
+        "Closing Time"
+      ],
+      "field_map": {
+        "tender_ref": "Tender Reference",
+        "title": "Subject",
+        "agency": "Requisitioning / Issuing Department",
+        "closing_date": "Closing Date",
+        "closing_time": "Closing Time"
+      },
+      "category_tags_default": ["government_procurement"],
+      "legal_notes": "Public open data on data.gov.hk. No robots.txt restriction. Data licence: HK Open Data Licence.",
+      "notes": "PRIMARY source for cross-departmental HK gov tenders. Covers tenders issued via e-Tender Box (ETB). Updated multiple times daily — once-per-day poll is sufficient for our cadence.",
+      "tags": ["hk", "gov", "xml", "all-departments", "primary"]
+    },
+
+    {
+      "source_id": "hk-gld-tenders-awarded-csv",
+      "name": "GLD Tenders Awarded – Historical CSV",
+      "organisation": "Intellectual Property Department / GLD (data.gov.hk)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "csv_open_data",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://data.gov.hk/en-data/dataset/hk-ipd-ipstat-tenders-awarded",
+      "feed_url": "https://data.gov.hk/en-data/dataset/hk-ipd-ipstat-tenders-awarded",
+      "ingest_method": "csv_download",
+      "update_pattern": "periodic",
+      "fields_in_source": [
+        "Tender Reference",
+        "Subject",
+        "Department",
+        "Awarded Date",
+        "Awarded Contractor",
+        "Awarded Amount"
+      ],
+      "field_map": {
+        "tender_ref": "Tender Reference",
+        "title": "Subject",
+        "agency": "Department",
+        "awarded_date": "Awarded Date",
+        "awarded_contractor": "Awarded Contractor",
+        "awarded_amount": "Awarded Amount"
+      },
+      "category_tags_default": ["government_procurement", "awarded"],
+      "legal_notes": "Public open data on data.gov.hk. HK Open Data Licence.",
+      "notes": "HISTORICAL source for win/loss analysis and market intelligence. Not for live tender alerts — use for FeedbackLearningAgent baseline calibration and competitor pattern analysis.",
+      "tags": ["hk", "gov", "csv", "historical", "awards"]
+    },
+
+    {
+      "source_id": "hk-emsd-rss-tender-notices",
+      "name": "EMSD – Tender Notices RSS",
+      "organisation": "Electrical and Mechanical Services Department (EMSD)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "rss_xml",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.emsd.gov.hk/en/tenders_contracts_and_consultancies/tender_notices/index.html",
+      "feed_url": "http://www.emsd.gov.hk/filemanager/tendernotice/en/tender_notices.xml",
+      "ingest_method": "rss_poll",
+      "update_pattern": "irregular",
+      "fields_in_source": ["title", "link", "pubDate", "description"],
+      "field_map": {
+        "title": "title (may contain tender ref inline — extract with regex)",
+        "source_url": "link",
+        "publish_date": "pubDate",
+        "description_snippet": "description"
+      },
+      "parsing_notes": "tender_ref often embedded inside <title>, e.g. 'EMSD(T)23/2025 - Supply of...' — extract with pattern /EMSD[^\\s]+/",
+      "category_tags_default": ["facilities_management", "engineering", "mechanical_electrical"],
+      "legal_notes": "Public RSS feed. No robots.txt restriction found on emsd.gov.hk.",
+      "notes": "Good coverage of EMSD-specific contracts (lifts, escalators, electrical, mechanical). Important for facilities-type tenders.",
+      "tags": ["hk", "gov", "rss", "emsd", "engineering"]
+    },
+
+    {
+      "source_id": "hk-emsd-rss-consultancy-eoi",
+      "name": "EMSD – Expression of Interest / Consultancy RSS",
+      "organisation": "Electrical and Mechanical Services Department (EMSD)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "rss_xml",
+      "access": "public",
+      "priority": 2,
+      "status": "active",
+      "discovery_hub_url": "https://www.emsd.gov.hk/en/tenders_contracts_and_consultancies/tender_notices/index.html",
+      "feed_url": "http://www.emsd.gov.hk/filemanager/tendernotice/en/consultancy.xml",
+      "ingest_method": "rss_poll",
+      "update_pattern": "irregular",
+      "fields_in_source": ["title", "link", "pubDate", "description"],
+      "field_map": {
+        "title": "title",
+        "source_url": "link",
+        "publish_date": "pubDate",
+        "description_snippet": "description"
+      },
+      "category_tags_default": ["consultancy_advisory", "engineering"],
+      "legal_notes": "Public RSS feed.",
+      "notes": "Covers EOI and consultancy calls from EMSD — smaller-scale but potentially relevant for advisory/consultancy services.",
+      "tags": ["hk", "gov", "rss", "emsd", "consultancy", "eoi"]
+    },
+
+    {
+      "source_id": "hk-archsd-rss-tender-notices",
+      "name": "ArchSD – Tender Notices RSS",
+      "organisation": "Architectural Services Department (ArchSD)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "rss_xml",
+      "access": "public",
+      "priority": 1,
+      "status": "pending_validation",
+      "discovery_hub_url": "https://www.archsd.gov.hk/en/rss-feeds.html",
+      "feed_url": "https://www.archsd.gov.hk/en/rss-feeds/tender-notices.xml",
+      "feed_url_note": "URL inferred from hub page pattern — agent must validate on first run",
+      "ingest_method": "rss_poll",
+      "update_pattern": "irregular",
+      "fields_in_source": ["title", "link", "pubDate", "description"],
+      "field_map": {
+        "title": "title",
+        "source_url": "link",
+        "publish_date": "pubDate",
+        "description_snippet": "description"
+      },
+      "category_tags_default": ["construction_works", "architecture", "building"],
+      "legal_notes": "Public government page. Validate robots.txt at archsd.gov.hk.",
+      "notes": "ArchSD handles public building works — primarily construction tenders. Likely lower relevance for IT/events work but good for market awareness. Agent should fetch hub page first to confirm actual RSS URL.",
+      "tags": ["hk", "gov", "rss", "archsd", "construction"]
+    },
+
+    {
+      "source_id": "hk-dsd-rss-hub",
+      "name": "DSD – RSS Feeds Index (Hub)",
+      "organisation": "Drainage Services Department (DSD)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.dsd.gov.hk/EN/RSS_Feeds/index.html",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "irregular",
+      "category_tags_default": ["construction_works", "civil_engineering", "drainage"],
+      "legal_notes": "Public government page.",
+      "notes": "This is a HUB — agent should fetch this page and extract individual RSS feed URLs (Current Tenders, Consultancy, Awarded Contracts). Each sub-feed becomes its own source_registry entry. Do not ingest this URL directly.",
+      "sub_feeds_expected": [
+        "Current Tenders RSS",
+        "Consultancy Agreements RSS",
+        "Awarded Contracts RSS",
+        "Expression of Interest RSS"
+      ],
+      "tags": ["hk", "gov", "rss-hub", "dsd", "construction"]
+    },
+
+    {
+      "source_id": "hk-rvd-rss-hub",
+      "name": "RVD – RSS Feeds Index (Hub)",
+      "organisation": "Rating and Valuation Department (RVD)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 2,
+      "status": "pending_validation",
+      "discovery_hub_url": "https://www.rvd.gov.hk/en/RSS/index.html",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "irregular",
+      "category_tags_default": ["government_procurement"],
+      "legal_notes": "Public government page.",
+      "notes": "Hub for RVD RSS feeds. May contain tender-related announcements. Agent should fetch and check if any feeds contain tender/procurement content. Lower priority — validate before committing to regular polling.",
+      "tags": ["hk", "gov", "rss-hub", "rvd", "validation-needed"]
+    },
+
+    {
+      "source_id": "hk-govhk-rss-directory",
+      "name": "GovHK – RSS Feeds Directory (Discovery Hub)",
+      "organisation": "GovHK / OGCIO",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.gov.hk/en/about/rss.htm",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "weekly_discovery",
+      "category_tags_default": [],
+      "legal_notes": "Public GovHK page.",
+      "notes": "PRIMARY DISCOVERY HUB. SourceDiscoveryAgent scans this page weekly. Extract all RSS feed links, filter those with 'tender', 'procurement', 'quotation', '招標', 'EOI' in their title or channel description. Each qualifying feed becomes a new source_registry candidate for SourceValidatorAgent.",
+      "agent_instructions": {
+        "action": "scan_for_rss_links",
+        "filter_keywords": ["tender", "procurement", "quotation", "EOI", "招標", "招募", "bidding"],
+        "output": "list of candidate RSS URLs → feed to SourceValidatorAgent"
+      },
+      "tags": ["hk", "gov", "discovery-hub", "weekly-scan"]
+    },
+
+    {
+      "source_id": "hk-fstb-tender-hub",
+      "name": "FSTB – Tender Notices Hub (HTML)",
+      "organisation": "Financial Services and the Treasury Bureau (FSTB)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.fstb.gov.hk/tb/en/business/gov_procurement/tender-notices.htm",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "weekly_discovery",
+      "category_tags_default": ["government_procurement"],
+      "legal_notes": "Public government page.",
+      "notes": "Aggregates links to tender notice pages across multiple bureaux and departments. Use as a DISCOVERY SOURCE: extract all department tender page links, then create individual html_list source entries for each department that does not already have an RSS feed. Check weekly for new departments added.",
+      "agent_instructions": {
+        "action": "extract_department_tender_links",
+        "for_each_link": "check if dept already in source_registry; if not, add as candidate for SourceValidatorAgent",
+        "output": "list of department tender page URLs"
+      },
+      "tags": ["hk", "gov", "discovery-hub", "html", "fstb", "weekly-scan"]
+    },
+
+    {
+      "source_id": "hk-hyd-tender-list",
+      "name": "HyD – Tender Notices List (HTML)",
+      "organisation": "Highways Department (HyD)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "html_list",
+      "access": "public",
+      "priority": 2,
+      "status": "pending_validation",
+      "discovery_hub_url": "https://www.hyd.gov.hk/en/tender_notices/contracts/prequalifications_and_tender_notices/",
+      "feed_url": null,
+      "ingest_method": "html_scrape",
+      "update_pattern": "irregular",
+      "scraping_config": {
+        "note": "URL provided is a specific 2025 tender example page, not the index. Agent must find the HyD tender listing index URL (likely at /en/tender_notices/ or /en/tender_notices/contracts/).",
+        "list_page_to_discover": "https://www.hyd.gov.hk/en/tender_notices/",
+        "list_selector_hint": "table.tenderList tr, or ul.tenderItems li — validate on first agent run",
+        "field_map_hint": {
+          "tender_ref": "First column (e.g. HY202514)",
+          "title": "Second column or anchor text",
+          "closing_date": "Date column",
+          "source_url": "href on tender ref or title"
+        }
+      },
+      "category_tags_default": ["construction_works", "highway_infrastructure"],
+      "legal_notes": "Public government page. Validate robots.txt at hyd.gov.hk.",
+      "notes": "HyD handles highways and civil engineering. Lower relevance for IT/events but useful for market mapping. Agent must first discover the correct listing page URL before building scraping_config.",
+      "tags": ["hk", "gov", "html", "hyd", "construction", "validation-needed"]
+    },
+
+    {
+      "source_id": "sg-gebiz-public-listing",
+      "name": "GeBIZ – Business Opportunities Public Listing (HTML)",
+      "organisation": "Government of Singapore / Ministry of Finance",
+      "owner_type": "gov",
+      "jurisdiction": "SG",
+      "source_type": "html_list",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.gebiz.gov.sg",
+      "feed_url": null,
+      "ingest_method": "html_scrape",
+      "update_pattern": "daily",
+      "scraping_config": {
+        "note": "GeBIZ public listing is accessible without login via the main site. Navigate to Business Opportunities section.",
+        "entry_url": "https://www.gebiz.gov.sg/ptn/opportunity/BOListing.xhtml",
+        "list_selector_hint": "table rows in opportunities listing — validate structure on first run",
+        "field_map_hint": {
+          "tender_ref": "ITQ/ITT reference number column",
+          "title": "Description/Title column",
+          "agency": "Agency column",
+          "closing_date": "Closing Date column",
+          "source_url": "href on reference or title"
+        },
+        "pagination": {
+          "type": "page_param",
+          "note": "GeBIZ listing is paginated — agent should follow pages until no new items"
+        }
+      },
+      "category_tags_default": ["government_procurement"],
+      "legal_notes": "Public page on gebiz.gov.sg. Respect robots.txt. No login required for listing view. Rate-limit: 2s delay between page requests.",
+      "notes": "PRIMARY source for SG government tenders. GeBIZ is the central procurement portal for Singapore government. No RSS feed is publicly available without Trading Partner login — HTML scraping is the required method.",
+      "tags": ["sg", "gov", "html", "gebiz", "primary"]
+    },
+
+    {
+      "source_id": "sg-gebiz-rss-trading-partner",
+      "name": "GeBIZ – RSS Feeds (Trading Partners Only)",
+      "organisation": "Government of Singapore / GeBIZ",
+      "owner_type": "gov",
+      "jurisdiction": "SG",
+      "source_type": "rss_xml",
+      "access": "login_required",
+      "priority": 2,
+      "status": "deferred",
+      "discovery_hub_url": "https://www.gebiz.gov.sg/docs/GeBIZ_Quicktips.pdf",
+      "feed_url": null,
+      "feed_url_note": "URLs only available after GeBIZ Trading Partner login. Store as internal config once obtained.",
+      "ingest_method": "rss_poll_authenticated",
+      "update_pattern": "real_time",
+      "category_tags_default": ["government_procurement"],
+      "legal_notes": "Requires GeBIZ Trading Partner registration. RSS URLs are session-specific or partner-specific.",
+      "notes": "GeBIZ RSS feeds exist for Trading Partners (registered suppliers) and allow filtering by procurement category. If/when we obtain GTP access, these are preferable to HTML scraping. For now, use sg-gebiz-public-listing (HTML scrape) as the active source.",
+      "tags": ["sg", "gov", "rss", "gebiz", "login-required", "deferred"]
+    },
+
+    {
+      "source_id": "sg-gebiz-developer-guide",
+      "name": "GeBIZ – Developer & Procurement Guide (Discovery Reference)",
+      "organisation": "GovTech Singapore",
+      "owner_type": "gov",
+      "jurisdiction": "SG",
+      "source_type": "html_reference",
+      "access": "public",
+      "priority": 3,
+      "status": "reference_only",
+      "discovery_hub_url": "https://www.developer.tech.gov.sg/guidelines/procurement/gebiz.html",
+      "feed_url": null,
+      "ingest_method": "none",
+      "update_pattern": "irregular",
+      "category_tags_default": [],
+      "legal_notes": "Public GovTech page.",
+      "notes": "Reference page only — not an ingestion source. Contains information about GeBIZ's procurement categories and structure. Useful for understanding taxonomy mapping when classifying SG tenders.",
+      "tags": ["sg", "gov", "reference", "gebiz", "taxonomy"]
+    },
+
+    {
+      "source_id": "intl-usgov-grants-gov-rss",
+      "name": "Grants.gov – New Opportunities RSS (USA Federal, incl. NGO/research grants)",
+      "organisation": "US Department of Health & Human Services (grants.gov operator)",
+      "owner_type": "gov",
+      "jurisdiction": "US",
+      "source_type": "rss_xml",
+      "access": "public",
+      "priority": 3,
+      "status": "stage_2_only",
+      "discovery_hub_url": "https://www.grants.gov/connect/rss-feeds",
+      "feed_url": "https://www.grants.gov/rss/GG_NewOppByAgency.xml",
+      "additional_feeds": [
+        "https://www.grants.gov/rss/GG_NewOppByCategory.xml",
+        "https://www.grants.gov/rss/GG_ModifiedOppByAgency.xml"
+      ],
+      "ingest_method": "rss_poll",
+      "update_pattern": "daily",
+      "fields_in_source": ["title", "link", "pubDate", "description", "category"],
+      "field_map": {
+        "title": "title",
+        "source_url": "link",
+        "publish_date": "pubDate",
+        "agency": "category (agency name)",
+        "description_snippet": "description"
+      },
+      "category_tags_default": ["grant_funding", "research_study", "social_services"],
+      "legal_notes": "Fully public RSS from US federal government grants portal.",
+      "notes": "Stage 2 only — include when expanding to NGO/grant tracking. Grants.gov covers US federal grants across many agencies, many of which accept international applicants. High volume (~100+ items/day) — apply category filtering to reduce noise. Use as a TEMPLATE for how to model grant-type RSS sources.",
+      "tags": ["us", "gov", "rss", "grants", "ngo-relevant", "stage-2"]
+    },
+
+    {
+      "source_id": "intl-eu-ecdc-procurement-rss",
+      "name": "ECDC – Procurement & Grants RSS (EU Public Health Agency)",
+      "organisation": "European Centre for Disease Prevention and Control (ECDC)",
+      "owner_type": "multilateral",
+      "jurisdiction": "EU",
+      "source_type": "rss_xml",
+      "access": "public",
+      "priority": 3,
+      "status": "stage_2_only",
+      "discovery_hub_url": "https://www.ecdc.europa.eu/en/about-ecdc/procurement-and-grants",
+      "feed_url": "https://ecdc.europa.eu/en/rss-feeds",
+      "feed_url_note": "Navigate to /en/rss-feeds to find the procurement/grants specific RSS sub-feed URL",
+      "ingest_method": "rss_poll",
+      "update_pattern": "irregular",
+      "category_tags_default": ["consultancy_advisory", "research_study", "grant_funding"],
+      "legal_notes": "Public EU agency page.",
+      "notes": "Stage 2 example of EU multilateral procurement/grant source. Use as a template pattern for similar EU agency RSS feeds (EMA, EIB, etc.). Volume is low — safe to poll daily.",
+      "tags": ["eu", "multilateral", "rss", "public-health", "stage-2"]
+    },
+
+    {
+      "source_id": "hk-isd-tender-hub",
+      "name": "ISD – Tender Notices (Information Services Department)",
+      "organisation": "Information Services Department (ISD)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.isd.gov.hk/eng/tenders_contracts.htm",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "weekly",
+      "category_tags_default": ["marketing_comms", "media_production", "public_education"],
+      "legal_notes": "Public government page.",
+      "notes": "ISD manages government communications, public education campaigns, media production, and publications. HIGH PRIORITY for 5ML — ISD posts tenders for advertising, media buying, creative production, website services, social media management, and public relations. Check for RSS; if unavailable, scrape the tender list page.",
+      "tags": ["hk", "gov", "isd", "comms", "marketing", "high-relevance"]
+    },
+
+    {
+      "source_id": "hk-lcsd-tender-hub",
+      "name": "LCSD – Tender Notices (Leisure and Cultural Services Department)",
+      "organisation": "Leisure and Cultural Services Department (LCSD)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.lcsd.gov.hk/en/tendernotices.html",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "weekly",
+      "category_tags_default": ["events_experiential", "cultural_arts", "facilities_management"],
+      "legal_notes": "Public government page.",
+      "notes": "LCSD manages parks, sports facilities, museums, performance venues, and cultural events. HIGH PRIORITY for 5ML — posts tenders for events management, arts programming, entertainment services, digital displays, and experiential activations. Relevant for AI Photo Booth, event tech, and experiential services.",
+      "tags": ["hk", "gov", "lcsd", "events", "cultural", "experiential", "high-relevance"]
+    },
+
+    {
+      "source_id": "hk-ogcio-tender-hub",
+      "name": "OGCIO – IT Tenders and Procurement Hub",
+      "organisation": "Office of the Government Chief Information Officer (OGCIO)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.ogcio.gov.hk/en/tenders_and_quotations/",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "weekly",
+      "category_tags_default": ["IT_digital", "consultancy_advisory", "digital_transformation"],
+      "legal_notes": "Public government page.",
+      "notes": "OGCIO drives digital government, smart city, and cybersecurity. HIGH PRIORITY for 5ML — posts tenders for IT services, AI/ML projects, digital platforms, system integration, data analytics, and technology consultancy. Strong alignment with 5ML's agentic AI capabilities.",
+      "tags": ["hk", "gov", "ogcio", "IT", "digital", "AI", "high-relevance"]
+    },
+
+    {
+      "source_id": "hk-itc-tender-hub",
+      "name": "ITC – Tender Notices (Innovation and Technology Commission)",
+      "organisation": "Innovation and Technology Commission (ITC)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.itc.gov.hk/en/general/tenders.html",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "weekly",
+      "category_tags_default": ["IT_digital", "research_study", "consultancy_advisory"],
+      "legal_notes": "Public government page.",
+      "notes": "ITC oversees innovation and technology policy, R&D funding, and smart city projects. Posts tenders for technology research, innovation studies, IT systems, and AI-related projects. Strong alignment with 5ML's AI and automation capabilities.",
+      "tags": ["hk", "gov", "itc", "innovation", "AI", "tech", "high-relevance"]
+    },
+
+    {
+      "source_id": "hk-hktdc-tender-hub",
+      "name": "HKTDC – Procurement and Tenders",
+      "organisation": "Hong Kong Trade Development Council (HKTDC)",
+      "owner_type": "statutory",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.hktdc.com/about-us/tenders-and-procurement",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "weekly",
+      "category_tags_default": ["events_experiential", "marketing_comms", "media_production"],
+      "legal_notes": "Public statutory body page.",
+      "notes": "HKTDC organises major trade fairs (e.g. Electronics Fair, Book Fair, Food Expo) and international events. Posts tenders for event production, marketing services, creative services, digital platforms, booth design, and event tech. Very high relevance for 5ML's events and marketing capabilities.",
+      "tags": ["hk", "statutory", "hktdc", "events", "trade-fairs", "marketing", "high-relevance"]
+    },
+
+    {
+      "source_id": "hk-hktb-tender-hub",
+      "name": "HKTB – Tenders and Procurement",
+      "organisation": "Hong Kong Tourism Board (HKTB)",
+      "owner_type": "statutory",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.discoverhongkong.com/about-hktb/procurement/tenders.html",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "weekly",
+      "category_tags_default": ["marketing_comms", "events_experiential", "media_production"],
+      "legal_notes": "Public statutory body page.",
+      "notes": "HKTB promotes HK as a tourist destination. Posts tenders for tourism marketing campaigns, digital media, creative production, events, and research studies. Relevant for 5ML's marketing, events, and digital capabilities.",
+      "tags": ["hk", "statutory", "hktb", "tourism", "marketing", "events", "high-relevance"]
+    },
+
+    {
+      "source_id": "hk-createhk-tender-hub",
+      "name": "CreateHK – Creative Industries Funding and Tenders",
+      "organisation": "Create Hong Kong (CreateHK) / Commerce and Economic Development Bureau",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 2,
+      "status": "active",
+      "discovery_hub_url": "https://www.createhk.gov.hk/en/funding.htm",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "monthly",
+      "category_tags_default": ["marketing_comms", "media_production", "creative_arts"],
+      "legal_notes": "Public government page.",
+      "notes": "CreateHK supports creative industries in HK (film, design, digital entertainment). Posts tenders and funding opportunities for creative production, digital content, design services. Relevant for 5ML's creative and digital media capabilities.",
+      "tags": ["hk", "gov", "createhk", "creative", "media", "design"]
+    },
+
+    {
+      "source_id": "hk-investhk-tender-hub",
+      "name": "InvestHK – Tenders and Procurement",
+      "organisation": "Invest Hong Kong (InvestHK)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 2,
+      "status": "active",
+      "discovery_hub_url": "https://www.investhk.gov.hk/en/about-investhk/procurement.html",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "monthly",
+      "category_tags_default": ["marketing_comms", "consultancy_advisory", "events_experiential"],
+      "legal_notes": "Public government page.",
+      "notes": "InvestHK promotes HK as an investment destination. Posts tenders for marketing campaigns, events, digital services, and research. Relevant for 5ML's marketing and events capabilities.",
+      "tags": ["hk", "gov", "investhk", "investment-promotion", "marketing"]
+    },
+
+    {
+      "source_id": "hk-had-tender-hub",
+      "name": "HAD – Tender Notices (Home Affairs Department)",
+      "organisation": "Home Affairs Department (HAD)",
+      "owner_type": "gov",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 2,
+      "status": "active",
+      "discovery_hub_url": "https://www.had.gov.hk/en/tenders_quotations/index.htm",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "weekly",
+      "category_tags_default": ["events_experiential", "marketing_comms", "community_engagement"],
+      "legal_notes": "Public government page.",
+      "notes": "HAD manages community affairs, district administration, and public engagement. Posts tenders for community events, cultural activities, public education campaigns, and IT systems for district offices. Relevant for events and community engagement services.",
+      "tags": ["hk", "gov", "had", "community", "events", "district"]
+    },
+
+    {
+      "source_id": "hk-hkpc-tender-hub",
+      "name": "HKPC – Tenders (Hong Kong Productivity Council)",
+      "organisation": "Hong Kong Productivity Council (HKPC)",
+      "owner_type": "statutory",
+      "jurisdiction": "HK",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 2,
+      "status": "active",
+      "discovery_hub_url": "https://www.hkpc.org/en/about-hkpc/procurement",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "monthly",
+      "category_tags_default": ["IT_digital", "consultancy_advisory", "research_study"],
+      "legal_notes": "Public statutory body page.",
+      "notes": "HKPC drives productivity enhancement and innovation for HK industry. Posts tenders for IT services, digital transformation projects, AI/automation research, and consultancy studies. Relevant for 5ML's AI and automation capabilities.",
+      "tags": ["hk", "statutory", "hkpc", "IT", "automation", "productivity"]
+    },
+
+    {
+      "source_id": "sg-govtech-tender-hub",
+      "name": "GovTech Singapore – ICT Procurement",
+      "organisation": "Government Technology Agency of Singapore (GovTech)",
+      "owner_type": "gov",
+      "jurisdiction": "SG",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.tech.gov.sg/procurement/",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "weekly",
+      "category_tags_default": ["IT_digital", "consultancy_advisory", "digital_transformation"],
+      "legal_notes": "Public Singapore government page.",
+      "notes": "GovTech is Singapore's central IT procurement agency. Posts tenders for digital services, AI/ML projects, data analytics, system integration, and technology consultancy. HIGH PRIORITY for SG — strong alignment with 5ML's AI and automation capabilities. Check GeBIZ too for GovTech tenders posted there.",
+      "tags": ["sg", "gov", "govtech", "IT", "AI", "digital", "high-relevance"]
+    },
+
+    {
+      "source_id": "sg-stb-tender-hub",
+      "name": "STB – Tenders and Quotations (Singapore Tourism Board)",
+      "organisation": "Singapore Tourism Board (STB)",
+      "owner_type": "gov",
+      "jurisdiction": "SG",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.stb.gov.sg/content/stb/en/about-us/procurement.html",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "weekly",
+      "category_tags_default": ["marketing_comms", "events_experiential", "media_production"],
+      "legal_notes": "Public Singapore government page.",
+      "notes": "STB promotes Singapore tourism. Posts tenders for tourism marketing campaigns, events, digital media, creative production, and market research. Relevant for 5ML's marketing, events, and digital capabilities.",
+      "tags": ["sg", "gov", "stb", "tourism", "marketing", "events", "high-relevance"]
+    },
+
+    {
+      "source_id": "sg-enterprisesg-tender-hub",
+      "name": "Enterprise Singapore – Procurement and Tenders",
+      "organisation": "Enterprise Singapore",
+      "owner_type": "gov",
+      "jurisdiction": "SG",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.enterprisesg.gov.sg/about-us/our-procurement",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "monthly",
+      "category_tags_default": ["consultancy_advisory", "research_study", "marketing_comms"],
+      "legal_notes": "Public Singapore government page.",
+      "notes": "Enterprise Singapore supports business growth, innovation, and international expansion. Posts tenders for research studies, consultancy, digital services, and marketing. Relevant for 5ML's consultancy and AI capabilities, and for SG market entry strategy.",
+      "tags": ["sg", "gov", "enterprisesg", "business", "consultancy", "innovation"]
+    },
+
+    {
+      "source_id": "sg-imda-tender-hub",
+      "name": "IMDA – Procurement (Info-communications Media Development Authority)",
+      "organisation": "Info-communications Media Development Authority (IMDA)",
+      "owner_type": "gov",
+      "jurisdiction": "SG",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 1,
+      "status": "active",
+      "discovery_hub_url": "https://www.imda.gov.sg/about/procurement",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "weekly",
+      "category_tags_default": ["IT_digital", "marketing_comms", "media_production", "consultancy_advisory"],
+      "legal_notes": "Public Singapore government page.",
+      "notes": "IMDA regulates and develops Singapore's infocomm and media sectors. Posts tenders for digital media, IT services, content production, AI research, and innovation studies. HIGH PRIORITY for SG — strong alignment with 5ML's AI, media, and digital capabilities.",
+      "tags": ["sg", "gov", "imda", "digital", "media", "AI", "tech", "high-relevance"]
+    },
+
+    {
+      "source_id": "sg-nac-tender-hub",
+      "name": "NAC – Grants and Procurement (National Arts Council)",
+      "organisation": "National Arts Council Singapore (NAC)",
+      "owner_type": "gov",
+      "jurisdiction": "SG",
+      "source_type": "html_hub",
+      "access": "public",
+      "priority": 2,
+      "status": "active",
+      "discovery_hub_url": "https://www.nac.gov.sg/about-us/procurement",
+      "feed_url": null,
+      "ingest_method": "hub_page_scan",
+      "update_pattern": "monthly",
+      "category_tags_default": ["events_experiential", "cultural_arts", "creative_arts"],
+      "legal_notes": "Public Singapore government page.",
+      "notes": "NAC funds and promotes the arts in Singapore. Posts tenders for arts events, cultural productions, creative technology, and venue services. Relevant for 5ML's experiential and creative capabilities.",
+      "tags": ["sg", "gov", "nac", "arts", "events", "creative", "culture"]
+    },
+
+    {
+      "source_id": "discovery-feedspot-tender-rss",
+      "name": "Feedspot – Tender RSS Directory (Meta-discovery Reference)",
+      "organisation": "Feedspot (commercial aggregator)",
+      "owner_type": "other",
+      "jurisdiction": "global",
+      "source_type": "html_reference",
+      "access": "public",
+      "priority": 3,
+      "status": "reference_only",
+      "discovery_hub_url": "https://rss.feedspot.com/tender_rss_feeds/",
+      "feed_url": null,
+      "ingest_method": "none",
+      "update_pattern": "irregular",
+      "category_tags_default": [],
+      "legal_notes": "Commercial aggregator — do not scrape. Read manually for source discovery.",
+      "notes": "Use as a MANUAL REFERENCE during source discovery to identify additional gov/NGO RSS feeds worth adding to the registry. Do not ingest from feedspot itself — always go direct to the original source. Useful for understanding common RSS field patterns across different tender portals.",
+      "tags": ["global", "reference", "meta-discovery", "rss-directory"]
+    }
+
+  ],
+
+  "discovery_queue": {
+    "description": "These hub pages should be scanned by SourceDiscoveryAgent on first run to find additional RSS feeds to add to the registry.",
+    "hubs": [
+      {
+        "hub_id": "hk-govhk-rss-directory",
+        "url": "https://www.gov.hk/en/about/rss.htm",
+        "scan_method": "extract_all_rss_links_filter_by_keywords",
+        "keywords": ["tender", "procurement", "quotation", "EOI", "招標", "招募"]
+      },
+      {
+        "hub_id": "hk-fstb-tender-hub",
+        "url": "https://www.fstb.gov.hk/tb/en/business/gov_procurement/tender-notices.htm",
+        "scan_method": "extract_department_tender_page_links",
+        "keywords": ["tender", "procurement"]
+      },
+      {
+        "hub_id": "hk-dsd-rss-hub",
+        "url": "https://www.dsd.gov.hk/EN/RSS_Feeds/index.html",
+        "scan_method": "extract_all_rss_links",
+        "keywords": []
+      },
+      {
+        "hub_id": "hk-rvd-rss-hub",
+        "url": "https://www.rvd.gov.hk/en/RSS/index.html",
+        "scan_method": "extract_all_rss_links_validate_content",
+        "keywords": ["tender", "procurement"]
+      },
+      {
+        "hub_id": "hk-archsd-rss-hub",
+        "url": "https://www.archsd.gov.hk/en/rss-feeds.html",
+        "scan_method": "extract_all_rss_links",
+        "keywords": []
+      }
+    ]
+  },
+
+  "ingestion_schedule": {
+    "daily_sources": [
+      "hk-gld-etb-xml",
+      "hk-gld-tenders-awarded-csv",
+      "hk-emsd-rss-tender-notices",
+      "hk-emsd-rss-consultancy-eoi",
+      "hk-archsd-rss-tender-notices",
+      "sg-gebiz-public-listing"
+    ],
+    "weekly_hub_scan": [
+      "hk-isd-tender-hub",
+      "hk-lcsd-tender-hub",
+      "hk-ogcio-tender-hub",
+      "hk-itc-tender-hub",
+      "hk-hktdc-tender-hub",
+      "hk-hktb-tender-hub",
+      "hk-createhk-tender-hub",
+      "hk-investhk-tender-hub",
+      "hk-had-tender-hub",
+      "hk-hkpc-tender-hub",
+      "sg-govtech-tender-hub",
+      "sg-stb-tender-hub",
+      "sg-enterprisesg-tender-hub",
+      "sg-imda-tender-hub",
+      "sg-nac-tender-hub"
+    ],
+    "pending_first_run": [
+      "hk-dsd-rss-hub",
+      "hk-rvd-rss-hub",
+      "hk-hyd-tender-list"
+    ],
+    "weekly_discovery_scan": [
+      "hk-govhk-rss-directory",
+      "hk-fstb-tender-hub"
+    ],
+    "deferred": [
+      "sg-gebiz-rss-trading-partner"
+    ],
+    "stage_2_only": [
+      "intl-usgov-grants-gov-rss",
+      "intl-eu-ecdc-procurement-rss"
+    ]
+  }
+}

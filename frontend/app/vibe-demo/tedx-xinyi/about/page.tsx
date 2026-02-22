@@ -27,7 +27,7 @@ const TIMELINE = [
   },
   {
     year: '2026',
-    title: '「We are Becoming – AI趨勢沙龍」',
+    title: '「We are Becoming – AI時代趨勢沙龍」',
     date: '2026.03.31',
     link: null,
     text: '在北藝藍盒子，把 AI、未來敘事與城市生活放在同一個舞台上，邀請大家一起練習：在變動中持續 becoming。',
@@ -60,9 +60,11 @@ export default function AboutPage() {
       <section className="relative min-h-[65vh] flex items-end overflow-hidden bg-neutral-900">
         {/* nanobanana-generated background */}
         <img
-          src="/tedx-xinyi/hero-about.png"
+          src="/tedx-xinyi/hero-about.webp"
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
           onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.7'; }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />

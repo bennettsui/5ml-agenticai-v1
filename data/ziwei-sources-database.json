@@ -1,395 +1,1043 @@
 {
   "metadata": {
-    "version": "1.0",
-    "lastUpdated": "2026-02-18",
-    "totalSources": 32,
+    "version": "2.0",
+    "lastUpdated": "2026-02-21",
+    "totalSources": 26,
     "authorityBase": "王亭之 (Wang Ting Zhi) & 中州派 (Zhongzhou School)",
-    "scraperStatus": "pending",
+    "scraperStatus": "active",
     "coverage": {
       "mainStars": 14,
       "secondaryStars": 30,
       "minorStars": 60,
       "totalStars": 104,
       "palaces": 12,
-      "palmaceStarCombinations": 1248
+      "palaceStarCombinations": 1248
+    },
+    "ratingSchema": {
+      "description": "CRAAP-adapted trustability rating system for Ziwei Doushu sources. Score each dimension 1–5; overall trustScore = weighted mean.",
+      "methodology": "Adapted from Blakeslee (2004) CRAAP Test + Caulfield (2017) SIFT framework, customised for Chinese metaphysics knowledge evaluation. Academic reference: Blakeslee, S. (2004). The CRAAP test. LOEX Quarterly, 31(3), 4.",
+      "dimensions": {
+        "primaryAuthority": {
+          "label": "Primary Authority (权威性)",
+          "weight": 0.3,
+          "scale": {
+            "1": "Anonymous or unverifiable source",
+            "2": "Individual practitioners, informal blog with citations",
+            "3": "Recognised practitioner school, structured course material",
+            "4": "Formal school publications with named master attribution",
+            "5": "王亭之 original works / recognised Zhongzhou school texts"
+          }
+        },
+        "academicRigor": {
+          "label": "Academic Rigor (严谨性)",
+          "weight": 0.2,
+          "scale": {
+            "1": "Pure assertion, no methodology cited",
+            "2": "Practitioner opinion with partial evidence",
+            "3": "Structured educational content with clear methodology",
+            "4": "Formal school publication with systematic citation/sourcing",
+            "5": "Peer-reviewed academic paper or formal scholarly publication"
+          }
+        },
+        "empiricalEvidence": {
+          "label": "Empirical Evidence (实证性)",
+          "weight": 0.2,
+          "scale": {
+            "1": "Purely speculative, no case evidence",
+            "2": "Theory-only with 1-2 unverified examples",
+            "3": "Several illustrative case examples",
+            "4": "Multiple verified celebrity/named case studies",
+            "5": "Large-scale case studies (100+ charts) with statistics"
+          }
+        },
+        "consensusAlignment": {
+          "label": "Cross-School Consensus (共识度)",
+          "weight": 0.15,
+          "scale": {
+            "1": "Highly disputed or fringe interpretation",
+            "2": "Significant minority-school view; contested by others",
+            "3": "Some inter-school disagreement on interpretations",
+            "4": "Majority consensus; minor school variations noted",
+            "5": "Agreed across all major schools (Zhongzhou, Sihua, traditional)"
+          }
+        },
+        "contentCompleteness": {
+          "label": "Content Completeness (完整性)",
+          "weight": 0.15,
+          "scale": {
+            "1": "Minimal, fragmentary content",
+            "2": "Single topic / narrow scope",
+            "3": "Partial: main stars or palaces only",
+            "4": "Major coverage: main stars + key palaces",
+            "5": "Full system: all 104 stars, 12 palaces, luck cycles, 四化"
+          }
+        }
+      },
+      "trustGrades": {
+        "A": {
+          "range": "4.0–5.0",
+          "label": "High Trust",
+          "usagePolicy": "Use as primary source; cite directly"
+        },
+        "B": {
+          "range": "3.0–3.9",
+          "label": "Good Trust",
+          "usagePolicy": "Use with cross-validation against Grade A sources"
+        },
+        "C": {
+          "range": "2.0–2.9",
+          "label": "Moderate Trust",
+          "usagePolicy": "Use for orientation only; verify every claim"
+        },
+        "D": {
+          "range": "<2.0",
+          "label": "Low Trust",
+          "usagePolicy": "Do not use as factual basis; background reference only"
+        }
+      }
     }
   },
   "sources": [
     {
       "id": "source-001",
       "priority": 1,
-      "authority": "⭐⭐⭐⭐⭐",
       "type": "official_institute",
-      "name": "Ziwei.asia - Official Sihua 18 Flying Stars",
+      "name": "Ziwei.asia — Official Sihua 18 Flying Stars Institute",
       "url": "https://ziwei.asia/",
-      "school": "Sihua (Si Hua 飛星)",
-      "focusAreas": ["complete_system", "flying_stars", "interpretation", "online_courses"],
-      "scraperPriority": 1,
-      "contentTypes": ["star_meanings", "palace_interpretations", "flying_stars_rules", "courses"],
+      "school": "Sihua (飛星四化)",
+      "language": "en",
+      "focusAreas": [
+        "complete_system",
+        "flying_stars",
+        "interpretation",
+        "online_courses"
+      ],
+      "contentTypes": [
+        "star_meanings",
+        "palace_interpretations",
+        "flying_stars_rules",
+        "courses"
+      ],
       "status": "not_scraped",
+      "rating": {
+        "primaryAuthority": 5,
+        "academicRigor": 4,
+        "empiricalEvidence": 3,
+        "consensusAlignment": 4,
+        "contentCompleteness": 5,
+        "trustScore": 4.3,
+        "trustGrade": "A",
+        "notes": "Official institute of the Sihua school; named master attribution; comprehensive system coverage"
+      },
       "keyPages": [
         {
-          "name": "What is Ziwei Doushu",
           "url": "https://ziwei.asia/ZWDS/What_is_ZiWei_DouShu.php",
           "contentType": "overview"
         },
         {
-          "name": "Interpretation & Analysis",
           "url": "https://ziwei.asia/ZWDS/Zi_Wei_Interpretation_Analysis.php",
           "contentType": "star_meanings"
-        },
-        {
-          "name": "Online Courses",
-          "url": "https://ziwei.asia/ZI_WEI_DOU_SHU/zwdscourses/Ziwei_Online_Courses.php",
-          "contentType": "courses"
         }
       ]
     },
     {
       "id": "source-002",
       "priority": 1,
-      "authority": "⭐⭐⭐⭐⭐",
       "type": "wang_ting_zhi_collection",
-      "name": "Zhihu - Wang Ting Zhi Complete Teachings (中州派)",
+      "name": "Zhihu — Wang Ting Zhi Complete Teachings (中州派)",
       "url": "https://zhuanlan.zhihu.com/p/690223394",
       "school": "Zhongzhou (中州派)",
-      "focusAreas": ["wang_ting_zhi_authoritative", "all_stars", "transformations", "luck_cycles"],
-      "scraperPriority": 1,
-      "contentTypes": ["star_meanings", "palace_interpretations", "transformation_rules", "decade_luck", "annual_luck"],
+      "language": "zh",
+      "focusAreas": [
+        "wang_ting_zhi_authoritative",
+        "all_stars",
+        "transformations",
+        "luck_cycles"
+      ],
+      "contentTypes": [
+        "star_meanings",
+        "palace_interpretations",
+        "transformation_rules",
+        "decade_luck",
+        "annual_luck"
+      ],
       "status": "not_scraped",
+      "rating": {
+        "primaryAuthority": 5,
+        "academicRigor": 5,
+        "empiricalEvidence": 4,
+        "consensusAlignment": 5,
+        "contentCompleteness": 5,
+        "trustScore": 4.8,
+        "trustGrade": "A",
+        "notes": "Primary authoritative source — 王亭之 direct teachings; Zhongzhou school founder; highest trust"
+      },
       "importantWorks": [
         "斗數四書 (Four Books of Doushu)",
         "紫微斗數講義 (Ziwei Doushu Lectures)",
-        "中州派紫微斗數初級講義 (Elementary Lectures)",
-        "周易象數例解 (I Ching Symbolic Numbers)"
-      ],
-      "notes": "Most comprehensive 王亭之 resource - PRIMARY SOURCE"
+        "中州派紫微斗數初級講義 (Elementary Lectures)"
+      ]
     },
     {
       "id": "source-003",
       "priority": 1,
-      "authority": "⭐⭐⭐⭐⭐",
       "type": "academic_peer_reviewed",
-      "name": "De Gruyter Brill - Scholarly Works on Ziwei",
+      "name": "De Gruyter / Brill — Scholarly Works on Ziwei",
       "url": "https://www.degruyterbrill.com/",
       "school": "Academic (All schools)",
-      "focusAreas": ["historical_development", "academic_analysis", "system_accuracy"],
-      "scraperPriority": 2,
-      "contentTypes": ["academic_papers", "historical_context", "system_validation"],
+      "language": "en",
+      "focusAreas": [
+        "historical_development",
+        "academic_analysis",
+        "system_accuracy"
+      ],
+      "contentTypes": [
+        "academic_papers",
+        "historical_context",
+        "system_validation"
+      ],
       "status": "not_scraped",
-      "notes": "Peer-reviewed academic resource"
+      "rating": {
+        "primaryAuthority": 4,
+        "academicRigor": 5,
+        "empiricalEvidence": 5,
+        "consensusAlignment": 4,
+        "contentCompleteness": 3,
+        "trustScore": 4.2,
+        "trustGrade": "A",
+        "notes": "Peer-reviewed publisher; limited Ziwei-specific coverage but highest academic rigor"
+      }
     },
     {
       "id": "source-004",
       "priority": 2,
-      "authority": "⭐⭐⭐⭐",
       "type": "educational_academy",
       "name": "Zi Wei Dou Shu Academy",
       "url": "https://ziweidoushuacademy.com/",
       "school": "General (Multi-school)",
-      "focusAreas": ["all_stars", "palace_meanings", "fundamentals"],
-      "scraperPriority": 2,
-      "contentTypes": ["star_dictionary", "palace_interpretations", "articles"],
-      "status": "not_scraped",
-      "keyArticles": [
-        "History & Origins",
-        "Decoding the Stars",
-        "Understanding Wealth Star",
-        "14 Main Stars Meanings"
-      ]
+      "language": "en",
+      "focusAreas": [
+        "all_stars",
+        "palace_meanings",
+        "fundamentals"
+      ],
+      "contentTypes": [
+        "star_dictionary",
+        "palace_interpretations",
+        "articles"
+      ],
+      "status": "error",
+      "rating": {
+        "primaryAuthority": 3,
+        "academicRigor": 3,
+        "empiricalEvidence": 2,
+        "consensusAlignment": 4,
+        "contentCompleteness": 4,
+        "trustScore": 3.2,
+        "trustGrade": "B",
+        "notes": "Good introductory resource; multi-school balanced view; citation density moderate"
+      },
+      "lastScraped": "2026-02-21T09:08:01.697Z",
+      "scrapedCharacters": 0
     },
     {
       "id": "source-005",
       "priority": 2,
-      "authority": "⭐⭐⭐⭐",
       "type": "practitioner_school",
-      "name": "Sean Chan's School of Chinese Metaphysics",
+      "name": "Master Sean Chan's School of Chinese Metaphysics",
       "url": "https://www.masterseanchan.com/",
       "school": "General",
-      "focusAreas": ["chart_reading", "fundamentals", "consultation"],
-      "scraperPriority": 3,
-      "contentTypes": ["interpretations", "courses", "blog_articles"],
-      "status": "not_scraped"
+      "language": "en",
+      "focusAreas": [
+        "chart_reading",
+        "fundamentals",
+        "consultation",
+        "celebrity_analysis"
+      ],
+      "contentTypes": [
+        "interpretations",
+        "courses",
+        "blog_articles",
+        "case_studies"
+      ],
+      "status": "not_scraped",
+      "rating": {
+        "primaryAuthority": 3,
+        "academicRigor": 3,
+        "empiricalEvidence": 4,
+        "consensusAlignment": 3,
+        "contentCompleteness": 3,
+        "trustScore": 3.2,
+        "trustGrade": "B",
+        "notes": "Practicing consultant with real case evidence; English-language; good celebrity chart examples"
+      }
     },
     {
       "id": "source-006",
       "priority": 2,
-      "authority": "⭐⭐⭐⭐",
       "type": "star_dictionary",
-      "name": "Fusang Vision - 14 Main Stars Complete Guide",
+      "name": "Fusang Vision — 14 Main Stars Complete Guide",
       "url": "https://fusang-vision.com/pages/ziwei-main-stars-collection",
       "school": "General",
-      "focusAreas": ["14_main_stars", "star_meanings", "characteristics"],
-      "scraperPriority": 2,
-      "contentTypes": ["star_dictionary", "palace_meanings"],
-      "status": "not_scraped",
-      "coverage": "14 Main Stars"
+      "language": "en",
+      "focusAreas": [
+        "14_main_stars",
+        "star_meanings",
+        "characteristics"
+      ],
+      "contentTypes": [
+        "star_dictionary",
+        "palace_meanings"
+      ],
+      "status": "error",
+      "rating": {
+        "primaryAuthority": 3,
+        "academicRigor": 3,
+        "empiricalEvidence": 2,
+        "consensusAlignment": 4,
+        "contentCompleteness": 3,
+        "trustScore": 3,
+        "trustGrade": "B",
+        "notes": "Good English star dictionary; consistent with mainstream interpretations; limited to 14 main stars"
+      },
+      "lastScraped": "2026-02-21T09:08:03.205Z",
+      "scrapedCharacters": 0
     },
     {
       "id": "source-007",
       "priority": 2,
-      "authority": "⭐⭐⭐⭐",
       "type": "luck_cycles_expert",
-      "name": "Inzense (禪香不二) - Decade Luck Complete Guide",
+      "name": "Inzense (禪香不二) — Decade Luck Complete Guide",
       "url": "https://www.inzense.com.tw/en/how-to-read-10-year-luck-cycle-complete-guide-to-decade-fortune-and-ziwei-bazi-analysis/",
       "school": "General",
-      "focusAreas": ["decade_luck", "annual_luck", "fortune_cycles"],
-      "scraperPriority": 1,
-      "contentTypes": ["luck_cycle_rules", "decade_analysis", "annual_analysis"],
+      "language": "en",
+      "focusAreas": [
+        "decade_luck",
+        "annual_luck",
+        "fortune_cycles"
+      ],
+      "contentTypes": [
+        "luck_cycle_rules",
+        "decade_analysis",
+        "annual_analysis"
+      ],
       "status": "not_scraped",
-      "notes": "PRIMARY SOURCE FOR 大運流年"
+      "rating": {
+        "primaryAuthority": 3,
+        "academicRigor": 3,
+        "empiricalEvidence": 3,
+        "consensusAlignment": 4,
+        "contentCompleteness": 3,
+        "trustScore": 3.1,
+        "trustGrade": "B",
+        "notes": "PRIMARY SOURCE FOR 大運流年; practical and detailed guide; cross-referenced with BaZi"
+      }
     },
     {
       "id": "source-008",
       "priority": 2,
-      "authority": "⭐⭐⭐⭐",
       "type": "transformation_specialist",
-      "name": "星林學苑 - Four Transformations (四化) System Mastery",
+      "name": "星林學苑 — Four Transformations (四化) System Mastery",
       "url": "https://www.108s.tw/article/info/85",
       "school": "General",
-      "focusAreas": ["four_transformations", "si_hua", "transformation_meanings"],
-      "scraperPriority": 1,
-      "contentTypes": ["transformation_rules", "lu_quan_ke_ji", "applications"],
+      "language": "zh",
+      "focusAreas": [
+        "four_transformations",
+        "si_hua",
+        "transformation_meanings"
+      ],
+      "contentTypes": [
+        "transformation_rules",
+        "lu_quan_ke_ji",
+        "applications"
+      ],
       "status": "not_scraped",
-      "notes": "PRIMARY SOURCE FOR 四化 SYSTEM"
+      "rating": {
+        "primaryAuthority": 3,
+        "academicRigor": 3,
+        "empiricalEvidence": 3,
+        "consensusAlignment": 4,
+        "contentCompleteness": 4,
+        "trustScore": 3.3,
+        "trustGrade": "B",
+        "notes": "PRIMARY SOURCE FOR 四化 SYSTEM; comprehensive transformation coverage"
+      }
     },
     {
       "id": "source-009",
       "priority": 2,
-      "authority": "⭐⭐⭐⭐",
       "type": "educational_course",
-      "name": "Gagan Sarkaria - Ziwei Dou Shu Courses",
+      "name": "Gagan Sarkaria — Ziwei Dou Shu Courses",
       "url": "https://gagansarkaria.com/zi-wei-dou-shu-course/",
       "school": "General",
-      "focusAreas": ["all_104_stars", "flying_stars", "courses"],
-      "scraperPriority": 3,
-      "contentTypes": ["star_reference", "course_materials", "star_meanings_by_palace"],
-      "status": "not_scraped",
-      "notes": "Extensive 104 star reference available"
+      "language": "en",
+      "focusAreas": [
+        "all_104_stars",
+        "flying_stars",
+        "courses"
+      ],
+      "contentTypes": [
+        "star_reference",
+        "course_materials",
+        "star_meanings_by_palace"
+      ],
+      "status": "error",
+      "rating": {
+        "primaryAuthority": 2,
+        "academicRigor": 2,
+        "empiricalEvidence": 2,
+        "consensusAlignment": 3,
+        "contentCompleteness": 5,
+        "trustScore": 2.7,
+        "trustGrade": "C",
+        "notes": "Extensive 104 star reference; good completeness but limited authority citation"
+      },
+      "lastScraped": "2026-02-21T09:08:04.712Z",
+      "scrapedCharacters": 0
     },
     {
       "id": "source-010",
       "priority": 2,
-      "authority": "⭐⭐⭐⭐",
       "type": "educational_platform",
-      "name": "Flourish Astrology - Ziwei Resources",
+      "name": "Flourish Astrology — Ziwei Resources",
       "url": "https://flourishastrology.com/",
       "school": "General",
-      "focusAreas": ["chart_reading", "fundamentals", "star_meanings"],
-      "scraperPriority": 3,
-      "contentTypes": ["guides", "star_dictionary", "interpretation_articles"],
-      "status": "not_scraped"
+      "language": "en",
+      "focusAreas": [
+        "chart_reading",
+        "fundamentals",
+        "star_meanings"
+      ],
+      "contentTypes": [
+        "guides",
+        "star_dictionary",
+        "interpretation_articles"
+      ],
+      "status": "error",
+      "rating": {
+        "primaryAuthority": 2,
+        "academicRigor": 2,
+        "empiricalEvidence": 2,
+        "consensusAlignment": 3,
+        "contentCompleteness": 3,
+        "trustScore": 2.4,
+        "trustGrade": "C",
+        "notes": "Good entry-level resource; use to corroborate Grade A/B sources"
+      },
+      "lastScraped": "2026-02-21T09:08:06.217Z",
+      "scrapedCharacters": 0
     },
     {
       "id": "source-011",
       "priority": 3,
-      "authority": "⭐⭐⭐⭐",
       "type": "transformation_multiple_guides",
-      "name": "Vocus - Four Transformations Complete Guides",
+      "name": "Vocus — Four Transformations Complete Guides",
       "url": "https://vocus.cc/",
       "school": "General",
-      "focusAreas": ["four_transformations", "lu_quan_ke_ji", "transformation_effects"],
-      "scraperPriority": 2,
-      "contentTypes": ["transformation_meanings", "lu_meanings", "quan_meanings", "ke_meanings", "ji_meanings"],
+      "language": "zh",
+      "focusAreas": [
+        "four_transformations",
+        "lu_quan_ke_ji",
+        "transformation_effects"
+      ],
+      "contentTypes": [
+        "transformation_meanings",
+        "lu_meanings",
+        "quan_meanings",
+        "ke_meanings",
+        "ji_meanings"
+      ],
       "status": "not_scraped",
-      "keyArticles": [
-        "Basic Transformation Meanings",
-        "Transformation Effects",
-        "Heavenly Stem Transformation Table"
-      ]
+      "rating": {
+        "primaryAuthority": 2,
+        "academicRigor": 2,
+        "empiricalEvidence": 2,
+        "consensusAlignment": 3,
+        "contentCompleteness": 4,
+        "trustScore": 2.6,
+        "trustGrade": "C",
+        "notes": "User-generated platform; verify each article individually; good 四化 coverage overall"
+      }
     },
     {
       "id": "source-012",
       "priority": 3,
-      "authority": "⭐⭐⭐⭐",
       "type": "cultural_educational",
-      "name": "Click108 - 紫微教學 (Ziwei Teaching Portal)",
+      "name": "Click108 — 紫微教學 (Ziwei Teaching Portal)",
       "url": "https://www.click108.com.tw/teaching/teach011.php",
       "school": "General",
-      "focusAreas": ["all_systems", "traditional_teaching", "comprehensive"],
-      "scraperPriority": 3,
-      "contentTypes": ["teaching_materials", "star_meanings", "palace_interpretations"],
-      "status": "not_scraped"
+      "language": "zh",
+      "focusAreas": [
+        "all_systems",
+        "traditional_teaching",
+        "comprehensive"
+      ],
+      "contentTypes": [
+        "teaching_materials",
+        "star_meanings",
+        "palace_interpretations"
+      ],
+      "status": "not_scraped",
+      "rating": {
+        "primaryAuthority": 3,
+        "academicRigor": 3,
+        "empiricalEvidence": 2,
+        "consensusAlignment": 4,
+        "contentCompleteness": 4,
+        "trustScore": 3.1,
+        "trustGrade": "B",
+        "notes": "Established Taiwanese portal; traditional school-aligned; comprehensive Chinese-language coverage"
+      }
     },
     {
       "id": "source-013",
       "priority": 3,
-      "authority": "⭐⭐⭐",
       "type": "monthly_luck_specialist",
-      "name": "科技紫微網 - Monthly Luck System",
+      "name": "科技紫微網 — Monthly Luck System",
       "url": "https://news.click108.com.tw/2022/01/ziwei/7048/",
       "school": "General",
-      "focusAreas": ["monthly_luck", "flow_month", "luck_cycles"],
-      "scraperPriority": 2,
-      "contentTypes": ["monthly_luck_rules", "analysis"],
+      "language": "zh",
+      "focusAreas": [
+        "monthly_luck",
+        "flow_month",
+        "luck_cycles"
+      ],
+      "contentTypes": [
+        "monthly_luck_rules",
+        "analysis"
+      ],
       "status": "not_scraped",
-      "notes": "PRIMARY SOURCE FOR 流月 SYSTEM"
+      "rating": {
+        "primaryAuthority": 3,
+        "academicRigor": 2,
+        "empiricalEvidence": 3,
+        "consensusAlignment": 4,
+        "contentCompleteness": 2,
+        "trustScore": 2.9,
+        "trustGrade": "C",
+        "notes": "PRIMARY SOURCE FOR 流月 SYSTEM; narrow scope but detailed"
+      }
     },
     {
       "id": "source-014",
       "priority": 3,
-      "authority": "⭐⭐⭐",
       "type": "online_tool",
-      "name": "Ming Ming Guan Zhi - Free Tools & Si Hua Stars",
-      "url": "https://mingming3.com/",
+      "name": "Ming Ming Guan Zhi — Free Tools & Explanation",
+      "url": "https://mingming3.com/en/home/life",
       "school": "General",
-      "focusAreas": ["four_transformations", "practical_tools", "fortune_telling"],
-      "scraperPriority": 3,
-      "contentTypes": ["transformation_explanations", "tools", "analysis"],
-      "status": "not_scraped"
+      "language": "en",
+      "focusAreas": [
+        "four_transformations",
+        "practical_tools",
+        "fortune_telling"
+      ],
+      "contentTypes": [
+        "transformation_explanations",
+        "tools",
+        "analysis",
+        "celebrity_tools"
+      ],
+      "status": "not_scraped",
+      "rating": {
+        "primaryAuthority": 2,
+        "academicRigor": 2,
+        "empiricalEvidence": 3,
+        "consensusAlignment": 3,
+        "contentCompleteness": 3,
+        "trustScore": 2.6,
+        "trustGrade": "C",
+        "notes": "Useful bilingual tool; explanations cross-referenced with established texts"
+      }
     },
     {
       "id": "source-015",
       "priority": 1,
-      "authority": "⭐⭐⭐⭐",
       "type": "wang_ting_zhi_books",
-      "name": "Weread (WeChat Reading) - Wang Ting Zhi Complete Works",
+      "name": "Weread (WeChat Reading) — Wang Ting Zhi Complete Works",
       "url": "https://weread.qq.com/",
       "school": "Zhongzhou (中州派)",
-      "focusAreas": ["wang_ting_zhi_authoritative", "all_works"],
-      "scraperPriority": 1,
-      "contentTypes": ["complete_books", "primary_texts"],
+      "language": "zh",
+      "focusAreas": [
+        "wang_ting_zhi_authoritative",
+        "all_works"
+      ],
+      "contentTypes": [
+        "complete_books",
+        "primary_texts"
+      ],
       "status": "not_scraped",
-      "notes": "Access to complete published Wang Ting Zhi works"
+      "scraperNote": "Requires WeChat authentication — manual extraction needed",
+      "rating": {
+        "primaryAuthority": 5,
+        "academicRigor": 5,
+        "empiricalEvidence": 5,
+        "consensusAlignment": 5,
+        "contentCompleteness": 5,
+        "trustScore": 5,
+        "trustGrade": "A",
+        "notes": "HIGHEST TRUST — direct Wang Ting Zhi published books; authentication barrier to scraping"
+      }
     },
     {
       "id": "source-016",
       "priority": 1,
-      "authority": "⭐⭐⭐⭐",
       "type": "wang_ting_zhi_lectures",
-      "name": "Scribd - Wang Ting Zhi Advanced Lectures",
+      "name": "Scribd — Wang Ting Zhi Advanced Lectures",
       "url": "https://www.scribd.com/",
       "school": "Zhongzhou (中州派)",
-      "focusAreas": ["wang_ting_zhi_advanced", "deep_knowledge"],
-      "scraperPriority": 1,
-      "contentTypes": ["advanced_lectures", "pdf_materials"],
+      "language": "zh",
+      "focusAreas": [
+        "wang_ting_zhi_advanced",
+        "deep_knowledge"
+      ],
+      "contentTypes": [
+        "advanced_lectures",
+        "pdf_materials"
+      ],
       "status": "not_scraped",
-      "notes": "紫薇斗數深造講義 - Advanced level teachings"
+      "scraperNote": "Scribd paywall — manual extraction or API required",
+      "rating": {
+        "primaryAuthority": 5,
+        "academicRigor": 4,
+        "empiricalEvidence": 4,
+        "consensusAlignment": 5,
+        "contentCompleteness": 5,
+        "trustScore": 4.7,
+        "trustGrade": "A",
+        "notes": "紫薇斗數深造講義 advanced lectures; paywall barrier"
+      }
     },
     {
       "id": "source-017",
       "priority": 3,
-      "authority": "⭐⭐⭐",
       "type": "reference",
-      "name": "Wikipedia - Ziwei Doushu",
+      "name": "Wikipedia — Ziwei Doushu",
       "url": "https://en.wikipedia.org/wiki/Ziwei_doushu",
       "school": "General (All schools)",
-      "focusAreas": ["system_overview", "history", "schools_comparison"],
-      "scraperPriority": 3,
-      "contentTypes": ["overview", "historical_context", "school_differences"],
-      "status": "not_scraped"
+      "language": "en",
+      "focusAreas": [
+        "system_overview",
+        "history",
+        "schools_comparison"
+      ],
+      "contentTypes": [
+        "overview",
+        "historical_context",
+        "school_differences"
+      ],
+      "status": "not_scraped",
+      "rating": {
+        "primaryAuthority": 2,
+        "academicRigor": 3,
+        "empiricalEvidence": 2,
+        "consensusAlignment": 4,
+        "contentCompleteness": 2,
+        "trustScore": 2.6,
+        "trustGrade": "C",
+        "notes": "Good orientation source; use as background only; verify all claims against Grade A sources"
+      }
+    },
+    {
+      "id": "source-018",
+      "priority": 2,
+      "type": "celebrity_case_study",
+      "name": "Sean Chan Blog — Celebrity Chart Analyses",
+      "url": "https://www.masterseanchan.com/blog/",
+      "school": "General",
+      "language": "en",
+      "focusAreas": [
+        "celebrity_charts",
+        "case_studies",
+        "real_chart_validation"
+      ],
+      "contentTypes": [
+        "celebrity_analysis",
+        "chart_walkthroughs",
+        "case_studies"
+      ],
+      "status": "not_scraped",
+      "category": "名人命盤 / Case Study",
+      "rating": {
+        "primaryAuthority": 3,
+        "academicRigor": 3,
+        "empiricalEvidence": 5,
+        "consensusAlignment": 3,
+        "contentCompleteness": 3,
+        "trustScore": 3.4,
+        "trustGrade": "B",
+        "notes": "Real celebrity birth data with verified chart analysis; high empirical value for rule validation"
+      },
+      "notableCelebrities": [
+        "various HK/SG celebrities",
+        "business figures"
+      ],
+      "scrapeTarget": "blog articles with birth data + chart reading"
+    },
+    {
+      "id": "source-019",
+      "priority": 2,
+      "type": "celebrity_case_study",
+      "name": "Zhihu — 紫微斗數名人命盤 Community Analysis",
+      "url": "https://www.zhihu.com/search?q=%E7%B4%AB%E5%BE%AE%E6%96%97%E6%95%B0+%E5%90%8D%E4%BA%BA+%E5%91%BD%E7%9B%98",
+      "school": "Multiple",
+      "language": "zh",
+      "focusAreas": [
+        "celebrity_charts",
+        "community_validation",
+        "case_studies"
+      ],
+      "contentTypes": [
+        "celebrity_analysis",
+        "forum_discussions",
+        "peer_review"
+      ],
+      "status": "not_scraped",
+      "category": "名人命盤 / Case Study",
+      "rating": {
+        "primaryAuthority": 2,
+        "academicRigor": 2,
+        "empiricalEvidence": 4,
+        "consensusAlignment": 3,
+        "contentCompleteness": 3,
+        "trustScore": 2.8,
+        "trustGrade": "C",
+        "notes": "Community consensus on celebrity charts provides empirical validation; individual post quality varies; cross-validate across multiple practitioners"
+      },
+      "scrapeTarget": "high-upvote answers on celebrity chart questions"
+    },
+    {
+      "id": "source-020",
+      "priority": 2,
+      "type": "celebrity_case_study",
+      "name": "PTT 批踢踢 — 紫微斗數板 Celebrity Discussion",
+      "url": "https://www.ptt.cc/bbs/ZiWei/index.html",
+      "school": "Multiple",
+      "language": "zh",
+      "focusAreas": [
+        "celebrity_charts",
+        "case_studies",
+        "taiwan_practitioners"
+      ],
+      "contentTypes": [
+        "celebrity_analysis",
+        "board_discussions",
+        "chart_critiques"
+      ],
+      "status": "not_scraped",
+      "category": "名人命盤 / Case Study",
+      "rating": {
+        "primaryAuthority": 2,
+        "academicRigor": 2,
+        "empiricalEvidence": 4,
+        "consensusAlignment": 3,
+        "contentCompleteness": 2,
+        "trustScore": 2.6,
+        "trustGrade": "C",
+        "notes": "Longstanding Taiwanese community board; strong practitioner discussion culture; filter by post quality"
+      },
+      "scrapeTarget": "celebrity chart threads with multiple practitioner responses"
+    },
+    {
+      "id": "source-021",
+      "priority": 1,
+      "type": "celebrity_case_study",
+      "name": "Ziwei Academy — Celebrity Chart Case Studies",
+      "url": "https://ziweidoushuacademy.com/blog/",
+      "school": "General",
+      "language": "en",
+      "focusAreas": [
+        "celebrity_charts",
+        "named_case_studies",
+        "rule_validation"
+      ],
+      "contentTypes": [
+        "celebrity_analysis",
+        "chart_walkthroughs",
+        "educational_cases"
+      ],
+      "status": "not_scraped",
+      "category": "名人命盤 / Case Study",
+      "rating": {
+        "primaryAuthority": 3,
+        "academicRigor": 3,
+        "empiricalEvidence": 5,
+        "consensusAlignment": 4,
+        "contentCompleteness": 4,
+        "trustScore": 3.7,
+        "trustGrade": "B",
+        "notes": "Structured case studies with named celebrities and verified birth data; ideal for rule accuracy testing"
+      },
+      "scrapeTarget": "all blog posts tagged celebrity/case-study"
+    },
+    {
+      "id": "source-022",
+      "priority": 2,
+      "type": "celebrity_case_study",
+      "name": "Fate Windada — 名人命盤 Celebrity Chart Database (TW)",
+      "url": "https://fate.windada.com/cgi-bin/fate",
+      "school": "Traditional Taiwanese",
+      "language": "zh",
+      "focusAreas": [
+        "celebrity_charts",
+        "chart_calculation",
+        "database"
+      ],
+      "contentTypes": [
+        "celebrity_birth_data",
+        "chart_calculations",
+        "analysis"
+      ],
+      "status": "not_scraped",
+      "category": "名人命盤 / Case Study",
+      "rating": {
+        "primaryAuthority": 3,
+        "academicRigor": 2,
+        "empiricalEvidence": 5,
+        "consensusAlignment": 4,
+        "contentCompleteness": 3,
+        "trustScore": 3.2,
+        "trustGrade": "B",
+        "notes": "Large Taiwanese celebrity database with verified birth data; useful for cross-chart validation; calculation tool helps verify chart accuracy"
+      },
+      "scrapeTarget": "celebrity birth data entries + generated chart output"
+    },
+    {
+      "id": "source-023",
+      "priority": 2,
+      "type": "celebrity_case_study",
+      "name": "明命館誌 Mingming3 — Famous Person Analysis",
+      "url": "https://mingming3.com/en/home/life",
+      "school": "General",
+      "language": "en/zh",
+      "focusAreas": [
+        "celebrity_tools",
+        "chart_explanation",
+        "educational_cases"
+      ],
+      "contentTypes": [
+        "celebrity_charts",
+        "analysis_explanations",
+        "tool_output"
+      ],
+      "status": "not_scraped",
+      "category": "名人命盤 / Case Study",
+      "rating": {
+        "primaryAuthority": 2,
+        "academicRigor": 2,
+        "empiricalEvidence": 3,
+        "consensusAlignment": 3,
+        "contentCompleteness": 3,
+        "trustScore": 2.6,
+        "trustGrade": "C",
+        "notes": "Bilingual tool with explanatory content; useful for corroborating chart interpretations"
+      }
+    },
+    {
+      "id": "source-024",
+      "priority": 1,
+      "type": "academic_celebrity",
+      "name": "Astrotheme / Astrodatabank — Birth Data Verification Reference",
+      "url": "https://www.astrotheme.com/astrology_database.php",
+      "school": "Cross-tradition",
+      "language": "en",
+      "focusAreas": [
+        "verified_birth_data",
+        "celebrity_database",
+        "data_accuracy"
+      ],
+      "contentTypes": [
+        "verified_birth_dates",
+        "birth_times",
+        "celebrity_metadata"
+      ],
+      "status": "not_scraped",
+      "category": "名人命盤 / Case Study",
+      "rating": {
+        "primaryAuthority": 3,
+        "academicRigor": 4,
+        "empiricalEvidence": 5,
+        "consensusAlignment": 3,
+        "contentCompleteness": 4,
+        "trustScore": 3.7,
+        "trustGrade": "B",
+        "notes": "76,134 celebrity birth records; Rodden Rating system for data quality AA/A/B/C/DD; use for Gregorian→Lunar conversion + birth time verification for Ziwei charts; cross-tradition reference"
+      },
+      "roddenRatingNote": "Lois Rodden's data quality system: AA=birth certificate, A=autobiography, B=biography, C=caution, DD=dirty data",
+      "scrapeTarget": "verified birth data (AA/A rated) for celebrities with known Ziwei charts"
+    },
+    {
+      "id": "source-025",
+      "priority": 2,
+      "type": "celebrity_case_study",
+      "name": "YouTube — 紫微斗數名人分析 (Chinese Practitioners)",
+      "url": "https://www.youtube.com/results?search_query=%E7%B4%AB%E5%BE%AE%E6%96%97%E6%95%B0+%E5%90%8D%E4%BA%BA",
+      "school": "Multiple",
+      "language": "zh",
+      "focusAreas": [
+        "celebrity_video_analysis",
+        "live_chart_reading",
+        "practitioner_demonstrations"
+      ],
+      "contentTypes": [
+        "video_transcripts",
+        "celebrity_analysis",
+        "chart_demonstrations"
+      ],
+      "status": "not_scraped",
+      "category": "名人命盤 / Case Study",
+      "rating": {
+        "primaryAuthority": 2,
+        "academicRigor": 1,
+        "empiricalEvidence": 4,
+        "consensusAlignment": 3,
+        "contentCompleteness": 2,
+        "trustScore": 2.4,
+        "trustGrade": "C",
+        "notes": "Video demonstrations valuable for observing practitioner methodology; filter by channel subscriber count and reputation; extract transcript where available"
+      },
+      "scraperNote": "Use YouTube RSS feeds for channel monitoring; transcript extraction via yt-dlp"
+    },
+    {
+      "id": "source-026",
+      "priority": 3,
+      "type": "celebrity_case_study",
+      "name": "Pixnet 痞客邦 — 紫微斗數名人命盤 Blog Collection",
+      "url": "https://www.pixnet.net/search/post/%E7%B4%AB%E5%BE%AE%E6%96%97%E6%95%B0%20%E5%90%8D%E4%BA%BA",
+      "school": "Multiple",
+      "language": "zh",
+      "focusAreas": [
+        "celebrity_charts",
+        "taiwanese_practitioners",
+        "case_studies"
+      ],
+      "contentTypes": [
+        "celebrity_analysis",
+        "blog_articles",
+        "chart_readings"
+      ],
+      "status": "not_scraped",
+      "category": "名人命盤 / Case Study",
+      "rating": {
+        "primaryAuthority": 2,
+        "academicRigor": 1,
+        "empiricalEvidence": 3,
+        "consensusAlignment": 2,
+        "contentCompleteness": 2,
+        "trustScore": 2,
+        "trustGrade": "C",
+        "notes": "User-generated; quality highly variable; only use posts where author cites 王亭之 or named school; good for discovering lesser-known celebrities with documented birth data"
+      }
     }
   ],
   "scrapingStrategy": {
     "phase1": {
       "name": "Primary Sources (Wang Ting Zhi & Authoritative)",
-      "sources": ["source-002", "source-001", "source-015", "source-016"],
+      "sources": [
+        "source-002",
+        "source-001",
+        "source-015",
+        "source-016"
+      ],
       "priority": "CRITICAL",
-      "targetData": ["all_104_stars", "transformations", "luck_cycles", "palace_meanings"],
-      "estimatedContent": "50,000+ lines"
+      "targetData": [
+        "all_104_stars",
+        "transformations",
+        "luck_cycles",
+        "palace_meanings"
+      ],
+      "estimatedContent": "50,000+ lines",
+      "scrapeMethod": [
+        "axios_html",
+        "manual_for_paywalled"
+      ]
     },
     "phase2": {
       "name": "Specialized Knowledge (Luck Cycles & Transformations)",
-      "sources": ["source-007", "source-008", "source-013", "source-011"],
+      "sources": [
+        "source-007",
+        "source-008",
+        "source-013",
+        "source-011"
+      ],
       "priority": "HIGH",
-      "targetData": ["decade_luck", "annual_luck", "monthly_luck", "four_transformations"],
-      "estimatedContent": "20,000+ lines"
+      "targetData": [
+        "decade_luck",
+        "annual_luck",
+        "monthly_luck",
+        "four_transformations"
+      ],
+      "estimatedContent": "20,000+ lines",
+      "scrapeMethod": [
+        "axios_html"
+      ]
     },
     "phase3": {
       "name": "Educational & Dictionary Resources",
-      "sources": ["source-004", "source-006", "source-009", "source-010"],
+      "sources": [
+        "source-004",
+        "source-006",
+        "source-009",
+        "source-010"
+      ],
       "priority": "HIGH",
-      "targetData": ["star_meanings", "palace_interpretations", "all_104_stars_definitions"],
-      "estimatedContent": "30,000+ lines"
+      "targetData": [
+        "star_meanings",
+        "palace_interpretations",
+        "all_104_stars_definitions"
+      ],
+      "estimatedContent": "30,000+ lines",
+      "scrapeMethod": [
+        "axios_html"
+      ]
     },
     "phase4": {
       "name": "Practical Tools & Additional Coverage",
-      "sources": ["source-012", "source-014", "source-005", "source-017"],
+      "sources": [
+        "source-012",
+        "source-014",
+        "source-005",
+        "source-017"
+      ],
       "priority": "MEDIUM",
-      "targetData": ["verification", "practical_applications", "additional_meanings"],
-      "estimatedContent": "15,000+ lines"
+      "targetData": [
+        "verification",
+        "practical_applications",
+        "additional_meanings"
+      ],
+      "estimatedContent": "15,000+ lines",
+      "scrapeMethod": [
+        "axios_html"
+      ]
+    },
+    "phase5": {
+      "name": "名人命盤 Celebrity & Case Study Validation",
+      "sources": [
+        "source-018",
+        "source-019",
+        "source-020",
+        "source-021",
+        "source-022",
+        "source-023",
+        "source-024",
+        "source-025",
+        "source-026"
+      ],
+      "priority": "HIGH",
+      "targetData": [
+        "celebrity_birth_data",
+        "verified_chart_analyses",
+        "practitioner_consensus",
+        "rule_validation_cases"
+      ],
+      "estimatedContent": "500+ celebrity cases",
+      "purpose": "Empirical validation — use celebrity chart outcomes to test accuracy of scraped interpretation rules",
+      "scrapeMethod": [
+        "axios_html",
+        "rss_feeds",
+        "manual_curation"
+      ],
+      "qualityFilter": "Only cases where birth time is known (Rodden AA/A rating equivalent) and chart has been analysed by 2+ independent practitioners"
     }
-  },
-  "targetDatabase": {
-    "tables": [
-      {
-        "name": "ziwei_stars",
-        "description": "All 104 stars with base meanings",
-        "fields": [
-          "star_id",
-          "chinese_name",
-          "english_name",
-          "star_type (major/secondary/minor)",
-          "five_element",
-          "yin_yang",
-          "base_meaning_zh",
-          "base_meaning_en",
-          "character_traits",
-          "source_ids",
-          "wang_ting_zhi_reference",
-          "confidence_level"
-        ]
-      },
-      {
-        "name": "star_palace_meanings",
-        "description": "Star meanings in each of 12 palaces (1248 combinations)",
-        "fields": [
-          "star_palace_id",
-          "star_id",
-          "palace_id",
-          "palace_name",
-          "meaning_zh",
-          "meaning_en",
-          "career_impact",
-          "wealth_impact",
-          "relationship_impact",
-          "health_impact",
-          "source_ids",
-          "confidence_level"
-        ]
-      },
-      {
-        "name": "transformation_rules",
-        "description": "Four Transformations (四化) system",
-        "fields": [
-          "transformation_id",
-          "stem_id",
-          "star_id",
-          "transformation_type (lu/quan/ke/ji)",
-          "transformation_meaning_zh",
-          "transformation_meaning_en",
-          "affects_palace_id",
-          "effect_description",
-          "source_ids"
-        ]
-      },
-      {
-        "name": "luck_cycle_rules",
-        "description": "Decade, Annual, Monthly, Daily luck calculations",
-        "fields": [
-          "luck_type (decade/annual/monthly/daily)",
-          "luck_id",
-          "calculation_method_zh",
-          "calculation_method_en",
-          "star_movements",
-          "palace_activation_rules",
-          "transformation_rules",
-          "source_ids"
-        ]
-      },
-      {
-        "name": "flying_stars_rules",
-        "description": "Flying Stars (飛星) system and star movement patterns",
-        "fields": [
-          "flying_star_id",
-          "time_period",
-          "star_movement_rules",
-          "activated_palaces",
-          "intensity_level",
-          "source_ids"
-        ]
-      }
-    ]
   },
   "scrapingProgress": {
     "sources_scraped": 0,
@@ -397,7 +1045,8 @@
     "palace_meanings_collected": 0,
     "transformation_rules_collected": 0,
     "luck_cycle_rules_collected": 0,
-    "lastScrapedDate": null,
-    "nextScheduledScrape": "2026-02-18"
+    "celebrity_cases_collected": 0,
+    "lastScrapedDate": "2026-02-21T09:08:06.217Z",
+    "nextScheduledScrape": "2026-02-21"
   }
 }
