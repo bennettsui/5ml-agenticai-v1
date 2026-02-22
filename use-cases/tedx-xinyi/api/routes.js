@@ -321,9 +321,26 @@ function scanAllImages() {
 
 // ---- API: list all media ----
 router.get('/media', (req, res) => {
-  const images = scanAllImages();
+  const foundImages = scanAllImages();
   const meta = loadMetadata();
-  const result = images.map(img => {
+
+  // Always include all expected VISUALS, even if missing from disk
+  const foundKeys = new Set(foundImages.map(img => img.filename));
+  const missingVisuals = VISUALS
+    .filter(v => !foundKeys.has(v.filename))
+    .map(v => ({
+      filename: v.filename,
+      folder: '',
+      path: `/tedx-xinyi/${v.filename}`,
+      size: 0,
+      modified: null,
+      source: 'generated',
+      description: v.description,
+      missing: true,
+    }));
+
+  const allImages = [...foundImages, ...missingVisuals];
+  const result = allImages.map(img => {
     const key = img.folder ? `${img.folder}/${img.filename}` : img.filename;
     return { ...img, alt: (meta[key] && meta[key].alt) || '', customName: (meta[key] && meta[key].customName) || '' };
   });
@@ -532,6 +549,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .card-actions{display:flex;gap:0.25rem}
 .tag{display:inline-block;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.65rem;font-weight:600}
 .tag-gen{background:#1e293b;color:#60a5fa}.tag-up{background:#1c1917;color:#fb923c}.tag-spk{background:#14532d;color:#86efac}
+.card-missing{opacity:0.6;border-style:dashed;border-color:#333}
 .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:0.75rem 1rem;font-size:0.8rem;z-index:100;opacity:0;transition:opacity 0.3s;pointer-events:none}
 .toast.show{opacity:1}.toast.ok{border-color:#065f46;color:#6ee7b7}.toast.err{border-color:#991b1b;color:#fca5a5}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:60;display:none;align-items:center;justify-content:center}
@@ -574,6 +592,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 <div class="toolbar">
   <button class="btn btn-red" onclick="openUpload()">+ Upload</button>
+  <button class="btn btn-outline" id="regenMissingBtn" onclick="regenAllMissing()">Regen Missing</button>
   <button class="btn btn-outline" id="compressAllBtn" onclick="compressAll()">Compress All</button>
   <button class="btn btn-outline" id="compressSelBtn" onclick="compressSelected()" disabled>Compress Selected</button>
   <button class="btn btn-ghost btn-sm" onclick="toggleSelectAll()">Select All</button>
@@ -652,10 +671,28 @@ function renderGrid() {
   g.innerHTML = mediaItems.map(img => {
     const key = img.folder ? img.folder + '/' + img.filename : img.filename;
     const sel = selectedKeys.has(key) ? ' selected' : '';
-    const sizeKb = (img.size / 1024).toFixed(0);
+    const sizeKb = img.size ? (img.size / 1024).toFixed(0) : '—';
     const src = img.folder ? '/tedx-xinyi/' + img.folder + '/' + img.filename : '/tedx-xinyi/' + img.filename;
     const tag = img.source === 'generated' ? '<span class="tag tag-gen">Generated</span>' : img.folder === 'speakers' ? '<span class="tag tag-spk">Speaker</span>' : '<span class="tag tag-up">Uploaded</span>';
     const v = img.size;
+
+    if (img.missing) {
+      // Missing file — show greyed card with Regenerate button
+      const id = img.filename.replace(/\\.webp$|\\.png$|\\.jpg$/, '');
+      return '<div class="card card-missing" data-key="' + key + '">' +
+        '<div class="card-img" style="background:#0d0d0d;flex-direction:column;gap:0.5rem">' +
+          '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+          '<span style="color:#555;font-size:0.7rem">Not on server</span>' +
+        '</div>' +
+        '<div class="card-body">' +
+          '<div class="card-filename" style="color:#666">' + img.filename + ' ' + tag + '</div>' +
+          '<div class="card-meta" style="color:#555"><span>Missing — lost on redeploy</span></div>' +
+          '<div class="card-actions">' +
+            '<button class="btn btn-red btn-sm" onclick="regenOne(\\'' + id + '\\',this)">Regenerate</button>' +
+          '</div>' +
+        '</div></div>';
+    }
+
     return '<div class="card' + sel + '" data-key="' + key + '">' +
       '<div class="card-check" onclick="toggleSelect(event,\\'' + key + '\\')">' +
         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' +
@@ -674,9 +711,42 @@ function renderGrid() {
 
 function updateStats() {
   const total = mediaItems.length;
-  const totalSize = mediaItems.reduce((s, i) => s + i.size, 0);
-  document.getElementById('stats').textContent = total + ' images | ' + (totalSize / 1024 / 1024).toFixed(1) + ' MB total';
+  const present = mediaItems.filter(i => !i.missing).length;
+  const missing = mediaItems.filter(i => i.missing).length;
+  const totalSize = mediaItems.reduce((s, i) => s + (i.size || 0), 0);
+  const parts = [present + ' images', (totalSize / 1024 / 1024).toFixed(1) + ' MB'];
+  if (missing) parts.push(missing + ' missing');
+  document.getElementById('stats').textContent = parts.join(' | ');
   document.getElementById('compressSelBtn').disabled = selectedKeys.size === 0;
+}
+
+async function regenOne(id, btn) {
+  btn.disabled = true; btn.textContent = 'Generating...';
+  try {
+    const r = await authFetch('/api/tedx-xinyi/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) });
+    const d = await r.json();
+    if (r.ok) { showToast('Generated: ' + (d.filename || id)); loadMedia(); }
+    else { showToast('Error: ' + (d.error || 'Failed'), true); btn.disabled = false; btn.textContent = 'Regenerate'; }
+  } catch(e) { showToast(e.message, true); btn.disabled = false; btn.textContent = 'Regenerate'; }
+}
+
+async function regenAllMissing() {
+  const missing = mediaItems.filter(i => i.missing);
+  if (!missing.length) { showToast('No missing images'); return; }
+  const btn = document.getElementById('regenMissingBtn');
+  btn.disabled = true;
+  for (let i = 0; i < missing.length; i++) {
+    const img = missing[i];
+    const id = img.filename.replace(/\\.webp$|\\.png$|\\.jpg$/, '');
+    btn.textContent = 'Regen ' + (i+1) + '/' + missing.length + '...';
+    try {
+      await authFetch('/api/tedx-xinyi/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) });
+    } catch(e) { /* continue */ }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  showToast('Regenerated ' + missing.length + ' images');
+  btn.disabled = false; btn.textContent = 'Regen Missing';
+  loadMedia();
 }
 
 function toggleSelect(e, key) {
