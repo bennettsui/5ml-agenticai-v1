@@ -70,7 +70,13 @@ jobs:
             cd 5ml-agenticai-v1
             git pull origin master
 
+            if [ -z "$ENV_FILE" ]; then
+              echo "ENV_FILE secret is empty; aborting deploy."
+              exit 1
+            fi
+
             printf '%s' "$ENV_FILE" > .env
+
             chmod 600 .env
 
             if ! command -v aws >/dev/null 2>&1; then
