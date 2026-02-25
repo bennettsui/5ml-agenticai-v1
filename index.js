@@ -189,6 +189,58 @@ app.get('/health', (req, res) => {
   });
 });
 
+app.get('/health/db-ssl', async (req, res) => {
+  const certPaths = [
+    process.env.PGSSLROOTCERT,
+    process.env.DB_CA_CERT_PATH,
+    '/usr/local/share/ca-certificates/rds-ca-bundle.crt',
+  ].filter(Boolean);
+
+  let certPath = null;
+  for (const candidate of certPaths) {
+    if (fs.existsSync(candidate)) {
+      certPath = candidate;
+      break;
+    }
+  }
+
+  if (!process.env.DATABASE_URL) {
+    return res.status(200).json({
+      status: 'ok',
+      database_configured: false,
+      cert: { found: !!certPath, path: certPath },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  let sslInfo = null;
+  let sslError = null;
+  try {
+    const result = await pool.query(
+      'SELECT ssl, version, cipher, bits FROM pg_stat_ssl WHERE pid = pg_backend_pid()'
+    );
+    sslInfo = result.rows[0] || null;
+  } catch (error) {
+    sslError = error.message;
+  }
+
+  return res.status(200).json({
+    status: 'ok',
+    database_configured: true,
+    cert: { found: !!certPath, path: certPath },
+    ssl: sslInfo
+      ? {
+          enabled: sslInfo.ssl,
+          version: sslInfo.version,
+          cipher: sslInfo.cipher,
+          bits: sslInfo.bits,
+        }
+      : null,
+    ssl_error: sslError,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Debug endpoint to test Meta TLS connection from within Fly container
 app.get('/debug/meta-tls', (req, res) => {
   const https = require('https');
