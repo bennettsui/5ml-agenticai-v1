@@ -76,6 +76,14 @@ jobs:
             fi
 
             printf '%s' "$ENV_FILE" > .env
+            sed -i 's/\r$//' .env
+            sed -i 's/^export[[:space:]]\+//' .env
+
+            invalid_lines=$(awk 'NF && $0 !~ /^#/ && $0 !~ /^[A-Za-z_][A-Za-z0-9_]*=/ {print NR}' .env)
+            if [ -n "$invalid_lines" ]; then
+              echo "Invalid .env lines (must be KEY=VALUE or comments): $invalid_lines"
+              exit 1
+            fi
 
             chmod 600 .env
 
