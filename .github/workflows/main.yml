@@ -23,7 +23,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: ENV_FILE
-          command_timeout: 30m
+          command_timeout: 90m
           script: |
             # 確保 repo 存在
             if [ ! -d "5ml-agenticai-v1" ]; then
