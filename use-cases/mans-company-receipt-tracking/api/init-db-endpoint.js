@@ -13,13 +13,13 @@ router.get('/init-database', async (req, res) => {
   try {
     console.log('\n🗄️  Database initialization requested via web endpoint\n');
 
-    // Check if all required tables already exist
+    // Check if database already has user tables
     const requiredTables = [
-      'receipt_batches',
+      'projects',
+      'brands',
       'receipts',
-      'category_statistics',
-      'processing_logs',
-      'receipt_batch_items'
+      'tenders',
+      'ziwei_birth_charts'
     ];
 
     const existingTables = await db.query(`
@@ -29,15 +29,17 @@ router.get('/init-database', async (req, res) => {
       AND table_type = 'BASE TABLE'
     `);
 
-    const existingSet = new Set(existingTables.rows.map(row => row.table_name));
+    const existingTableNames = existingTables.rows.map(row => row.table_name);
+    const existingSet = new Set(existingTableNames);
     const missingTables = requiredTables.filter(name => !existingSet.has(name));
 
-    if (missingTables.length === 0) {
+    if (existingTableNames.length > 0) {
       return res.json({
         success: true,
         message: '✅ Database already initialized',
         tables_exist: true,
-        tables: requiredTables
+        table_count: existingTableNames.length,
+        missing_tables: missingTables
       });
     }
 
@@ -45,16 +47,32 @@ router.get('/init-database', async (req, res) => {
     const schemaPath = path.join(__dirname, '../db/schema.sql');
     let schema = fs.readFileSync(schemaPath, 'utf8');
 
-    // Check for pgvector extension
-    console.log('🔍 Checking for pgvector...');
-    try {
-      await db.query("SELECT * FROM pg_available_extensions WHERE name = 'vector'");
+    schema = schema.replace(/^\\.*$/gm, '');
+
+    const availableExtensions = await db.query('SELECT name FROM pg_available_extensions');
+    const availableSet = new Set(availableExtensions.rows.map(row => row.name));
+
+    const stripExtensionStatements = (schemaText, extensionName) => {
+      const escapedName = extensionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const createRegex = new RegExp(`^CREATE EXTENSION IF NOT EXISTS ${escapedName}[^;]*;\\n?`, 'gm');
+      const commentRegex = new RegExp(`^COMMENT ON EXTENSION ${escapedName}[^;]*;\\n?`, 'gm');
+      return schemaText.replace(createRegex, '').replace(commentRegex, '');
+    };
+
+    const optionalExtensions = ['pg_stat_monitor', 'pgaudit', 'vector'];
+    for (const extension of optionalExtensions) {
+      if (!availableSet.has(extension)) {
+        console.log(`⚠️  ${extension} not available - skipping related statements`);
+        schema = stripExtensionStatements(schema, extension);
+      }
+    }
+
+    if (!availableSet.has('vector')) {
+      schema = schema.replace(/public\.vector\(\d+\)/g, 'jsonb');
+      schema = schema.replace(/\bvector\(\d+\)/g, 'jsonb');
+      schema = schema.replace(/^CREATE INDEX .* USING (ivfflat|hnsw) .*;\\n?/gm, '');
+    } else {
       console.log('✅ pgvector available');
-    } catch (error) {
-      console.log('⚠️  pgvector not available - adjusting schema');
-      // Remove pgvector sections
-      schema = schema.replace(/CREATE EXTENSION IF NOT EXISTS vector;[\s\S]*?WITH\s+\(lists = 100\);/g, '');
-      schema = schema.replace(/embedding vector\(384\),/g, '-- embedding vector(384),');
     }
 
     console.log('🚀 Executing schema...');
