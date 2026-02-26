@@ -37,15 +37,16 @@ export default function SpeakersPage() {
 
         <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-32" style={{ textShadow: '0 2px 16px rgba(0,0,0,0.6), 0 1px 3px rgba(0,0,0,0.4)' }}>
           <FadeIn>
-            <SectionLabel dark>SPEAKERS &amp; TALKS</SectionLabel>
+            <SectionLabel dark>SPEAKERS &amp; TALKS · 2021–2025</SectionLabel>
             <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-white" lang="en">
               Speakers<br />& Talks
             </h1>
+            <p className="text-white/50 text-sm font-medium tracking-wide mt-3">2021 – 2025 PAST EDITIONS</p>
           </FadeIn>
           <FadeIn delay={200}>
             <p className="text-white/75 text-base sm:text-lg leading-relaxed max-w-2xl mt-6" lang="zh-TW">
               從廚師到設計師，從教育工作者到創業者，<br />
-              這些在台北信義分享想法的人，讓我們看見不同版本的未來。
+              這些曾在 2021–2025 年 TEDxXinyi 舞台上分享想法的人，讓我們看見不同版本的未來。
             </p>
           </FadeIn>
         </div>
@@ -53,6 +54,10 @@ export default function SpeakersPage() {
 
       {/* ==================== SPEAKER GRID — POSTER LINEUP ==================== */}
       <Section bg="white">
+        <FadeIn>
+          <SectionLabel>PAST SPEAKERS · 2021–2025</SectionLabel>
+          <h2 className="text-2xl md:text-3xl font-black mb-10" lang="zh-TW">歷屆講者回顧</h2>
+        </FadeIn>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6">
           {SPEAKERS.map((speaker, i) => (
             <FadeIn key={i} delay={i * 50}>

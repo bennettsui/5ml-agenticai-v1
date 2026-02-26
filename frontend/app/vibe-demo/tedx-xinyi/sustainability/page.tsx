@@ -93,8 +93,42 @@ export default function SustainabilityPage() {
         </div>
       </Section>
 
-      {/* ==================== THREE APPROACHES ==================== */}
+      {/* ==================== IDEAS DEVELOPMENT ==================== */}
       <Section bg="warm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div>
+            <FadeIn>
+              <SectionLabel>IDEAS IN ACTION</SectionLabel>
+              <h2 className="text-3xl md:text-4xl font-black mb-6" lang="zh-TW">
+                永續理念的發展
+              </h2>
+            </FadeIn>
+            <FadeIn delay={150}>
+              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9]" lang="zh-TW">
+                每一屆 TEDxXinyi 年度大會，我們都在問：
+                永續可以不只是口號嗎？
+                從舞台設計到材料選擇，從合作夥伴到觀眾體驗，
+                我們試著把永續變成一種看得見、摸得到的實踐。
+                這支影片記錄了我們一路走來的思考與嘗試。
+              </p>
+            </FadeIn>
+          </div>
+          <FadeIn delay={200}>
+            <div className="w-full aspect-video rounded-2xl overflow-hidden shadow-lg bg-neutral-900">
+              <iframe
+                src="https://www.youtube.com/embed/-i9MntW94Bs?rel=0"
+                title="TEDxXinyi Sustainability Ideas Development"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="w-full h-full border-0"
+              />
+            </div>
+          </FadeIn>
+        </div>
+      </Section>
+
+      {/* ==================== THREE APPROACHES ==================== */}
+      <Section bg="white">
         <FadeIn>
           <SectionLabel>OUR APPROACH</SectionLabel>
           <h2 className="text-3xl md:text-4xl font-black mb-14" lang="zh-TW">我們怎麼做？</h2>

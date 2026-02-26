@@ -31,12 +31,6 @@ const SPEAKERS = [
     bio: '曾為 Apple 台北 101 旗艦店創作 75 公尺剪紙作品《有閒來坐》，作品橫跨公共藝術、攝影與影像導演。',
     imageId: 'yang-shi-yi',
   },
-  {
-    name: '玻璃兄弟',
-    role: 'Podcast 主持人・華夏玻璃',
-    bio: 'Richard 與 Winston 兩兄弟經營家族企業華夏玻璃，同時主持商業管理與 ESG podcast「玻科客」。',
-    imageId: 'glass-brothers',
-  },
 ];
 
 const VALUE_BULLETS = [
