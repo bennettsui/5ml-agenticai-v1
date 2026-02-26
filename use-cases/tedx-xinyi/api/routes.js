@@ -366,7 +366,10 @@ router.get('/media', (req, res) => {
   const allImages = [...foundImages, ...missingVisuals];
   const result = allImages.map(img => {
     const key = img.folder ? `${img.folder}/${img.filename}` : img.filename;
-    return { ...img, alt: (meta[key] && meta[key].alt) || '', customName: (meta[key] && meta[key].customName) || '', publicUrl: (meta[key] && meta[key].publicUrl) || null };
+    const publicUrl = (meta[key] && meta[key].publicUrl) || null;
+    // If file is missing from disk but has a CDN URL, it's not really missing
+    const missing = img.missing && !publicUrl;
+    return { ...img, missing, alt: (meta[key] && meta[key].alt) || '', customName: (meta[key] && meta[key].customName) || '', publicUrl };
   });
   res.json({ images: result, total: result.length });
 });
