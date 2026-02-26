@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY, WARM_AMBER } from '../components';
 
+// CDN URL map for speaker images — updated by POST /api/tedx-xinyi/sync-cdn
+const SPEAKER_CDN_URLS: Record<string, string> = {};
+
 const SPEAKERS = [
   {
     name: '程世嘉',
@@ -288,7 +291,7 @@ export default function SalonPage() {
                 <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full mx-auto mb-4 overflow-hidden bg-neutral-100 border-2 border-neutral-100 relative">
                   {/* Try loading uploaded photo; show initial on error */}
                   <img
-                    src={`/tedx-xinyi/speakers/${speaker.imageId}.jpg`}
+                    src={SPEAKER_CDN_URLS[speaker.imageId] || `/tedx-xinyi/speakers/${speaker.imageId}.jpg`}
                     alt={speaker.name}
                     loading="lazy"
                     className="w-full h-full object-cover"

@@ -727,6 +727,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <button class="btn btn-outline" id="regenAllBtn" onclick="regenAll()">Generate All</button>
   <button class="btn btn-outline" id="compressAllBtn" onclick="compressAll()">Compress All</button>
   <button class="btn btn-outline" id="compressSelBtn" onclick="compressSelected()" disabled>Compress Selected</button>
+  <button class="btn btn-outline" id="syncCdnBtn" onclick="syncCdn()" style="border-color:#065f46;color:#6ee7b7">Sync All → CDN</button>
   <button class="btn btn-ghost btn-sm" onclick="toggleSelectAll()">Select All</button>
   <div class="stats" id="stats"></div>
 </div>
@@ -984,6 +985,20 @@ async function compressSelected() {
   setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0'; }, 2000);
 }
 
+async function syncCdn() {
+  const btn = document.getElementById('syncCdnBtn');
+  btn.disabled = true; btn.textContent = 'Syncing to CDN...';
+  try {
+    const r = await authFetch('/api/tedx-xinyi/sync-cdn', { method:'POST' });
+    const d = await r.json();
+    if (r.ok) {
+      showToast('CDN sync: ' + d.summary.uploaded + ' uploaded, ' + d.summary.existing + ' existing, ' + d.summary.errors + ' errors');
+      loadMedia();
+    } else { showToast('Error: ' + (d.error || 'Sync failed'), true); }
+  } catch(e) { showToast(e.message, true); }
+  btn.disabled = false; btn.textContent = 'Sync All → CDN';
+}
+
 function openUpload() { document.getElementById('uploadModal').classList.add('open'); }
 function closeUpload() { document.getElementById('uploadModal').classList.remove('open'); document.getElementById('uploadPreview').innerHTML = '<span style="color:#444;font-size:0.85rem">Select a file</span>'; }
 
@@ -1133,6 +1148,118 @@ function updateWebpageImageUrl(filename, folder, publicUrl) {
     console.error(`[TEDxXinyi] Failed to update webpage URLs:`, err.message);
   }
 }
+
+/**
+ * Batch: upload ALL local images to mmdbfiles and replace ALL local paths
+ * in TSX source files with CDN URLs. This is the one-shot migration.
+ */
+async function uploadAllAndReplacePaths() {
+  const results = [];
+  const meta = loadMetadata();
+  const imgRe = /\.(jpg|jpeg|png|webp|gif)$/i;
+
+  // Collect all local images
+  const images = [];
+  if (fs.existsSync(OUTPUT_DIR)) {
+    for (const f of fs.readdirSync(OUTPUT_DIR)) {
+      const full = path.join(OUTPUT_DIR, f);
+      if (fs.statSync(full).isFile() && imgRe.test(f)) {
+        images.push({ key: f, filename: f, folder: '', fullPath: full });
+      }
+    }
+    for (const dir of fs.readdirSync(OUTPUT_DIR)) {
+      const dirPath = path.join(OUTPUT_DIR, dir);
+      if (fs.statSync(dirPath).isDirectory()) {
+        for (const f of fs.readdirSync(dirPath)) {
+          const full = path.join(dirPath, f);
+          if (fs.statSync(full).isFile() && imgRe.test(f)) {
+            images.push({ key: `${dir}/${f}`, filename: f, folder: dir, fullPath: full });
+          }
+        }
+      }
+    }
+  }
+
+  for (const img of images) {
+    // Skip if already has a CDN URL
+    if (meta[img.key] && meta[img.key].publicUrl) {
+      // Still update the TSX pages with existing CDN URL
+      updateWebpageImageUrl(img.filename, img.folder, meta[img.key].publicUrl);
+      results.push({ key: img.key, status: 'already_uploaded', publicUrl: meta[img.key].publicUrl });
+      continue;
+    }
+    try {
+      const buffer = fs.readFileSync(img.fullPath);
+      const publicUrl = await uploadToMmdb(buffer);
+      savePublicUrl(img.key, publicUrl);
+      updateWebpageImageUrl(img.filename, img.folder, publicUrl);
+      results.push({ key: img.key, status: 'uploaded', publicUrl });
+    } catch (err) {
+      results.push({ key: img.key, status: 'error', error: err.message });
+    }
+  }
+
+  // Also update pages using CDN URLs from metadata (for images not on local disk)
+  const latestMeta = loadMetadata();
+  for (const [key, data] of Object.entries(latestMeta)) {
+    if (key.startsWith('_')) continue;
+    if (data && data.publicUrl && !images.find(i => i.key === key)) {
+      const parts = key.split('/');
+      const filename = parts.pop();
+      const folder = parts.join('/');
+      updateWebpageImageUrl(filename, folder, data.publicUrl);
+      results.push({ key, status: 'page_updated_from_metadata', publicUrl: data.publicUrl });
+    }
+  }
+
+  // Update speaker CDN URL map in salon/page.tsx
+  const speakerUrls = {};
+  for (const [key, data] of Object.entries(latestMeta)) {
+    if (key.startsWith('speakers/') && data && data.publicUrl) {
+      // key = "speakers/cheng-shi-jia.jpg" → imageId = "cheng-shi-jia"
+      const basename = key.replace('speakers/', '').replace(/\.(jpg|jpeg|png|webp)$/i, '');
+      speakerUrls[basename] = data.publicUrl;
+    }
+  }
+  if (Object.keys(speakerUrls).length > 0) {
+    try {
+      const salonPath = path.join(PAGES_DIR, 'salon', 'page.tsx');
+      if (fs.existsSync(salonPath)) {
+        let content = fs.readFileSync(salonPath, 'utf8');
+        const mapStr = JSON.stringify(speakerUrls, null, 2)
+          .replace(/"/g, "'")
+          .replace(/'([^']+)':/g, "'$1':");
+        const newMap = `const SPEAKER_CDN_URLS: Record<string, string> = ${mapStr};`;
+        content = content.replace(
+          /const SPEAKER_CDN_URLS: Record<string, string> = \{[^}]*\};/,
+          newMap
+        );
+        fs.writeFileSync(salonPath, content);
+        console.log(`[TEDxXinyi] Updated SPEAKER_CDN_URLS with ${Object.keys(speakerUrls).length} speakers`);
+      }
+    } catch (err) {
+      console.error('[TEDxXinyi] Failed to update speaker CDN map:', err.message);
+    }
+  }
+
+  return results;
+}
+
+// ---- API: batch upload all images to mmdbfiles and update pages ----
+router.post('/sync-cdn', async (req, res) => {
+  try {
+    console.log('[TEDxXinyi] Starting batch CDN sync...');
+    const results = await uploadAllAndReplacePaths();
+    const uploaded = results.filter(r => r.status === 'uploaded').length;
+    const existing = results.filter(r => r.status === 'already_uploaded').length;
+    const errors = results.filter(r => r.status === 'error').length;
+    console.log(`[TEDxXinyi] CDN sync done: ${uploaded} uploaded, ${existing} already had CDN, ${errors} errors`);
+    res.json({ success: true, results, summary: { uploaded, existing, errors, total: results.length } });
+  } catch (err) {
+    console.error('[TEDxXinyi] CDN sync failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ==================== HELPER ====================
 
