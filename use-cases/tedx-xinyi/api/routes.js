@@ -385,7 +385,6 @@ const SPEAKER_SLOTS = [
   { imageId: 'lin-dong-liang', name: '林東良', extensions: ['jpg', 'png'] },
   { imageId: 'liao-wei-jie', name: '廖唯傑', extensions: ['jpg', 'png'] },
   { imageId: 'yang-shi-yi', name: '楊士毅', extensions: ['jpg', 'png'] },
-  { imageId: 'glass-brothers', name: '玻璃兄弟', extensions: ['jpg', 'png'] },
 ];
 
 // ---- Helper: check if local file exists ----
@@ -686,12 +685,13 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
     const outPath = path.join(targetDir, safeName);
     fs.writeFileSync(outPath, compressed);
 
-    // Save alt text if provided
-    if (alt) {
+    // Always save metadata entry for uploaded file (so /media finds it)
+    const metaKey = folder === 'speakers' ? `speakers/${safeName}` : safeName;
+    {
       const meta = loadMetadata();
-      const key = folder === 'speakers' ? `speakers/${safeName}` : safeName;
-      if (!meta[key]) meta[key] = {};
-      meta[key].alt = alt;
+      if (!meta[metaKey]) meta[metaKey] = {};
+      if (alt) meta[metaKey].alt = alt;
+      meta[metaKey].uploadedAt = new Date().toISOString();
       saveMetadata(meta);
     }
 
@@ -703,7 +703,6 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
     let publicUrl = null;
     try {
       publicUrl = await uploadToMmdb(compressed);
-      const metaKey = folder === 'speakers' ? `speakers/${safeName}` : safeName;
       savePublicUrl(metaKey, publicUrl);
       updateWebpageImageUrl(safeName, folder === 'speakers' ? 'speakers' : '', publicUrl);
       console.log(`[TEDxXinyi] ${safeName} → ${publicUrl}`);
@@ -722,7 +721,7 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
 router.post('/upload-speaker', express.json({ limit: '50mb' }), async (req, res) => {
   try {
     const { speaker, data } = req.body;
-    const validSpeakers = ['cheng-shi-jia', 'lin-dong-liang', 'yang-shi-yi', 'glass-brothers'];
+    const validSpeakers = ['cheng-shi-jia', 'lin-dong-liang', 'liao-wei-jie', 'yang-shi-yi'];
     if (!validSpeakers.includes(speaker)) return res.status(400).json({ error: 'Invalid speaker ID' });
     if (!data || !data.startsWith('data:image/')) return res.status(400).json({ error: 'Invalid image data' });
     const match = data.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
@@ -994,10 +993,13 @@ function updateStats() {
   const onCdn = mediaItems.filter(i => !!i.publicUrl).length;
   const localOnly = mediaItems.filter(i => !i.publicUrl && i.localExists).length;
   const missing = mediaItems.filter(i => i.missing).length;
+  const visuals = mediaItems.filter(i => i.source === 'generated').length;
+  const speakers = mediaItems.filter(i => i.source === 'speaker').length;
   const parts = [total + ' assets'];
   parts.push(onCdn + ' on CDN');
   if (localOnly) parts.push(localOnly + ' local only');
   if (missing) parts.push(missing + ' missing');
+  parts.push(visuals + ' visuals, ' + speakers + ' speakers');
   document.getElementById('stats').textContent = parts.join(' | ');
   document.getElementById('compressSelBtn').disabled = selectedKeys.size === 0;
 }
@@ -1140,7 +1142,7 @@ async function syncCdn() {
     const r = await authFetch('/api/tedx-xinyi/sync-cdn', { method:'POST' });
     const d = await r.json();
     if (r.ok) {
-      showToast('CDN sync: ' + d.summary.uploaded + ' uploaded, ' + d.summary.existing + ' existing, ' + d.summary.errors + ' errors');
+      showToast('CDN sync: ' + d.summary.uploaded + ' uploaded, ' + d.summary.existing + ' existing, ' + d.summary.errors + ' errors (' + (d.summary.localFilesFound || 0) + ' local files found)');
       loadMedia();
     } else { showToast('Error: ' + (d.error || 'Sync failed'), true); }
   } catch(e) { showToast(e.message, true); }
@@ -1417,13 +1419,30 @@ async function uploadAllAndReplacePaths() {
 // ---- API: batch upload all images to mmdbfiles and update pages ----
 router.post('/sync-cdn', async (req, res) => {
   try {
-    console.log('[TEDxXinyi] Starting batch CDN sync...');
+    console.log(`[TEDxXinyi] Starting batch CDN sync... OUTPUT_DIR=${OUTPUT_DIR}`);
+    // Pre-check: count local files
+    const imgRe = /\.(jpg|jpeg|png|webp|gif)$/i;
+    let localCount = 0;
+    if (fs.existsSync(OUTPUT_DIR)) {
+      for (const f of fs.readdirSync(OUTPUT_DIR)) {
+        if (f.startsWith('.')) continue;
+        const full = path.join(OUTPUT_DIR, f);
+        if (fs.statSync(full).isFile() && imgRe.test(f)) localCount++;
+        else if (fs.statSync(full).isDirectory()) {
+          for (const sf of fs.readdirSync(full)) {
+            if (fs.statSync(path.join(full, sf)).isFile() && imgRe.test(sf)) localCount++;
+          }
+        }
+      }
+    }
+    console.log(`[TEDxXinyi] Found ${localCount} local image files to sync`);
     const results = await uploadAllAndReplacePaths();
     const uploaded = results.filter(r => r.status === 'uploaded').length;
     const existing = results.filter(r => r.status === 'already_uploaded').length;
+    const pageUpdated = results.filter(r => r.status === 'page_updated_from_metadata').length;
     const errors = results.filter(r => r.status === 'error').length;
-    console.log(`[TEDxXinyi] CDN sync done: ${uploaded} uploaded, ${existing} already had CDN, ${errors} errors`);
-    res.json({ success: true, results, summary: { uploaded, existing, errors, total: results.length } });
+    console.log(`[TEDxXinyi] CDN sync done: ${uploaded} uploaded, ${existing} already had CDN, ${pageUpdated} page-updated, ${errors} errors (${localCount} local files found)`);
+    res.json({ success: true, results, summary: { uploaded, existing, pageUpdated, errors, total: results.length, localFilesFound: localCount } });
   } catch (err) {
     console.error('[TEDxXinyi] CDN sync failed:', err.message);
     res.status(500).json({ error: err.message });
