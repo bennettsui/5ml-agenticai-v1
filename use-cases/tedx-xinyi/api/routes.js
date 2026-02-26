@@ -249,7 +249,7 @@ router.post('/generate', async (req, res) => {
     // Upload to mmdbfiles and get public URL
     let publicUrl = null;
     try {
-      publicUrl = await uploadToMmdb(imageBuffer);
+      publicUrl = await uploadToMmdb(imageBuffer, visual.filename);
       savePublicUrl(visual.filename, publicUrl);
       updateWebpageImageUrl(visual.filename, '', publicUrl);
       console.log(`[TEDxXinyi] ${visual.filename} → ${publicUrl}`);
@@ -319,7 +319,7 @@ router.post('/generate-all', async (req, res) => {
         // Upload to mmdbfiles
         let publicUrl = null;
         try {
-          publicUrl = await uploadToMmdb(imageBuffer);
+          publicUrl = await uploadToMmdb(imageBuffer, visual.filename);
           savePublicUrl(visual.filename, publicUrl);
           console.log(`[TEDxXinyi] ${visual.filename} → ${publicUrl}`);
         } catch (uploadErr) {
@@ -480,11 +480,11 @@ async function backupMetadataToMmdb(meta) {
 
 // ---- Expected speaker photo slots (salon page speakers) ----
 const SPEAKER_SLOTS = [
-  { imageId: 'cheng-shi-jia', name: '程世嘉', extensions: ['jpg', 'png'] },
-  { imageId: 'lin-dong-liang', name: '林東良', extensions: ['jpg', 'png'] },
-  { imageId: 'liao-wei-jie', name: '廖唯傑', extensions: ['jpg', 'png'] },
-  { imageId: 'yang-shi-yi', name: '楊士毅', extensions: ['jpg', 'png'] },
-  { imageId: 'dawn-chang', name: 'Dawn Chang', extensions: ['jpg', 'png'] },
+  { imageId: 'cheng-shi-jia', name: '程世嘉', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'lin-dong-liang', name: '林東良', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'liao-wei-jie', name: '廖唯傑', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'yang-shi-yi', name: '楊士毅', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'dawn-chang', name: 'Dawn Chang', extensions: ['jpg', 'png', 'webp'] },
 ];
 
 // ---- Helper: check if local file exists ----
@@ -805,7 +805,7 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
     // Upload to mmdbfiles
     let publicUrl = null;
     try {
-      publicUrl = await uploadToMmdb(compressed);
+      publicUrl = await uploadToMmdb(compressed, safeName);
       savePublicUrl(metaKey, publicUrl, { source: folder === 'speakers' ? 'speaker' : 'uploaded' });
       updateWebpageImageUrl(safeName, folder === 'speakers' ? 'speakers' : '', publicUrl);
       console.log(`[TEDxXinyi] ${safeName} → ${publicUrl}`);
@@ -1333,20 +1333,32 @@ function showToast(msg, err) {
 // ==================== MMDBFILES UPLOAD ====================
 
 /**
- * Convert image buffer to JPEG, then upload to mmdbfiles as base64.
+ * Convert image buffer to base64 and upload to mmdbfiles.
+ * Preserves .webp format when filename ends in .webp; otherwise converts to JPEG.
  * Returns the public_url from the response.
  */
-async function uploadToMmdb(imageBuffer) {
+async function uploadToMmdb(imageBuffer, filename) {
   const fetch = (await import('node-fetch')).default;
   const sharp = require('sharp');
 
-  // Convert to JPEG
-  const jpegBuffer = await sharp(imageBuffer)
-    .jpeg({ quality: 85, progressive: true })
-    .toBuffer();
+  const isWebp = filename && /\.webp$/i.test(filename);
+  let outBuffer;
+  let mimeType;
 
-  const base64 = jpegBuffer.toString('base64');
-  const fileData = `data:image/jpeg;base64,${base64}`;
+  if (isWebp) {
+    outBuffer = await sharp(imageBuffer)
+      .webp({ quality: 82, effort: 4 })
+      .toBuffer();
+    mimeType = 'image/webp';
+  } else {
+    outBuffer = await sharp(imageBuffer)
+      .jpeg({ quality: 85, progressive: true })
+      .toBuffer();
+    mimeType = 'image/jpeg';
+  }
+
+  const base64 = outBuffer.toString('base64');
+  const fileData = `data:${mimeType};base64,${base64}`;
 
   const response = await fetch('http://5ml.mmdbfiles.com/api/upload', {
     method: 'POST',
@@ -1471,7 +1483,7 @@ async function uploadAllAndReplacePaths() {
     }
     try {
       const buffer = fs.readFileSync(img.fullPath);
-      const publicUrl = await uploadToMmdb(buffer);
+      const publicUrl = await uploadToMmdb(buffer, img.filename);
       savePublicUrl(img.key, publicUrl, { source: img.folder === 'speakers' ? 'speaker' : 'generated' });
       updateWebpageImageUrl(img.filename, img.folder, publicUrl);
       results.push({ key: img.key, status: 'uploaded', publicUrl });
@@ -1567,12 +1579,11 @@ router.post('/sync-cdn-one', express.json(), async (req, res) => {
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: `File not found locally: ${key}` });
   try {
     const buffer = fs.readFileSync(filePath);
-    const publicUrl = await uploadToMmdb(buffer);
-    savePublicUrl(key, publicUrl);
-    // Also update TSX pages with the CDN URL
     const parts = key.split('/');
     const filename = parts.pop();
     const folder = parts.join('/');
+    const publicUrl = await uploadToMmdb(buffer, filename);
+    savePublicUrl(key, publicUrl);
     updateWebpageImageUrl(filename, folder, publicUrl);
     console.log(`[TEDxXinyi] Single CDN sync: ${key} → ${publicUrl}`);
     res.json({ success: true, key, publicUrl });
