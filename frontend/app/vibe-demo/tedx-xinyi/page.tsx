@@ -88,16 +88,16 @@ export default function TEDxXinyiHome() {
         {/* nanobanana-generated background with CSS fallback */}
         <div className="absolute inset-0">
           <img
-            src="/tedx-xinyi/hero-home.webp"
+            src="/tedx-xinyi/hero-home.jpg"
             alt=""
             fetchPriority="high"
             decoding="async"
             className="w-full h-full object-cover opacity-0 transition-opacity duration-300"
-            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.75'; }}
+            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.9'; }}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
-          {/* Warm gradient overlay — kept light to let brighter banner show through */}
-          <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/40 via-neutral-900/10 to-neutral-900/60" />
+          {/* Minimal gradient overlay — let the hero image show through clearly */}
+          <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/20 via-transparent to-neutral-900/40" />
         </div>
 
         {/* Fallback: warm amber glow when no image */}
@@ -181,12 +181,15 @@ export default function TEDxXinyiHome() {
             >
               認識 <span className="font-handwriting text-base">We are Becoming</span> salon
             </Link>
-            <button
+            <a
+              href="https://www.instagram.com/tedxxinyi/"
+              target="_blank"
+              rel="noopener noreferrer"
               className="px-5 py-2.5 text-sm font-bold rounded-full border border-white/30 text-white/70 hover:text-white hover:border-white/60 transition-all"
               lang="zh-TW"
             >
               取得最新消息
-            </button>
+            </a>
           </div>
         </div>
       </section>
@@ -279,7 +282,7 @@ export default function TEDxXinyiHome() {
           <FadeIn delay={200}>
             <div className="aspect-video rounded-xl overflow-hidden bg-neutral-100">
               <img
-                src="/tedx-xinyi/salon-teaser.webp"
+                src="/tedx-xinyi/salon-teaser.jpg"
                 alt="We are Becoming AI salon teaser"
                 loading="lazy"
                 className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
@@ -415,9 +418,13 @@ export default function TEDxXinyiHome() {
             <p className="text-white/70 text-sm mb-8" lang="en">
               TEDxXinyi 2026
             </p>
-            <button className="px-8 py-3.5 bg-white font-black text-sm rounded-full transition-all hover:scale-105 hover:shadow-lg" style={{ color: TED_RED }}>
+            <Link
+              href="/vibe-demo/tedx-xinyi/salon"
+              className="px-8 py-3.5 bg-white font-black text-sm rounded-full transition-all hover:scale-105 hover:shadow-lg inline-block"
+              style={{ color: TED_RED }}
+            >
               關注本年度大會
-            </button>
+            </Link>
           </FadeIn>
         </div>
       </section>

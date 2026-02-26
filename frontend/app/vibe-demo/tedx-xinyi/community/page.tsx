@@ -20,7 +20,7 @@ export default function CommunityPage() {
       {/* ==================== HERO ==================== */}
       <section className="relative min-h-[55vh] flex items-end overflow-hidden bg-neutral-900">
         <img
-          src="/tedx-xinyi/hero-community.webp"
+          src="/tedx-xinyi/hero-community.jpg"
           alt=""
           fetchPriority="high"
           decoding="async"
@@ -79,7 +79,7 @@ export default function CommunityPage() {
           <FadeIn delay={200}>
             <div className="aspect-video rounded-xl overflow-hidden bg-neutral-100">
               <img
-                src="/tedx-xinyi/salon-teaser.webp"
+                src="/tedx-xinyi/salon-teaser.jpg"
                 alt=""
                 className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
                 onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
@@ -184,13 +184,16 @@ export default function CommunityPage() {
             </p>
           </FadeIn>
           <FadeIn delay={250}>
-            <button
-              className="px-8 py-3.5 bg-white font-black text-sm rounded-full transition-all hover:scale-105 hover:shadow-lg"
+            <a
+              href="https://www.instagram.com/tedxxinyi/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-8 py-3.5 bg-white font-black text-sm rounded-full transition-all hover:scale-105 hover:shadow-lg inline-block"
               style={{ color: TED_RED }}
               lang="zh-TW"
             >
               填寫志工表單
-            </button>
+            </a>
           </FadeIn>
         </div>
       </section>

@@ -38,7 +38,7 @@ export default function SustainabilityPage() {
       {/* ==================== HERO ==================== */}
       <section className="relative min-h-[60vh] flex items-end overflow-hidden bg-neutral-900">
         <img
-          src="/tedx-xinyi/hero-sustainability.webp"
+          src="/tedx-xinyi/hero-sustainability.jpg"
           alt=""
           fetchPriority="high"
           decoding="async"
