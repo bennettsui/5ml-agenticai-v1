@@ -10,24 +10,28 @@ const SPEAKERS = [
   {
     name: '程世嘉',
     role: 'iKala 共同創辦人暨執行長',
-    bio: 'Stanford CS 碩士、前 Google 軟體工程師。2011 年創辦 AI 跨國企業 iKala，專注 AI 技術與數位轉型。',
+    tagline: 'AI 時代的人文思考——賦能而不替代',
+    bio: 'Stanford CS 碩士、前 Google 軟體工程師。2011 年創辦 AI 跨國企業 iKala，專注 AI 技術與數位轉型，倡導以人為本的 AI 應用。',
     imageId: 'cheng-shi-jia',
   },
   {
     name: '林東良',
-    role: '講者',
-    bio: '',
+    role: '黑潮海洋文教基金會 執行長',
+    tagline: '從解說員到執行長——海洋教育 × 環境行動',
+    bio: '從花蓮海岸的鯨豚解說員一路走到基金會執行長，長期投入海洋議題與鯨豚碳排研究，探索環境保育與科技的交會點。',
     imageId: 'lin-dong-liang',
   },
   {
     name: '廖唯傑',
     role: '講者',
-    bio: '',
+    tagline: '教育 × 科技的跨界實踐',
+    bio: '以教育與科技為起點，探索如何建立一個企業持續百年的永續模式，從轉型逆襲中找到危機與轉機。',
     imageId: 'liao-wei-jie',
   },
   {
     name: '楊士毅',
-    role: '剪紙藝術家・攝影師・導演',
+    role: '剪紙藝術家・導演・攝影師',
+    tagline: '剪紙藝術 × 國際成就',
     bio: '曾為 Apple 台北 101 旗艦店創作 75 公尺剪紙作品《有閒來坐》，作品橫跨公共藝術、攝影與影像導演。',
     imageId: 'yang-shi-yi',
   },
@@ -409,15 +413,52 @@ export default function SalonPage() {
                 </div>
                 <p className="font-black text-base mb-1" lang="zh-TW">{speaker.name}</p>
                 <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">{speaker.role}</p>
-                {speaker.bio && (
-                  <p className="text-neutral-400 text-xs leading-relaxed mt-2 max-w-[200px] mx-auto" lang="zh-TW">{speaker.bio}</p>
+                {speaker.tagline && (
+                  <p className="text-neutral-600 text-xs leading-relaxed mt-2 max-w-[200px] mx-auto italic" lang="zh-TW">{speaker.tagline}</p>
                 )}
               </div>
             </FadeIn>
           ))}
         </div>
 
+        {/* Curator */}
         <FadeIn delay={200}>
+          <div className="flex items-center gap-5 mt-2 mb-10 p-5 rounded-xl border border-neutral-100" style={{ backgroundColor: '#fafaf9' }}>
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden bg-neutral-100 border-2 border-neutral-100 flex-shrink-0 relative">
+              <img
+                src={SPEAKER_CDN_URLS['dawn-chang'] || '/tedx-xinyi/speakers/dawn-chang.jpg'}
+                alt="Dawn Chang"
+                loading="lazy"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  const el = e.target as HTMLImageElement;
+                  if (el.src.endsWith('.jpg')) { el.src = el.src.replace('.jpg', '.png'); }
+                  else { el.style.display = 'none'; if (el.nextElementSibling) (el.nextElementSibling as HTMLElement).style.display = 'flex'; }
+                }}
+              />
+              <div className="w-full h-full items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-300 absolute inset-0" style={{ display: 'none' }}>
+                <span className="text-xl font-black text-neutral-400">D</span>
+              </div>
+            </div>
+            <div>
+              <span
+                className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2 tracking-wide"
+                style={{ backgroundColor: `${WARM_AMBER}20`, color: WARM_AMBER }}
+              >
+                CURATOR
+              </span>
+              <p className="font-black text-base" lang="zh-TW">Dawn Chang 張敏訓</p>
+              <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">
+                TEDxXinyi 策展人總籌
+              </p>
+              <p className="text-neutral-400 text-xs leading-relaxed mt-1 italic" lang="zh-TW">
+                在思想被說出口之前——以策展力連結 AI、藝術、永續與城市文化
+              </p>
+            </div>
+          </div>
+        </FadeIn>
+
+        <FadeIn delay={250}>
           <p className="text-xs text-neutral-400 mb-10" lang="zh-TW">
             更多講者與嘉賓陸續公布中。
           </p>
