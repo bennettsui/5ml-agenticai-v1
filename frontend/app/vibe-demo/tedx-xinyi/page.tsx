@@ -96,8 +96,8 @@ export default function TEDxXinyiHome() {
             onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.75'; }}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
-          {/* Warm gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/50 via-neutral-900/20 to-neutral-900/70" />
+          {/* Warm gradient overlay — kept light to let brighter banner show through */}
+          <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/40 via-neutral-900/10 to-neutral-900/60" />
         </div>
 
         {/* Fallback: warm amber glow when no image */}
@@ -354,60 +354,11 @@ export default function TEDxXinyiHome() {
         </div>
       </Section>
 
-      {/* ==================== LATEST BLOG ==================== */}
+      {/* Blog section hidden — uncomment when blog content is ready
       <Section bg="warm">
-        <FadeIn>
-          <SectionLabel>BLOG</SectionLabel>
-          <h2 className="text-3xl md:text-5xl font-black mb-12" lang="zh-TW">最新文章</h2>
-        </FadeIn>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          {BLOG_POSTS.map((post, i) => (
-            <FadeIn key={post.title} delay={i * 100}>
-              <div className="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all h-full flex flex-col border border-neutral-100">
-                {post.image ? (
-                  <div className="aspect-[16/9] overflow-hidden bg-neutral-100">
-                    <img
-                      src={post.image}
-                      alt={post.title}
-                      loading="lazy"
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                  </div>
-                ) : (
-                  <div className="aspect-[16/9] flex items-center justify-center" style={{ backgroundColor: WARM_GRAY }}>
-                    <span className="text-neutral-300 text-5xl font-black">T</span>
-                  </div>
-                )}
-                <div className="p-5 flex-1 flex flex-col">
-                  <p className="text-neutral-400 text-xs mb-2 font-medium">{post.date}</p>
-                  <h3 className="text-base font-black mb-2 group-hover:text-neutral-700 transition-colors" lang="zh-TW">
-                    {post.title}
-                  </h3>
-                  <p className="text-neutral-500 text-sm leading-relaxed flex-1 whitespace-pre-line" lang="zh-TW">
-                    {post.excerpt}
-                  </p>
-                </div>
-              </div>
-            </FadeIn>
-          ))}
-        </div>
-
-        <FadeIn>
-          <div className="text-center">
-            <Link
-              href="/vibe-demo/tedx-xinyi/blog"
-              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold border-2 border-neutral-300 hover:border-neutral-900 rounded-full text-neutral-600 hover:text-neutral-900 transition-all"
-              lang="zh-TW"
-            >
-              閱讀所有文章
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            </Link>
-          </div>
-        </FadeIn>
+        ...
       </Section>
+      */}
 
       {/* ==================== PARTNERS ==================== */}
       <Section bg="white">

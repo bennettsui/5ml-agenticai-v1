@@ -212,30 +212,7 @@ export default function AboutPage() {
         </div>
       </Section>
 
-      {/* ==================== TEAM ==================== */}
-      <Section bg="white">
-        <FadeIn>
-          <SectionLabel>TEAM</SectionLabel>
-          <h2 className="text-3xl md:text-4xl font-black mb-3" lang="zh-TW">策展與設計團隊</h2>
-          <p className="text-neutral-500 text-base leading-relaxed mb-10" lang="zh-TW">
-            一群來自不同領域的人，在信義共同策畫這場長期的實驗。
-          </p>
-        </FadeIn>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
-          {TEAM_ROLES.map((member, i) => (
-            <FadeIn key={i} delay={i * 60}>
-              <div className="rounded-xl p-5 text-center border border-neutral-100 hover:border-neutral-200 hover:shadow-sm transition-all" style={{ backgroundColor: WARM_GRAY }}>
-                <div className="w-14 h-14 rounded-full bg-neutral-200 mx-auto mb-3 flex items-center justify-center">
-                  <span className="text-neutral-400 text-xs font-bold">{member.name === 'Dawn Chang' ? 'DC' : 'Photo'}</span>
-                </div>
-                <p className="font-bold text-sm mb-0.5" lang="zh-TW">{member.name}</p>
-                <p className="text-neutral-400 text-xs" lang="zh-TW">{member.role}</p>
-              </div>
-            </FadeIn>
-          ))}
-        </div>
-      </Section>
+      {/* Team section hidden until member info is finalized */}
 
       <SiteFooter />
     </div>
