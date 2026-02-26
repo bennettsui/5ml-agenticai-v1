@@ -152,6 +152,7 @@ router.post('/generate', async (req, res) => {
     try {
       publicUrl = await uploadToMmdb(imageBuffer);
       savePublicUrl(visual.filename, publicUrl);
+      updateWebpageImageUrl(visual.filename, '', publicUrl);
       console.log(`[TEDxXinyi] ${visual.filename} → ${publicUrl}`);
     } catch (uploadErr) {
       console.error(`[TEDxXinyi] mmdbfiles upload failed for ${visual.filename}:`, uploadErr.message);
@@ -496,6 +497,7 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
       publicUrl = await uploadToMmdb(compressed);
       const metaKey = folder === 'speakers' ? `speakers/${safeName}` : safeName;
       savePublicUrl(metaKey, publicUrl);
+      updateWebpageImageUrl(safeName, folder === 'speakers' ? 'speakers' : '', publicUrl);
       console.log(`[TEDxXinyi] ${safeName} → ${publicUrl}`);
     } catch (uploadErr) {
       console.error(`[TEDxXinyi] mmdbfiles upload failed for ${safeName}:`, uploadErr.message);
@@ -709,7 +711,8 @@ function renderGrid() {
     const key = img.folder ? img.folder + '/' + img.filename : img.filename;
     const sel = selectedKeys.has(key) ? ' selected' : '';
     const sizeKb = img.size ? (img.size / 1024).toFixed(0) : '—';
-    const src = img.folder ? '/tedx-xinyi/' + img.folder + '/' + img.filename : '/tedx-xinyi/' + img.filename;
+    const localSrc = img.folder ? '/tedx-xinyi/' + img.folder + '/' + img.filename : '/tedx-xinyi/' + img.filename;
+    const src = img.publicUrl || localSrc;
     const tag = img.source === 'generated' ? '<span class="tag tag-gen">Generated</span>' : img.folder === 'speakers' ? '<span class="tag tag-spk">Speaker</span>' : '<span class="tag tag-up">Uploaded</span>';
     const v = img.size;
 
@@ -733,7 +736,7 @@ function renderGrid() {
       '<div class="card-check" onclick="toggleSelect(event,\\'' + key + '\\')">' +
         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' +
       '</div>' +
-      '<div class="card-img"><img src="' + src + '?v=' + v + '" onerror="this.style.display=\\'none\\';this.nextElementSibling.style.display=\\'flex\\'"><div class="placeholder" style="display:none">?</div></div>' +
+      '<div class="card-img"><img src="' + src + (img.publicUrl ? '' : '?v=' + v) + '" onerror="this.style.display=\\'none\\';this.nextElementSibling.style.display=\\'flex\\'"><div class="placeholder" style="display:none">?</div></div>' +
       '<div class="card-body">' +
         '<div class="card-filename">' + img.filename + ' ' + tag + '</div>' +
         '<div class="card-meta"><span>' + sizeKb + ' KB</span></div>' +
@@ -984,6 +987,58 @@ function savePublicUrl(key, publicUrl) {
   if (!meta[key]) meta[key] = {};
   meta[key].publicUrl = publicUrl;
   saveMetadata(meta);
+}
+
+// ==================== WEBPAGE URL UPDATE ====================
+
+const PAGES_DIR = path.join(__dirname, '../../../frontend/app/vibe-demo/tedx-xinyi');
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * After generate/upload, replace local image paths in webpage TSX files
+ * with the mmdbfiles CDN URL so the site serves from CDN.
+ */
+function updateWebpageImageUrl(filename, folder, publicUrl) {
+  if (!publicUrl) return;
+  const localPath = folder ? `/tedx-xinyi/${folder}/${filename}` : `/tedx-xinyi/${filename}`;
+
+  const scanDir = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir)) {
+      const full = path.join(dir, entry);
+      const stat = fs.statSync(full);
+      if (stat.isDirectory()) {
+        scanDir(full);
+      } else if (entry.endsWith('.tsx') || entry.endsWith('.ts')) {
+        let content = fs.readFileSync(full, 'utf8');
+        let changed = false;
+        // Replace relative paths: /tedx-xinyi/filename
+        if (content.includes(localPath)) {
+          content = content.replace(new RegExp(escapeRegExp(localPath), 'g'), publicUrl);
+          changed = true;
+        }
+        // Replace full URLs in metadata: https://5ml-agenticai-v1.fly.dev/tedx-xinyi/filename
+        const fullUrl = `https://5ml-agenticai-v1.fly.dev${localPath}`;
+        if (content.includes(fullUrl)) {
+          content = content.replace(new RegExp(escapeRegExp(fullUrl), 'g'), publicUrl);
+          changed = true;
+        }
+        if (changed) {
+          fs.writeFileSync(full, content);
+          console.log(`[TEDxXinyi] Updated webpage: ${path.basename(dir)}/${entry} — ${localPath} → ${publicUrl}`);
+        }
+      }
+    }
+  };
+
+  try {
+    scanDir(PAGES_DIR);
+  } catch (err) {
+    console.error(`[TEDxXinyi] Failed to update webpage URLs:`, err.message);
+  }
 }
 
 // ==================== HELPER ====================
