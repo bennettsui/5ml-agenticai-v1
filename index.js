@@ -99,6 +99,23 @@ const tedxStaticOpts = { maxAge: '7d', immutable: false };
 app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx'), tedxStaticOpts));
 app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi'), tedxStaticOpts));
 
+// CDN fallback: if local file is missing, redirect to mmdbfiles CDN URL
+app.use('/tedx-xinyi', (req, res, next) => {
+  // Only handle image requests that fell through static middleware
+  if (!/\.(jpg|jpeg|png|webp|gif)$/i.test(req.path)) return next();
+  try {
+    const metaPath = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi', '.media-metadata.json');
+    if (!fs.existsSync(metaPath)) return next();
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    // req.path is like /hero-home.webp or /speakers/cheng-shi-jia.jpg
+    const key = req.path.replace(/^\//, '');
+    if (meta[key] && meta[key].publicUrl) {
+      return res.redirect(302, meta[key].publicUrl);
+    }
+  } catch { /* ignore */ }
+  next();
+});
+
 // Serve Radiance uploaded media
 app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
 
