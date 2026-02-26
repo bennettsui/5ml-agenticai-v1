@@ -173,7 +173,7 @@ export default function SalonPage() {
       {/* ==================== HERO ==================== */}
       <section id="salon-we-are-becoming-ai" className="relative min-h-[60vh] flex items-end overflow-hidden bg-neutral-900">
         <img
-          src="/tedx-xinyi/salon-hero.webp"
+          src="/tedx-xinyi/salon-hero.jpg"
           alt=""
           fetchPriority="high"
           decoding="async"
@@ -218,7 +218,7 @@ export default function SalonPage() {
 
                   {/* nanobanana background (above gradient fallback) */}
                   <img
-                    src="/tedx-xinyi/poster-dark.webp"
+                    src="/tedx-xinyi/poster-dark.jpg"
                     alt="We are Becoming — TEDxXinyi 2026 key visual poster"
                     loading="lazy"
                     className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
@@ -464,6 +464,19 @@ export default function SalonPage() {
           </p>
         </FadeIn>
 
+        {/* Salon atmosphere photo */}
+        <FadeIn delay={180}>
+          <div className="rounded-2xl overflow-hidden mb-10">
+            <img
+              src="http://5ml.mmdbfiles.com/assets/93f5a75df69dca1744dd756c.jpg"
+              alt="TEDxXinyi salon 現場氛圍"
+              loading="lazy"
+              className="w-full h-auto object-cover rounded-2xl"
+              style={{ maxHeight: '420px' }}
+            />
+          </div>
+        </FadeIn>
+
         {/* Galaxy section */}
         <FadeIn delay={200}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center rounded-2xl overflow-hidden border border-neutral-100 p-6 md:p-0">
@@ -476,7 +489,7 @@ export default function SalonPage() {
             </div>
             <div className="aspect-square max-w-sm mx-auto w-full rounded-xl overflow-hidden bg-neutral-100">
               <img
-                src="/tedx-xinyi/salon-galaxy.webp"
+                src="/tedx-xinyi/salon-galaxy.jpg"
                 alt=""
                 className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
                 onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
@@ -686,8 +699,8 @@ export default function SalonPage() {
             <div className="space-y-4">
               <div className="aspect-[4/3] rounded-xl overflow-hidden bg-neutral-100">
                 <img
-                  src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Taipei_Performing_Arts_Center_20220821.jpg/1280px-Taipei_Performing_Arts_Center_20220821.jpg"
-                  alt="台北表演藝術中心外觀"
+                  src="http://5ml.mmdbfiles.com/assets/7bfb3356fd0a844260692058.jpg"
+                  alt="台北表演藝術中心 藍盒子 Blue Box"
                   loading="lazy"
                   className="w-full h-full object-cover"
                 />

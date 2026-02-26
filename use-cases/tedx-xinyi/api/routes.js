@@ -129,61 +129,61 @@ function scanExternalUrls() {
 const VISUALS = [
   {
     id: 'hero-home',
-    filename: 'hero-home.webp',
+    filename: 'hero-home.jpg',
     description: 'Home hero — luminous galaxy distance cinematic banner',
     prompt: 'Wide 16:9 cinematic banner, expansive sky transitioning from deep midnight blue at the edges to warm indigo and soft violet in the centre, layered nebula clouds in luminous violet rose-pink and warm amber tones that look like long-exposure astrophotography mixed with painting not 3D cartoon, a clear smooth galaxy arc curves gracefully across the upper half with a brightly glowing warm golden-amber core radiating soft light surrounded by many tiny sharp stars, from the galaxy arc let a few very thin beams of warm golden light and sparse glowing data-like particles flow downward along curved paths suggesting AI as a vast quiet information system, the overall scene should feel luminous hopeful and bright not oppressively dark, foreground at very bottom centre a tiny solitary human figure standing on a narrow rock edge facing the galaxy occupying only 5-8% of total image height realistic adult proportions long dark coat trousers gender-neutral calm reflective pose arms relaxed head slightly tilted upward, warm realistic rim light from the galaxy outlining head shoulders and coat clearly, around the upper body a few faint rising particles of golden light where data streams begin to touch this person, palette balanced between deep midnight blues and warm violet rose amber and cream highlights with the galaxy core glowing warm gold, generous amounts of star light and nebula glow so the image feels radiant not heavy, no text no watermarks no UI HUD graphics, cinematic contrast soft bloom on brightest galaxy parts subtle film-grain overlay, mature restrained premium theatrical key art that feels uplifting and aspirational',
   },
   {
     id: 'hero-about',
-    filename: 'hero-about.webp',
+    filename: 'hero-about.jpg',
     description: 'About hero — creative gathering space Xinyi',
     prompt: 'Warm intimate view of a modern creative event space in Taipei, rows of minimalist chairs facing a small stage with warm amber lighting, large floor-to-ceiling windows showing Xinyi skyline at dusk, soft golden light streaming in, a few potted plants and modern furniture, the feeling of anticipation before a talk begins, cinematic photography, warm color palette with cream and amber tones, no text, no watermarks, no people, slight bokeh effect',
   },
   {
     id: 'hero-speakers',
-    filename: 'hero-speakers.webp',
+    filename: 'hero-speakers.jpg',
     description: 'Speakers hero — stage atmosphere warm light',
     prompt: 'Close up of a minimalist TEDx stage from the audience perspective, warm spotlight creating a circle of golden light on a clean stage, blurred audience seats in foreground, modern venue architecture visible, Taipei city lights visible through large windows in background, warm amber and cream color palette, dramatic but optimistic lighting like a festival concert poster, no text, no watermarks, no people, cinematic depth of field',
   },
   {
     id: 'hero-sustainability',
-    filename: 'hero-sustainability.webp',
+    filename: 'hero-sustainability.jpg',
     description: 'Sustainability hero — 3D printed stage materials',
     prompt: 'Artistic close-up of sustainable stage materials: 3D printed geometric lamp components, recycled wood panels, and modular metal structures arranged beautifully on a workbench, warm natural daylight from a large window, workshop atmosphere, cream and warm brown tones with subtle green accents, macro photography style showing material textures, optimistic and creative mood, no text, no watermarks, no people, shallow depth of field',
   },
   {
     id: 'hero-community',
-    filename: 'hero-community.webp',
+    filename: 'hero-community.jpg',
     description: 'Community hero — circle gathering warmth',
     prompt: 'Overhead bird-eye view of chairs arranged in a circle in a modern Taipei rooftop terrace, warm evening golden hour light, potted trees and string lights creating cozy atmosphere, Xinyi district buildings visible in soft background, some chairs have warm red and amber cushions, the feeling of community gathering and conversation, warm bright photography style, no text, no watermarks, no people, festival poster mood',
   },
   {
     id: 'salon-teaser',
-    filename: 'salon-teaser.webp',
+    filename: 'salon-teaser.jpg',
     description: 'Home hero / Salon teaser — Blue Box venue cinematic',
     prompt: 'Wide 16:9 cinematic still of a theatre space reminiscent of Taipei Performing Arts Center Blue Box, clean modern architecture, high ceiling, deep blue ambient light, subtle hints of tiered seating and a stage, in the foreground silhouettes of diverse people standing or sitting facing towards a glowing central focal point symbolising AI and ideas not a literal screen of code, thin streams of light or flowing lines connecting people to the central glow suggesting shared learning and becoming, colour palette deep blue dark charcoal with accents of TED red and warm skin tones, enough negative space on one side for overlay text, no text no watermarks no logos, optimistic contemplative atmosphere',
   },
   {
     id: 'salon-hero',
-    filename: 'salon-hero.webp',
+    filename: 'salon-hero.jpg',
     description: 'Salon page main visual — full galaxy centered cinematic wide',
     prompt: 'Wide 16:9 cinematic banner, the ENTIRE galaxy is fully visible and vertically centred in frame with generous breathing room above and below, vast spiral galaxy with smooth arc curving gracefully across the centre of the image, rich indigo violet and magenta nebula clouds in a dark navy charcoal sky mixing long-exposure astrophotography with painting not 3D cartoon, softly glowing warm core at galaxy centre surrounded by many tiny sharp stars, a few very thin beams of light and sparse glowing data-like particles radiating outward from the core, deep space surrounds the galaxy on all sides so the full shape is clearly visible from edge to edge, at the very bottom centre a single tiny solitary human figure silhouette stands on a minimal dark ledge facing upward toward the galaxy occupying only 3-5% of image height, soft rim light from the galaxy outlines the figure against the darkness, palette of deep blues violets blacks and neutral whites with warm highlights at galaxy core, camera pulled back far enough to frame the complete galaxy with dark space margins, no text no watermarks no logos no UI, cinematic contrast soft bloom on galaxy subtle film-grain, mature restrained theatrical atmosphere',
   },
   {
     id: 'poster-dark',
-    filename: 'poster-dark.webp',
+    filename: 'poster-dark.jpg',
     description: 'Dark galaxy poster background — 4:5 portrait for key visual section',
     prompt: '4:5 vertical cinematic sci-fi poster background, upper 80% is a vast deep-space sky in dark navy and charcoal black with layered slightly abstract nebula clouds in rich indigo violet and magenta mixing long-exposure astrophotography with painting not 3D cartoon, a clear smooth galaxy arc curves from left to right across the upper half with a softly glowing warm core surrounded by many tiny sharp stars, from the arc a few very thin beams of light and sparse glowing data-like particles flow downward along curved paths, in the very bottom centre a tiny human figure standing on a narrow rock edge facing the galaxy occupying only 5-8% of total image height realistic adult proportions long dark coat trousers gender-neutral calm reflective pose feet near edge arms relaxed head slightly tilted up, soft realistic rim light from galaxy above so the outline of head shoulders and coat is clearly readable against the darkness, around the upper body a few faint rising particles of light, the lower 15% of image fades to near-pure black providing a clean base for text overlay, palette dominated by deep blues violets blacks and neutral whites with controlled warm highlights at galaxy core and figure rim light, no text no watermarks no logos no HUD no UI, cinematic contrast soft bloom on brightest galaxy parts subtle film-grain overlay, mature restrained premium theatrical key art',
   },
   {
     id: 'salon-galaxy',
-    filename: 'salon-galaxy.webp',
+    filename: 'salon-galaxy.jpg',
     description: 'Galaxy networking visual — The Quest community',
     prompt: 'Square abstract galaxy made of floating islands or orbits each representing a different Intelligence domain, Design Intelligence with minimal objects like chairs posters typography, Food Intelligence with stylised table ingredients coffee, Ocean Intelligence with wave lines tiny whale dolphin icons, Music Art Intelligence with musical notes vinyl simple instrument shapes, no realistic logos but iconic shapes suggesting each domain, dark background with colourful but slightly muted orbit colours connected by thin lines with one orbit subtly highlighted in TED red, overall composition usable as a background behind text, no text no watermarks',
   },
   {
     id: 'salon-curiosity',
-    filename: 'salon-curiosity.webp',
+    filename: 'salon-curiosity.jpg',
     description: 'Curiosity zones visual — multi-zone experience',
     prompt: 'Vertical portrait 3:4 image composed of multiple stacked zones, bottom a small open-mic corner with a mic stand and a small seated audience, middle a creative market area with small booths plants and people talking, upper a quiet reading journaling corner with books notebooks lamps, style semi-illustrative slightly stylised not hyper-realistic, people appear diverse but not individually recognisable, lighting warm glows in each zone connected with a gentle path or staircase hinting at moving from one version of yourself to the next, palette mix of warm earth tones and deep blues with small red accents, no text no watermarks no logos',
   },
@@ -249,7 +249,7 @@ router.post('/generate', async (req, res) => {
     // Upload to mmdbfiles and get public URL
     let publicUrl = null;
     try {
-      publicUrl = await uploadToMmdb(imageBuffer, visual.filename);
+      publicUrl = await uploadToMmdb(imageBuffer);
       savePublicUrl(visual.filename, publicUrl);
       updateWebpageImageUrl(visual.filename, '', publicUrl);
       console.log(`[TEDxXinyi] ${visual.filename} → ${publicUrl}`);
@@ -319,7 +319,7 @@ router.post('/generate-all', async (req, res) => {
         // Upload to mmdbfiles
         let publicUrl = null;
         try {
-          publicUrl = await uploadToMmdb(imageBuffer, visual.filename);
+          publicUrl = await uploadToMmdb(imageBuffer);
           savePublicUrl(visual.filename, publicUrl);
           console.log(`[TEDxXinyi] ${visual.filename} → ${publicUrl}`);
         } catch (uploadErr) {
@@ -805,7 +805,7 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
     // Upload to mmdbfiles
     let publicUrl = null;
     try {
-      publicUrl = await uploadToMmdb(compressed, safeName);
+      publicUrl = await uploadToMmdb(compressed);
       savePublicUrl(metaKey, publicUrl, { source: folder === 'speakers' ? 'speaker' : 'uploaded' });
       updateWebpageImageUrl(safeName, folder === 'speakers' ? 'speakers' : '', publicUrl);
       console.log(`[TEDxXinyi] ${safeName} → ${publicUrl}`);
@@ -1333,32 +1333,21 @@ function showToast(msg, err) {
 // ==================== MMDBFILES UPLOAD ====================
 
 /**
- * Convert image buffer to base64 and upload to mmdbfiles.
- * Preserves .webp format when filename ends in .webp; otherwise converts to JPEG.
+ * Convert image buffer to JPEG base64, then upload to mmdbfiles.
+ * Always converts to JPEG for CDN compatibility.
  * Returns the public_url from the response.
  */
-async function uploadToMmdb(imageBuffer, filename) {
+async function uploadToMmdb(imageBuffer) {
   const fetch = (await import('node-fetch')).default;
   const sharp = require('sharp');
 
-  const isWebp = filename && /\.webp$/i.test(filename);
-  let outBuffer;
-  let mimeType;
+  // Always convert to JPEG for CDN
+  const jpegBuffer = await sharp(imageBuffer)
+    .jpeg({ quality: 85, progressive: true })
+    .toBuffer();
 
-  if (isWebp) {
-    outBuffer = await sharp(imageBuffer)
-      .webp({ quality: 82, effort: 4 })
-      .toBuffer();
-    mimeType = 'image/webp';
-  } else {
-    outBuffer = await sharp(imageBuffer)
-      .jpeg({ quality: 85, progressive: true })
-      .toBuffer();
-    mimeType = 'image/jpeg';
-  }
-
-  const base64 = outBuffer.toString('base64');
-  const fileData = `data:${mimeType};base64,${base64}`;
+  const base64 = jpegBuffer.toString('base64');
+  const fileData = `data:image/jpeg;base64,${base64}`;
 
   const response = await fetch('http://5ml.mmdbfiles.com/api/upload', {
     method: 'POST',
@@ -1483,7 +1472,7 @@ async function uploadAllAndReplacePaths() {
     }
     try {
       const buffer = fs.readFileSync(img.fullPath);
-      const publicUrl = await uploadToMmdb(buffer, img.filename);
+      const publicUrl = await uploadToMmdb(buffer);
       savePublicUrl(img.key, publicUrl, { source: img.folder === 'speakers' ? 'speaker' : 'generated' });
       updateWebpageImageUrl(img.filename, img.folder, publicUrl);
       results.push({ key: img.key, status: 'uploaded', publicUrl });
@@ -1582,7 +1571,7 @@ router.post('/sync-cdn-one', express.json(), async (req, res) => {
     const parts = key.split('/');
     const filename = parts.pop();
     const folder = parts.join('/');
-    const publicUrl = await uploadToMmdb(buffer, filename);
+    const publicUrl = await uploadToMmdb(buffer);
     savePublicUrl(key, publicUrl);
     updateWebpageImageUrl(filename, folder, publicUrl);
     console.log(`[TEDxXinyi] Single CDN sync: ${key} → ${publicUrl}`);
@@ -1632,15 +1621,15 @@ async function generateVisual(client, prompt) {
       const imageData = part.inlineData || part.inline_data;
       if (imageData && imageData.mimeType?.startsWith('image/')) {
         const rawBuffer = Buffer.from(imageData.data, 'base64');
-        // Resize to max 1920px wide + compress to WebP
+        // Resize to 1920×1080 (16:9) + compress to JPEG
         try {
           const sharp = require('sharp');
-          const webpBuffer = await sharp(rawBuffer)
-            .resize({ width: 1920, withoutEnlargement: true })
-            .webp({ quality: 82, effort: 4 })
+          const jpegBuffer = await sharp(rawBuffer)
+            .resize({ width: 1920, height: 1080, fit: 'cover' })
+            .jpeg({ quality: 85, progressive: true })
             .toBuffer();
-          console.log(`[TEDxXinyi] Optimized: ${(rawBuffer.length / 1024).toFixed(0)} KB → ${(webpBuffer.length / 1024).toFixed(0)} KB WebP (${((1 - webpBuffer.length / rawBuffer.length) * 100).toFixed(0)}% smaller)`);
-          return webpBuffer;
+          console.log(`[TEDxXinyi] Optimized: ${(rawBuffer.length / 1024).toFixed(0)} KB → ${(jpegBuffer.length / 1024).toFixed(0)} KB JPEG (${((1 - jpegBuffer.length / rawBuffer.length) * 100).toFixed(0)}% smaller)`);
+          return jpegBuffer;
         } catch {
           return rawBuffer;
         }
