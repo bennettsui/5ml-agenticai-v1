@@ -1,0 +1,71 @@
+# TEDxXinyi — Apache Configuration
+# Requires: mod_rewrite, mod_headers, mod_expires
+
+# ─── Clean URLs (optional) ───
+RewriteEngine On
+RewriteBase /
+
+# If requesting a directory, look for .html file
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{DOCUMENT_ROOT}/%{REQUEST_URI}.html -f
+RewriteRule ^(.+)$ $1.html [L]
+
+# ─── Security ───
+
+# Block access to config and metadata files
+<FilesMatch "\.(php|json)$">
+  Order Allow,Deny
+  Allow from all
+</FilesMatch>
+
+<FilesMatch "^(config\.php|\.media-metadata\.json)$">
+  Order Deny,Allow
+  Deny from all
+</FilesMatch>
+
+# Block dotfiles (except .htaccess)
+<FilesMatch "^\.(?!htaccess)">
+  Order Deny,Allow
+  Deny from all
+</FilesMatch>
+
+# Security headers
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set X-XSS-Protection "1; mode=block"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ─── Caching ───
+<IfModule mod_expires.c>
+  ExpiresActive On
+
+  # Images: 7 days
+  ExpiresByType image/jpeg "access plus 7 days"
+  ExpiresByType image/png "access plus 7 days"
+  ExpiresByType image/webp "access plus 7 days"
+  ExpiresByType image/gif "access plus 7 days"
+  ExpiresByType image/svg+xml "access plus 7 days"
+
+  # CSS/JS: 7 days
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+
+  # HTML: 1 hour
+  ExpiresByType text/html "access plus 1 hour"
+</IfModule>
+
+# ─── Compression ───
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+</IfModule>
+
+# ─── PHP settings (for admin upload) ───
+<IfModule mod_php.c>
+  php_value post_max_size 30M
+  php_value upload_max_filesize 30M
+  php_value memory_limit 128M
+  php_value max_execution_time 120
+</IfModule>
