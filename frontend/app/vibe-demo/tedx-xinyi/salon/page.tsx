@@ -15,8 +15,8 @@ const SPEAKERS = [
   },
   {
     name: '林東良',
-    role: '講者',
-    bio: '',
+    role: '黑潮海洋文教基金會',
+    bio: '長期關注海洋議題與鯨豚碳排研究，從海洋算力到花紋海豚的超能力，探索環境與 AI 的交會點。',
     imageId: 'lin-dong-liang',
   },
   {
@@ -417,7 +417,41 @@ export default function SalonPage() {
           ))}
         </div>
 
+        {/* Curator */}
         <FadeIn delay={200}>
+          <div className="flex items-center gap-5 mt-2 mb-10 p-5 rounded-xl border border-neutral-100" style={{ backgroundColor: '#fafaf9' }}>
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden bg-neutral-100 border-2 border-neutral-100 flex-shrink-0 relative">
+              <img
+                src={SPEAKER_CDN_URLS['dawn-chang'] || '/tedx-xinyi/speakers/dawn-chang.jpg'}
+                alt="Dawn Chang"
+                loading="lazy"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  const el = e.target as HTMLImageElement;
+                  if (el.src.endsWith('.jpg')) { el.src = el.src.replace('.jpg', '.png'); }
+                  else { el.style.display = 'none'; if (el.nextElementSibling) (el.nextElementSibling as HTMLElement).style.display = 'flex'; }
+                }}
+              />
+              <div className="w-full h-full items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-300 absolute inset-0" style={{ display: 'none' }}>
+                <span className="text-xl font-black text-neutral-400">D</span>
+              </div>
+            </div>
+            <div>
+              <span
+                className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2 tracking-wide"
+                style={{ backgroundColor: `${WARM_AMBER}20`, color: WARM_AMBER }}
+              >
+                CURATOR
+              </span>
+              <p className="font-black text-base" lang="zh-TW">Dawn Chang</p>
+              <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">
+                TEDxXinyi 持牌策展人 — 以策展力連結 AI、藝術、永續與城市文化
+              </p>
+            </div>
+          </div>
+        </FadeIn>
+
+        <FadeIn delay={250}>
           <p className="text-xs text-neutral-400 mb-10" lang="zh-TW">
             更多講者與嘉賓陸續公布中。
           </p>
