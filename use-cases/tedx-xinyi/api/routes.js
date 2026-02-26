@@ -147,12 +147,23 @@ router.post('/generate', async (req, res) => {
     fs.writeFileSync(outputPath, imageBuffer);
     console.log(`[TEDxXinyi] Saved ${visual.filename} (${(imageBuffer.length / 1024).toFixed(0)} KB)`);
 
+    // Upload to mmdbfiles and get public URL
+    let publicUrl = null;
+    try {
+      publicUrl = await uploadToMmdb(imageBuffer);
+      savePublicUrl(visual.filename, publicUrl);
+      console.log(`[TEDxXinyi] ${visual.filename} → ${publicUrl}`);
+    } catch (uploadErr) {
+      console.error(`[TEDxXinyi] mmdbfiles upload failed for ${visual.filename}:`, uploadErr.message);
+    }
+
     res.json({
       success: true,
       id: visual.id,
       filename: visual.filename,
       size: imageBuffer.length,
       path: `/tedx-xinyi/${visual.filename}`,
+      publicUrl,
     });
   } catch (err) {
     console.error(`[TEDxXinyi] Failed to generate ${visual.id}:`, err.message);
@@ -204,7 +215,17 @@ router.post('/generate-all', async (req, res) => {
         const imageBuffer = await generateVisual(client, visual.prompt);
         fs.writeFileSync(outputPath, imageBuffer);
         console.log(`[TEDxXinyi] ${visual.filename} (${(imageBuffer.length / 1024).toFixed(0)} KB)`);
-        batchState.results.push({ id: visual.id, status: 'generated', size: imageBuffer.length });
+
+        // Upload to mmdbfiles
+        let publicUrl = null;
+        try {
+          publicUrl = await uploadToMmdb(imageBuffer);
+          savePublicUrl(visual.filename, publicUrl);
+          console.log(`[TEDxXinyi] ${visual.filename} → ${publicUrl}`);
+        } catch (uploadErr) {
+          console.error(`[TEDxXinyi] mmdbfiles upload failed for ${visual.filename}:`, uploadErr.message);
+        }
+        batchState.results.push({ id: visual.id, status: 'generated', size: imageBuffer.length, publicUrl });
       } catch (err) {
         console.error(`[TEDxXinyi] ${visual.id}: ${err.message}`);
         batchState.results.push({ id: visual.id, status: 'failed', error: err.message });
@@ -236,6 +257,7 @@ router.get('/generate-all/status', (req, res) => {
 });
 
 router.get('/visuals', (req, res) => {
+  const meta = loadMetadata();
   const visuals = VISUALS.map((v) => {
     const filePath = path.join(OUTPUT_DIR, v.filename);
     const exists = fs.existsSync(filePath);
@@ -247,6 +269,7 @@ router.get('/visuals', (req, res) => {
       exists,
       size: stat ? stat.size : 0,
       url: exists ? `/tedx-xinyi/${v.filename}` : null,
+      publicUrl: (meta[v.filename] && meta[v.filename].publicUrl) || null,
     };
   });
 
@@ -342,7 +365,7 @@ router.get('/media', (req, res) => {
   const allImages = [...foundImages, ...missingVisuals];
   const result = allImages.map(img => {
     const key = img.folder ? `${img.folder}/${img.filename}` : img.filename;
-    return { ...img, alt: (meta[key] && meta[key].alt) || '', customName: (meta[key] && meta[key].customName) || '' };
+    return { ...img, alt: (meta[key] && meta[key].alt) || '', customName: (meta[key] && meta[key].customName) || '', publicUrl: (meta[key] && meta[key].publicUrl) || null };
   });
   res.json({ images: result, total: result.length });
 });
@@ -466,7 +489,19 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
     const ratio = ((1 - compressed.length / rawBuffer.length) * 100).toFixed(0);
     const urlPath = folder === 'speakers' ? `/tedx-xinyi/speakers/${safeName}` : `/tedx-xinyi/${safeName}`;
     console.log(`[TEDxXinyi] Upload: ${safeName} — ${(rawBuffer.length / 1024).toFixed(0)} KB -> ${(compressed.length / 1024).toFixed(0)} KB (${ratio}% smaller)`);
-    res.json({ success: true, filename: safeName, path: urlPath, originalSize: rawBuffer.length, compressedSize: compressed.length, savings: `${ratio}%` });
+
+    // Upload to mmdbfiles
+    let publicUrl = null;
+    try {
+      publicUrl = await uploadToMmdb(compressed);
+      const metaKey = folder === 'speakers' ? `speakers/${safeName}` : safeName;
+      savePublicUrl(metaKey, publicUrl);
+      console.log(`[TEDxXinyi] ${safeName} → ${publicUrl}`);
+    } catch (uploadErr) {
+      console.error(`[TEDxXinyi] mmdbfiles upload failed for ${safeName}:`, uploadErr.message);
+    }
+
+    res.json({ success: true, filename: safeName, path: urlPath, originalSize: rawBuffer.length, compressedSize: compressed.length, savings: `${ratio}%`, publicUrl });
   } catch (err) {
     console.error('[TEDxXinyi] Upload error:', err.message);
     res.status(500).json({ error: err.message });
@@ -546,6 +581,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .card-meta{font-size:0.7rem;color:#666;display:flex;gap:0.5rem;margin-bottom:0.5rem}
 .card-alt{width:100%;padding:0.35rem 0.5rem;background:#111;border:1px solid #333;border-radius:5px;color:#ccc;font-size:0.75rem;margin-bottom:0.4rem;resize:none;font-family:inherit}
 .card-alt:focus{outline:none;border-color:#E62B1E}
+.card-url{margin-bottom:0.4rem;padding:0.25rem 0.4rem;background:#111;border-radius:4px;display:flex;align-items:center;gap:0.35rem;cursor:pointer;transition:background 0.15s}.card-url:hover{background:#1a2a1a}
 .card-actions{display:flex;gap:0.25rem}
 .tag{display:inline-block;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.65rem;font-weight:600}
 .tag-gen{background:#1e293b;color:#60a5fa}.tag-up{background:#1c1917;color:#fb923c}.tag-spk{background:#14532d;color:#86efac}
@@ -701,6 +737,7 @@ function renderGrid() {
       '<div class="card-body">' +
         '<div class="card-filename">' + img.filename + ' ' + tag + '</div>' +
         '<div class="card-meta"><span>' + sizeKb + ' KB</span></div>' +
+        (img.publicUrl ? '<div class="card-url" onclick="copyUrl(\\'' + img.publicUrl + '\\')" title="Click to copy"><span class="tag" style="background:#065f46;color:#6ee7b7;cursor:pointer">CDN</span> <span style="font-size:0.65rem;color:#888;word-break:break-all;cursor:pointer">' + img.publicUrl + '</span></div>' : '<div class="card-url"><span class="tag" style="background:#333;color:#888">No CDN URL</span></div>') +
         '<textarea class="card-alt" rows="1" placeholder="Alt text..." data-key="' + key + '" onfocus="this.rows=2" onblur="this.rows=1;saveAlt(this)">' + (img.alt || '') + '</textarea>' +
         '<div class="card-actions">' +
           '<button class="btn btn-outline btn-sm" onclick="compressOne(\\'' + key + '\\')">Compress</button>' +
@@ -886,6 +923,10 @@ async function doUpload() {
   btn.disabled = false; btn.textContent = 'Upload';
 }
 
+function copyUrl(url) {
+  navigator.clipboard.writeText(url).then(() => showToast('Copied: ' + url)).catch(() => { const t = document.createElement('textarea'); t.value = url; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); showToast('Copied: ' + url); });
+}
+
 function showToast(msg, err) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -894,6 +935,54 @@ function showToast(msg, err) {
 }
 </script>
 </body></html>`;
+
+// ==================== MMDBFILES UPLOAD ====================
+
+/**
+ * Convert image buffer to JPEG, then upload to mmdbfiles as base64.
+ * Returns the public_url from the response.
+ */
+async function uploadToMmdb(imageBuffer) {
+  const fetch = (await import('node-fetch')).default;
+  const sharp = require('sharp');
+
+  // Convert to JPEG
+  const jpegBuffer = await sharp(imageBuffer)
+    .jpeg({ quality: 85, progressive: true })
+    .toBuffer();
+
+  const base64 = jpegBuffer.toString('base64');
+  const fileData = `data:image/jpeg;base64,${base64}`;
+
+  const response = await fetch('http://5ml.mmdbfiles.com/api/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_data: fileData }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`mmdbfiles upload failed (${response.status}): ${errText.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  if (!data.success) {
+    throw new Error('mmdbfiles upload returned success: false');
+  }
+
+  console.log(`[TEDxXinyi] Uploaded to mmdbfiles: ${data.public_url} (${(data.size / 1024).toFixed(0)} KB)`);
+  return data.public_url;
+}
+
+/**
+ * Save the mmdbfiles public URL for an image key in metadata.
+ */
+function savePublicUrl(key, publicUrl) {
+  const meta = loadMetadata();
+  if (!meta[key]) meta[key] = {};
+  meta[key].publicUrl = publicUrl;
+  saveMetadata(meta);
+}
 
 // ==================== HELPER ====================
 
