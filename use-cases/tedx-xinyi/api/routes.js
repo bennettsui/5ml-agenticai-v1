@@ -762,7 +762,7 @@ async function regenOne(id, btn) {
   try {
     const r = await authFetch('/api/tedx-xinyi/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) });
     const d = await r.json();
-    if (r.ok) { showToast('Generated: ' + (d.filename || id)); loadMedia(); }
+    if (r.ok) { showToast('Generated: ' + (d.filename || id) + (d.publicUrl ? ' → CDN uploaded' : '')); if (d.publicUrl) copyUrl(d.publicUrl); loadMedia(); }
     else { showToast('Error: ' + (d.error || 'Failed'), true); btn.disabled = false; btn.textContent = 'Regenerate'; }
   } catch(e) { showToast(e.message, true); btn.disabled = false; btn.textContent = 'Regenerate'; }
 }
@@ -915,7 +915,8 @@ async function doUpload() {
     const r = await authFetch('/api/tedx-xinyi/media/upload', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data, filename, folder, alt }) });
     const d = await r.json();
     if (r.ok) {
-      showToast('Uploaded: ' + d.filename + ' (' + d.savings + ' smaller)');
+      showToast('Uploaded: ' + d.filename + (d.publicUrl ? ' → CDN: ' + d.publicUrl : ''));
+      if (d.publicUrl) copyUrl(d.publicUrl);
       closeUpload(); document.getElementById('uploadFile').value = ''; document.getElementById('uploadName').value = ''; document.getElementById('uploadAlt').value = '';
       loadMedia();
     } else { showToast('Error: ' + d.error, true); }
@@ -931,7 +932,8 @@ function showToast(msg, err) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast show ' + (err ? 'err' : 'ok');
-  setTimeout(() => { t.className = 'toast'; }, 3000);
+  const dur = msg.length > 60 ? 5000 : 3000;
+  setTimeout(() => { t.className = 'toast'; }, dur);
 }
 </script>
 </body></html>`;
