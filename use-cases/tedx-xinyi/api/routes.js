@@ -379,66 +379,103 @@ async function backupMetadataToMmdb(meta) {
   }, 5000);
 }
 
-function scanAllImages() {
-  const images = [];
-  const imgRe = /\.(jpg|jpeg|png|webp|gif)$/i;
-  // Root images
-  if (fs.existsSync(OUTPUT_DIR)) {
-    for (const f of fs.readdirSync(OUTPUT_DIR)) {
-      const full = path.join(OUTPUT_DIR, f);
-      if (fs.statSync(full).isFile() && imgRe.test(f)) {
-        const stat = fs.statSync(full);
-        const visual = VISUALS.find(v => v.filename === f);
-        images.push({ filename: f, folder: '', path: `/tedx-xinyi/${f}`, size: stat.size, modified: stat.mtime.toISOString(), source: visual ? 'generated' : 'uploaded', description: visual ? visual.description : '' });
-      }
-    }
-  }
-  // Scan all subdirectories (speakers, etc.)
-  if (fs.existsSync(OUTPUT_DIR)) {
-    for (const dir of fs.readdirSync(OUTPUT_DIR)) {
-      const dirPath = path.join(OUTPUT_DIR, dir);
-      if (fs.statSync(dirPath).isDirectory()) {
-        for (const f of fs.readdirSync(dirPath)) {
-          const full = path.join(dirPath, f);
-          if (fs.statSync(full).isFile() && imgRe.test(f)) {
-            const stat = fs.statSync(full);
-            images.push({ filename: f, folder: dir, path: `/tedx-xinyi/${dir}/${f}`, size: stat.size, modified: stat.mtime.toISOString(), source: 'uploaded', description: '' });
-          }
-        }
-      }
-    }
-  }
-  return images;
-}
+// ---- Expected speaker photo slots (salon page speakers) ----
+const SPEAKER_SLOTS = [
+  { imageId: 'cheng-shi-jia', name: '程世嘉', extensions: ['jpg', 'png'] },
+  { imageId: 'lin-dong-liang', name: '林東良', extensions: ['jpg', 'png'] },
+  { imageId: 'liao-wei-jie', name: '廖唯傑', extensions: ['jpg', 'png'] },
+  { imageId: 'yang-shi-yi', name: '楊士毅', extensions: ['jpg', 'png'] },
+  { imageId: 'glass-brothers', name: '玻璃兄弟', extensions: ['jpg', 'png'] },
+];
 
-// ---- API: list all media ----
+// ---- API: list all media (mmdb-first, no local filesystem dependency) ----
 router.get('/media', (req, res) => {
-  const foundImages = scanAllImages();
   const meta = loadMetadata();
+  const result = [];
+  const seenKeys = new Set();
 
-  // Always include all expected VISUALS, even if missing from disk
-  const foundKeys = new Set(foundImages.map(img => img.filename));
-  const missingVisuals = VISUALS
-    .filter(v => !foundKeys.has(v.filename))
-    .map(v => ({
+  // 1. All expected VISUALS (generated hero/salon images)
+  for (const v of VISUALS) {
+    const key = v.filename;
+    seenKeys.add(key);
+    const m = meta[key] || {};
+    result.push({
       filename: v.filename,
       folder: '',
+      key,
       path: `/tedx-xinyi/${v.filename}`,
-      size: 0,
-      modified: null,
       source: 'generated',
       description: v.description,
-      missing: true,
-    }));
+      publicUrl: m.publicUrl || null,
+      alt: m.alt || '',
+      missing: !m.publicUrl,
+    });
+  }
 
-  const allImages = [...foundImages, ...missingVisuals];
-  const result = allImages.map(img => {
-    const key = img.folder ? `${img.folder}/${img.filename}` : img.filename;
-    const publicUrl = (meta[key] && meta[key].publicUrl) || null;
-    // If file is missing from disk but has a CDN URL, it's not really missing
-    const missing = img.missing && !publicUrl;
-    return { ...img, missing, alt: (meta[key] && meta[key].alt) || '', customName: (meta[key] && meta[key].customName) || '', publicUrl };
-  });
+  // 2. All expected speaker photos
+  for (const sp of SPEAKER_SLOTS) {
+    // Check all possible extensions
+    let found = false;
+    for (const ext of sp.extensions) {
+      const key = `speakers/${sp.imageId}.${ext}`;
+      if (meta[key] && meta[key].publicUrl) {
+        seenKeys.add(key);
+        result.push({
+          filename: `${sp.imageId}.${ext}`,
+          folder: 'speakers',
+          key,
+          path: `/tedx-xinyi/speakers/${sp.imageId}.${ext}`,
+          source: 'speaker',
+          description: `Speaker photo — ${sp.name}`,
+          publicUrl: meta[key].publicUrl,
+          alt: meta[key].alt || sp.name,
+          missing: false,
+        });
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      const key = `speakers/${sp.imageId}.jpg`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        result.push({
+          filename: `${sp.imageId}.jpg`,
+          folder: 'speakers',
+          key,
+          path: `/tedx-xinyi/speakers/${sp.imageId}.jpg`,
+          source: 'speaker',
+          description: `Speaker photo — ${sp.name}`,
+          publicUrl: null,
+          alt: sp.name,
+          missing: true,
+        });
+      }
+    }
+  }
+
+  // 3. Any other entries in metadata not yet listed (uploaded images, etc.)
+  for (const [key, data] of Object.entries(meta)) {
+    if (key.startsWith('_')) continue;
+    if (seenKeys.has(key)) continue;
+    if (!data || typeof data !== 'object') continue;
+    seenKeys.add(key);
+    const parts = key.split('/');
+    const filename = parts.pop() || key;
+    const folder = parts.join('/');
+    result.push({
+      filename,
+      folder,
+      key,
+      path: `/tedx-xinyi/${key}`,
+      source: 'uploaded',
+      description: '',
+      publicUrl: data.publicUrl || null,
+      alt: data.alt || '',
+      missing: !data.publicUrl,
+    });
+  }
+
   res.json({ images: result, total: result.length });
 });
 
@@ -514,25 +551,40 @@ router.post('/media/compress', express.json(), async (req, res) => {
   }
 });
 
-// ---- API: compress all images ----
+// ---- API: compress all images (local files only) ----
 router.post('/media/compress-all', express.json(), async (req, res) => {
-  const images = scanAllImages();
+  const imgRe = /\.(jpg|jpeg|png|webp|gif)$/i;
+  const images = [];
+  // Scan local filesystem for images to compress
+  if (fs.existsSync(OUTPUT_DIR)) {
+    for (const f of fs.readdirSync(OUTPUT_DIR)) {
+      const full = path.join(OUTPUT_DIR, f);
+      if (fs.statSync(full).isFile() && imgRe.test(f)) images.push({ key: f, fullPath: full });
+    }
+    for (const dir of fs.readdirSync(OUTPUT_DIR)) {
+      const dirPath = path.join(OUTPUT_DIR, dir);
+      if (fs.statSync(dirPath).isDirectory()) {
+        for (const f of fs.readdirSync(dirPath)) {
+          const full = path.join(dirPath, f);
+          if (fs.statSync(full).isFile() && imgRe.test(f)) images.push({ key: `${dir}/${f}`, fullPath: full });
+        }
+      }
+    }
+  }
   const results = [];
   for (const img of images) {
-    const key = img.folder ? `${img.folder}/${img.filename}` : img.filename;
-    const filePath = path.join(OUTPUT_DIR, key);
     try {
-      const raw = fs.readFileSync(filePath);
-      const compressed = await optimizeImage(raw, key);
+      const raw = fs.readFileSync(img.fullPath);
+      const compressed = await optimizeImage(raw, img.key);
       if (compressed.length < raw.length) {
-        fs.writeFileSync(filePath, compressed);
+        fs.writeFileSync(img.fullPath, compressed);
         const ratio = ((1 - compressed.length / raw.length) * 100).toFixed(0);
-        results.push({ key, before: raw.length, after: compressed.length, savings: `${ratio}%` });
+        results.push({ key: img.key, before: raw.length, after: compressed.length, savings: `${ratio}%` });
       } else {
-        results.push({ key, before: raw.length, after: raw.length, savings: '0%', note: 'Already optimized' });
+        results.push({ key: img.key, before: raw.length, after: raw.length, savings: '0%', note: 'Already optimized' });
       }
     } catch (err) {
-      results.push({ key, error: err.message });
+      results.push({ key: img.key, error: err.message });
     }
   }
   const totalBefore = results.reduce((s, r) => s + (r.before || 0), 0);
@@ -727,6 +779,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <button class="btn btn-outline" id="regenAllBtn" onclick="regenAll()">Generate All</button>
   <button class="btn btn-outline" id="compressAllBtn" onclick="compressAll()">Compress All</button>
   <button class="btn btn-outline" id="compressSelBtn" onclick="compressSelected()" disabled>Compress Selected</button>
+  <button class="btn btn-outline" id="syncCdnBtn" onclick="syncCdn()" style="border-color:#065f46;color:#6ee7b7">Sync All → CDN</button>
   <button class="btn btn-ghost btn-sm" onclick="toggleSelectAll()">Select All</button>
   <div class="stats" id="stats"></div>
 </div>
@@ -801,42 +854,46 @@ function renderGrid() {
   const g = document.getElementById('grid');
   if (!mediaItems.length) { g.innerHTML = '<div style="text-align:center;padding:4rem;color:#444;grid-column:1/-1">No images found</div>'; return; }
   g.innerHTML = mediaItems.map(img => {
-    const key = img.folder ? img.folder + '/' + img.filename : img.filename;
+    const key = img.key || (img.folder ? img.folder + '/' + img.filename : img.filename);
     const sel = selectedKeys.has(key) ? ' selected' : '';
-    const sizeKb = img.size ? (img.size / 1024).toFixed(0) : '—';
-    const localSrc = img.folder ? '/tedx-xinyi/' + img.folder + '/' + img.filename : '/tedx-xinyi/' + img.filename;
-    const src = img.publicUrl || localSrc;
-    const tag = img.source === 'generated' ? '<span class="tag tag-gen">Generated</span>' : img.folder === 'speakers' ? '<span class="tag tag-spk">Speaker</span>' : '<span class="tag tag-up">Uploaded</span>';
-    const v = img.size;
+    const tag = img.source === 'generated' ? '<span class="tag tag-gen">Generated</span>'
+              : img.source === 'speaker' ? '<span class="tag tag-spk">Speaker</span>'
+              : '<span class="tag tag-up">Uploaded</span>';
 
+    // ---- MISSING: no CDN URL ----
     if (img.missing) {
-      const id = img.filename.replace(/\\.webp$|\\.png$|\\.jpg$/, '');
+      const id = img.filename.replace(/\\.webp$|\\.png$|\\.jpg$|\\.jpeg$/, '');
       const desc = img.description || '';
+      const isGenerated = img.source === 'generated';
       return '<div class="card card-missing" data-key="' + key + '">' +
         '<div class="card-img" style="background:#0d0d0d;flex-direction:column;gap:0.4rem">' +
           '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>' +
-          '<span style="color:#555;font-size:0.65rem;text-align:center;padding:0 0.5rem">' + (desc || 'Not generated') + '</span>' +
+          '<span style="color:#555;font-size:0.65rem;text-align:center;padding:0 0.5rem">' + (desc || 'No CDN image') + '</span>' +
         '</div>' +
         '<div class="card-body">' +
-          '<div class="card-filename" style="color:#888">' + img.filename + ' <span class="tag" style="background:#7f1d1d;color:#fca5a5">Missing</span></div>' +
+          '<div class="card-filename" style="color:#888">' + img.filename + ' <span class="tag" style="background:#7f1d1d;color:#fca5a5">No CDN</span> ' + tag + '</div>' +
           '<div class="card-actions" style="margin-top:0.4rem">' +
-            '<button class="btn btn-red btn-sm" onclick="regenOne(\\'' + id + '\\',this)">Generate</button>' +
+            (isGenerated ? '<button class="btn btn-red btn-sm" onclick="regenOne(\\'' + id + '\\',this)">Generate</button>' : '') +
+            '<button class="btn btn-outline btn-sm" onclick="openUploadFor(\\'' + key + '\\')">Upload</button>' +
           '</div>' +
         '</div></div>';
     }
 
+    // ---- HAS CDN URL: show image from mmdb only ----
     return '<div class="card' + sel + '" data-key="' + key + '">' +
       '<div class="card-check" onclick="toggleSelect(event,\\'' + key + '\\')">' +
         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' +
       '</div>' +
-      '<div class="card-img"><img src="' + src + (img.publicUrl ? '' : '?v=' + v) + '" onerror="this.style.display=\\'none\\';this.nextElementSibling.style.display=\\'flex\\'"><div class="placeholder" style="display:none">?</div></div>' +
+      '<div class="card-img"><img src="' + img.publicUrl + '" onerror="this.style.display=\\'none\\';this.nextElementSibling.style.display=\\'flex\\'"><div class="placeholder" style="display:none">?</div></div>' +
       '<div class="card-body">' +
         '<div class="card-filename">' + img.filename + ' ' + tag + '</div>' +
-        '<div class="card-meta"><span>' + sizeKb + ' KB</span></div>' +
-        (img.publicUrl ? '<div class="card-url" onclick="copyUrl(\\'' + img.publicUrl + '\\')" title="Click to copy"><span class="tag" style="background:#065f46;color:#6ee7b7;cursor:pointer">CDN</span> <span style="font-size:0.65rem;color:#888;word-break:break-all;cursor:pointer">' + img.publicUrl + '</span></div>' : '<div class="card-url"><span class="tag" style="background:#333;color:#888">No CDN URL</span></div>') +
+        '<div class="card-url" onclick="copyUrl(\\'' + img.publicUrl + '\\')" title="Click to copy CDN URL">' +
+          '<span class="tag" style="background:#065f46;color:#6ee7b7;cursor:pointer">CDN</span> ' +
+          '<span style="font-size:0.65rem;color:#888;word-break:break-all;cursor:pointer">' + img.publicUrl + '</span>' +
+        '</div>' +
         '<textarea class="card-alt" rows="1" placeholder="Alt text..." data-key="' + key + '" onfocus="this.rows=2" onblur="this.rows=1;saveAlt(this)">' + (img.alt || '') + '</textarea>' +
         '<div class="card-actions">' +
-          '<button class="btn btn-outline btn-sm" onclick="compressOne(\\'' + key + '\\')">Compress</button>' +
+          '<button class="btn btn-outline btn-sm" onclick="regenOne(\\'' + img.filename.replace(/\\.webp$|\\.png$|\\.jpg$/, '') + '\\',this)">Regenerate</button>' +
         '</div>' +
       '</div></div>';
   }).join('');
@@ -844,11 +901,13 @@ function renderGrid() {
 
 function updateStats() {
   const total = mediaItems.length;
-  const present = mediaItems.filter(i => !i.missing).length;
+  const withCdn = mediaItems.filter(i => !i.missing).length;
   const missing = mediaItems.filter(i => i.missing).length;
-  const totalSize = mediaItems.reduce((s, i) => s + (i.size || 0), 0);
-  const parts = [present + ' images', (totalSize / 1024 / 1024).toFixed(1) + ' MB'];
+  const generated = mediaItems.filter(i => i.source === 'generated').length;
+  const speakers = mediaItems.filter(i => i.source === 'speaker').length;
+  const parts = [total + ' assets', withCdn + ' on CDN'];
   if (missing) parts.push(missing + ' missing');
+  parts.push(generated + ' visuals, ' + speakers + ' speakers');
   document.getElementById('stats').textContent = parts.join(' | ');
   document.getElementById('compressSelBtn').disabled = selectedKeys.size === 0;
 }
@@ -984,8 +1043,30 @@ async function compressSelected() {
   setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0'; }, 2000);
 }
 
+async function syncCdn() {
+  const btn = document.getElementById('syncCdnBtn');
+  btn.disabled = true; btn.textContent = 'Syncing to CDN...';
+  try {
+    const r = await authFetch('/api/tedx-xinyi/sync-cdn', { method:'POST' });
+    const d = await r.json();
+    if (r.ok) {
+      showToast('CDN sync: ' + d.summary.uploaded + ' uploaded, ' + d.summary.existing + ' existing, ' + d.summary.errors + ' errors');
+      loadMedia();
+    } else { showToast('Error: ' + (d.error || 'Sync failed'), true); }
+  } catch(e) { showToast(e.message, true); }
+  btn.disabled = false; btn.textContent = 'Sync All → CDN';
+}
+
 function openUpload() { document.getElementById('uploadModal').classList.add('open'); }
-function closeUpload() { document.getElementById('uploadModal').classList.remove('open'); document.getElementById('uploadPreview').innerHTML = '<span style="color:#444;font-size:0.85rem">Select a file</span>'; }
+function closeUpload() { document.getElementById('uploadModal').classList.remove('open'); document.getElementById('uploadPreview').innerHTML = '<span style="color:#444;font-size:0.85rem">Select a file</span>'; document.getElementById('uploadFolder').value = ''; document.getElementById('uploadName').value = ''; }
+function openUploadFor(key) {
+  const parts = key.split('/');
+  const filename = parts.pop();
+  const folder = parts.join('/');
+  openUpload();
+  if (folder === 'speakers') document.getElementById('uploadFolder').value = 'speakers';
+  document.getElementById('uploadName').value = filename;
+}
 
 document.getElementById('uploadFile').onchange = function(e) {
   const f = e.target.files[0];
@@ -1133,6 +1214,118 @@ function updateWebpageImageUrl(filename, folder, publicUrl) {
     console.error(`[TEDxXinyi] Failed to update webpage URLs:`, err.message);
   }
 }
+
+/**
+ * Batch: upload ALL local images to mmdbfiles and replace ALL local paths
+ * in TSX source files with CDN URLs. This is the one-shot migration.
+ */
+async function uploadAllAndReplacePaths() {
+  const results = [];
+  const meta = loadMetadata();
+  const imgRe = /\.(jpg|jpeg|png|webp|gif)$/i;
+
+  // Collect all local images
+  const images = [];
+  if (fs.existsSync(OUTPUT_DIR)) {
+    for (const f of fs.readdirSync(OUTPUT_DIR)) {
+      const full = path.join(OUTPUT_DIR, f);
+      if (fs.statSync(full).isFile() && imgRe.test(f)) {
+        images.push({ key: f, filename: f, folder: '', fullPath: full });
+      }
+    }
+    for (const dir of fs.readdirSync(OUTPUT_DIR)) {
+      const dirPath = path.join(OUTPUT_DIR, dir);
+      if (fs.statSync(dirPath).isDirectory()) {
+        for (const f of fs.readdirSync(dirPath)) {
+          const full = path.join(dirPath, f);
+          if (fs.statSync(full).isFile() && imgRe.test(f)) {
+            images.push({ key: `${dir}/${f}`, filename: f, folder: dir, fullPath: full });
+          }
+        }
+      }
+    }
+  }
+
+  for (const img of images) {
+    // Skip if already has a CDN URL
+    if (meta[img.key] && meta[img.key].publicUrl) {
+      // Still update the TSX pages with existing CDN URL
+      updateWebpageImageUrl(img.filename, img.folder, meta[img.key].publicUrl);
+      results.push({ key: img.key, status: 'already_uploaded', publicUrl: meta[img.key].publicUrl });
+      continue;
+    }
+    try {
+      const buffer = fs.readFileSync(img.fullPath);
+      const publicUrl = await uploadToMmdb(buffer);
+      savePublicUrl(img.key, publicUrl);
+      updateWebpageImageUrl(img.filename, img.folder, publicUrl);
+      results.push({ key: img.key, status: 'uploaded', publicUrl });
+    } catch (err) {
+      results.push({ key: img.key, status: 'error', error: err.message });
+    }
+  }
+
+  // Also update pages using CDN URLs from metadata (for images not on local disk)
+  const latestMeta = loadMetadata();
+  for (const [key, data] of Object.entries(latestMeta)) {
+    if (key.startsWith('_')) continue;
+    if (data && data.publicUrl && !images.find(i => i.key === key)) {
+      const parts = key.split('/');
+      const filename = parts.pop();
+      const folder = parts.join('/');
+      updateWebpageImageUrl(filename, folder, data.publicUrl);
+      results.push({ key, status: 'page_updated_from_metadata', publicUrl: data.publicUrl });
+    }
+  }
+
+  // Update speaker CDN URL map in salon/page.tsx
+  const speakerUrls = {};
+  for (const [key, data] of Object.entries(latestMeta)) {
+    if (key.startsWith('speakers/') && data && data.publicUrl) {
+      // key = "speakers/cheng-shi-jia.jpg" → imageId = "cheng-shi-jia"
+      const basename = key.replace('speakers/', '').replace(/\.(jpg|jpeg|png|webp)$/i, '');
+      speakerUrls[basename] = data.publicUrl;
+    }
+  }
+  if (Object.keys(speakerUrls).length > 0) {
+    try {
+      const salonPath = path.join(PAGES_DIR, 'salon', 'page.tsx');
+      if (fs.existsSync(salonPath)) {
+        let content = fs.readFileSync(salonPath, 'utf8');
+        const mapStr = JSON.stringify(speakerUrls, null, 2)
+          .replace(/"/g, "'")
+          .replace(/'([^']+)':/g, "'$1':");
+        const newMap = `const SPEAKER_CDN_URLS: Record<string, string> = ${mapStr};`;
+        content = content.replace(
+          /const SPEAKER_CDN_URLS: Record<string, string> = \{[^}]*\};/,
+          newMap
+        );
+        fs.writeFileSync(salonPath, content);
+        console.log(`[TEDxXinyi] Updated SPEAKER_CDN_URLS with ${Object.keys(speakerUrls).length} speakers`);
+      }
+    } catch (err) {
+      console.error('[TEDxXinyi] Failed to update speaker CDN map:', err.message);
+    }
+  }
+
+  return results;
+}
+
+// ---- API: batch upload all images to mmdbfiles and update pages ----
+router.post('/sync-cdn', async (req, res) => {
+  try {
+    console.log('[TEDxXinyi] Starting batch CDN sync...');
+    const results = await uploadAllAndReplacePaths();
+    const uploaded = results.filter(r => r.status === 'uploaded').length;
+    const existing = results.filter(r => r.status === 'already_uploaded').length;
+    const errors = results.filter(r => r.status === 'error').length;
+    console.log(`[TEDxXinyi] CDN sync done: ${uploaded} uploaded, ${existing} already had CDN, ${errors} errors`);
+    res.json({ success: true, results, summary: { uploaded, existing, errors, total: results.length } });
+  } catch (err) {
+    console.error('[TEDxXinyi] CDN sync failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ==================== HELPER ====================
 

@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY, WARM_AMBER } from '../components';
 
+// CDN URL map for speaker images — updated by POST /api/tedx-xinyi/sync-cdn
+const SPEAKER_CDN_URLS: Record<string, string> = {};
+
 const SPEAKERS = [
   {
     name: '程世嘉',
@@ -15,6 +18,12 @@ const SPEAKERS = [
     role: '講者',
     bio: '',
     imageId: 'lin-dong-liang',
+  },
+  {
+    name: '廖唯傑',
+    role: '講者',
+    bio: '',
+    imageId: 'liao-wei-jie',
   },
   {
     name: '楊士毅',
@@ -45,18 +54,115 @@ const VALUE_BULLETS = [
   },
 ];
 
-const FLOW_SEGMENTS = [
+const PROGRAM_BLOCKS = [
   {
-    heading: '上午｜奇點世界 – TEDxXinyi Talks',
-    text: '四位講者從 AI、專注力、情緒與人性出發，\n拉出 AI 時代的人文光譜，幫我們重新看見『人』的邊界。',
+    time: '09:30 – 10:30',
+    label: '簽到與高空探索',
+    theme: '現場提供互動式體驗專區',
+    themeTag: null,
+    items: [
+      'Retreat Music 腦波淨化區（頌缽洗禮 正念行走）',
+      'Legacy Journey 傳承之道區（定位練習，創造無限可能）',
+      'I do I will Art Work 從我開始影響力學習專區（永續飲食）',
+      'Art & Design Floral Talk 每天進步一點點咖啡廳（品牌合作專區）',
+      'Meditation Hall 人類洞穴休憩處（好好喝水，好好呼吸）',
+    ],
   },
   {
-    heading: '中午到下午｜Immersive Learning & Galaxy Networking',
-    text: 'AI 咖啡、趨勢工作坊、Open Mic、Book Club、未來市集與不同 Intelligence 區域，\n讓你用身體走路、用手寫字、用對話彼此碰撞新的問題。',
+    time: '10:30 – 11:00',
+    label: 'Prelude：探索力',
+    theme: '歡迎來到藍盒子之屋，TEDxXinyi舞台',
+    themeTag: '探索力',
+    items: [
+      'Opening Performance: 開場 當3D hologram 未來趨勢啟迪',
+      'Prelude - The Sound of Universe 來自地心的聲音',
+      'Ideas to Aesthetic Intelligence — 持牌策展人說故事的奧秘 都會續美學開場',
+      'Ideas to Astrology Intelligence — 特約嘉賓 林靜宜占星敘事 自我覺察引導',
+    ],
   },
   {
-    heading: '下午｜TED Adventure AI 趨勢報告書座談',
-    text: '一場把全球案例、在地實驗與產業對話放在同一張桌子的座談，\n從趨勢報告、學習、國際策展人案例、AI 敘事到台灣故事，\n幫助你把『看展／聽 talk』變成下一步可以採取的行動。',
+    time: '11:00 – 12:00',
+    label: 'All Of Us：學習力',
+    theme: '18 分鐘演講',
+    themeTag: '學習力',
+    items: [
+      'Session 1：AI趨勢 — 當機器人學會說故事的一天（程世嘉先生）',
+      'Session 2：AI環境 — 海洋算力？花紋海豚的超能力？（林東良先生）',
+      'Session 3：AI×永續 — 如何建立一個企業持續百年？轉型逆襲的危機轉機？（廖唯傑先生）',
+      'Session 4：幸福論 — 幸福沒有門檻（楊士毅先生）',
+    ],
+  },
+  {
+    time: '12:00 – 13:00',
+    label: '午餐 & 認識新朋友',
+    theme: null,
+    themeTag: '鑑賞力',
+    items: [],
+  },
+  {
+    time: '13:00 – 14:30',
+    label: 'Discovery Session：行動力',
+    theme: null,
+    themeTag: '行動力',
+    items: [
+      '場外 We Are Becoming Stage — 價值鏈換位思考議題探討：從2050年看2026年，你看見什麼？',
+      '安心靜態展 — 講者品味剪紙藝術鑑賞區',
+      '海洋動態展 — 講者海洋知識環境教育學習',
+      '人類未來趨勢＿不插電俱樂部（現場燙金壓印服務，咖啡品味區）',
+    ],
+  },
+  {
+    time: '14:30 – 16:00',
+    label: 'We Are Becoming 趨勢報告書對談',
+    theme: null,
+    themeTag: null,
+    items: [],
+  },
+  {
+    time: '16:10 – 17:00',
+    label: '閉幕：Finale — Pass it On',
+    theme: null,
+    themeTag: null,
+    items: [],
+  },
+];
+
+const TICKET_TYPES = [
+  {
+    name: 'Early Bird 早鳥票',
+    price: 'NT$2,000',
+    desc: '限時、限量釋出。以最早的行動，換最好的位置感受。',
+    note: '票種不得更換。',
+    accent: WARM_AMBER,
+  },
+  {
+    name: 'Regular 一般票',
+    price: 'NT$2,500',
+    desc: '標準入場，完整體驗整日沙龍、Talks、工作坊與互動專區。',
+    note: null,
+    accent: TED_RED,
+  },
+  {
+    name: 'Student / Youth 學生／青年票',
+    price: 'NT$1,750',
+    desc: '讓好奇心不被預算擋住。我們相信年輕的視角，是這場對話最需要的。',
+    note: '需出示有效學生證或青年證明，否則需補差額至一般票。',
+    accent: '#10B981',
+  },
+  {
+    name: 'Group 4 人套票',
+    price: 'NT$8,000／套',
+    priceNote: '平均 NT$2,000／人',
+    desc: '和朋友、同事或家人一起來。四個人，四種觀點，一起 becoming。',
+    note: '單一訂單一次購買 4 名入場資格，不可拆單部分退票或改票種；4 位可分開報到，座位以現場安排為準。',
+    accent: '#6366F1',
+  },
+  {
+    name: 'Door / Walk-in 現場票',
+    price: 'NT$2,750–3,000',
+    desc: '臨時決定也沒關係——但座位有限，建議提早預購。',
+    note: '僅於活動當日、仍有座位時開放，數量有限，票價高於預售，且不保證與同行者相鄰。',
+    accent: '#737373',
   },
 ];
 
@@ -288,7 +394,7 @@ export default function SalonPage() {
                 <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full mx-auto mb-4 overflow-hidden bg-neutral-100 border-2 border-neutral-100 relative">
                   {/* Try loading uploaded photo; show initial on error */}
                   <img
-                    src={`/tedx-xinyi/speakers/${speaker.imageId}.jpg`}
+                    src={SPEAKER_CDN_URLS[speaker.imageId] || `/tedx-xinyi/speakers/${speaker.imageId}.jpg`}
                     alt={speaker.name}
                     loading="lazy"
                     className="w-full h-full object-cover"
@@ -353,38 +459,142 @@ export default function SalonPage() {
         </FadeIn>
       </Section>
 
-      {/* ==================== BLOCK D — HOW / FLOW ==================== */}
+      {/* ==================== BLOCK D — PROGRAM RUNDOWN ==================== */}
       <Section bg="warm">
         <FadeIn>
-          <SectionLabel>HOW</SectionLabel>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-10" lang="zh-TW">
-            這一天，會發生什麼？
+          <SectionLabel>PROGRAM RUNDOWN</SectionLabel>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-4" lang="zh-TW">
+            活動流程
           </h2>
+          <p className="text-neutral-500 text-base mb-12" lang="zh-TW">
+            一整天，從探索力、學習力、鑑賞力到行動力——每個時段都是一次 becoming。
+          </p>
         </FadeIn>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {FLOW_SEGMENTS.map((seg, i) => (
-            <FadeIn key={i} delay={i * 100}>
-              <div className="bg-white rounded-xl p-6 border border-neutral-100 hover:border-neutral-200 hover:shadow-sm transition-all h-full flex flex-col">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center mb-4 text-white font-black text-sm"
-                  style={{ backgroundColor: TED_RED }}
-                >
-                  {i + 1}
+        <div className="space-y-0 max-w-3xl">
+          {PROGRAM_BLOCKS.map((block, i) => (
+            <FadeIn key={i} delay={i * 60}>
+              <div className="flex gap-5 md:gap-8 pb-8 relative">
+                {/* Timeline dot + line */}
+                <div className="flex flex-col items-center flex-shrink-0">
+                  <div
+                    className="w-3.5 h-3.5 rounded-full mt-1.5 border-4 border-white"
+                    style={{ backgroundColor: TED_RED }}
+                  />
+                  {i < PROGRAM_BLOCKS.length - 1 && (
+                    <div className="w-[2px] flex-1 mt-1" style={{ backgroundColor: `${TED_RED}20` }} />
+                  )}
                 </div>
-                <h3 className="text-base font-black mb-3" lang="zh-TW">{seg.heading}</h3>
-                <p className="text-neutral-500 text-sm leading-relaxed whitespace-pre-line flex-1" lang="zh-TW">
-                  {seg.text}
-                </p>
+
+                <div className="flex-1 pb-2">
+                  {/* Time + optional theme tag */}
+                  <div className="flex items-center gap-3 mb-1 flex-wrap">
+                    <span className="text-sm font-black" style={{ color: TED_RED }}>{block.time}</span>
+                    {block.themeTag && (
+                      <span
+                        className="text-[10px] font-black px-2.5 py-0.5 rounded-full"
+                        style={{ backgroundColor: `${TED_RED}10`, color: TED_RED }}
+                      >
+                        {block.themeTag}
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="text-lg font-black mb-1" lang="zh-TW">{block.label}</h3>
+                  {block.theme && (
+                    <p className="text-neutral-500 text-sm mb-2" lang="zh-TW">{block.theme}</p>
+                  )}
+
+                  {block.items.length > 0 && (
+                    <ul className="space-y-1.5 mt-2">
+                      {block.items.map((item, j) => (
+                        <li key={j} className="flex items-start gap-2">
+                          <div className="w-1 h-1 rounded-full bg-neutral-300 mt-2 flex-shrink-0" />
+                          <p className="text-neutral-600 text-sm leading-relaxed" lang="zh-TW">{item}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </FadeIn>
+          ))}
+        </div>
+      </Section>
+
+      {/* ==================== BLOCK D2 — TICKETS & PRICING ==================== */}
+      <Section bg="white">
+        <FadeIn>
+          <SectionLabel>TICKETS</SectionLabel>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-4" lang="zh-TW">
+            票種與售價
+          </h2>
+          <p className="text-neutral-500 text-base mb-12" lang="zh-TW">
+            每一張票，都是一張走進未來的入場券。選擇最適合你的方式加入。
+          </p>
+        </FadeIn>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-10">
+          {TICKET_TYPES.map((ticket, i) => (
+            <FadeIn key={i} delay={i * 80}>
+              <div className="bg-white rounded-xl border border-neutral-100 hover:border-neutral-200 hover:shadow-md transition-all h-full flex flex-col overflow-hidden">
+                <div className="h-1.5" style={{ backgroundColor: ticket.accent }} />
+                <div className="p-6 flex-1 flex flex-col">
+                  <h3 className="text-base font-black mb-1" lang="zh-TW">{ticket.name}</h3>
+                  <p className="text-2xl font-black mb-1" style={{ color: ticket.accent }}>{ticket.price}</p>
+                  {'priceNote' in ticket && ticket.priceNote && (
+                    <p className="text-xs text-neutral-400 mb-3">{ticket.priceNote}</p>
+                  )}
+                  <p className="text-neutral-500 text-sm leading-relaxed mb-4 flex-1" lang="zh-TW">
+                    {ticket.desc}
+                  </p>
+                  {ticket.note && (
+                    <p className="text-neutral-400 text-xs leading-relaxed border-t border-neutral-100 pt-3" lang="zh-TW">
+                      {ticket.note}
+                    </p>
+                  )}
+                </div>
               </div>
             </FadeIn>
           ))}
         </div>
 
-        <FadeIn delay={300}>
-          <p className="text-neutral-400 text-xs text-center" lang="zh-TW">
-            實際時間表與完整講者名單，將在活動前透過郵件與社群陸續公布。
-          </p>
+        <FadeIn delay={400}>
+          <div className="text-center mb-8">
+            <a
+              href="https://www.accupass.com/event/2602250742267540353300"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-8 py-3.5 text-sm font-black rounded-full text-white transition-all hover:scale-105 hover:shadow-lg"
+              style={{ backgroundColor: TED_RED }}
+              lang="zh-TW"
+            >
+              立即購票
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </a>
+          </div>
+        </FadeIn>
+
+        <FadeIn delay={500}>
+          <div className="rounded-xl p-6 border border-neutral-100" style={{ backgroundColor: WARM_GRAY }}>
+            <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">備註 · Notes</p>
+            <ul className="space-y-2">
+              <li className="flex items-start gap-2">
+                <div className="w-1 h-1 rounded-full bg-neutral-300 mt-2 flex-shrink-0" />
+                <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">
+                  所有票券僅限本活動當日單次入場使用，不得轉售牟利，主辦單位保留入場審核與座位安排之權利。
+                </p>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="w-1 h-1 rounded-full bg-neutral-300 mt-2 flex-shrink-0" />
+                <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">
+                  退票與更名依主辦公告之規定與期限辦理，逾期恕不受理，可能酌收手續費。
+                </p>
+              </li>
+            </ul>
+          </div>
         </FadeIn>
       </Section>
 
