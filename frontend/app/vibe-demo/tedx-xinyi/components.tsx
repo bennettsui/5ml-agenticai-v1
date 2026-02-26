@@ -17,7 +17,6 @@ export const NAV_ITEMS = [
   { label: '講者與演講', href: '/vibe-demo/tedx-xinyi/speakers' },
   { label: '永續設計', href: '/vibe-demo/tedx-xinyi/sustainability' },
   { label: '社群', href: '/vibe-demo/tedx-xinyi/community' },
-  { label: '文章', href: '/vibe-demo/tedx-xinyi/blog' },
 ];
 
 export const FOOTER_LINKS = [

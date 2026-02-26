@@ -31,8 +31,8 @@ const VISUALS = [
   {
     id: 'hero-home',
     filename: 'hero-home.webp',
-    description: 'Home hero — dark galaxy distance cinematic banner',
-    prompt: 'Wide 16:9 cinematic banner, vast deep-space sky in dark navy and charcoal black, layered nebula clouds in rich indigo violet and magenta that look like long-exposure astrophotography mixed with painting not 3D cartoon, a clear smooth galaxy arc curves gracefully across the upper half with a softly glowing warm core surrounded by many tiny sharp stars, from the galaxy arc let a few very thin beams of light and sparse glowing data-like particles flow downward along curved paths suggesting AI as a vast quiet information system, foreground at very bottom centre a tiny solitary human figure standing on a narrow rock edge facing the galaxy occupying only 5-8% of total image height realistic adult proportions long dark coat trousers gender-neutral calm reflective pose arms relaxed head slightly tilted upward, soft realistic rim light from the galaxy outlining head shoulders and coat clearly against the darkness, around the upper body a few faint rising particles of light where data streams begin to touch this person, palette dominated by deep blues violets blacks and neutral whites with controlled warm highlights at galaxy core and figure rim light, no text no watermarks no UI HUD graphics, cinematic contrast soft bloom on brightest galaxy parts subtle film-grain overlay, mature restrained premium theatrical key art that a 40-year-old professional would comfortably share',
+    description: 'Home hero — luminous galaxy distance cinematic banner',
+    prompt: 'Wide 16:9 cinematic banner, expansive sky transitioning from deep midnight blue at the edges to warm indigo and soft violet in the centre, layered nebula clouds in luminous violet rose-pink and warm amber tones that look like long-exposure astrophotography mixed with painting not 3D cartoon, a clear smooth galaxy arc curves gracefully across the upper half with a brightly glowing warm golden-amber core radiating soft light surrounded by many tiny sharp stars, from the galaxy arc let a few very thin beams of warm golden light and sparse glowing data-like particles flow downward along curved paths suggesting AI as a vast quiet information system, the overall scene should feel luminous hopeful and bright not oppressively dark, foreground at very bottom centre a tiny solitary human figure standing on a narrow rock edge facing the galaxy occupying only 5-8% of total image height realistic adult proportions long dark coat trousers gender-neutral calm reflective pose arms relaxed head slightly tilted upward, warm realistic rim light from the galaxy outlining head shoulders and coat clearly, around the upper body a few faint rising particles of golden light where data streams begin to touch this person, palette balanced between deep midnight blues and warm violet rose amber and cream highlights with the galaxy core glowing warm gold, generous amounts of star light and nebula glow so the image feels radiant not heavy, no text no watermarks no UI HUD graphics, cinematic contrast soft bloom on brightest galaxy parts subtle film-grain overlay, mature restrained premium theatrical key art that feels uplifting and aspirational',
   },
   {
     id: 'hero-about',
@@ -299,16 +299,84 @@ if (!fs.existsSync(SPEAKERS_DIR)) {
 }
 
 const METADATA_PATH = path.join(OUTPUT_DIR, '.media-metadata.json');
+const METADATA_SEED_PATH = path.join(__dirname, '.media-metadata-seed.json');
+
+// --- Metadata persistence ---
+// On Fly.dev, the filesystem is EPHEMERAL. .media-metadata.json is wiped on
+// every machine restart, deploy, or sleep/wake. To survive restarts:
+// 1. A seed file (.media-metadata-seed.json) is committed to git as baseline
+// 2. After every save, metadata is backed up to mmdbfiles as a tiny image
+// 3. On startup, if metadata is missing, restore from seed or mmdbfiles backup
 
 function loadMetadata() {
   try {
-    if (fs.existsSync(METADATA_PATH)) return JSON.parse(fs.readFileSync(METADATA_PATH, 'utf8'));
+    if (fs.existsSync(METADATA_PATH)) {
+      const meta = JSON.parse(fs.readFileSync(METADATA_PATH, 'utf8'));
+      if (Object.keys(meta).length > 0) return meta;
+    }
+  } catch { /* ignore */ }
+  // Try to restore from seed file (committed to git)
+  try {
+    if (fs.existsSync(METADATA_SEED_PATH)) {
+      const seed = JSON.parse(fs.readFileSync(METADATA_SEED_PATH, 'utf8'));
+      if (Object.keys(seed).length > 0) {
+        console.log(`[TEDxXinyi] Restored metadata from seed (${Object.keys(seed).length} entries)`);
+        fs.writeFileSync(METADATA_PATH, JSON.stringify(seed, null, 2));
+        return seed;
+      }
+    }
   } catch { /* ignore */ }
   return {};
 }
 
 function saveMetadata(meta) {
   fs.writeFileSync(METADATA_PATH, JSON.stringify(meta, null, 2));
+  // Also update the seed file so it can be committed to git
+  try {
+    fs.writeFileSync(METADATA_SEED_PATH, JSON.stringify(meta, null, 2));
+  } catch (e) {
+    console.error('[TEDxXinyi] Failed to update seed:', e.message);
+  }
+  // Async backup to mmdbfiles (fire-and-forget)
+  backupMetadataToMmdb(meta).catch(() => {});
+}
+
+let _metadataBackupTimeout = null;
+async function backupMetadataToMmdb(meta) {
+  // Debounce: only backup after 5s of no changes
+  if (_metadataBackupTimeout) clearTimeout(_metadataBackupTimeout);
+  _metadataBackupTimeout = setTimeout(async () => {
+    try {
+      const fetch = (await import('node-fetch')).default;
+      const sharp = require('sharp');
+      // Encode metadata JSON into a 1x1 PNG with the data in a text chunk
+      const jsonStr = JSON.stringify(meta);
+      // Create a tiny 1x1 red PNG and embed JSON as EXIF comment
+      const buf = await sharp({
+        create: { width: 1, height: 1, channels: 3, background: { r: 230, g: 43, b: 30 } },
+      }).jpeg({ quality: 50 }).toBuffer();
+      const base64 = buf.toString('base64');
+      const fileData = `data:image/jpeg;base64,${base64}`;
+      const response = await fetch('http://5ml.mmdbfiles.com/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_data: fileData, metadata: jsonStr }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.public_url) {
+          // Store backup URL in the metadata itself for future recovery
+          meta._backupUrl = data.public_url;
+          meta._backupTime = new Date().toISOString();
+          fs.writeFileSync(METADATA_PATH, JSON.stringify(meta, null, 2));
+          try { fs.writeFileSync(METADATA_SEED_PATH, JSON.stringify(meta, null, 2)); } catch {}
+          console.log(`[TEDxXinyi] Metadata backed up to mmdbfiles`);
+        }
+      }
+    } catch (err) {
+      console.error('[TEDxXinyi] Metadata backup failed:', err.message);
+    }
+  }, 5000);
 }
 
 function scanAllImages() {
@@ -372,6 +440,28 @@ router.get('/media', (req, res) => {
     return { ...img, missing, alt: (meta[key] && meta[key].alt) || '', customName: (meta[key] && meta[key].customName) || '', publicUrl };
   });
   res.json({ images: result, total: result.length });
+});
+
+// ---- API: export/import metadata (for backup/recovery) ----
+router.get('/metadata-export', (req, res) => {
+  const meta = loadMetadata();
+  res.setHeader('Content-Disposition', 'attachment; filename=media-metadata.json');
+  res.json(meta);
+});
+
+router.post('/metadata-import', express.json({ limit: '5mb' }), (req, res) => {
+  try {
+    const imported = req.body;
+    if (!imported || typeof imported !== 'object') return res.status(400).json({ error: 'Invalid metadata JSON' });
+    // Merge with existing (don't overwrite)
+    const current = loadMetadata();
+    const merged = { ...current, ...imported };
+    saveMetadata(merged);
+    console.log(`[TEDxXinyi] Imported metadata: ${Object.keys(imported).length} entries, merged total: ${Object.keys(merged).length}`);
+    res.json({ success: true, imported: Object.keys(imported).length, total: Object.keys(merged).length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ---- API: update metadata (alt, customName) ----

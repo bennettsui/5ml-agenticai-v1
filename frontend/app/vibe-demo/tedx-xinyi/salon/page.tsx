@@ -474,13 +474,16 @@ export default function SalonPage() {
           </FadeIn>
           <FadeIn delay={250}>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button
-                className="px-8 py-3.5 bg-white font-black text-sm rounded-full transition-all hover:scale-105 hover:shadow-lg"
+              <a
+                href="https://www.accupass.com/event/2602250742267540353300"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-8 py-3.5 bg-white font-black text-sm rounded-full transition-all hover:scale-105 hover:shadow-lg inline-block"
                 style={{ color: TED_RED }}
                 lang="zh-TW"
               >
                 我有興趣加入這場沙龍
-              </button>
+              </a>
             </div>
           </FadeIn>
         </div>
