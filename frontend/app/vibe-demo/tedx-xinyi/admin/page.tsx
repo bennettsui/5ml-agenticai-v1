@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 
 const API_BASE = typeof window !== 'undefined'
@@ -119,11 +119,13 @@ export default function TEDxXinyiAdmin() {
     setMediaLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/tedx-xinyi/media`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setMedia(data.images || []);
       setMediaLoaded(true);
-    } catch {
+    } catch (err) {
       setMedia([]);
+      showToast(`Load media failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
     } finally {
       setMediaLoading(false);
     }
@@ -133,16 +135,31 @@ export default function TEDxXinyiAdmin() {
     setSlotsLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/tedx-xinyi/image-slots`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setSlots(data.slots || []);
       setSlotSummary(data.summary || null);
       setSlotsLoaded(true);
-    } catch {
+    } catch (err) {
       setSlots([]);
+      showToast(`Load slots failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
     } finally {
       setSlotsLoading(false);
     }
   }, []);
+
+  // ─── Auto-load data when switching tabs ─────────────────────
+  useEffect(() => {
+    if (authed && tab === 'slots' && !slotsLoaded && !slotsLoading) {
+      loadSlots();
+    }
+  }, [authed, tab, slotsLoaded, slotsLoading, loadSlots]);
+
+  useEffect(() => {
+    if (authed && tab === 'media' && !mediaLoaded && !mediaLoading) {
+      loadMedia();
+    }
+  }, [authed, tab, mediaLoaded, mediaLoading, loadMedia]);
 
   // ─── Upload (replace) handler ─────────────────────────────
   function triggerUpload(key: string) {
@@ -305,8 +322,8 @@ export default function TEDxXinyiAdmin() {
   // ─── Main Admin ─────────────────────────────────────────────
   const tabs: { id: Tab; label: string }[] = [
     { id: 'slots', label: 'Image Slots' },
-    { id: 'publish', label: 'Publish Site Pack' },
     { id: 'media', label: 'Media Library' },
+    { id: 'publish', label: 'Publish Site Pack' },
   ];
 
   return (
