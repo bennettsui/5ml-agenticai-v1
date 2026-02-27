@@ -223,7 +223,6 @@ router.get('/image-slots', (req, res) => {
           const fallbackUrl = cm[2];
           if (seen.has(`cdn-map:${imageId}`)) continue;
           seen.add(`cdn-map:${imageId}`);
-          // Check if speaker has a CDN URL
           const speakerKey = `speakers/${imageId}.jpg`;
           const metaEntry = meta[speakerKey] || meta[`speakers/${imageId}.png`] || meta[`speakers/${imageId}.webp`];
           slots.push({
@@ -237,6 +236,43 @@ router.get('/image-slots', (req, res) => {
             localExists: fs.existsSync(path.join(OUTPUT_DIR, speakerKey)),
             status: metaEntry?.publicUrl ? 'cdn' : (fs.existsSync(path.join(OUTPUT_DIR, speakerKey)) ? 'local-only' : 'missing'),
             note: `CDN map fallback for ${imageId}`,
+          });
+        }
+
+        // Detect imageId-based speaker patterns: { imageId: 'xxx' } used with template literals
+        // Handles: imageId: 'cheng-shi-jia' where src uses `/tedx-xinyi/speakers/${speaker.imageId}.jpg`
+        const imageIdRe = /imageId:\s*['"]([^'"]+)['"]/g;
+        let im;
+        while ((im = imageIdRe.exec(content)) !== null) {
+          const imageId = im[1];
+          if (seen.has(`imageId:${imageId}`)) continue;
+          seen.add(`imageId:${imageId}`);
+          // Check all extensions
+          let foundKey = null;
+          let foundMeta = null;
+          for (const ext of ['jpg', 'png', 'webp']) {
+            const key = `speakers/${imageId}.${ext}`;
+            const entry = meta[key];
+            if (entry?.publicUrl || fs.existsSync(path.join(OUTPUT_DIR, key))) {
+              foundKey = key;
+              foundMeta = entry;
+              break;
+            }
+          }
+          const speakerKey = foundKey || `speakers/${imageId}.jpg`;
+          const metaEntry = foundMeta || meta[speakerKey];
+          const local = fs.existsSync(path.join(OUTPUT_DIR, speakerKey));
+          slots.push({
+            page: pageName,
+            src: `/tedx-xinyi/speakers/${imageId}.jpg`,
+            type: 'speaker',
+            isExternal: false,
+            isLocal: true,
+            metaKey: speakerKey,
+            cdnUrl: metaEntry?.publicUrl || null,
+            localExists: local,
+            status: metaEntry?.publicUrl ? 'cdn' : (local ? 'local-only' : 'missing'),
+            note: `Speaker imageId: ${imageId}`,
           });
         }
       } catch {}
