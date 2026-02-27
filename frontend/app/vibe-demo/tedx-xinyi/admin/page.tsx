@@ -575,7 +575,7 @@ export default function TEDxXinyiAdmin() {
                       }`}
                     >
                       {/* Image preview */}
-                      <div className="aspect-video bg-neutral-800 flex items-center justify-center relative">
+                      <div className="aspect-video bg-neutral-800 flex items-center justify-center relative group">
                         {(img.publicUrl || img.localExists) ? (
                           <img
                             src={img.publicUrl || `${API_BASE}/tedx-xinyi/${img.key}`}
@@ -595,6 +595,18 @@ export default function TEDxXinyiAdmin() {
                           <div className="absolute top-2 left-2">
                             <span className="text-[10px] px-1.5 py-0.5 bg-amber-900/60 text-amber-300 rounded font-bold">ARCHIVED</span>
                           </div>
+                        )}
+                        {/* Delete X button — visible on hover */}
+                        {!loading && (
+                          <button
+                            onClick={() => setConfirmDelete(img.key)}
+                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/70 hover:bg-red-600 text-white/70 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                            title="Delete image"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                              <path d="M18 6L6 18M6 6l12 12" />
+                            </svg>
+                          </button>
                         )}
                       </div>
 
