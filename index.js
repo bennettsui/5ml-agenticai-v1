@@ -100,19 +100,23 @@ app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx
 app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi'), tedxStaticOpts));
 
 // CDN fallback: if local file is missing, redirect to mmdbfiles CDN URL
+// Checks .media-metadata.json first, then falls back to seed file (git-committed)
 app.use('/tedx-xinyi', (req, res, next) => {
   // Only handle image requests that fell through static middleware
   if (!/\.(jpg|jpeg|png|webp|gif)$/i.test(req.path)) return next();
-  try {
-    const metaPath = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi', '.media-metadata.json');
-    if (!fs.existsSync(metaPath)) return next();
-    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-    // req.path is like /hero-home.webp or /speakers/cheng-shi-jia.jpg
-    const key = req.path.replace(/^\//, '');
-    if (meta[key] && meta[key].publicUrl) {
-      return res.redirect(302, meta[key].publicUrl);
-    }
-  } catch { /* ignore */ }
+  const key = req.path.replace(/^\//, '');
+  // Try metadata file, then seed file
+  const metaPath = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi', '.media-metadata.json');
+  const seedPath = path.join(__dirname, 'use-cases', 'tedx-xinyi', 'api', '.media-metadata-seed.json');
+  for (const p of [metaPath, seedPath]) {
+    try {
+      if (!fs.existsSync(p)) continue;
+      const meta = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (meta[key] && meta[key].publicUrl) {
+        return res.redirect(302, meta[key].publicUrl);
+      }
+    } catch { /* ignore */ }
+  }
   next();
 });
 

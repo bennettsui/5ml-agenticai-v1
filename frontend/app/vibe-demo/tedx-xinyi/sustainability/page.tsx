@@ -114,14 +114,22 @@ export default function SustainabilityPage() {
             </FadeIn>
           </div>
           <FadeIn delay={200}>
-            <div className="w-full aspect-video rounded-2xl overflow-hidden shadow-lg bg-neutral-900">
+            <div className="w-full aspect-video rounded-2xl overflow-hidden shadow-lg bg-neutral-900 relative">
               <iframe
-                src="https://www.youtube.com/embed/-i9MntW94Bs?rel=0"
-                title="TEDxXinyi Sustainability Ideas Development"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                src="https://www.youtube-nocookie.com/embed/-i9MntW94Bs?rel=0&modestbranding=1"
+                title="TEDxXinyi — Sustainability Ideas Development"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
                 allowFullScreen
+                loading="lazy"
                 className="w-full h-full border-0"
-              />
+              ></iframe>
+              {/* Fallback if video unavailable */}
+              <noscript>
+                <a href="https://www.youtube.com/watch?v=-i9MntW94Bs" className="absolute inset-0 flex items-center justify-center text-white/60 text-sm">
+                  Watch on YouTube →
+                </a>
+              </noscript>
             </div>
           </FadeIn>
         </div>

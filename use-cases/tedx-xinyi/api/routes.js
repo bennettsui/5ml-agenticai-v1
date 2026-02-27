@@ -90,8 +90,35 @@ async function loadMediaUrlsFromDb() {
   }
 }
 
-// Init media table on module load
-initMediaTable();
+// Init media table on module load, then hydrate metadata from DB
+initMediaTable().then(() => hydrateMetadataFromDb()).catch(() => {});
+
+// On startup: if .media-metadata.json is empty/missing, populate from DB CDN URLs.
+// This fixes image loading on Fly.dev where the ephemeral FS loses the metadata file
+// but the DB retains CDN URLs from previous sessions.
+async function hydrateMetadataFromDb() {
+  // Only hydrate if metadata is empty/missing
+  let existing = {};
+  try {
+    if (fs.existsSync(METADATA_PATH)) {
+      existing = JSON.parse(fs.readFileSync(METADATA_PATH, 'utf8'));
+      if (Object.keys(existing).filter(k => !k.startsWith('_')).length > 0) return; // already has entries
+    }
+  } catch { /* ignore */ }
+  const dbUrls = await loadMediaUrlsFromDb();
+  const entries = Object.entries(dbUrls).filter(([, v]) => v.publicUrl);
+  if (entries.length === 0) return;
+  const meta = { ...existing };
+  for (const [key, data] of entries) {
+    meta[key] = { publicUrl: data.publicUrl, alt: data.alt || '', source: data.source || 'db-restored' };
+  }
+  try {
+    fs.writeFileSync(METADATA_PATH, JSON.stringify(meta, null, 2));
+    console.log(`[TEDxXinyi] Hydrated metadata from DB (${entries.length} CDN URLs)`);
+  } catch (e) {
+    console.error('[TEDxXinyi] Failed to hydrate metadata:', e.message);
+  }
+}
 
 // ---- Scan external image URLs from website source files ----
 let _externalUrlsCache = null;
@@ -758,6 +785,67 @@ router.post('/media/compress-all', express.json(), async (req, res) => {
   res.json({ success: true, results, totalBefore, totalAfter });
 });
 
+// ---- API: convert image format ----
+router.post('/media/convert', express.json(), async (req, res) => {
+  const { key, format } = req.body;
+  if (!key) return res.status(400).json({ error: 'key required' });
+  if (!['jpg', 'png', 'webp'].includes(format)) return res.status(400).json({ error: 'format must be jpg, png, or webp' });
+  const filePath = path.join(OUTPUT_DIR, key);
+  // Check CDN source if local file missing
+  const meta = loadMetadata();
+  let raw;
+  if (fs.existsSync(filePath)) {
+    raw = fs.readFileSync(filePath);
+  } else if (meta[key] && meta[key].publicUrl) {
+    // Download from CDN
+    try {
+      const fetch = (await import('node-fetch')).default;
+      const resp = await fetch(meta[key].publicUrl);
+      if (!resp.ok) return res.status(404).json({ error: 'CDN download failed' });
+      raw = Buffer.from(await resp.arrayBuffer());
+    } catch (e) {
+      return res.status(404).json({ error: 'File not found locally or on CDN' });
+    }
+  } else {
+    return res.status(404).json({ error: 'File not found' });
+  }
+  try {
+    const sharp = require('sharp');
+    const oldExt = path.extname(key).toLowerCase();
+    const newExt = '.' + (format === 'jpg' ? 'jpg' : format);
+    if (oldExt === newExt) return res.json({ success: true, key, note: 'Already in this format' });
+    const newKey = key.replace(/\.(jpg|jpeg|png|webp|gif)$/i, newExt);
+    let pipeline = sharp(raw);
+    if (format === 'jpg') {
+      pipeline = pipeline.jpeg({ quality: 85, progressive: true });
+    } else if (format === 'png') {
+      pipeline = pipeline.png({ quality: 85, compressionLevel: 9 });
+    } else {
+      pipeline = pipeline.webp({ quality: 85, effort: 4 });
+    }
+    const converted = await pipeline.toBuffer();
+    const newPath = path.join(OUTPUT_DIR, newKey);
+    if (!fs.existsSync(path.dirname(newPath))) fs.mkdirSync(path.dirname(newPath), { recursive: true });
+    fs.writeFileSync(newPath, converted);
+    // Update metadata: copy old metadata to new key
+    if (meta[key]) {
+      meta[newKey] = { ...meta[key], publicUrl: null }; // CDN URL no longer valid for new format
+    } else {
+      meta[newKey] = {};
+    }
+    saveMetadata(meta);
+    // Update VISUALS reference if this is a generated visual
+    const visual = VISUALS.find(v => v.filename === key);
+    if (visual) {
+      visual.filename = newKey;
+    }
+    console.log(`[TEDxXinyi] Converted ${key} → ${newKey} (${(raw.length / 1024).toFixed(0)} KB → ${(converted.length / 1024).toFixed(0)} KB)`);
+    res.json({ success: true, oldKey: key, newKey, before: raw.length, after: converted.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---- API: upload image ----
 router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) => {
   try {
@@ -1088,6 +1176,7 @@ function renderGrid() {
         '<div class="card-actions">' +
           (img.source === 'generated' ? '<button class="btn btn-outline btn-sm" onclick="regenOne(\\'' + id + '\\',this)">Regenerate</button>' : '') +
           (!hasCdn ? '<button class="btn btn-outline btn-sm" style="border-color:#065f46;color:#6ee7b7" onclick="uploadOneToCdn(\\'' + key + '\\',this)">Upload → CDN</button>' : '') +
+          '<select class="btn btn-outline btn-sm" style="padding:2px 6px;font-size:0.65rem;cursor:pointer" onchange="convertFormat(\\'' + key + '\\',this.value,this);this.selectedIndex=0"><option value="">Convert →</option><option value="jpg">JPG</option><option value="png">PNG</option><option value="webp">WebP</option></select>' +
         '</div>' +
       '</div></div>';
   }).join('');
@@ -1270,6 +1359,20 @@ async function uploadOneToCdn(key, btn) {
       loadMedia();
     } else { showToast('Error: ' + (d.error || 'Upload failed'), true); btn.disabled = false; btn.textContent = 'Upload → CDN'; }
   } catch(e) { showToast(e.message, true); btn.disabled = false; btn.textContent = 'Upload → CDN'; }
+}
+
+async function convertFormat(key, format, sel) {
+  if (!format) return;
+  sel.disabled = true;
+  try {
+    const r = await authFetch('/api/tedx-xinyi/media/convert', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ key, format }) });
+    const d = await r.json();
+    if (r.ok) {
+      if (d.note) { showToast(d.note); }
+      else { showToast('Converted ' + d.oldKey + ' → ' + d.newKey); loadMedia(); }
+    } else { showToast('Error: ' + (d.error || 'Convert failed'), true); }
+  } catch(e) { showToast(e.message, true); }
+  sel.disabled = false; sel.selectedIndex = 0;
 }
 
 function openUpload() { document.getElementById('uploadModal').classList.add('open'); }
