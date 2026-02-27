@@ -2098,14 +2098,105 @@ router.post('/publish-html-pack', async (req, res) => {
       archive.directory(PUBLIC_IMAGES, 'tedx-xinyi');
     }
 
-    // manifest.json
+    // index.php — PHP router for Apache/PHP hosting
     const htmlFiles = fs.existsSync(TEDX_OUT)
       ? fs.readdirSync(TEDX_OUT).filter(f => f.endsWith('.html'))
       : [];
+    const phpPages = htmlFiles.map(f => f.replace('.html', ''));
+    const phpRouter = `<?php
+/**
+ * TEDxXinyi — PHP Router
+ * Drop this folder on any Apache + PHP host. No Python or Node needed.
+ *
+ * Supports:
+ *   /              → index.html
+ *   /salon         → salon.html
+ *   /about         → about.html
+ *   /speakers      → speakers.html
+ *   /_next/...     → static JS/CSS assets
+ *   /tedx-xinyi/.. → images
+ *
+ * For Apache: add .htaccess (included) to enable clean URLs.
+ * For PHP built-in server: php -S localhost:8000 index.php
+ */
+
+$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$uri = rtrim($uri, '/');
+
+// Static files — serve directly
+if ($uri !== '' && file_exists(__DIR__ . $uri)) {
+    $ext = pathinfo($uri, PATHINFO_EXTENSION);
+    $mimeTypes = [
+        'html' => 'text/html',
+        'css'  => 'text/css',
+        'js'   => 'application/javascript',
+        'json' => 'application/json',
+        'png'  => 'image/png',
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'webp' => 'image/webp',
+        'gif'  => 'image/gif',
+        'svg'  => 'image/svg+xml',
+        'ico'  => 'image/x-icon',
+        'woff' => 'font/woff',
+        'woff2'=> 'font/woff2',
+    ];
+    if (isset($mimeTypes[$ext])) {
+        header('Content-Type: ' . $mimeTypes[$ext]);
+    }
+    readfile(__DIR__ . $uri);
+    return;
+}
+
+// Clean URL routing — /salon → salon.html
+$pages = [${phpPages.map(p => `'${p}'`).join(', ')}];
+$page = ltrim($uri, '/');
+
+if ($page === '' || $page === 'index') {
+    include __DIR__ . '/index.html';
+} elseif (in_array($page, $pages) && file_exists(__DIR__ . '/' . $page . '.html')) {
+    include __DIR__ . '/' . $page . '.html';
+} else {
+    http_response_code(404);
+    if (file_exists(__DIR__ . '/index.html')) {
+        include __DIR__ . '/index.html';
+    } else {
+        echo '<h1>404 Not Found</h1>';
+    }
+}
+`;
+    archive.append(phpRouter, { name: 'index.php' });
+
+    // .htaccess — Apache rewrite rules for clean URLs
+    const htaccess = `# TEDxXinyi — Apache rewrite rules
+RewriteEngine On
+RewriteBase /
+
+# Serve existing files directly
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# Serve existing directories directly
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Route clean URLs through index.php
+RewriteRule ^ index.php [L]
+`;
+    archive.append(htaccess, { name: '.htaccess' });
+
+    // manifest.json
     const manifest = {
-      name: 'TEDxXinyi Static HTML Pack',
+      name: 'TEDxXinyi Static HTML + PHP Pack',
       built: new Date().toISOString(),
       pages: ['index.html', ...htmlFiles],
+      phpRouter: 'index.php',
+      htaccess: '.htaccess',
+      usage: {
+        apache: 'Upload entire folder to Apache web root. .htaccess handles routing.',
+        phpBuiltIn: 'php -S localhost:8000 index.php',
+        staticOnly: 'Serve index.html and sub-pages directly (clean URLs won\'t work without server)',
+      },
     };
     archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
 

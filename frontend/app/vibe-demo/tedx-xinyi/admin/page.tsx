@@ -284,8 +284,8 @@ export default function TEDxXinyiAdmin() {
   // ─── Main Admin ─────────────────────────────────────────────
   const tabs: { id: Tab; label: string }[] = [
     { id: 'slots', label: 'Image Slots' },
+    { id: 'publish', label: 'Publish Site Pack' },
     { id: 'media', label: 'Media Library' },
-    { id: 'publish', label: 'Publish HTML Pack' },
   ];
 
   return (
@@ -670,19 +670,21 @@ export default function TEDxXinyiAdmin() {
         {/* ─── PUBLISH TAB ─── */}
         {tab === 'publish' && (
           <div>
-            <h2 className="text-2xl font-black mb-2">Publish HTML Pack</h2>
+            <h2 className="text-2xl font-black mb-2">Publish Site Pack</h2>
             <p className="text-neutral-400 text-sm mb-8 leading-relaxed">
-              Generate a complete static HTML package of the TEDxXinyi website for deployment.<br />
-              Includes all pages, JS/CSS assets, and generated images. No Python required.
+              Generate a complete static package of the TEDxXinyi website.<br />
+              Includes HTML + PHP router + .htaccess — works on any Apache/PHP host. No Python or Node needed.
             </p>
 
             <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 mb-6">
               <h3 className="text-sm font-bold text-neutral-300 mb-4">Package Contents</h3>
               <ul className="text-sm text-neutral-400 space-y-1.5 mb-6">
-                <li>• Homepage + 6 sub-pages (about, blog, community, salon, speakers, sustainability)</li>
-                <li>• Next.js static assets (_next/ JS &amp; CSS chunks)</li>
-                <li>• Generated images (tedx-xinyi/ folder)</li>
-                <li>• manifest.json with build timestamp</li>
+                <li>• <span className="text-neutral-300 font-bold">index.html</span> + 6 sub-pages (about, blog, community, salon, speakers, sustainability)</li>
+                <li>• <span className="text-neutral-300 font-bold">index.php</span> — PHP router for clean URLs (/salon, /about, etc.)</li>
+                <li>• <span className="text-neutral-300 font-bold">.htaccess</span> — Apache rewrite rules</li>
+                <li>• _next/ static assets (JS &amp; CSS chunks)</li>
+                <li>• tedx-xinyi/ images folder</li>
+                <li>• manifest.json with build info &amp; deployment instructions</li>
               </ul>
 
               <button
@@ -701,12 +703,24 @@ export default function TEDxXinyiAdmin() {
             </div>
 
             <div className="bg-neutral-900/50 border border-neutral-800/50 rounded-xl p-6">
-              <h3 className="text-sm font-bold text-neutral-400 mb-2">Deployment Notes</h3>
-              <ul className="text-xs text-neutral-500 space-y-1">
-                <li>• Unzip the pack and serve from any static host (Netlify, Vercel, S3, etc.)</li>
-                <li>• Images with CDN URLs will load from mmdbfiles CDN even if local files are missing</li>
-                <li>• The _next/ folder must be at the same root level as the HTML files</li>
-              </ul>
+              <h3 className="text-sm font-bold text-neutral-400 mb-3">Deployment Options</h3>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-neutral-300 font-bold mb-1">Apache / PHP hosting (recommended)</p>
+                  <p className="text-xs text-neutral-500">Upload the entire unzipped folder to your web root. The .htaccess + index.php handle clean URL routing automatically.</p>
+                </div>
+                <div>
+                  <p className="text-xs text-neutral-300 font-bold mb-1">PHP built-in server (local preview)</p>
+                  <p className="text-xs text-neutral-500 font-mono bg-neutral-800/50 px-2 py-1 rounded inline-block">php -S localhost:8000 index.php</p>
+                </div>
+                <div>
+                  <p className="text-xs text-neutral-300 font-bold mb-1">Static hosting (Netlify, Vercel, S3)</p>
+                  <p className="text-xs text-neutral-500">Serve the HTML files directly. Clean URLs won&apos;t work without a server-side router — use the .html extension in links.</p>
+                </div>
+              </div>
+              <div className="mt-4 pt-3 border-t border-neutral-800/50">
+                <p className="text-[11px] text-neutral-600">Images with CDN URLs load from mmdbfiles CDN even if local files are missing.</p>
+              </div>
             </div>
           </div>
         )}
