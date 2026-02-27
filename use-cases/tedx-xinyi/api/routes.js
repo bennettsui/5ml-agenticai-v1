@@ -389,6 +389,12 @@ const VISUALS = [
     prompt: 'Square abstract galaxy made of floating islands or orbits each representing a different Intelligence domain, Design Intelligence with minimal objects like chairs posters typography, Food Intelligence with stylised table ingredients coffee, Ocean Intelligence with wave lines tiny whale dolphin icons, Music Art Intelligence with musical notes vinyl simple instrument shapes, no realistic logos but iconic shapes suggesting each domain, dark background with colourful but slightly muted orbit colours connected by thin lines with one orbit subtly highlighted in TED red, overall composition usable as a background behind text, no text no watermarks',
   },
   {
+    id: 'about-xinyi',
+    filename: 'about-xinyi.webp',
+    description: 'About page — Xinyi district creative community gathering',
+    prompt: 'Wide 4:3 photograph-style image of a creative community gathering in a modern urban space in Taipei Xinyi district, warm golden hour lighting through large windows showing city skyline at dusk, a diverse group of people in animated conversation forming small circles, modern minimalist furniture and potted plants, the feeling of post-event networking at a TEDx event, warm amber and cream tones with natural light, candid documentary photography style, depth of field with some figures softly blurred, no text no watermarks no logos, optimistic community atmosphere',
+  },
+  {
     id: 'salon-curiosity',
     filename: 'salon-curiosity.webp',
     description: 'Curiosity zones visual — multi-zone experience',
@@ -873,14 +879,23 @@ router.post('/metadata-import', express.json({ limit: '5mb' }), (req, res) => {
   }
 });
 
-// ---- API: update metadata (alt, customName) ----
+// ---- API: update metadata (alt, customName, publicUrl/cdnUrl) ----
 router.post('/media/metadata', express.json(), (req, res) => {
-  const { key, alt, customName } = req.body;
+  const { key, alt, customName, publicUrl, cdnUrl } = req.body;
   if (!key) return res.status(400).json({ error: 'key required' });
   const meta = loadMetadata();
   if (!meta[key]) meta[key] = {};
   if (alt !== undefined) meta[key].alt = alt;
   if (customName !== undefined) meta[key].customName = customName;
+  // Accept either publicUrl or cdnUrl to set the CDN URL
+  const newUrl = publicUrl || cdnUrl;
+  if (newUrl !== undefined) {
+    meta[key].publicUrl = newUrl || null;
+    // Also persist to DB so it survives Fly.dev restarts
+    if (newUrl) {
+      saveMediaUrlToDb(key, newUrl, { alt: meta[key].alt, source: 'manual' }).catch(() => {});
+    }
+  }
   saveMetadata(meta);
   res.json({ success: true, key, meta: meta[key] });
 });

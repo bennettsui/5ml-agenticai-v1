@@ -80,6 +80,9 @@ export default function TEDxXinyiAdmin() {
   // Edit modal state (for any slot or media entry)
   const [editSlot, setEditSlot] = useState<ImageSlot | null>(null);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
+  const [editCdnUrl, setEditCdnUrl] = useState('');
+  const [editCdnSaving, setEditCdnSaving] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const downloadRef = useRef<HTMLAnchorElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,6 +91,37 @@ export default function TEDxXinyiAdmin() {
   function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
+  }
+
+  function copyToClipboard(text: string, label: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(label);
+      setTimeout(() => setCopiedKey(null), 2000);
+      showToast('Copied to clipboard');
+    }).catch(() => {
+      showToast('Copy failed', 'err');
+    });
+  }
+
+  async function saveCdnUrl(key: string, url: string) {
+    setEditCdnSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/metadata`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, publicUrl: url }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast(`Updated CDN URL for ${key}`);
+      setEditSlot(null);
+      setImagePickerOpen(false);
+      if (slotsLoaded) await loadSlots();
+      if (mediaLoaded) await loadMedia();
+    } catch (err) {
+      showToast(`Save failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setEditCdnSaving(false);
+    }
   }
 
   function handleLogin() {
@@ -441,11 +475,54 @@ export default function TEDxXinyiAdmin() {
                 <div className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-300 font-mono break-all select-all">{editSlot.src}</div>
               </div>
 
-              {/* Full CDN URL */}
+              {/* Editable CDN URL */}
               <div>
-                <label className="text-[11px] text-neutral-500 font-bold uppercase tracking-wider block mb-1">CDN URL</label>
-                {editSlot.cdnUrl ? (
-                  <a href={editSlot.cdnUrl} target="_blank" rel="noopener noreferrer" className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-blue-400 hover:text-blue-300 font-mono break-all block">{editSlot.cdnUrl}</a>
+                <label className="text-[11px] text-neutral-500 font-bold uppercase tracking-wider block mb-1">CDN URL {editSlot.metaKey && <span className="text-neutral-600 normal-case">(editable)</span>}</label>
+                {editSlot.metaKey ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={editCdnUrl}
+                      onChange={e => setEditCdnUrl(e.target.value)}
+                      placeholder="Paste CDN URL here (e.g. http://5ml.mmdbfiles.com/assets/...)"
+                      className="flex-1 bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-blue-400 font-mono focus:outline-none focus:border-blue-500"
+                    />
+                    <button
+                      onClick={() => saveCdnUrl(editSlot.metaKey!, editCdnUrl)}
+                      disabled={editCdnSaving || !editCdnUrl.trim()}
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-40 flex-shrink-0"
+                    >
+                      {editCdnSaving ? 'Saving\u2026' : 'Save URL'}
+                    </button>
+                    {editSlot.cdnUrl && (
+                      <button
+                        onClick={() => copyToClipboard(editSlot.cdnUrl!, editSlot.metaKey!)}
+                        className="px-3 py-2 bg-neutral-700 hover:bg-neutral-600 text-neutral-300 text-xs font-bold rounded-lg transition-colors flex-shrink-0"
+                      >
+                        {copiedKey === editSlot.metaKey ? 'Copied' : 'Copy'}
+                      </button>
+                    )}
+                  </div>
+                ) : editSlot.cdnUrl ? (
+                  <div className="flex gap-2 items-center">
+                    <a href={editSlot.cdnUrl} target="_blank" rel="noopener noreferrer" className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-blue-400 hover:text-blue-300 font-mono break-all flex-1">{editSlot.cdnUrl}</a>
+                    <button
+                      onClick={() => copyToClipboard(editSlot.cdnUrl!, 'cdn')}
+                      className="px-3 py-2 bg-neutral-700 hover:bg-neutral-600 text-neutral-300 text-xs font-bold rounded-lg transition-colors flex-shrink-0"
+                    >
+                      {copiedKey === 'cdn' ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                ) : editSlot.isExternal ? (
+                  <div className="flex gap-2 items-center">
+                    <div className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-blue-400 font-mono break-all flex-1">{editSlot.src}</div>
+                    <button
+                      onClick={() => copyToClipboard(editSlot.src, 'ext')}
+                      className="px-3 py-2 bg-neutral-700 hover:bg-neutral-600 text-neutral-300 text-xs font-bold rounded-lg transition-colors flex-shrink-0"
+                    >
+                      {copiedKey === 'ext' ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
                 ) : (
                   <div className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-600 font-mono">none</div>
                 )}
@@ -461,7 +538,7 @@ export default function TEDxXinyiAdmin() {
 
               {/* Actions */}
               <div className="flex flex-wrap gap-2 pt-2">
-                {editSlot.isLocal && editSlot.metaKey && (
+                {editSlot.metaKey && (
                   <button
                     onClick={() => triggerUpload(editSlot.metaKey!)}
                     disabled={actionLoading === editSlot.metaKey}
@@ -470,7 +547,7 @@ export default function TEDxXinyiAdmin() {
                     {actionLoading === editSlot.metaKey ? 'Uploading\u2026' : 'Upload Replacement'}
                   </button>
                 )}
-                {editSlot.isLocal && editSlot.metaKey && (
+                {editSlot.metaKey && (
                   <button
                     onClick={() => setImagePickerOpen(!imagePickerOpen)}
                     className="px-4 py-2 text-xs font-bold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded-lg transition-colors"
@@ -478,7 +555,7 @@ export default function TEDxXinyiAdmin() {
                     {imagePickerOpen ? 'Close Picker' : 'Pick from Library'}
                   </button>
                 )}
-                {editSlot.isLocal && editSlot.metaKey && (
+                {editSlot.metaKey && (
                   <button
                     onClick={() => { setConfirmRegen(editSlot.metaKey!); }}
                     className="px-4 py-2 text-xs font-bold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 rounded-lg transition-colors"
@@ -660,7 +737,7 @@ export default function TEDxXinyiAdmin() {
                           <tr
                             key={`${slot.page}-${slot.src}-${i}`}
                             className="border-b border-neutral-800/50 hover:bg-white/[0.04] cursor-pointer transition-colors"
-                            onClick={() => setEditSlot(slot)}
+                            onClick={() => { setEditSlot(slot); setEditCdnUrl(slot.cdnUrl || ''); setImagePickerOpen(false); }}
                           >
                             <td className="px-4 py-2">
                               <div className="w-16 h-10 rounded bg-neutral-800 overflow-hidden flex items-center justify-center flex-shrink-0">
@@ -785,10 +862,17 @@ export default function TEDxXinyiAdmin() {
                           {img.missing && <span className="text-[10px] px-1.5 py-0.5 bg-red-900/40 text-red-400 rounded">missing</span>}
                         </div>
 
-                        {/* CDN URL — visible and copyable */}
+                        {/* CDN URL — visible with copy button */}
                         {img.publicUrl && (
-                          <div className="mt-2">
-                            <a href={img.publicUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-400 hover:text-blue-300 font-mono break-all">{img.publicUrl}</a>
+                          <div className="mt-2 flex items-start gap-1.5">
+                            <a href={img.publicUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-400 hover:text-blue-300 font-mono break-all flex-1 min-w-0">{img.publicUrl}</a>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); copyToClipboard(img.publicUrl!, img.key); }}
+                              className="px-1.5 py-0.5 text-[9px] font-bold bg-neutral-700 hover:bg-neutral-600 text-neutral-300 rounded transition-colors flex-shrink-0"
+                              title="Copy CDN URL"
+                            >
+                              {copiedKey === img.key ? 'Copied' : 'Copy'}
+                            </button>
                           </div>
                         )}
 
