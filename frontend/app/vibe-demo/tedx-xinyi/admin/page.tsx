@@ -124,6 +124,27 @@ export default function TEDxXinyiAdmin() {
     }
   }
 
+  async function pushToCdn(key: string) {
+    setActionLoading(key);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/push-to-cdn`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      showToast(`Pushed to CDN: ${data.publicUrl}`);
+      setEditSlot(null);
+      if (slotsLoaded) await loadSlots();
+      if (mediaLoaded) await loadMedia();
+    } catch (err) {
+      showToast(`Push to CDN failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   function handleLogin() {
     if (pw === ADMIN_PASSWORD) {
       setAuthed(true);
@@ -475,95 +496,95 @@ export default function TEDxXinyiAdmin() {
                 <div className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-300 font-mono break-all select-all">{editSlot.src}</div>
               </div>
 
-              {/* Editable CDN URL */}
-              <div>
-                <label className="text-[11px] text-neutral-500 font-bold uppercase tracking-wider block mb-1">CDN URL {editSlot.metaKey && <span className="text-neutral-600 normal-case">(editable)</span>}</label>
-                {editSlot.metaKey ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={editCdnUrl}
-                      onChange={e => setEditCdnUrl(e.target.value)}
-                      placeholder="Paste CDN URL here (e.g. http://5ml.mmdbfiles.com/assets/...)"
-                      className="flex-1 bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-blue-400 font-mono focus:outline-none focus:border-blue-500"
-                    />
-                    <button
-                      onClick={() => saveCdnUrl(editSlot.metaKey!, editCdnUrl)}
-                      disabled={editCdnSaving || !editCdnUrl.trim()}
-                      className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-40 flex-shrink-0"
-                    >
-                      {editCdnSaving ? 'Saving\u2026' : 'Save URL'}
-                    </button>
-                    {editSlot.cdnUrl && (
-                      <button
-                        onClick={() => copyToClipboard(editSlot.cdnUrl!, editSlot.metaKey!)}
-                        className="px-3 py-2 bg-neutral-700 hover:bg-neutral-600 text-neutral-300 text-xs font-bold rounded-lg transition-colors flex-shrink-0"
-                      >
-                        {copiedKey === editSlot.metaKey ? 'Copied' : 'Copy'}
-                      </button>
-                    )}
+              {/* Editable CDN URL — always shown */}
+              {(() => {
+                // Derive a usable key for all entries
+                const effectiveKey = editSlot.metaKey || (editSlot.isLocal ? editSlot.src.replace('/tedx-xinyi/', '') : null);
+                return (
+                  <div>
+                    <label className="text-[11px] text-neutral-500 font-bold uppercase tracking-wider block mb-1">CDN URL <span className="text-neutral-600 normal-case">(editable)</span></label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editCdnUrl}
+                        onChange={e => setEditCdnUrl(e.target.value)}
+                        placeholder="Paste CDN URL here (e.g. http://5ml.mmdbfiles.com/assets/...)"
+                        className="flex-1 bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-blue-400 font-mono focus:outline-none focus:border-blue-500"
+                      />
+                      {effectiveKey && (
+                        <button
+                          onClick={() => saveCdnUrl(effectiveKey, editCdnUrl)}
+                          disabled={editCdnSaving || !editCdnUrl.trim()}
+                          className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-40 flex-shrink-0"
+                        >
+                          {editCdnSaving ? 'Saving\u2026' : 'Save URL'}
+                        </button>
+                      )}
+                      {editCdnUrl && (
+                        <button
+                          onClick={() => copyToClipboard(editCdnUrl, 'cdn-edit')}
+                          className="px-3 py-2 bg-neutral-700 hover:bg-neutral-600 text-neutral-300 text-xs font-bold rounded-lg transition-colors flex-shrink-0"
+                        >
+                          {copiedKey === 'cdn-edit' ? 'Copied' : 'Copy'}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                ) : editSlot.cdnUrl ? (
-                  <div className="flex gap-2 items-center">
-                    <a href={editSlot.cdnUrl} target="_blank" rel="noopener noreferrer" className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-blue-400 hover:text-blue-300 font-mono break-all flex-1">{editSlot.cdnUrl}</a>
-                    <button
-                      onClick={() => copyToClipboard(editSlot.cdnUrl!, 'cdn')}
-                      className="px-3 py-2 bg-neutral-700 hover:bg-neutral-600 text-neutral-300 text-xs font-bold rounded-lg transition-colors flex-shrink-0"
-                    >
-                      {copiedKey === 'cdn' ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-                ) : editSlot.isExternal ? (
-                  <div className="flex gap-2 items-center">
-                    <div className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-blue-400 font-mono break-all flex-1">{editSlot.src}</div>
-                    <button
-                      onClick={() => copyToClipboard(editSlot.src, 'ext')}
-                      className="px-3 py-2 bg-neutral-700 hover:bg-neutral-600 text-neutral-300 text-xs font-bold rounded-lg transition-colors flex-shrink-0"
-                    >
-                      {copiedKey === 'ext' ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-600 font-mono">none</div>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Meta Key */}
-              {editSlot.metaKey && (
+              {(editSlot.metaKey || editSlot.isLocal) && (
                 <div>
                   <label className="text-[11px] text-neutral-500 font-bold uppercase tracking-wider block mb-1">Metadata Key</label>
-                  <div className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-300 font-mono break-all">{editSlot.metaKey}</div>
+                  <div className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-300 font-mono break-all">{editSlot.metaKey || editSlot.src.replace('/tedx-xinyi/', '')}</div>
                 </div>
               )}
 
-              {/* Actions */}
-              <div className="flex flex-wrap gap-2 pt-2">
-                {editSlot.metaKey && (
-                  <button
-                    onClick={() => triggerUpload(editSlot.metaKey!)}
-                    disabled={actionLoading === editSlot.metaKey}
-                    className="px-4 py-2 text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded-lg transition-colors disabled:opacity-40"
-                  >
-                    {actionLoading === editSlot.metaKey ? 'Uploading\u2026' : 'Upload Replacement'}
-                  </button>
-                )}
-                {editSlot.metaKey && (
-                  <button
-                    onClick={() => setImagePickerOpen(!imagePickerOpen)}
-                    className="px-4 py-2 text-xs font-bold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded-lg transition-colors"
-                  >
-                    {imagePickerOpen ? 'Close Picker' : 'Pick from Library'}
-                  </button>
-                )}
-                {editSlot.metaKey && (
-                  <button
-                    onClick={() => { setConfirmRegen(editSlot.metaKey!); }}
-                    className="px-4 py-2 text-xs font-bold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 rounded-lg transition-colors"
-                  >
-                    AI Regenerate
-                  </button>
-                )}
-              </div>
+              {/* Actions — always shown */}
+              {(() => {
+                const effectiveKey = editSlot.metaKey || (editSlot.isLocal ? editSlot.src.replace('/tedx-xinyi/', '') : null);
+                const isLoading = actionLoading === effectiveKey;
+                return (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {/* Push to CDN — for local-only images */}
+                    {effectiveKey && editSlot.localExists && editSlot.status !== 'cdn' && (
+                      <button
+                        onClick={() => pushToCdn(effectiveKey)}
+                        disabled={isLoading}
+                        className="px-4 py-2 text-xs font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded-lg transition-colors disabled:opacity-40"
+                      >
+                        {isLoading ? 'Uploading\u2026' : 'Push to CDN'}
+                      </button>
+                    )}
+                    {effectiveKey && (
+                      <button
+                        onClick={() => triggerUpload(effectiveKey)}
+                        disabled={isLoading}
+                        className="px-4 py-2 text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded-lg transition-colors disabled:opacity-40"
+                      >
+                        {isLoading ? 'Uploading\u2026' : 'Upload Replacement'}
+                      </button>
+                    )}
+                    {effectiveKey && (
+                      <button
+                        onClick={() => setImagePickerOpen(!imagePickerOpen)}
+                        className="px-4 py-2 text-xs font-bold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded-lg transition-colors"
+                      >
+                        {imagePickerOpen ? 'Close Picker' : 'Pick from Library'}
+                      </button>
+                    )}
+                    {effectiveKey && (
+                      <button
+                        onClick={() => { setConfirmRegen(effectiveKey); }}
+                        className="px-4 py-2 text-xs font-bold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 rounded-lg transition-colors"
+                      >
+                        AI Regenerate
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Image Picker Grid */}
               {imagePickerOpen && (
@@ -877,6 +898,12 @@ export default function TEDxXinyiAdmin() {
                         )}
 
                         <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-neutral-800/50">
+                          {/* Push to CDN — for local-only images */}
+                          {!archived && img.localExists && !img.publicUrl && (
+                            <button onClick={() => pushToCdn(img.key)} disabled={loading} className="w-full px-2 py-1.5 text-[11px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 mb-1" title="Upload local file to mmdbfiles CDN">
+                              {loading ? 'Uploading\u2026' : 'Push to CDN'}
+                            </button>
+                          )}
                           {!archived && (
                             <button onClick={() => setConfirmRegen(img.key)} disabled={loading} className="flex-1 px-2 py-1.5 text-[11px] font-bold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 rounded transition-colors disabled:opacity-40" title="Regenerate with AI">
                               {loading ? 'Generating\u2026' : 'Regenerate'}

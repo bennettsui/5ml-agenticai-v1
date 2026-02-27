@@ -900,6 +900,31 @@ router.post('/media/metadata', express.json(), (req, res) => {
   res.json({ success: true, key, meta: meta[key] });
 });
 
+// ---- API: push local file to CDN (upload existing local image to mmdbfiles) ----
+router.post('/media/push-to-cdn', express.json(), async (req, res) => {
+  const { key } = req.body;
+  if (!key) return res.status(400).json({ error: 'key required' });
+  const filePath = path.join(OUTPUT_DIR, key);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: `File not found locally: ${key}` });
+  }
+  try {
+    const raw = fs.readFileSync(filePath);
+    const publicUrl = await uploadToMmdb(raw);
+    const isSpeaker = key.startsWith('speakers/');
+    const parts = key.split('/');
+    const filename = parts.pop();
+    const folder = parts.join('/');
+    savePublicUrl(key, publicUrl, { source: isSpeaker ? 'speaker' : 'generated' });
+    updateWebpageImageUrl(filename, folder, publicUrl);
+    console.log(`[TEDxXinyi] Pushed to CDN: ${key} → ${publicUrl}`);
+    res.json({ success: true, key, publicUrl, size: raw.length });
+  } catch (err) {
+    console.error(`[TEDxXinyi] Push to CDN failed for ${key}:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Resize + compress helper: hero/poster images → max 1920w, speakers → 800w
 async function optimizeImage(raw, key) {
   const sharp = require('sharp');
