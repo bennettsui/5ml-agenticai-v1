@@ -70,6 +70,7 @@ export default function TEDxXinyiAdmin() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmRegen, setConfirmRegen] = useState<string | null>(null);
 
   const downloadRef = useRef<HTMLAnchorElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -224,6 +225,26 @@ export default function TEDxXinyiAdmin() {
     }
   }
 
+  // ─── Regenerate (AI) ────────────────────────────────────────
+  async function handleRegenerate(key: string) {
+    setActionLoading(key);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      showToast(`Regenerated ${key} (${data.dimensions}). Old version archived.`);
+      await loadMedia();
+    } catch (err) {
+      showToast(`Regenerate failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   // ─── Password Gate ──────────────────────────────────────────
   if (!authed) {
     return (
@@ -328,6 +349,34 @@ export default function TEDxXinyiAdmin() {
                 className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg transition-colors"
               >
                 Delete Forever
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm regenerate modal */}
+      {confirmRegen && (
+        <div className="fixed inset-0 z-40 bg-black/60 flex items-center justify-center px-4">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-6 max-w-sm w-full">
+            <h3 className="text-white font-bold mb-2">Regenerate with AI?</h3>
+            <p className="text-neutral-400 text-sm mb-1">
+              This will use Gemini AI to generate a new image matching the original content, branding, and dimensions.
+              The current version will be archived.
+            </p>
+            <p className="text-purple-400 text-xs font-mono mb-4 break-all">{confirmRegen}</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmRegen(null)}
+                className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { const k = confirmRegen; setConfirmRegen(null); handleRegenerate(k); }}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-bold rounded-lg transition-colors"
+              >
+                Regenerate
               </button>
             </div>
           </div>
@@ -628,7 +677,19 @@ export default function TEDxXinyiAdmin() {
                         </div>
 
                         {/* Action buttons */}
-                        <div className="flex gap-1.5 mt-3 pt-3 border-t border-neutral-800/50">
+                        <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-neutral-800/50">
+                          {/* Regenerate — AI re-generation */}
+                          {!archived && (
+                            <button
+                              onClick={() => setConfirmRegen(img.key)}
+                              disabled={loading}
+                              className="flex-1 px-2 py-1.5 text-[11px] font-bold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 rounded transition-colors disabled:opacity-40"
+                              title="Regenerate with AI (archives current, generates new matching branding & dimensions)"
+                            >
+                              {loading ? 'Generating…' : 'Regenerate'}
+                            </button>
+                          )}
+                          {/* Upload New — manual replace */}
                           {!archived && (
                             <button
                               onClick={() => triggerUpload(img.key)}
@@ -639,16 +700,18 @@ export default function TEDxXinyiAdmin() {
                               Upload New
                             </button>
                           )}
+                          {/* Remove — deactivate, archive */}
                           {!archived && (img.localExists || img.publicUrl) && (
                             <button
                               onClick={() => handleRemove(img.key)}
                               disabled={loading}
-                              className="flex-1 px-2 py-1.5 text-[11px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40"
+                              className="px-2 py-1.5 text-[11px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40"
                               title="Remove from active slot (kept as archived asset)"
                             >
                               Remove
                             </button>
                           )}
+                          {/* Delete — permanent */}
                           <button
                             onClick={() => setConfirmDelete(img.key)}
                             disabled={loading}
