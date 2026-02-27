@@ -3842,9 +3842,7 @@ try {
     if (token === ADMIN_PASS) return next();
     return res.status(401).json({ error: 'Unauthorized' });
   });
-  // Admin UI serves at /vibe-demo/tedx-xinyi/admin
-  app.get('/vibe-demo/tedx-xinyi/admin', (req, res) => res.redirect('/api/tedx-xinyi/upload'));
-  // Legacy redirect
+  // Legacy admin shortcut redirects to Next.js admin page
   app.get('/tedxxinyi/admin', (req, res) => res.redirect('/vibe-demo/tedx-xinyi/admin'));
   console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /vibe-demo/tedx-xinyi/admin');
 } catch (error) {
