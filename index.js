@@ -100,8 +100,8 @@ app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx
 app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi'), tedxStaticOpts));
 
 // CDN fallback: if local file is missing, redirect to mmdbfiles CDN URL
-// Checks .media-metadata.json first, then falls back to seed file (git-committed)
-app.use('/tedx-xinyi', (req, res, next) => {
+// Checks .media-metadata.json first, seed file second, then DB as last resort
+app.use('/tedx-xinyi', async (req, res, next) => {
   // Only handle image requests that fell through static middleware
   if (!/\.(jpg|jpeg|png|webp|gif)$/i.test(req.path)) return next();
   const key = req.path.replace(/^\//, '');
@@ -117,6 +117,19 @@ app.use('/tedx-xinyi', (req, res, next) => {
       }
     } catch { /* ignore */ }
   }
+  // Last resort: check PostgreSQL DB for CDN URL (survives Fly.dev restarts)
+  try {
+    const db = require('./db');
+    if (db && db.pool) {
+      const { rows } = await db.pool.query(
+        'SELECT public_url FROM tedx_media_assets WHERE key = $1 AND public_url IS NOT NULL LIMIT 1',
+        [key]
+      );
+      if (rows.length > 0 && rows[0].public_url) {
+        return res.redirect(302, rows[0].public_url);
+      }
+    }
+  } catch { /* DB not available — fall through */ }
   next();
 });
 
