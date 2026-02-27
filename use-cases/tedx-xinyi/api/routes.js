@@ -150,6 +150,150 @@ function scanExternalUrls() {
   return _externalUrlsCache;
 }
 
+// ---- API: list all image slots used across website pages ----
+router.get('/image-slots', (req, res) => {
+  const slots = [];
+  const meta = (() => { try { return loadMetadata(); } catch { return {}; } })();
+
+  // Scan all TSX/TS files for image src references
+  if (fs.existsSync(PAGES_DIR)) {
+    const srcRe = /src\s*=\s*\{?\s*["'`]([^"'`]+\.(jpg|jpeg|png|webp|gif))[^"'`]*["'`]/gi;
+    const cdnMapRe = /SPEAKER_CDN_URLS\[['"]([^'"]+)['"]\]\s*\|\|\s*['"`]([^'"`]+)['"`]/g;
+    const imgSrcRe = /src\s*=\s*["']([^"']+)["']/gi;
+
+    function scanFile(filePath, pageName) {
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const seen = new Set();
+
+        // Match all src="..." patterns
+        let m;
+        const allSrcRe = /src\s*[=:]\s*\{?\s*["'`]([^"'`\s][^"'`]*)["'`]/gi;
+        while ((m = allSrcRe.exec(content)) !== null) {
+          const url = m[1].trim();
+          if (seen.has(url)) continue;
+          seen.add(url);
+
+          // Classify the image
+          const isExternal = /^https?:\/\//.test(url);
+          const isLocal = url.startsWith('/tedx-xinyi/');
+          const isSpeaker = url.includes('speakers/') || url.includes('speaker');
+          const isHero = url.includes('hero-');
+          const isPoster = url.includes('poster-');
+          const isSalon = url.includes('salon-');
+          const isVideo = url.includes('youtube') || url.includes('youtu.be');
+          if (isVideo) continue; // skip video thumbnails/embeds
+
+          // Determine image type
+          let type = 'other';
+          if (isHero) type = 'hero';
+          else if (isPoster) type = 'poster';
+          else if (isSalon) type = 'visual';
+          else if (isSpeaker) type = 'speaker';
+          else if (isExternal) type = 'external';
+
+          // Check if local image has a CDN URL in metadata
+          let metaKey = null;
+          let cdnUrl = null;
+          let localExists = false;
+          if (isLocal) {
+            metaKey = url.replace('/tedx-xinyi/', '');
+            const metaEntry = meta[metaKey];
+            cdnUrl = metaEntry?.publicUrl || null;
+            localExists = fs.existsSync(path.join(OUTPUT_DIR, metaKey));
+          }
+
+          slots.push({
+            page: pageName,
+            src: url,
+            type,
+            isExternal,
+            isLocal,
+            metaKey,
+            cdnUrl,
+            localExists,
+            status: isExternal ? 'external' : (cdnUrl ? 'cdn' : (localExists ? 'local-only' : 'missing')),
+          });
+        }
+
+        // Also find CDN map fallback patterns like: SPEAKER_CDN_URLS[id] || '/tedx-xinyi/...'
+        let cm;
+        while ((cm = cdnMapRe.exec(content)) !== null) {
+          const imageId = cm[1];
+          const fallbackUrl = cm[2];
+          if (seen.has(`cdn-map:${imageId}`)) continue;
+          seen.add(`cdn-map:${imageId}`);
+          // Check if speaker has a CDN URL
+          const speakerKey = `speakers/${imageId}.jpg`;
+          const metaEntry = meta[speakerKey] || meta[`speakers/${imageId}.png`] || meta[`speakers/${imageId}.webp`];
+          slots.push({
+            page: pageName,
+            src: fallbackUrl,
+            type: 'speaker',
+            isExternal: false,
+            isLocal: true,
+            metaKey: speakerKey,
+            cdnUrl: metaEntry?.publicUrl || null,
+            localExists: fs.existsSync(path.join(OUTPUT_DIR, speakerKey)),
+            status: metaEntry?.publicUrl ? 'cdn' : (fs.existsSync(path.join(OUTPUT_DIR, speakerKey)) ? 'local-only' : 'missing'),
+            note: `CDN map fallback for ${imageId}`,
+          });
+        }
+      } catch {}
+    }
+
+    function scanDir(dir) {
+      try {
+        for (const entry of fs.readdirSync(dir)) {
+          const full = path.join(dir, entry);
+          const stat = fs.statSync(full);
+          if (stat.isDirectory()) {
+            scanDir(full);
+          } else if (/\.(tsx?|jsx?)$/.test(entry)) {
+            // Derive page name from path
+            const rel = path.relative(PAGES_DIR, full);
+            const pageName = rel.replace(/\/page\.tsx$/, '').replace(/\.tsx$/, '') || 'home';
+            scanFile(full, pageName);
+          }
+        }
+      } catch {}
+    }
+    scanDir(PAGES_DIR);
+  }
+
+  // Also include layout.tsx metadata images
+  const layoutPath = path.join(PAGES_DIR, 'layout.tsx');
+  if (fs.existsSync(layoutPath)) {
+    try {
+      const content = fs.readFileSync(layoutPath, 'utf8');
+      const urlRe = /https?:\/\/[^\s'")\]>]+\.(jpg|jpeg|png|webp|gif)/gi;
+      let m;
+      while ((m = urlRe.exec(content)) !== null) {
+        slots.push({
+          page: 'layout (meta)',
+          src: m[0],
+          type: 'meta',
+          isExternal: true,
+          isLocal: false,
+          metaKey: null,
+          cdnUrl: null,
+          localExists: false,
+          status: 'external',
+        });
+      }
+    } catch {}
+  }
+
+  // Summary stats
+  const total = slots.length;
+  const missing = slots.filter(s => s.status === 'missing').length;
+  const cdnOk = slots.filter(s => s.status === 'cdn').length;
+  const localOnly = slots.filter(s => s.status === 'local-only').length;
+  const external = slots.filter(s => s.status === 'external').length;
+
+  res.json({ slots, summary: { total, missing, cdnOk, localOnly, external } });
+});
+
 // ==================== VISUAL DEFINITIONS ====================
 // Festival poster aesthetic: warm golden hour, Taipei Xinyi energy,
 // bright optimistic tones (distinct from Boundary Street's dark noir)

@@ -8,7 +8,7 @@ const API_BASE = typeof window !== 'undefined'
   : 'http://localhost:8080';
 const ADMIN_PASSWORD = '5milesLab01@';
 
-type Tab = 'publish' | 'media';
+type Tab = 'slots' | 'media' | 'publish';
 
 interface MediaImage {
   key: string;
@@ -22,11 +22,32 @@ interface MediaImage {
   missing?: boolean;
 }
 
+interface ImageSlot {
+  page: string;
+  src: string;
+  type: string;
+  isExternal: boolean;
+  isLocal: boolean;
+  metaKey: string | null;
+  cdnUrl: string | null;
+  localExists: boolean;
+  status: 'cdn' | 'local-only' | 'missing' | 'external';
+  note?: string;
+}
+
+interface SlotSummary {
+  total: number;
+  missing: number;
+  cdnOk: number;
+  localOnly: number;
+  external: number;
+}
+
 export default function TEDxXinyiAdmin() {
   const [authed, setAuthed] = useState(false);
   const [pw, setPw] = useState('');
   const [pwError, setPwError] = useState(false);
-  const [tab, setTab] = useState<Tab>('publish');
+  const [tab, setTab] = useState<Tab>('slots');
 
   // Publish state
   const [publishing, setPublishing] = useState(false);
@@ -36,6 +57,14 @@ export default function TEDxXinyiAdmin() {
   const [media, setMedia] = useState<MediaImage[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaLoaded, setMediaLoaded] = useState(false);
+
+  // Image Slots state
+  const [slots, setSlots] = useState<ImageSlot[]>([]);
+  const [slotSummary, setSlotSummary] = useState<SlotSummary | null>(null);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsLoaded, setSlotsLoaded] = useState(false);
+  const [slotFilter, setSlotFilter] = useState<string>('all');
+  const [slotPageFilter, setSlotPageFilter] = useState<string>('all');
 
   // Action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -96,6 +125,21 @@ export default function TEDxXinyiAdmin() {
       setMedia([]);
     } finally {
       setMediaLoading(false);
+    }
+  }, []);
+
+  const loadSlots = useCallback(async () => {
+    setSlotsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/image-slots`);
+      const data = await res.json();
+      setSlots(data.slots || []);
+      setSlotSummary(data.summary || null);
+      setSlotsLoaded(true);
+    } catch {
+      setSlots([]);
+    } finally {
+      setSlotsLoading(false);
     }
   }, []);
 
@@ -207,13 +251,41 @@ export default function TEDxXinyiAdmin() {
     );
   }
 
-  // ─── Is image an archived copy? ───────────────────────────
+  // ─── Helpers ──────────────────────────────────────────────
   const isArchived = (key: string) => key.includes('--archived-') || key.includes('--removed-');
+
+  const statusColor: Record<string, string> = {
+    cdn: 'bg-green-900/40 text-green-400',
+    'local-only': 'bg-amber-900/40 text-amber-400',
+    missing: 'bg-red-900/40 text-red-400',
+    external: 'bg-blue-900/40 text-blue-400',
+  };
+
+  const typeColor: Record<string, string> = {
+    hero: 'bg-purple-900/40 text-purple-300',
+    poster: 'bg-indigo-900/40 text-indigo-300',
+    visual: 'bg-cyan-900/40 text-cyan-300',
+    speaker: 'bg-pink-900/40 text-pink-300',
+    external: 'bg-neutral-700/40 text-neutral-400',
+    meta: 'bg-neutral-700/40 text-neutral-400',
+    other: 'bg-neutral-700/40 text-neutral-400',
+  };
+
+  // Get unique pages for filter dropdown
+  const slotPages = ['all', ...Array.from(new Set(slots.map(s => s.page)))];
+
+  // Filtered slots
+  const filteredSlots = slots.filter(s => {
+    if (slotFilter !== 'all' && s.status !== slotFilter) return false;
+    if (slotPageFilter !== 'all' && s.page !== slotPageFilter) return false;
+    return true;
+  });
 
   // ─── Main Admin ─────────────────────────────────────────────
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'publish', label: 'Publish HTML Pack' },
+    { id: 'slots', label: 'Image Slots' },
     { id: 'media', label: 'Media Library' },
+    { id: 'publish', label: 'Publish HTML Pack' },
   ];
 
   return (
@@ -290,49 +362,181 @@ export default function TEDxXinyiAdmin() {
       </div>
 
       {/* Content */}
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-6 py-8">
 
-        {/* ─── PUBLISH TAB ─── */}
-        {tab === 'publish' && (
+        {/* ─── IMAGE SLOTS TAB ─── */}
+        {tab === 'slots' && (
           <div>
-            <h2 className="text-2xl font-black mb-2">Publish HTML Pack</h2>
-            <p className="text-neutral-400 text-sm mb-8 leading-relaxed">
-              Generate a complete static HTML package of the TEDxXinyi website for deployment.<br />
-              Includes all pages, JS/CSS assets, and generated images. No Python required.
-            </p>
-
-            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 mb-6">
-              <h3 className="text-sm font-bold text-neutral-300 mb-4">Package Contents</h3>
-              <ul className="text-sm text-neutral-400 space-y-1.5 mb-6">
-                <li>• Homepage + 6 sub-pages (about, blog, community, salon, speakers, sustainability)</li>
-                <li>• Next.js static assets (_next/ JS &amp; CSS chunks)</li>
-                <li>• Generated images (tedx-xinyi/ folder)</li>
-                <li>• manifest.json with build timestamp</li>
-              </ul>
-
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-2xl font-black">Image Slots</h2>
+                <p className="text-neutral-500 text-sm mt-1">Every image URL referenced across all website pages. Check status, match, and replace.</p>
+              </div>
               <button
-                onClick={handlePublish}
-                disabled={publishing}
-                className="px-6 py-3 bg-red-600 hover:bg-red-500 disabled:bg-neutral-700 disabled:text-neutral-500 text-white text-sm font-bold rounded-lg transition-colors"
+                onClick={loadSlots}
+                disabled={slotsLoading}
+                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-sm font-bold rounded-lg transition-colors"
               >
-                {publishing ? 'Building & Packaging…' : 'Build & Download Pack'}
+                {slotsLoading ? 'Scanning…' : slotsLoaded ? 'Re-scan' : 'Scan Pages'}
               </button>
-
-              {publishMsg && (
-                <p className={`mt-4 text-sm ${publishMsg.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>
-                  {publishMsg}
-                </p>
-              )}
             </div>
 
-            <div className="bg-neutral-900/50 border border-neutral-800/50 rounded-xl p-6">
-              <h3 className="text-sm font-bold text-neutral-400 mb-2">Deployment Notes</h3>
-              <ul className="text-xs text-neutral-500 space-y-1">
-                <li>• Unzip the pack and serve from any static host (Netlify, Vercel, S3, etc.)</li>
-                <li>• Images with CDN URLs will load from mmdbfiles CDN even if local files are missing</li>
-                <li>• The _next/ folder must be at the same root level as the HTML files</li>
-              </ul>
-            </div>
+            {!slotsLoaded && !slotsLoading && (
+              <p className="text-neutral-500 text-sm">Click &quot;Scan Pages&quot; to analyze all image references in the website source code.</p>
+            )}
+
+            {/* Summary cards */}
+            {slotSummary && (
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+                {[
+                  { label: 'Total', value: slotSummary.total, color: 'text-white' },
+                  { label: 'CDN OK', value: slotSummary.cdnOk, color: 'text-green-400' },
+                  { label: 'Local Only', value: slotSummary.localOnly, color: 'text-amber-400' },
+                  { label: 'Missing', value: slotSummary.missing, color: 'text-red-400' },
+                  { label: 'External', value: slotSummary.external, color: 'text-blue-400' },
+                ].map(s => (
+                  <div key={s.label} className="bg-neutral-900 border border-neutral-800 rounded-lg p-3 text-center">
+                    <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
+                    <p className="text-[11px] text-neutral-500 font-bold">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Filters */}
+            {slotsLoaded && slots.length > 0 && (
+              <div className="flex flex-wrap gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-500">Status:</span>
+                  <select
+                    value={slotFilter}
+                    onChange={e => setSlotFilter(e.target.value)}
+                    className="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500"
+                  >
+                    <option value="all">All</option>
+                    <option value="cdn">CDN OK</option>
+                    <option value="local-only">Local Only</option>
+                    <option value="missing">Missing</option>
+                    <option value="external">External</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-500">Page:</span>
+                  <select
+                    value={slotPageFilter}
+                    onChange={e => setSlotPageFilter(e.target.value)}
+                    className="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500"
+                  >
+                    {slotPages.map(p => (
+                      <option key={p} value={p}>{p === 'all' ? 'All pages' : p}</option>
+                    ))}
+                  </select>
+                </div>
+                <span className="text-xs text-neutral-600 self-center">
+                  {filteredSlots.length} of {slots.length} shown
+                </span>
+              </div>
+            )}
+
+            {/* Slots table */}
+            {filteredSlots.length > 0 && (
+              <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-neutral-800 text-neutral-500 text-xs">
+                        <th className="text-left px-4 py-3 font-bold">Preview</th>
+                        <th className="text-left px-4 py-3 font-bold">Page</th>
+                        <th className="text-left px-4 py-3 font-bold">Type</th>
+                        <th className="text-left px-4 py-3 font-bold">Image URL / Path</th>
+                        <th className="text-left px-4 py-3 font-bold">Status</th>
+                        <th className="text-left px-4 py-3 font-bold">CDN URL</th>
+                        <th className="text-left px-4 py-3 font-bold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSlots.map((slot, i) => {
+                        const previewUrl = slot.cdnUrl || (slot.isExternal ? slot.src : (slot.isLocal ? `${API_BASE}${slot.src}` : null));
+                        const loading = actionLoading === (slot.metaKey || slot.src);
+                        return (
+                          <tr key={`${slot.page}-${slot.src}-${i}`} className="border-b border-neutral-800/50 hover:bg-white/[0.02]">
+                            {/* Preview */}
+                            <td className="px-4 py-2">
+                              <div className="w-16 h-10 rounded bg-neutral-800 overflow-hidden flex items-center justify-center flex-shrink-0">
+                                {previewUrl ? (
+                                  <img
+                                    src={previewUrl}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  <span className="text-neutral-700 text-[9px]">N/A</span>
+                                )}
+                              </div>
+                            </td>
+                            {/* Page */}
+                            <td className="px-4 py-2">
+                              <span className="text-xs text-neutral-300 font-mono">{slot.page}</span>
+                            </td>
+                            {/* Type */}
+                            <td className="px-4 py-2">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${typeColor[slot.type] || typeColor.other}`}>
+                                {slot.type}
+                              </span>
+                            </td>
+                            {/* URL */}
+                            <td className="px-4 py-2 max-w-[200px]">
+                              <p className="text-xs text-neutral-400 truncate font-mono" title={slot.src}>{slot.src}</p>
+                              {slot.note && <p className="text-[10px] text-neutral-600 truncate">{slot.note}</p>}
+                            </td>
+                            {/* Status */}
+                            <td className="px-4 py-2">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${statusColor[slot.status] || 'bg-neutral-800 text-neutral-500'}`}>
+                                {slot.status}
+                              </span>
+                            </td>
+                            {/* CDN URL */}
+                            <td className="px-4 py-2 max-w-[180px]">
+                              {slot.cdnUrl ? (
+                                <a
+                                  href={slot.cdnUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-blue-400 hover:text-blue-300 truncate block font-mono"
+                                  title={slot.cdnUrl}
+                                >
+                                  {slot.cdnUrl.replace(/^https?:\/\//, '').slice(0, 40)}...
+                                </a>
+                              ) : slot.isExternal ? (
+                                <span className="text-[10px] text-neutral-600">external src</span>
+                              ) : (
+                                <span className="text-[10px] text-neutral-700">none</span>
+                              )}
+                            </td>
+                            {/* Actions */}
+                            <td className="px-4 py-2">
+                              {slot.isLocal && slot.metaKey && (
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={() => triggerUpload(slot.metaKey!)}
+                                    disabled={loading}
+                                    className="px-2 py-1 text-[10px] font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded transition-colors disabled:opacity-40"
+                                    title="Replace with new image"
+                                  >
+                                    {loading ? '...' : 'Replace'}
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -413,7 +617,6 @@ export default function TEDxXinyiAdmin() {
 
                         {/* Action buttons */}
                         <div className="flex gap-1.5 mt-3 pt-3 border-t border-neutral-800/50">
-                          {/* Upload / Replace */}
                           {!archived && (
                             <button
                               onClick={() => triggerUpload(img.key)}
@@ -424,7 +627,6 @@ export default function TEDxXinyiAdmin() {
                               Upload New
                             </button>
                           )}
-                          {/* Remove (deactivate) */}
                           {!archived && (img.localExists || img.publicUrl) && (
                             <button
                               onClick={() => handleRemove(img.key)}
@@ -435,7 +637,6 @@ export default function TEDxXinyiAdmin() {
                               Remove
                             </button>
                           )}
-                          {/* Delete (permanent) */}
                           <button
                             onClick={() => setConfirmDelete(img.key)}
                             disabled={loading}
@@ -451,6 +652,50 @@ export default function TEDxXinyiAdmin() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ─── PUBLISH TAB ─── */}
+        {tab === 'publish' && (
+          <div>
+            <h2 className="text-2xl font-black mb-2">Publish HTML Pack</h2>
+            <p className="text-neutral-400 text-sm mb-8 leading-relaxed">
+              Generate a complete static HTML package of the TEDxXinyi website for deployment.<br />
+              Includes all pages, JS/CSS assets, and generated images. No Python required.
+            </p>
+
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 mb-6">
+              <h3 className="text-sm font-bold text-neutral-300 mb-4">Package Contents</h3>
+              <ul className="text-sm text-neutral-400 space-y-1.5 mb-6">
+                <li>• Homepage + 6 sub-pages (about, blog, community, salon, speakers, sustainability)</li>
+                <li>• Next.js static assets (_next/ JS &amp; CSS chunks)</li>
+                <li>• Generated images (tedx-xinyi/ folder)</li>
+                <li>• manifest.json with build timestamp</li>
+              </ul>
+
+              <button
+                onClick={handlePublish}
+                disabled={publishing}
+                className="px-6 py-3 bg-red-600 hover:bg-red-500 disabled:bg-neutral-700 disabled:text-neutral-500 text-white text-sm font-bold rounded-lg transition-colors"
+              >
+                {publishing ? 'Building & Packaging…' : 'Build & Download Pack'}
+              </button>
+
+              {publishMsg && (
+                <p className={`mt-4 text-sm ${publishMsg.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>
+                  {publishMsg}
+                </p>
+              )}
+            </div>
+
+            <div className="bg-neutral-900/50 border border-neutral-800/50 rounded-xl p-6">
+              <h3 className="text-sm font-bold text-neutral-400 mb-2">Deployment Notes</h3>
+              <ul className="text-xs text-neutral-500 space-y-1">
+                <li>• Unzip the pack and serve from any static host (Netlify, Vercel, S3, etc.)</li>
+                <li>• Images with CDN URLs will load from mmdbfiles CDN even if local files are missing</li>
+                <li>• The _next/ folder must be at the same root level as the HTML files</li>
+              </ul>
+            </div>
           </div>
         )}
       </div>
