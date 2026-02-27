@@ -1743,6 +1743,81 @@ async function generateVisual(client, prompt) {
   throw new Error('No image in Gemini response');
 }
 
+// ==================== PUBLISH HTML PACK ====================
+
+router.post('/publish-html-pack', async (req, res) => {
+  const { execSync } = require('child_process');
+  const archiver = require('archiver');
+  const FRONTEND_DIR = path.join(__dirname, '../../../frontend');
+  const OUT_DIR = path.join(FRONTEND_DIR, 'out');
+  const TEDX_OUT = path.join(OUT_DIR, 'vibe-demo', 'tedx-xinyi');
+  const TEDX_HOME_HTML = path.join(OUT_DIR, 'vibe-demo', 'tedx-xinyi.html');
+  const NEXT_DIR = path.join(OUT_DIR, '_next');
+  const PUBLIC_IMAGES = path.join(FRONTEND_DIR, 'public', 'tedx-xinyi');
+
+  try {
+    // 1. Build frontend
+    console.log('[TEDxXinyi] Publish: running npm run build …');
+    execSync('npm run build', { cwd: FRONTEND_DIR, timeout: 180000, stdio: 'pipe' });
+    console.log('[TEDxXinyi] Publish: build complete');
+
+    // 2. Verify output exists
+    if (!fs.existsSync(TEDX_OUT)) {
+      return res.status(500).json({ error: 'Build output not found' });
+    }
+
+    // 3. Stream ZIP
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="tedx-xinyi-${Date.now()}.zip"`);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', err => { throw err; });
+    archive.pipe(res);
+
+    // index.html (homepage)
+    if (fs.existsSync(TEDX_HOME_HTML)) {
+      archive.file(TEDX_HOME_HTML, { name: 'index.html' });
+    }
+
+    // Sub-pages (about.html, salon.html, etc.)
+    if (fs.existsSync(TEDX_OUT)) {
+      for (const f of fs.readdirSync(TEDX_OUT)) {
+        if (f.endsWith('.html')) {
+          archive.file(path.join(TEDX_OUT, f), { name: f });
+        }
+      }
+    }
+
+    // _next/ static assets (JS, CSS)
+    if (fs.existsSync(NEXT_DIR)) {
+      archive.directory(NEXT_DIR, '_next');
+    }
+
+    // tedx-xinyi/ images from public folder
+    if (fs.existsSync(PUBLIC_IMAGES)) {
+      archive.directory(PUBLIC_IMAGES, 'tedx-xinyi');
+    }
+
+    // manifest.json
+    const htmlFiles = fs.existsSync(TEDX_OUT)
+      ? fs.readdirSync(TEDX_OUT).filter(f => f.endsWith('.html'))
+      : [];
+    const manifest = {
+      name: 'TEDxXinyi Static HTML Pack',
+      built: new Date().toISOString(),
+      pages: ['index.html', ...htmlFiles],
+    };
+    archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
+
+    await archive.finalize();
+    console.log(`[TEDxXinyi] Publish: ZIP streamed (${archive.pointer()} bytes)`);
+  } catch (err) {
+    console.error('[TEDxXinyi] Publish failed:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
+
 module.exports = router;
 module.exports.router = router;
 module.exports.VISUALS = VISUALS;

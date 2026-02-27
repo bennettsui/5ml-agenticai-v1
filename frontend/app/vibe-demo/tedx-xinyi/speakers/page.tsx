@@ -25,7 +25,7 @@ export default function SpeakersPage() {
       {/* ==================== HERO ==================== */}
       <section className="relative min-h-[55vh] flex items-end overflow-hidden bg-neutral-900">
         <img
-          src="/tedx-xinyi/hero-speakers.jpg"
+          src="/tedx-xinyi/hero-speakers.webp"
           alt=""
           fetchPriority="high"
           decoding="async"

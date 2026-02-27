@@ -20,7 +20,7 @@ export default function CommunityPage() {
       {/* ==================== HERO ==================== */}
       <section className="relative min-h-[55vh] flex items-end overflow-hidden bg-neutral-900">
         <img
-          src="/tedx-xinyi/hero-community.jpg"
+          src="/tedx-xinyi/hero-community.webp"
           alt=""
           fetchPriority="high"
           decoding="async"
@@ -79,7 +79,7 @@ export default function CommunityPage() {
           <FadeIn delay={200}>
             <div className="aspect-video rounded-xl overflow-hidden bg-neutral-100">
               <img
-                src="/tedx-xinyi/salon-teaser.jpg"
+                src="/tedx-xinyi/salon-teaser.webp"
                 alt=""
                 className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
                 onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
