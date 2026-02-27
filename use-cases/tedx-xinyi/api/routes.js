@@ -908,6 +908,163 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
   }
 });
 
+// ---- API: replace image (archive old, set new as active) ----
+router.post('/media/replace', express.json({ limit: '50mb' }), async (req, res) => {
+  try {
+    const { key, data, alt } = req.body;
+    if (!key) return res.status(400).json({ error: 'key required' });
+    if (!data || !data.startsWith('data:image/')) return res.status(400).json({ error: 'Invalid image data' });
+    const match = data.match(/^data:image\/(jpeg|png|webp|gif);base64,(.+)$/);
+    if (!match) return res.status(400).json({ error: 'Unsupported format' });
+    const rawBuffer = Buffer.from(match[2], 'base64');
+    if (rawBuffer.length > 25 * 1024 * 1024) return res.status(400).json({ error: 'File too large (max 25MB)' });
+
+    const meta = loadMetadata();
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ext = path.extname(key);
+    const base = key.replace(ext, '');
+    const archiveKey = `${base}--archived-${ts}${ext}`;
+
+    // Archive old file if it exists locally
+    const oldPath = path.join(OUTPUT_DIR, key);
+    if (fs.existsSync(oldPath)) {
+      const archivePath = path.join(OUTPUT_DIR, archiveKey);
+      const archiveDir = path.dirname(archivePath);
+      if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
+      fs.copyFileSync(oldPath, archivePath);
+      // Copy old metadata to archive key
+      if (meta[key]) {
+        meta[archiveKey] = { ...meta[key], archivedFrom: key, archivedAt: new Date().toISOString() };
+      }
+      console.log(`[TEDxXinyi] Archived ${key} → ${archiveKey}`);
+    } else if (meta[key] && meta[key].publicUrl) {
+      // No local file but has CDN URL — save archive metadata pointing to old CDN
+      meta[archiveKey] = { ...meta[key], archivedFrom: key, archivedAt: new Date().toISOString() };
+      console.log(`[TEDxXinyi] Archived metadata ${key} → ${archiveKey} (CDN-only)`);
+    }
+
+    // Write new file
+    const sharp = require('sharp');
+    const isSpeaker = key.startsWith('speakers/');
+    const maxWidth = isSpeaker ? 800 : 1920;
+    let compressed;
+    if (ext === '.webp') {
+      compressed = await sharp(rawBuffer).resize({ width: maxWidth, withoutEnlargement: true }).webp({ quality: 82, effort: 4 }).toBuffer();
+    } else if (ext === '.png') {
+      compressed = await sharp(rawBuffer).resize({ width: maxWidth, withoutEnlargement: true }).png({ quality: 80, compressionLevel: 9 }).toBuffer();
+    } else {
+      compressed = await sharp(rawBuffer).resize({ width: maxWidth, withoutEnlargement: true }).jpeg({ quality: 80, progressive: true }).toBuffer();
+    }
+    const targetDir = path.dirname(path.join(OUTPUT_DIR, key));
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    fs.writeFileSync(path.join(OUTPUT_DIR, key), compressed);
+
+    // Update metadata for the active key
+    if (!meta[key]) meta[key] = {};
+    if (alt) meta[key].alt = alt;
+    meta[key].replacedAt = new Date().toISOString();
+    meta[key].publicUrl = null; // Clear old CDN URL since content changed
+    saveMetadata(meta);
+
+    // Upload new version to CDN
+    let publicUrl = null;
+    try {
+      publicUrl = await uploadToMmdb(compressed);
+      const parts = key.split('/');
+      const filename = parts.pop();
+      const folder = parts.join('/');
+      savePublicUrl(key, publicUrl, { source: isSpeaker ? 'speaker' : 'uploaded' });
+      updateWebpageImageUrl(filename, folder, publicUrl);
+      console.log(`[TEDxXinyi] Replaced ${key} → CDN: ${publicUrl}`);
+    } catch (uploadErr) {
+      console.error(`[TEDxXinyi] CDN upload failed for replacement ${key}:`, uploadErr.message);
+    }
+
+    const ratio = ((1 - compressed.length / rawBuffer.length) * 100).toFixed(0);
+    res.json({
+      success: true, key, archiveKey,
+      originalSize: rawBuffer.length, compressedSize: compressed.length, savings: `${ratio}%`,
+      publicUrl,
+    });
+  } catch (err) {
+    console.error('[TEDxXinyi] Replace error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: remove image from active slot (keep as archived asset) ----
+router.post('/media/remove', express.json(), async (req, res) => {
+  try {
+    const { key } = req.body;
+    if (!key) return res.status(400).json({ error: 'key required' });
+
+    const meta = loadMetadata();
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ext = path.extname(key);
+    const base = key.replace(ext, '');
+    const archiveKey = `${base}--removed-${ts}${ext}`;
+
+    // Move local file to archive name
+    const filePath = path.join(OUTPUT_DIR, key);
+    if (fs.existsSync(filePath)) {
+      const archivePath = path.join(OUTPUT_DIR, archiveKey);
+      const archiveDir = path.dirname(archivePath);
+      if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
+      fs.renameSync(filePath, archivePath);
+      console.log(`[TEDxXinyi] Moved ${key} → ${archiveKey}`);
+    }
+
+    // Move metadata to archive key
+    if (meta[key]) {
+      meta[archiveKey] = { ...meta[key], removedFrom: key, removedAt: new Date().toISOString() };
+      delete meta[key];
+    }
+    saveMetadata(meta);
+
+    res.json({ success: true, key, archiveKey, message: `Removed from active slot. Archived as ${archiveKey}` });
+  } catch (err) {
+    console.error('[TEDxXinyi] Remove error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: permanently delete image ----
+router.delete('/media/delete', express.json(), async (req, res) => {
+  try {
+    const { key } = req.body;
+    if (!key) return res.status(400).json({ error: 'key required' });
+
+    // Delete local file
+    const filePath = path.join(OUTPUT_DIR, key);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`[TEDxXinyi] Deleted local file: ${key}`);
+    }
+
+    // Remove from metadata
+    const meta = loadMetadata();
+    if (meta[key]) {
+      delete meta[key];
+      saveMetadata(meta);
+    }
+
+    // Remove from DB
+    const pool = getDbPool();
+    if (pool) {
+      try {
+        await pool.query('DELETE FROM tedx_media_assets WHERE key = $1', [key]);
+      } catch (dbErr) {
+        console.error(`[TEDxXinyi] DB delete failed for ${key}:`, dbErr.message);
+      }
+    }
+
+    res.json({ success: true, key, message: `Permanently deleted: ${key}` });
+  } catch (err) {
+    console.error('[TEDxXinyi] Delete error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Legacy speaker upload endpoint (still works)
 router.post('/upload-speaker', express.json({ limit: '50mb' }), async (req, res) => {
   try {
