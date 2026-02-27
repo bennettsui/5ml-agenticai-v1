@@ -306,7 +306,7 @@ export default function TEDxXinyiHome() {
         <FadeIn>
           <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
             <div>
-              <SectionLabel>2022–2025 LINEUP</SectionLabel>
+              <SectionLabel>2021–2025 LINEUP</SectionLabel>
               <h2 className="text-3xl md:text-5xl font-black" lang="zh-TW">講者陣容</h2>
             </div>
             <Link
