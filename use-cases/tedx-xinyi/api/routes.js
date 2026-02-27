@@ -156,61 +156,61 @@ function scanExternalUrls() {
 const VISUALS = [
   {
     id: 'hero-home',
-    filename: 'hero-home.jpg',
+    filename: 'hero-home.webp',
     description: 'Home hero — luminous galaxy distance cinematic banner',
     prompt: 'Wide 16:9 cinematic banner, expansive sky transitioning from deep midnight blue at the edges to warm indigo and soft violet in the centre, layered nebula clouds in luminous violet rose-pink and warm amber tones that look like long-exposure astrophotography mixed with painting not 3D cartoon, a clear smooth galaxy arc curves gracefully across the upper half with a brightly glowing warm golden-amber core radiating soft light surrounded by many tiny sharp stars, from the galaxy arc let a few very thin beams of warm golden light and sparse glowing data-like particles flow downward along curved paths suggesting AI as a vast quiet information system, the overall scene should feel luminous hopeful and bright not oppressively dark, foreground at very bottom centre a tiny solitary human figure standing on a narrow rock edge facing the galaxy occupying only 5-8% of total image height realistic adult proportions long dark coat trousers gender-neutral calm reflective pose arms relaxed head slightly tilted upward, warm realistic rim light from the galaxy outlining head shoulders and coat clearly, around the upper body a few faint rising particles of golden light where data streams begin to touch this person, palette balanced between deep midnight blues and warm violet rose amber and cream highlights with the galaxy core glowing warm gold, generous amounts of star light and nebula glow so the image feels radiant not heavy, no text no watermarks no UI HUD graphics, cinematic contrast soft bloom on brightest galaxy parts subtle film-grain overlay, mature restrained premium theatrical key art that feels uplifting and aspirational',
   },
   {
     id: 'hero-about',
-    filename: 'hero-about.jpg',
+    filename: 'hero-about.webp',
     description: 'About hero — creative gathering space Xinyi',
     prompt: 'Warm intimate view of a modern creative event space in Taipei, rows of minimalist chairs facing a small stage with warm amber lighting, large floor-to-ceiling windows showing Xinyi skyline at dusk, soft golden light streaming in, a few potted plants and modern furniture, the feeling of anticipation before a talk begins, cinematic photography, warm color palette with cream and amber tones, no text, no watermarks, no people, slight bokeh effect',
   },
   {
     id: 'hero-speakers',
-    filename: 'hero-speakers.jpg',
+    filename: 'hero-speakers.webp',
     description: 'Speakers hero — stage atmosphere warm light',
     prompt: 'Close up of a minimalist TEDx stage from the audience perspective, warm spotlight creating a circle of golden light on a clean stage, blurred audience seats in foreground, modern venue architecture visible, Taipei city lights visible through large windows in background, warm amber and cream color palette, dramatic but optimistic lighting like a festival concert poster, no text, no watermarks, no people, cinematic depth of field',
   },
   {
     id: 'hero-sustainability',
-    filename: 'hero-sustainability.jpg',
+    filename: 'hero-sustainability.webp',
     description: 'Sustainability hero — 3D printed stage materials',
     prompt: 'Artistic close-up of sustainable stage materials: 3D printed geometric lamp components, recycled wood panels, and modular metal structures arranged beautifully on a workbench, warm natural daylight from a large window, workshop atmosphere, cream and warm brown tones with subtle green accents, macro photography style showing material textures, optimistic and creative mood, no text, no watermarks, no people, shallow depth of field',
   },
   {
     id: 'hero-community',
-    filename: 'hero-community.jpg',
+    filename: 'hero-community.webp',
     description: 'Community hero — circle gathering warmth',
     prompt: 'Overhead bird-eye view of chairs arranged in a circle in a modern Taipei rooftop terrace, warm evening golden hour light, potted trees and string lights creating cozy atmosphere, Xinyi district buildings visible in soft background, some chairs have warm red and amber cushions, the feeling of community gathering and conversation, warm bright photography style, no text, no watermarks, no people, festival poster mood',
   },
   {
     id: 'salon-teaser',
-    filename: 'salon-teaser.jpg',
+    filename: 'salon-teaser.webp',
     description: 'Home hero / Salon teaser — Blue Box venue cinematic',
     prompt: 'Wide 16:9 cinematic still of a theatre space reminiscent of Taipei Performing Arts Center Blue Box, clean modern architecture, high ceiling, deep blue ambient light, subtle hints of tiered seating and a stage, in the foreground silhouettes of diverse people standing or sitting facing towards a glowing central focal point symbolising AI and ideas not a literal screen of code, thin streams of light or flowing lines connecting people to the central glow suggesting shared learning and becoming, colour palette deep blue dark charcoal with accents of TED red and warm skin tones, enough negative space on one side for overlay text, no text no watermarks no logos, optimistic contemplative atmosphere',
   },
   {
     id: 'salon-hero',
-    filename: 'salon-hero.jpg',
+    filename: 'salon-hero.webp',
     description: 'Salon page main visual — full galaxy centered cinematic wide',
     prompt: 'Wide 16:9 cinematic banner, the ENTIRE galaxy is fully visible and vertically centred in frame with generous breathing room above and below, vast spiral galaxy with smooth arc curving gracefully across the centre of the image, rich indigo violet and magenta nebula clouds in a dark navy charcoal sky mixing long-exposure astrophotography with painting not 3D cartoon, softly glowing warm core at galaxy centre surrounded by many tiny sharp stars, a few very thin beams of light and sparse glowing data-like particles radiating outward from the core, deep space surrounds the galaxy on all sides so the full shape is clearly visible from edge to edge, at the very bottom centre a single tiny solitary human figure silhouette stands on a minimal dark ledge facing upward toward the galaxy occupying only 3-5% of image height, soft rim light from the galaxy outlines the figure against the darkness, palette of deep blues violets blacks and neutral whites with warm highlights at galaxy core, camera pulled back far enough to frame the complete galaxy with dark space margins, no text no watermarks no logos no UI, cinematic contrast soft bloom on galaxy subtle film-grain, mature restrained theatrical atmosphere',
   },
   {
     id: 'poster-dark',
-    filename: 'poster-dark.jpg',
+    filename: 'poster-dark.webp',
     description: 'Dark galaxy poster background — 4:5 portrait for key visual section',
     prompt: '4:5 vertical cinematic sci-fi poster background, upper 80% is a vast deep-space sky in dark navy and charcoal black with layered slightly abstract nebula clouds in rich indigo violet and magenta mixing long-exposure astrophotography with painting not 3D cartoon, a clear smooth galaxy arc curves from left to right across the upper half with a softly glowing warm core surrounded by many tiny sharp stars, from the arc a few very thin beams of light and sparse glowing data-like particles flow downward along curved paths, in the very bottom centre a tiny human figure standing on a narrow rock edge facing the galaxy occupying only 5-8% of total image height realistic adult proportions long dark coat trousers gender-neutral calm reflective pose feet near edge arms relaxed head slightly tilted up, soft realistic rim light from galaxy above so the outline of head shoulders and coat is clearly readable against the darkness, around the upper body a few faint rising particles of light, the lower 15% of image fades to near-pure black providing a clean base for text overlay, palette dominated by deep blues violets blacks and neutral whites with controlled warm highlights at galaxy core and figure rim light, no text no watermarks no logos no HUD no UI, cinematic contrast soft bloom on brightest galaxy parts subtle film-grain overlay, mature restrained premium theatrical key art',
   },
   {
     id: 'salon-galaxy',
-    filename: 'salon-galaxy.jpg',
+    filename: 'salon-galaxy.webp',
     description: 'Galaxy networking visual — The Quest community',
     prompt: 'Square abstract galaxy made of floating islands or orbits each representing a different Intelligence domain, Design Intelligence with minimal objects like chairs posters typography, Food Intelligence with stylised table ingredients coffee, Ocean Intelligence with wave lines tiny whale dolphin icons, Music Art Intelligence with musical notes vinyl simple instrument shapes, no realistic logos but iconic shapes suggesting each domain, dark background with colourful but slightly muted orbit colours connected by thin lines with one orbit subtly highlighted in TED red, overall composition usable as a background behind text, no text no watermarks',
   },
   {
     id: 'salon-curiosity',
-    filename: 'salon-curiosity.jpg',
+    filename: 'salon-curiosity.webp',
     description: 'Curiosity zones visual — multi-zone experience',
     prompt: 'Vertical portrait 3:4 image composed of multiple stacked zones, bottom a small open-mic corner with a mic stand and a small seated audience, middle a creative market area with small booths plants and people talking, upper a quiet reading journaling corner with books notebooks lamps, style semi-illustrative slightly stylised not hyper-realistic, people appear diverse but not individually recognisable, lighting warm glows in each zone connected with a gentle path or staircase hinting at moving from one version of yourself to the next, palette mix of warm earth tones and deep blues with small red accents, no text no watermarks no logos',
   },
@@ -1742,6 +1742,81 @@ async function generateVisual(client, prompt) {
 
   throw new Error('No image in Gemini response');
 }
+
+// ==================== PUBLISH HTML PACK ====================
+
+router.post('/publish-html-pack', async (req, res) => {
+  const { execSync } = require('child_process');
+  const archiver = require('archiver');
+  const FRONTEND_DIR = path.join(__dirname, '../../../frontend');
+  const OUT_DIR = path.join(FRONTEND_DIR, 'out');
+  const TEDX_OUT = path.join(OUT_DIR, 'vibe-demo', 'tedx-xinyi');
+  const TEDX_HOME_HTML = path.join(OUT_DIR, 'vibe-demo', 'tedx-xinyi.html');
+  const NEXT_DIR = path.join(OUT_DIR, '_next');
+  const PUBLIC_IMAGES = path.join(FRONTEND_DIR, 'public', 'tedx-xinyi');
+
+  try {
+    // 1. Build frontend
+    console.log('[TEDxXinyi] Publish: running npm run build …');
+    execSync('npm run build', { cwd: FRONTEND_DIR, timeout: 180000, stdio: 'pipe' });
+    console.log('[TEDxXinyi] Publish: build complete');
+
+    // 2. Verify output exists
+    if (!fs.existsSync(TEDX_OUT)) {
+      return res.status(500).json({ error: 'Build output not found' });
+    }
+
+    // 3. Stream ZIP
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="tedx-xinyi-${Date.now()}.zip"`);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', err => { throw err; });
+    archive.pipe(res);
+
+    // index.html (homepage)
+    if (fs.existsSync(TEDX_HOME_HTML)) {
+      archive.file(TEDX_HOME_HTML, { name: 'index.html' });
+    }
+
+    // Sub-pages (about.html, salon.html, etc.)
+    if (fs.existsSync(TEDX_OUT)) {
+      for (const f of fs.readdirSync(TEDX_OUT)) {
+        if (f.endsWith('.html')) {
+          archive.file(path.join(TEDX_OUT, f), { name: f });
+        }
+      }
+    }
+
+    // _next/ static assets (JS, CSS)
+    if (fs.existsSync(NEXT_DIR)) {
+      archive.directory(NEXT_DIR, '_next');
+    }
+
+    // tedx-xinyi/ images from public folder
+    if (fs.existsSync(PUBLIC_IMAGES)) {
+      archive.directory(PUBLIC_IMAGES, 'tedx-xinyi');
+    }
+
+    // manifest.json
+    const htmlFiles = fs.existsSync(TEDX_OUT)
+      ? fs.readdirSync(TEDX_OUT).filter(f => f.endsWith('.html'))
+      : [];
+    const manifest = {
+      name: 'TEDxXinyi Static HTML Pack',
+      built: new Date().toISOString(),
+      pages: ['index.html', ...htmlFiles],
+    };
+    archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
+
+    await archive.finalize();
+    console.log(`[TEDxXinyi] Publish: ZIP streamed (${archive.pointer()} bytes)`);
+  } catch (err) {
+    console.error('[TEDxXinyi] Publish failed:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
 
 module.exports = router;
 module.exports.router = router;

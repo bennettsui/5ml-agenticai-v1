@@ -88,7 +88,7 @@ export default function TEDxXinyiHome() {
         {/* nanobanana-generated background with CSS fallback */}
         <div className="absolute inset-0">
           <img
-            src="/tedx-xinyi/hero-home.jpg"
+            src="/tedx-xinyi/hero-home.webp"
             alt=""
             fetchPriority="high"
             decoding="async"
@@ -282,7 +282,7 @@ export default function TEDxXinyiHome() {
           <FadeIn delay={200}>
             <div className="aspect-video rounded-xl overflow-hidden bg-neutral-100">
               <img
-                src="/tedx-xinyi/salon-teaser.jpg"
+                src="/tedx-xinyi/salon-teaser.webp"
                 alt="We are Becoming AI salon teaser"
                 loading="lazy"
                 className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
@@ -307,7 +307,7 @@ export default function TEDxXinyiHome() {
           <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
             <div>
               <SectionLabel>2021–2025 LINEUP</SectionLabel>
-              <h2 className="text-3xl md:text-5xl font-black" lang="zh-TW">講者陣容</h2>
+              <h2 className="text-3xl md:text-5xl font-black" lang="zh-TW">歷屆講者陣容</h2>
             </div>
             <Link
               href="/vibe-demo/tedx-xinyi/speakers"
@@ -367,7 +367,7 @@ export default function TEDxXinyiHome() {
       <Section bg="white">
         <FadeIn>
           <SectionLabel>PARTNERS</SectionLabel>
-          <h2 className="text-3xl md:text-5xl font-black mb-3" lang="zh-TW">合作夥伴</h2>
+          <h2 className="text-3xl md:text-5xl font-black mb-3" lang="zh-TW">歷屆合作夥伴</h2>
           <p className="text-neutral-500 text-sm sm:text-base leading-relaxed mb-12 max-w-xl" lang="zh-TW">
             這些品牌、組織與空間，和我們一起在信義嘗試新的可能。
           </p>

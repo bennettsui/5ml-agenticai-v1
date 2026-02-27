@@ -60,7 +60,7 @@ export default function AboutPage() {
       <section className="relative min-h-[65vh] flex items-end overflow-hidden bg-neutral-900">
         {/* nanobanana-generated background */}
         <img
-          src="/tedx-xinyi/hero-about.jpg"
+          src="/tedx-xinyi/hero-about.webp"
           alt=""
           fetchPriority="high"
           decoding="async"
