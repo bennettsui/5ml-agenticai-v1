@@ -4,8 +4,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 
 const API_BASE = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
-  : 'http://localhost:8080';
+  ? (process.env.NEXT_PUBLIC_API_URL || '')
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080');
 const ADMIN_PASSWORD = '5milesLab01@';
 
 type Tab = 'slots' | 'media' | 'publish';
