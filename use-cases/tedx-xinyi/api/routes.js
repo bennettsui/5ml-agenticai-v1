@@ -1136,6 +1136,124 @@ router.post('/media/replace', express.json({ limit: '50mb' }), async (req, res) 
   }
 });
 
+// ---- API: regenerate image using AI based on current image context ----
+router.post('/media/regenerate', express.json(), async (req, res) => {
+  const client = getClient();
+  if (!client) {
+    return res.status(503).json({ error: 'GEMINI_API_KEY not configured — cannot regenerate' });
+  }
+
+  const { key } = req.body;
+  if (!key) return res.status(400).json({ error: 'key required' });
+
+  try {
+    const meta = loadMetadata();
+    const metaEntry = meta[key] || {};
+
+    // 1. Find matching VISUAL definition for prompt + dimensions
+    const visual = VISUALS.find(v => v.filename === key);
+
+    // 2. Determine dimensions and format from the key
+    const ext = path.extname(key);
+    const isSpeaker = key.startsWith('speakers/');
+    const isPoster = key.includes('poster');
+    // Speakers: 800x800 square, Poster: 4:5 portrait, default: 16:9 landscape
+    let targetWidth = 1920, targetHeight = 1080, fit = 'cover';
+    if (isSpeaker) { targetWidth = 800; targetHeight = 800; }
+    else if (isPoster) { targetWidth = 1080; targetHeight = 1350; }
+
+    // 3. Build regeneration prompt
+    let prompt;
+    if (visual) {
+      // Use the original VISUAL prompt — best quality, already tuned
+      prompt = visual.prompt;
+    } else {
+      // Build a prompt from metadata context
+      const desc = metaEntry.description || metaEntry.alt || key.replace(/[-_./]/g, ' ').replace(/\.(webp|jpg|png|jpeg)$/, '');
+      const aspect = isPoster ? '4:5 portrait' : (isSpeaker ? 'square 1:1' : 'wide 16:9');
+      prompt = `Generate a high-quality ${aspect} image for the TEDxXinyi 2026 event website. `
+        + `This image is used as: ${desc}. `
+        + `Brand style: TEDx red (#E62B1E) accent, warm golden amber tones, deep blue-violet galaxy/space aesthetic, `
+        + `cinematic photography feel, luminous hopeful mood, premium theatrical quality. `
+        + `No text, no watermarks, no logos, no UI elements. `
+        + `Mature, restrained, aspirational composition suitable for a professional event website.`;
+    }
+
+    console.log(`[TEDxXinyi] Regenerating: ${key} (${targetWidth}x${targetHeight})`);
+
+    // 4. Archive old version
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const base = key.replace(ext, '');
+    const archiveKey = `${base}--archived-${ts}${ext}`;
+
+    const oldPath = path.join(OUTPUT_DIR, key);
+    if (fs.existsSync(oldPath)) {
+      const archivePath = path.join(OUTPUT_DIR, archiveKey);
+      const archiveDir = path.dirname(archivePath);
+      if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
+      fs.copyFileSync(oldPath, archivePath);
+      if (meta[key]) {
+        meta[archiveKey] = { ...meta[key], archivedFrom: key, archivedAt: new Date().toISOString() };
+      }
+      console.log(`[TEDxXinyi] Archived ${key} → ${archiveKey}`);
+    } else if (meta[key]?.publicUrl) {
+      meta[archiveKey] = { ...meta[key], archivedFrom: key, archivedAt: new Date().toISOString() };
+    }
+
+    // 5. Generate new image via Gemini
+    const rawBuffer = await generateVisual(client, prompt);
+
+    // 6. Resize to target dimensions + compress
+    const sharp = require('sharp');
+    let compressed;
+    if (ext === '.webp') {
+      compressed = await sharp(rawBuffer).resize({ width: targetWidth, height: targetHeight, fit }).webp({ quality: 82, effort: 4 }).toBuffer();
+    } else if (ext === '.png') {
+      compressed = await sharp(rawBuffer).resize({ width: targetWidth, height: targetHeight, fit }).png({ quality: 80, compressionLevel: 9 }).toBuffer();
+    } else {
+      compressed = await sharp(rawBuffer).resize({ width: targetWidth, height: targetHeight, fit }).jpeg({ quality: 85, progressive: true }).toBuffer();
+    }
+
+    // 7. Write new file
+    const targetDir = path.dirname(path.join(OUTPUT_DIR, key));
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    fs.writeFileSync(path.join(OUTPUT_DIR, key), compressed);
+
+    // 8. Update metadata
+    if (!meta[key]) meta[key] = {};
+    meta[key].regeneratedAt = new Date().toISOString();
+    meta[key].source = 'ai-regenerated';
+    meta[key].publicUrl = null; // Clear old CDN since content changed
+    saveMetadata(meta);
+
+    // 9. Upload to CDN
+    let publicUrl = null;
+    try {
+      publicUrl = await uploadToMmdb(compressed);
+      const parts = key.split('/');
+      const filename = parts.pop();
+      const folder = parts.join('/');
+      savePublicUrl(key, publicUrl, { source: 'ai-regenerated' });
+      updateWebpageImageUrl(filename, folder, publicUrl);
+      console.log(`[TEDxXinyi] Regenerated ${key} → CDN: ${publicUrl}`);
+    } catch (uploadErr) {
+      console.error(`[TEDxXinyi] CDN upload failed for regenerated ${key}:`, uploadErr.message);
+    }
+
+    res.json({
+      success: true, key, archiveKey,
+      originalSize: rawBuffer.length,
+      compressedSize: compressed.length,
+      dimensions: `${targetWidth}x${targetHeight}`,
+      publicUrl,
+      hadVisualDef: !!visual,
+    });
+  } catch (err) {
+    console.error(`[TEDxXinyi] Regenerate failed for ${key}:`, err.message);
+    res.status(500).json({ error: err.message, key });
+  }
+});
+
 // ---- API: remove image from active slot (keep as archived asset) ----
 router.post('/media/remove', express.json(), async (req, res) => {
   try {
@@ -2098,14 +2216,105 @@ router.post('/publish-html-pack', async (req, res) => {
       archive.directory(PUBLIC_IMAGES, 'tedx-xinyi');
     }
 
-    // manifest.json
+    // index.php — PHP router for Apache/PHP hosting
     const htmlFiles = fs.existsSync(TEDX_OUT)
       ? fs.readdirSync(TEDX_OUT).filter(f => f.endsWith('.html'))
       : [];
+    const phpPages = htmlFiles.map(f => f.replace('.html', ''));
+    const phpRouter = `<?php
+/**
+ * TEDxXinyi — PHP Router
+ * Drop this folder on any Apache + PHP host. No Python or Node needed.
+ *
+ * Supports:
+ *   /              → index.html
+ *   /salon         → salon.html
+ *   /about         → about.html
+ *   /speakers      → speakers.html
+ *   /_next/...     → static JS/CSS assets
+ *   /tedx-xinyi/.. → images
+ *
+ * For Apache: add .htaccess (included) to enable clean URLs.
+ * For PHP built-in server: php -S localhost:8000 index.php
+ */
+
+$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$uri = rtrim($uri, '/');
+
+// Static files — serve directly
+if ($uri !== '' && file_exists(__DIR__ . $uri)) {
+    $ext = pathinfo($uri, PATHINFO_EXTENSION);
+    $mimeTypes = [
+        'html' => 'text/html',
+        'css'  => 'text/css',
+        'js'   => 'application/javascript',
+        'json' => 'application/json',
+        'png'  => 'image/png',
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'webp' => 'image/webp',
+        'gif'  => 'image/gif',
+        'svg'  => 'image/svg+xml',
+        'ico'  => 'image/x-icon',
+        'woff' => 'font/woff',
+        'woff2'=> 'font/woff2',
+    ];
+    if (isset($mimeTypes[$ext])) {
+        header('Content-Type: ' . $mimeTypes[$ext]);
+    }
+    readfile(__DIR__ . $uri);
+    return;
+}
+
+// Clean URL routing — /salon → salon.html
+$pages = [${phpPages.map(p => `'${p}'`).join(', ')}];
+$page = ltrim($uri, '/');
+
+if ($page === '' || $page === 'index') {
+    include __DIR__ . '/index.html';
+} elseif (in_array($page, $pages) && file_exists(__DIR__ . '/' . $page . '.html')) {
+    include __DIR__ . '/' . $page . '.html';
+} else {
+    http_response_code(404);
+    if (file_exists(__DIR__ . '/index.html')) {
+        include __DIR__ . '/index.html';
+    } else {
+        echo '<h1>404 Not Found</h1>';
+    }
+}
+`;
+    archive.append(phpRouter, { name: 'index.php' });
+
+    // .htaccess — Apache rewrite rules for clean URLs
+    const htaccess = `# TEDxXinyi — Apache rewrite rules
+RewriteEngine On
+RewriteBase /
+
+# Serve existing files directly
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# Serve existing directories directly
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Route clean URLs through index.php
+RewriteRule ^ index.php [L]
+`;
+    archive.append(htaccess, { name: '.htaccess' });
+
+    // manifest.json
     const manifest = {
-      name: 'TEDxXinyi Static HTML Pack',
+      name: 'TEDxXinyi Static HTML + PHP Pack',
       built: new Date().toISOString(),
       pages: ['index.html', ...htmlFiles],
+      phpRouter: 'index.php',
+      htaccess: '.htaccess',
+      usage: {
+        apache: 'Upload entire folder to Apache web root. .htaccess handles routing.',
+        phpBuiltIn: 'php -S localhost:8000 index.php',
+        staticOnly: 'Serve index.html and sub-pages directly (clean URLs won\'t work without server)',
+      },
     };
     archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
 
