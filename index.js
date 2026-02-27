@@ -93,19 +93,17 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
   customSiteTitle: '5ML Agentic AI API Documentation',
 }));
 
-// Serve TEDx generated visuals (runtime-generated via nanobanana API)
-// Cache for 1 day — images are regenerated only when prompts change
+// Serve TEDx generated visuals
 const tedxStaticOpts = { maxAge: '7d', immutable: false };
 app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx'), tedxStaticOpts));
-app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi'), tedxStaticOpts));
 
-// CDN fallback: if local file is missing, redirect to mmdbfiles CDN URL
-// Checks .media-metadata.json first, seed file second, then DB as last resort
+// CDN-first redirect: mmdbfiles CDN has higher priority than local files.
+// If a CDN URL exists in metadata or DB, redirect to it immediately.
+// Only falls through to local static files when no CDN URL is found.
 app.use('/tedx-xinyi', async (req, res, next) => {
-  // Only handle image requests that fell through static middleware
   if (!/\.(jpg|jpeg|png|webp|gif)$/i.test(req.path)) return next();
   const key = req.path.replace(/^\//, '');
-  // Try metadata file, then seed file
+  // Check metadata file, then seed file
   const metaPath = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi', '.media-metadata.json');
   const seedPath = path.join(__dirname, 'use-cases', 'tedx-xinyi', 'api', '.media-metadata-seed.json');
   for (const p of [metaPath, seedPath]) {
@@ -117,7 +115,7 @@ app.use('/tedx-xinyi', async (req, res, next) => {
       }
     } catch { /* ignore */ }
   }
-  // Last resort: check PostgreSQL DB for CDN URL (survives Fly.dev restarts)
+  // Check PostgreSQL DB (survives Fly.dev restarts)
   try {
     const db = require('./db');
     if (db && db.pool) {
@@ -129,9 +127,11 @@ app.use('/tedx-xinyi', async (req, res, next) => {
         return res.redirect(302, rows[0].public_url);
       }
     }
-  } catch { /* DB not available — fall through */ }
+  } catch { /* DB not available */ }
   next();
 });
+// Local static files — only reached when no CDN URL was found above
+app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi'), tedxStaticOpts));
 
 // Serve Radiance uploaded media
 app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
