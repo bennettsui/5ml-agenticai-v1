@@ -109,10 +109,21 @@ export default function AboutPage() {
             </FadeIn>
           </div>
           <FadeIn delay={200}>
-            <div className="flex items-center justify-center">
-              <div className="text-[120px] md:text-[160px] font-black leading-none select-none" style={{ color: `${TED_RED}15` }}>
-                x
-              </div>
+            <div className="aspect-[4/3] rounded-xl overflow-hidden bg-neutral-100">
+              <img
+                src="/tedx-xinyi/about-xinyi.webp"
+                alt="TEDxXinyi event atmosphere"
+                loading="lazy"
+                className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
+                onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                onError={(e) => {
+                  const el = e.target as HTMLImageElement;
+                  el.style.display = 'none';
+                  if (el.parentElement) {
+                    el.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%"><span style="color:rgba(230,43,30,0.15);font-size:10rem;font-weight:900">x</span></div>';
+                  }
+                }}
+              />
             </div>
           </FadeIn>
         </div>
