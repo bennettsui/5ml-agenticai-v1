@@ -4,6 +4,10 @@ primary_region = "iad"
 [build]
 dockerfile = "./Dockerfile"
 
+[deploy]
+strategy = "rolling"
+wait_timeout = "10m"
+
 [env]
 PORT = "8080"
 PUBLIC_BASE_URL = "https://5ml-agenticai-v1.fly.dev"
@@ -22,10 +26,10 @@ type = "requests"
 hard_limit = 250
 soft_limit = 200
 
-# Health check — grace period covers LLM cold-start
+# Health check — grace period covers LLM cold-start + DB connection init
 [[http_service.checks]]
-grace_period = "60s"
+grace_period = "120s"
 interval = "30s"
 method = "GET"
 path = "/health"
-timeout = "10s"
+timeout = "15s"

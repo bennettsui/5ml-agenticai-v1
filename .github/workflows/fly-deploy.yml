@@ -25,7 +25,7 @@ jobs:
           # Retry deployment up to 3 times with backoff for lease conflicts
           for i in 1 2 3; do
             echo "Deployment attempt $i..."
-            if flyctl deploy --remote-only --lease-timeout=5m --wait-timeout=5m; then
+            if flyctl deploy --remote-only --strategy rolling --lease-timeout=5m --wait-timeout=10m; then
               echo "Deployment successful!"
               exit 0
             fi

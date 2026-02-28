@@ -362,15 +362,19 @@ export default function TEDxXinyiAdmin() {
     }
   }, []);
 
-  const loadSlots = useCallback(async () => {
+  const loadSlots = useCallback(async (silent = false) => {
     setSlotsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/tedx-xinyi/image-slots`);
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/image-slots`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setSlots(data.slots || []);
       setSlotSummary(data.summary || null);
       setSlotsLoaded(true);
+      if (!silent) {
+        const s = data.summary;
+        showToast(`Scanned ${s?.total || 0} image slots — ${s?.cdnOk || 0} CDN, ${s?.missing || 0} missing`);
+      }
     } catch (err) {
       setSlots([]);
       showToast(`Load slots failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
@@ -379,10 +383,10 @@ export default function TEDxXinyiAdmin() {
     }
   }, []);
 
-  // Auto-load data when switching tabs
+  // Auto-load data when switching tabs (silent — no toast)
   useEffect(() => {
     if (authed && tab === 'slots' && !slotsLoaded && !slotsLoading) {
-      loadSlots();
+      loadSlots(true);
     }
   }, [authed, tab, slotsLoaded, slotsLoading, loadSlots]);
 
@@ -854,9 +858,9 @@ export default function TEDxXinyiAdmin() {
                 <p className="text-neutral-500 text-sm mt-1">Every image URL referenced across all website pages. Click any row to view full details and edit.</p>
               </div>
               <button
-                onClick={loadSlots}
+                onClick={() => loadSlots()}
                 disabled={slotsLoading}
-                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-sm font-bold rounded-lg transition-colors"
+                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold rounded-lg transition-colors"
               >
                 {slotsLoading ? 'Scanning\u2026' : slotsLoaded ? 'Re-scan' : 'Scan Pages'}
               </button>
