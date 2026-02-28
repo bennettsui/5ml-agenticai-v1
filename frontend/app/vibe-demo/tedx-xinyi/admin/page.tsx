@@ -349,7 +349,7 @@ export default function TEDxXinyiAdmin() {
   const loadMedia = useCallback(async () => {
     setMediaLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media`);
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setMedia(data.images || []);
