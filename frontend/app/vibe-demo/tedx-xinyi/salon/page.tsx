@@ -191,7 +191,7 @@ export default function SalonPage() {
           </FadeIn>
           <FadeIn delay={200}>
             <p className="text-white/90 text-xl sm:text-2xl font-black leading-relaxed max-w-2xl" lang="zh-TW">
-              你和 AI 的距離，<br />決定你和自己的樣子。
+              AI 時代，每天學著重來，<br />日常活出新精彩。
             </p>
           </FadeIn>
           <FadeIn delay={350}>
@@ -255,10 +255,10 @@ export default function SalonPage() {
                         WE ARE<br />BECOMING
                       </p>
                       <p className="text-white/95 font-black text-base leading-snug" lang="zh-TW">
-                        你和 AI 的距離
+                        AI 時代，每天學著重來
                       </p>
                       <p className="text-white/95 font-black text-base leading-snug mb-3" lang="zh-TW">
-                        決定你和自己的樣子
+                        日常活出新精彩
                       </p>
                       <p className="text-white/35 text-[10px] tracking-wider" lang="zh-TW">
                         #2026首波沙龍論壇　#在AI時代學會看懂趨勢
@@ -294,7 +294,7 @@ export default function SalonPage() {
                   而我們，就在邊緣，決定要走多近。
                 </p>
                 <p className="text-white/30 text-sm leading-relaxed" lang="zh-TW">
-                  你和 AI 的距離，是技術問題，也是人的問題。<br />
+                  每天學著重來，日常活出新精彩。<br />
                   TEDxXinyi 2026，從這裡出發。
                 </p>
               </div>
@@ -343,7 +343,7 @@ export default function SalonPage() {
         <FadeIn delay={300}>
           <div className="mt-10 border-l-4 pl-6" style={{ borderColor: TED_RED }}>
             <p className="text-neutral-900 text-xl sm:text-2xl font-black leading-snug mb-2" lang="zh-TW">
-              你和 AI 的距離，<br />決定你和自己的樣子。
+              AI 時代，每天學著重來，<br />日常活出新精彩。
             </p>
             <p className="text-neutral-400 text-sm" lang="zh-TW">
               — TEDxXinyi <span className="font-handwriting text-base">We are Becoming</span> 2026 核心主題
@@ -736,7 +736,7 @@ export default function SalonPage() {
           </FadeIn>
           <FadeIn delay={150}>
             <p className="text-white/85 text-base sm:text-lg leading-[1.9] mb-8" lang="zh-TW">
-              你和 AI 的距離，正在決定你成為什麼樣的人。<br />
+              AI 時代，每天學著重來，日常活出新精彩。<br />
               留一天，好好想想我們要成為誰。
             </p>
           </FadeIn>

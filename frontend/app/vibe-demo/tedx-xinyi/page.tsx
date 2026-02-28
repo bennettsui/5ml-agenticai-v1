@@ -125,7 +125,7 @@ export default function TEDxXinyiHome() {
 
           <FadeIn delay={280}>
             <p className="text-white/90 text-lg sm:text-xl font-black leading-snug mb-4 max-w-2xl mx-auto" lang="zh-TW">
-              你和 AI 的距離，決定你和自己的樣子。
+              AI 時代，每天學著重來，日常活出新精彩。
             </p>
           </FadeIn>
 
@@ -169,7 +169,7 @@ export default function TEDxXinyiHome() {
               2026/3/31（二）｜台北藝術表演中心 藍盒子
             </p>
             <p className="text-white/40 text-xs mt-1" lang="zh-TW">
-              你和 AI 的距離，決定你和自己的樣子。
+              AI 時代，每天學著重來，日常活出新精彩。
             </p>
           </div>
           <div className="flex gap-3 flex-shrink-0">
