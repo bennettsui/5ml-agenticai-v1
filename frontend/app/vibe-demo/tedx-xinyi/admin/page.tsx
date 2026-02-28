@@ -97,6 +97,7 @@ export default function TEDxXinyiAdmin() {
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<string | null>(null);
   const [confirmRegen, setConfirmRegen] = useState<string | null>(null);
+  const [regenInstructions, setRegenInstructions] = useState('');
 
   // Edit modal state (for any slot or media entry)
   const [editSlot, setEditSlot] = useState<ImageSlot | null>(null);
@@ -422,13 +423,13 @@ export default function TEDxXinyiAdmin() {
   }
 
   // Regenerate (AI)
-  async function handleRegenerate(key: string) {
+  async function handleRegenerate(key: string, instructions?: string) {
     setActionLoading(key);
     try {
       const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/regenerate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key }),
+        body: JSON.stringify({ key, instructions: instructions || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -545,16 +546,36 @@ export default function TEDxXinyiAdmin() {
       {/* Confirm regenerate modal */}
       {confirmRegen && (
         <div className="fixed inset-0 z-40 bg-black/60 flex items-center justify-center px-4">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-6 max-w-sm w-full">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-6 max-w-md w-full">
             <h3 className="text-white font-bold mb-2">Regenerate with AI?</h3>
             <p className="text-neutral-400 text-sm mb-1">
-              This will use Gemini AI to generate a new image matching the original content, branding, and dimensions.
-              The current version will be archived.
+              This will use Gemini AI to generate a new image. The current version will be archived.
             </p>
             <p className="text-purple-400 text-xs font-mono mb-4 break-all">{confirmRegen}</p>
+            <div className="mb-4">
+              <label className="text-xs text-neutral-500 font-bold block mb-1.5">Additional instructions (optional)</label>
+              <textarea
+                value={regenInstructions}
+                onChange={e => setRegenInstructions(e.target.value)}
+                placeholder="e.g. more warm tones, add galaxy elements, make it brighter, include subtle red accents..."
+                rows={3}
+                className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white placeholder-neutral-600 resize-y focus:outline-none focus:border-purple-500"
+              />
+            </div>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setConfirmRegen(null)} className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors">Cancel</button>
-              <button onClick={() => { const k = confirmRegen; setConfirmRegen(null); handleRegenerate(k); }} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-bold rounded-lg transition-colors">Regenerate</button>
+              <button onClick={() => { setConfirmRegen(null); setRegenInstructions(''); }} className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors">Cancel</button>
+              <button
+                onClick={() => { const k = confirmRegen; setConfirmRegen(null); handleRegenerate(k); setRegenInstructions(''); }}
+                className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 text-white text-sm font-bold rounded-lg transition-colors"
+              >
+                Skip &amp; Generate
+              </button>
+              <button
+                onClick={() => { const k = confirmRegen; const instr = regenInstructions; setConfirmRegen(null); handleRegenerate(k, instr); setRegenInstructions(''); }}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-bold rounded-lg transition-colors"
+              >
+                Generate
+              </button>
             </div>
           </div>
         </div>

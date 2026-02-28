@@ -1219,7 +1219,7 @@ router.post('/media/regenerate', express.json(), async (req, res) => {
     return res.status(503).json({ error: 'GEMINI_API_KEY not configured — cannot regenerate' });
   }
 
-  const { key } = req.body;
+  const { key, instructions } = req.body;
   if (!key) return res.status(400).json({ error: 'key required' });
 
   try {
@@ -1255,7 +1255,12 @@ router.post('/media/regenerate', express.json(), async (req, res) => {
         + `Mature, restrained, aspirational composition suitable for a professional event website.`;
     }
 
-    console.log(`[TEDxXinyi] Regenerating: ${key} (${targetWidth}x${targetHeight})`);
+    // Append user instructions if provided
+    if (instructions && instructions.trim()) {
+      prompt += `\n\nAdditional instructions from the user: ${instructions.trim()}`;
+    }
+
+    console.log(`[TEDxXinyi] Regenerating: ${key} (${targetWidth}x${targetHeight})${instructions ? ' with custom instructions' : ''}`);
 
     // 4. Archive old version
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
