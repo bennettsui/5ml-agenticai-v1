@@ -67,7 +67,9 @@ export default function SpeakersPage() {
                     src={speaker.image}
                     alt={speaker.name}
                     loading="lazy"
-                    className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
+                    className="w-full h-full object-cover opacity-0 transition-all duration-500 group-hover:scale-105"
+                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
                 <div
