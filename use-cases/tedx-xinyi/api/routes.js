@@ -1219,7 +1219,7 @@ router.post('/media/regenerate', express.json(), async (req, res) => {
     return res.status(503).json({ error: 'GEMINI_API_KEY not configured — cannot regenerate' });
   }
 
-  const { key } = req.body;
+  const { key, instructions } = req.body;
   if (!key) return res.status(400).json({ error: 'key required' });
 
   try {
@@ -1255,7 +1255,12 @@ router.post('/media/regenerate', express.json(), async (req, res) => {
         + `Mature, restrained, aspirational composition suitable for a professional event website.`;
     }
 
-    console.log(`[TEDxXinyi] Regenerating: ${key} (${targetWidth}x${targetHeight})`);
+    // Append user instructions if provided
+    if (instructions && instructions.trim()) {
+      prompt += `\n\nAdditional instructions from the user: ${instructions.trim()}`;
+    }
+
+    console.log(`[TEDxXinyi] Regenerating: ${key} (${targetWidth}x${targetHeight})${instructions ? ' with custom instructions' : ''}`);
 
     // 4. Archive old version
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -2393,7 +2398,7 @@ function saveSocialPosts(posts) {
 const TEDX_EVENT_CONTEXT = `
 Event: TEDxXinyi 2026 — "We Are Becoming"
 Theme: AI時代趨勢沙龍 (AI Era Trend Salon)
-Tagline: 你和 AI 的距離，決定你和自己的樣子。(The distance between you and AI determines what you become.)
+Tagline: AI 時代，每天學著重來，日常活出新精彩。(In the AI era, learn to start fresh every day, live out new brilliance in daily life.)
 Date: March 31, 2026 (Tuesday)
 Venue: 台北表演藝術中心 藍盒子 (Taipei Performing Arts Center, Blue Box)
 Location: Taipei, Taiwan

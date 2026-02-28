@@ -1,6 +1,6 @@
 'use client';
 
-import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_AMBER, WARM_GRAY } from '../components';
+import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_AMBER } from '../components';
 
 const APPROACH_BLOCKS = [
   {
@@ -18,15 +18,6 @@ const APPROACH_BLOCKS = [
     text: '第三步，是選擇可以被回收、再製或回到生活現場的材質。\n我們希望舞台結束之後，物料可以變成家具、展示架、或其他活動的一部分。\n舞台不只是被使用一次的『效果』，\n而是延伸進日常的長期存在。',
     image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E7%AD%96%E5%B1%95%E7%89%B9%E9%82%802-e1627376423498.jpg',
   },
-];
-
-const PARTNER_STORIES = [
-  { name: '1MORE 萬魔耳機', text: '38 座國際設計大獎、CES 創新獎得主。和我們一起，在活動中示範更長久、可維修的音樂與聆聽體驗。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/1MORE-e1627275745256.png' },
-  { name: 'Cofit', text: '以行為科學為基礎的數位健康品牌。透過再利用容器與在地供應鏈，讓一杯飲料背後的碳足跡減少一點。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/cofit-e1626948574733.png' },
-  { name: 'tissue', text: '從最日常的紙張使用開始，思考一次性消耗品還有沒有第二生命。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/tissue-150x150.png' },
-  { name: 'One Ten 食分之一', text: '未來永續生活合作夥伴。以食物為出發點，減少浪費、讓每一餐都更有意義。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/one-ten%E5%9C%93%E5%BD%A2logo-150x150.jpg' },
-  { name: '全興資源再生', text: '綠色合作夥伴。從回收到再製的完整循環，讓舞台材料真正走入第二生命。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E9%AD%9A.png' },
-  { name: '實在影像', text: '影像製作夥伴，2018 年共同創辦。用鏡頭記錄每一場談話，讓想法不只留在現場。', logo: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E6%9D%B1%E5%90%B3.png' },
 ];
 
 export default function SustainabilityPage() {
@@ -167,36 +158,6 @@ export default function SustainabilityPage() {
                     {block.text}
                   </p>
                 </div>
-              </div>
-            </FadeIn>
-          ))}
-        </div>
-      </Section>
-
-      {/* ==================== PARTNER STORIES ==================== */}
-      <Section bg="white">
-        <FadeIn>
-          <SectionLabel>PARTNER STORIES</SectionLabel>
-          <h2 className="text-3xl md:text-4xl font-black mb-3" lang="zh-TW">夥伴的環保小故事</h2>
-          <p className="text-neutral-500 text-base leading-relaxed mb-10 max-w-2xl" lang="zh-TW">
-            我們不是自己一個人在做永續。<br />
-            是這些品牌、空間與組織，一起把不同領域的專業帶進來。
-          </p>
-        </FadeIn>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-          {PARTNER_STORIES.map((partner, i) => (
-            <FadeIn key={partner.name} delay={i * 60}>
-              <div className="rounded-xl p-6 border border-neutral-100 hover:border-neutral-200 hover:shadow-sm transition-all h-full" style={{ backgroundColor: WARM_GRAY }}>
-                <div className="w-14 h-14 rounded-lg bg-white flex items-center justify-center mb-4 overflow-hidden shadow-sm">
-                  <img
-                    src={partner.logo}
-                    alt={partner.name}
-                    className="max-w-[40px] max-h-[40px] object-contain"
-                  />
-                </div>
-                <h4 className="font-black text-sm mb-2">{partner.name}</h4>
-                <p className="text-neutral-500 text-sm leading-relaxed" lang="zh-TW">{partner.text}</p>
               </div>
             </FadeIn>
           ))}

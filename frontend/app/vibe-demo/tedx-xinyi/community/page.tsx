@@ -3,14 +3,6 @@
 import Link from 'next/link';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY } from '../components';
 
-const MERCH_ITEMS = [
-  { name: '1MORE 萬魔耳機', description: '國際設計獎得主，可維修聆聽體驗', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/1MORE-e1627275745256.png' },
-  { name: 'Cofit', description: '以行為科學為基礎的數位健康品牌', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/cofit-e1626948574733.png' },
-  { name: 'tissue', description: '重新思考紙張的第二生命', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/tissue-150x150.png' },
-  { name: 'PLAYPLUS', description: '網站製作夥伴，數位體驗設計', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/logo_210719_0003-150x150.jpg' },
-  { name: '格蘭山麥', description: '未來永續生活合作夥伴', image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/logo_210719_0004-e1626948663927.jpg' },
-];
-
 export default function CommunityPage() {
   return (
     <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
@@ -136,37 +128,6 @@ export default function CommunityPage() {
               <div className="w-12 h-12 rounded-full border-4" style={{ borderColor: `${TED_RED}30` }} />
             </div>
           </FadeIn>
-        </div>
-      </Section>
-
-      {/* ==================== MERCH ==================== */}
-      <Section bg="warm">
-        <FadeIn>
-          <SectionLabel>MERCH</SectionLabel>
-          <h2 className="text-3xl md:text-4xl font-black mb-4" lang="zh-TW">樂觀趨勢家周邊商品</h2>
-          <p className="text-neutral-500 text-base leading-relaxed mb-10 max-w-2xl" lang="zh-TW">
-            有時候，一個實體的物件，<br />
-            可以提醒我們：其實還有另一種生活方式可以選擇。<br />
-            這些周邊是我們對「樂觀」的一種具象化。
-          </p>
-        </FadeIn>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-          {MERCH_ITEMS.map((item, i) => (
-            <FadeIn key={i} delay={i * 60}>
-              <div className="bg-white rounded-xl p-5 border border-neutral-100 hover:border-neutral-200 hover:shadow-sm transition-all text-center h-full flex flex-col items-center">
-                <div className="w-16 h-16 rounded-lg bg-neutral-50 flex items-center justify-center mb-3 overflow-hidden">
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="max-w-[48px] max-h-[48px] object-contain"
-                  />
-                </div>
-                <p className="font-bold text-sm mb-1" lang="zh-TW">{item.name}</p>
-                <p className="text-neutral-400 text-xs" lang="zh-TW">{item.description}</p>
-              </div>
-            </FadeIn>
-          ))}
         </div>
       </Section>
 
