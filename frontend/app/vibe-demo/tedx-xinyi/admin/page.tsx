@@ -8,7 +8,7 @@ const API_BASE = typeof window !== 'undefined'
   : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080');
 const ADMIN_PASSWORD = '5milesLab01@';
 
-type Tab = 'slots' | 'media' | 'publish';
+type Tab = 'slots' | 'media' | 'social' | 'publish';
 
 interface MediaImage {
   key: string;
@@ -43,6 +43,16 @@ interface SlotSummary {
   external: number;
 }
 
+interface SocialPost {
+  id: string;
+  copy: string;
+  comment: string;
+  imageUrl: string | null;
+  platform: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function TEDxXinyiAdmin() {
   const [authed, setAuthed] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -63,6 +73,17 @@ export default function TEDxXinyiAdmin() {
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaLoaded, setMediaLoaded] = useState(false);
 
+  // Social posts state
+  const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [socialLoaded, setSocialLoaded] = useState(false);
+  const [editingCopy, setEditingCopy] = useState<string | null>(null);
+  const [editCopyText, setEditCopyText] = useState('');
+  const [commentText, setCommentText] = useState<Record<string, string>>({});
+  const [generatingCopy, setGeneratingCopy] = useState<string | null>(null);
+  const [generatingImage, setGeneratingImage] = useState<string | null>(null);
+  const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
+
   // Image Slots state
   const [slots, setSlots] = useState<ImageSlot[]>([]);
   const [slotSummary, setSlotSummary] = useState<SlotSummary | null>(null);
@@ -74,7 +95,7 @@ export default function TEDxXinyiAdmin() {
   // Action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmArchive, setConfirmArchive] = useState<string | null>(null);
   const [confirmRegen, setConfirmRegen] = useState<string | null>(null);
 
   // Edit modal state (for any slot or media entry)
@@ -180,6 +201,109 @@ export default function TEDxXinyiAdmin() {
     }
   }
 
+  // ---- Social media post functions ----
+  const loadSocialPosts = useCallback(async () => {
+    setSocialLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/social/posts`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setSocialPosts(data.posts || []);
+      setSocialLoaded(true);
+    } catch (err) {
+      showToast(`Failed to load posts: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setSocialLoading(false);
+    }
+  }, []);
+
+  async function createSocialPost() {
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/social/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: 'instagram' }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await loadSocialPosts();
+      showToast('New post slot created');
+    } catch (err) {
+      showToast(`Failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    }
+  }
+
+  async function saveSocialCopy(postId: string, copy: string) {
+    try {
+      await fetch(`${API_BASE}/api/tedx-xinyi/social/posts/${postId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ copy }),
+      });
+      setEditingCopy(null);
+      await loadSocialPosts();
+      showToast('Copy saved');
+    } catch (err) {
+      showToast(`Save failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    }
+  }
+
+  async function generateCopy(postId: string, existingCopy: string, comment: string) {
+    setGeneratingCopy(postId);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/social/generate-copy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, existingCopy: existingCopy || undefined, comment: comment || undefined, platform: 'instagram' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setCommentText(prev => ({ ...prev, [postId]: '' }));
+      await loadSocialPosts();
+      showToast('Copy generated');
+    } catch (err) {
+      showToast(`Generate failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setGeneratingCopy(null);
+    }
+  }
+
+  async function generateImage(postId: string, copy: string) {
+    if (!copy) { showToast('Generate copy first before generating an image', 'err'); return; }
+    setGeneratingImage(postId);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/social/generate-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, copy }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      await loadSocialPosts();
+      showToast('Image generated');
+    } catch (err) {
+      showToast(`Image generation failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setGeneratingImage(null);
+    }
+  }
+
+  async function deleteSocialPost(postId: string) {
+    try {
+      await fetch(`${API_BASE}/api/tedx-xinyi/social/posts/${postId}`, { method: 'DELETE' });
+      await loadSocialPosts();
+      showToast('Post removed');
+    } catch (err) {
+      showToast(`Delete failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    }
+  }
+
+  function copySocialCopy(text: string, postId: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedPostId(postId);
+      setTimeout(() => setCopiedPostId(null), 2000);
+    });
+  }
+
   const loadMedia = useCallback(async () => {
     setMediaLoading(true);
     try {
@@ -276,9 +400,10 @@ export default function TEDxXinyiAdmin() {
     }
   }
 
-  // Remove (deactivate, keep as archive)
-  async function handleRemove(key: string) {
+  // Archive (deactivate, keep asset in storage with --archived- prefix)
+  async function handleArchive(key: string) {
     setActionLoading(key);
+    setConfirmArchive(null);
     try {
       const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/remove`, {
         method: 'POST',
@@ -287,31 +412,10 @@ export default function TEDxXinyiAdmin() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      showToast(`Removed ${key}. Archived as ${data.archiveKey}`);
+      showToast(`Archived ${key} as ${data.archiveKey}`);
       await loadMedia();
     } catch (err) {
-      showToast(`Remove failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
-    } finally {
-      setActionLoading(null);
-    }
-  }
-
-  // Delete (permanent)
-  async function handleDelete(key: string) {
-    setActionLoading(key);
-    setConfirmDelete(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/delete`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      showToast(`Permanently deleted: ${key}`);
-      await loadMedia();
-    } catch (err) {
-      showToast(`Delete failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+      showToast(`Archive failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
     } finally {
       setActionLoading(null);
     }
@@ -395,6 +499,7 @@ export default function TEDxXinyiAdmin() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'slots', label: 'Image Slots' },
     { id: 'media', label: 'Media Library' },
+    { id: 'social', label: 'Social Media' },
     { id: 'publish', label: 'Publish Site Pack' },
   ];
 
@@ -422,16 +527,16 @@ export default function TEDxXinyiAdmin() {
         </div>
       )}
 
-      {/* Confirm delete modal */}
-      {confirmDelete && (
+      {/* Confirm archive modal */}
+      {confirmArchive && (
         <div className="fixed inset-0 z-40 bg-black/60 flex items-center justify-center px-4">
           <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-6 max-w-sm w-full">
-            <h3 className="text-white font-bold mb-2">Permanently delete?</h3>
-            <p className="text-neutral-400 text-sm mb-1">This will remove the file and all metadata.</p>
-            <p className="text-red-400 text-xs font-mono mb-4 break-all">{confirmDelete}</p>
+            <h3 className="text-white font-bold mb-2">Archive this image?</h3>
+            <p className="text-neutral-400 text-sm mb-1">The image will be deactivated but kept in storage for recovery.</p>
+            <p className="text-amber-400 text-xs font-mono mb-4 break-all">{confirmArchive}</p>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors">Cancel</button>
-              <button onClick={() => handleDelete(confirmDelete)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg transition-colors">Delete Forever</button>
+              <button onClick={() => setConfirmArchive(null)} className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors">Cancel</button>
+              <button onClick={() => handleArchive(confirmArchive)} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold rounded-lg transition-colors">Archive</button>
             </div>
           </div>
         </div>
@@ -884,13 +989,13 @@ export default function TEDxXinyiAdmin() {
                             <span className="text-[10px] px-1.5 py-0.5 bg-amber-900/60 text-amber-300 rounded font-bold">ARCHIVED</span>
                           </div>
                         )}
-                        {!loading && (
+                        {!loading && !archived && (
                           <button
-                            onClick={() => setConfirmDelete(img.key)}
-                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/70 hover:bg-red-600 text-white/70 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
-                            title="Delete image"
+                            onClick={() => setConfirmArchive(img.key)}
+                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/70 hover:bg-amber-600 text-white/70 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                            title="Archive image"
                           >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4" /></svg>
                           </button>
                         )}
                       </div>
@@ -939,14 +1044,11 @@ export default function TEDxXinyiAdmin() {
                               Upload New
                             </button>
                           )}
-                          {!archived && (img.localExists || img.publicUrl) && (
-                            <button onClick={() => handleRemove(img.key)} disabled={loading} className="px-2 py-1.5 text-[11px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40" title="Remove from active slot">
-                              Remove
+                          {!archived && (
+                            <button onClick={() => setConfirmArchive(img.key)} disabled={loading} className="px-2 py-1.5 text-[11px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40" title="Archive image">
+                              Archive
                             </button>
                           )}
-                          <button onClick={() => setConfirmDelete(img.key)} disabled={loading} className="px-2 py-1.5 text-[11px] font-bold bg-red-600/20 hover:bg-red-600/30 text-red-300 rounded transition-colors disabled:opacity-40" title="Permanently delete">
-                            Delete
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -954,6 +1056,179 @@ export default function TEDxXinyiAdmin() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* SOCIAL MEDIA TAB */}
+        {tab === 'social' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-2xl font-black">Social Media Posts</h2>
+                <p className="text-neutral-500 text-sm mt-1">Create, generate, and manage social media content for TEDxXinyi promotion.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={loadSocialPosts}
+                  disabled={socialLoading}
+                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-sm font-bold rounded-lg transition-colors"
+                >
+                  {socialLoading ? 'Loading\u2026' : socialLoaded ? 'Refresh' : 'Load Posts'}
+                </button>
+                <button
+                  onClick={createSocialPost}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-sm font-bold text-white rounded-lg transition-colors"
+                >
+                  + New Post
+                </button>
+              </div>
+            </div>
+
+            {!socialLoaded && !socialLoading && (
+              <p className="text-neutral-500 text-sm">Click &quot;Load Posts&quot; to see existing social media drafts, or &quot;+ New Post&quot; to start creating.</p>
+            )}
+
+            {socialLoaded && socialPosts.length === 0 && (
+              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 text-center">
+                <p className="text-neutral-500 text-sm mb-3">No posts yet. Create your first social media post.</p>
+                <button onClick={createSocialPost} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg transition-colors">
+                  + New Post
+                </button>
+              </div>
+            )}
+
+            {/* Post cards */}
+            <div className="space-y-4">
+              {socialPosts.map(post => {
+                const isCopyGen = generatingCopy === post.id;
+                const isImgGen = generatingImage === post.id;
+                const isEditing = editingCopy === post.id;
+                const postComment = commentText[post.id] || '';
+
+                return (
+                  <div key={post.id} className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800/50">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] px-2 py-0.5 bg-pink-600/20 text-pink-300 rounded font-bold uppercase">{post.platform}</span>
+                        <span className="text-xs text-neutral-500">{new Date(post.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <button onClick={() => deleteSocialPost(post.id)} className="text-neutral-600 hover:text-red-400 transition-colors" title="Remove post">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row">
+                      {/* Copy section */}
+                      <div className="flex-1 p-4 border-b md:border-b-0 md:border-r border-neutral-800/50">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Copy</h4>
+                          <div className="flex gap-1">
+                            {post.copy && (
+                              <button
+                                onClick={() => copySocialCopy(post.copy, post.id)}
+                                className="px-2 py-1 text-[10px] font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded transition-colors"
+                              >
+                                {copiedPostId === post.id ? 'Copied!' : 'Copy'}
+                              </button>
+                            )}
+                            {post.copy && !isEditing && (
+                              <button
+                                onClick={() => { setEditingCopy(post.id); setEditCopyText(post.copy); }}
+                                className="px-2 py-1 text-[10px] font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded transition-colors"
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Display copy or editing state */}
+                        {isEditing ? (
+                          <div>
+                            <textarea
+                              value={editCopyText}
+                              onChange={e => setEditCopyText(e.target.value)}
+                              rows={8}
+                              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white resize-y focus:outline-none focus:border-red-500"
+                            />
+                            <div className="flex gap-2 mt-2">
+                              <button onClick={() => saveSocialCopy(post.id, editCopyText)} className="px-3 py-1.5 text-xs font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors">Save</button>
+                              <button onClick={() => setEditingCopy(null)} className="px-3 py-1.5 text-xs font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-400 rounded transition-colors">Cancel</button>
+                            </div>
+                          </div>
+                        ) : post.copy ? (
+                          <div className="text-sm text-neutral-300 whitespace-pre-wrap leading-relaxed bg-white/[0.02] rounded-lg p-3 max-h-64 overflow-y-auto">
+                            {post.copy}
+                          </div>
+                        ) : (
+                          <p className="text-neutral-600 text-sm italic">No copy yet. Click &quot;Generate Copy&quot; below.</p>
+                        )}
+
+                        {/* Comment + generate buttons */}
+                        <div className="mt-3 space-y-2">
+                          {post.copy && (
+                            <div>
+                              <input
+                                type="text"
+                                value={postComment}
+                                onChange={e => setCommentText(prev => ({ ...prev, [post.id]: e.target.value }))}
+                                placeholder="Feedback for revision (e.g. more casual, add ticket link\u2026)"
+                                className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500"
+                              />
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => generateCopy(post.id, post.copy, postComment)}
+                              disabled={isCopyGen}
+                              className="px-3 py-1.5 text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded transition-colors disabled:opacity-40"
+                            >
+                              {isCopyGen ? 'Generating\u2026' : post.copy && postComment ? 'Revise Copy' : post.copy ? 'Regenerate Copy' : 'Generate Copy'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Image section */}
+                      <div className="w-full md:w-72 p-4 flex-shrink-0">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">IG Image</h4>
+                        </div>
+
+                        {post.imageUrl ? (
+                          <div className="relative group">
+                            <div className="aspect-square rounded-lg overflow-hidden bg-neutral-800">
+                              <img src={post.imageUrl} alt="Social post" className="w-full h-full object-cover" />
+                            </div>
+                            <a
+                              href={post.imageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-blue-400 hover:text-blue-300 font-mono break-all mt-1 block"
+                            >
+                              {post.imageUrl.length > 50 ? post.imageUrl.slice(0, 50) + '\u2026' : post.imageUrl}
+                            </a>
+                          </div>
+                        ) : (
+                          <div className="aspect-square rounded-lg bg-neutral-800/50 border border-dashed border-neutral-700 flex items-center justify-center">
+                            <span className="text-neutral-600 text-xs">No image yet</span>
+                          </div>
+                        )}
+
+                        <button
+                          onClick={() => generateImage(post.id, post.copy)}
+                          disabled={isImgGen || !post.copy}
+                          className="w-full mt-2 px-3 py-1.5 text-xs font-bold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 rounded transition-colors disabled:opacity-40"
+                          title={!post.copy ? 'Generate copy first' : 'Generate IG post image'}
+                        >
+                          {isImgGen ? 'Generating image\u2026' : post.imageUrl ? 'Regenerate Image' : 'Generate Image'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

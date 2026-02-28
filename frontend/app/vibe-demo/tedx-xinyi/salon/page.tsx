@@ -177,8 +177,7 @@ export default function SalonPage() {
           alt=""
           fetchPriority="high"
           decoding="async"
-          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
-          onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.7'; }}
+          className="absolute inset-0 w-full h-full object-cover opacity-70"
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/40 via-transparent to-neutral-900/80" />
@@ -196,9 +195,24 @@ export default function SalonPage() {
             </p>
           </FadeIn>
           <FadeIn delay={350}>
-            <p className="text-white/50 text-xs tracking-[0.2em] mt-4" lang="zh-TW">
-              #2026首波沙龍論壇　#在AI時代學會看懂趨勢
-            </p>
+            <div className="flex flex-col sm:flex-row items-start gap-4 mt-6">
+              <a
+                href="https://www.accupass.com/event/2602250742267540353300"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-7 py-3 text-sm font-black rounded-full text-white transition-all hover:scale-105 hover:shadow-lg"
+                style={{ backgroundColor: TED_RED }}
+                lang="zh-TW"
+              >
+                立即購票
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </a>
+              <p className="text-white/40 text-xs tracking-[0.2em] mt-2 sm:mt-3" lang="zh-TW">
+                #2026首波沙龍論壇　#在AI時代學會看懂趨勢
+              </p>
+            </div>
           </FadeIn>
         </div>
       </section>
@@ -221,9 +235,8 @@ export default function SalonPage() {
                     src="/tedx-xinyi/poster-dark.webp"
                     alt="We are Becoming — TEDxXinyi 2026 key visual poster"
                     loading="lazy"
-                    className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+                    className="absolute inset-0 w-full h-full object-cover"
                     style={{ zIndex: 1 }}
-                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
 
@@ -491,8 +504,7 @@ export default function SalonPage() {
               <img
                 src="/tedx-xinyi/salon-galaxy.webp"
                 alt=""
-                className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
-                onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                className="w-full h-full object-cover"
                 onError={(e) => {
                   const el = e.target as HTMLImageElement;
                   el.style.display = 'none';
