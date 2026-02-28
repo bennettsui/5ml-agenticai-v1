@@ -1,19 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_AMBER, WARM_GRAY } from './components';
+import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_AMBER } from './components';
 
 // ==================== DATA ====================
 
+const SPEAKER_COLORS = ['#E62B1E', '#D97706', '#059669', '#7C3AED', '#2563EB', '#DC2626', '#0891B2', '#9333EA'];
+
 const SPEAKERS = [
-  { name: '張卉君', role: '自然倡議者／黑潮海洋文教基金會', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E5%BC%B5%E5%8D%89%E5%90%9B-e1625535281259-500x500.png' },
-  { name: '蔡年玨', role: '跨域創作者', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E8%94%A1%E5%B9%B4%E7%8E%A8-500x500.jpg' },
-  { name: '劉欣瑜', role: '國際模特兒', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E5%8A%89%E6%AC%A3%E7%91%9C%E2%80%94%E7%94%9F%E6%B4%BB%E7%85%A7-e1625535100576-500x500.png' },
-  { name: '范欽慧', role: '野地錄音師', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E8%8C%83%E6%AC%BD%E6%85%A72-e1625812859822-500x500.jpg' },
-  { name: '段智敏', role: '國際溜溜球表演者／太陽馬戲團', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E6%AE%B5%E6%99%BA%E6%95%8F%EF%BC%92-500x500.jpg' },
-  { name: '林知秦', role: '未來媽媽戲劇監製', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E6%9E%97%E7%9F%A5%E7%A7%A6-e1625816914518-500x500.jpg' },
-  { name: '周世雄', role: '當代藝術家', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E5%91%A8%E4%B8%96%E9%9B%84-500x500.jpg' },
-  { name: '蕭青陽', role: '唱片設計師／葛萊美獎入圍', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E8%95%AD%E9%9D%92%E9%99%BD-scaled-e1625535578597-500x500.jpg' },
+  { name: '張卉君', role: '自然倡議者／黑潮海洋文教基金會' },
+  { name: '蔡年玨', role: '跨域創作者' },
+  { name: '劉欣瑜', role: '國際模特兒' },
+  { name: '范欽慧', role: '野地錄音師' },
+  { name: '段智敏', role: '國際溜溜球表演者／太陽馬戲團' },
+  { name: '林知秦', role: '未來媽媽戲劇監製' },
+  { name: '周世雄', role: '當代藝術家' },
+  { name: '蕭青陽', role: '唱片設計師／葛萊美獎入圍' },
 ];
 
 const BLOG_POSTS = [
@@ -37,15 +39,6 @@ const BLOG_POSTS = [
   },
 ];
 
-const PARTNER_LOGOS = [
-  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/1MORE-e1627275745256.png', name: '1MORE 萬魔耳機' },
-  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/cofit-e1626948574733.png', name: 'Cofit' },
-  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/tissue-150x150.png', name: 'tissue' },
-  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E7%BE%8E%E5%AD%B8-e1626949204652.png', name: '美學' },
-  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/one-ten%E5%9C%93%E5%BD%A2logo-150x150.jpg', name: 'One Ten 食分之一' },
-  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E9%AD%9A.png', name: '全興資源再生' },
-  { src: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E6%9D%B1%E5%90%B3.png', name: '東吳大學' },
-];
 
 const ENTRY_CARDS = [
   {
@@ -53,7 +46,8 @@ const ENTRY_CARDS = [
     description: '台北第一個以都會生活圈為核心的在地 TEDx 團隊。\n#Community #Relevancy #Evolution',
     button: '走進故事',
     href: '/vibe-demo/tedx-xinyi/about',
-    image: 'https://tedxxinyi.com/wp-content/uploads/2021/08/S__45482024.jpg',
+    icon: 'x',
+    gradient: `linear-gradient(135deg, ${TED_RED}20 0%, ${TED_RED}08 100%)`,
     accent: TED_RED,
   },
   {
@@ -61,7 +55,8 @@ const ENTRY_CARDS = [
     description: '舞台不只是背景，而是一種對未來的態度。\n我們實驗再製、3D 列印與可回收材質，讓每一屆的舞台都能留下新的可能。',
     button: '看我們怎麼做',
     href: '/vibe-demo/tedx-xinyi/sustainability',
-    image: 'https://tedxxinyi.com/wp-content/uploads/2021/08/%E8%9E%A2%E5%B9%95%E5%BF%AB%E7%85%A7-2021-08-24-%E4%B8%8B%E5%8D%882.37.26.png',
+    icon: '♻',
+    gradient: `linear-gradient(135deg, ${WARM_AMBER}20 0%, ${WARM_AMBER}08 100%)`,
     accent: WARM_AMBER,
   },
   {
@@ -69,7 +64,8 @@ const ENTRY_CARDS = [
     description: '除了年度大會，我們也透過 TED Circles、工作坊與城市散步，\n讓想法在一年中的不同時刻持續發生。',
     button: '加入社群',
     href: '/vibe-demo/tedx-xinyi/community',
-    image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/logo_white_%E5%B7%A5%E4%BD%9C%E5%8D%80%E5%9F%9F-1-e1625644086441.png',
+    icon: '◎',
+    gradient: 'linear-gradient(135deg, #10B98120 0%, #10B98108 100%)',
     accent: '#10B981',
   },
 ];
@@ -210,16 +206,16 @@ export default function TEDxXinyiHome() {
                 href={card.href}
                 className="group block bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all hover:-translate-y-1 border border-neutral-100"
               >
-                <div className="aspect-[16/10] overflow-hidden bg-neutral-100">
-                  <img
-                    src={card.image}
-                    alt={card.title}
-                    loading="lazy"
-                    className="w-full h-full object-cover opacity-0 transition-all duration-500 group-hover:scale-105"
-                    style={i === 2 ? { objectFit: 'contain', padding: '1.5rem', background: '#1a1a1a' } : undefined}
-                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
+                <div
+                  className="aspect-[16/10] flex items-center justify-center"
+                  style={{ background: card.gradient }}
+                >
+                  <span
+                    className="text-6xl font-black select-none transition-transform duration-300 group-hover:scale-110"
+                    style={{ color: card.accent, opacity: 0.35 }}
+                  >
+                    {card.icon}
+                  </span>
                 </div>
                 <div className="h-1" style={{ backgroundColor: card.accent }} />
                 <div className="p-6">
@@ -336,20 +332,16 @@ export default function TEDxXinyiHome() {
           {SPEAKERS.map((speaker, i) => (
             <FadeIn key={i} delay={i * 60}>
               <div className="group relative cursor-pointer">
-                <div className="aspect-square overflow-hidden rounded-xl bg-neutral-100">
-                  <img
-                    src={speaker.image}
-                    alt={speaker.name}
-                    loading="lazy"
-                    className="w-full h-full object-cover opacity-0 transition-all duration-500 group-hover:scale-105"
-                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
-                  <p className="text-white font-black text-sm" lang="zh-TW">{speaker.name}</p>
-                  <p className="text-white/60 text-xs" lang="zh-TW">{speaker.role}</p>
+                <div
+                  className="aspect-square overflow-hidden rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: `${SPEAKER_COLORS[i % SPEAKER_COLORS.length]}12` }}
+                >
+                  <span
+                    className="text-5xl sm:text-6xl font-black select-none transition-transform duration-300 group-hover:scale-110"
+                    style={{ color: SPEAKER_COLORS[i % SPEAKER_COLORS.length] }}
+                  >
+                    {speaker.name[0]}
+                  </span>
                 </div>
                 <div className="mt-2.5">
                   <p className="font-bold text-sm" lang="zh-TW">{speaker.name}</p>
@@ -366,53 +358,6 @@ export default function TEDxXinyiHome() {
         ...
       </Section>
       */}
-
-      {/* ==================== PARTNERS ==================== */}
-      <Section bg="white">
-        <FadeIn>
-          <SectionLabel>PARTNERS</SectionLabel>
-          <h2 className="text-3xl md:text-5xl font-black mb-3" lang="zh-TW">歷屆合作夥伴</h2>
-          <p className="text-neutral-500 text-sm sm:text-base leading-relaxed mb-12 max-w-xl" lang="zh-TW">
-            這些品牌、組織與空間，和我們一起在信義嘗試新的可能。
-          </p>
-        </FadeIn>
-
-        <FadeIn delay={100}>
-          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12 mb-12">
-            {PARTNER_LOGOS.map((logo, i) => (
-              <div
-                key={i}
-                className="w-20 h-20 flex items-center justify-center grayscale hover:grayscale-0 opacity-50 hover:opacity-100 transition-all duration-300"
-                title={logo.name}
-              >
-                <img
-                  src={logo.src}
-                  alt={logo.name}
-                  loading="lazy"
-                  className="max-w-full max-h-full object-contain opacity-0 transition-opacity duration-300"
-                  onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              </div>
-            ))}
-          </div>
-        </FadeIn>
-
-        <FadeIn>
-          <div className="text-center">
-            <Link
-              href="/vibe-demo/tedx-xinyi/sustainability"
-              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold border-2 border-neutral-300 hover:border-neutral-900 rounded-full text-neutral-600 hover:text-neutral-900 transition-all"
-              lang="zh-TW"
-            >
-              看更多合作故事
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            </Link>
-          </div>
-        </FadeIn>
-      </Section>
 
       {/* ==================== RED CTA BAND ==================== */}
       <section className="py-16 text-white text-center" style={{ backgroundColor: TED_RED }}>
