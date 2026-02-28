@@ -47,6 +47,7 @@ const ENTRY_CARDS = [
     button: '走進故事',
     href: '/vibe-demo/tedx-xinyi/about',
     icon: 'x',
+    image: '/tedx-xinyi/entry-about.webp',
     gradient: `linear-gradient(135deg, ${TED_RED}20 0%, ${TED_RED}08 100%)`,
     accent: TED_RED,
   },
@@ -56,6 +57,7 @@ const ENTRY_CARDS = [
     button: '看我們怎麼做',
     href: '/vibe-demo/tedx-xinyi/sustainability',
     icon: '♻',
+    image: '/tedx-xinyi/entry-sustainability.webp',
     gradient: `linear-gradient(135deg, ${WARM_AMBER}20 0%, ${WARM_AMBER}08 100%)`,
     accent: WARM_AMBER,
   },
@@ -65,6 +67,7 @@ const ENTRY_CARDS = [
     button: '加入社群',
     href: '/vibe-demo/tedx-xinyi/community',
     icon: '◎',
+    image: '/tedx-xinyi/entry-community.webp',
     gradient: 'linear-gradient(135deg, #10B98120 0%, #10B98108 100%)',
     accent: '#10B981',
   },
@@ -207,11 +210,19 @@ export default function TEDxXinyiHome() {
                 className="group block bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all hover:-translate-y-1 border border-neutral-100"
               >
                 <div
-                  className="aspect-[16/10] flex items-center justify-center"
+                  className="aspect-[16/10] relative overflow-hidden flex items-center justify-center"
                   style={{ background: card.gradient }}
                 >
+                  <img
+                    src={card.image}
+                    alt=""
+                    loading="lazy"
+                    className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-500"
+                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
                   <span
-                    className="text-6xl font-black select-none transition-transform duration-300 group-hover:scale-110"
+                    className="relative text-6xl font-black select-none transition-transform duration-300 group-hover:scale-110"
                     style={{ color: card.accent, opacity: 0.35 }}
                   >
                     {card.icon}
