@@ -85,7 +85,6 @@ const CHAPTER_ICONS = [IconLightbulb, IconGrid, IconLayers, IconHandshake];
 
 const CATEGORIES = [
   {
-    tag: 'A',
     title: '當 AI 學會說故事',
     label: 'ORIGIN',
     description:
@@ -93,7 +92,6 @@ const CATEGORIES = [
     accent: WARM_AMBER,
   },
   {
-    tag: 'B',
     title: '五個正在重寫的場景',
     label: 'SCENES',
     description:
@@ -101,7 +99,6 @@ const CATEGORIES = [
     accent: TED_RED,
   },
   {
-    tag: 'C',
     title: '三個隱形的力量',
     label: 'FORCES',
     description:
@@ -109,7 +106,6 @@ const CATEGORIES = [
     accent: '#6366F1',
   },
   {
-    tag: 'D',
     title: '從一本報告，到一起成為',
     label: 'PRACTICE',
     description:
@@ -190,7 +186,7 @@ export default function ReportPage() {
             {/* Chapter chips — show report structure at a glance */}
             <FadeIn delay={400}>
               <div className="flex flex-wrap gap-2 mb-8">
-                {['A — Origin', 'B — Scenes', 'C — Forces', 'D — Practice'].map((ch) => (
+                {['Origin', 'Scenes', 'Forces', 'Practice'].map((ch) => (
                   <span key={ch} className="px-3 py-1 text-[10px] font-bold tracking-wider rounded-full text-white/50 border border-white/10 bg-white/[0.04]">
                     {ch}
                   </span>
@@ -296,7 +292,6 @@ export default function ReportPage() {
                         >
                           {cat.label}
                         </span>
-                        <span className="text-xs text-neutral-400 font-bold">{cat.tag}</span>
                       </div>
                       <h3 className="text-lg sm:text-xl font-black mb-3" lang="zh-TW">{cat.title}</h3>
                       <p className="text-neutral-500 text-sm leading-[1.9] whitespace-pre-line flex-1" lang="zh-TW">
@@ -408,19 +403,19 @@ export default function ReportPage() {
         </section>
 
         {/* CTA 2: Get the Report */}
-        <Section bg="dark">
+        <Section bg="warm">
           <div className="max-w-3xl mx-auto text-center">
             <FadeIn>
-              <SectionLabel dark>THE REPORT</SectionLabel>
-              <h2 className="text-3xl md:text-4xl font-black mb-6 text-white leading-tight" lang="zh-TW">
+              <SectionLabel>THE REPORT</SectionLabel>
+              <h2 className="text-3xl md:text-4xl font-black mb-6 leading-tight" lang="zh-TW">
                 你手上這本，<br />是現代雅典學堂的課本
               </h2>
             </FadeIn>
             <FadeIn delay={150}>
-              <p className="text-white/65 text-base sm:text-lg leading-[1.9] mb-4" lang="zh-TW">
+              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-4" lang="zh-TW">
                 《We are Becoming》不只是一本趨勢報告，更是一份可以帶回團隊、教室、社群的共學藍圖——支援關係型社區學習與跨域對話。
               </p>
-              <p className="text-white/40 text-sm mb-8" lang="zh-TW">
+              <p className="text-neutral-400 text-sm mb-8" lang="zh-TW">
                 每一章都可以變成一場讀書會、一堂工作坊、一次團隊對話的起點。
               </p>
             </FadeIn>
@@ -441,7 +436,7 @@ export default function ReportPage() {
                   href="https://sunrisehorizon.com.tw/ai-reports"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-8 py-3.5 border-2 border-white/30 text-white/80 font-black text-sm rounded-full transition-all hover:border-white/50 hover:scale-105"
+                  className="inline-flex items-center gap-2 px-8 py-3.5 border-2 border-neutral-300 text-neutral-600 font-black text-sm rounded-full transition-all hover:border-neutral-500 hover:scale-105"
                   lang="zh-TW"
                 >
                   <IconBook size={15} color="currentColor" />

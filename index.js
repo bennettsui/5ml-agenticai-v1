@@ -4369,17 +4369,13 @@ app.get('*', (req, res, next) => {
     ? req.path.slice(0, -1)
     : req.path;
 
-  const htmlPath = path.join(nextJsPath, cleanPath, 'index.html');
   const directHtmlPath = path.join(nextJsPath, cleanPath + '.html');
+  const htmlPath = path.join(nextJsPath, cleanPath, 'index.html');
 
-  // Check if path/index.html exists
-  if (fs.existsSync(htmlPath)) {
-    return res.sendFile(htmlPath);
-  }
-  // Check if path.html exists
-  if (fs.existsSync(directHtmlPath)) {
-    return res.sendFile(directHtmlPath);
-  }
+  // Check .html first (Next.js static export default), then index.html
+  // Wrap in try/catch to handle EIO errors on ephemeral filesystems (Fly.dev)
+  try { if (fs.existsSync(directHtmlPath)) return res.sendFile(directHtmlPath); } catch {}
+  try { if (fs.existsSync(htmlPath)) return res.sendFile(htmlPath); } catch {}
 
   // Dynamic route fallback — serve the [param] placeholder page
   // e.g. /healthcheck/abc123 → frontend/out/healthcheck/placeholder.html
