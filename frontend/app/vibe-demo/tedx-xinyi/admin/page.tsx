@@ -749,6 +749,7 @@ export default function TEDxXinyiAdmin() {
                         <th className="text-left px-4 py-3 font-bold">Image URL / Path</th>
                         <th className="text-left px-4 py-3 font-bold">Status</th>
                         <th className="text-left px-4 py-3 font-bold">CDN URL</th>
+                        <th className="text-left px-4 py-3 font-bold">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -792,6 +793,30 @@ export default function TEDxXinyiAdmin() {
                               ) : (
                                 <span className="text-[10px] text-neutral-700">none</span>
                               )}
+                            </td>
+                            {/* Actions */}
+                            <td className="px-4 py-2">
+                              {(() => {
+                                const effectiveKey = slot.metaKey || (slot.isLocal ? slot.src.replace('/tedx-xinyi/', '') : null);
+                                if (!effectiveKey) return null;
+                                const loading = actionLoading === effectiveKey;
+                                return (
+                                  <div className="flex gap-1">
+                                    {slot.localExists && slot.status !== 'cdn' && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); pushToCdn(effectiveKey); }}
+                                        disabled={loading}
+                                        className="px-2 py-1 text-[10px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 whitespace-nowrap"
+                                      >
+                                        {loading ? '\u2026' : 'Push to CDN'}
+                                      </button>
+                                    )}
+                                    {slot.status === 'cdn' && (
+                                      <span className="text-[10px] text-green-500">on CDN</span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </td>
                           </tr>
                         );

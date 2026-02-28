@@ -2251,10 +2251,15 @@ router.post('/publish-html-pack', async (req, res) => {
   const PUBLIC_IMAGES = path.join(FRONTEND_DIR, 'public', 'tedx-xinyi');
 
   try {
-    // 1. Build frontend
-    console.log('[TEDxXinyi] Publish: running npm run build …');
-    execSync('npm run build', { cwd: FRONTEND_DIR, timeout: 180000, stdio: 'pipe' });
-    console.log('[TEDxXinyi] Publish: build complete');
+    // 1. Use existing build output if available (avoids OOM on small Fly.dev machines)
+    if (fs.existsSync(OUT_DIR) && fs.existsSync(path.join(OUT_DIR, '_next'))) {
+      console.log('[TEDxXinyi] Publish: using existing build output');
+    } else {
+      // Only rebuild if out/ doesn't exist — this can OOM on small machines
+      console.log('[TEDxXinyi] Publish: no existing build, running npm run build …');
+      execSync('npm run build', { cwd: FRONTEND_DIR, timeout: 180000, stdio: 'pipe' });
+      console.log('[TEDxXinyi] Publish: build complete');
+    }
 
     // 2. Verify output exists
     if (!fs.existsSync(TEDX_OUT)) {
