@@ -215,8 +215,10 @@ export default function TEDxXinyiHome() {
                     src={card.image}
                     alt={card.title}
                     loading="lazy"
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    className="w-full h-full object-cover opacity-0 transition-all duration-500 group-hover:scale-105"
                     style={i === 2 ? { objectFit: 'contain', padding: '1.5rem', background: '#1a1a1a' } : undefined}
+                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
                 <div className="h-1" style={{ backgroundColor: card.accent }} />
@@ -339,7 +341,9 @@ export default function TEDxXinyiHome() {
                     src={speaker.image}
                     alt={speaker.name}
                     loading="lazy"
-                    className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
+                    className="w-full h-full object-cover opacity-0 transition-all duration-500 group-hover:scale-105"
+                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 </div>
@@ -385,7 +389,9 @@ export default function TEDxXinyiHome() {
                   src={logo.src}
                   alt={logo.name}
                   loading="lazy"
-                  className="max-w-full max-h-full object-contain"
+                  className="max-w-full max-h-full object-contain opacity-0 transition-opacity duration-300"
+                  onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
               </div>
             ))}

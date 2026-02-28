@@ -177,7 +177,8 @@ export default function SalonPage() {
           alt=""
           fetchPriority="high"
           decoding="async"
-          className="absolute inset-0 w-full h-full object-cover opacity-70"
+          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
+          onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.7'; }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/40 via-transparent to-neutral-900/80" />
@@ -233,8 +234,9 @@ export default function SalonPage() {
                     src="/tedx-xinyi/poster-dark.webp"
                     alt="We are Becoming — TEDxXinyi 2026 key visual poster"
                     loading="lazy"
-                    className="absolute inset-0 w-full h-full object-cover"
+                    className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-500"
                     style={{ zIndex: 1 }}
+                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
 
@@ -479,11 +481,13 @@ export default function SalonPage() {
         <FadeIn delay={180}>
           <div className="rounded-2xl overflow-hidden mb-10">
             <img
-              src="http://5ml.mmdbfiles.com/assets/93f5a75df69dca1744dd756c.jpg"
+              src="https://5ml.mmdbfiles.com/assets/93f5a75df69dca1744dd756c.jpg"
               alt="TEDxXinyi salon 現場氛圍"
               loading="lazy"
-              className="w-full h-auto object-cover rounded-2xl"
+              className="w-full h-auto object-cover rounded-2xl opacity-0 transition-opacity duration-500"
               style={{ maxHeight: '420px' }}
+              onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
           </div>
         </FadeIn>
@@ -502,7 +506,8 @@ export default function SalonPage() {
               <img
                 src="/tedx-xinyi/salon-galaxy.webp"
                 alt=""
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover opacity-0 transition-opacity duration-500"
+                onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
                 onError={(e) => {
                   const el = e.target as HTMLImageElement;
                   el.style.display = 'none';
@@ -709,10 +714,12 @@ export default function SalonPage() {
             <div className="space-y-4">
               <div className="aspect-[4/3] rounded-xl overflow-hidden bg-neutral-100">
                 <img
-                  src="http://5ml.mmdbfiles.com/assets/7bfb3356fd0a844260692058.jpg"
+                  src="https://5ml.mmdbfiles.com/assets/7bfb3356fd0a844260692058.jpg"
                   alt="台北表演藝術中心 藍盒子 Blue Box"
                   loading="lazy"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover opacity-0 transition-opacity duration-500"
+                  onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
               </div>
               <div className="rounded-xl p-5 border border-neutral-100" style={{ backgroundColor: WARM_GRAY }}>

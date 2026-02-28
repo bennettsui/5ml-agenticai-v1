@@ -142,7 +142,9 @@ export default function SustainabilityPage() {
                     <img
                       src={block.image}
                       alt=""
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover opacity-0 transition-opacity duration-500"
+                      onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                   </div>
                 </div>

@@ -61,7 +61,8 @@ export default function ReportPage() {
             alt=""
             fetchPriority="high"
             decoding="async"
-            className="absolute inset-0 w-full h-full object-cover opacity-50"
+            className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
+            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.5'; }}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/60 via-neutral-900/30 to-neutral-900/90" />
