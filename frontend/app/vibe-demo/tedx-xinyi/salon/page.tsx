@@ -171,7 +171,7 @@ export default function SalonPage() {
       <SiteNav currentPath="/vibe-demo/tedx-xinyi/salon" heroMode />
 
       {/* ==================== HERO ==================== */}
-      <section id="salon-we-are-becoming-ai" className="relative min-h-[60vh] flex items-end overflow-hidden bg-neutral-900">
+      <section id="salon-we-are-becoming-ai" className="relative min-h-[75vh] flex items-end overflow-hidden bg-neutral-900">
         <img
           src="/tedx-xinyi/salon-hero.webp"
           alt=""
@@ -182,7 +182,7 @@ export default function SalonPage() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/40 via-transparent to-neutral-900/80" />
 
-        <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-32" style={{ textShadow: '0 2px 16px rgba(0,0,0,0.6), 0 1px 3px rgba(0,0,0,0.4)' }}>
+        <div className="relative z-10 max-w-5xl mx-auto px-6 pb-20 pt-36" style={{ textShadow: '0 2px 16px rgba(0,0,0,0.6), 0 1px 3px rgba(0,0,0,0.4)' }}>
           <FadeIn>
             <SectionLabel dark>SALON</SectionLabel>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-4" lang="zh-TW">
@@ -195,24 +195,22 @@ export default function SalonPage() {
             </p>
           </FadeIn>
           <FadeIn delay={350}>
-            <div className="flex flex-col sm:flex-row items-start gap-4 mt-6">
-              <a
-                href="https://www.accupass.com/event/2602250742267540353300"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-7 py-3 text-sm font-black rounded-full text-white transition-all hover:scale-105 hover:shadow-lg"
-                style={{ backgroundColor: TED_RED }}
-                lang="zh-TW"
-              >
-                立即購票
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </a>
-              <p className="text-white/40 text-xs tracking-[0.2em] mt-2 sm:mt-3" lang="zh-TW">
-                #2026首波沙龍論壇　#在AI時代學會看懂趨勢
-              </p>
-            </div>
+            <p className="text-white/40 text-xs tracking-[0.2em] mt-6" lang="zh-TW">
+              #2026首波沙龍論壇　#在AI時代學會看懂趨勢
+            </p>
+            <a
+              href="https://www.accupass.com/event/2602250742267540353300"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-7 py-3 mt-4 text-sm font-black rounded-full text-white transition-all hover:scale-105 hover:shadow-lg"
+              style={{ backgroundColor: TED_RED }}
+              lang="zh-TW"
+            >
+              立即購票
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </a>
           </FadeIn>
         </div>
       </section>
