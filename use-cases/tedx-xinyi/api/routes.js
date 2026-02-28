@@ -2372,6 +2372,236 @@ RewriteRule ^ index.php [L]
   }
 });
 
+// ==================== SOCIAL MEDIA POSTS ====================
+
+const SOCIAL_POSTS_PATH = path.join(__dirname, '.social-posts.json');
+
+function loadSocialPosts() {
+  try {
+    if (fs.existsSync(SOCIAL_POSTS_PATH)) {
+      return JSON.parse(fs.readFileSync(SOCIAL_POSTS_PATH, 'utf8'));
+    }
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveSocialPosts(posts) {
+  fs.writeFileSync(SOCIAL_POSTS_PATH, JSON.stringify(posts, null, 2));
+}
+
+// TEDx Xinyi event context for AI prompts
+const TEDX_EVENT_CONTEXT = `
+Event: TEDxXinyi 2026 — "We Are Becoming"
+Theme: AI時代趨勢沙龍 (AI Era Trend Salon)
+Tagline: 你和 AI 的距離，決定你和自己的樣子。(The distance between you and AI determines what you become.)
+Date: March 31, 2026 (Tuesday)
+Venue: 台北表演藝術中心 藍盒子 (Taipei Performing Arts Center, Blue Box)
+Location: Taipei, Taiwan
+
+Speakers:
+- 程世嘉 (Sega Cheng) — iKala co-founder & CEO, Stanford CS, ex-Google. Topic: AI趨勢, humanistic thinking in AI era
+- 林東良 (Lin Dong-Liang) — Kuroshio Ocean Education Foundation CEO. Topic: Ocean ecology × AI environment
+- 廖唯傑 (Liao Wei-Jie) — Education × Technology cross-discipline. Topic: Building a 100-year sustainable business
+- 楊士毅 (Yang Shi-Yi) — Paper-cutting artist, director, photographer. Apple Taipei 101 flagship 75m artwork. Topic: 幸福沒有門檻 (Happiness has no threshold)
+
+Core Values:
+- Pulling AI back to human feelings and choices
+- Learning to keep learning through massive change
+- Dialogue on a real city stage (Blue Box, not a hotel conference room)
+
+Program: Morning talks (4×18 min), experience zones (meditation, art, sustainability food, ocean education), afternoon discovery sessions
+
+Brand Style: TEDx red (#E62B1E), warm golden amber, deep blue-violet galaxy aesthetic, cinematic feel, luminous hopeful mood
+Website: https://5ml-agenticai-v1.fly.dev/vibe-demo/tedx-xinyi
+Instagram: @tedxxinyi
+`.trim();
+
+// ---- List all social posts ----
+router.get('/social/posts', (req, res) => {
+  const posts = loadSocialPosts();
+  res.json({ posts });
+});
+
+// ---- Create a new empty post slot ----
+router.post('/social/posts', express.json(), (req, res) => {
+  const posts = loadSocialPosts();
+  const id = `post-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const post = {
+    id,
+    copy: '',
+    comment: '',
+    imageUrl: null,
+    platform: req.body.platform || 'instagram',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  posts.unshift(post);
+  saveSocialPosts(posts);
+  res.json({ post });
+});
+
+// ---- Update a post (copy, comment, platform) ----
+router.put('/social/posts/:id', express.json(), (req, res) => {
+  const posts = loadSocialPosts();
+  const idx = posts.findIndex(p => p.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Post not found' });
+  const { copy, comment, platform } = req.body;
+  if (copy !== undefined) posts[idx].copy = copy;
+  if (comment !== undefined) posts[idx].comment = comment;
+  if (platform !== undefined) posts[idx].platform = platform;
+  posts[idx].updatedAt = new Date().toISOString();
+  saveSocialPosts(posts);
+  res.json({ post: posts[idx] });
+});
+
+// ---- Delete a post ----
+router.delete('/social/posts/:id', (req, res) => {
+  let posts = loadSocialPosts();
+  posts = posts.filter(p => p.id !== req.params.id);
+  saveSocialPosts(posts);
+  res.json({ success: true });
+});
+
+// ---- Generate copy with DeepSeek ----
+router.post('/social/generate-copy', express.json(), async (req, res) => {
+  const { postId, comment, existingCopy, platform } = req.body;
+
+  try {
+    const deepseek = require('../../../services/deepseekService');
+    if (!deepseek.isAvailable()) {
+      return res.status(503).json({ error: 'DeepSeek API key not configured' });
+    }
+
+    let userPrompt;
+    if (existingCopy && comment) {
+      // Regenerate with feedback
+      userPrompt = `Here is an existing social media post draft:\n\n---\n${existingCopy}\n---\n\nThe user wants this revision:\n"${comment}"\n\nPlease rewrite the post incorporating this feedback. Return ONLY the updated post copy, nothing else.`;
+    } else {
+      // Generate fresh
+      userPrompt = `Write a compelling ${platform || 'Instagram'} post to promote this TEDx event. The post should be engaging, inspire curiosity, and drive ticket interest. Include relevant hashtags. Use a mix of Chinese and English where natural. Return ONLY the post copy, nothing else.`;
+    }
+
+    const systemPrompt = `You are a social media copywriter for TEDxXinyi, a TEDx event in Taipei. Write in a warm, inspiring, authentic voice that matches TEDx's tone — thought-provoking, human-centered, optimistic but not cheesy.
+
+${TEDX_EVENT_CONTEXT}
+
+Guidelines:
+- Keep it concise and punchy for ${platform || 'Instagram'}
+- Use a mix of Traditional Chinese and English naturally
+- Include 5-8 relevant hashtags at the end
+- Use line breaks for readability
+- Tone: warm, curious, forward-looking
+- DO NOT use placeholder brackets like [something] — write complete, ready-to-post copy`;
+
+    const result = await deepseek.analyze(systemPrompt, userPrompt, {
+      model: 'deepseek-chat',
+      maxTokens: 1000,
+      temperature: 0.8,
+    });
+
+    // Save the generated copy to the post
+    if (postId) {
+      const posts = loadSocialPosts();
+      const idx = posts.findIndex(p => p.id === postId);
+      if (idx !== -1) {
+        posts[idx].copy = result.content;
+        posts[idx].comment = '';
+        posts[idx].updatedAt = new Date().toISOString();
+        saveSocialPosts(posts);
+      }
+    }
+
+    res.json({ copy: result.content, model: result.model, usage: result.usage });
+  } catch (err) {
+    console.error('[TEDxXinyi] Generate copy error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- Generate IG post image with Gemini (NanoBanana) ----
+router.post('/social/generate-image', express.json(), async (req, res) => {
+  const client = getClient();
+  if (!client) {
+    return res.status(503).json({ error: 'GEMINI_API_KEY not configured — cannot generate image' });
+  }
+
+  const { postId, copy } = req.body;
+  if (!copy) return res.status(400).json({ error: 'copy is required to generate an image' });
+
+  try {
+    // Extract a headline / key phrase from the copy for the visual
+    const headline = copy.split('\n').find(l => l.trim().length > 0 && l.trim().length < 80) || 'We Are Becoming';
+
+    const prompt = `Create a visually striking Instagram post image (1080x1080 square, 1:1 aspect ratio).
+
+Design brief:
+- Big bold headline text prominently displayed: "${headline.replace(/[#@]/g, '').trim().slice(0, 60)}"
+- TEDx branded style: use TEDx red (#E62B1E) as accent color
+- Color palette: deep midnight blue, warm golden amber, soft violet, cream highlights
+- Style: cinematic, luminous, premium theatrical quality
+- Include "TEDxXinyi" text somewhere visible but secondary
+- Simple, clean composition — not cluttered
+- Galaxy/cosmic subtle background elements matching the "We Are Becoming" theme
+- Professional event promotion feel
+- Instagram best practice: readable text over imagery, high contrast for mobile viewing
+- No stock photo feel — artistic and unique
+- Date hint: 2026.3.31
+
+Do NOT include any placeholder text. All text in the image should be real, finalized copy.`;
+
+    console.log(`[TEDxXinyi] Generating social media image for post ${postId || 'unknown'}`);
+    const rawBuffer = await generateVisual(client, prompt);
+
+    // Resize to 1080x1080 for IG post
+    const sharp = require('sharp');
+    const compressed = await sharp(rawBuffer)
+      .resize({ width: 1080, height: 1080, fit: 'cover' })
+      .jpeg({ quality: 90, progressive: true })
+      .toBuffer();
+
+    // Save locally
+    const filename = `social-${postId || Date.now()}.jpg`;
+    const socialDir = path.join(OUTPUT_DIR, 'social');
+    if (!fs.existsSync(socialDir)) fs.mkdirSync(socialDir, { recursive: true });
+    fs.writeFileSync(path.join(socialDir, filename), compressed);
+
+    // Upload to CDN
+    let publicUrl = null;
+    try {
+      publicUrl = await uploadToMmdb(compressed);
+      const key = `social/${filename}`;
+      savePublicUrl(key, publicUrl, { source: 'social-post', description: `Social media post image` });
+      console.log(`[TEDxXinyi] Social image → CDN: ${publicUrl}`);
+    } catch (uploadErr) {
+      console.error(`[TEDxXinyi] CDN upload failed for social image:`, uploadErr.message);
+    }
+
+    const imageUrl = publicUrl || `/tedx-xinyi/social/${filename}`;
+
+    // Save to post
+    if (postId) {
+      const posts = loadSocialPosts();
+      const idx = posts.findIndex(p => p.id === postId);
+      if (idx !== -1) {
+        posts[idx].imageUrl = imageUrl;
+        posts[idx].updatedAt = new Date().toISOString();
+        saveSocialPosts(posts);
+      }
+    }
+
+    res.json({
+      success: true,
+      imageUrl,
+      publicUrl,
+      size: compressed.length,
+      dimensions: '1080x1080',
+    });
+  } catch (err) {
+    console.error('[TEDxXinyi] Generate social image error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 module.exports.router = router;
 module.exports.VISUALS = VISUALS;
