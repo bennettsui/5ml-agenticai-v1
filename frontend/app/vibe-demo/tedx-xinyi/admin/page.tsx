@@ -47,6 +47,7 @@ interface SocialPost {
   id: string;
   copy: string;
   comment: string;
+  imagePrompt: string;
   imageUrl: string | null;
   platform: string;
   createdAt: string;
@@ -81,7 +82,11 @@ export default function TEDxXinyiAdmin() {
   const [editCopyText, setEditCopyText] = useState('');
   const [commentText, setCommentText] = useState<Record<string, string>>({});
   const [generatingCopy, setGeneratingCopy] = useState<string | null>(null);
+  const [generatingImagePrompt, setGeneratingImagePrompt] = useState<string | null>(null);
   const [generatingImage, setGeneratingImage] = useState<string | null>(null);
+  const [editingImagePrompt, setEditingImagePrompt] = useState<string | null>(null);
+  const [editImagePromptText, setEditImagePromptText] = useState('');
+  const [promptCommentText, setPromptCommentText] = useState<Record<string, string>>({});
   const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
 
   // Image Slots state
@@ -268,14 +273,50 @@ export default function TEDxXinyiAdmin() {
     }
   }
 
-  async function generateImage(postId: string, copy: string) {
-    if (!copy) { showToast('Generate copy first before generating an image', 'err'); return; }
+  async function generateImagePrompt(postId: string, copy: string, comment?: string, existingPrompt?: string) {
+    if (!copy) { showToast('Generate copy first before generating an image prompt', 'err'); return; }
+    setGeneratingImagePrompt(postId);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/social/generate-image-prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, copy, comment: comment || undefined, existingPrompt: existingPrompt || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setPromptCommentText(prev => ({ ...prev, [postId]: '' }));
+      await loadSocialPosts();
+      showToast('Image prompt generated');
+    } catch (err) {
+      showToast(`Image prompt generation failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setGeneratingImagePrompt(null);
+    }
+  }
+
+  async function saveImagePrompt(postId: string, imagePrompt: string) {
+    try {
+      await fetch(`${API_BASE}/api/tedx-xinyi/social/posts/${postId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagePrompt }),
+      });
+      setEditingImagePrompt(null);
+      await loadSocialPosts();
+      showToast('Image prompt saved');
+    } catch (err) {
+      showToast(`Save failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    }
+  }
+
+  async function generateImage(postId: string, copy: string, imagePrompt?: string) {
+    if (!copy && !imagePrompt) { showToast('Generate copy or image prompt first', 'err'); return; }
     setGeneratingImage(postId);
     try {
       const res = await fetch(`${API_BASE}/api/tedx-xinyi/social/generate-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId, copy }),
+        body: JSON.stringify({ postId, copy, imagePrompt: imagePrompt || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -350,6 +391,12 @@ export default function TEDxXinyiAdmin() {
       loadMedia();
     }
   }, [authed, tab, mediaLoaded, mediaLoading, loadMedia]);
+
+  useEffect(() => {
+    if (authed && tab === 'social' && !socialLoaded && !socialLoading) {
+      loadSocialPosts();
+    }
+  }, [authed, tab, socialLoaded, socialLoading, loadSocialPosts]);
 
   // Also preload media when opening image picker from slots tab
   useEffect(() => {
@@ -1122,9 +1169,12 @@ export default function TEDxXinyiAdmin() {
             <div className="space-y-4">
               {socialPosts.map(post => {
                 const isCopyGen = generatingCopy === post.id;
+                const isPromptGen = generatingImagePrompt === post.id;
                 const isImgGen = generatingImage === post.id;
                 const isEditing = editingCopy === post.id;
+                const isEditingPrompt = editingImagePrompt === post.id;
                 const postComment = commentText[post.id] || '';
+                const promptComment = promptCommentText[post.id] || '';
 
                 return (
                   <div key={post.id} className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
@@ -1138,11 +1188,11 @@ export default function TEDxXinyiAdmin() {
                       </button>
                     </div>
 
-                    <div className="flex flex-col md:flex-row">
-                      {/* Copy section */}
-                      <div className="flex-1 p-4 border-b md:border-b-0 md:border-r border-neutral-800/50">
+                    <div className="flex flex-col lg:flex-row">
+                      {/* Column 1: Copy */}
+                      <div className="flex-1 p-4 border-b lg:border-b-0 lg:border-r border-neutral-800/50 min-w-0">
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Copy</h4>
+                          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">1. Copy</h4>
                           <div className="flex gap-1">
                             {post.copy && (
                               <button
@@ -1163,7 +1213,6 @@ export default function TEDxXinyiAdmin() {
                           </div>
                         </div>
 
-                        {/* Display copy or editing state */}
                         {isEditing ? (
                           <div>
                             <textarea
@@ -1185,40 +1234,94 @@ export default function TEDxXinyiAdmin() {
                           <p className="text-neutral-600 text-sm italic">No copy yet. Click &quot;Generate Copy&quot; below.</p>
                         )}
 
-                        {/* Comment + generate buttons */}
                         <div className="mt-3 space-y-2">
                           {post.copy && (
-                            <div>
-                              <input
-                                type="text"
-                                value={postComment}
-                                onChange={e => setCommentText(prev => ({ ...prev, [post.id]: e.target.value }))}
-                                placeholder="Feedback for revision (e.g. more casual, add ticket link\u2026)"
-                                className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500"
-                              />
-                            </div>
+                            <input
+                              type="text"
+                              value={postComment}
+                              onChange={e => setCommentText(prev => ({ ...prev, [post.id]: e.target.value }))}
+                              placeholder="Feedback for revision (e.g. more casual, add ticket link...)"
+                              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500"
+                            />
                           )}
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => generateCopy(post.id, post.copy, postComment)}
-                              disabled={isCopyGen}
-                              className="px-3 py-1.5 text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded transition-colors disabled:opacity-40"
-                            >
-                              {isCopyGen ? 'Generating\u2026' : post.copy && postComment ? 'Revise Copy' : post.copy ? 'Regenerate Copy' : 'Generate Copy'}
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => generateCopy(post.id, post.copy, postComment)}
+                            disabled={isCopyGen}
+                            className="px-3 py-1.5 text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded transition-colors disabled:opacity-40"
+                          >
+                            {isCopyGen ? 'Generating...' : post.copy && postComment ? 'Revise Copy' : post.copy ? 'Regenerate Copy' : 'Generate Copy'}
+                          </button>
                         </div>
                       </div>
 
-                      {/* Image section */}
-                      <div className="w-full md:w-72 p-4 flex-shrink-0">
+                      {/* Column 2: Image Prompt */}
+                      <div className="flex-1 p-4 border-b lg:border-b-0 lg:border-r border-neutral-800/50 min-w-0">
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">IG Image</h4>
+                          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">2. Image Prompt</h4>
+                          <div className="flex gap-1">
+                            {post.imagePrompt && !isEditingPrompt && (
+                              <button
+                                onClick={() => { setEditingImagePrompt(post.id); setEditImagePromptText(post.imagePrompt); }}
+                                className="px-2 py-1 text-[10px] font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded transition-colors"
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {isEditingPrompt ? (
+                          <div>
+                            <textarea
+                              value={editImagePromptText}
+                              onChange={e => setEditImagePromptText(e.target.value)}
+                              rows={8}
+                              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white resize-y focus:outline-none focus:border-purple-500"
+                            />
+                            <div className="flex gap-2 mt-2">
+                              <button onClick={() => saveImagePrompt(post.id, editImagePromptText)} className="px-3 py-1.5 text-xs font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors">Save</button>
+                              <button onClick={() => setEditingImagePrompt(null)} className="px-3 py-1.5 text-xs font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-400 rounded transition-colors">Cancel</button>
+                            </div>
+                          </div>
+                        ) : post.imagePrompt ? (
+                          <div className="text-sm text-neutral-300 whitespace-pre-wrap leading-relaxed bg-white/[0.02] rounded-lg p-3 max-h-64 overflow-y-auto">
+                            {post.imagePrompt}
+                          </div>
+                        ) : (
+                          <p className="text-neutral-600 text-sm italic">No image prompt yet. Generate from copy.</p>
+                        )}
+
+                        <div className="mt-3 space-y-2">
+                          {post.imagePrompt && (
+                            <input
+                              type="text"
+                              value={promptComment}
+                              onChange={e => setPromptCommentText(prev => ({ ...prev, [post.id]: e.target.value }))}
+                              placeholder="Feedback for revision (e.g. warmer tones, more cosmic...)"
+                              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-purple-500"
+                            />
+                          )}
+                          <button
+                            onClick={() => generateImagePrompt(post.id, post.copy, promptComment, post.imagePrompt)}
+                            disabled={isPromptGen || !post.copy}
+                            className="px-3 py-1.5 text-xs font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40"
+                            title={!post.copy ? 'Generate copy first' : 'Generate image prompt from copy'}
+                          >
+                            {isPromptGen ? 'Generating...' : post.imagePrompt && promptComment ? 'Revise Prompt' : post.imagePrompt ? 'Regenerate Prompt' : 'Generate Image Prompt'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Column 3: Generated Image */}
+                      <div className="w-full lg:w-72 p-4 flex-shrink-0">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">3. IG Image</h4>
                         </div>
 
                         {post.imageUrl ? (
                           <div className="relative group">
                             <div className="aspect-square rounded-lg overflow-hidden bg-neutral-800">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={post.imageUrl} alt="Social post" className="w-full h-full object-cover" />
                             </div>
                             <a
@@ -1237,13 +1340,16 @@ export default function TEDxXinyiAdmin() {
                         )}
 
                         <button
-                          onClick={() => generateImage(post.id, post.copy)}
-                          disabled={isImgGen || !post.copy}
+                          onClick={() => generateImage(post.id, post.copy, post.imagePrompt)}
+                          disabled={isImgGen || (!post.copy && !post.imagePrompt)}
                           className="w-full mt-2 px-3 py-1.5 text-xs font-bold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 rounded transition-colors disabled:opacity-40"
-                          title={!post.copy ? 'Generate copy first' : 'Generate IG post image'}
+                          title={!post.copy && !post.imagePrompt ? 'Generate copy or image prompt first' : post.imagePrompt ? 'Generate image using custom prompt' : 'Generate image from copy'}
                         >
-                          {isImgGen ? 'Generating image\u2026' : post.imageUrl ? 'Regenerate Image' : 'Generate Image'}
+                          {isImgGen ? 'Generating image...' : post.imageUrl ? 'Regenerate Image' : 'Generate Image'}
                         </button>
+                        {post.imagePrompt && (
+                          <p className="text-[10px] text-neutral-600 mt-1 text-center">Using custom prompt</p>
+                        )}
                       </div>
                     </div>
                   </div>

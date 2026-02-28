@@ -90,8 +90,89 @@ async function loadMediaUrlsFromDb() {
   }
 }
 
+// ---- PostgreSQL persistence for social posts ----
+async function initSocialPostsTable() {
+  const pool = getDbPool();
+  if (!pool) return;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tedx_social_posts (
+        id VARCHAR(100) PRIMARY KEY,
+        copy TEXT DEFAULT '',
+        comment TEXT DEFAULT '',
+        image_prompt TEXT DEFAULT '',
+        image_url TEXT,
+        platform VARCHAR(50) DEFAULT 'instagram',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    // Add image_prompt column if table already existed without it
+    await pool.query(`
+      ALTER TABLE tedx_social_posts ADD COLUMN IF NOT EXISTS image_prompt TEXT DEFAULT ''
+    `).catch(() => {});
+    console.log('[TEDxXinyi] Social posts table ready');
+  } catch (err) {
+    console.error('[TEDxXinyi] Failed to create social posts table:', err.message);
+  }
+}
+
+async function loadSocialPostsFromDb() {
+  const pool = getDbPool();
+  if (!pool) return null;
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, copy, comment, image_prompt, image_url, platform, created_at, updated_at FROM tedx_social_posts ORDER BY created_at DESC'
+    );
+    return rows.map(r => ({
+      id: r.id,
+      copy: r.copy || '',
+      comment: r.comment || '',
+      imagePrompt: r.image_prompt || '',
+      imageUrl: r.image_url || null,
+      platform: r.platform || 'instagram',
+      createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+    }));
+  } catch (err) {
+    console.error('[TEDxXinyi] DB load social posts failed:', err.message);
+    return null;
+  }
+}
+
+async function saveSocialPostToDb(post) {
+  const pool = getDbPool();
+  if (!pool) return;
+  try {
+    await pool.query(`
+      INSERT INTO tedx_social_posts (id, copy, comment, image_prompt, image_url, platform, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (id) DO UPDATE SET
+        copy = EXCLUDED.copy,
+        comment = EXCLUDED.comment,
+        image_prompt = EXCLUDED.image_prompt,
+        image_url = EXCLUDED.image_url,
+        platform = EXCLUDED.platform,
+        updated_at = EXCLUDED.updated_at
+    `, [post.id, post.copy || '', post.comment || '', post.imagePrompt || '', post.imageUrl || null, post.platform || 'instagram', post.createdAt, post.updatedAt]);
+  } catch (err) {
+    console.error('[TEDxXinyi] DB save social post failed:', err.message);
+  }
+}
+
+async function deleteSocialPostFromDb(id) {
+  const pool = getDbPool();
+  if (!pool) return;
+  try {
+    await pool.query('DELETE FROM tedx_social_posts WHERE id = $1', [id]);
+  } catch (err) {
+    console.error('[TEDxXinyi] DB delete social post failed:', err.message);
+  }
+}
+
 // Init media table on module load, then hydrate metadata from DB
 initMediaTable().then(() => hydrateMetadataFromDb()).catch(() => {});
+initSocialPostsTable().catch(() => {});
 
 // On startup: if .media-metadata.json is empty/missing, populate from DB CDN URLs.
 // This fixes image loading on Fly.dev where the ephemeral FS loses the metadata file
@@ -2381,7 +2462,7 @@ RewriteRule ^ index.php [L]
 
 const SOCIAL_POSTS_PATH = path.join(__dirname, '.social-posts.json');
 
-function loadSocialPosts() {
+function loadSocialPostsFromFile() {
   try {
     if (fs.existsSync(SOCIAL_POSTS_PATH)) {
       return JSON.parse(fs.readFileSync(SOCIAL_POSTS_PATH, 'utf8'));
@@ -2390,8 +2471,33 @@ function loadSocialPosts() {
   return [];
 }
 
-function saveSocialPosts(posts) {
-  fs.writeFileSync(SOCIAL_POSTS_PATH, JSON.stringify(posts, null, 2));
+function saveSocialPostsToFile(posts) {
+  try {
+    fs.writeFileSync(SOCIAL_POSTS_PATH, JSON.stringify(posts, null, 2));
+  } catch { /* ignore */ }
+}
+
+// Load from DB first, fall back to file
+async function loadSocialPosts() {
+  const dbPosts = await loadSocialPostsFromDb();
+  if (dbPosts && dbPosts.length > 0) return dbPosts;
+  // Fall back to file (and migrate to DB if possible)
+  const filePosts = loadSocialPostsFromFile();
+  if (filePosts.length > 0) {
+    for (const p of filePosts) {
+      if (!p.imagePrompt) p.imagePrompt = '';
+      await saveSocialPostToDb(p);
+    }
+  }
+  return filePosts;
+}
+
+// Save to both DB and file
+async function saveSocialPosts(posts) {
+  saveSocialPostsToFile(posts);
+  for (const p of posts) {
+    await saveSocialPostToDb(p);
+  }
 }
 
 // TEDx Xinyi event context for AI prompts
@@ -2422,49 +2528,69 @@ Instagram: @tedxxinyi
 `.trim();
 
 // ---- List all social posts ----
-router.get('/social/posts', (req, res) => {
-  const posts = loadSocialPosts();
-  res.json({ posts });
+router.get('/social/posts', async (req, res) => {
+  try {
+    const posts = await loadSocialPosts();
+    res.json({ posts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ---- Create a new empty post slot ----
-router.post('/social/posts', express.json(), (req, res) => {
-  const posts = loadSocialPosts();
-  const id = `post-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const post = {
-    id,
-    copy: '',
-    comment: '',
-    imageUrl: null,
-    platform: req.body.platform || 'instagram',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  posts.unshift(post);
-  saveSocialPosts(posts);
-  res.json({ post });
+router.post('/social/posts', express.json(), async (req, res) => {
+  try {
+    const posts = await loadSocialPosts();
+    const id = `post-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const post = {
+      id,
+      copy: '',
+      comment: '',
+      imagePrompt: '',
+      imageUrl: null,
+      platform: req.body.platform || 'instagram',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    posts.unshift(post);
+    await saveSocialPosts(posts);
+    res.json({ post });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// ---- Update a post (copy, comment, platform) ----
-router.put('/social/posts/:id', express.json(), (req, res) => {
-  const posts = loadSocialPosts();
-  const idx = posts.findIndex(p => p.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'Post not found' });
-  const { copy, comment, platform } = req.body;
-  if (copy !== undefined) posts[idx].copy = copy;
-  if (comment !== undefined) posts[idx].comment = comment;
-  if (platform !== undefined) posts[idx].platform = platform;
-  posts[idx].updatedAt = new Date().toISOString();
-  saveSocialPosts(posts);
-  res.json({ post: posts[idx] });
+// ---- Update a post (copy, comment, imagePrompt, platform) ----
+router.put('/social/posts/:id', express.json(), async (req, res) => {
+  try {
+    const posts = await loadSocialPosts();
+    const idx = posts.findIndex(p => p.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Post not found' });
+    const { copy, comment, imagePrompt, platform } = req.body;
+    if (copy !== undefined) posts[idx].copy = copy;
+    if (comment !== undefined) posts[idx].comment = comment;
+    if (imagePrompt !== undefined) posts[idx].imagePrompt = imagePrompt;
+    if (platform !== undefined) posts[idx].platform = platform;
+    posts[idx].updatedAt = new Date().toISOString();
+    await saveSocialPosts(posts);
+    res.json({ post: posts[idx] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ---- Delete a post ----
-router.delete('/social/posts/:id', (req, res) => {
-  let posts = loadSocialPosts();
-  posts = posts.filter(p => p.id !== req.params.id);
-  saveSocialPosts(posts);
-  res.json({ success: true });
+router.delete('/social/posts/:id', async (req, res) => {
+  try {
+    let posts = await loadSocialPosts();
+    const deletedId = req.params.id;
+    posts = posts.filter(p => p.id !== deletedId);
+    await saveSocialPosts(posts);
+    await deleteSocialPostFromDb(deletedId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ---- Generate copy with DeepSeek ----
@@ -2506,19 +2632,81 @@ Guidelines:
 
     // Save the generated copy to the post
     if (postId) {
-      const posts = loadSocialPosts();
+      const posts = await loadSocialPosts();
       const idx = posts.findIndex(p => p.id === postId);
       if (idx !== -1) {
         posts[idx].copy = result.content;
         posts[idx].comment = '';
         posts[idx].updatedAt = new Date().toISOString();
-        saveSocialPosts(posts);
+        await saveSocialPosts(posts);
       }
     }
 
     res.json({ copy: result.content, model: result.model, usage: result.usage });
   } catch (err) {
     console.error('[TEDxXinyi] Generate copy error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- Generate image prompt from copy with DeepSeek ----
+router.post('/social/generate-image-prompt', express.json(), async (req, res) => {
+  const { postId, copy, comment, existingPrompt } = req.body;
+  if (!copy) return res.status(400).json({ error: 'copy is required to generate an image prompt' });
+
+  try {
+    const deepseek = require('../../../services/deepseekService');
+    if (!deepseek.isAvailable()) {
+      return res.status(503).json({ error: 'DeepSeek API key not configured' });
+    }
+
+    let userPrompt;
+    if (existingPrompt && comment) {
+      userPrompt = `Here is an existing image generation prompt:\n\n---\n${existingPrompt}\n---\n\nThe user wants this revision:\n"${comment}"\n\nPlease rewrite the image prompt incorporating this feedback. Return ONLY the updated image prompt, nothing else.`;
+    } else {
+      userPrompt = `Based on this social media post copy, create a detailed image generation prompt for an Instagram post image (1080x1080):\n\n---\n${copy}\n---\n\nReturn ONLY the image generation prompt, nothing else.`;
+    }
+
+    const systemPrompt = `You are an expert at writing image generation prompts for AI image generators (like Gemini, DALL-E, Midjourney). Your job is to translate social media copy into detailed visual prompts.
+
+${TEDX_EVENT_CONTEXT}
+
+Write prompts that produce visually striking, on-brand images for TEDxXinyi Instagram posts.
+
+Guidelines for the prompt:
+- Specify 1080x1080 square format, 1:1 aspect ratio
+- Extract key themes/phrases from the copy to guide the visual
+- Use TEDx brand colors: TEDx red (#E62B1E), deep midnight blue, warm golden amber, soft violet, cream
+- Style: cinematic, luminous, premium theatrical quality
+- Include "TEDxXinyi" text placement direction
+- Galaxy/cosmic subtle background matching "We Are Becoming" theme
+- Professional event promotion feel
+- Instagram best practice: readable text, high contrast for mobile
+- Artistic and unique — no stock photo feel
+- Include date hint: 2026.3.31
+- DO NOT use placeholder brackets — all text should be finalized copy
+- Keep prompt under 300 words but detailed enough for high-quality output`;
+
+    const result = await deepseek.analyze(systemPrompt, userPrompt, {
+      model: 'deepseek-chat',
+      maxTokens: 800,
+      temperature: 0.7,
+    });
+
+    // Save the generated prompt to the post
+    if (postId) {
+      const posts = await loadSocialPosts();
+      const idx = posts.findIndex(p => p.id === postId);
+      if (idx !== -1) {
+        posts[idx].imagePrompt = result.content;
+        posts[idx].updatedAt = new Date().toISOString();
+        await saveSocialPosts(posts);
+      }
+    }
+
+    res.json({ imagePrompt: result.content, model: result.model, usage: result.usage });
+  } catch (err) {
+    console.error('[TEDxXinyi] Generate image prompt error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2530,14 +2718,18 @@ router.post('/social/generate-image', express.json(), async (req, res) => {
     return res.status(503).json({ error: 'GEMINI_API_KEY not configured — cannot generate image' });
   }
 
-  const { postId, copy } = req.body;
-  if (!copy) return res.status(400).json({ error: 'copy is required to generate an image' });
+  const { postId, copy, imagePrompt: customPrompt } = req.body;
+  if (!copy && !customPrompt) return res.status(400).json({ error: 'copy or imagePrompt is required to generate an image' });
 
   try {
-    // Extract a headline / key phrase from the copy for the visual
-    const headline = copy.split('\n').find(l => l.trim().length > 0 && l.trim().length < 80) || 'We Are Becoming';
-
-    const prompt = `Create a visually striking Instagram post image (1080x1080 square, 1:1 aspect ratio).
+    let prompt;
+    if (customPrompt) {
+      // Use the user-provided/AI-generated image prompt
+      prompt = customPrompt;
+    } else {
+      // Fallback: auto-generate a prompt from the copy
+      const headline = copy.split('\n').find(l => l.trim().length > 0 && l.trim().length < 80) || 'We Are Becoming';
+      prompt = `Create a visually striking Instagram post image (1080x1080 square, 1:1 aspect ratio).
 
 Design brief:
 - Big bold headline text prominently displayed: "${headline.replace(/[#@]/g, '').trim().slice(0, 60)}"
@@ -2553,6 +2745,7 @@ Design brief:
 - Date hint: 2026.3.31
 
 Do NOT include any placeholder text. All text in the image should be real, finalized copy.`;
+    }
 
     console.log(`[TEDxXinyi] Generating social media image for post ${postId || 'unknown'}`);
     const rawBuffer = await generateVisual(client, prompt);
@@ -2585,12 +2778,12 @@ Do NOT include any placeholder text. All text in the image should be real, final
 
     // Save to post
     if (postId) {
-      const posts = loadSocialPosts();
+      const posts = await loadSocialPosts();
       const idx = posts.findIndex(p => p.id === postId);
       if (idx !== -1) {
         posts[idx].imageUrl = imageUrl;
         posts[idx].updatedAt = new Date().toISOString();
-        saveSocialPosts(posts);
+        await saveSocialPosts(posts);
       }
     }
 
