@@ -74,7 +74,7 @@ export default function TEDxXinyiAdmin() {
   // Action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmArchive, setConfirmArchive] = useState<string | null>(null);
   const [confirmRegen, setConfirmRegen] = useState<string | null>(null);
 
   // Edit modal state (for any slot or media entry)
@@ -276,9 +276,10 @@ export default function TEDxXinyiAdmin() {
     }
   }
 
-  // Remove (deactivate, keep as archive)
-  async function handleRemove(key: string) {
+  // Archive (deactivate, keep asset in storage with --archived- prefix)
+  async function handleArchive(key: string) {
     setActionLoading(key);
+    setConfirmArchive(null);
     try {
       const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/remove`, {
         method: 'POST',
@@ -287,31 +288,10 @@ export default function TEDxXinyiAdmin() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      showToast(`Removed ${key}. Archived as ${data.archiveKey}`);
+      showToast(`Archived ${key} as ${data.archiveKey}`);
       await loadMedia();
     } catch (err) {
-      showToast(`Remove failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
-    } finally {
-      setActionLoading(null);
-    }
-  }
-
-  // Delete (permanent)
-  async function handleDelete(key: string) {
-    setActionLoading(key);
-    setConfirmDelete(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/delete`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      showToast(`Permanently deleted: ${key}`);
-      await loadMedia();
-    } catch (err) {
-      showToast(`Delete failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+      showToast(`Archive failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
     } finally {
       setActionLoading(null);
     }
@@ -422,16 +402,16 @@ export default function TEDxXinyiAdmin() {
         </div>
       )}
 
-      {/* Confirm delete modal */}
-      {confirmDelete && (
+      {/* Confirm archive modal */}
+      {confirmArchive && (
         <div className="fixed inset-0 z-40 bg-black/60 flex items-center justify-center px-4">
           <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-6 max-w-sm w-full">
-            <h3 className="text-white font-bold mb-2">Permanently delete?</h3>
-            <p className="text-neutral-400 text-sm mb-1">This will remove the file and all metadata.</p>
-            <p className="text-red-400 text-xs font-mono mb-4 break-all">{confirmDelete}</p>
+            <h3 className="text-white font-bold mb-2">Archive this image?</h3>
+            <p className="text-neutral-400 text-sm mb-1">The image will be deactivated but kept in storage for recovery.</p>
+            <p className="text-amber-400 text-xs font-mono mb-4 break-all">{confirmArchive}</p>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors">Cancel</button>
-              <button onClick={() => handleDelete(confirmDelete)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg transition-colors">Delete Forever</button>
+              <button onClick={() => setConfirmArchive(null)} className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors">Cancel</button>
+              <button onClick={() => handleArchive(confirmArchive)} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold rounded-lg transition-colors">Archive</button>
             </div>
           </div>
         </div>
@@ -884,13 +864,13 @@ export default function TEDxXinyiAdmin() {
                             <span className="text-[10px] px-1.5 py-0.5 bg-amber-900/60 text-amber-300 rounded font-bold">ARCHIVED</span>
                           </div>
                         )}
-                        {!loading && (
+                        {!loading && !archived && (
                           <button
-                            onClick={() => setConfirmDelete(img.key)}
-                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/70 hover:bg-red-600 text-white/70 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
-                            title="Delete image"
+                            onClick={() => setConfirmArchive(img.key)}
+                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/70 hover:bg-amber-600 text-white/70 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                            title="Archive image"
                           >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4" /></svg>
                           </button>
                         )}
                       </div>
@@ -939,14 +919,11 @@ export default function TEDxXinyiAdmin() {
                               Upload New
                             </button>
                           )}
-                          {!archived && (img.localExists || img.publicUrl) && (
-                            <button onClick={() => handleRemove(img.key)} disabled={loading} className="px-2 py-1.5 text-[11px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40" title="Remove from active slot">
-                              Remove
+                          {!archived && (
+                            <button onClick={() => setConfirmArchive(img.key)} disabled={loading} className="px-2 py-1.5 text-[11px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40" title="Archive image">
+                              Archive
                             </button>
                           )}
-                          <button onClick={() => setConfirmDelete(img.key)} disabled={loading} className="px-2 py-1.5 text-[11px] font-bold bg-red-600/20 hover:bg-red-600/30 text-red-300 rounded transition-colors disabled:opacity-40" title="Permanently delete">
-                            Delete
-                          </button>
                         </div>
                       </div>
                     </div>

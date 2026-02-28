@@ -1330,7 +1330,7 @@ router.post('/media/regenerate', express.json(), async (req, res) => {
   }
 });
 
-// ---- API: remove image from active slot (keep as archived asset) ----
+// ---- API: archive image (deactivate, keep asset in storage) ----
 router.post('/media/remove', express.json(), async (req, res) => {
   try {
     const { key } = req.body;
@@ -1340,7 +1340,7 @@ router.post('/media/remove', express.json(), async (req, res) => {
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const ext = path.extname(key);
     const base = key.replace(ext, '');
-    const archiveKey = `${base}--removed-${ts}${ext}`;
+    const archiveKey = `${base}--archived-${ts}${ext}`;
 
     // Move local file to archive name
     const filePath = path.join(OUTPUT_DIR, key);
@@ -1349,56 +1349,19 @@ router.post('/media/remove', express.json(), async (req, res) => {
       const archiveDir = path.dirname(archivePath);
       if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
       fs.renameSync(filePath, archivePath);
-      console.log(`[TEDxXinyi] Moved ${key} → ${archiveKey}`);
+      console.log(`[TEDxXinyi] Archived ${key} → ${archiveKey}`);
     }
 
     // Move metadata to archive key
     if (meta[key]) {
-      meta[archiveKey] = { ...meta[key], removedFrom: key, removedAt: new Date().toISOString() };
+      meta[archiveKey] = { ...meta[key], archivedFrom: key, archivedAt: new Date().toISOString() };
       delete meta[key];
     }
     saveMetadata(meta);
 
-    res.json({ success: true, key, archiveKey, message: `Removed from active slot. Archived as ${archiveKey}` });
+    res.json({ success: true, key, archiveKey, message: `Archived as ${archiveKey}` });
   } catch (err) {
-    console.error('[TEDxXinyi] Remove error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ---- API: permanently delete image ----
-router.delete('/media/delete', express.json(), async (req, res) => {
-  try {
-    const { key } = req.body;
-    if (!key) return res.status(400).json({ error: 'key required' });
-
-    // Delete local file
-    const filePath = path.join(OUTPUT_DIR, key);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      console.log(`[TEDxXinyi] Deleted local file: ${key}`);
-    }
-
-    // Remove from metadata
-    const meta = loadMetadata();
-    if (meta[key]) {
-      delete meta[key];
-      saveMetadata(meta);
-    }
-
-    // Remove from DB
-    const pool = getDbPool();
-    if (pool) {
-      try {
-        await pool.query('DELETE FROM tedx_media_assets WHERE key = $1', [key]);
-      } catch (dbErr) {
-        console.error(`[TEDxXinyi] DB delete failed for ${key}:`, dbErr.message);
-      }
-    }
-
-    res.json({ success: true, key, message: `Permanently deleted: ${key}` });
-  } catch (err) {
-    console.error('[TEDxXinyi] Delete error:', err.message);
+    console.error('[TEDxXinyi] Archive error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
