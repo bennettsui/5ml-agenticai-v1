@@ -3,15 +3,17 @@
 import { useState } from 'react';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY } from '../components';
 
+const SPEAKER_COLORS = ['#E62B1E', '#D97706', '#059669', '#7C3AED', '#2563EB', '#DC2626', '#0891B2', '#9333EA'];
+
 const SPEAKERS = [
-  { name: '張卉君', role: '自然倡議者／黑潮海洋文教基金會', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E5%BC%B5%E5%8D%89%E5%90%9B-e1625535281259-500x500.png' },
-  { name: '蔡年玨', role: '跨域創作者', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E8%94%A1%E5%B9%B4%E7%8E%A8-500x500.jpg' },
-  { name: '劉欣瑜', role: '國際模特兒', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E5%8A%89%E6%AC%A3%E7%91%9C%E2%80%94%E7%94%9F%E6%B4%BB%E7%85%A7-e1625535100576-500x500.png' },
-  { name: '范欽慧', role: '野地錄音師', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E8%8C%83%E6%AC%BD%E6%85%A72-e1625812859822-500x500.jpg' },
-  { name: '段智敏', role: '國際溜溜球表演者／太陽馬戲團', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E6%AE%B5%E6%99%BA%E6%95%8F%EF%BC%92-500x500.jpg' },
-  { name: '林知秦', role: '未來媽媽戲劇監製', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E6%9E%97%E7%9F%A5%E7%A7%A6-e1625816914518-500x500.jpg' },
-  { name: '周世雄', role: '當代藝術家', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E5%91%A8%E4%B8%96%E9%9B%84-500x500.jpg' },
-  { name: '蕭青陽', role: '唱片設計師／葛萊美獎入圍', image: 'https://tedxxinyi.com/wp-content/uploads/2017/02/%E8%95%AD%E9%9D%92%E9%99%BD-scaled-e1625535578597-500x500.jpg' },
+  { name: '張卉君', role: '自然倡議者／黑潮海洋文教基金會' },
+  { name: '蔡年玨', role: '跨域創作者' },
+  { name: '劉欣瑜', role: '國際模特兒' },
+  { name: '范欽慧', role: '野地錄音師' },
+  { name: '段智敏', role: '國際溜溜球表演者／太陽馬戲團' },
+  { name: '林知秦', role: '未來媽媽戲劇監製' },
+  { name: '周世雄', role: '當代藝術家' },
+  { name: '蕭青陽', role: '唱片設計師／葛萊美獎入圍' },
 ];
 
 export default function SpeakersPage() {
@@ -62,15 +64,16 @@ export default function SpeakersPage() {
           {SPEAKERS.map((speaker, i) => (
             <FadeIn key={i} delay={i * 50}>
               <div className="group relative">
-                <div className="aspect-square overflow-hidden rounded-xl bg-neutral-100">
-                  <img
-                    src={speaker.image}
-                    alt={speaker.name}
-                    loading="lazy"
-                    className="w-full h-full object-cover opacity-0 transition-all duration-500 group-hover:scale-105"
-                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
+                <div
+                  className="aspect-square overflow-hidden rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: `${SPEAKER_COLORS[i % SPEAKER_COLORS.length]}12` }}
+                >
+                  <span
+                    className="text-5xl sm:text-6xl font-black select-none transition-transform duration-300 group-hover:scale-110"
+                    style={{ color: SPEAKER_COLORS[i % SPEAKER_COLORS.length] }}
+                  >
+                    {speaker.name[0]}
+                  </span>
                 </div>
                 <div
                   className="h-1 rounded-b-xl scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300 -mt-1 relative z-10"

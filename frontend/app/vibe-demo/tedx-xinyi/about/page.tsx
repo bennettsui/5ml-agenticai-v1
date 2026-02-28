@@ -50,6 +50,8 @@ const TEAM_ROLES = [
   { name: '成員姓名', role: '策展', title: 'Curation' },
 ];
 
+const SPEAKER_COLORS = ['#E62B1E', '#D97706', '#059669', '#7C3AED', '#2563EB', '#DC2626', '#0891B2', '#9333EA'];
+
 const PAST_SPEAKERS = [
   { name: '張卉君', role: '自然倡議者／黑潮海洋文教基金會' },
   { name: '蔡年玨', role: '跨域創作者' },
@@ -247,8 +249,11 @@ export default function AboutPage() {
           {PAST_SPEAKERS.map((speaker, i) => (
             <FadeIn key={i} delay={i * 60}>
               <div className="text-center">
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full mx-auto mb-4 overflow-hidden bg-neutral-100 border-2 border-neutral-100 flex items-center justify-center">
-                  <span className="text-2xl font-black text-neutral-300">{speaker.name[0]}</span>
+                <div
+                  className="w-24 h-24 sm:w-28 sm:h-28 rounded-full mx-auto mb-4 overflow-hidden border-2 border-white shadow-md flex items-center justify-center"
+                  style={{ backgroundColor: `${SPEAKER_COLORS[i % SPEAKER_COLORS.length]}18`, borderColor: `${SPEAKER_COLORS[i % SPEAKER_COLORS.length]}30` }}
+                >
+                  <span className="text-3xl sm:text-4xl font-black" style={{ color: SPEAKER_COLORS[i % SPEAKER_COLORS.length] }}>{speaker.name[0]}</span>
                 </div>
                 <p className="font-black text-base mb-1" lang="zh-TW">{speaker.name}</p>
                 <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">{speaker.role}</p>
