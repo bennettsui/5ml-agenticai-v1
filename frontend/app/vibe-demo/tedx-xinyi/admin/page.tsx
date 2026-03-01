@@ -8,7 +8,7 @@ const API_BASE = typeof window !== 'undefined'
   : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080');
 const ADMIN_PASSWORD = '5milesLab01@';
 
-type Tab = 'slots' | 'media' | 'social' | 'publish';
+type Tab = 'slots' | 'media' | 'social' | 'publish' | 'records';
 
 interface MediaImage {
   key: string;
@@ -392,7 +392,7 @@ export default function TEDxXinyiAdmin() {
   }, [authed, tab, slotsLoaded, slotsLoading, loadSlots]);
 
   useEffect(() => {
-    if (authed && tab === 'media' && !mediaLoaded && !mediaLoading) {
+    if (authed && (tab === 'media' || tab === 'records') && !mediaLoaded && !mediaLoading) {
       loadMedia();
     }
   }, [authed, tab, mediaLoaded, mediaLoading, loadMedia]);
@@ -513,7 +513,7 @@ export default function TEDxXinyiAdmin() {
     }
   }
 
-  // Regenerate (AI)
+  // Regenerate (AI) — for existing images
   async function handleRegenerate(key: string, instructions?: string) {
     setActionLoading(key);
     try {
@@ -528,6 +528,28 @@ export default function TEDxXinyiAdmin() {
       await loadMedia();
     } catch (err) {
       showToast(`Regenerate failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  // Generate via nanobanana (Gemini) — for VISUALS with predefined prompts
+  async function handleGenerate(visualId: string) {
+    setActionLoading(visualId);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: visualId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      showToast(`Generated ${visualId} → CDN: ${data.publicUrl || 'local only'}`);
+      setEditSlot(null);
+      await loadMedia();
+      if (slotsLoaded) await loadSlots();
+    } catch (err) {
+      showToast(`Generate failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
     } finally {
       setActionLoading(null);
     }
@@ -590,6 +612,7 @@ export default function TEDxXinyiAdmin() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'slots', label: 'Image Slots' },
+    { id: 'records', label: 'Image Records' },
     { id: 'media', label: 'Media Library' },
     { id: 'social', label: 'Social Media' },
     { id: 'publish', label: 'Publish Site Pack' },
@@ -796,6 +819,16 @@ export default function TEDxXinyiAdmin() {
                         className="px-4 py-2 text-xs font-bold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded-lg transition-colors"
                       >
                         {imagePickerOpen ? 'Close Picker' : 'Pick from Library'}
+                      </button>
+                    )}
+                    {effectiveKey && editSlot.type !== 'speaker' && (
+                      <button
+                        onClick={() => handleGenerate(effectiveKey.replace(/\.(jpg|jpeg|png|webp|gif)$/i, ''))}
+                        disabled={isLoading}
+                        className="px-4 py-2 text-xs font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded-lg transition-colors disabled:opacity-40"
+                        title="Generate fresh via Gemini nanobanana using pre-defined prompt"
+                      >
+                        {isLoading ? 'Generating…' : '✦ Generate (nanobanana)'}
                       </button>
                     )}
                     {effectiveKey && (
@@ -1473,6 +1506,134 @@ export default function TEDxXinyiAdmin() {
                 <p className="text-[11px] text-neutral-600">Images with CDN URLs load from mmdbfiles CDN even if local files are missing.</p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ==================== IMAGE RECORDS TAB ==================== */}
+        {tab === 'records' && (
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-black">Image Records</h2>
+                <p className="text-neutral-500 text-sm mt-1">Complete canonical inventory of all site images — CDN status, local status, and generation actions.</p>
+              </div>
+              <button
+                onClick={() => loadMedia()}
+                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold rounded-lg transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {!mediaLoaded ? (
+              <div className="text-center py-20 text-neutral-600">Loading image records…</div>
+            ) : (
+              <>
+                {/* Summary strip */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                  {[
+                    { label: 'Total', value: media.length, color: 'text-white' },
+                    { label: 'CDN Ready', value: media.filter(m => m.publicUrl).length, color: 'text-green-400' },
+                    { label: 'Local Only', value: media.filter(m => !m.publicUrl && m.localExists).length, color: 'text-amber-400' },
+                    { label: 'Missing', value: media.filter(m => m.missing).length, color: 'text-red-400' },
+                  ].map(s => (
+                    <div key={s.label} className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+                      <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
+                      <p className="text-neutral-500 text-xs mt-0.5">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Records table grouped by source */}
+                {(['generated', 'speaker', 'uploaded'] as const).map(src => {
+                  const group = media.filter(m => m.source === src);
+                  if (group.length === 0) return null;
+                  const srcLabel = src === 'generated' ? '✦ Generated (nanobanana)' : src === 'speaker' ? '👤 Speaker Photos' : '⬆ Uploaded';
+                  return (
+                    <div key={src} className="mb-8">
+                      <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3">{srcLabel}</h3>
+                      <div className="border border-neutral-800 rounded-xl overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-neutral-800 bg-neutral-900/50">
+                              <th className="text-left px-4 py-2.5 text-[11px] font-bold text-neutral-500 uppercase tracking-wide">Key</th>
+                              <th className="text-left px-4 py-2.5 text-[11px] font-bold text-neutral-500 uppercase tracking-wide hidden md:table-cell">Description</th>
+                              <th className="text-center px-4 py-2.5 text-[11px] font-bold text-neutral-500 uppercase tracking-wide">CDN</th>
+                              <th className="text-center px-4 py-2.5 text-[11px] font-bold text-neutral-500 uppercase tracking-wide">Local</th>
+                              <th className="text-right px-4 py-2.5 text-[11px] font-bold text-neutral-500 uppercase tracking-wide">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.map((img, i) => {
+                              const isGenerated = src === 'generated';
+                              const visualId = img.key.replace(/\.(jpg|jpeg|png|webp|gif)$/i, '');
+                              const loading = actionLoading === img.key || actionLoading === visualId;
+                              return (
+                                <tr key={img.key} className={`border-b border-neutral-800/50 last:border-0 ${i % 2 === 0 ? '' : 'bg-neutral-900/20'}`}>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-2">
+                                      {(img.publicUrl || img.localExists) && (
+                                        <img
+                                          src={img.publicUrl || `${API_BASE}/tedx-xinyi/${img.key}`}
+                                          alt=""
+                                          className="w-8 h-8 rounded object-cover flex-shrink-0 bg-neutral-800"
+                                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                      )}
+                                      <span className="font-mono text-[11px] text-neutral-300 break-all">{img.key}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-[11px] text-neutral-500 hidden md:table-cell max-w-[200px]">{img.description || img.alt || '—'}</td>
+                                  <td className="px-4 py-3 text-center">
+                                    {img.publicUrl ? (
+                                      <a href={img.publicUrl} target="_blank" rel="noopener noreferrer" className="text-green-400 text-[10px] font-bold hover:underline">✓ CDN</a>
+                                    ) : (
+                                      <span className="text-neutral-600 text-[10px]">—</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    {img.localExists ? (
+                                      <span className="text-amber-400 text-[10px] font-bold">✓ Local</span>
+                                    ) : (
+                                      <span className="text-neutral-600 text-[10px]">—</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="flex gap-1 justify-end flex-wrap">
+                                      {isGenerated && (
+                                        <button
+                                          onClick={() => handleGenerate(visualId)}
+                                          disabled={!!loading}
+                                          className="px-2 py-1 text-[10px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40"
+                                        >
+                                          {loading ? '…' : img.localExists || img.publicUrl ? 'Re-gen' : 'Generate'}
+                                        </button>
+                                      )}
+                                      {!img.publicUrl && img.localExists && (
+                                        <button
+                                          onClick={() => pushToCdn(img.key)}
+                                          disabled={!!loading}
+                                          className="px-2 py-1 text-[10px] font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded transition-colors disabled:opacity-40"
+                                        >
+                                          {loading ? '…' : 'Push CDN'}
+                                        </button>
+                                      )}
+                                      {img.missing && !isGenerated && (
+                                        <span className="px-2 py-1 text-[10px] font-bold text-red-400">Missing</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </div>
         )}
       </div>
