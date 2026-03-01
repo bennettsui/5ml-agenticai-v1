@@ -87,12 +87,14 @@ export default function SustainabilityPage() {
             </FadeIn>
           </div>
           <FadeIn delay={200}>
-            <div className="aspect-[4/3] rounded-2xl overflow-hidden bg-neutral-100">
-              <img
-                src={IMG_PROBLEM}
-                alt="TEDxXinyi 現場書法藝術裝置——Negative / Positive"
-                className="w-full h-full object-cover"
-              />
+            <div className="max-w-[70%] mx-auto">
+              <div className="aspect-[4/3] rounded-2xl overflow-hidden bg-neutral-100">
+                <img
+                  src={IMG_PROBLEM}
+                  alt="TEDxXinyi 現場書法藝術裝置——Negative / Positive"
+                  className="w-full h-full object-cover"
+                />
+              </div>
             </div>
           </FadeIn>
         </div>
@@ -119,6 +121,7 @@ export default function SustainabilityPage() {
             </FadeIn>
           </div>
           <FadeIn delay={200}>
+            <div className="max-w-[70%] mx-auto">
             <div className="w-full aspect-video rounded-2xl overflow-hidden shadow-lg bg-neutral-900 relative">
               {playVideo ? (
                 <iframe
@@ -151,6 +154,7 @@ export default function SustainabilityPage() {
                 </button>
               )}
             </div>
+            </div>
           </FadeIn>
         </div>
       </Section>
@@ -176,18 +180,20 @@ export default function SustainabilityPage() {
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   {/* Image */}
-                  <div className="relative z-10 rounded-2xl overflow-hidden shadow-lg aspect-[4/3]">
-                    <img
-                      src={block.img}
-                      alt={block.imgAlt}
-                      className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-                    />
-                    {/* Bottom-right step badge */}
-                    <div
-                      className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full text-[11px] font-black tracking-widest"
-                      style={{ backgroundColor: TED_RED, color: '#fff' }}
-                    >
-                      STEP {String(i + 1).padStart(2, '0')}
+                  <div className="max-w-[70%] mx-auto">
+                    <div className="relative z-10 rounded-2xl overflow-hidden shadow-lg aspect-[4/3]">
+                      <img
+                        src={block.img}
+                        alt={block.imgAlt}
+                        className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                      />
+                      {/* Bottom-right step badge */}
+                      <div
+                        className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full text-[11px] font-black tracking-widest"
+                        style={{ backgroundColor: TED_RED, color: '#fff' }}
+                      >
+                        STEP {String(i + 1).padStart(2, '0')}
+                      </div>
                     </div>
                   </div>
                 </div>
