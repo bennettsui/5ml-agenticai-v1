@@ -384,6 +384,8 @@ export function AiAssistant() {
   // Attachments
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
 
   const chatHistoryRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [crmSessionId, setCrmSessionId] = useState<string | null>(null);
@@ -591,10 +593,8 @@ export function AiAssistant() {
   // -----------------------------------------------------------------------
   // File attachment handling
   // -----------------------------------------------------------------------
-  const handleFileChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
+  const processFiles = useCallback(async (files: File[]) => {
     if (!files.length) return;
-
     const newAttachments: Attachment[] = [];
     for (const file of files) {
       const id = attachId();
@@ -602,8 +602,8 @@ export function AiAssistant() {
         try {
           const { base64, mediaType, preview } = await fileToBase64(file);
           newAttachments.push({ id, file, kind: 'image', preview, base64, mediaType });
-        } catch { /* skip unreadable files */ }
-      } else if (TEXT_TYPES.includes(file.type) || file.name.endsWith('.md') || file.name.endsWith('.txt') || file.name.endsWith('.csv')) {
+        } catch { /* skip unreadable */ }
+      } else if (TEXT_TYPES.includes(file.type) || /\.(md|txt|csv)$/.test(file.name)) {
         try {
           const textContent = await fileToText(file);
           newAttachments.push({ id, file, kind: 'text', textContent });
@@ -612,15 +612,45 @@ export function AiAssistant() {
         newAttachments.push({ id, file, kind: 'other' });
       }
     }
-
     setAttachments((prev) => [...prev, ...newAttachments]);
-    // Reset input so the same file can be re-selected
-    if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
+
+  const handleFileChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
+    await processFiles(Array.from(e.target.files ?? []));
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [processFiles]);
 
   const removeAttachment = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
+
+  // -----------------------------------------------------------------------
+  // Drag and drop
+  // -----------------------------------------------------------------------
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.types.includes('Files')) setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) setIsDragging(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    await processFiles(files);
+  }, [processFiles]);
 
   // -----------------------------------------------------------------------
   // Send message
@@ -741,7 +771,24 @@ export function AiAssistant() {
   // Expanded panel
   // -----------------------------------------------------------------------
   return (
-    <aside className="flex h-screen w-[380px] flex-shrink-0 flex-col border-l border-slate-700 bg-slate-900/95 backdrop-blur sticky top-0">
+    <aside
+      className="relative flex h-screen w-[380px] flex-shrink-0 flex-col border-l border-slate-700 bg-slate-900/95 backdrop-blur sticky top-0"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drop overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 rounded-none bg-slate-900/90 border-2 border-dashed border-emerald-400 pointer-events-none">
+          <div className="p-4 rounded-full bg-emerald-500/20">
+            <Paperclip size={28} className="text-emerald-400" />
+          </div>
+          <p className="text-sm font-semibold text-emerald-300">Drop files here</p>
+          <p className="text-xs text-slate-400">Images, text, CSV, JSON…</p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
         <div className="flex items-center gap-2">
