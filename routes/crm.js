@@ -302,6 +302,39 @@ module.exports = function createCrmRoutes(db) {
     }
   });
 
+  // Update project (brief, deliverables, status, etc.)
+  router.put('/projects/:id', async (req, res) => {
+    try {
+      const { name, type, brief, start_date, end_date, status, success_flag, deliverables } = req.body;
+
+      // Build SET clauses dynamically so we only touch provided fields
+      const sets = ['updated_at = NOW()'];
+      const params = [req.params.id];
+
+      if (name !== undefined) { params.push(name?.trim() || null); sets.push(`name = $${params.length}`); }
+      if (type !== undefined) { params.push(type || null); sets.push(`type = $${params.length}`); }
+      if (brief !== undefined) { params.push(brief); sets.push(`brief = $${params.length}`); }
+      if (start_date !== undefined) { params.push(start_date || null); sets.push(`start_date = $${params.length}`); }
+      if (end_date !== undefined) { params.push(end_date || null); sets.push(`end_date = $${params.length}`); }
+      if (status !== undefined) { params.push(status || null); sets.push(`status = $${params.length}`); }
+      if (success_flag !== undefined) { params.push(success_flag || null); sets.push(`success_flag = $${params.length}`); }
+      if (deliverables !== undefined) { params.push(JSON.stringify(deliverables)); sets.push(`deliverables = $${params.length}`); }
+
+      const result = await pool.query(
+        `UPDATE crm_projects SET ${sets.join(', ')} WHERE id = $1 RETURNING *`,
+        params
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ detail: 'Project not found' });
+      }
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error('Error updating project:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
   // ==========================================
   // FEEDBACK
   // ==========================================

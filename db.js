@@ -310,9 +310,13 @@ async function initDatabase() {
         end_date DATE,
         status VARCHAR(50) DEFAULT 'planning',
         success_flag VARCHAR(50),
+        deliverables JSONB DEFAULT '[]',
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       );
+
+      -- Add deliverables column to existing tables (idempotent migration)
+      ALTER TABLE crm_projects ADD COLUMN IF NOT EXISTS deliverables JSONB DEFAULT '[]';
 
       CREATE INDEX IF NOT EXISTS idx_crm_projects_client ON crm_projects(client_id);
       CREATE INDEX IF NOT EXISTS idx_crm_projects_status ON crm_projects(status);
