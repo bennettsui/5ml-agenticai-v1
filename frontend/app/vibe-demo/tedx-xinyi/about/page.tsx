@@ -50,19 +50,6 @@ const TEAM_ROLES = [
   { name: '成員姓名', role: '策展', title: 'Curation' },
 ];
 
-const SPEAKER_COLORS = ['#E62B1E', '#D97706', '#059669', '#7C3AED', '#2563EB', '#DC2626', '#0891B2', '#9333EA'];
-
-const PAST_SPEAKERS = [
-  { name: '張卉君', role: '自然倡議者／黑潮海洋文教基金會' },
-  { name: '蔡年玨', role: '跨域創作者' },
-  { name: '劉欣瑜', role: '國際模特兒' },
-  { name: '范欽慧', role: '野地錄音師' },
-  { name: '段智敏', role: '國際溜溜球表演者／太陽馬戲團' },
-  { name: '林知秦', role: '未來媽媽戲劇監製' },
-  { name: '周世雄', role: '當代藝術家' },
-  { name: '蕭青陽', role: '唱片設計師／葛萊美獎入圍' },
-];
-
 export default function AboutPage() {
   return (
     <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
@@ -237,32 +224,6 @@ export default function AboutPage() {
       </Section>
 
       {/* Team section hidden until member info is finalized */}
-
-      {/* ==================== PAST SPEAKERS ==================== */}
-      <Section bg="white">
-        <FadeIn>
-          <SectionLabel>PAST SPEAKERS &middot; 2021&ndash;2025</SectionLabel>
-          <h2 className="text-3xl md:text-4xl font-black mb-12" lang="zh-TW">歷屆講者回顧</h2>
-        </FadeIn>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-          {PAST_SPEAKERS.map((speaker, i) => (
-            <FadeIn key={i} delay={i * 60}>
-              <div className="text-center">
-                <div
-                  className="w-24 h-24 sm:w-28 sm:h-28 rounded-full mx-auto mb-4 overflow-hidden border-2 border-white shadow-md flex items-center justify-center"
-                  style={{ backgroundColor: `${SPEAKER_COLORS[i % SPEAKER_COLORS.length]}18`, borderColor: `${SPEAKER_COLORS[i % SPEAKER_COLORS.length]}30` }}
-                >
-                  <span className="text-3xl sm:text-4xl font-black" style={{ color: SPEAKER_COLORS[i % SPEAKER_COLORS.length] }}>{speaker.name[0]}</span>
-                </div>
-                <p className="font-black text-base mb-1" lang="zh-TW">{speaker.name}</p>
-                <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">{speaker.role}</p>
-              </div>
-            </FadeIn>
-          ))}
-        </div>
-      </Section>
-
       <SiteFooter />
     </div>
   );

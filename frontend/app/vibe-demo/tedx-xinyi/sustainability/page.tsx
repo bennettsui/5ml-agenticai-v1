@@ -84,7 +84,7 @@ export default function SustainabilityPage() {
             </FadeIn>
           </div>
           <FadeIn delay={200}>
-            <div className="aspect-[3/4] rounded-2xl overflow-hidden bg-neutral-100">
+            <div className="aspect-[4/3] rounded-2xl overflow-hidden bg-neutral-100">
               <img
                 src={IMG_PROBLEM}
                 alt="TEDxXinyi 現場書法藝術裝置——Negative / Positive"
