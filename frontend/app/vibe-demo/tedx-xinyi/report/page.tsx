@@ -324,6 +324,130 @@ export default function ReportPage() {
           </div>
         </Section>
 
+        {/* ==================== TED AI — TALKS + PHENOMENA ==================== */}
+        <section className="overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-[5fr_7fr]">
+
+            {/* ── LEFT: Dark editorial panel — 5 Talks ── */}
+            <div className="bg-neutral-950 text-white px-8 py-14 md:px-12 md:py-20 flex flex-col justify-between relative">
+              {/* Subtle red left border accent */}
+              <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: TED_RED }} />
+
+              <div>
+                {/* Conference badge */}
+                <div className="flex flex-wrap items-center gap-3 mb-10">
+                  <span
+                    className="px-2.5 py-1 text-[10px] font-black tracking-[0.18em] rounded text-white"
+                    style={{ backgroundColor: TED_RED }}
+                  >TED AI</span>
+                  <span className="text-white/30 text-[11px] font-mono tracking-wider">24–26.9 · Vienna, Austria</span>
+                </div>
+
+                {/* Title */}
+                <FadeIn>
+                  <h2 className="text-3xl md:text-4xl xl:text-[2.6rem] font-black leading-[1.15] mb-12 max-w-sm">
+                    5 TED Talks showing AI&apos;s impact on our{' '}
+                    <em className="not-italic" style={{ color: WARM_AMBER }}>past, present</em>
+                    {' '}and{' '}
+                    <em className="not-italic" style={{ color: TED_RED }}>future</em>
+                  </h2>
+                </FadeIn>
+
+                {/* Talk list */}
+                <ol className="space-y-0">
+                  {TALKS.map((talk, i) => (
+                    <FadeIn key={i} delay={i * 80}>
+                      <li className="group flex items-start gap-4 py-5 border-t border-white/[0.07] hover:border-white/20 transition-colors">
+                        {/* Ghost number */}
+                        <span
+                          className="flex-shrink-0 text-[42px] md:text-[52px] font-black leading-none select-none mt-0.5 tabular-nums"
+                          style={{ color: 'rgba(255,255,255,0.06)' }}
+                        >
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <div className="pt-1">
+                          <p className="text-sm md:text-[0.9rem] font-bold leading-snug text-white/80 group-hover:text-white transition-colors mb-1.5">
+                            {talk.title}
+                          </p>
+                          <p className="text-[11px] font-mono text-white/35 tracking-wider">{talk.speaker}</p>
+                        </div>
+                      </li>
+                    </FadeIn>
+                  ))}
+                  <li className="border-t border-white/[0.07]" />
+                </ol>
+              </div>
+
+              {/* Footer */}
+              <FadeIn delay={500}>
+                <div className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span className="text-[11px] font-black tracking-[0.2em] text-white/25">TED</span>
+                  <span className="w-px h-3 bg-white/10" />
+                  <span className="text-[11px] font-black tracking-[0.2em]" style={{ color: WARM_AMBER }}>TED AI</span>
+                  <span className="w-px h-3 bg-white/10" />
+                  <span className="text-[11px] font-mono text-white/25">24–26.9 · Vienna, Austria</span>
+                </div>
+              </FadeIn>
+            </div>
+
+            {/* ── RIGHT: Light panel — 6 Phenomena ── */}
+            <div className="bg-neutral-50 px-8 py-14 md:px-10 md:py-20">
+              <FadeIn>
+                <div className="flex items-center gap-3 mb-8">
+                  <span className="text-[11px] font-black tracking-[0.18em] text-neutral-400 uppercase">六個關鍵現象</span>
+                  <span className="flex-1 h-px bg-neutral-200" />
+                </div>
+              </FadeIn>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                {PHENOMENA.map((ph, i) => (
+                  <FadeIn key={i} delay={i * 60}>
+                    <div className="relative rounded-2xl p-5 bg-white border border-neutral-100 hover:border-neutral-300 hover:shadow-md transition-all duration-300 overflow-hidden group h-full flex flex-col">
+                      {/* Ghost number watermark */}
+                      <span
+                        className="absolute -bottom-3 -right-2 text-[72px] font-black leading-none select-none pointer-events-none tabular-nums"
+                        style={{ color: `${TED_RED}07` }}
+                      >
+                        {ph.num}
+                      </span>
+
+                      {/* Top row: hashtag pill */}
+                      <div className="flex items-start justify-between mb-3">
+                        <span
+                          className="inline-block px-2.5 py-0.5 text-[11px] font-black tracking-wide rounded-full"
+                          style={{ backgroundColor: `${WARM_AMBER}18`, color: WARM_AMBER }}
+                        >
+                          {ph.tag}
+                        </span>
+                        <span className="text-xs font-black text-neutral-300 tabular-nums">現象{ph.num}</span>
+                      </div>
+
+                      {/* Title */}
+                      <h3
+                        className="text-sm font-black leading-snug text-neutral-900 mb-2.5 relative z-10"
+                        lang="zh-TW"
+                      >
+                        {ph.title}
+                      </h3>
+
+                      {/* Red divider */}
+                      <div className="w-5 h-0.5 mb-2.5" style={{ backgroundColor: TED_RED, opacity: 0.4 }} />
+
+                      {/* Body */}
+                      {ph.text && (
+                        <p className="text-xs text-neutral-500 leading-[1.85] relative z-10 flex-1" lang="zh-TW">
+                          {ph.text}
+                        </p>
+                      )}
+                    </div>
+                  </FadeIn>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </section>
+
         {/* ==================== 3) SALON — What We'll Do Together ==================== */}
         <Section bg="white">
           <FadeIn>
@@ -421,130 +545,6 @@ export default function ReportPage() {
           </div>
         </section>
 
-
-        {/* ==================== TED AI — TALKS + PHENOMENA ==================== */}
-        <section className="overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-[5fr_7fr]">
-
-            {/* ── LEFT: Dark editorial panel — 5 Talks ── */}
-            <div className="bg-neutral-950 text-white px-8 py-14 md:px-12 md:py-20 flex flex-col justify-between relative">
-              {/* Subtle red left border accent */}
-              <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: TED_RED }} />
-
-              <div>
-                {/* Conference badge */}
-                <div className="flex flex-wrap items-center gap-3 mb-10">
-                  <span
-                    className="px-2.5 py-1 text-[10px] font-black tracking-[0.18em] rounded text-white"
-                    style={{ backgroundColor: TED_RED }}
-                  >TED AI</span>
-                  <span className="text-white/30 text-[11px] font-mono tracking-wider">24–26.9 · Vienna, Austria</span>
-                </div>
-
-                {/* Title */}
-                <FadeIn>
-                  <h2 className="text-3xl md:text-4xl xl:text-[2.6rem] font-black leading-[1.15] mb-12 max-w-sm">
-                    5 TED Talks showing AI&apos;s impact on our{' '}
-                    <em className="not-italic" style={{ color: WARM_AMBER }}>past, present</em>
-                    {' '}and{' '}
-                    <em className="not-italic" style={{ color: TED_RED }}>future</em>
-                  </h2>
-                </FadeIn>
-
-                {/* Talk list */}
-                <ol className="space-y-0">
-                  {TALKS.map((talk, i) => (
-                    <FadeIn key={i} delay={i * 80}>
-                      <li className="group flex items-start gap-4 py-5 border-t border-white/[0.07] hover:border-white/20 transition-colors">
-                        {/* Ghost number */}
-                        <span
-                          className="flex-shrink-0 text-[42px] md:text-[52px] font-black leading-none select-none mt-0.5 tabular-nums"
-                          style={{ color: 'rgba(255,255,255,0.06)' }}
-                        >
-                          {String(i + 1).padStart(2, '0')}
-                        </span>
-                        <div className="pt-1">
-                          <p className="text-sm md:text-[0.9rem] font-bold leading-snug text-white/80 group-hover:text-white transition-colors mb-1.5">
-                            {talk.title}
-                          </p>
-                          <p className="text-[11px] font-mono text-white/35 tracking-wider">{talk.speaker}</p>
-                        </div>
-                      </li>
-                    </FadeIn>
-                  ))}
-                  <li className="border-t border-white/[0.07]" />
-                </ol>
-              </div>
-
-              {/* Footer */}
-              <FadeIn delay={500}>
-                <div className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <span className="text-[11px] font-black tracking-[0.2em] text-white/25">TED</span>
-                  <span className="w-px h-3 bg-white/10" />
-                  <span className="text-[11px] font-black tracking-[0.2em]" style={{ color: WARM_AMBER }}>TED AI</span>
-                  <span className="w-px h-3 bg-white/10" />
-                  <span className="text-[11px] font-mono text-white/25">24–26.9 · Vienna, Austria</span>
-                </div>
-              </FadeIn>
-            </div>
-
-            {/* ── RIGHT: Light panel — 6 Phenomena ── */}
-            <div className="bg-neutral-50 px-8 py-14 md:px-10 md:py-20">
-              <FadeIn>
-                <div className="flex items-center gap-3 mb-8">
-                  <span className="text-[11px] font-black tracking-[0.18em] text-neutral-400 uppercase">六個關鍵現象</span>
-                  <span className="flex-1 h-px bg-neutral-200" />
-                </div>
-              </FadeIn>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                {PHENOMENA.map((ph, i) => (
-                  <FadeIn key={i} delay={i * 60}>
-                    <div className="relative rounded-2xl p-5 bg-white border border-neutral-100 hover:border-neutral-300 hover:shadow-md transition-all duration-300 overflow-hidden group h-full flex flex-col">
-                      {/* Ghost number watermark */}
-                      <span
-                        className="absolute -bottom-3 -right-2 text-[72px] font-black leading-none select-none pointer-events-none tabular-nums"
-                        style={{ color: `${TED_RED}07` }}
-                      >
-                        {ph.num}
-                      </span>
-
-                      {/* Top row: hashtag pill */}
-                      <div className="flex items-start justify-between mb-3">
-                        <span
-                          className="inline-block px-2.5 py-0.5 text-[9px] font-black tracking-wider rounded-full"
-                          style={{ backgroundColor: `${WARM_AMBER}18`, color: WARM_AMBER }}
-                        >
-                          {ph.tag}
-                        </span>
-                        <span className="text-[10px] font-black text-neutral-200 tabular-nums">現象{ph.num}</span>
-                      </div>
-
-                      {/* Title */}
-                      <h3
-                        className="text-[0.8rem] font-black leading-snug text-neutral-900 mb-2.5 relative z-10"
-                        lang="zh-TW"
-                      >
-                        {ph.title}
-                      </h3>
-
-                      {/* Red divider */}
-                      <div className="w-5 h-0.5 mb-2.5" style={{ backgroundColor: TED_RED, opacity: 0.4 }} />
-
-                      {/* Body */}
-                      {ph.text && (
-                        <p className="text-[11px] text-neutral-500 leading-[1.85] relative z-10 flex-1" lang="zh-TW">
-                          {ph.text}
-                        </p>
-                      )}
-                    </div>
-                  </FadeIn>
-                ))}
-              </div>
-            </div>
-
-          </div>
-        </section>
 
         {/* CTA 2: Get the Report */}
         <Section bg="warm">
