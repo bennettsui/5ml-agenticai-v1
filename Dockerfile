@@ -57,7 +57,8 @@ COPY data/ ./data/
 RUN npx tsc --project tsconfig.json || echo "TypeScript compilation warnings (non-critical)"
 
 # Create necessary directories
-RUN mkdir -p /tmp/dropbox-downloads /tmp/excel-exports
+RUN mkdir -p /tmp/dropbox-downloads /tmp/excel-exports \
+    && mkdir -p /usr/src/app/use-cases/event-checkin/data
 
 ENV NODE_ENV=production
 ENV PORT=8080
