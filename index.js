@@ -3898,6 +3898,24 @@ try {
   console.warn('⚠️ Image Compression routes not loaded:', error.message);
 }
 
+// Event Check-in System
+try {
+  const eventCheckinRoutes = require('./use-cases/event-checkin/api/routes');
+  app.use('/api/event-checkin', eventCheckinRoutes);
+  // Serve vanilla HTML pages (not part of the Next.js build)
+  app.get('/event-checkin', (req, res) =>
+    res.sendFile(path.join(__dirname, 'use-cases', 'event-checkin', 'public', 'index.html'))
+  );
+  app.get('/event-checkin/admin', (req, res) =>
+    res.sendFile(path.join(__dirname, 'use-cases', 'event-checkin', 'public', 'admin.html'))
+  );
+  // Serve static assets (CSS, JS) under /event-checkin/static/
+  app.use('/event-checkin/static', express.static(path.join(__dirname, 'use-cases', 'event-checkin', 'public')));
+  console.log('✅ Event Check-in routes loaded: /event-checkin, /event-checkin/admin, /api/event-checkin');
+} catch (error) {
+  console.warn('⚠️ Event Check-in routes not loaded:', error.message);
+}
+
 // Scheduler Service
 const scheduler = require('./services/scheduler');
 const scheduleRegistry = require('./services/schedule-registry');

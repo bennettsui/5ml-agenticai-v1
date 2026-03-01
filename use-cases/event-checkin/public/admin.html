@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin — Event Check-in</title>
-  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/event-checkin/static/css/style.css" />
 </head>
 <body>
 
@@ -12,7 +12,8 @@
 <header class="page-header">
   <h1>Admin Panel</h1>
   <nav>
-    <a href="/">Check-in</a>
+    <a href="/event-checkin">Check-in</a>
+    <a href="/">← Home</a>
   </nav>
   <span class="conn-status">
     <span class="conn-dot" id="connDot"></span>
@@ -46,10 +47,10 @@
         Downloads only participants with status "Checked-in".
       </p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <a class="btn btn-outline btn-sm" href="/api/admin/export-checkedin.csv" download>
+        <a class="btn btn-outline btn-sm" href="/api/event-checkin/admin/export-checkedin.csv" download>
           ↓ CSV
         </a>
-        <a class="btn btn-outline btn-sm" href="/api/admin/export-checkedin.xlsx" download>
+        <a class="btn btn-outline btn-sm" href="/api/event-checkin/admin/export-checkedin.xlsx" download>
           ↓ Excel (.xlsx)
         </a>
       </div>
@@ -193,7 +194,9 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <!-- ─── Scripts ───────────────────────────────────────────────────────────── -->
-<script src="/socket.io/socket.io.js"></script>
-<script src="/js/admin.js"></script>
+<script>
+  window.API_BASE = '/api/event-checkin';
+</script>
+<script src="/event-checkin/static/js/admin.js"></script>
 </body>
 </html>
