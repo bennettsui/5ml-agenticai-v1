@@ -118,7 +118,9 @@ export default function TEDxXinyiAdmin() {
   const pickerFileInputRef = useRef<HTMLInputElement>(null);
   const circlesFileInputRef = useRef<HTMLInputElement>(null);
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
-  const [circlesToggling, setCirclesToggling] = useState<string | null>(null);
+  const [circlesSaving, setCirclesSaving] = useState(false);
+  // draft = keys the user has toggled but not yet saved; null means "no picker open / no draft"
+  const [draftCirclesKeys, setDraftCirclesKeys] = useState<Set<string> | null>(null);
 
   function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
     setToast({ msg, type });
@@ -528,23 +530,44 @@ export default function TEDxXinyiAdmin() {
     }
   }
 
-  // Toggle a library image in/out of the TED Circles gallery
-  async function toggleCircles(key: string, inCircles: boolean) {
-    setCirclesToggling(key);
+  // Toggle a key in the local draft (no API call until Save is clicked)
+  function toggleDraftCircle(key: string) {
+    setDraftCirclesKeys(prev => {
+      const next = new Set(prev ?? media.filter(m => m.circlesGallery).map(m => m.key));
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  // Commit all draft changes to the backend
+  async function saveCircles() {
+    if (!draftCirclesKeys) return;
+    setCirclesSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/toggle-circles`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, inCircles }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setMedia(prev => prev.map(m => m.key === key ? { ...m, circlesGallery: inCircles } : m));
-      showToast(inCircles ? 'Added to gallery ✓' : 'Removed from gallery');
+      // Compute which keys changed vs the current saved state
+      const savedKeys = new Set(media.filter(m => m.circlesGallery).map(m => m.key));
+      const allKeys = new Set([...savedKeys, ...draftCirclesKeys]);
+      const changed: Array<{ key: string; inCircles: boolean }> = [];
+      for (const key of allKeys) {
+        const wasSaved = savedKeys.has(key);
+        const isDraft = draftCirclesKeys.has(key);
+        if (wasSaved !== isDraft) changed.push({ key, inCircles: isDraft });
+      }
+      await Promise.all(changed.map(({ key, inCircles }) =>
+        fetch(`${API_BASE}/api/tedx-xinyi/media/toggle-circles`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, inCircles }),
+        })
+      ));
+      // Reflect saved state in media list
+      setMedia(prev => prev.map(m => ({ ...m, circlesGallery: draftCirclesKeys.has(m.key) })));
+      setDraftCirclesKeys(null); // clear draft — picker shows fresh saved state
+      showToast(`Saved ${changed.length} change${changed.length !== 1 ? 's' : ''} ✓`);
     } catch (err) {
-      showToast(`Failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+      showToast(`Save failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
     } finally {
-      setCirclesToggling(null);
+      setCirclesSaving(false);
     }
   }
 
@@ -1635,6 +1658,12 @@ export default function TEDxXinyiAdmin() {
 
             {/* Library picker — select any media image to add to circles gallery */}
             {showLibraryPicker && mediaLoaded && (() => {
+              const effectiveKeys = draftCirclesKeys ?? new Set(media.filter(m => m.circlesGallery).map(m => m.key));
+              const savedKeys = new Set(media.filter(m => m.circlesGallery).map(m => m.key));
+              const hasUnsaved = draftCirclesKeys !== null && (
+                [...effectiveKeys].some(k => !savedKeys.has(k)) ||
+                [...savedKeys].some(k => !effectiveKeys.has(k))
+              );
               const libraryImgs = media.filter(m =>
                 !m.key.startsWith('ted-circles/') &&
                 m.key !== 'ted-circles.webp' &&
@@ -1646,20 +1675,31 @@ export default function TEDxXinyiAdmin() {
                   <div className="px-4 py-3 bg-amber-900/20 border-b border-amber-900/40 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-black text-amber-200">Pick from Library</p>
-                      <p className="text-xs text-amber-400/70 mt-0.5">Toggle any image to add or remove it from the circles gallery.</p>
+                      <p className="text-xs text-amber-400/70 mt-0.5">Select images then click Save to apply changes.</p>
                     </div>
-                    <span className="text-xs text-amber-500 font-mono">{media.filter(m => m.circlesGallery).length} selected</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-amber-500 font-mono">{effectiveKeys.size} selected{hasUnsaved ? ' · unsaved' : ''}</span>
+                      {hasUnsaved ? (
+                        <button
+                          onClick={saveCircles}
+                          disabled={circlesSaving}
+                          className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-black rounded-lg transition-colors"
+                        >
+                          {circlesSaving ? 'Saving…' : 'Save'}
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-green-400 font-bold">Saved ✓</span>
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-4 max-h-[480px] overflow-y-auto">
                     {libraryImgs.map(img => {
-                      const selected = !!img.circlesGallery;
-                      const toggling = circlesToggling === img.key;
+                      const selected = effectiveKeys.has(img.key);
                       return (
                         <button
                           key={img.key}
-                          onClick={() => toggleCircles(img.key, !selected)}
-                          disabled={toggling}
-                          className={`relative rounded-xl overflow-hidden aspect-square border-2 transition-all ${selected ? 'border-amber-400 ring-2 ring-amber-400/40' : 'border-neutral-700 hover:border-neutral-500'} disabled:opacity-50`}
+                          onClick={() => toggleDraftCircle(img.key)}
+                          className={`relative rounded-xl overflow-hidden aspect-square border-2 transition-all ${selected ? 'border-amber-400 ring-2 ring-amber-400/40' : 'border-neutral-700 hover:border-neutral-500'}`}
                         >
                           <img
                             src={img.publicUrl || `/tedx-xinyi/${img.key}`}
@@ -1670,11 +1710,6 @@ export default function TEDxXinyiAdmin() {
                           {selected && (
                             <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center">
                               <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                            </div>
-                          )}
-                          {toggling && (
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                             </div>
                           )}
                           <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4">
