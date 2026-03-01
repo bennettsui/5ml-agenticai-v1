@@ -8,14 +8,15 @@ import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_R
 const SPEAKER_COLORS = ['#E62B1E', '#D97706', '#059669', '#7C3AED', '#2563EB', '#DC2626', '#0891B2', '#9333EA'];
 
 const SPEAKERS = [
+  { name: '江振誠', role: '米其林國際名廚 創意總監', imageId: 'jiang-zhen-cheng' },
+  { name: '蕭青陽', role: '唱片設計師／葛萊美獎評審暨葛萊美獎得主', imageId: 'xiao-qing-yang' },
+  { name: '凌宗湧', role: 'CN Flower創辦人，東方美學花藝家', imageId: 'ling-zong-yong' },
   { name: '張卉君', role: '自然倡議者／黑潮海洋文教基金會', imageId: 'zhang-hui-jun' },
-  { name: '蔡年玨', role: '跨域創作者', imageId: 'cai-nian-jue' },
+  { name: '王士豪', role: '高山醫生', imageId: 'wang-shi-hao' },
   { name: '劉欣瑜', role: '國際模特兒', imageId: 'liu-xin-yu' },
   { name: '范欽慧', role: '野地錄音師', imageId: 'fan-qin-hui' },
   { name: '段智敏', role: '國際溜溜球表演者／太陽馬戲團', imageId: 'duan-zhi-min' },
   { name: '林知秦', role: '未來媽媽戲劇監製', imageId: 'lin-zhi-qin' },
-  { name: '周世雄', role: '當代藝術家', imageId: 'zhou-shi-xiong' },
-  { name: '蕭青陽', role: '唱片設計師／葛萊美獎入圍', imageId: 'xiao-qing-yang' },
 ];
 
 const BLOG_POSTS = [
