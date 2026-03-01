@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -180,23 +180,22 @@ function ProjectDetailInner() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Memoize the serialized attachment list so the setPageState effect only
+  // re-runs when attachment data actually changes, not on every render.
+  const attachmentContext = useMemo(
+    () => attachments.map(a => ({ name: a.original_name, type: a.mime_type, summary: a.summary ?? null })),
+    [attachments]
+  );
+
   // Keep AI page context in sync with project + attachments
   useEffect(() => {
     if (!project) return;
     setPageState({
       pageType: 'project-detail',
       pageTitle: project.name,
-      formData: {
-        projectId: project.id,
-        projectName: project.name,
-        attachments: attachments.map(a => ({
-          name: a.original_name,
-          type: a.mime_type,
-          summary: a.summary ?? null,
-        })),
-      },
+      formData: { projectId: project.id, projectName: project.name, attachments: attachmentContext },
     });
-  }, [project, attachments, setPageState]);
+  }, [project, attachmentContext, setPageState]);
 
   // Focus the new-deliverable title input when form opens
   useEffect(() => {

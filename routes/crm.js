@@ -665,7 +665,6 @@ module.exports = function createCrmRoutes(db) {
 
   const multer = require('multer');
   const path = require('path');
-  const fs = require('fs');
   const deepseekService = require('../services/deepseekService');
 
   // Files are stored as bytea in Postgres — no disk writes, no ephemeral-filesystem issues.
@@ -674,10 +673,17 @@ module.exports = function createCrmRoutes(db) {
     limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
   });
 
+  /** Columns returned to the client — excludes file_data (raw bytes) */
+  const ATTACHMENT_COLS = 'id, project_id, original_name, filename, file_path, mime_type, size, summary, uploaded_at';
+
+  /** True when a file is a PDF based on MIME type or extension */
+  function isPdfFile(mimeType, originalName) {
+    return (mimeType || '').includes('pdf') || (originalName || '').toLowerCase().endsWith('.pdf');
+  }
+
   /** Try to extract text from a Buffer; returns null if unsupported */
   async function tryExtractText(buf, mimeType, originalName) {
-    const isPdf = (mimeType || '').includes('pdf') || (originalName || '').toLowerCase().endsWith('.pdf');
-    if (isPdf) {
+    if (isPdfFile(mimeType, originalName)) {
       try {
         const pdfParse = require('pdf-parse');
         const data = await pdfParse(buf);
@@ -736,12 +742,12 @@ module.exports = function createCrmRoutes(db) {
         `INSERT INTO crm_project_attachments
            (project_id, original_name, filename, file_path, mime_type, size, summary, file_data)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id, project_id, original_name, filename, file_path, mime_type, size, summary, uploaded_at`,
+         RETURNING ${ATTACHMENT_COLS}`,
         [
           req.params.id,
           req.file.originalname,
           filename,
-          `/uploads/crm/${req.params.id}/${filename}`, // kept for legacy compatibility
+          `/uploads/crm/${req.params.id}/${filename}`,
           req.file.mimetype || null,
           req.file.size || null,
           summary,
@@ -760,8 +766,7 @@ module.exports = function createCrmRoutes(db) {
   router.get('/projects/:id/attachments', async (req, res) => {
     try {
       const result = await pool.query(
-        `SELECT id, project_id, original_name, filename, file_path, mime_type, size, summary, uploaded_at
-         FROM crm_project_attachments WHERE project_id = $1 ORDER BY uploaded_at DESC`,
+        `SELECT ${ATTACHMENT_COLS} FROM crm_project_attachments WHERE project_id = $1 ORDER BY uploaded_at DESC`,
         [req.params.id]
       );
       res.json(result.rows);
@@ -804,11 +809,9 @@ module.exports = function createCrmRoutes(db) {
         return res.status(422).json({ detail: 'No file data stored. Re-upload the file to generate a summary.' });
       }
 
-      const buf = Buffer.isBuffer(att.file_data) ? att.file_data : Buffer.from(att.file_data);
-      const isPdf = (att.mime_type || '').includes('pdf') || att.original_name.toLowerCase().endsWith('.pdf');
-
+      const buf = att.file_data; // pg returns Buffer for BYTEA
       let summary = null;
-      if (isPdf) {
+      if (isPdfFile(att.mime_type, att.original_name)) {
         try {
           const llm = require('../lib/llm');
           const base64 = buf.toString('base64');
@@ -832,8 +835,7 @@ module.exports = function createCrmRoutes(db) {
       }
 
       const updated = await pool.query(
-        `UPDATE crm_project_attachments SET summary = $1 WHERE id = $2
-         RETURNING id, project_id, original_name, filename, file_path, mime_type, size, summary, uploaded_at`,
+        `UPDATE crm_project_attachments SET summary = $1 WHERE id = $2 RETURNING ${ATTACHMENT_COLS}`,
         [summary, att.id]
       );
       res.json(updated.rows[0]);

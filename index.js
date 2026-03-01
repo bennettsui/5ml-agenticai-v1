@@ -2490,7 +2490,15 @@ console.log('✅ Debug routes loaded: /api/debug/sessions, /api/debug/modules, /
 const llm = require('./lib/llm');
 
 // Helper: read use case source code for chatbot context
+const _useCaseCodeCache = new Map();
 function readUseCaseCode(useCaseId, maxChars = 8000) {
+  const key = `${useCaseId}:${maxChars}`;
+  if (_useCaseCodeCache.has(key)) return _useCaseCodeCache.get(key);
+  const result = _readUseCaseCode(useCaseId, maxChars);
+  _useCaseCodeCache.set(key, result);
+  return result;
+}
+function _readUseCaseCode(useCaseId, maxChars = 8000) {
   const baseDir = path.join(__dirname, 'frontend', 'app', 'use-cases', useCaseId);
   if (!fs.existsSync(baseDir)) return '';
   const files = [];
@@ -2542,7 +2550,7 @@ app.post('/api/crm/chat', async (req, res) => {
 
     // RAG: retrieve relevant CRM + company context.
     // content may be a string or a multimodal array — extract text blocks for the RAG query.
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragQuery = lastUserMsg
       ? (Array.isArray(lastUserMsg.content)
           ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text || '').join('\n')
@@ -2697,7 +2705,7 @@ app.post('/api/social/chat', async (req, res) => {
     // Triggered when the caller provides a task_id (new Sarah chat panel).
     // Module-specific pages that don't send task_id fall through to legacy path.
     if (task_id) {
-      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+      const lastUserMsg = messages.findLast(m => m.role === 'user');
       const userInput = lastUserMsg?.content || '';
 
       // Detect research-related requests (bypass orchestrator for simpler handling)
@@ -2848,7 +2856,7 @@ ${ragContext ? `\n${ragContext}` : ''}`;
     }
     // ── Legacy path (module pages: strategy, content-dev, calendar, etc.) ────
 
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 3) : '';
     const codeContext = readUseCaseCode(use_case_id || 'social-content-ops', 6000);
 
@@ -4162,7 +4170,7 @@ app.post('/api/workflow-chat', async (req, res) => {
     }, null, 2);
 
     // RAG: retrieve relevant context for the latest user message
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'workflows', 3) : '';
     const companyRag = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
 
@@ -4217,7 +4225,7 @@ app.post('/api/agent-chat', async (req, res) => {
     }
 
     // RAG: retrieve relevant context for the latest user message
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, null, 3) : '';
 
     const systemPrompt = `You are the 5ML Platform Agent Assistant — an expert on the 5ML Agentic AI Platform.
