@@ -350,42 +350,70 @@ export default function ReportPage() {
 
         {/* ==================== INTRO — Bottom Reset ==================== */}
         <Section bg="white">
-          <FadeIn>
-            <SectionLabel>BOTTOM RESET</SectionLabel>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-6 leading-tight" lang="zh-TW">
-              一次底層設定的重啟
-            </h2>
-          </FadeIn>
-          <FadeIn delay={100}>
-            <div className="max-w-3xl">
-              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-6" lang="zh-TW">
-                當 AI 開始學人類說故事、學習我們的價值與選擇，我們需要的不是追趕技術，而是一次 Bottom Reset——重新校準自己的底層設定。
-              </p>
-              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-6" lang="zh-TW">
-                這份報告出自 TEDxXinyi 社群與多位趨勢觀察者、創作者與實踐者的合作。它聚焦四件事：
-              </p>
-            </div>
-          </FadeIn>
-          <FadeIn delay={200}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl">
-              {([
-                { title: '學習如何學習', desc: 'Meta Learning——不是學更多，而是學會怎麼學', Icon: IconBrain },
-                { title: 'AI 敘事與敘事經濟', desc: '當故事成為新的價值生成系統', Icon: IconPen },
-                { title: 'AI 應用能力', desc: '重點不在工具，而在人性與判斷力', Icon: IconCpu },
-                { title: '社區即學堂', desc: '社群不是 networking，而是 intelligence system', Icon: IconUsers },
-              ] as const).map((item, i) => (
-                <div key={i} className="flex items-start gap-3 p-4 rounded-xl border border-neutral-100 hover:border-neutral-200 transition-all" style={{ backgroundColor: WARM_GRAY }}>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: `${TED_RED}10` }}>
-                    <item.Icon size={16} color={TED_RED} />
-                  </div>
-                  <div>
-                    <p className="font-black text-sm mb-0.5" lang="zh-TW">{item.title}</p>
-                    <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">{item.desc}</p>
-                  </div>
+          {/* Two-column: text left, brain infographic right */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 lg:gap-16 items-start">
+
+            {/* Left: heading + text + cards */}
+            <div>
+              <FadeIn>
+                <SectionLabel>BOTTOM RESET</SectionLabel>
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-6 leading-tight" lang="zh-TW">
+                  一次底層設定的重啟
+                </h2>
+              </FadeIn>
+              <FadeIn delay={100}>
+                <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-6" lang="zh-TW">
+                  當 AI 開始學人類說故事、學習我們的價值與選擇，我們需要的不是追趕技術，而是一次 Bottom Reset——重新校準自己的底層設定。
+                </p>
+                <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-6" lang="zh-TW">
+                  這份報告出自 TEDxXinyi 社群與多位趨勢觀察者、創作者與實踐者的合作。它聚焦四件事：
+                </p>
+              </FadeIn>
+              <FadeIn delay={200}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl">
+                  {([
+                    { title: '學習如何學習', desc: 'Meta Learning——不是學更多，而是學會怎麼學', Icon: IconBrain },
+                    { title: 'AI 敘事與敘事經濟', desc: '當故事成為新的價值生成系統', Icon: IconPen },
+                    { title: 'AI 應用能力', desc: '重點不在工具，而在人性與判斷力', Icon: IconCpu },
+                    { title: '社區即學堂', desc: '社群不是 networking，而是 intelligence system', Icon: IconUsers },
+                  ] as const).map((item, i) => (
+                    <div key={i} className="flex items-start gap-3 p-4 rounded-xl border border-neutral-100 hover:border-neutral-200 transition-all" style={{ backgroundColor: WARM_GRAY }}>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: `${TED_RED}10` }}>
+                        <item.Icon size={16} color={TED_RED} />
+                      </div>
+                      <div>
+                        <p className="font-black text-sm mb-0.5" lang="zh-TW">{item.title}</p>
+                        <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">{item.desc}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </FadeIn>
             </div>
-          </FadeIn>
+
+            {/* Right: brain infographic — sticky on large screens */}
+            <FadeIn delay={150}>
+              <div
+                className="lg:sticky lg:top-8 flex-shrink-0 mx-auto"
+                style={{ width: 'min(320px, 100%)' }}
+              >
+                <div className="rounded-2xl overflow-hidden shadow-lg border border-neutral-100 bg-white">
+                  <img
+                    src="/tedx-xinyi/report-brain.webp"
+                    alt="Bottom Reset 底層設定 — 重新理解學習的四個維度"
+                    loading="lazy"
+                    className="w-full h-auto block opacity-0 transition-opacity duration-700"
+                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+                <p className="text-center text-[11px] text-neutral-400 mt-2 font-mono tracking-wider" lang="zh-TW">
+                  底層設定的四個維度
+                </p>
+              </div>
+            </FadeIn>
+
+          </div>
         </Section>
 
         {/* ==================== 2) FOUR CATEGORIES ==================== */}
