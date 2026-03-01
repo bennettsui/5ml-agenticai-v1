@@ -852,14 +852,14 @@ export default function TEDxXinyiAdmin() {
                 const isLoading = actionLoading === effectiveKey;
                 return (
                   <div className="flex flex-wrap gap-2 pt-2">
-                    {/* Push to CDN — for local-only images */}
-                    {effectiveKey && editSlot.localExists && editSlot.status !== 'cdn' && (
+                    {/* Push to CDN — any slot with a local file */}
+                    {effectiveKey && editSlot.localExists && (
                       <button
                         onClick={() => pushToCdn(effectiveKey)}
                         disabled={isLoading}
                         className="px-4 py-2 text-xs font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded-lg transition-colors disabled:opacity-40"
                       >
-                        {isLoading ? 'Uploading\u2026' : 'Push to CDN'}
+                        {isLoading ? 'Uploading\u2026' : editSlot.cdnUrl ? 'Repush to CDN' : 'Push to CDN'}
                       </button>
                     )}
                     {effectiveKey && (
@@ -1126,18 +1126,18 @@ export default function TEDxXinyiAdmin() {
                                 if (!effectiveKey) return null;
                                 const loading = actionLoading === effectiveKey;
                                 return (
-                                  <div className="flex gap-1">
-                                    {slot.localExists && slot.status !== 'cdn' && (
+                                  <div className="flex gap-1 items-center">
+                                    {slot.localExists && (
                                       <button
                                         onClick={(e) => { e.stopPropagation(); pushToCdn(effectiveKey); }}
                                         disabled={loading}
                                         className="px-2 py-1 text-[10px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 whitespace-nowrap"
                                       >
-                                        {loading ? '\u2026' : 'Push to CDN'}
+                                        {loading ? '\u2026' : slot.cdnUrl ? 'Repush CDN' : 'Push CDN'}
                                       </button>
                                     )}
-                                    {slot.status === 'cdn' && (
-                                      <span className="text-[10px] text-green-500">on CDN</span>
+                                    {slot.status === 'cdn' && !slot.localExists && (
+                                      <span className="text-[10px] text-green-500">CDN only</span>
                                     )}
                                   </div>
                                 );
@@ -1248,10 +1248,10 @@ export default function TEDxXinyiAdmin() {
                         )}
 
                         <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-neutral-800/50">
-                          {/* Push to CDN — for local-only images */}
-                          {!archived && img.localExists && !img.publicUrl && (
-                            <button onClick={() => pushToCdn(img.key)} disabled={loading} className="w-full px-2 py-1.5 text-[11px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 mb-1" title="Upload local file to mmdbfiles CDN">
-                              {loading ? 'Uploading\u2026' : 'Push to CDN'}
+                          {/* Push to CDN — any image with a local file */}
+                          {!archived && img.localExists && (
+                            <button onClick={() => pushToCdn(img.key)} disabled={loading} className="w-full px-2 py-1.5 text-[11px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 mb-1" title={img.publicUrl ? 'Re-upload local file to mmdbfiles CDN' : 'Upload local file to mmdbfiles CDN'}>
+                              {loading ? 'Uploading\u2026' : img.publicUrl ? 'Repush to CDN' : 'Push to CDN'}
                             </button>
                           )}
                           {!archived && (
@@ -1659,9 +1659,9 @@ export default function TEDxXinyiAdmin() {
                             </div>
                           )}
                           <div className="flex flex-wrap gap-1.5 pt-2 border-t border-neutral-800/50">
-                            {!archived && img.localExists && !img.publicUrl && (
-                              <button onClick={() => pushToCdn(img.key)} disabled={loading} className="w-full px-2 py-1.5 text-[11px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 mb-1">
-                                {loading ? 'Uploading…' : 'Push to CDN'}
+                            {!archived && img.localExists && (
+                              <button onClick={() => pushToCdn(img.key)} disabled={loading} className="w-full px-2 py-1.5 text-[11px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 mb-1" title={img.publicUrl ? 'Re-upload to CDN' : 'Upload to CDN'}>
+                                {loading ? 'Uploading…' : img.publicUrl ? 'Repush to CDN' : 'Push to CDN'}
                               </button>
                             )}
                             {!archived && (
@@ -1785,13 +1785,14 @@ export default function TEDxXinyiAdmin() {
                                           {loading ? '…' : img.localExists || img.publicUrl ? 'Re-gen' : 'Generate'}
                                         </button>
                                       )}
-                                      {!img.publicUrl && img.localExists && (
+                                      {img.localExists && (
                                         <button
                                           onClick={() => pushToCdn(img.key)}
                                           disabled={!!loading}
-                                          className="px-2 py-1 text-[10px] font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded transition-colors disabled:opacity-40"
+                                          className="px-2 py-1 text-[10px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40"
+                                          title={img.publicUrl ? 'Re-upload local file to CDN' : 'Upload local file to CDN'}
                                         >
-                                          {loading ? '…' : 'Push CDN'}
+                                          {loading ? '…' : img.publicUrl ? 'Repush CDN' : 'Push CDN'}
                                         </button>
                                       )}
                                       {img.missing && !isGenerated && (
