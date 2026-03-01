@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
-  ArrowLeft,
   Loader2,
   AlertCircle,
   FolderKanban,
@@ -188,32 +187,58 @@ function ProjectDetailInner() {
     <div className="space-y-6">
       {/* Breadcrumb + Header */}
       <div>
-        <nav className="flex items-center gap-2 text-sm text-slate-400 mb-4">
+        <nav className="flex items-center gap-1.5 text-xs text-slate-500 mb-4 flex-wrap">
+          <Link
+            href="/use-cases/crm/brands"
+            className="hover:text-white transition-colors"
+          >
+            Brands
+          </Link>
+          {brand && (
+            <>
+              <span className="text-slate-700">/</span>
+              <Link
+                href={`/use-cases/crm/brands/detail?id=${brand.id}`}
+                className="hover:text-white transition-colors text-slate-400"
+              >
+                {brand.name}
+              </Link>
+            </>
+          )}
+          <span className="text-slate-700">/</span>
           <Link
             href="/use-cases/crm/projects"
-            className="hover:text-white transition-colors inline-flex items-center gap-1"
+            className="hover:text-white transition-colors"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
             Projects
           </Link>
-          <span className="text-slate-600">/</span>
+          <span className="text-slate-700">/</span>
           <span className="text-slate-300">{project.name}</span>
         </nav>
 
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold text-white">{project.name}</h1>
+            {brand && (
+              <Link
+                href={`/use-cases/crm/brands/detail?id=${brand.id}`}
+                className="inline-flex items-center gap-1.5 mt-1 text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                {brand.name}
+              </Link>
+            )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <span
               className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${
                 STATUS_COLORS[project.status] ?? 'bg-slate-700 text-slate-300 border-slate-600'
               }`}
             >
-              {project.status.replace('_', ' ')}
+              {project.status.replace(/_/g, ' ')}
             </span>
             <span className="inline-block px-3 py-1 rounded-full text-xs font-medium border bg-slate-700/50 text-slate-300 border-slate-600 capitalize">
-              {project.type.replace('_', ' ')}
+              {project.type.replace(/_/g, ' ')}
             </span>
           </div>
         </div>
