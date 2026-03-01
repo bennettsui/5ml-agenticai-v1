@@ -36,7 +36,6 @@ export interface CrmAiContextValue {
 
   /** Send a file into the AI assistant chat (opens assistant if collapsed) */
   sendFileToChat: (file: File) => void;
-  sendFileToChatRef: React.MutableRefObject<((file: File) => void) | null>;
   registerSendFileCallback: (cb: ((file: File) => void) | null) => void;
 }
 
@@ -130,7 +129,6 @@ export function CrmAiProvider({ children }: { children: React.ReactNode }) {
         refreshRef,
         registerRefreshCallback,
         sendFileToChat,
-        sendFileToChatRef,
         registerSendFileCallback,
       }}
     >
