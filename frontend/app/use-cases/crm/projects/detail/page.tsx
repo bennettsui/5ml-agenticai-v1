@@ -134,6 +134,7 @@ function ProjectDetailInner() {
   // Attachments
   const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [attachDragging, setAttachDragging] = useState(false);
   const attachDragCounterRef = useRef(0);
   const attachFileInputRef = useRef<HTMLInputElement>(null);
@@ -304,6 +305,19 @@ function ProjectDetailInner() {
       setAttachments((prev) => prev.filter((a) => a.id !== id));
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Delete failed');
+    }
+  };
+
+  const handleSummarize = async (att: ProjectAttachment) => {
+    if (!projectId || summarizingId) return;
+    setSummarizingId(att.id);
+    try {
+      const updated = await crmApi.projects.attachments.summarize(projectId, att.id);
+      setAttachments((prev) => prev.map((a) => (a.id === att.id ? updated : a)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Summarization failed');
+    } finally {
+      setSummarizingId(null);
     }
   };
 
@@ -740,17 +754,44 @@ function ProjectDetailInner() {
                         <span className="text-[10px] text-slate-600 flex-shrink-0 uppercase">{att.mime_type.split('/')[1]}</span>
                       )}
                     </div>
-                    {att.summary && (
+                    {att.summary ? (
                       <div className="mt-2 flex items-start gap-1.5">
                         <Sparkles className="w-3 h-3 text-purple-400 flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-slate-400 leading-relaxed">{att.summary}</p>
                       </div>
+                    ) : (
+                      <button
+                        onClick={() => handleSummarize(att)}
+                        disabled={!!summarizingId}
+                        className="mt-2 inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-purple-400 transition-colors disabled:opacity-40"
+                      >
+                        {summarizingId === att.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3 h-3" />
+                        )}
+                        {summarizingId === att.id ? 'Generating summary…' : 'Generate summary'}
+                      </button>
                     )}
                     <p className="text-[11px] text-slate-600 mt-1.5">
                       {new Date(att.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
+                    {att.summary && (
+                      <button
+                        onClick={() => handleSummarize(att)}
+                        disabled={!!summarizingId}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-slate-500 hover:text-purple-400 hover:bg-purple-400/10 transition-all disabled:opacity-40"
+                        title="Regenerate summary"
+                      >
+                        {summarizingId === att.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
                     <a
                       href={`/uploads/crm/${projectId}/${att.filename}`}
                       download={att.original_name}

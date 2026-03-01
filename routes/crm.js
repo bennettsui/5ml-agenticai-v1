@@ -795,6 +795,65 @@ module.exports = function createCrmRoutes(db) {
     }
   });
 
+  // (Re-)generate AI summary for an attachment
+  // Uses Claude Haiku for PDFs (native PDF reading, no DOM deps) and DeepSeek for text files.
+  router.post('/projects/:id/attachments/:attachmentId/summarize', async (req, res) => {
+    try {
+      const attResult = await pool.query(
+        'SELECT * FROM crm_project_attachments WHERE id = $1 AND project_id = $2',
+        [req.params.attachmentId, req.params.id]
+      );
+      if (attResult.rows.length === 0) {
+        return res.status(404).json({ detail: 'Attachment not found' });
+      }
+      const att = attResult.rows[0];
+      const absPath = path.join(__dirname, '..', att.file_path);
+      if (!fs.existsSync(absPath)) {
+        return res.status(422).json({ detail: 'File not found on disk' });
+      }
+
+      let summary = null;
+      const isPdf = (att.mime_type || '').includes('pdf') || att.original_name.toLowerCase().endsWith('.pdf');
+
+      if (isPdf) {
+        // Use Claude Haiku — natively reads PDFs without DOM/canvas dependencies
+        try {
+          const llm = require('../lib/llm');
+          const buf = fs.readFileSync(absPath);
+          const base64 = buf.toString('base64');
+          const result = await llm.chat('haiku', [
+            {
+              role: 'user',
+              content: [
+                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+                { type: 'text', text: `Summarize this PDF document concisely in 2-4 sentences, focusing on key information and purpose. File name: ${att.original_name}` },
+              ],
+            },
+          ], { maxTokens: 300 });
+          summary = result.text || null;
+        } catch (e) {
+          console.error('PDF summarization error:', e);
+          return res.status(500).json({ detail: 'Failed to summarize PDF: ' + e.message });
+        }
+      } else {
+        const textContent = await tryReadAsText(absPath, att.mime_type);
+        if (!textContent) {
+          return res.status(422).json({ detail: 'File cannot be read as text' });
+        }
+        summary = await generateSummary(textContent, att.original_name);
+      }
+
+      const updated = await pool.query(
+        'UPDATE crm_project_attachments SET summary = $1 WHERE id = $2 RETURNING *',
+        [summary, att.id]
+      );
+      res.json(updated.rows[0]);
+    } catch (error) {
+      console.error('Error summarizing attachment:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
   // Delete an attachment
   router.delete('/projects/:id/attachments/:attachmentId', async (req, res) => {
     try {

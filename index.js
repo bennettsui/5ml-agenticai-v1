@@ -2540,10 +2540,16 @@ app.post('/api/crm/chat', async (req, res) => {
       return res.status(400).json({ error: 'messages array is required' });
     }
 
-    // RAG: retrieve relevant CRM + company context
+    // RAG: retrieve relevant CRM + company context.
+    // content may be a string or a multimodal array — extract text blocks for the RAG query.
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-    const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'crm', 3) : '';
-    const companyContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
+    const ragQuery = lastUserMsg
+      ? (Array.isArray(lastUserMsg.content)
+          ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text || '').join('\n')
+          : lastUserMsg.content || '')
+      : '';
+    const ragContext = ragQuery ? ragService.getContext(ragQuery, 'crm', 3) : '';
+    const companyContext = ragQuery ? ragService.getContext(ragQuery, 'company', 2) : '';
 
     // Include use case source code for code-aware assistance
     const codeContext = readUseCaseCode(use_case_id || 'crm', 6000);

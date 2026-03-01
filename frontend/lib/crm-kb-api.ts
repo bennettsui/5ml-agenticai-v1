@@ -436,6 +436,12 @@ export const crmApi = {
           method: "DELETE",
         });
       },
+      summarize(projectId: string, attachmentId: string) {
+        return request<ProjectAttachment>(
+          `/projects/${projectId}/attachments/${attachmentId}/summarize`,
+          { method: "POST" }
+        );
+      },
     },
   },
 
