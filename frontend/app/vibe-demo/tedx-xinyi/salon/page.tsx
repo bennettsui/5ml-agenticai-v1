@@ -12,7 +12,6 @@ const SPEAKERS = [
     org: 'iKala Interactive Media Inc.',
     role: 'iKala集團董事長，AI知識暢銷作家',
     tagline: 'AI 時代的人文思考者 × 賦能型創業家',
-    bio: 'Stanford CS 碩士、前 Google 軟體工程師。2011 年創辦 AI 跨國企業 iKala，專注 AI 技術與數位轉型，倡導以人為本的 AI 應用。',
     imageId: 'cheng-shi-jia',
   },
   {
@@ -20,7 +19,6 @@ const SPEAKERS = [
     org: '楊士毅個人工作室',
     role: '剪紙藝術家 導演、攝影師',
     tagline: '剪紙藝術 × 國際成就',
-    bio: '曾為 Apple 台北 101 旗艦店創作 75 公尺剪紙作品《有閒來坐》，作品橫跨公共藝術、攝影與影像導演。',
     imageId: 'yang-shi-yi',
   },
   {
@@ -28,7 +26,6 @@ const SPEAKERS = [
     org: '黑潮海洋文化基金會',
     role: '執行長',
     tagline: '從解說員到執行長——海洋教育 × 環境行動',
-    bio: '從花蓮海岸的鯨豚解說員一路走到基金會執行長，長期投入海洋議題與鯨豚碳排研究，探索環境保育與科技的交會點。',
     imageId: 'lin-dong-liang',
   },
   {
@@ -36,9 +33,11 @@ const SPEAKERS = [
     org: '華夏集團玻璃',
     role: '企業經營者',
     tagline: '教育 × 科技的跨界實踐',
-    bio: '以教育與科技為起點，探索如何建立一個企業持續百年的永續模式，從轉型逆襲中找到危機與轉機。',
     imageId: 'liao-wei-jie',
   },
+];
+
+const GUESTS = [
   {
     name: '廖冠傑',
     roleTag: '對談嘉賓',
@@ -436,11 +435,12 @@ export default function SalonPage() {
           </p>
         </FadeIn>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-10">
+        {/* ── 4 Main Speakers ── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
           {SPEAKERS.map((speaker, i) => (
-            <FadeIn key={i} delay={i * 60}>
+            <FadeIn key={i} delay={i * 70}>
               <div className="text-center">
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full mx-auto mb-3 overflow-hidden bg-neutral-100 border-2 border-neutral-100 relative">
+                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full mx-auto mb-3 overflow-hidden bg-neutral-100 border-2 border-neutral-100 relative">
                   <img
                     src={SPEAKER_CDN_URLS[speaker.imageId] || `/tedx-xinyi/speakers/${speaker.imageId}.jpg`}
                     alt={speaker.name}
@@ -448,42 +448,72 @@ export default function SalonPage() {
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       const el = e.target as HTMLImageElement;
-                      if (el.src.endsWith('.jpg')) {
-                        el.src = el.src.replace('.jpg', '.png');
-                      } else {
-                        el.style.display = 'none';
-                        if (el.nextElementSibling) (el.nextElementSibling as HTMLElement).style.display = 'flex';
-                      }
+                      if (el.src.endsWith('.jpg')) { el.src = el.src.replace('.jpg', '.png'); }
+                      else { el.style.display = 'none'; if (el.nextElementSibling) (el.nextElementSibling as HTMLElement).style.display = 'flex'; }
                     }}
                   />
                   <div className="w-full h-full items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-300 absolute inset-0" style={{ display: 'none' }}>
                     <span className="text-2xl font-black text-neutral-400">{speaker.name[0]}</span>
                   </div>
                 </div>
-                {speaker.roleTag && (
-                  <span
-                    className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-1.5 tracking-wide"
-                    style={{ backgroundColor: `${TED_RED}12`, color: TED_RED }}
-                  >
-                    {speaker.roleTag}
-                  </span>
-                )}
                 <p className="font-black text-sm mb-0.5" lang="zh-TW">{speaker.name}</p>
                 {speaker.org && (
                   <p className="text-neutral-400 text-[10px] leading-relaxed" lang="zh-TW">{speaker.org}</p>
                 )}
                 <p className="text-neutral-500 text-xs leading-relaxed mt-0.5" lang="zh-TW">{speaker.role}</p>
                 {speaker.tagline && (
-                  <p className="text-neutral-400 text-[10px] leading-relaxed mt-1.5 max-w-[180px] mx-auto italic" lang="zh-TW">{speaker.tagline}</p>
+                  <p className="text-neutral-400 text-[10px] leading-relaxed mt-1.5 max-w-[160px] mx-auto italic" lang="zh-TW">{speaker.tagline}</p>
                 )}
               </div>
             </FadeIn>
           ))}
         </div>
 
-        {/* Curator */}
+        {/* ── 5 Guests / Hosts ── */}
+        <FadeIn delay={100}>
+          <div className="border-t border-neutral-100 pt-10 mb-10">
+            <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-8" lang="zh-TW">TEDxXinyi 智庫</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-5">
+              {GUESTS.map((guest, i) => (
+                <FadeIn key={i} delay={i * 60}>
+                  <div className="text-center">
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full mx-auto mb-3 overflow-hidden bg-neutral-100 border-2 border-neutral-100 relative">
+                      <img
+                        src={SPEAKER_CDN_URLS[guest.imageId] || `/tedx-xinyi/speakers/${guest.imageId}.jpg`}
+                        alt={guest.name}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const el = e.target as HTMLImageElement;
+                          if (el.src.endsWith('.jpg')) { el.src = el.src.replace('.jpg', '.png'); }
+                          else { el.style.display = 'none'; if (el.nextElementSibling) (el.nextElementSibling as HTMLElement).style.display = 'flex'; }
+                        }}
+                      />
+                      <div className="w-full h-full items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-300 absolute inset-0" style={{ display: 'none' }}>
+                        <span className="text-xl font-black text-neutral-400">{guest.name[0]}</span>
+                      </div>
+                    </div>
+                    <span
+                      className="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full mb-1.5 tracking-wide"
+                      style={{ backgroundColor: `${TED_RED}12`, color: TED_RED }}
+                    >
+                      {guest.roleTag}
+                    </span>
+                    <p className="font-black text-xs mb-0.5" lang="zh-TW">{guest.name}</p>
+                    {guest.org && (
+                      <p className="text-neutral-400 text-[10px] leading-relaxed" lang="zh-TW">{guest.org}</p>
+                    )}
+                    <p className="text-neutral-500 text-[10px] leading-relaxed mt-0.5" lang="zh-TW">{guest.role}</p>
+                  </div>
+                </FadeIn>
+              ))}
+            </div>
+          </div>
+        </FadeIn>
+
+        {/* ── Curator ── */}
         <FadeIn delay={200}>
-          <div className="flex items-center gap-5 mt-2 mb-10 p-5 rounded-xl border border-neutral-100" style={{ backgroundColor: '#fafaf9' }}>
+          <div className="flex items-center gap-5 mb-10 p-5 rounded-xl border border-neutral-100" style={{ backgroundColor: '#fafaf9' }}>
             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden bg-neutral-100 border-2 border-neutral-100 flex-shrink-0 relative">
               <img
                 src={SPEAKER_CDN_URLS['dawn-chang'] || '/tedx-xinyi/speakers/dawn-chang.jpg'}
@@ -508,12 +538,9 @@ export default function SalonPage() {
                 CURATOR
               </span>
               <p className="font-black text-base" lang="zh-TW">Dawn Chang 張敏訓</p>
-              <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">
-                TEDxXinyi 策展人總籌
-              </p>
-              <p className="text-neutral-400 text-xs leading-relaxed mt-1 italic" lang="zh-TW">
-                在思想被說出口之前——以策展力連結 AI、藝術、永續與城市文化
-              </p>
+              <p className="text-neutral-400 text-xs leading-relaxed" lang="zh-TW">Sunrise On The Horizon House</p>
+              <p className="text-neutral-500 text-xs leading-relaxed mt-0.5" lang="zh-TW">TEDxXinyi持牌策展人</p>
+              <p className="text-neutral-400 text-xs leading-relaxed mt-1 italic" lang="en">TED Conference Community Ambassador</p>
             </div>
           </div>
         </FadeIn>
