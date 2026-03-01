@@ -122,10 +122,21 @@ export default function CommunityPage() {
             </FadeIn>
           </div>
           <FadeIn delay={200}>
-            <div className="flex items-center justify-center gap-4 p-8">
-              <div className="w-20 h-20 rounded-full border-4 -mr-3" style={{ borderColor: TED_RED }} />
-              <div className="w-16 h-16 rounded-full border-4 -mr-3" style={{ borderColor: `${TED_RED}60` }} />
-              <div className="w-12 h-12 rounded-full border-4" style={{ borderColor: `${TED_RED}30` }} />
+            <div className="aspect-video rounded-xl overflow-hidden bg-neutral-50 relative flex items-center justify-center">
+              {/* Fallback CSS circles shown until image loads */}
+              <div className="flex items-center justify-center gap-4 p-8 absolute inset-0">
+                <div className="w-20 h-20 rounded-full border-4 -mr-3" style={{ borderColor: TED_RED }} />
+                <div className="w-16 h-16 rounded-full border-4 -mr-3" style={{ borderColor: `${TED_RED}60` }} />
+                <div className="w-12 h-12 rounded-full border-4" style={{ borderColor: `${TED_RED}30` }} />
+              </div>
+              <img
+                src="/tedx-xinyi/ted-circles.webp"
+                alt="TED Circles discussion gathering with the iconic red circle carpet"
+                loading="lazy"
+                className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+                onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
             </div>
           </FadeIn>
         </div>

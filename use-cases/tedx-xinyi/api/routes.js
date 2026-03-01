@@ -481,6 +481,30 @@ const VISUALS = [
     description: 'Curiosity zones visual — multi-zone experience',
     prompt: 'Vertical portrait 3:4 image composed of multiple stacked zones, bottom a small open-mic corner with a mic stand and a small seated audience, middle a creative market area with small booths plants and people talking, upper a quiet reading journaling corner with books notebooks lamps, style semi-illustrative slightly stylised not hyper-realistic, people appear diverse but not individually recognisable, lighting warm glows in each zone connected with a gentle path or staircase hinting at moving from one version of yourself to the next, palette mix of warm earth tones and deep blues with small red accents, no text no watermarks no logos',
   },
+  {
+    id: 'entry-about',
+    filename: 'entry-about.webp',
+    description: 'Entry card — About TEDxXinyi community',
+    prompt: 'Horizontal 16:10 card thumbnail image, warm intimate creative gathering in a modern Taipei event loft space, a few diverse people in casual animated conversation slightly blurred in background, foreground shows minimalist venue details with a warm TED red accent wall or column, overall warm cream and red colour palette, soft golden hour light from tall windows, documentary photography style, shallow depth of field, optimistic open community atmosphere, no text no watermarks no logos',
+  },
+  {
+    id: 'entry-sustainability',
+    filename: 'entry-sustainability.webp',
+    description: 'Entry card — Sustainability stage design',
+    prompt: 'Horizontal 16:10 card thumbnail image, beautiful artistic close-up of sustainable stage materials arranged on a pale oak workbench: a 3D-printed geometric lamp module in matte white, a flat sheet of patterned recycled wood veneer, a small coil of recycled copper wire, all catching warm amber afternoon sunlight from a window at left, shallow depth of field with warm cream and amber palette, refined makers workshop aesthetic, optimistic and creative mood, no text no watermarks no people',
+  },
+  {
+    id: 'entry-community',
+    filename: 'entry-community.webp',
+    description: 'Entry card — Community and small gatherings',
+    prompt: 'Horizontal 16:10 card thumbnail image, gentle three-quarter overhead angle of a small circle of chairs arranged in a cozy modern Taipei creative space, warm amber-green evening lighting, colourful cushions on chairs, a low wooden coffee table in the centre with cups and small plants, arrangement clearly suggests a small intimate discussion group event, soft bokeh background, community warmth, documentary photography style, no text no watermarks no people',
+  },
+  {
+    id: 'ted-circles',
+    filename: 'ted-circles.webp',
+    description: 'TED Circles — iconic red circle carpet discussion gathering',
+    prompt: 'Warm intimate photograph of a small TED Circles discussion gathering, the centrepiece and visual anchor is the iconic TED Circle floor carpet — a large bold solid vivid red circle on a light wood floor, chairs arranged in a circle around it, slightly elevated camera angle clearly showing the full red circle and the circular seating arrangement, warm soft interior lighting in a clean modern Taipei venue, cream walls and natural wood tones, the bold red circle stands out vividly against the light floor, people seated in discussion are softly blurred, intimate cozy editorial photography style, no text no watermarks no logos',
+  },
 ];
 
 // Lazy init Gemini client
@@ -772,13 +796,23 @@ async function backupMetadataToMmdb(meta) {
   }, 5000);
 }
 
-// ---- Expected speaker photo slots (salon page speakers) ----
+// ---- Expected speaker photo slots (salon page + homepage lineup) ----
 const SPEAKER_SLOTS = [
+  // Salon page speakers
   { imageId: 'cheng-shi-jia', name: '程世嘉', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'lin-dong-liang', name: '林東良', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'liao-wei-jie', name: '廖唯傑', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'yang-shi-yi', name: '楊士毅', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'dawn-chang', name: 'Dawn Chang', extensions: ['jpg', 'png', 'webp'] },
+  // Homepage lineup speakers
+  { imageId: 'zhang-hui-jun', name: '張卉君', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'cai-nian-jue', name: '蔡年玨', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'liu-xin-yu', name: '劉欣瑜', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'fan-qin-hui', name: '范欽慧', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'duan-zhi-min', name: '段智敏', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'lin-zhi-qin', name: '林知秦', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'zhou-shi-xiong', name: '周世雄', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'xiao-qing-yang', name: '蕭青陽', extensions: ['jpg', 'png', 'webp'] },
 ];
 
 // ---- Helper: check if local file exists ----
