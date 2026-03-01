@@ -69,6 +69,7 @@ async function loadPage(page = 1) {
   try {
     const resp = await fetch(`${API}/admin/participants?${params}`);
     const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
 
     totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
     pageInfo.textContent  = `Page ${currentPage} of ${totalPages}`;
@@ -77,8 +78,9 @@ async function loadPage(page = 1) {
     nextPageBtn.disabled  = currentPage >= totalPages;
 
     renderTable(data.rows);
-  } catch {
-    toast('Failed to load participants.', 'error');
+  } catch (err) {
+    toast(`Failed to load participants: ${err.message}`, 'error');
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--color-red);font-size:13px;">Error: ${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -283,15 +285,29 @@ document.getElementById('importBtn').addEventListener('click', async () => {
 
     const summary = document.getElementById('importSummary');
     summary.classList.remove('hidden');
+    const skipDetails = [];
+    if (data.skipped_no_color > 0) skipDetails.push(`${data.skipped_no_color} missing/invalid Color`);
+    if (data.skipped_no_name  > 0) skipDetails.push(`${data.skipped_no_name} missing Name`);
+    if (data.skipped > (data.skipped_no_color || 0) + (data.skipped_no_name || 0)) {
+      skipDetails.push(`${data.skipped - (data.skipped_no_color||0) - (data.skipped_no_name||0)} duplicates`);
+    }
+    const skipNote = data.skipped > 0
+      ? ` <span style="color:#fbbf24;">(${skipDetails.join(', ') || data.skipped + ' skipped'})</span>`
+      : '';
     summary.innerHTML = `
       <strong>Import complete</strong><br/>
       Rows processed: ${data.processed} &nbsp;|&nbsp;
       Inserted: <strong>${data.inserted}</strong> &nbsp;|&nbsp;
-      Skipped (duplicates): ${data.skipped} &nbsp;|&nbsp;
+      Skipped: ${data.skipped}${skipNote} &nbsp;|&nbsp;
       Updated: ${data.updated} &nbsp;|&nbsp;
       Mode: <em>${data.dedup_mode}</em>
+      ${data.skipped_no_color > 0 ? '<br/><span style="color:#fbbf24;font-size:12px;">⚠️ Color must be exactly: Red, Purple, Blue, or Green (sheet name or Color column)</span>' : ''}
     `;
-    toast(`Imported ${data.inserted} new participant(s).`, 'success');
+    if (data.inserted === 0 && data.skipped > 0) {
+      toast(`Import: 0 inserted — ${skipDetails.join(', ')}`, 'error');
+    } else {
+      toast(`Imported ${data.inserted} new participant(s).`, 'success');
+    }
     loadPage(1);
   } catch { toast('Import request failed.', 'error'); }
   finally { btn.disabled = false; btn.textContent = 'Upload'; }

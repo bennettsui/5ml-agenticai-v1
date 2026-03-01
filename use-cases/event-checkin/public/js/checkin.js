@@ -97,16 +97,30 @@ connectSSE();
 // ─── Search ───────────────────────────────────────────────────────────────────
 
 let debounceTimer;
+let lastSuggestions = []; // cached results for Enter-to-show-cards
 
+// Typing → fetch suggestions → show autocomplete dropdown only (no cards yet)
 searchInput.addEventListener('input', () => {
   clearTimeout(debounceTimer);
   const q = searchInput.value.trim();
-  if (!q) { clearResults(); showHint(true); hideAutocomplete(); return; }
-  debounceTimer = setTimeout(() => doSearch(q), 250);
+  if (!q) { clearResults(); showHint(true); hideAutocomplete(); lastSuggestions = []; return; }
+  debounceTimer = setTimeout(() => fetchSuggestions(q), 150);
 });
 
+// Enter → show result cards from cached suggestions (or re-fetch)
+// Escape → close autocomplete
 searchInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { clearTimeout(debounceTimer); hideAutocomplete(); doSearch(searchInput.value.trim()); }
+  if (e.key === 'Enter') {
+    clearTimeout(debounceTimer);
+    hideAutocomplete();
+    const q = searchInput.value.trim();
+    if (!q) return;
+    if (lastSuggestions.length > 0) {
+      renderCards(lastSuggestions, q);
+    } else {
+      fetchAndShowCards(q);
+    }
+  }
   if (e.key === 'Escape') hideAutocomplete();
 });
 
@@ -114,15 +128,29 @@ document.addEventListener('click', (e) => {
   if (!searchInput.contains(e.target) && !autocomplete.contains(e.target)) hideAutocomplete();
 });
 
-async function doSearch(query) {
-  if (!query) return;
+// Fetch for autocomplete: shows dropdown, does NOT render cards
+async function fetchSuggestions(query) {
   lastQuery = query;
   showHint(false);
   try {
     const resp = await fetch(`${API}/participants/search?query=${encodeURIComponent(query)}`);
     const data = await resp.json();
-    renderResults(data, query);
+    lastSuggestions = data;
     renderAutocomplete(data);
+  } catch {
+    hideAutocomplete();
+  }
+}
+
+// Fetch then immediately render cards (used when Enter pressed before suggestions loaded)
+async function fetchAndShowCards(query) {
+  lastQuery = query;
+  showHint(false);
+  try {
+    const resp = await fetch(`${API}/participants/search?query=${encodeURIComponent(query)}`);
+    const data = await resp.json();
+    lastSuggestions = data;
+    renderCards(data, query);
   } catch {
     toast('Search failed. Please try again.', 'error');
   }
@@ -146,7 +174,14 @@ function renderAutocomplete(participants) {
       <span style="font-weight:600;">${esc(name)}</span>
       <span style="color:var(--text-muted);font-size:12px;">${esc(p.organization || '')}</span>
     `;
-    item.addEventListener('click', () => { searchInput.value = name; hideAutocomplete(); doSearch(name); });
+    // Click: fill input, show that participant's card immediately, hide dropdown
+    item.addEventListener('click', () => {
+      searchInput.value = name;
+      hideAutocomplete();
+      lastQuery = name;
+      showHint(false);
+      renderCards([p], name);
+    });
     autocomplete.appendChild(item);
   }
   autocomplete.classList.remove('hidden');
@@ -158,13 +193,13 @@ function hideAutocomplete() { autocomplete.classList.add('hidden'); }
 
 function clearResults() { resultsList.innerHTML = ''; cardMap.clear(); }
 
-function renderResults(participants, query) {
+function renderCards(participants, query) {
   clearResults();
   if (!participants.length) {
-    // Show spinner while AI tries a fuzzy search
+    // No exact match — kick off AI fuzzy search
     resultsList.innerHTML = `
       <div class="empty-state" id="aiSearchState">
-        <div class="ai-spinner">✨ No exact match — trying AI search…</div>
+        <div class="ai-spinner">✨ No match found — trying AI search…</div>
       </div>
     `;
     doAISearch(query);

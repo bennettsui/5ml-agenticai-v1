@@ -348,13 +348,14 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
     }
 
     // ── Deduplication + insert ─────────────────────────────────────────────────
-    let inserted = 0, skipped = 0, updated = 0;
+    let inserted = 0, skipped = 0, updated = 0, skipped_no_color = 0, skipped_no_name = 0;
     const newRows = [];
 
     for (const row of rows) {
       // Normalize color one final time (handles any remaining case mismatches)
       if (row.color) row.color = VALID_COLORS.find(v => v.toLowerCase() === row.color.toLowerCase()) ?? row.color;
-      if (!row.full_name || !VALID_COLORS.includes(row.color)) { skipped++; continue; }
+      if (!row.full_name) { skipped++; skipped_no_name++; continue; }
+      if (!VALID_COLORS.includes(row.color)) { skipped++; skipped_no_color++; continue; }
 
       // TUNE: deduplication key is (full_name, organization, color)
       const existing = DEDUP_MODE !== 'insert'
@@ -375,7 +376,7 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
     }
 
     if (newRows.length) sse.broadcast('bulk_imported', { type: 'bulk_imported', payload: newRows });
-    res.json({ processed: rows.length, inserted, skipped, updated, dedup_mode: DEDUP_MODE });
+    res.json({ processed: rows.length, inserted, skipped, updated, dedup_mode: DEDUP_MODE, skipped_no_color, skipped_no_name });
 
   } catch (err) {
     console.error('[event-checkin import]', err);
@@ -465,6 +466,16 @@ async function getStats() {
     orgs:        [...new Set(rows.map(p => p.organization).filter(Boolean))].length,
   };
 }
+
+// GET /stats — live check-in statistics (used by client dashboard)
+router.get('/stats', async (req, res) => {
+  try {
+    res.json(await getStats());
+  } catch (err) {
+    console.error('[event-checkin stats]', err);
+    res.status(500).json({ error: 'Stats failed' });
+  }
+});
 
 // POST /ai/search-assist — fuzzy match when SQL returns 0 results
 router.post('/ai/search-assist', async (req, res) => {
