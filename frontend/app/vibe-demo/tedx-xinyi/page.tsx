@@ -17,6 +17,7 @@ const SPEAKERS = [
   { name: '范欽慧', role: '野地錄音師', imageId: 'fan-qin-hui' },
   { name: '段智敏', role: '國際溜溜球表演者／太陽馬戲團', imageId: 'duan-zhi-min' },
   { name: '林知秦', role: '未來媽媽戲劇監製', imageId: 'lin-zhi-qin' },
+  { name: '周世雄', role: '當代藝術家', imageId: 'zhou-shi-xiong' },
 ];
 
 const BLOG_POSTS = [
