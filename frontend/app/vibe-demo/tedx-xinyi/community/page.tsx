@@ -137,19 +137,19 @@ export default function CommunityPage() {
           </FadeIn>
         </div>
 
-        {/* TED Circles Photo Gallery */}
+        {/* TED Circles Photo Gallery — masonry, natural proportions */}
         {circlePhotos.length > 0 && (
           <FadeIn delay={100}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            <div className="columns-2 sm:columns-3 md:columns-4 gap-3">
               {circlePhotos.map((photo, i) => (
-                <div key={photo.key} className="aspect-square rounded-xl overflow-hidden bg-neutral-100">
+                <div key={photo.key} className="break-inside-avoid mb-3 rounded-xl overflow-hidden bg-neutral-100 group">
                   <img
                     src={photo.src}
                     alt={photo.alt || `TED Circles moment ${i + 1}`}
                     loading="lazy"
-                    className="w-full h-full object-cover opacity-0 transition-opacity duration-500 hover:scale-105 transition-transform"
+                    className="w-full h-auto block opacity-0 transition-[opacity,filter] duration-300 group-hover:brightness-90"
                     onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    onError={(e) => { (e.target as HTMLImageElement).closest('div')!.style.display = 'none'; }}
                   />
                 </div>
               ))}
