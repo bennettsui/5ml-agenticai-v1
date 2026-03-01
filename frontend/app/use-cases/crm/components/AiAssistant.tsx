@@ -76,10 +76,10 @@ interface Suggestion {
 interface Attachment {
   id: string;
   file: File;
-  kind: 'image' | 'text' | 'other';
+  kind: 'image' | 'text' | 'pdf' | 'other';
   /** Data URL for image preview */
   preview?: string;
-  /** Base64-only string (no prefix) for images */
+  /** Base64-only string (no prefix) for images/pdfs */
   base64?: string;
   mediaType?: string;
   /** Text content for plain-text files */
@@ -173,6 +173,7 @@ function fileToText(file: File): Promise<string> {
 
 const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
 const TEXT_TYPES = ['text/plain', 'text/markdown', 'text/csv', 'application/json', 'text/html'];
+const PDF_TYPE = 'application/pdf';
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -603,6 +604,11 @@ export function AiAssistant() {
           const { base64, mediaType, preview } = await fileToBase64(file);
           newAttachments.push({ id, file, kind: 'image', preview, base64, mediaType });
         } catch { /* skip unreadable */ }
+      } else if (file.type === PDF_TYPE || file.name.toLowerCase().endsWith('.pdf')) {
+        try {
+          const { base64 } = await fileToBase64(file);
+          newAttachments.push({ id, file, kind: 'pdf', base64, mediaType: PDF_TYPE });
+        } catch { /* skip */ }
       } else if (TEXT_TYPES.includes(file.type) || /\.(md|txt|csv)$/.test(file.name)) {
         try {
           const textContent = await fileToText(file);
@@ -669,11 +675,11 @@ export function AiAssistant() {
     // Build display message
     const imagePreviews = currentAttachments.filter(a => a.kind === 'image').map(a => a.preview!);
     const fileNames = currentAttachments.filter(a => a.kind !== 'image').map(a => a.file.name);
-    const userMsg: Message = { id: nextId(), role: 'user', content: text, imagePreviews, fileNames };
+    const userMsg: Message = { id: nextId(), role: 'user', content: text, imagePreviews, fileNames: fileNames.length > 0 ? fileNames : undefined };
     setMessages((prev) => [...prev, userMsg]);
 
     // Build API content
-    // For multimodal (images), use content array; otherwise string
+    // For multimodal (images/pdfs), use content array; otherwise string
     let apiContent: string | Array<{type: string; [key: string]: unknown}>;
 
     const imageBlocks = currentAttachments
@@ -681,6 +687,15 @@ export function AiAssistant() {
       .map(a => ({
         type: 'image',
         source: { type: 'base64', media_type: a.mediaType!, data: a.base64! },
+      }));
+
+    // PDFs sent as Claude document blocks (natively understood by Claude)
+    const pdfBlocks = currentAttachments
+      .filter(a => a.kind === 'pdf' && a.base64)
+      .map(a => ({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: a.base64! },
+        title: a.file.name,
       }));
 
     const textBlocks: Array<{type: string; text: string}> = [];
@@ -691,7 +706,7 @@ export function AiAssistant() {
     }
     // Note unsupported files
     for (const att of currentAttachments.filter(a => a.kind === 'other')) {
-      textBlocks.push({ type: 'text', text: `[Attached file: ${att.file.name} — content not readable in browser]` });
+      textBlocks.push({ type: 'text', text: `[Attached file: ${att.file.name} — binary format not supported]` });
     }
 
     let contextPrefix = '';
@@ -702,9 +717,10 @@ export function AiAssistant() {
 
     const userTextBlock = { type: 'text', text: contextPrefix + (text || '(see attached)') };
 
-    if (imageBlocks.length > 0) {
+    const hasMultimodal = imageBlocks.length > 0 || pdfBlocks.length > 0;
+    if (hasMultimodal) {
       // Must use content array for multimodal
-      apiContent = [...imageBlocks, ...textBlocks, userTextBlock] as Array<{type: string; [key: string]: unknown}>;
+      apiContent = [...pdfBlocks, ...imageBlocks, ...textBlocks, userTextBlock] as Array<{type: string; [key: string]: unknown}>;
     } else if (textBlocks.length > 0) {
       // Text files: prepend to string message
       apiContent = [...textBlocks.map(b => b.text), userTextBlock.text].join('\n\n');
@@ -715,6 +731,7 @@ export function AiAssistant() {
     // For history, store only a summary (avoid storing large base64 blobs)
     const historyText = [
       ...currentAttachments.filter(a => a.kind === 'image').map(a => `[Image: ${a.file.name}]`),
+      ...currentAttachments.filter(a => a.kind === 'pdf').map(a => `[PDF: ${a.file.name}]`),
       ...currentAttachments.filter(a => a.kind === 'text').map(a => `[File: ${a.file.name}]`),
       text,
     ].filter(Boolean).join(' ');

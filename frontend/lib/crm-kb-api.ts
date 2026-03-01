@@ -115,6 +115,18 @@ export interface ProjectUpdate {
   deliverables?: Deliverable[];
 }
 
+export interface ProjectAttachment {
+  id: string;
+  project_id: string;
+  original_name: string;
+  filename: string;
+  file_path: string;
+  mime_type: string | null;
+  size: number | null;
+  summary: string | null;
+  uploaded_at: string;
+}
+
 export interface FeedbackEvent {
   id: string;
   client_id: string;
@@ -400,6 +412,30 @@ export const crmApi = {
     },
     delete(id: string) {
       return request<void>(`/projects/${id}`, { method: "DELETE" });
+    },
+    attachments: {
+      list(projectId: string) {
+        return request<ProjectAttachment[]>(`/projects/${projectId}/attachments`);
+      },
+      upload(projectId: string, file: File): Promise<ProjectAttachment> {
+        const form = new FormData();
+        form.append("file", file);
+        return fetch(`/api/projects/${projectId}/attachments`, {
+          method: "POST",
+          body: form,
+        }).then(async (r) => {
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({ detail: r.statusText }));
+            throw new Error(err.detail || "Upload failed");
+          }
+          return r.json();
+        });
+      },
+      delete(projectId: string, attachmentId: string) {
+        return request<void>(`/projects/${projectId}/attachments/${attachmentId}`, {
+          method: "DELETE",
+        });
+      },
     },
   },
 

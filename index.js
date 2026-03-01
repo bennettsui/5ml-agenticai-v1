@@ -136,6 +136,9 @@ app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public',
 // Serve Radiance uploaded media
 app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
 
+// Serve CRM project attachments
+app.use('/uploads/crm', express.static(path.join(__dirname, 'uploads', 'crm')));
+
 // Serve compressed image/PDF outputs
 app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
 app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
