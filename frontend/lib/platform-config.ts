@@ -672,6 +672,18 @@ export const USE_CASES: UseCaseConfig[] = [
     features: ['Custom Slugs', 'Click Analytics', 'UTM Builder', 'QR Export', 'Branded Domains'],
   },
   {
+    id: 'event-checkin',
+    name: 'Event Check-in',
+    description: 'Real-time event check-in system for reception staff: searchable participant list with color-coded categories, live sync across devices, bulk Excel/CSV import, and checked-in export.',
+    solutionLine: 'FrontierVentures',
+    status: 'live',
+    progress: 1.0,
+    priority: 'high',
+    path: '/event-checkin',
+    agentCount: 0,
+    features: ['Real-time Sync (SSE)', 'Excel/CSV Import', 'Color Categories', 'Bulk Check-in', 'CSV/XLSX Export', 'Admin Panel'],
+  },
+  {
     id: 'barcode-qr-generator',
     name: 'Barcode & QR Generator',
     description: 'Generate QR codes and barcodes (EAN, UPC, Code128) with logo embedding, batch export, and brand colour customisation',
