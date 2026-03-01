@@ -550,20 +550,6 @@ export default function SalonPage() {
           </p>
         </FadeIn>
 
-        {/* Salon atmosphere photo */}
-        <FadeIn delay={180}>
-          <div className="rounded-2xl overflow-hidden mb-10">
-            <img
-              src="https://5ml.mmdbfiles.com/assets/93f5a75df69dca1744dd756c.jpg"
-              alt="TEDxXinyi salon 現場氛圍"
-              loading="lazy"
-              className="w-full h-auto object-cover rounded-2xl opacity-0 transition-opacity duration-500"
-              style={{ maxHeight: '420px' }}
-              onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-          </div>
-        </FadeIn>
 
         {/* Galaxy section */}
         <FadeIn delay={200}>
