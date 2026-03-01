@@ -241,6 +241,113 @@ export default function ReportPage() {
           </div>
         </section>
 
+        {/* ==================== CAVE FOREWORD ==================== */}
+        <section className="relative overflow-hidden" style={{ minHeight: '92vh' }}>
+          {/* Cave illustration background */}
+          <img
+            src="/tedx-xinyi/report-cave-intro.webp"
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+          {/* Dark overlay — heavier at top and bottom, lighter at cave mouth centre */}
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(8,6,4,0.88) 0%, rgba(8,6,4,0.55) 40%, rgba(8,6,4,0.72) 75%, rgba(8,6,4,0.94) 100%)' }} />
+          {/* Fallback bg if image missing */}
+          <div className="absolute inset-0 -z-10 bg-neutral-950" />
+
+          <div className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 md:px-14 py-24 md:py-36">
+
+            {/* Label */}
+            <FadeIn>
+              <div className="flex items-center gap-3 mb-10">
+                <span className="text-[10px] font-black tracking-[0.22em] uppercase" style={{ color: WARM_AMBER }}>前言</span>
+                <span className="flex-1 max-w-[80px] h-px" style={{ backgroundColor: `${WARM_AMBER}40` }} />
+                <span className="text-[10px] font-mono tracking-wider text-white/25">FOREWORD</span>
+              </div>
+            </FadeIn>
+
+            {/* Section 1 — 當資訊開始呼吸：AI 敘事 */}
+            <FadeIn delay={80}>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white leading-tight mb-3" lang="zh-TW">
+                當資訊開始呼吸：<em className="not-italic" style={{ color: WARM_AMBER }}>AI 敘事</em>
+              </h2>
+              <p className="text-sm font-black tracking-wider mb-7" style={{ color: `${WARM_AMBER}90` }} lang="zh-TW">
+                從觀察者到成為者
+              </p>
+            </FadeIn>
+            <FadeIn delay={160}>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] mb-5 max-w-2xl" lang="zh-TW">
+                在過去的時代，我們習慣把「趨勢」看作是一種外部的力量，它像是一場發生在外圍的景象變化，我們強烈感到，像洪流決定某種下一波一切。
+              </p>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] mb-5 max-w-2xl" lang="zh-TW">
+                然而，在 AI 時代，這種觀察者的視角，某程度上可能再不適用？當資訊呼吸的一刻，不單會在世界舞台上掀起人類與 AI 細密互動的具體徵象及震盪回響。這亦寓言般地宣告一場由 AI 細胞寄居人類生命的蔓延。
+              </p>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] mb-5 max-w-2xl" lang="zh-TW">
+                這就是「We Becoming」（我們成為），受時間氣候影響下，AI 正在重新塑造人類一切的時代。這不只是科技改變世界的故事，更是在每個人日常中成為嶄新世界標準的一場內在修練。
+              </p>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] max-w-2xl" lang="zh-TW">
+                前人總愛說一生只活一次（YOLO），可曾想過我們身處的時空，AI 從對手到 AI Itself 的自我進化底層架構，都正反過來總結人類本來人的面貌，並帶入未曾被完全展現的更多可能？以 AI 故事為名，這是一場集結具豐富探索精神與 TED Style 立體立場大家庭的集體敍事實驗。
+              </p>
+            </FadeIn>
+
+            {/* Divider */}
+            <FadeIn delay={220}>
+              <div className="my-10 flex items-center gap-4">
+                <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.12))' }} />
+                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: TED_RED }} />
+                <div className="flex-1 h-px" style={{ background: 'linear-gradient(to left, transparent, rgba(255,255,255,0.12))' }} />
+              </div>
+            </FadeIn>
+
+            {/* Section 2 — 重新思考的勇氣 */}
+            <FadeIn delay={280}>
+              <h3 className="text-xl sm:text-2xl font-black text-white mb-6" lang="zh-TW">重新思考的勇氣</h3>
+            </FadeIn>
+            <FadeIn delay={340}>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] mb-5 max-w-2xl" lang="zh-TW">
+                Adam Grant 艾登‧格蘭特在《逆思者 Think Again》中提醒我們，進步的最大障礙往往不是無知，而是對於原有想法抱持不退縮的反思與執念。AI 取代而威脅人類角色早已不再是一個新話題，我們久踞熟悉舒適區的框架，結果有時會看見不起。
+              </p>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] max-w-2xl" lang="zh-TW">
+                這份每年精心策劃並進行一場賭注於深層底定的重啟（Bottom Reset）。提案從遞出的一刻開始就等同於「放棄現狀」。它意味著 TEDxXinyi 的共建實驗將既不會停留在已知的安全地帶，也不會滿足於表面的創新修辭。所有參與者都被邀請暫時放下那些自以為堅不可摧的信念，反而是以謙虛而堅定的態度：「如果一切可以重新來過，我們會選擇怎樣的未來？」
+              </p>
+            </FadeIn>
+
+            {/* Divider */}
+            <FadeIn delay={380}>
+              <div className="my-10 flex items-center gap-4">
+                <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.12))' }} />
+                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: TED_RED }} />
+                <div className="flex-1 h-px" style={{ background: 'linear-gradient(to left, transparent, rgba(255,255,255,0.12))' }} />
+              </div>
+            </FadeIn>
+
+            {/* Section 3 — 邀請函 */}
+            <FadeIn delay={420}>
+              <h3 className="text-xl sm:text-2xl font-black text-white mb-6" lang="zh-TW">一份發給所有思考者的邀請函</h3>
+            </FadeIn>
+            <FadeIn delay={480}>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] mb-5 max-w-2xl" lang="zh-TW">
+                這不是一場單向度的表演，而是一場互為鏡像的思想實驗。每位觀眾和講者都以無形的線連結在一起，當你在台下思考、質疑、點頭或困惑的時候，台上的分享者也正在經歷同樣的內在震盪。這是一場沒有標準答案的考卷，卻是一份任何一位仍然願意保持好奇，願意承認「我可以再想深一點」的人都值得收到的邀請函。
+              </p>
+            </FadeIn>
+
+            {/* Closing pull-quote */}
+            <FadeIn delay={540}>
+              <blockquote
+                className="mt-10 pl-5 border-l-2 text-base sm:text-lg font-black leading-relaxed max-w-xl italic"
+                style={{ borderColor: WARM_AMBER, color: `${WARM_AMBER}CC` }}
+                lang="zh-TW"
+              >
+                人類正在深入內在的暗黑洞穴，當我們向前走，你依然在你的陰影之中呼吸。
+              </blockquote>
+            </FadeIn>
+
+          </div>
+        </section>
+
         {/* ==================== INTRO — Bottom Reset ==================== */}
         <Section bg="white">
           <FadeIn>

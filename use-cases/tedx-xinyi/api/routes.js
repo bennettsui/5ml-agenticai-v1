@@ -589,6 +589,12 @@ const VISUALS = [
     prompt: 'Horizontal 16:10 card thumbnail image, gentle three-quarter overhead angle of a small circle of chairs arranged in a cozy modern Taipei creative space, warm amber-green evening lighting, colourful cushions on chairs, a low wooden coffee table in the centre with cups and small plants, arrangement clearly suggests a small intimate discussion group event, soft bokeh background, community warmth, documentary photography style, no text no watermarks no people',
   },
   {
+    id: 'report-cave-intro',
+    filename: 'report-cave-intro.webp',
+    description: 'Report foreword — cave silhouette, person walking toward light',
+    prompt: 'Cinematic photograph of a cave interior, rough dark brown and charcoal rock walls and floor in the foreground with deep shadows and visible texture, the cave narrows into an arched tunnel passage, strong bright golden-white light floods in from the cave mouth creating a glowing halo effect, a single lone human figure stands backlit at the cave opening as a silhouette — full upright posture, no facial features visible, facing away from camera toward the light, the contrast between the dark cave interior and the blinding white-gold exterior light is extreme and dramatic, mood: emergence, awakening, walking out of darkness into light, metaphorical and cinematic, no text, no watermarks',
+  },
+  {
     id: 'ted-circles',
     filename: 'ted-circles.webp',
     description: 'TED Circles — iconic red circle carpet in dramatic dark venue',
