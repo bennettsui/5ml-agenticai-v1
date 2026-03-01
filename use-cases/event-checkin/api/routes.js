@@ -31,8 +31,8 @@ const router  = express.Router();
 const db  = require('./db');
 const sse = require('./sse');
 
-// Initialise the SQLite database when this module is first loaded
-db.init();
+// Initialise the PostgreSQL table when this module is first loaded
+db.init().catch(err => console.error('[event-checkin] DB init error:', err));
 
 // Multer: store uploaded files in memory
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -48,11 +48,11 @@ router.get('/events', sse.handler);
 // ═══════════════════════════════════════════════════════════════
 
 // GET /participants/search?query=...
-router.get('/participants/search', (req, res) => {
+router.get('/participants/search', async (req, res) => {
   const query = (req.query.query || '').trim();
   if (!query) return res.json([]);
   try {
-    res.json(db.search(query));
+    res.json(await db.search(query));
   } catch (err) {
     console.error('[event-checkin search]', err);
     res.status(500).json({ error: 'Search failed' });
@@ -60,17 +60,17 @@ router.get('/participants/search', (req, res) => {
 });
 
 // POST /participants/:id/checkin
-router.post('/participants/:id/checkin', (req, res) => {
+router.post('/participants/:id/checkin', async (req, res) => {
   const id      = Number(req.params.id);
   const remarks = req.body.remarks !== undefined ? String(req.body.remarks) : undefined;
   try {
-    const existing = db.findById(id);
+    const existing = await db.findById(id);
     if (!existing) return res.status(404).json({ error: 'Participant not found' });
 
     const updates = { status: 'checked_in' };
     if (remarks !== undefined) updates.remarks = remarks;
 
-    const updated = db.update(id, updates);
+    const updated = await db.update(id, updates);
     sse.broadcast('participant_updated', { type: 'participant_updated', payload: updated });
     res.json(updated);
   } catch (err) {
@@ -80,14 +80,14 @@ router.post('/participants/:id/checkin', (req, res) => {
 });
 
 // POST /participants/:id/remarks
-router.post('/participants/:id/remarks', (req, res) => {
+router.post('/participants/:id/remarks', async (req, res) => {
   const id      = Number(req.params.id);
   const remarks = req.body.remarks !== undefined ? String(req.body.remarks) : '';
   try {
-    const existing = db.findById(id);
+    const existing = await db.findById(id);
     if (!existing) return res.status(404).json({ error: 'Participant not found' });
 
-    const updated = db.update(id, { remarks });
+    const updated = await db.update(id, { remarks });
     sse.broadcast('participant_updated', { type: 'participant_updated', payload: updated });
     res.json(updated);
   } catch (err) {
@@ -97,12 +97,12 @@ router.post('/participants/:id/remarks', (req, res) => {
 });
 
 // POST /participants  — create from check-in "add new" form
-router.post('/participants', (req, res) => {
+router.post('/participants', async (req, res) => {
   const { color, title, first_name, last_name, full_name, organization, remarks } = req.body;
   if (!color || !full_name)               return res.status(400).json({ error: 'color and full_name are required' });
   if (!VALID_COLORS.includes(color))      return res.status(400).json({ error: 'Invalid color' });
   try {
-    const p = db.insert({ color, title, first_name, last_name, full_name, organization, remarks });
+    const p = await db.insert({ color, title, first_name, last_name, full_name, organization, remarks });
     sse.broadcast('participant_created', { type: 'participant_created', payload: p });
     res.status(201).json(p);
   } catch (err) {
@@ -116,14 +116,14 @@ router.post('/participants', (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 
 // GET /admin/participants  — paginated list with filters
-router.get('/admin/participants', (req, res) => {
+router.get('/admin/participants', async (req, res) => {
   const page     = Math.max(1, parseInt(req.query.page, 10)      || 1);
   const pageSize = Math.min(200, parseInt(req.query.pageSize, 10) || 50);
   const color    = VALID_COLORS.includes(req.query.color)  ? req.query.color  : undefined;
   const status   = ['checked_in','not_checked_in'].includes(req.query.status) ? req.query.status : undefined;
   const query    = (req.query.query || '').trim() || undefined;
   try {
-    res.json({ ...db.list({ page, pageSize, color, status, query }), page, pageSize });
+    res.json({ ...(await db.list({ page, pageSize, color, status, query })), page, pageSize });
   } catch (err) {
     console.error('[event-checkin admin list]', err);
     res.status(500).json({ error: 'Failed to list participants' });
@@ -131,12 +131,12 @@ router.get('/admin/participants', (req, res) => {
 });
 
 // POST /admin/participants — create from admin
-router.post('/admin/participants', (req, res) => {
+router.post('/admin/participants', async (req, res) => {
   const { color, title, first_name, last_name, full_name, organization, status, remarks } = req.body;
   if (!color || !full_name)          return res.status(400).json({ error: 'color and full_name are required' });
   if (!VALID_COLORS.includes(color)) return res.status(400).json({ error: 'Invalid color' });
   try {
-    const p = db.insert({ color, title, first_name, last_name, full_name, organization, status, remarks });
+    const p = await db.insert({ color, title, first_name, last_name, full_name, organization, status, remarks });
     sse.broadcast('participant_created', { type: 'participant_created', payload: p });
     res.status(201).json(p);
   } catch (err) {
@@ -146,12 +146,12 @@ router.post('/admin/participants', (req, res) => {
 });
 
 // PUT /admin/participants/:id — update
-router.put('/admin/participants/:id', (req, res) => {
+router.put('/admin/participants/:id', async (req, res) => {
   const id = Number(req.params.id);
   const { color, title, first_name, last_name, full_name, organization, status, remarks } = req.body;
   if (color && !VALID_COLORS.includes(color)) return res.status(400).json({ error: 'Invalid color' });
   try {
-    if (!db.findById(id)) return res.status(404).json({ error: 'Not found' });
+    if (!(await db.findById(id))) return res.status(404).json({ error: 'Not found' });
     const fields = {};
     if (color        !== undefined) fields.color        = color;
     if (title        !== undefined) fields.title        = title;
@@ -161,7 +161,7 @@ router.put('/admin/participants/:id', (req, res) => {
     if (organization !== undefined) fields.organization = organization;
     if (status       !== undefined) fields.status       = status;
     if (remarks      !== undefined) fields.remarks      = remarks;
-    const updated = db.update(id, fields);
+    const updated = await db.update(id, fields);
     sse.broadcast('participant_updated', { type: 'participant_updated', payload: updated });
     res.json(updated);
   } catch (err) {
@@ -171,11 +171,11 @@ router.put('/admin/participants/:id', (req, res) => {
 });
 
 // DELETE /admin/participants/:id
-router.delete('/admin/participants/:id', (req, res) => {
+router.delete('/admin/participants/:id', async (req, res) => {
   const id = Number(req.params.id);
   try {
-    if (!db.findById(id)) return res.status(404).json({ error: 'Not found' });
-    db.remove(id);
+    if (!(await db.findById(id))) return res.status(404).json({ error: 'Not found' });
+    await db.remove(id);
     sse.broadcast('participant_deleted', { type: 'participant_deleted', payload: { id } });
     res.json({ success: true });
   } catch (err) {
@@ -185,11 +185,11 @@ router.delete('/admin/participants/:id', (req, res) => {
 });
 
 // POST /admin/participants/bulk-delete
-router.post('/admin/participants/bulk-delete', (req, res) => {
+router.post('/admin/participants/bulk-delete', async (req, res) => {
   const ids = Array.isArray(req.body.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
   if (!ids.length) return res.status(400).json({ error: 'ids required' });
   try {
-    const count = db.bulkDelete(ids);
+    const count = await db.bulkDelete(ids);
     sse.broadcast('bulk_deleted', { type: 'bulk_deleted', payload: { ids } });
     res.json({ deleted: count });
   } catch (err) {
@@ -199,14 +199,14 @@ router.post('/admin/participants/bulk-delete', (req, res) => {
 });
 
 // POST /admin/participants/bulk-status
-router.post('/admin/participants/bulk-status', (req, res) => {
+router.post('/admin/participants/bulk-status', async (req, res) => {
   const ids    = Array.isArray(req.body.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
   const status = req.body.status;
   if (!ids.length)                                          return res.status(400).json({ error: 'ids required' });
   if (!['checked_in','not_checked_in'].includes(status))   return res.status(400).json({ error: 'Invalid status' });
   try {
-    const count      = db.bulkStatus(ids, status);
-    const updatedRows = ids.map(id => db.findById(id)).filter(Boolean);
+    const count       = await db.bulkStatus(ids, status);
+    const updatedRows = (await Promise.all(ids.map(id => db.findById(id)))).filter(Boolean);
     sse.broadcast('bulk_status_updated', { type: 'bulk_status_updated', payload: { ids, status, rows: updatedRows } });
     res.json({ updated: count });
   } catch (err) {
@@ -358,18 +358,18 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
 
       // TUNE: deduplication key is (full_name, organization, color)
       const existing = DEDUP_MODE !== 'insert'
-        ? db.findDuplicate(row.full_name, row.organization, row.color)
+        ? await db.findDuplicate(row.full_name, row.organization, row.color)
         : null;
 
       if (existing) {
         if (DEDUP_MODE === 'skip') {
           skipped++;
         } else if (DEDUP_MODE === 'update') {
-          const p = db.update(existing.id, { title: row.title, first_name: row.first_name, last_name: row.last_name, organization: row.organization });
+          const p = await db.update(existing.id, { title: row.title, first_name: row.first_name, last_name: row.last_name, organization: row.organization });
           newRows.push(p); updated++;
         }
       } else {
-        const p = db.insert({ ...row, status: 'not_checked_in' });
+        const p = await db.insert({ ...row, status: 'not_checked_in' });
         newRows.push(p); inserted++;
       }
     }
@@ -384,9 +384,9 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
 });
 
 // ─── Export CSV ───────────────────────────────────────────────────────────────
-router.get('/admin/export-checkedin.csv', (req, res) => {
+router.get('/admin/export-checkedin.csv', async (req, res) => {
   try {
-    const rows    = db.getCheckedIn();
+    const rows    = await db.getCheckedIn();
     const headers = ['id','color','title','first_name','last_name','full_name','organization','status','remarks','created_at','updated_at'];
     const lines   = [
       headers.join(','),
@@ -407,7 +407,7 @@ router.get('/admin/export-checkedin.csv', (req, res) => {
 // ─── Export XLSX ──────────────────────────────────────────────────────────────
 router.get('/admin/export-checkedin.xlsx', async (req, res) => {
   try {
-    const rows    = db.getCheckedIn();
+    const rows    = await db.getCheckedIn();
     const headers = ['id','color','title','first_name','last_name','full_name','organization','status','remarks','created_at','updated_at'];
     const wb      = new ExcelJS.Workbook();
     const ws      = wb.addWorksheet('Checked-in Participants');
@@ -449,8 +449,8 @@ function extractJson(text) {
   return JSON.parse(m[1]);
 }
 
-function getStats() {
-  const { rows } = db.list({ pageSize: 5000 });
+async function getStats() {
+  const { rows } = await db.list({ pageSize: 5000 });
   const byColor = {};
   for (const c of VALID_COLORS) {
     byColor[c] = {
@@ -472,7 +472,7 @@ router.post('/ai/search-assist', async (req, res) => {
   const { query } = req.body;
   if (!query) return res.status(400).json({ error: 'query required' });
 
-  const { rows } = db.list({ pageSize: 2000 });
+  const { rows } = await db.list({ pageSize: 2000 });
   const list = rows.map(p => `${p.id}|${p.full_name}|${p.organization || ''}|${p.color}`).join('\n');
 
   try {
@@ -482,10 +482,11 @@ Find participants whose names or organisations fuzzy-match the search query.
 Consider typos, partial names, abbreviations, name-order swaps, and romanisation variants.
 Return ONLY valid JSON: {"ids":[id1,id2,...]} — up to 5 IDs, best match first. No explanation.`,
       `Query: "${query}"\n\nParticipants (id|full_name|organization|color):\n${list}`,
-      { maxTokens: 512, temperature: 0 }
+      { model: 'deepseek-chat', maxTokens: 256, temperature: 0 }
     );
     const { ids = [] } = extractJson(result.content);
-    const participants = ids.slice(0, 5).map(id => db.findById(Number(id))).filter(Boolean);
+    const fetched = await Promise.all(ids.slice(0, 5).map(id => db.findById(Number(id))));
+    const participants = fetched.filter(Boolean);
     res.json({ participants });
   } catch (err) {
     console.error('[checkin ai search]', err);
@@ -496,7 +497,7 @@ Return ONLY valid JSON: {"ids":[id1,id2,...]} — up to 5 IDs, best match first.
 // POST /ai/enrich/:id — suggest cleaned/missing field values for a participant
 router.post('/ai/enrich/:id', async (req, res) => {
   if (!requireAI(res)) return;
-  const p = db.findById(Number(req.params.id));
+  const p = await db.findById(Number(req.params.id));
   if (!p) return res.status(404).json({ error: 'Not found' });
 
   try {
@@ -522,16 +523,16 @@ Only include a key if you have a confident suggestion that differs from the curr
 });
 
 // POST /ai/enrich/:id/apply — write AI suggestions back to the DB
-router.post('/ai/enrich/:id/apply', (req, res) => {
+router.post('/ai/enrich/:id/apply', async (req, res) => {
   const id = Number(req.params.id);
-  if (!db.findById(id)) return res.status(404).json({ error: 'Not found' });
+  if (!(await db.findById(id))) return res.status(404).json({ error: 'Not found' });
   const safe = {};
   for (const k of ['title', 'first_name', 'last_name', 'organization']) {
     if (req.body[k] !== undefined) safe[k] = req.body[k];
   }
   if (!Object.keys(safe).length) return res.status(400).json({ error: 'No valid fields' });
   try {
-    const updated = db.update(id, safe);
+    const updated = await db.update(id, safe);
     sse.broadcast('participant_updated', { type: 'participant_updated', payload: updated });
     res.json(updated);
   } catch (err) {
@@ -542,8 +543,8 @@ router.post('/ai/enrich/:id/apply', (req, res) => {
 // POST /ai/report — generate a post-event attendance report (markdown)
 router.post('/ai/report', async (req, res) => {
   if (!requireAI(res)) return;
-  const stats = getStats();
-  const { rows } = db.list({ pageSize: 5000 });
+  const stats = await getStats();
+  const { rows } = await db.list({ pageSize: 5000 });
   const noShows = rows.filter(p => p.status === 'not_checked_in').map(p => `${p.full_name} (${p.color})`).slice(0, 30);
 
   try {
@@ -564,7 +565,7 @@ breakdown by group colour, notable observations, and a no-show list if applicabl
 // POST /ai/explain — plain-language explanation of current dashboard stats
 router.post('/ai/explain', async (req, res) => {
   if (!requireAI(res)) return;
-  const stats = getStats();
+  const stats = await getStats();
 
   try {
     const result = await deepseek.analyze(
@@ -587,7 +588,7 @@ router.post('/ai/concierge', async (req, res) => {
   const { question } = req.body;
   if (!question) return res.status(400).json({ error: 'question required' });
 
-  const { rows } = db.list({ pageSize: 5000 });
+  const { rows } = await db.list({ pageSize: 5000 });
   const compact = rows.map(p =>
     `${p.full_name}|${p.color}|${p.organization || ''}|${p.status === 'checked_in' ? '✓' : '○'}`
   ).join('\n');
