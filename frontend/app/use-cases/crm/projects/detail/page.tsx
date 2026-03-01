@@ -340,8 +340,8 @@ function ProjectDetailInner() {
     if (!projectId || sendingToAiId) return;
     setSendingToAiId(att.id);
     try {
-      const res = await fetch(`/uploads/crm/${projectId}/${att.filename}`);
-      if (!res.ok) throw new Error('File not available on server (may have been lost after restart)');
+      const res = await fetch(`/api/crm/projects/${projectId}/attachments/${att.id}/download`);
+      if (!res.ok) throw new Error('File not available');
       const blob = await res.blob();
       const file = new File([blob], att.original_name, { type: att.mime_type || blob.type });
       sendFileToChat(file);
@@ -836,7 +836,7 @@ function ProjectDetailInner() {
                       )}
                     </button>
                     <a
-                      href={`/uploads/crm/${projectId}/${att.filename}`}
+                      href={`/api/crm/projects/${projectId}/attachments/${att.id}/download`}
                       download={att.original_name}
                       className="p-1.5 rounded text-slate-500 hover:text-white hover:bg-slate-600/60 transition-colors"
                       title="Download"

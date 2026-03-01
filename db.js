@@ -327,8 +327,12 @@ async function initDatabase() {
         mime_type TEXT,
         size INTEGER,
         summary TEXT,
+        file_data BYTEA,
         uploaded_at TIMESTAMP DEFAULT NOW()
       );
+
+      -- Migrate existing rows to add file_data column if this is an older DB
+      ALTER TABLE crm_project_attachments ADD COLUMN IF NOT EXISTS file_data BYTEA;
 
       CREATE INDEX IF NOT EXISTS idx_crm_attachments_project ON crm_project_attachments(project_id);
 
