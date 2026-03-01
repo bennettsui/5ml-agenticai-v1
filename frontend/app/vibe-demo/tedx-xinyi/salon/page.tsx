@@ -9,31 +9,69 @@ const SPEAKER_CDN_URLS: Record<string, string> = {};
 const SPEAKERS = [
   {
     name: '程世嘉',
-    role: 'iKala 共同創辦人暨執行長',
-    tagline: 'AI 時代的人文思考——賦能而不替代',
+    org: 'iKala Interactive Media Inc.',
+    role: 'iKala集團董事長，AI知識暢銷作家',
+    tagline: 'AI 時代的人文思考者 × 賦能型創業家',
     bio: 'Stanford CS 碩士、前 Google 軟體工程師。2011 年創辦 AI 跨國企業 iKala，專注 AI 技術與數位轉型，倡導以人為本的 AI 應用。',
     imageId: 'cheng-shi-jia',
   },
   {
+    name: '楊士毅',
+    org: '楊士毅個人工作室',
+    role: '剪紙藝術家 導演、攝影師',
+    tagline: '剪紙藝術 × 國際成就',
+    bio: '曾為 Apple 台北 101 旗艦店創作 75 公尺剪紙作品《有閒來坐》，作品橫跨公共藝術、攝影與影像導演。',
+    imageId: 'yang-shi-yi',
+  },
+  {
     name: '林東良',
-    role: '黑潮海洋文教基金會 執行長',
+    org: '黑潮海洋文化基金會',
+    role: '執行長',
     tagline: '從解說員到執行長——海洋教育 × 環境行動',
     bio: '從花蓮海岸的鯨豚解說員一路走到基金會執行長，長期投入海洋議題與鯨豚碳排研究，探索環境保育與科技的交會點。',
     imageId: 'lin-dong-liang',
   },
   {
     name: '廖唯傑',
-    role: '講者',
+    org: '華夏集團玻璃',
+    role: '企業經營者',
     tagline: '教育 × 科技的跨界實踐',
     bio: '以教育與科技為起點，探索如何建立一個企業持續百年的永續模式，從轉型逆襲中找到危機與轉機。',
     imageId: 'liao-wei-jie',
   },
   {
-    name: '楊士毅',
-    role: '剪紙藝術家・導演・攝影師',
-    tagline: '剪紙藝術 × 國際成就',
-    bio: '曾為 Apple 台北 101 旗艦店創作 75 公尺剪紙作品《有閒來坐》，作品橫跨公共藝術、攝影與影像導演。',
-    imageId: 'yang-shi-yi',
+    name: '廖冠傑',
+    roleTag: '對談嘉賓',
+    org: '玻璃兄弟主持人 哥哥',
+    role: '企業經營者，知識型KOL',
+    imageId: 'liao-guan-jie',
+  },
+  {
+    name: '曹榮軒博士',
+    roleTag: '邀約策展主持人',
+    org: '福爾摩沙氣候智慧服務有限公司執行長',
+    role: '氣候科學家，永續專家',
+    imageId: 'cao-rong-xuan',
+  },
+  {
+    name: '張卉君',
+    roleTag: '邀約策展主持人',
+    role: '詩人，海洋環境倡議家，作家，陶藝家',
+    imageId: 'zhang-hui-jun',
+  },
+  {
+    name: '林靜宜',
+    roleTag: '邀約趨勢引言',
+    org: '自由工作者',
+    role: '傳記作家，占星敘事趨勢家',
+    imageId: 'lin-jing-yi',
+  },
+  {
+    name: '郭安妮',
+    roleTag: 'Wisdom 3.0 Moderator',
+    org: '美商中經合集團',
+    role: '總經理',
+    imageId: 'guo-an-ni',
   },
 ];
 
@@ -398,12 +436,11 @@ export default function SalonPage() {
           </p>
         </FadeIn>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-10">
           {SPEAKERS.map((speaker, i) => (
-            <FadeIn key={i} delay={i * 80}>
+            <FadeIn key={i} delay={i * 60}>
               <div className="text-center">
-                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full mx-auto mb-4 overflow-hidden bg-neutral-100 border-2 border-neutral-100 relative">
-                  {/* Try loading uploaded photo; show initial on error */}
+                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full mx-auto mb-3 overflow-hidden bg-neutral-100 border-2 border-neutral-100 relative">
                   <img
                     src={SPEAKER_CDN_URLS[speaker.imageId] || `/tedx-xinyi/speakers/${speaker.imageId}.jpg`}
                     alt={speaker.name}
@@ -411,7 +448,6 @@ export default function SalonPage() {
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       const el = e.target as HTMLImageElement;
-                      // Try png before giving up
                       if (el.src.endsWith('.jpg')) {
                         el.src = el.src.replace('.jpg', '.png');
                       } else {
@@ -424,10 +460,21 @@ export default function SalonPage() {
                     <span className="text-2xl font-black text-neutral-400">{speaker.name[0]}</span>
                   </div>
                 </div>
-                <p className="font-black text-base mb-1" lang="zh-TW">{speaker.name}</p>
-                <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">{speaker.role}</p>
+                {speaker.roleTag && (
+                  <span
+                    className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-1.5 tracking-wide"
+                    style={{ backgroundColor: `${TED_RED}12`, color: TED_RED }}
+                  >
+                    {speaker.roleTag}
+                  </span>
+                )}
+                <p className="font-black text-sm mb-0.5" lang="zh-TW">{speaker.name}</p>
+                {speaker.org && (
+                  <p className="text-neutral-400 text-[10px] leading-relaxed" lang="zh-TW">{speaker.org}</p>
+                )}
+                <p className="text-neutral-500 text-xs leading-relaxed mt-0.5" lang="zh-TW">{speaker.role}</p>
                 {speaker.tagline && (
-                  <p className="text-neutral-600 text-xs leading-relaxed mt-2 max-w-[200px] mx-auto italic" lang="zh-TW">{speaker.tagline}</p>
+                  <p className="text-neutral-400 text-[10px] leading-relaxed mt-1.5 max-w-[180px] mx-auto italic" lang="zh-TW">{speaker.tagline}</p>
                 )}
               </div>
             </FadeIn>
