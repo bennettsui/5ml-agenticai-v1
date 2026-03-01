@@ -156,21 +156,59 @@ function clearResults() { resultsList.innerHTML = ''; cardMap.clear(); }
 function renderResults(participants, query) {
   clearResults();
   if (!participants.length) {
+    // Show spinner while AI tries a fuzzy search
     resultsList.innerHTML = `
-      <div class="empty-state">
-        <h3>No relevant result</h3>
-        <p>No participant found matching "<strong>${esc(query)}</strong>".</p>
-        <p>Do you want to add this participant?</p>
-        <button class="btn btn-primary" id="addNewBtn">+ Add New Participant</button>
+      <div class="empty-state" id="aiSearchState">
+        <div class="ai-spinner">✨ No exact match — trying AI search…</div>
       </div>
     `;
-    document.getElementById('addNewBtn').addEventListener('click', openAddModal);
+    doAISearch(query);
     return;
   }
   for (const p of participants) {
     const card = buildCard(p);
     resultsList.appendChild(card);
     cardMap.set(p.id, card);
+  }
+}
+
+async function doAISearch(query) {
+  try {
+    const resp = await fetch(`${API}/ai/search-assist`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+    const data = await resp.json();
+    const state = document.getElementById('aiSearchState');
+    if (!state) return; // user typed again, ignore
+
+    if (!data.participants || !data.participants.length) {
+      state.innerHTML = `
+        <h3>No results found</h3>
+        <p>No participant found matching "<strong>${esc(query)}</strong>".</p>
+        <p>Do you want to add this participant?</p>
+        <button class="btn btn-primary" id="addNewBtn">+ Add New Participant</button>
+      `;
+      document.getElementById('addNewBtn').addEventListener('click', openAddModal);
+      return;
+    }
+
+    state.innerHTML = `<div class="ai-label">✨ AI-suggested matches for "<strong>${esc(query)}</strong>"</div>`;
+    for (const p of data.participants) {
+      const card = buildCard(p);
+      state.appendChild(card);
+      cardMap.set(p.id, card);
+    }
+  } catch {
+    const state = document.getElementById('aiSearchState');
+    if (state) {
+      state.innerHTML = `
+        <h3>No results found</h3>
+        <p>No participant found matching "<strong>${esc(query)}</strong>".</p>
+        <button class="btn btn-primary" id="addNewBtn">+ Add New Participant</button>
+      `;
+      document.getElementById('addNewBtn').addEventListener('click', openAddModal);
+    }
   }
 }
 

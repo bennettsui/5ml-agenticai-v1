@@ -366,6 +366,75 @@ tbody td { padding: 10px 12px; vertical-align: middle; color: var(--text); }
 ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.35); }
 
+/* ═══════════════════════════════════════════════════════════════
+   AI FEATURE STYLES
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Loading / thinking state */
+.ai-thinking {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text-muted);
+  padding: 12px 0;
+}
+.ai-thinking::before {
+  content: '';
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid rgba(59,130,246,.3);
+  border-top-color: var(--color-blue);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* AI label above search results */
+.ai-label {
+  font-size: 13px; color: var(--text-muted);
+  padding: 0 0 12px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.ai-label strong { color: var(--text); }
+
+/* Spinner in check-in empty state */
+.ai-spinner {
+  font-size: 14px; color: var(--text-muted);
+  padding: 48px 0; display: flex; align-items: center;
+  justify-content: center; gap: 10px;
+}
+.ai-spinner::before {
+  content: '';
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid rgba(59,130,246,.3);
+  border-top-color: var(--color-blue);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+/* AI output box (explain + concierge) */
+.ai-output {
+  margin-top: 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.ai-text {
+  background: rgba(59,130,246,0.06);
+  border: 1px solid rgba(59,130,246,0.2);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px; line-height: 1.6;
+  color: var(--text); white-space: pre-wrap;
+}
+
+/* Report modal content */
+.report-content {
+  font-size: 14px; line-height: 1.7; color: var(--text);
+}
+.report-content h1, .report-content h2 { font-size: 16px; font-weight: 700; margin: 16px 0 8px; color: var(--text); }
+.report-content h3, .report-content h4 { font-size: 14px; font-weight: 700; margin: 12px 0 6px; color: #cbd5e1; }
+.report-content p  { margin-bottom: 10px; }
+.report-content ul { padding-left: 20px; margin-bottom: 10px; }
+.report-content li { margin-bottom: 4px; }
+.report-content strong { color: var(--text); }
+
 /* ─── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .participant-card { flex-direction: column; }

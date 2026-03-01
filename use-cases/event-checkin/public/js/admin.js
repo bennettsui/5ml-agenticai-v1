@@ -104,8 +104,9 @@ function renderTable(rows) {
         <td>${esc(p.organization || '')}</td>
         <td>${checked ? `<span class="status-checked">✓ Checked-in</span>` : `<span class="status-not-checked">○ Not checked-in</span>`}</td>
         <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(p.remarks||'')}">${esc(p.remarks || '')}</td>
-        <td>
-          <button class="btn btn-sm btn-outline" data-action="edit" data-id="${p.id}">Edit</button>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-sm btn-outline" data-action="edit"   data-id="${p.id}">Edit</button>
+          <button class="btn btn-sm btn-outline" data-action="enrich" data-id="${p.id}" style="margin-left:4px;" title="AI Enrich">✨</button>
           <button class="btn btn-sm btn-danger"  data-action="delete" data-id="${p.id}" style="margin-left:4px;">Del</button>
         </td>
       </tr>
@@ -114,6 +115,9 @@ function renderTable(rows) {
 
   tbody.querySelectorAll('[data-action="edit"]').forEach(btn => {
     btn.addEventListener('click', () => openEditModal(Number(btn.dataset.id)));
+  });
+  tbody.querySelectorAll('[data-action="enrich"]').forEach(btn => {
+    btn.addEventListener('click', () => openEnrichModal(Number(btn.dataset.id)));
   });
   tbody.querySelectorAll('[data-action="delete"]').forEach(btn => {
     btn.addEventListener('click', () => deleteOne(Number(btn.dataset.id)));
@@ -311,6 +315,190 @@ function toast(msg, type = 'info') {
   el.textContent = msg;
   toastCont.appendChild(el);
   setTimeout(() => el.remove(), 4000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AI FEATURES
+// ═══════════════════════════════════════════════════════════════
+
+// ─── AI Enrich ────────────────────────────────────────────────────────────────
+
+const enrichModal      = document.getElementById('enrichModal');
+const enrichModalBody  = document.getElementById('enrichModalBody');
+const enrichModalApply = document.getElementById('enrichModalApply');
+let   enrichPending    = null; // { id, suggestions }
+
+document.getElementById('enrichModalClose').addEventListener('click',  closeEnrichModal);
+document.getElementById('enrichModalCancel').addEventListener('click', closeEnrichModal);
+enrichModal.addEventListener('click', e => { if (e.target === enrichModal) closeEnrichModal(); });
+
+async function openEnrichModal(id) {
+  enrichPending = null;
+  enrichModalApply.classList.add('hidden');
+  enrichModalBody.innerHTML = '<div class="ai-thinking">✨ Analysing record with AI…</div>';
+  enrichModal.classList.remove('hidden');
+
+  try {
+    const resp = await fetch(`${API}/ai/enrich/${id}`, { method: 'POST' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed');
+
+    const { suggestions, current } = data;
+    const keys = Object.keys(suggestions);
+
+    if (!keys.length) {
+      enrichModalBody.innerHTML = `<p style="color:var(--text-muted);font-size:14px;">
+        No suggestions — record looks complete already.</p>`;
+      return;
+    }
+
+    enrichPending = { id, suggestions };
+    enrichModalApply.classList.remove('hidden');
+
+    const rows = keys.map(k => `
+      <tr>
+        <td style="color:var(--text-muted);text-transform:uppercase;font-size:11px;font-weight:700;">${k.replace('_',' ')}</td>
+        <td style="color:var(--text-muted);text-decoration:line-through;">${esc(current[k] || '—')}</td>
+        <td style="color:var(--color-green);font-weight:600;">→ ${esc(suggestions[k])}</td>
+      </tr>`).join('');
+
+    enrichModalBody.innerHTML = `
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">AI suggests the following changes:</p>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-muted);font-size:11px;">Field</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-muted);font-size:11px;">Current</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-muted);font-size:11px;">Suggestion</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (err) {
+    enrichModalBody.innerHTML = `<p style="color:var(--color-red);font-size:14px;">Error: ${esc(err.message)}</p>`;
+  }
+}
+
+enrichModalApply.addEventListener('click', async () => {
+  if (!enrichPending) return;
+  const { id, suggestions } = enrichPending;
+  enrichModalApply.disabled = true;
+  enrichModalApply.textContent = 'Applying…';
+  try {
+    const resp = await fetch(`${API}/ai/enrich/${id}/apply`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(suggestions),
+    });
+    if (!resp.ok) throw new Error((await resp.json()).error || 'Failed');
+    toast('Record updated by AI.', 'success');
+    closeEnrichModal();
+    loadPage(currentPage);
+  } catch (err) {
+    toast('Apply failed: ' + err.message, 'error');
+  } finally {
+    enrichModalApply.disabled = false;
+    enrichModalApply.textContent = 'Apply Suggestions';
+  }
+});
+
+function closeEnrichModal() {
+  enrichModal.classList.add('hidden');
+  enrichPending = null;
+  enrichModalApply.classList.add('hidden');
+}
+
+// ─── Explain Stats ────────────────────────────────────────────────────────────
+
+document.getElementById('explainBtn').addEventListener('click', async () => {
+  const out = document.getElementById('explainOutput');
+  const btn = document.getElementById('explainBtn');
+  btn.disabled = true; btn.textContent = '💬 Thinking…';
+  out.classList.remove('hidden');
+  out.innerHTML = '<div class="ai-thinking">Analysing current stats…</div>';
+  try {
+    const resp = await fetch(`${API}/ai/explain`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed');
+    out.innerHTML = `<div class="ai-text">${esc(data.explanation).replace(/\n/g, '<br/>')}</div>`;
+  } catch (err) {
+    out.innerHTML = `<div style="color:var(--color-red);font-size:13px;">Error: ${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = '💬 Explain Stats';
+  }
+});
+
+// ─── Generate Report ──────────────────────────────────────────────────────────
+
+const reportModal = document.getElementById('reportModal');
+document.getElementById('reportModalClose').addEventListener('click', () => reportModal.classList.add('hidden'));
+reportModal.addEventListener('click', e => { if (e.target === reportModal) reportModal.classList.add('hidden'); });
+
+document.getElementById('reportBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('reportBtn');
+  const content = document.getElementById('reportContent');
+  btn.disabled = true; btn.textContent = '📊 Generating…';
+  content.innerHTML = '<div class="ai-thinking">Generating report…</div>';
+  reportModal.classList.remove('hidden');
+  try {
+    const resp = await fetch(`${API}/ai/report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed');
+    content.innerHTML = markdownToHtml(data.report);
+  } catch (err) {
+    content.innerHTML = `<div style="color:var(--color-red);">Error: ${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = '📊 Generate Report';
+  }
+});
+
+// ─── AI Concierge ─────────────────────────────────────────────────────────────
+
+document.getElementById('conciergeBtn').addEventListener('click', askConcierge);
+document.getElementById('conciergeInput').addEventListener('keydown', e => { if (e.key === 'Enter') askConcierge(); });
+
+async function askConcierge() {
+  const input = document.getElementById('conciergeInput');
+  const out   = document.getElementById('conciergeOutput');
+  const btn   = document.getElementById('conciergeBtn');
+  const q = input.value.trim();
+  if (!q) return;
+
+  btn.disabled = true; btn.textContent = '…';
+  out.classList.remove('hidden');
+  out.innerHTML = '<div class="ai-thinking">✨ Thinking…</div>';
+
+  try {
+    const resp = await fetch(`${API}/ai/concierge`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed');
+    out.innerHTML = `<div class="ai-text">${esc(data.answer).replace(/\n/g, '<br/>')}</div>`;
+    input.value = '';
+  } catch (err) {
+    out.innerHTML = `<div style="color:var(--color-red);font-size:13px;">Error: ${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Ask';
+  }
+}
+
+// ─── Minimal markdown → HTML (for report display) ─────────────────────────────
+
+function markdownToHtml(md) {
+  return md
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^### (.+)$/gm,  '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,   '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,    '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,     '<em>$1</em>')
+    .replace(/^- (.+)$/gm,    '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, s => `<ul>${s}</ul>`)
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, '<br/>')
+    .replace(/^(?!<[hup])/gm, '<p>')
+    .replace(/([^>])$/gm, '$1</p>')
+    .replace(/<p><\/p>/g, '');
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

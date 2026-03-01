@@ -425,6 +425,188 @@ router.get('/admin/export-checkedin.xlsx', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+//  AI ENDPOINTS  (deepseek-reasoner)
+// ═══════════════════════════════════════════════════════════════
+
+const deepseek = (() => {
+  try { return require('../../../services/deepseekService'); } catch { return null; }
+})();
+
+function requireAI(res) {
+  if (!deepseek || !deepseek.isAvailable()) {
+    res.status(503).json({ error: 'AI unavailable — DEEPSEEK_API_KEY not set' });
+    return false;
+  }
+  return true;
+}
+
+// Strip <think>…</think> blocks and extract first JSON object/array from AI output
+function extractJson(text) {
+  const clean = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  const m = clean.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  if (!m) throw new Error('No JSON in AI response');
+  return JSON.parse(m[1]);
+}
+
+function getStats() {
+  const { rows } = db.list({ pageSize: 5000 });
+  const byColor = {};
+  for (const c of VALID_COLORS) {
+    byColor[c] = {
+      total:      rows.filter(p => p.color === c).length,
+      checked_in: rows.filter(p => p.color === c && p.status === 'checked_in').length,
+    };
+  }
+  return {
+    total:       rows.length,
+    checked_in:  rows.filter(p => p.status === 'checked_in').length,
+    by_color:    byColor,
+    orgs:        [...new Set(rows.map(p => p.organization).filter(Boolean))].length,
+  };
+}
+
+// POST /ai/search-assist — fuzzy match when SQL returns 0 results
+router.post('/ai/search-assist', async (req, res) => {
+  if (!requireAI(res)) return;
+  const { query } = req.body;
+  if (!query) return res.status(400).json({ error: 'query required' });
+
+  const { rows } = db.list({ pageSize: 2000 });
+  const list = rows.map(p => `${p.id}|${p.full_name}|${p.organization || ''}|${p.color}`).join('\n');
+
+  try {
+    const result = await deepseek.analyze(
+      `You are a guest list assistant for the RD Symposium check-in desk.
+Find participants whose names or organisations fuzzy-match the search query.
+Consider typos, partial names, abbreviations, name-order swaps, and romanisation variants.
+Return ONLY valid JSON: {"ids":[id1,id2,...]} — up to 5 IDs, best match first. No explanation.`,
+      `Query: "${query}"\n\nParticipants (id|full_name|organization|color):\n${list}`,
+      { maxTokens: 512, temperature: 0 }
+    );
+    const { ids = [] } = extractJson(result.content);
+    const participants = ids.slice(0, 5).map(id => db.findById(Number(id))).filter(Boolean);
+    res.json({ participants });
+  } catch (err) {
+    console.error('[checkin ai search]', err);
+    res.status(500).json({ error: 'AI search failed: ' + err.message });
+  }
+});
+
+// POST /ai/enrich/:id — suggest cleaned/missing field values for a participant
+router.post('/ai/enrich/:id', async (req, res) => {
+  if (!requireAI(res)) return;
+  const p = db.findById(Number(req.params.id));
+  if (!p) return res.status(404).json({ error: 'Not found' });
+
+  try {
+    const result = await deepseek.analyze(
+      `You are a data-quality assistant for an event guest list.
+Given a participant record, suggest corrections or fill-ins for empty fields.
+Rules: extract title (Dr./Mr./Ms./Prof./Hon.) and first/last name from full_name when those fields are blank.
+Do NOT change full_name. Return ONLY valid JSON with keys: title, first_name, last_name, organization.
+Only include a key if you have a confident suggestion that differs from the current value. No explanation.`,
+      `Record:\n${JSON.stringify(p, null, 2)}`,
+      { maxTokens: 256, temperature: 0 }
+    );
+    const raw = extractJson(result.content);
+    const suggestions = {};
+    for (const k of ['title', 'first_name', 'last_name', 'organization']) {
+      if (raw[k] && String(raw[k]).trim() && raw[k] !== p[k]) suggestions[k] = String(raw[k]).trim();
+    }
+    res.json({ id: p.id, suggestions, current: p });
+  } catch (err) {
+    console.error('[checkin ai enrich]', err);
+    res.status(500).json({ error: 'AI enrich failed: ' + err.message });
+  }
+});
+
+// POST /ai/enrich/:id/apply — write AI suggestions back to the DB
+router.post('/ai/enrich/:id/apply', (req, res) => {
+  const id = Number(req.params.id);
+  if (!db.findById(id)) return res.status(404).json({ error: 'Not found' });
+  const safe = {};
+  for (const k of ['title', 'first_name', 'last_name', 'organization']) {
+    if (req.body[k] !== undefined) safe[k] = req.body[k];
+  }
+  if (!Object.keys(safe).length) return res.status(400).json({ error: 'No valid fields' });
+  try {
+    const updated = db.update(id, safe);
+    sse.broadcast('participant_updated', { type: 'participant_updated', payload: updated });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Apply failed: ' + err.message });
+  }
+});
+
+// POST /ai/report — generate a post-event attendance report (markdown)
+router.post('/ai/report', async (req, res) => {
+  if (!requireAI(res)) return;
+  const stats = getStats();
+  const { rows } = db.list({ pageSize: 5000 });
+  const noShows = rows.filter(p => p.status === 'not_checked_in').map(p => `${p.full_name} (${p.color})`).slice(0, 30);
+
+  try {
+    const result = await deepseek.analyze(
+      `You are an event coordinator writing a post-event attendance report for the RD Symposium.
+Write a concise, professional report in markdown. Include: executive summary, attendance rate,
+breakdown by group colour, notable observations, and a no-show list if applicable.`,
+      `Event: RD Symposium\nDate: ${new Date().toDateString()}\n\nStats:\n${JSON.stringify(stats, null, 2)}\n\nNo-shows (sample):\n${noShows.join('\n')}`,
+      { maxTokens: 1500, temperature: 0.3 }
+    );
+    res.json({ report: result.content, stats });
+  } catch (err) {
+    console.error('[checkin ai report]', err);
+    res.status(500).json({ error: 'Report failed: ' + err.message });
+  }
+});
+
+// POST /ai/explain — plain-language explanation of current dashboard stats
+router.post('/ai/explain', async (req, res) => {
+  if (!requireAI(res)) return;
+  const stats = getStats();
+
+  try {
+    const result = await deepseek.analyze(
+      `You are a friendly event assistant. Explain the current check-in stats in 2–3 short paragraphs.
+Highlight anything notable (low attendance in a group, overall progress, etc.).
+Use plain language for an event organiser who needs a quick overview. No markdown headers.`,
+      `RD Symposium live stats:\n${JSON.stringify(stats, null, 2)}`,
+      { maxTokens: 400, temperature: 0.4 }
+    );
+    res.json({ explanation: result.content, stats });
+  } catch (err) {
+    console.error('[checkin ai explain]', err);
+    res.status(500).json({ error: 'Explain failed: ' + err.message });
+  }
+});
+
+// POST /ai/concierge — Q&A assistant about the participant list
+router.post('/ai/concierge', async (req, res) => {
+  if (!requireAI(res)) return;
+  const { question } = req.body;
+  if (!question) return res.status(400).json({ error: 'question required' });
+
+  const { rows } = db.list({ pageSize: 5000 });
+  const compact = rows.map(p =>
+    `${p.full_name}|${p.color}|${p.organization || ''}|${p.status === 'checked_in' ? '✓' : '○'}`
+  ).join('\n');
+
+  try {
+    const result = await deepseek.analyze(
+      `You are an intelligent concierge for the RD Symposium check-in desk.
+You have the full guest list with live check-in status (✓=checked in, ○=not yet).
+Answer the coordinator's question accurately and concisely.`,
+      `Question: ${question}\n\nGuest list (name|color|org|status):\n${compact}`,
+      { maxTokens: 800, temperature: 0.3 }
+    );
+    res.json({ answer: result.content });
+  } catch (err) {
+    console.error('[checkin ai concierge]', err);
+    res.status(500).json({ error: 'Concierge failed: ' + err.message });
+  }
+});
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function findCol(headers, candidates) {
