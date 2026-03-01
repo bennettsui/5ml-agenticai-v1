@@ -274,12 +274,21 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         });
 
         // TUNE: Excel column mapping — adjust property names to match your Excel headers
+        const cellText = (val) => {
+          if (val == null) return null;
+          // ExcelJS may return rich text objects: { richText: [{text:'...'}, ...] }
+          if (typeof val === 'object' && Array.isArray(val.richText)) {
+            return val.richText.map(r => r.text ?? '').join('').trim() || null;
+          }
+          const s = String(val).trim();
+          return s || null;
+        };
         const getCell = (row, ...names) => {
           for (const name of names) {
             const idx = colIndex[name];
             if (idx) {
-              const val = row.getCell(idx).value;
-              if (val != null) return String(val).trim();
+              const val = cellText(row.getCell(idx).value);
+              if (val) return val;
             }
           }
           return null;
@@ -287,15 +296,23 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
 
         ws.eachRow((row, rowNum) => {
           if (rowNum === 1) return;
-          const full_name = getCell(row, 'FullName', 'full_name', 'Full Name');
+          const full_name = getCell(row,
+            'FullName', 'full_name', 'Full Name',
+            'Name', 'English Name', 'EnglishName',
+            'Participant Name', 'Display Name', 'Badge Name',
+          );
           if (!full_name) return;
           rows.push({
-            color:        sheetColor || getCell(row, 'Color', 'color') || null,
-            title:        getCell(row, 'Title', 'title')               || null,
-            first_name:   getCell(row, 'FirstName', 'first_name', 'First Name') || null,
-            last_name:    getCell(row, 'LastName', 'last_name', 'Last Name')    || null,
+            color:        sheetColor || getCell(row,
+              'Color', 'color', 'Colour', 'colour',
+              'Group', 'group', 'Table', 'table',
+              'Table Color', 'TableColor', 'Badge Color',
+            ) || null,
+            title:        getCell(row, 'Title', 'title', 'Salutation', 'salutation', 'Title/Salutation') || null,
+            first_name:   getCell(row, 'FirstName', 'first_name', 'First Name', 'Given Name') || null,
+            last_name:    getCell(row, 'LastName', 'last_name', 'Last Name', 'Family Name', 'Surname') || null,
             full_name,
-            organization: getCell(row, 'Organization', 'organization', 'Org') || null,
+            organization: getCell(row, 'Organization', 'organization', 'Organisation', 'Org', 'Company', 'Affiliation') || null,
           });
         });
       }
