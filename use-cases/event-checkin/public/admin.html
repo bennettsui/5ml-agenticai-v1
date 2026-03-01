@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin — Event Check-in</title>
+  <title>Event Check-in — Admin</title>
   <link rel="stylesheet" href="/event-checkin/static/css/style.css" />
 </head>
 <body>
 
 <!-- ─── Header ──────────────────────────────────────────────────────────── -->
 <header class="page-header">
-  <h1>Admin Panel</h1>
+  <h1>🎟️ Event Check-in — Admin</h1>
   <nav>
     <a href="/event-checkin">Check-in</a>
     <a href="/">← Home</a>
@@ -28,10 +28,11 @@
 
     <!-- Import -->
     <div class="panel">
-      <div class="panel-title">Import Participants (Excel / CSV)</div>
+      <div class="panel-title">📥 Import Participants (Excel / CSV)</div>
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
-        Append-only. Excel: sheets named Red/Purple/Blue/Green.
-        CSV: requires columns color, full_name.
+        Excel: auto-detects Color, Name, English Name, Organisation columns.
+        Sheets named Red/Purple/Blue/Green set the color automatically.
+        CSV: requires <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:4px;font-family:monospace;">color</code> and <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:4px;font-family:monospace;">full_name</code> columns.
       </p>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="font-size:13px;flex:1;" />
@@ -42,7 +43,7 @@
 
     <!-- Export -->
     <div class="panel">
-      <div class="panel-title">Export Checked-in Participants</div>
+      <div class="panel-title">📤 Export Checked-in Participants</div>
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
         Downloads only participants with status "Checked-in".
       </p>
