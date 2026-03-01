@@ -337,7 +337,7 @@ export default function ReportPage() {
             {/* Closing pull-quote */}
             <FadeIn delay={540}>
               <blockquote
-                className="mt-10 pl-5 border-l-2 text-base sm:text-lg font-black leading-relaxed max-w-xl italic"
+                className="mt-10 pl-5 border-l-2 text-base sm:text-lg font-black italic whitespace-nowrap overflow-x-auto"
                 style={{ borderColor: WARM_AMBER, color: `${WARM_AMBER}CC` }}
                 lang="zh-TW"
               >
@@ -351,7 +351,7 @@ export default function ReportPage() {
         {/* ==================== INTRO — Bottom Reset ==================== */}
         <Section bg="white">
           {/* Two-column: text left, brain infographic right */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 lg:gap-16 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-10 lg:gap-14 items-start">
 
             {/* Left: heading + text + cards */}
             <div>
@@ -393,10 +393,7 @@ export default function ReportPage() {
 
             {/* Right: brain infographic — sticky on large screens */}
             <FadeIn delay={150}>
-              <div
-                className="lg:sticky lg:top-8 flex-shrink-0 mx-auto"
-                style={{ width: 'min(320px, 100%)' }}
-              >
+              <div className="lg:sticky lg:top-8 w-full mx-auto">
                 <div className="rounded-2xl overflow-hidden shadow-lg border border-neutral-100 bg-white">
                   <img
                     src="/tedx-xinyi/report-brain.webp"
