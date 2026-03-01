@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Event Check-in</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<!-- ─── Header ──────────────────────────────────────────────────────────── -->
+<header class="page-header">
+  <h1>Admin Panel</h1>
+  <nav>
+    <a href="/">Check-in</a>
+  </nav>
+  <span class="conn-status">
+    <span class="conn-dot" id="connDot"></span>
+    <span id="connLabel">Connecting…</span>
+  </span>
+</header>
+
+<div class="container-wide">
+
+  <!-- ─── Import / Export panels ────────────────────────────────────────── -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+
+    <!-- Import -->
+    <div class="panel">
+      <div class="panel-title">Import Participants (Excel / CSV)</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+        Append-only. Excel: sheets named Red/Purple/Blue/Green.
+        CSV: requires columns color, full_name.
+      </p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="font-size:13px;flex:1;" />
+        <button class="btn btn-primary btn-sm" id="importBtn">Upload</button>
+      </div>
+      <div id="importSummary" class="import-summary hidden"></div>
+    </div>
+
+    <!-- Export -->
+    <div class="panel">
+      <div class="panel-title">Export Checked-in Participants</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+        Downloads only participants with status "Checked-in".
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a class="btn btn-outline btn-sm" href="/api/admin/export-checkedin.csv" download>
+          ↓ CSV
+        </a>
+        <a class="btn btn-outline btn-sm" href="/api/admin/export-checkedin.xlsx" download>
+          ↓ Excel (.xlsx)
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ─── Participants table ─────────────────────────────────────────────── -->
+  <div class="panel" style="padding:0;overflow:hidden;">
+
+    <!-- Toolbar -->
+    <div class="admin-toolbar" style="padding:16px 20px;border-bottom:1px solid var(--border);">
+      <button class="btn btn-primary btn-sm" id="addParticipantBtn">+ Add Participant</button>
+
+      <div class="filters">
+        <select id="filterColor" aria-label="Filter by color">
+          <option value="">All Colors</option>
+          <option value="Red">Red</option>
+          <option value="Purple">Purple</option>
+          <option value="Blue">Blue</option>
+          <option value="Green">Green</option>
+        </select>
+        <select id="filterStatus" aria-label="Filter by status">
+          <option value="">All Status</option>
+          <option value="checked_in">Checked-in</option>
+          <option value="not_checked_in">Not checked-in</option>
+        </select>
+        <input type="search" id="filterQuery" placeholder="Search name / org…" aria-label="Search" />
+      </div>
+    </div>
+
+    <!-- Bulk action bar (shown when rows selected) -->
+    <div id="bulkBar" class="bulk-bar hidden" style="margin:0;border-radius:0;border-left:none;border-right:none;">
+      <span id="bulkCount">0 selected</span>
+      <button class="btn btn-sm btn-success" id="bulkCheckin">Mark Checked-in</button>
+      <button class="btn btn-sm btn-outline" id="bulkUncheck">Mark Not checked-in</button>
+      <button class="btn btn-sm btn-danger" id="bulkDelete">Delete Selected</button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap" style="border:none;border-radius:0;">
+      <table id="adminTable">
+        <thead>
+          <tr>
+            <th style="width:36px;"><input type="checkbox" id="selectAll" title="Select all on page" /></th>
+            <th>ID</th>
+            <th>Color</th>
+            <th>Full Name</th>
+            <th>Title</th>
+            <th>First</th>
+            <th>Last</th>
+            <th>Organization</th>
+            <th>Status</th>
+            <th>Remarks</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="adminTableBody">
+          <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" style="padding:16px;">
+      <button class="btn btn-outline btn-sm" id="prevPage">← Prev</button>
+      <span id="pageInfo">Page 1</span>
+      <button class="btn btn-outline btn-sm" id="nextPage">Next →</button>
+      <span id="totalInfo" style="margin-left:8px;font-size:12px;color:var(--text-muted);"></span>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ─── Add/Edit Modal ────────────────────────────────────────────────────── -->
+<div id="editModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="editModalTitle">Add Participant</span>
+      <button class="modal-close" id="editModalClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editForm" autocomplete="off">
+        <input type="hidden" id="ef-id" name="id" />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div>
+            <label for="ef-color">Color <span style="color:red">*</span></label>
+            <select id="ef-color" name="color" required>
+              <option value="">— select —</option>
+              <option value="Red">Red</option>
+              <option value="Purple">Purple</option>
+              <option value="Blue">Blue</option>
+              <option value="Green">Green</option>
+            </select>
+          </div>
+          <div>
+            <label for="ef-title">Title</label>
+            <input type="text" id="ef-title" name="title" placeholder="Dr, Mr, Ms…" />
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div>
+            <label for="ef-first">First Name</label>
+            <input type="text" id="ef-first" name="first_name" />
+          </div>
+          <div>
+            <label for="ef-last">Last Name</label>
+            <input type="text" id="ef-last" name="last_name" />
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label for="ef-full">Full Name <span style="color:red">*</span></label>
+          <input type="text" id="ef-full" name="full_name" required />
+        </div>
+        <div style="margin-bottom:12px;">
+          <label for="ef-org">Organization</label>
+          <input type="text" id="ef-org" name="organization" />
+        </div>
+        <div style="margin-bottom:12px;">
+          <label for="ef-status">Status</label>
+          <select id="ef-status" name="status">
+            <option value="not_checked_in">Not checked-in</option>
+            <option value="checked_in">Checked-in</option>
+          </select>
+        </div>
+        <div>
+          <label for="ef-remarks">Remarks</label>
+          <textarea id="ef-remarks" name="remarks" rows="2"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="editModalCancel">Cancel</button>
+      <button class="btn btn-primary" id="editModalSubmit">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Toast container ───────────────────────────────────────────────────── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ─── Scripts ───────────────────────────────────────────────────────────── -->
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>
