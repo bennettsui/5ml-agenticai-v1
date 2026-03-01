@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_AMBER } from '../components';
 
 // Images embedded as base64 — no external CDN dependency
@@ -30,6 +31,8 @@ const APPROACH_BLOCKS = [
 ];
 
 export default function SustainabilityPage() {
+  const [playVideo, setPlayVideo] = useState(false);
+
   return (
     <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
@@ -117,20 +120,36 @@ export default function SustainabilityPage() {
           </div>
           <FadeIn delay={200}>
             <div className="w-full aspect-video rounded-2xl overflow-hidden shadow-lg bg-neutral-900 relative">
-              <iframe
-                src="https://www.youtube-nocookie.com/embed/-i9MntW94Bs?rel=0&modestbranding=1"
-                title="TEDxXinyi — Sustainability Ideas Development"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-                loading="lazy"
-                className="w-full h-full border-0"
-              ></iframe>
-              <noscript>
-                <a href="https://www.youtube.com/watch?v=-i9MntW94Bs" className="absolute inset-0 flex items-center justify-center text-white/60 text-sm">
-                  Watch on YouTube →
-                </a>
-              </noscript>
+              {playVideo ? (
+                <iframe
+                  src="https://www.youtube-nocookie.com/embed/-i9MntW94Bs?autoplay=1&rel=0&modestbranding=1"
+                  title="TEDxXinyi — Sustainability Ideas Development"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                  className="absolute inset-0 w-full h-full border-0"
+                />
+              ) : (
+                <button
+                  onClick={() => setPlayVideo(true)}
+                  className="absolute inset-0 w-full h-full group flex items-center justify-center"
+                  aria-label="Play TEDxXinyi Sustainability video"
+                >
+                  <img
+                    src="https://img.youtube.com/vi/-i9MntW94Bs/maxresdefault.jpg"
+                    alt="TEDxXinyi sustainability video thumbnail"
+                    className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-500"
+                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  <div className="absolute inset-0 bg-black/30 group-hover:bg-black/20 transition-colors" />
+                  <div className="relative z-10 w-16 h-16 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center shadow-xl transition-all group-hover:scale-110">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                      <path d="M8 5l11 7-11 7V5z" fill="#E62B1E"/>
+                    </svg>
+                  </div>
+                </button>
+              )}
             </div>
           </FadeIn>
         </div>
