@@ -659,5 +659,156 @@ module.exports = function createCrmRoutes(db) {
     });
   });
 
+  // ==========================================
+  // PROJECT ATTACHMENTS
+  // ==========================================
+
+  const multer = require('multer');
+  const path = require('path');
+  const fs = require('fs');
+  const deepseekService = require('../services/deepseekService');
+  const pdfParse = require('pdf-parse');
+
+  const crmStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(__dirname, '..', 'uploads', 'crm', req.params.id);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+    },
+  });
+
+  const crmUpload = multer({
+    storage: crmStorage,
+    limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  });
+
+  /** Try to read a file as text; returns null if it can't be decoded */
+  async function tryReadAsText(filePath, mimeType) {
+    // PDF extraction
+    if ((mimeType || '').includes('pdf') || filePath.toLowerCase().endsWith('.pdf')) {
+      try {
+        const buf = fs.readFileSync(filePath);
+        const data = await pdfParse(buf);
+        const text = (data.text || '').trim();
+        if (!text) return null;
+        return text.length > 40000 ? text.slice(0, 40000) + '\n[truncated]' : text;
+      } catch {
+        return null;
+      }
+    }
+
+    const textMimes = ['text/', 'application/json', 'application/xml'];
+    const couldBeText = textMimes.some(m => (mimeType || '').startsWith(m));
+    const textExts = ['.txt', '.md', '.csv', '.json', '.xml', '.html', '.htm', '.js', '.ts', '.py', '.log'];
+    const hasTextExt = textExts.some(e => filePath.toLowerCase().endsWith(e));
+
+    if (!couldBeText && !hasTextExt) return null;
+
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      return content.length > 40000 ? content.slice(0, 40000) + '\n[truncated]' : content;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Generate a DeepSeek summary for text content */
+  async function generateSummary(text, fileName) {
+    try {
+      const result = await deepseekService.analyze(
+        'You are a document analyst. Summarize the document concisely in 2-4 sentences, focusing on key information, purpose, and any important data points.',
+        `File: ${fileName}\n\n${text}`,
+        { maxTokens: 300, temperature: 0.3 }
+      );
+      return result.content || null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Upload attachment to a project
+  router.post('/projects/:id/attachments', crmUpload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ detail: 'No file uploaded' });
+      }
+
+      // Verify project exists
+      const projectCheck = await pool.query('SELECT id FROM crm_projects WHERE id = $1', [req.params.id]);
+      if (projectCheck.rows.length === 0) {
+        fs.unlinkSync(req.file.path);
+        return res.status(404).json({ detail: 'Project not found' });
+      }
+
+      const relPath = `/uploads/crm/${req.params.id}/${req.file.filename}`;
+
+      // Try to read file content and generate a DeepSeek summary
+      let summary = null;
+      const textContent = await tryReadAsText(req.file.path, req.file.mimetype);
+      if (textContent) {
+        summary = await generateSummary(textContent, req.file.originalname);
+      }
+
+      const result = await pool.query(
+        `INSERT INTO crm_project_attachments
+           (project_id, original_name, filename, file_path, mime_type, size, summary)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [
+          req.params.id,
+          req.file.originalname,
+          req.file.filename,
+          relPath,
+          req.file.mimetype || null,
+          req.file.size || null,
+          summary,
+        ]
+      );
+
+      res.status(201).json(result.rows[0]);
+    } catch (error) {
+      console.error('Error uploading attachment:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
+  // List attachments for a project
+  router.get('/projects/:id/attachments', async (req, res) => {
+    try {
+      const result = await pool.query(
+        'SELECT * FROM crm_project_attachments WHERE project_id = $1 ORDER BY uploaded_at DESC',
+        [req.params.id]
+      );
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Error listing attachments:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
+  // Delete an attachment
+  router.delete('/projects/:id/attachments/:attachmentId', async (req, res) => {
+    try {
+      const result = await pool.query(
+        'DELETE FROM crm_project_attachments WHERE id = $1 AND project_id = $2 RETURNING *',
+        [req.params.attachmentId, req.params.id]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ detail: 'Attachment not found' });
+      }
+      // Remove file from disk (best-effort)
+      const absPath = path.join(__dirname, '..', result.rows[0].file_path);
+      try { fs.unlinkSync(absPath); } catch { /* ignore if already gone */ }
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting attachment:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
   return router;
 };

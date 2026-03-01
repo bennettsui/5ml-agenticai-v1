@@ -76,10 +76,10 @@ interface Suggestion {
 interface Attachment {
   id: string;
   file: File;
-  kind: 'image' | 'text' | 'other';
+  kind: 'image' | 'text' | 'pdf' | 'other';
   /** Data URL for image preview */
   preview?: string;
-  /** Base64-only string (no prefix) for images */
+  /** Base64-only string (no prefix) for images/pdfs */
   base64?: string;
   mediaType?: string;
   /** Text content for plain-text files */
@@ -173,6 +173,7 @@ function fileToText(file: File): Promise<string> {
 
 const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
 const TEXT_TYPES = ['text/plain', 'text/markdown', 'text/csv', 'application/json', 'text/html'];
+const PDF_TYPE = 'application/pdf';
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -384,6 +385,8 @@ export function AiAssistant() {
   // Attachments
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
 
   const chatHistoryRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [crmSessionId, setCrmSessionId] = useState<string | null>(null);
@@ -591,10 +594,8 @@ export function AiAssistant() {
   // -----------------------------------------------------------------------
   // File attachment handling
   // -----------------------------------------------------------------------
-  const handleFileChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
+  const processFiles = useCallback(async (files: File[]) => {
     if (!files.length) return;
-
     const newAttachments: Attachment[] = [];
     for (const file of files) {
       const id = attachId();
@@ -602,8 +603,13 @@ export function AiAssistant() {
         try {
           const { base64, mediaType, preview } = await fileToBase64(file);
           newAttachments.push({ id, file, kind: 'image', preview, base64, mediaType });
-        } catch { /* skip unreadable files */ }
-      } else if (TEXT_TYPES.includes(file.type) || file.name.endsWith('.md') || file.name.endsWith('.txt') || file.name.endsWith('.csv')) {
+        } catch { /* skip unreadable */ }
+      } else if (file.type === PDF_TYPE || file.name.toLowerCase().endsWith('.pdf')) {
+        try {
+          const { base64 } = await fileToBase64(file);
+          newAttachments.push({ id, file, kind: 'pdf', base64, mediaType: PDF_TYPE });
+        } catch { /* skip */ }
+      } else if (TEXT_TYPES.includes(file.type) || /\.(md|txt|csv)$/.test(file.name)) {
         try {
           const textContent = await fileToText(file);
           newAttachments.push({ id, file, kind: 'text', textContent });
@@ -612,15 +618,45 @@ export function AiAssistant() {
         newAttachments.push({ id, file, kind: 'other' });
       }
     }
-
     setAttachments((prev) => [...prev, ...newAttachments]);
-    // Reset input so the same file can be re-selected
-    if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
+
+  const handleFileChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
+    await processFiles(Array.from(e.target.files ?? []));
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [processFiles]);
 
   const removeAttachment = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
+
+  // -----------------------------------------------------------------------
+  // Drag and drop
+  // -----------------------------------------------------------------------
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.types.includes('Files')) setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) setIsDragging(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    await processFiles(files);
+  }, [processFiles]);
 
   // -----------------------------------------------------------------------
   // Send message
@@ -639,11 +675,11 @@ export function AiAssistant() {
     // Build display message
     const imagePreviews = currentAttachments.filter(a => a.kind === 'image').map(a => a.preview!);
     const fileNames = currentAttachments.filter(a => a.kind !== 'image').map(a => a.file.name);
-    const userMsg: Message = { id: nextId(), role: 'user', content: text, imagePreviews, fileNames };
+    const userMsg: Message = { id: nextId(), role: 'user', content: text, imagePreviews, fileNames: fileNames.length > 0 ? fileNames : undefined };
     setMessages((prev) => [...prev, userMsg]);
 
     // Build API content
-    // For multimodal (images), use content array; otherwise string
+    // For multimodal (images/pdfs), use content array; otherwise string
     let apiContent: string | Array<{type: string; [key: string]: unknown}>;
 
     const imageBlocks = currentAttachments
@@ -651,6 +687,15 @@ export function AiAssistant() {
       .map(a => ({
         type: 'image',
         source: { type: 'base64', media_type: a.mediaType!, data: a.base64! },
+      }));
+
+    // PDFs sent as Claude document blocks (natively understood by Claude)
+    const pdfBlocks = currentAttachments
+      .filter(a => a.kind === 'pdf' && a.base64)
+      .map(a => ({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: a.base64! },
+        title: a.file.name,
       }));
 
     const textBlocks: Array<{type: string; text: string}> = [];
@@ -661,7 +706,7 @@ export function AiAssistant() {
     }
     // Note unsupported files
     for (const att of currentAttachments.filter(a => a.kind === 'other')) {
-      textBlocks.push({ type: 'text', text: `[Attached file: ${att.file.name} — content not readable in browser]` });
+      textBlocks.push({ type: 'text', text: `[Attached file: ${att.file.name} — binary format not supported]` });
     }
 
     let contextPrefix = '';
@@ -672,9 +717,10 @@ export function AiAssistant() {
 
     const userTextBlock = { type: 'text', text: contextPrefix + (text || '(see attached)') };
 
-    if (imageBlocks.length > 0) {
+    const hasMultimodal = imageBlocks.length > 0 || pdfBlocks.length > 0;
+    if (hasMultimodal) {
       // Must use content array for multimodal
-      apiContent = [...imageBlocks, ...textBlocks, userTextBlock] as Array<{type: string; [key: string]: unknown}>;
+      apiContent = [...pdfBlocks, ...imageBlocks, ...textBlocks, userTextBlock] as Array<{type: string; [key: string]: unknown}>;
     } else if (textBlocks.length > 0) {
       // Text files: prepend to string message
       apiContent = [...textBlocks.map(b => b.text), userTextBlock.text].join('\n\n');
@@ -685,6 +731,7 @@ export function AiAssistant() {
     // For history, store only a summary (avoid storing large base64 blobs)
     const historyText = [
       ...currentAttachments.filter(a => a.kind === 'image').map(a => `[Image: ${a.file.name}]`),
+      ...currentAttachments.filter(a => a.kind === 'pdf').map(a => `[PDF: ${a.file.name}]`),
       ...currentAttachments.filter(a => a.kind === 'text').map(a => `[File: ${a.file.name}]`),
       text,
     ].filter(Boolean).join(' ');
@@ -741,7 +788,24 @@ export function AiAssistant() {
   // Expanded panel
   // -----------------------------------------------------------------------
   return (
-    <aside className="flex h-screen w-[380px] flex-shrink-0 flex-col border-l border-slate-700 bg-slate-900/95 backdrop-blur sticky top-0">
+    <aside
+      className="relative flex h-screen w-[380px] flex-shrink-0 flex-col border-l border-slate-700 bg-slate-900/95 backdrop-blur sticky top-0"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drop overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 rounded-none bg-slate-900/90 border-2 border-dashed border-emerald-400 pointer-events-none">
+          <div className="p-4 rounded-full bg-emerald-500/20">
+            <Paperclip size={28} className="text-emerald-400" />
+          </div>
+          <p className="text-sm font-semibold text-emerald-300">Drop files here</p>
+          <p className="text-xs text-slate-400">Images, text, CSV, JSON…</p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
         <div className="flex items-center gap-2">

@@ -318,6 +318,20 @@ async function initDatabase() {
       -- Add deliverables column to existing tables (idempotent migration)
       ALTER TABLE crm_projects ADD COLUMN IF NOT EXISTS deliverables JSONB DEFAULT '[]';
 
+      CREATE TABLE IF NOT EXISTS crm_project_attachments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        project_id UUID REFERENCES crm_projects(id) ON DELETE CASCADE,
+        original_name TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        mime_type TEXT,
+        size INTEGER,
+        summary TEXT,
+        uploaded_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_crm_attachments_project ON crm_project_attachments(project_id);
+
       CREATE INDEX IF NOT EXISTS idx_crm_projects_client ON crm_projects(client_id);
       CREATE INDEX IF NOT EXISTS idx_crm_projects_status ON crm_projects(status);
 

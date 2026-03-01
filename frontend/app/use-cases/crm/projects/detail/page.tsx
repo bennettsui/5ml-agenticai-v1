@@ -24,8 +24,13 @@ import {
   CheckCircle2,
   Circle,
   Clock,
+  Paperclip,
+  Upload,
+  FileImage,
+  Download,
+  Sparkles,
 } from 'lucide-react';
-import { crmApi, type Project, type Brand, type FeedbackEvent, type Deliverable } from '@/lib/crm-kb-api';
+import { crmApi, type Project, type Brand, type FeedbackEvent, type Deliverable, type ProjectAttachment } from '@/lib/crm-kb-api';
 import { useCrmAi } from '../../context';
 
 // ---------------------------------------------------------------------------
@@ -89,6 +94,12 @@ function nanoid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 // ---------------------------------------------------------------------------
 // Inner component
 // ---------------------------------------------------------------------------
@@ -120,6 +131,13 @@ function ProjectDetailInner() {
   const [newDeadline, setNewDeadline] = useState('');
   const newTitleRef = useRef<HTMLInputElement>(null);
 
+  // Attachments
+  const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [attachDragging, setAttachDragging] = useState(false);
+  const attachDragCounterRef = useRef(0);
+  const attachFileInputRef = useRef<HTMLInputElement>(null);
+
   const fetchData = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
@@ -143,6 +161,11 @@ function ProjectDetailInner() {
           const fd = await feedbackRes.json();
           setFeedback(fd.items ?? fd);
         }
+      } catch { /* non-critical */ }
+
+      try {
+        const attList = await crmApi.projects.attachments.list(projectId);
+        setAttachments(attList);
       } catch { /* non-critical */ }
 
       setPageState({
@@ -257,6 +280,53 @@ function ProjectDetailInner() {
       setSyncing(false);
     }
   };
+
+  // -----------------------------------------------------------------------
+  // Attachments
+  // -----------------------------------------------------------------------
+  const handleAttachmentUpload = async (file: File) => {
+    if (!projectId || uploading) return;
+    setUploading(true);
+    try {
+      const att = await crmApi.projects.attachments.upload(projectId, file);
+      setAttachments((prev) => [att, ...prev]);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (id: string) => {
+    if (!projectId) return;
+    try {
+      await crmApi.projects.attachments.delete(projectId, id);
+      setAttachments((prev) => prev.filter((a) => a.id !== id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Delete failed');
+    }
+  };
+
+  const handleAttachDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    attachDragCounterRef.current += 1;
+    if (e.dataTransfer.types.includes('Files')) setAttachDragging(true);
+  }, []);
+
+  const handleAttachDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    attachDragCounterRef.current -= 1;
+    if (attachDragCounterRef.current === 0) setAttachDragging(false);
+  }, []);
+
+  const handleAttachDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    attachDragCounterRef.current = 0;
+    setAttachDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleAttachmentUpload(file);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, uploading]);
 
   // -----------------------------------------------------------------------
   // Guard states
@@ -589,6 +659,117 @@ function ProjectDetailInner() {
               </button>
               <span className="text-[11px] text-slate-500 ml-1">Enter to add · Esc to cancel</span>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* ---- Attachments ---- */}
+      <div
+        className={`relative bg-slate-800/50 border rounded-xl p-5 transition-colors ${
+          attachDragging ? 'border-emerald-500/60 bg-emerald-900/10' : 'border-slate-700/50'
+        }`}
+        onDragEnter={handleAttachDragEnter}
+        onDragLeave={handleAttachDragLeave}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleAttachDrop}
+      >
+        {/* Drag overlay */}
+        {attachDragging && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-xl bg-emerald-900/20 border-2 border-dashed border-emerald-500 pointer-events-none">
+            <Upload className="w-7 h-7 text-emerald-400" />
+            <p className="text-sm text-emerald-300 font-medium">Drop to attach</p>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Paperclip className="w-4 h-4 text-slate-400" />
+            <h2 className="text-sm font-semibold text-white">Attachments</h2>
+            {attachments.length > 0 && (
+              <span className="text-xs text-slate-500 bg-slate-700/60 px-2 py-0.5 rounded-full">
+                {attachments.length}
+              </span>
+            )}
+            {uploading && <Loader2 className="w-3.5 h-3.5 text-slate-500 animate-spin" />}
+          </div>
+          <button
+            onClick={() => attachFileInputRef.current?.click()}
+            disabled={uploading}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-slate-700/60 transition-colors disabled:opacity-50"
+          >
+            <Upload className="w-3 h-3" />
+            Upload
+          </button>
+          <input
+            ref={attachFileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleAttachmentUpload(file);
+              e.target.value = '';
+            }}
+          />
+        </div>
+
+        {attachments.length === 0 && !uploading ? (
+          <div className="text-center py-8">
+            <Paperclip className="w-8 h-8 text-slate-700 mx-auto mb-2" />
+            <p className="text-sm text-slate-500">No attachments yet</p>
+            <p className="text-xs text-slate-600 mt-1">Drag & drop files here or click Upload</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {attachments.map((att) => (
+              <div key={att.id} className="group bg-slate-700/30 border border-slate-700/40 rounded-lg p-3.5">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    {att.mime_type?.startsWith('image/') ? (
+                      <FileImage className="w-4 h-4 text-blue-400" />
+                    ) : (
+                      <FileText className="w-4 h-4 text-slate-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-slate-200 truncate">{att.original_name}</span>
+                      {att.size && (
+                        <span className="text-[11px] text-slate-500 flex-shrink-0">{formatFileSize(att.size)}</span>
+                      )}
+                      {att.mime_type && (
+                        <span className="text-[10px] text-slate-600 flex-shrink-0 uppercase">{att.mime_type.split('/')[1]}</span>
+                      )}
+                    </div>
+                    {att.summary && (
+                      <div className="mt-2 flex items-start gap-1.5">
+                        <Sparkles className="w-3 h-3 text-purple-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-slate-400 leading-relaxed">{att.summary}</p>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-slate-600 mt-1.5">
+                      {new Date(att.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <a
+                      href={`/uploads/crm/${projectId}/${att.filename}`}
+                      download={att.original_name}
+                      className="p-1.5 rounded text-slate-500 hover:text-white hover:bg-slate-600/60 transition-colors"
+                      title="Download"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </a>
+                    <button
+                      onClick={() => handleDeleteAttachment(att.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-400/10 transition-all"
+                      title="Delete attachment"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
