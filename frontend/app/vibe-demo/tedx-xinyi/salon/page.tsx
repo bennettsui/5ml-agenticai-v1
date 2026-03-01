@@ -35,16 +35,15 @@ const SPEAKERS = [
     tagline: '教育 × 科技的跨界實踐',
     imageId: 'liao-wei-jie',
   },
-];
-
-const GUESTS = [
   {
     name: '廖冠傑',
-    roleTag: '對談嘉賓',
     org: '玻璃兄弟主持人 哥哥',
     role: '企業經營者，知識型KOL',
     imageId: 'liao-guan-jie',
   },
+];
+
+const GUESTS = [
   {
     name: '曹榮軒博士',
     roleTag: '邀約策展主持人',
