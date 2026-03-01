@@ -1,9 +1,22 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY } from '../components';
 
+// CDN URL for ted-circles representative image — updated by sync-cdn
+const TED_CIRCLES_CDN = '';
+
 export default function CommunityPage() {
+  const [circlePhotos, setCirclePhotos] = useState<{ key: string; src: string; alt: string }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/tedx-xinyi/circles')
+      .then(r => r.json())
+      .then(d => setCirclePhotos(d.photos || []))
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
@@ -91,47 +104,30 @@ export default function CommunityPage() {
 
       {/* ==================== TED CIRCLES ==================== */}
       <Section bg="white">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center mb-12">
           <div>
             <FadeIn>
               <SectionLabel>CIRCLES</SectionLabel>
               <h2 className="text-3xl md:text-4xl font-black mb-6" lang="en">TED Circles</h2>
             </FadeIn>
             <FadeIn delay={150}>
-              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-8" lang="zh-TW">
+              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9]" lang="zh-TW">
                 TED Circles 是 TED 所發起的小型討論聚會。
                 在 TEDxXinyi，我們會挑選一支 TED 或 TEDx Talk，
                 和一小群人一起看、一起聊，
                 試著把大命題拉回日常的選擇。
               </p>
             </FadeIn>
-            <FadeIn delay={250}>
-              <a
-                href="https://tedxxinyi.com/ted-circles/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-6 py-3 text-sm font-black rounded-full text-white transition-all hover:scale-105 hover:shadow-lg"
-                style={{ backgroundColor: TED_RED }}
-                lang="zh-TW"
-              >
-                了解 TED Circles
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </a>
-            </FadeIn>
           </div>
           <FadeIn delay={200}>
-            <div className="aspect-video rounded-xl overflow-hidden bg-neutral-50 relative flex items-center justify-center">
-              {/* Fallback CSS circles shown until image loads */}
-              <div className="flex items-center justify-center gap-4 p-8 absolute inset-0">
-                <div className="w-20 h-20 rounded-full border-4 -mr-3" style={{ borderColor: TED_RED }} />
-                <div className="w-16 h-16 rounded-full border-4 -mr-3" style={{ borderColor: `${TED_RED}60` }} />
-                <div className="w-12 h-12 rounded-full border-4" style={{ borderColor: `${TED_RED}30` }} />
+            <div className="aspect-video rounded-2xl overflow-hidden bg-neutral-950 relative flex items-center justify-center">
+              {/* Dark fallback — bold red circle */}
+              <div className="absolute inset-0 flex items-center justify-center bg-neutral-950">
+                <div className="w-32 h-32 rounded-full" style={{ backgroundColor: TED_RED, opacity: 0.85 }} />
               </div>
               <img
-                src="/tedx-xinyi/ted-circles.webp"
-                alt="TED Circles discussion gathering with the iconic red circle carpet"
+                src={TED_CIRCLES_CDN || '/tedx-xinyi/ted-circles.webp'}
+                alt="TED Circles — iconic red circle carpet gathering"
                 loading="lazy"
                 className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
                 onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
@@ -140,6 +136,26 @@ export default function CommunityPage() {
             </div>
           </FadeIn>
         </div>
+
+        {/* TED Circles Photo Gallery */}
+        {circlePhotos.length > 0 && (
+          <FadeIn delay={100}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {circlePhotos.map((photo, i) => (
+                <div key={photo.key} className="aspect-square rounded-xl overflow-hidden bg-neutral-100">
+                  <img
+                    src={photo.src}
+                    alt={photo.alt || `TED Circles moment ${i + 1}`}
+                    loading="lazy"
+                    className="w-full h-full object-cover opacity-0 transition-opacity duration-500 hover:scale-105 transition-transform"
+                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              ))}
+            </div>
+          </FadeIn>
+        )}
       </Section>
 
       {/* ==================== VOLUNTEER CTA ==================== */}

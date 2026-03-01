@@ -534,8 +534,8 @@ const VISUALS = [
   {
     id: 'ted-circles',
     filename: 'ted-circles.webp',
-    description: 'TED Circles — iconic red circle carpet discussion gathering',
-    prompt: 'Warm intimate photograph of a small TED Circles discussion gathering, the centrepiece and visual anchor is the iconic TED Circle floor carpet — a large bold solid vivid red circle on a light wood floor, chairs arranged in a circle around it, slightly elevated camera angle clearly showing the full red circle and the circular seating arrangement, warm soft interior lighting in a clean modern Taipei venue, cream walls and natural wood tones, the bold red circle stands out vividly against the light floor, people seated in discussion are softly blurred, intimate cozy editorial photography style, no text no watermarks no logos',
+    description: 'TED Circles — iconic red circle carpet in dramatic dark venue',
+    prompt: 'Dramatic wide-angle photograph shot from a slightly elevated angle, a large bold vivid solid TEDx red circular carpet perfectly centred on a dark polished concrete floor, the surrounding space is very dark — nearly black walls ceiling and floor beyond the carpet, a single precise overhead spotlight makes the red circle glow intensely, chairs arranged in a perfect ring just outside the red carpet with participants visible as dark silhouettes, the bold saturated red carpet is the only strong colour in the entire frame, atmosphere is cinematic and intimate like a private theatre, documentary photography with extreme high-contrast lighting, no text no watermarks no logos',
   },
 ];
 
@@ -827,6 +827,23 @@ async function backupMetadataToMmdb(meta) {
     }
   }, 5000);
 }
+
+// ---- API: public TED Circles photo listing (no auth required) ----
+router.get('/circles', (req, res) => {
+  const meta = loadMetadata();
+  const photos = [];
+  for (const [key, data] of Object.entries(meta)) {
+    if (!key.startsWith('ted-circles/')) continue;
+    if (key.includes('--archived-')) continue;
+    if (!data || typeof data !== 'object') continue;
+    const localExists = fs.existsSync(path.join(OUTPUT_DIR, key));
+    const src = data.publicUrl || (localExists ? `/tedx-xinyi/${key}` : null);
+    if (src) {
+      photos.push({ key, src, publicUrl: data.publicUrl || null, alt: data.alt || '' });
+    }
+  }
+  res.json({ photos });
+});
 
 // ---- Expected speaker photo slots (salon page + homepage lineup) ----
 const SPEAKER_SLOTS = [

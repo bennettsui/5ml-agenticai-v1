@@ -8,7 +8,7 @@ const API_BASE = typeof window !== 'undefined'
   : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080');
 const ADMIN_PASSWORD = '5milesLab01@';
 
-type Tab = 'slots' | 'media' | 'social' | 'publish' | 'records';
+type Tab = 'slots' | 'media' | 'circles' | 'social' | 'publish' | 'records';
 
 interface MediaImage {
   key: string;
@@ -115,6 +115,7 @@ export default function TEDxXinyiAdmin() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceTargetRef = useRef<string | null>(null);
   const pickerFileInputRef = useRef<HTMLInputElement>(null);
+  const circlesFileInputRef = useRef<HTMLInputElement>(null);
 
   function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
     setToast({ msg, type });
@@ -392,7 +393,7 @@ export default function TEDxXinyiAdmin() {
   }, [authed, tab, slotsLoaded, slotsLoading, loadSlots]);
 
   useEffect(() => {
-    if (authed && (tab === 'media' || tab === 'records') && !mediaLoaded && !mediaLoading) {
+    if (authed && (tab === 'media' || tab === 'records' || tab === 'circles') && !mediaLoaded && !mediaLoading) {
       loadMedia();
     }
   }, [authed, tab, mediaLoaded, mediaLoading, loadMedia]);
@@ -489,6 +490,36 @@ export default function TEDxXinyiAdmin() {
     } finally {
       setActionLoading(null);
       if (pickerFileInputRef.current) pickerFileInputRef.current.value = '';
+    }
+  }
+
+  // Upload a new TED Circles photo to ted-circles/ folder
+  async function handleCirclesUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const key = `circles-${Date.now()}-${file.name}`;
+    setActionLoading(key);
+    try {
+      const reader = new FileReader();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: dataUrl, filename: file.name, folder: 'ted-circles' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      showToast(`Uploaded ${file.name} → ${data.publicUrl ? 'CDN ✓' : 'local'}`);
+      await loadMedia();
+    } catch (err) {
+      showToast(`Upload failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setActionLoading(null);
+      if (circlesFileInputRef.current) circlesFileInputRef.current.value = '';
     }
   }
 
@@ -614,6 +645,7 @@ export default function TEDxXinyiAdmin() {
     { id: 'slots', label: 'Image Slots' },
     { id: 'records', label: 'Image Records' },
     { id: 'media', label: 'Media Library' },
+    { id: 'circles', label: 'TED Circles' },
     { id: 'social', label: 'Social Media' },
     { id: 'publish', label: 'Publish Site Pack' },
   ];
@@ -638,6 +670,20 @@ export default function TEDxXinyiAdmin() {
         accept="image/jpeg,image/png,image/webp"
         className="hidden"
         onChange={handlePickerUpload}
+      />
+      <input
+        ref={circlesFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        multiple
+        onChange={async (e) => {
+          const files = Array.from(e.target.files || []);
+          for (const file of files) {
+            await handleCirclesUpload({ target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>);
+          }
+          if (circlesFileInputRef.current) circlesFileInputRef.current.value = '';
+        }}
       />
 
       {/* Toast */}
@@ -780,11 +826,21 @@ export default function TEDxXinyiAdmin() {
                 );
               })()}
 
-              {/* Meta Key */}
+              {/* Meta Key + Visual ID */}
               {(editSlot.metaKey || editSlot.isLocal) && (
-                <div>
-                  <label className="text-[11px] text-neutral-500 font-bold uppercase tracking-wider block mb-1">Metadata Key</label>
-                  <div className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-300 font-mono break-all">{editSlot.metaKey || editSlot.src.replace('/tedx-xinyi/', '')}</div>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-[11px] text-neutral-500 font-bold uppercase tracking-wider block mb-1">Metadata Key</label>
+                    <div className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-300 font-mono break-all">{editSlot.metaKey || editSlot.src.replace('/tedx-xinyi/', '')}</div>
+                  </div>
+                  {editSlot.type !== 'speaker' && editSlot.isLocal && (
+                    <div>
+                      <label className="text-[11px] text-neutral-500 font-bold uppercase tracking-wider block mb-1">Visual ID <span className="text-neutral-600 normal-case font-normal">(for Generate button)</span></label>
+                      <div className="bg-amber-950/30 border border-amber-800/30 rounded-lg px-3 py-2 text-xs text-amber-300 font-mono">
+                        {(editSlot.metaKey || editSlot.src.replace('/tedx-xinyi/', '')).replace(/\.(jpg|jpeg|png|webp|gif)$/i, '')}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1506,6 +1562,121 @@ export default function TEDxXinyiAdmin() {
                 <p className="text-[11px] text-neutral-600">Images with CDN URLs load from mmdbfiles CDN even if local files are missing.</p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ==================== TED CIRCLES TAB ==================== */}
+        {tab === 'circles' && (
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-black">TED Circles Photos</h2>
+                <p className="text-neutral-500 text-sm mt-1">Manage the TED Circles photo library shown on the Community page.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => circlesFileInputRef.current?.click()}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors"
+                >
+                  + Upload Photos
+                </button>
+                <button
+                  onClick={loadMedia}
+                  disabled={mediaLoading}
+                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-xs font-bold rounded-lg transition-colors"
+                >
+                  {mediaLoading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            {!mediaLoaded && !mediaLoading && (
+              <div className="text-center py-16 text-neutral-600">
+                <p className="text-sm mb-3">No photos yet.</p>
+                <button onClick={() => circlesFileInputRef.current?.click()} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors">
+                  Upload first photo
+                </button>
+              </div>
+            )}
+
+            {mediaLoaded && (() => {
+              const circleImgs = media.filter(m => m.key.startsWith('ted-circles/'));
+              if (circleImgs.length === 0) return (
+                <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-2xl">
+                  <p className="text-neutral-500 text-sm mb-3">No TED Circles photos uploaded yet.</p>
+                  <button onClick={() => circlesFileInputRef.current?.click()} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors">
+                    Upload photos
+                  </button>
+                </div>
+              );
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {circleImgs.map(img => {
+                    const archived = isArchived(img.key);
+                    const loading = actionLoading === img.key;
+                    return (
+                      <div key={img.key} className={`bg-neutral-900 border rounded-xl overflow-hidden ${archived ? 'border-neutral-800/50 opacity-60' : 'border-neutral-800'}`}>
+                        <div className="aspect-square bg-neutral-800 flex items-center justify-center relative group">
+                          {(img.publicUrl || img.localExists) ? (
+                            <img
+                              src={img.publicUrl || `${API_BASE}/tedx-xinyi/${img.key}`}
+                              alt={img.alt || img.key}
+                              className="w-full h-full object-cover"
+                              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <span className="text-neutral-600 text-xs">Missing</span>
+                          )}
+                          {loading && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            </div>
+                          )}
+                          {archived && (
+                            <div className="absolute top-2 left-2">
+                              <span className="text-[10px] px-1.5 py-0.5 bg-amber-900/60 text-amber-300 rounded font-bold">ARCHIVED</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-3">
+                          <p className="text-[11px] text-neutral-500 truncate font-mono mb-2" title={img.key}>{img.key.replace('ted-circles/', '')}</p>
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {img.localExists && <span className="text-[10px] px-1.5 py-0.5 bg-green-900/40 text-green-400 rounded">local</span>}
+                            {img.publicUrl && <span className="text-[10px] px-1.5 py-0.5 bg-blue-900/40 text-blue-400 rounded">CDN</span>}
+                            {img.missing && <span className="text-[10px] px-1.5 py-0.5 bg-red-900/40 text-red-400 rounded">missing</span>}
+                          </div>
+                          {img.publicUrl && (
+                            <div className="flex items-center gap-1 mb-2">
+                              <a href={img.publicUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-400 hover:text-blue-300 font-mono truncate flex-1">{img.publicUrl}</a>
+                              <button onClick={() => copyToClipboard(img.publicUrl!, img.key)} className="px-1.5 py-0.5 text-[9px] font-bold bg-neutral-700 hover:bg-neutral-600 text-neutral-300 rounded flex-shrink-0">
+                                {copiedKey === img.key ? 'Copied' : 'Copy'}
+                              </button>
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-1.5 pt-2 border-t border-neutral-800/50">
+                            {!archived && img.localExists && !img.publicUrl && (
+                              <button onClick={() => pushToCdn(img.key)} disabled={loading} className="w-full px-2 py-1.5 text-[11px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 mb-1">
+                                {loading ? 'Uploading…' : 'Push to CDN'}
+                              </button>
+                            )}
+                            {!archived && (
+                              <button onClick={() => triggerUpload(img.key)} disabled={loading} className="flex-1 px-2 py-1.5 text-[11px] font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded transition-colors disabled:opacity-40">
+                                Replace
+                              </button>
+                            )}
+                            {!archived && (
+                              <button onClick={() => setConfirmArchive(img.key)} disabled={loading} className="px-2 py-1.5 text-[11px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40">
+                                Archive
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
