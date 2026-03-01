@@ -33,6 +33,11 @@ export interface CrmAiContextValue {
   /** Ref holding a callback the current page registers for data refresh */
   refreshRef: React.MutableRefObject<(() => void) | null>;
   registerRefreshCallback: (cb: (() => void) | null) => void;
+
+  /** Send a file into the AI assistant chat (opens assistant if collapsed) */
+  sendFileToChat: (file: File) => void;
+  sendFileToChatRef: React.MutableRefObject<((file: File) => void) | null>;
+  registerSendFileCallback: (cb: ((file: File) => void) | null) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +70,8 @@ export function CrmAiProvider({ children }: { children: React.ReactNode }) {
 
   const refreshRef = useRef<(() => void) | null>(null);
 
+  const sendFileToChatRef = useRef<((file: File) => void) | null>(null);
+
   const setPageState = useCallback((state: PageState) => {
     setPageStateRaw(state);
   }, []);
@@ -93,6 +100,17 @@ export function CrmAiProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const registerSendFileCallback = useCallback(
+    (cb: ((file: File) => void) | null) => {
+      sendFileToChatRef.current = cb;
+    },
+    []
+  );
+
+  const sendFileToChat = useCallback((file: File) => {
+    sendFileToChatRef.current?.(file);
+  }, []);
+
   const navigate = useCallback(
     (path: string) => {
       router.push(path);
@@ -111,6 +129,9 @@ export function CrmAiProvider({ children }: { children: React.ReactNode }) {
         navigate,
         refreshRef,
         registerRefreshCallback,
+        sendFileToChat,
+        sendFileToChatRef,
+        registerSendFileCallback,
       }}
     >
       {children}

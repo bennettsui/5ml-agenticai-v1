@@ -29,6 +29,7 @@ import {
   FileImage,
   Download,
   Sparkles,
+  Bot,
 } from 'lucide-react';
 import { crmApi, type Project, type Brand, type FeedbackEvent, type Deliverable, type ProjectAttachment } from '@/lib/crm-kb-api';
 import { useCrmAi } from '../../context';
@@ -107,7 +108,7 @@ function formatFileSize(bytes: number): string {
 function ProjectDetailInner() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('id');
-  const { setPageState } = useCrmAi();
+  const { setPageState, sendFileToChat } = useCrmAi();
 
   const [project, setProject] = useState<Project | null>(null);
   const [brand, setBrand] = useState<Brand | null>(null);
@@ -135,6 +136,7 @@ function ProjectDetailInner() {
   const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
+  const [sendingToAiId, setSendingToAiId] = useState<string | null>(null);
   const [attachDragging, setAttachDragging] = useState(false);
   const attachDragCounterRef = useRef(0);
   const attachFileInputRef = useRef<HTMLInputElement>(null);
@@ -169,19 +171,32 @@ function ProjectDetailInner() {
         setAttachments(attList);
       } catch { /* non-critical */ }
 
-      setPageState({
-        pageType: 'project-detail',
-        pageTitle: projectData.name,
-        hints: { projectId: projectData.id, projectName: projectData.name },
-      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load project');
     } finally {
       setLoading(false);
     }
-  }, [projectId, setPageState]);
+  }, [projectId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Keep AI page context in sync with project + attachments
+  useEffect(() => {
+    if (!project) return;
+    setPageState({
+      pageType: 'project-detail',
+      pageTitle: project.name,
+      formData: {
+        projectId: project.id,
+        projectName: project.name,
+        attachments: attachments.map(a => ({
+          name: a.original_name,
+          type: a.mime_type,
+          summary: a.summary ?? null,
+        })),
+      },
+    });
+  }, [project, attachments, setPageState]);
 
   // Focus the new-deliverable title input when form opens
   useEffect(() => {
@@ -318,6 +333,22 @@ function ProjectDetailInner() {
       alert(err instanceof Error ? err.message : 'Summarization failed');
     } finally {
       setSummarizingId(null);
+    }
+  };
+
+  const handleSendToAi = async (att: ProjectAttachment) => {
+    if (!projectId || sendingToAiId) return;
+    setSendingToAiId(att.id);
+    try {
+      const res = await fetch(`/uploads/crm/${projectId}/${att.filename}`);
+      if (!res.ok) throw new Error('File not available on server (may have been lost after restart)');
+      const blob = await res.blob();
+      const file = new File([blob], att.original_name, { type: att.mime_type || blob.type });
+      sendFileToChat(file);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not send file to AI');
+    } finally {
+      setSendingToAiId(null);
     }
   };
 
@@ -792,6 +823,18 @@ function ProjectDetailInner() {
                         )}
                       </button>
                     )}
+                    <button
+                      onClick={() => handleSendToAi(att)}
+                      disabled={!!sendingToAiId}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-slate-500 hover:text-emerald-400 hover:bg-emerald-400/10 transition-all disabled:opacity-40"
+                      title="Send to AI assistant"
+                    >
+                      {sendingToAiId === att.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Bot className="w-3.5 h-3.5" />
+                      )}
+                    </button>
                     <a
                       href={`/uploads/crm/${projectId}/${att.filename}`}
                       download={att.original_name}

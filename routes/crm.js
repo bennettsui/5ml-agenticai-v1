@@ -809,7 +809,9 @@ module.exports = function createCrmRoutes(db) {
       const att = attResult.rows[0];
       const absPath = path.join(__dirname, '..', att.file_path);
       if (!fs.existsSync(absPath)) {
-        return res.status(422).json({ detail: 'File not found on disk' });
+        return res.status(422).json({
+          detail: 'File not found on disk. On Fly.io the filesystem is ephemeral — files are lost on restart. Re-upload the file to generate a summary.',
+        });
       }
 
       let summary = null;
