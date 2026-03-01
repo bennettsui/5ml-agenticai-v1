@@ -384,7 +384,7 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
 });
 
 // ─── Export CSV ───────────────────────────────────────────────────────────────
-router.get('/admin/export-checkedin.csv', (req, res) => {
+router.get('/admin/export-checkedin.csv', async (req, res) => {
   try {
     const rows    = await db.getCheckedIn();
     const headers = ['id','color','title','first_name','last_name','full_name','organization','status','remarks','created_at','updated_at'];
@@ -482,10 +482,11 @@ Find participants whose names or organisations fuzzy-match the search query.
 Consider typos, partial names, abbreviations, name-order swaps, and romanisation variants.
 Return ONLY valid JSON: {"ids":[id1,id2,...]} — up to 5 IDs, best match first. No explanation.`,
       `Query: "${query}"\n\nParticipants (id|full_name|organization|color):\n${list}`,
-      { maxTokens: 512, temperature: 0 }
+      { model: 'deepseek-chat', maxTokens: 256, temperature: 0 }
     );
     const { ids = [] } = extractJson(result.content);
-    const participants = ids.slice(0, 5).map(id => db.findById(Number(id))).filter(Boolean);
+    const fetched = await Promise.all(ids.slice(0, 5).map(id => db.findById(Number(id))));
+    const participants = fetched.filter(Boolean);
     res.json({ participants });
   } catch (err) {
     console.error('[checkin ai search]', err);
@@ -522,9 +523,9 @@ Only include a key if you have a confident suggestion that differs from the curr
 });
 
 // POST /ai/enrich/:id/apply — write AI suggestions back to the DB
-router.post('/ai/enrich/:id/apply', (req, res) => {
+router.post('/ai/enrich/:id/apply', async (req, res) => {
   const id = Number(req.params.id);
-  if (!db.findById(id)) return res.status(404).json({ error: 'Not found' });
+  if (!(await db.findById(id))) return res.status(404).json({ error: 'Not found' });
   const safe = {};
   for (const k of ['title', 'first_name', 'last_name', 'organization']) {
     if (req.body[k] !== undefined) safe[k] = req.body[k];

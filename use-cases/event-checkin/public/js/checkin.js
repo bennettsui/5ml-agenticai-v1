@@ -128,20 +128,25 @@ async function doSearch(query) {
   }
 }
 
+function composeName(p) {
+  return [p.title, p.first_name, p.last_name].filter(Boolean).join(' ') || p.full_name || '';
+}
+
 function renderAutocomplete(participants) {
   if (!participants.length) { hideAutocomplete(); return; }
   autocomplete.innerHTML = '';
   const limit = Math.min(participants.length, 8);
   for (let i = 0; i < limit; i++) {
     const p    = participants[i];
+    const name = composeName(p);
     const item = document.createElement('div');
     item.className = 'autocomplete-item';
     item.innerHTML = `
       <span class="badge badge-${p.color}" style="font-size:10px;">${p.color}</span>
-      <span style="font-weight:600;">${esc(p.full_name)}</span>
+      <span style="font-weight:600;">${esc(name)}</span>
       <span style="color:var(--text-muted);font-size:12px;">${esc(p.organization || '')}</span>
     `;
-    item.addEventListener('click', () => { searchInput.value = p.full_name; hideAutocomplete(); doSearch(p.full_name); });
+    item.addEventListener('click', () => { searchInput.value = name; hideAutocomplete(); doSearch(name); });
     autocomplete.appendChild(item);
   }
   autocomplete.classList.remove('hidden');
@@ -225,13 +230,13 @@ function buildCard(p) {
   card.className = `participant-card${checked ? ' is-checked' : ''}`;
   card.dataset.id = p.id;
 
+  const displayName = composeName(p);
   card.innerHTML = `
     <div class="card-badge-col">
       <span class="badge badge-${p.color}">${p.color}</span>
     </div>
     <div class="card-body">
-      <div class="card-name">${esc(p.full_name)}</div>
-      <div class="card-meta">${[p.title, p.first_name, p.last_name].filter(Boolean).map(esc).join(' ')}</div>
+      <div class="card-name">${esc(displayName)}</div>
       <div class="card-org">${esc(p.organization || '')}</div>
       <div class="card-actions">
         <div>
@@ -265,7 +270,7 @@ function buildCard(p) {
       if (!resp.ok) throw new Error(await resp.text());
       const updated = await resp.json();
       updateCard(card, updated);
-      toast(`${updated.full_name} checked in!`, 'success');
+      toast(`${composeName(updated)} checked in!`, 'success');
     } catch {
       btn.disabled = false; btn.textContent = 'Check In';
       toast('Check-in failed. Please retry.', 'error');
@@ -319,7 +324,11 @@ document.getElementById('addModalSubmit').addEventListener('click', async () => 
   const body = {};
   for (const [k, v] of fd.entries()) body[k] = v;
 
-  if (!body.color || !body.full_name) { toast('Color and Full Name are required.', 'error'); return; }
+  if (!body.color)      { toast('Color is required.', 'error'); return; }
+  if (!body.first_name) { toast('First Name is required.', 'error'); return; }
+
+  // Auto-build full_name from title + first + last
+  body.full_name = [body.title, body.first_name, body.last_name].filter(Boolean).join(' ');
 
   try {
     const resp = await fetch(`${API}/participants`, {
@@ -332,7 +341,7 @@ document.getElementById('addModalSubmit').addEventListener('click', async () => 
     const card = buildCard(p);
     resultsList.appendChild(card);
     cardMap.set(p.id, card);
-    toast(`${p.full_name} added successfully.`, 'success');
+    toast(`${composeName(p)} added successfully.`, 'success');
   } catch (err) {
     toast(err.message || 'Failed to add participant.', 'error');
   }

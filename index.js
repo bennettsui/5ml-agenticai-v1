@@ -3909,9 +3909,12 @@ try {
   app.get('/event-checkin/admin', (req, res) =>
     res.sendFile(path.join(__dirname, 'use-cases', 'event-checkin', 'public', 'admin.html'))
   );
+  app.get('/event-checkin/client', (req, res) =>
+    res.sendFile(path.join(__dirname, 'use-cases', 'event-checkin', 'public', 'client.html'))
+  );
   // Serve static assets (CSS, JS) under /event-checkin/static/
   app.use('/event-checkin/static', express.static(path.join(__dirname, 'use-cases', 'event-checkin', 'public')));
-  console.log('✅ Event Check-in routes loaded: /event-checkin, /event-checkin/admin, /api/event-checkin');
+  console.log('✅ Event Check-in routes loaded: /event-checkin, /event-checkin/client, /event-checkin/admin, /api/event-checkin');
 } catch (error) {
   console.warn('⚠️ Event Check-in routes not loaded:', error.message);
 }
