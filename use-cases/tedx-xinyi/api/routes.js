@@ -796,13 +796,23 @@ async function backupMetadataToMmdb(meta) {
   }, 5000);
 }
 
-// ---- Expected speaker photo slots (salon page speakers) ----
+// ---- Expected speaker photo slots (salon page + homepage lineup) ----
 const SPEAKER_SLOTS = [
+  // Salon page speakers
   { imageId: 'cheng-shi-jia', name: '程世嘉', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'lin-dong-liang', name: '林東良', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'liao-wei-jie', name: '廖唯傑', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'yang-shi-yi', name: '楊士毅', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'dawn-chang', name: 'Dawn Chang', extensions: ['jpg', 'png', 'webp'] },
+  // Homepage lineup speakers
+  { imageId: 'zhang-hui-jun', name: '張卉君', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'cai-nian-jue', name: '蔡年玨', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'liu-xin-yu', name: '劉欣瑜', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'fan-qin-hui', name: '范欽慧', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'duan-zhi-min', name: '段智敏', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'lin-zhi-qin', name: '林知秦', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'zhou-shi-xiong', name: '周世雄', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'xiao-qing-yang', name: '蕭青陽', extensions: ['jpg', 'png', 'webp'] },
 ];
 
 // ---- Helper: check if local file exists ----
