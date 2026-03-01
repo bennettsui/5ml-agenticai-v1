@@ -1,14 +1,36 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY } from '../components';
 
 // CDN URL for ted-circles representative image — updated by sync-cdn
 const TED_CIRCLES_CDN = '';
 
+const ARC_SLOTS = 9; // visible thumbnails in filmstrip (must be odd)
+const SLOT_W   = 120; // thumbnail width px
+const SLOT_H   = 80;  // thumbnail height px
+const STEP     = 112; // horizontal spacing px
+
 export default function CommunityPage() {
   const [circlePhotos, setCirclePhotos] = useState<{ key: string; src: string; alt: string }[]>([]);
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  const prev = useCallback(() => setActiveIdx(i => Math.max(0, i - 1)), []);
+  const next = useCallback(
+    () => setActiveIdx(i => Math.min(circlePhotos.length - 1, i + 1)),
+    [circlePhotos.length],
+  );
+
+  // Keyboard navigation
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft')  prev();
+      if (e.key === 'ArrowRight') next();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [prev, next]);
 
   useEffect(() => {
     fetch('/api/tedx-xinyi/circles')
@@ -137,22 +159,144 @@ export default function CommunityPage() {
           </FadeIn>
         </div>
 
-        {/* TED Circles Photo Gallery — masonry, natural proportions */}
+        {/* ── Arc Filmstrip Gallery ── */}
         {circlePhotos.length > 0 && (
           <FadeIn delay={100}>
-            <div className="columns-2 sm:columns-3 md:columns-4 gap-3">
-              {circlePhotos.map((photo, i) => (
-                <div key={photo.key} className="break-inside-avoid mb-3 rounded-xl overflow-hidden bg-neutral-100 group">
+            <div className="select-none" aria-label="TED Circles photo gallery">
+
+              {/* ── Featured display ── */}
+              <div
+                className="relative w-full rounded-2xl overflow-hidden bg-neutral-950 shadow-2xl mb-6"
+                style={{ aspectRatio: '16 / 7' }}
+              >
+                {/* Crossfade stack — all images in DOM, only active is opaque */}
+                {circlePhotos.map((photo, i) => (
                   <img
+                    key={photo.key}
                     src={photo.src}
                     alt={photo.alt || `TED Circles moment ${i + 1}`}
-                    loading="lazy"
-                    className="w-full h-auto block opacity-0 transition-[opacity,filter] duration-300 group-hover:brightness-90"
-                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
-                    onError={(e) => { (e.target as HTMLImageElement).closest('div')!.style.display = 'none'; }}
+                    loading={Math.abs(i - activeIdx) <= 2 ? 'eager' : 'lazy'}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    style={{
+                      opacity: i === activeIdx ? 1 : 0,
+                      transition: 'opacity 600ms ease',
+                      pointerEvents: 'none',
+                    }}
                   />
+                ))}
+
+                {/* Bottom gradient scrim */}
+                <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/65 to-transparent pointer-events-none" />
+
+                {/* Counter */}
+                <div className="absolute bottom-4 right-5 pointer-events-none">
+                  <span className="text-white/50 text-[11px] font-mono tabular-nums">
+                    {String(activeIdx + 1).padStart(2, '0')}&thinsp;/&thinsp;{String(circlePhotos.length).padStart(2, '0')}
+                  </span>
                 </div>
-              ))}
+
+                {/* Prev arrow */}
+                <button
+                  onClick={prev}
+                  disabled={activeIdx === 0}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-white transition-all duration-200 hover:scale-110 disabled:opacity-20"
+                  style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+                  aria-label="Previous photo"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M15 18l-6-6 6-6" />
+                  </svg>
+                </button>
+
+                {/* Next arrow */}
+                <button
+                  onClick={next}
+                  disabled={activeIdx === circlePhotos.length - 1}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-white transition-all duration-200 hover:scale-110 disabled:opacity-20"
+                  style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+                  aria-label="Next photo"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* ── 3-D Arc filmstrip ── */}
+              {/* perspective on the outer div; thumbnails rotateY based on distance from center */}
+              <div
+                className="relative overflow-hidden"
+                style={{ height: `${SLOT_H + 24}px`, perspective: '700px', perspectiveOrigin: '50% 50%' }}
+              >
+                {Array.from({ length: ARC_SLOTS }, (_, slot) => {
+                  const half   = Math.floor(ARC_SLOTS / 2);       // 4
+                  const offset = slot - half;                       // -4 … +4
+                  const idx    = activeIdx + offset;
+                  if (idx < 0 || idx >= circlePhotos.length) return null;
+
+                  const photo  = circlePhotos[idx];
+                  const absOff = Math.abs(offset);
+                  const scale  = Math.max(0.50, 1 - absOff * 0.11);
+                  const rotY   = offset * -18;                      // curves into screen
+                  const opac   = Math.max(0.22, 1 - absOff * 0.19);
+                  const isActive = offset === 0;
+
+                  return (
+                    <button
+                      key={photo.key}
+                      onClick={() => setActiveIdx(idx)}
+                      aria-label={`View photo ${idx + 1}`}
+                      className="absolute top-1/2 left-1/2 overflow-hidden rounded-xl"
+                      style={{
+                        width:  SLOT_W,
+                        height: SLOT_H,
+                        transform: `translate(calc(-50% + ${offset * STEP}px), -50%) rotateY(${rotY}deg) scale(${scale})`,
+                        opacity: opac,
+                        zIndex: ARC_SLOTS - absOff,
+                        boxShadow: isActive
+                          ? `0 0 0 2.5px ${TED_RED}, 0 8px 28px rgba(0,0,0,0.35)`
+                          : '0 2px 10px rgba(0,0,0,0.18)',
+                        transition: 'transform 480ms cubic-bezier(0.25,0.46,0.45,0.94), opacity 480ms ease, box-shadow 300ms ease',
+                        cursor: isActive ? 'default' : 'pointer',
+                      }}
+                    >
+                      <img
+                        src={photo.src}
+                        alt=""
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                        style={{
+                          filter: isActive ? 'none' : 'brightness(0.75)',
+                          transition: 'filter 480ms ease',
+                        }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* ── Pill-dot progress ── */}
+              <div className="flex items-center justify-center gap-1.5 mt-5">
+                {circlePhotos.map((_, i) => {
+                  const isActive = i === activeIdx;
+                  const isNear   = Math.abs(i - activeIdx) <= 1;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setActiveIdx(i)}
+                      aria-label={`Go to photo ${i + 1}`}
+                      className="rounded-full transition-all duration-300"
+                      style={{
+                        width:           isActive ? 22 : isNear ? 7 : 5,
+                        height:          isActive ? 6  : isNear ? 7 : 5,
+                        backgroundColor: isActive ? TED_RED : '#d4d4d4',
+                        opacity:         isActive ? 1 : isNear ? 0.7 : 0.45,
+                      }}
+                    />
+                  );
+                })}
+              </div>
+
             </div>
           </FadeIn>
         )}
