@@ -810,13 +810,15 @@ const SPEAKER_SLOTS = [
   { imageId: 'guo-an-ni', name: '郭安妮', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'dawn-chang', name: 'Dawn Chang', extensions: ['jpg', 'png', 'webp'] },
   // Homepage lineup speakers (zhang-hui-jun already above)
-  { imageId: 'cai-nian-jue', name: '蔡年玨', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'jiang-zhen-cheng', name: '江振誠', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'xiao-qing-yang', name: '蕭青陽', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'ling-zong-yong', name: '凌宗湧', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'wang-shi-hao', name: '王士豪', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'liu-xin-yu', name: '劉欣瑜', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'fan-qin-hui', name: '范欽慧', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'duan-zhi-min', name: '段智敏', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'lin-zhi-qin', name: '林知秦', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'zhou-shi-xiong', name: '周世雄', extensions: ['jpg', 'png', 'webp'] },
-  { imageId: 'xiao-qing-yang', name: '蕭青陽', extensions: ['jpg', 'png', 'webp'] },
 ];
 
 // ---- Helper: check if local file exists ----
