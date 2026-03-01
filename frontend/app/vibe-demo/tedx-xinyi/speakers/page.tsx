@@ -128,13 +128,23 @@ export default function SpeakersPage() {
             )}
             {videoLoaded && (
               <iframe
-                src="https://www.youtube.com/embed/wvv9lGRh6RI?autoplay=1"
+                src="https://www.youtube-nocookie.com/embed/wvv9lGRh6RI?autoplay=1"
                 title="Sustainability Ideas development for TEDxXinyi annual event"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
                 className="w-full h-full"
               />
             )}
+          </div>
+          <div className="mt-3 text-center">
+            <a
+              href="https://www.youtube.com/watch?v=wvv9lGRh6RI"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors underline underline-offset-2"
+            >
+              ↗ 在 YouTube 觀看
+            </a>
           </div>
         </FadeIn>
       </Section>
