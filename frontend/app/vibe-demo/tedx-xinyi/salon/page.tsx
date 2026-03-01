@@ -472,11 +472,11 @@ export default function SalonPage() {
         <FadeIn delay={100}>
           <div className="border-t border-neutral-100 pt-10 mb-10">
             <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-8" lang="zh-TW">TEDxXinyi 智庫</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               {GUESTS.map((guest, i) => (
                 <FadeIn key={i} delay={i * 60}>
                   <div className="text-center">
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full mx-auto mb-3 overflow-hidden bg-neutral-100 border-2 border-neutral-100 relative">
+                    <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full mx-auto mb-3 overflow-hidden bg-neutral-100 border-2 border-neutral-100 relative">
                       <img
                         src={SPEAKER_CDN_URLS[guest.imageId] || `/tedx-xinyi/speakers/${guest.imageId}.jpg`}
                         alt={guest.name}
@@ -489,7 +489,7 @@ export default function SalonPage() {
                         }}
                       />
                       <div className="w-full h-full items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-300 absolute inset-0" style={{ display: 'none' }}>
-                        <span className="text-xl font-black text-neutral-400">{guest.name[0]}</span>
+                        <span className="text-2xl font-black text-neutral-400">{guest.name[0]}</span>
                       </div>
                     </div>
                     <span
@@ -498,11 +498,11 @@ export default function SalonPage() {
                     >
                       {guest.roleTag}
                     </span>
-                    <p className="font-black text-xs mb-0.5" lang="zh-TW">{guest.name}</p>
+                    <p className="font-black text-sm mb-0.5" lang="zh-TW">{guest.name}</p>
                     {guest.org && (
                       <p className="text-neutral-400 text-[10px] leading-relaxed" lang="zh-TW">{guest.org}</p>
                     )}
-                    <p className="text-neutral-500 text-[10px] leading-relaxed mt-0.5" lang="zh-TW">{guest.role}</p>
+                    <p className="text-neutral-500 text-xs leading-relaxed mt-0.5" lang="zh-TW">{guest.role}</p>
                   </div>
                 </FadeIn>
               ))}
