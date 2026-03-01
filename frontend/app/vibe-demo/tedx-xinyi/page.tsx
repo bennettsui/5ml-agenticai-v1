@@ -342,14 +342,14 @@ export default function TEDxXinyiHome() {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
           {SPEAKERS.map((speaker, i) => (
             <FadeIn key={i} delay={i * 60}>
-              <div className="group relative cursor-pointer">
+              <div className="group relative">
                 <div
                   className="aspect-square overflow-hidden rounded-xl relative flex items-center justify-center"
                   style={{ backgroundColor: `${SPEAKER_COLORS[i % SPEAKER_COLORS.length]}12` }}
                 >
                   {/* Character fallback */}
                   <span
-                    className="text-5xl sm:text-6xl font-black select-none"
+                    className="text-5xl sm:text-6xl font-black select-none transition-transform duration-300 group-hover:scale-110"
                     style={{ color: SPEAKER_COLORS[i % SPEAKER_COLORS.length] }}
                   >
                     {speaker.name[0]}
@@ -359,7 +359,7 @@ export default function TEDxXinyiHome() {
                     src={`/tedx-xinyi/speakers/${speaker.imageId}.jpg`}
                     alt={speaker.name}
                     loading="lazy"
-                    className="absolute inset-0 w-full h-full object-cover object-top opacity-0 transition-opacity duration-500"
+                    className="absolute inset-0 w-full h-full object-cover object-top opacity-0 transition-all duration-300 group-hover:scale-110"
                     onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
