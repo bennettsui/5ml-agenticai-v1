@@ -20,6 +20,7 @@ interface MediaImage {
   source?: string;
   description?: string;
   missing?: boolean;
+  circlesGallery?: boolean;
 }
 
 interface ImageSlot {
@@ -116,6 +117,8 @@ export default function TEDxXinyiAdmin() {
   const replaceTargetRef = useRef<string | null>(null);
   const pickerFileInputRef = useRef<HTMLInputElement>(null);
   const circlesFileInputRef = useRef<HTMLInputElement>(null);
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [circlesToggling, setCirclesToggling] = useState<string | null>(null);
 
   function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
     setToast({ msg, type });
@@ -522,6 +525,26 @@ export default function TEDxXinyiAdmin() {
     } finally {
       setActionLoading(null);
       if (circlesFileInputRef.current) circlesFileInputRef.current.value = '';
+    }
+  }
+
+  // Toggle a library image in/out of the TED Circles gallery
+  async function toggleCircles(key: string, inCircles: boolean) {
+    setCirclesToggling(key);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/toggle-circles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, inCircles }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setMedia(prev => prev.map(m => m.key === key ? { ...m, circlesGallery: inCircles } : m));
+      showToast(inCircles ? 'Added to gallery ✓' : 'Removed from gallery');
+    } catch (err) {
+      showToast(`Failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setCirclesToggling(null);
     }
   }
 
@@ -1580,6 +1603,12 @@ export default function TEDxXinyiAdmin() {
               </div>
               <div className="flex gap-2">
                 <button
+                  onClick={() => setShowLibraryPicker(p => !p)}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${showLibraryPicker ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-200'}`}
+                >
+                  {showLibraryPicker ? 'Hide Library' : 'Pick from Library'}
+                </button>
+                <button
                   onClick={() => circlesFileInputRef.current?.click()}
                   className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors"
                 >
@@ -1604,8 +1633,63 @@ export default function TEDxXinyiAdmin() {
               </div>
             )}
 
-            {mediaLoaded && (() => {
-              const circleImgs = media.filter(m => m.key === 'ted-circles.webp' || m.key.startsWith('ted-circles/'));
+            {/* Library picker — select any media image to add to circles gallery */}
+            {showLibraryPicker && mediaLoaded && (() => {
+              const libraryImgs = media.filter(m =>
+                !m.key.startsWith('ted-circles/') &&
+                m.key !== 'ted-circles.webp' &&
+                (m.publicUrl || m.localExists) &&
+                !m.missing
+              );
+              return (
+                <div className="mb-6 border border-amber-900/40 rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 bg-amber-900/20 border-b border-amber-900/40 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-amber-200">Pick from Library</p>
+                      <p className="text-xs text-amber-400/70 mt-0.5">Toggle any image to add or remove it from the circles gallery.</p>
+                    </div>
+                    <span className="text-xs text-amber-500 font-mono">{media.filter(m => m.circlesGallery).length} selected</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-4 max-h-[480px] overflow-y-auto">
+                    {libraryImgs.map(img => {
+                      const selected = !!img.circlesGallery;
+                      const toggling = circlesToggling === img.key;
+                      return (
+                        <button
+                          key={img.key}
+                          onClick={() => toggleCircles(img.key, !selected)}
+                          disabled={toggling}
+                          className={`relative rounded-xl overflow-hidden aspect-square border-2 transition-all ${selected ? 'border-amber-400 ring-2 ring-amber-400/40' : 'border-neutral-700 hover:border-neutral-500'} disabled:opacity-50`}
+                        >
+                          <img
+                            src={img.publicUrl || `/tedx-xinyi/${img.key}`}
+                            alt={img.alt || img.filename}
+                            className="w-full h-full object-cover"
+                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                          {selected && (
+                            <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center">
+                              <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </div>
+                          )}
+                          {toggling && (
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4">
+                            <p className="text-[9px] text-white/80 truncate font-mono leading-tight">{img.filename}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+                        {mediaLoaded && (() => {
+              const circleImgs = media.filter(m => m.key === 'ted-circles.webp' || m.key.startsWith('ted-circles/') || m.circlesGallery);
               if (circleImgs.length === 0) return (
                 <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-2xl">
                   <p className="text-neutral-500 text-sm mb-3">No TED Circles photos uploaded yet.</p>

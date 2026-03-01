@@ -833,9 +833,10 @@ router.get('/circles', (req, res) => {
   const meta = loadMetadata();
   const photos = [];
   for (const [key, data] of Object.entries(meta)) {
-    if (!key.startsWith('ted-circles/')) continue;
-    if (key.includes('--archived-')) continue;
     if (!data || typeof data !== 'object') continue;
+    const inCircles = key.startsWith('ted-circles/') || data.circlesGallery === true;
+    if (!inCircles) continue;
+    if (key.includes('--archived-')) continue;
     const localExists = fs.existsSync(path.join(OUTPUT_DIR, key));
     const src = data.publicUrl || (localExists ? `/tedx-xinyi/${key}` : null);
     if (src) {
@@ -843,6 +844,17 @@ router.get('/circles', (req, res) => {
     }
   }
   res.json({ photos });
+});
+
+// ---- API: toggle a media item in/out of the TED Circles gallery ----
+router.post('/media/toggle-circles', express.json(), (req, res) => {
+  const { key, inCircles } = req.body;
+  if (!key) return res.status(400).json({ error: 'key required' });
+  const meta = loadMetadata();
+  if (!meta[key]) meta[key] = {};
+  meta[key].circlesGallery = !!inCircles;
+  saveMetadata(meta);
+  res.json({ success: true, key, circlesGallery: !!inCircles });
 });
 
 // ---- Expected speaker photo slots (salon page + homepage lineup) ----
@@ -901,6 +913,7 @@ router.get('/media', async (req, res) => {
       source: 'generated', description: v.description,
       publicUrl: m.publicUrl, localExists: local, alt: m.alt,
       missing: !m.publicUrl && !local,
+      circlesGallery: !!(meta[key] && meta[key].circlesGallery),
     });
   }
 
@@ -955,6 +968,7 @@ router.get('/media', async (req, res) => {
       source: 'uploaded', description: '',
       publicUrl: data.publicUrl || null, localExists: local, alt: data.alt || '',
       missing: !data.publicUrl && !local,
+      circlesGallery: !!data.circlesGallery,
     });
   }
 

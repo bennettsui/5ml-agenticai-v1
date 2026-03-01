@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY, WARM_AMBER } from '../components';
 
@@ -200,7 +201,18 @@ const TICKET_TYPES = [
   },
 ];
 
+interface CirclePhoto { key: string; src: string; alt: string; }
+
 export default function SalonPage() {
+  const [circlePhotos, setCirclePhotos] = useState<CirclePhoto[]>([]);
+
+  useEffect(() => {
+    fetch('/api/tedx-xinyi/circles')
+      .then(r => r.json())
+      .then(d => setCirclePhotos(d.photos || []))
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
@@ -792,7 +804,31 @@ export default function SalonPage() {
         </div>
       </Section>
 
-      {/* ==================== BLOCK F — CTA ==================== */}
+      {/* ==================== PHOTO GALLERY ==================== */}
+      {circlePhotos.length > 0 && (
+        <Section bg="white">
+          <FadeIn>
+            <SectionLabel>PHOTO GALLERY</SectionLabel>
+            <h2 className="text-3xl md:text-4xl font-black mb-8" lang="zh-TW">活動現場</h2>
+          </FadeIn>
+          <div className="columns-2 sm:columns-3 md:columns-4 gap-3 space-y-3">
+            {circlePhotos.map((photo, i) => (
+              <div key={photo.key} className="break-inside-avoid rounded-xl overflow-hidden bg-neutral-100">
+                <img
+                  src={photo.src}
+                  alt={photo.alt || '活動照片'}
+                  loading="lazy"
+                  className="w-full h-auto block opacity-0 transition-opacity duration-500"
+                  onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+            {/* ==================== BLOCK F — CTA ==================== */}
       <section className="py-20 md:py-28 text-white" style={{ backgroundColor: TED_RED }}>
         <div className="max-w-3xl mx-auto px-6 text-center">
           <FadeIn>
