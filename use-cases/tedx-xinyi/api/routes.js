@@ -800,12 +800,16 @@ async function backupMetadataToMmdb(meta) {
 const SPEAKER_SLOTS = [
   // Salon page speakers
   { imageId: 'cheng-shi-jia', name: '程世嘉', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'yang-shi-yi', name: '楊士毅', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'lin-dong-liang', name: '林東良', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'liao-wei-jie', name: '廖唯傑', extensions: ['jpg', 'png', 'webp'] },
-  { imageId: 'yang-shi-yi', name: '楊士毅', extensions: ['jpg', 'png', 'webp'] },
-  { imageId: 'dawn-chang', name: 'Dawn Chang', extensions: ['jpg', 'png', 'webp'] },
-  // Homepage lineup speakers
+  { imageId: 'liao-guan-jie', name: '廖冠傑', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'cao-rong-xuan', name: '曹榮軒', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'zhang-hui-jun', name: '張卉君', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'lin-jing-yi', name: '林靜宜', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'guo-an-ni', name: '郭安妮', extensions: ['jpg', 'png', 'webp'] },
+  { imageId: 'dawn-chang', name: 'Dawn Chang', extensions: ['jpg', 'png', 'webp'] },
+  // Homepage lineup speakers (zhang-hui-jun already above)
   { imageId: 'cai-nian-jue', name: '蔡年玨', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'liu-xin-yu', name: '劉欣瑜', extensions: ['jpg', 'png', 'webp'] },
   { imageId: 'fan-qin-hui', name: '范欽慧', extensions: ['jpg', 'png', 'webp'] },
