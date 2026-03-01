@@ -2599,7 +2599,16 @@ ${page_context ? `Current page context: ${JSON.stringify(page_context)}` : ''}
 
 Respond concisely. Use English or the language the user writes in.`;
 
-    const result = await llm.chat(modelKey || 'sonnet', messages, {
+    // Model routing per CLAUDE.md:
+    //   DeepSeek  → default for text-only CRM chat (cheap, no Anthropic quota)
+    //   Haiku     → multimodal messages (images / PDF document blocks require Claude)
+    const hasMultimodal = messages.some(m =>
+      Array.isArray(m.content) &&
+      m.content.some(b => b.type === 'image' || b.type === 'document')
+    );
+    const defaultModel = hasMultimodal ? 'haiku' : 'deepseek';
+
+    const result = await llm.chat(modelKey || defaultModel, messages, {
       system,
       maxTokens: 4096,
     });
