@@ -297,6 +297,38 @@ router.get('/image-slots', (req, res) => {
           });
         }
 
+        // Also detect any '/tedx-xinyi/...' path in quoted strings (e.g. image: '/tedx-xinyi/entry-about.webp')
+        const anyLocalRe = /['"`](\/tedx-xinyi\/[^'"`\s]+\.(jpg|jpeg|png|webp|gif))['"`]/gi;
+        let al;
+        while ((al = anyLocalRe.exec(content)) !== null) {
+          const url = al[1];
+          if (seen.has(url)) continue;
+          seen.add(url);
+          const metaKey = url.replace('/tedx-xinyi/', '');
+          const metaEntry = meta[metaKey];
+          const localEx = fs.existsSync(path.join(OUTPUT_DIR, metaKey));
+          const isSpeakerImg = url.includes('speakers/');
+          const isHeroImg = url.includes('hero-');
+          const isPosterImg = url.includes('poster-');
+          const isSalonImg = url.includes('salon-');
+          let imgType = 'other';
+          if (isHeroImg) imgType = 'hero';
+          else if (isPosterImg) imgType = 'poster';
+          else if (isSalonImg) imgType = 'visual';
+          else if (isSpeakerImg) imgType = 'speaker';
+          slots.push({
+            page: pageName,
+            src: url,
+            type: imgType,
+            isExternal: false,
+            isLocal: true,
+            metaKey,
+            cdnUrl: metaEntry?.publicUrl || null,
+            localExists: localEx,
+            status: metaEntry?.publicUrl ? 'cdn' : (localEx ? 'local-only' : 'missing'),
+          });
+        }
+
         // Also find CDN map fallback patterns like: SPEAKER_CDN_URLS[id] || '/tedx-xinyi/...'
         let cm;
         while ((cm = cdnMapRe.exec(content)) !== null) {
@@ -2208,6 +2240,37 @@ async function uploadAllAndReplacePaths() {
       }
     } catch (err) {
       console.error('[TEDxXinyi] Failed to update speaker CDN map:', err.message);
+    }
+  }
+
+  // Update IMAGE_CDN_URLS in homepage page.tsx (hero + entry card images)
+  const imageUrls = {};
+  for (const [key, data] of Object.entries(latestMeta)) {
+    if (key.startsWith('speakers/') || key.startsWith('_')) continue;
+    if (data && data.publicUrl) {
+      // key = "hero-home.webp" → mapKey = "hero-home"
+      const mapKey = key.replace(/\.(jpg|jpeg|png|webp|gif)$/i, '');
+      imageUrls[mapKey] = data.publicUrl;
+    }
+  }
+  if (Object.keys(imageUrls).length > 0) {
+    try {
+      const homePath = path.join(PAGES_DIR, 'page.tsx');
+      if (fs.existsSync(homePath)) {
+        let content = fs.readFileSync(homePath, 'utf8');
+        const mapStr = JSON.stringify(imageUrls, null, 2)
+          .replace(/"/g, "'")
+          .replace(/'([^']+)':/g, "'$1':");
+        const newMap = `const IMAGE_CDN_URLS: Record<string, string> = ${mapStr};`;
+        content = content.replace(
+          /const IMAGE_CDN_URLS: Record<string, string> = \{[^}]*\};/s,
+          newMap
+        );
+        fs.writeFileSync(homePath, content);
+        console.log(`[TEDxXinyi] Updated IMAGE_CDN_URLS with ${Object.keys(imageUrls).length} images`);
+      }
+    } catch (err) {
+      console.error('[TEDxXinyi] Failed to update homepage CDN map:', err.message);
     }
   }
 
