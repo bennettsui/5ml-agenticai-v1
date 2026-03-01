@@ -482,9 +482,11 @@ export default function TEDxXinyiAdmin() {
       if (!mapRes.ok) throw new Error(`Map failed: HTTP ${mapRes.status}`);
       showToast(`Uploaded and mapped to ${editSlot.metaKey}`);
       setImagePickerOpen(false);
-      setEditSlot(null);
-      await loadMedia();
-      if (slotsLoaded) await loadSlots();
+      // Keep modal open so user can see the updated CDN URL immediately
+      setEditCdnUrl(cdnUrl);
+      setEditSlot(prev => prev ? { ...prev, cdnUrl, status: 'cdn' } : prev);
+      loadMedia();
+      if (slotsLoaded) loadSlots();
     } catch (err) {
       showToast(`Upload failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
     } finally {
@@ -932,8 +934,10 @@ export default function TEDxXinyiAdmin() {
                               if (!res.ok) throw new Error(`HTTP ${res.status}`);
                               showToast(`Mapped ${editSlot.metaKey} to ${img.key}`);
                               setImagePickerOpen(false);
-                              setEditSlot(null);
-                              await loadSlots();
+                              // Keep modal open so user sees the CDN URL immediately
+                              setEditCdnUrl(img.publicUrl);
+                              setEditSlot(prev => prev ? { ...prev, cdnUrl: img.publicUrl, status: 'cdn' } : prev);
+                              loadSlots();
                             } catch (err) {
                               showToast(`Map failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
                             } finally {
@@ -1519,8 +1523,8 @@ export default function TEDxXinyiAdmin() {
             <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 mb-6">
               <h3 className="text-sm font-bold text-neutral-300 mb-4">Package Contents</h3>
               <ul className="text-sm text-neutral-400 space-y-1.5 mb-6">
-                <li>&#x2022; <span className="text-neutral-300 font-bold">index.html</span> + 6 sub-pages (about, blog, community, salon, speakers, sustainability)</li>
-                <li>&#x2022; <span className="text-neutral-300 font-bold">index.php</span> — PHP router for clean URLs (/salon, /about, etc.)</li>
+                <li>&#x2022; <span className="text-neutral-300 font-bold">vibe-demo/tedx-xinyi/</span> — homepage + all sub-pages (about, blog, community, report, salon, speakers, sustainability)</li>
+                <li>&#x2022; <span className="text-neutral-300 font-bold">index.php</span> — PHP router handling <code className="text-xs bg-neutral-800 px-1 rounded">/vibe-demo/tedx-xinyi/...</code> URLs</li>
                 <li>&#x2022; <span className="text-neutral-300 font-bold">.htaccess</span> — Apache rewrite rules</li>
                 <li>&#x2022; _next/ static assets (JS &amp; CSS chunks)</li>
                 <li>&#x2022; tedx-xinyi/ images folder</li>
@@ -1552,6 +1556,7 @@ export default function TEDxXinyiAdmin() {
                 <div>
                   <p className="text-xs text-neutral-300 font-bold mb-1">PHP built-in server (local preview)</p>
                   <p className="text-xs text-neutral-500 font-mono bg-neutral-800/50 px-2 py-1 rounded inline-block">php -S localhost:8000 index.php</p>
+                  <p className="text-xs text-neutral-600 mt-1">Then open: http://localhost:8000/vibe-demo/tedx-xinyi/</p>
                 </div>
                 <div>
                   <p className="text-xs text-neutral-300 font-bold mb-1">Static hosting (Netlify, Vercel, S3)</p>
