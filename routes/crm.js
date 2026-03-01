@@ -667,7 +667,10 @@ module.exports = function createCrmRoutes(db) {
   const path = require('path');
   const fs = require('fs');
   const deepseekService = require('../services/deepseekService');
-  const pdfParse = require('pdf-parse');
+
+  // pdf-parse uses pdfjs-dist which requires DOM APIs (DOMMatrix etc.).
+  // Require it lazily inside tryReadAsText so a failure is caught gracefully
+  // rather than crashing the server at startup (e.g. on Fly.io Node.js).
 
   const crmStorage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -688,16 +691,18 @@ module.exports = function createCrmRoutes(db) {
 
   /** Try to read a file as text; returns null if it can't be decoded */
   async function tryReadAsText(filePath, mimeType) {
-    // PDF extraction
+    // PDF extraction — lazy-require so startup doesn't crash if pdfjs
+    // DOM polyfills are unavailable in the current Node.js environment.
     if ((mimeType || '').includes('pdf') || filePath.toLowerCase().endsWith('.pdf')) {
       try {
+        const pdfParse = require('pdf-parse'); // may throw in some envs
         const buf = fs.readFileSync(filePath);
         const data = await pdfParse(buf);
         const text = (data.text || '').trim();
         if (!text) return null;
         return text.length > 40000 ? text.slice(0, 40000) + '\n[truncated]' : text;
       } catch {
-        return null;
+        return null; // PDF parsing unavailable — no summary, but server keeps running
       }
     }
 
