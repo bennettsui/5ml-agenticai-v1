@@ -256,6 +256,38 @@ router.get('/image-slots', (req, res) => {
   const slots = [];
   const meta = (() => { try { return loadMetadata(); } catch { return {}; } })();
 
+  // ── Phase 0: Guarantee all VISUALS always appear (baseline) ──
+  // Prevents dynamic-expression references (e.g. src={VAR || '/tedx-xinyi/...'})
+  // from being silently missed by the regex scanner.
+  const seenVisualKeys = new Set();
+  for (const v of VISUALS) {
+    const key = v.filename;
+    seenVisualKeys.add(key);
+    const localPath = `/tedx-xinyi/${key}`;
+    const metaEntry = meta[key];
+    const cdnUrl = metaEntry?.publicUrl || null;
+    const localExists = fs.existsSync(path.join(OUTPUT_DIR, key));
+    const isHero   = key.includes('hero-');
+    const isPoster = key.includes('poster-');
+    const isSalon  = key.includes('salon-');
+    let type = 'other';
+    if (isHero)   type = 'hero';
+    else if (isPoster) type = 'poster';
+    else if (isSalon)  type = 'visual';
+    slots.push({
+      page: 'visuals',
+      src: localPath,
+      type,
+      isExternal: false,
+      isLocal: true,
+      metaKey: key,
+      cdnUrl,
+      localExists,
+      status: cdnUrl ? 'cdn' : localExists ? 'local-only' : 'missing',
+      note: v.description || '',
+    });
+  }
+
   // Scan all TSX/TS files for image src references
   if (fs.existsSync(PAGES_DIR)) {
     const srcRe = /src\s*=\s*\{?\s*["'`]([^"'`]+\.(jpg|jpeg|png|webp|gif))[^"'`]*["'`]/gi;
@@ -304,6 +336,9 @@ router.get('/image-slots', (req, res) => {
             localExists = fs.existsSync(path.join(OUTPUT_DIR, metaKey));
           }
 
+          // Skip if already added as a VISUAL baseline entry (avoid duplicate rows)
+          if (isLocal && metaKey && seenVisualKeys.has(metaKey)) continue;
+
           slots.push({
             page: pageName,
             src: url,
@@ -325,6 +360,8 @@ router.get('/image-slots', (req, res) => {
           if (seen.has(url)) continue;
           seen.add(url);
           const metaKey = url.replace('/tedx-xinyi/', '');
+          // Skip if already added as a VISUAL baseline entry
+          if (seenVisualKeys.has(metaKey)) continue;
           const metaEntry = meta[metaKey];
           const localEx = fs.existsSync(path.join(OUTPUT_DIR, metaKey));
           const isSpeakerImg = url.includes('speakers/');

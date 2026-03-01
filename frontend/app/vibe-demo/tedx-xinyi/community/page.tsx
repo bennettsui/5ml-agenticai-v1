@@ -7,10 +7,11 @@ import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_R
 // CDN URL for ted-circles representative image — updated by sync-cdn
 const TED_CIRCLES_CDN = '';
 
-const ARC_SLOTS = 9; // visible thumbnails in filmstrip (must be odd)
-const SLOT_W   = 120; // thumbnail width px
-const SLOT_H   = 80;  // thumbnail height px
-const STEP     = 112; // horizontal spacing px
+const ARC_SLOTS = 7;  // visible thumbnails in vertical arc (must be odd)
+const SLOT_W   = 96;  // thumbnail width px
+const SLOT_H   = 64;  // thumbnail height px
+const STEP     = 76;  // vertical spacing px between arc slots
+const ROT_DEG  = 20;  // rotateX degrees per step (arc curvature)
 
 export default function CommunityPage() {
   const [circlePhotos, setCirclePhotos] = useState<{ key: string; src: string; alt: string }[]>([]);
@@ -22,11 +23,11 @@ export default function CommunityPage() {
     [circlePhotos.length],
   );
 
-  // Keyboard navigation
+  // Keyboard navigation — Up/Down for vertical arc, Left/Right also supported
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft')  prev();
-      if (e.key === 'ArrowRight') next();
+      if (e.key === 'ArrowUp'   || e.key === 'ArrowLeft')  prev();
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -159,104 +160,67 @@ export default function CommunityPage() {
           </FadeIn>
         </div>
 
-        {/* ── Arc Filmstrip Gallery ── */}
+        {/* ── Circular Arc Gallery ── */}
         {circlePhotos.length > 0 && (
           <FadeIn delay={100}>
-            <div className="select-none" aria-label="TED Circles photo gallery">
-
-              {/* ── Featured display ── */}
+            {/*
+              Desktop: [LEFT vertical arc selector] + [RIGHT featured display]
+              Mobile:  [featured display full-width] + [dot nav below]
+            */}
+            <div
+              className="select-none flex flex-col lg:flex-row items-stretch gap-0"
+              aria-label="TED Circles photo gallery"
+            >
+              {/* ══════════════════════════════════════════════
+                  LEFT — Vertical circular arc selector
+                  perspectiveOrigin '150% 50%' puts VP to the
+                  right so the arc opens toward the main display
+              ══════════════════════════════════════════════ */}
               <div
-                className="relative w-full rounded-2xl overflow-hidden bg-neutral-950 shadow-2xl mb-6"
-                style={{ aspectRatio: '16 / 7' }}
-              >
-                {/* Crossfade stack — all images in DOM, only active is opaque */}
-                {circlePhotos.map((photo, i) => (
-                  <img
-                    key={photo.key}
-                    src={photo.src}
-                    alt={photo.alt || `TED Circles moment ${i + 1}`}
-                    loading={Math.abs(i - activeIdx) <= 2 ? 'eager' : 'lazy'}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    style={{
-                      opacity: i === activeIdx ? 1 : 0,
-                      transition: 'opacity 600ms ease',
-                      pointerEvents: 'none',
-                    }}
-                  />
-                ))}
-
-                {/* Bottom gradient scrim */}
-                <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/65 to-transparent pointer-events-none" />
-
-                {/* Counter */}
-                <div className="absolute bottom-4 right-5 pointer-events-none">
-                  <span className="text-white/50 text-[11px] font-mono tabular-nums">
-                    {String(activeIdx + 1).padStart(2, '0')}&thinsp;/&thinsp;{String(circlePhotos.length).padStart(2, '0')}
-                  </span>
-                </div>
-
-                {/* Prev arrow */}
-                <button
-                  onClick={prev}
-                  disabled={activeIdx === 0}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-white transition-all duration-200 hover:scale-110 disabled:opacity-20"
-                  style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
-                  aria-label="Previous photo"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <path d="M15 18l-6-6 6-6" />
-                  </svg>
-                </button>
-
-                {/* Next arrow */}
-                <button
-                  onClick={next}
-                  disabled={activeIdx === circlePhotos.length - 1}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-white transition-all duration-200 hover:scale-110 disabled:opacity-20"
-                  style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
-                  aria-label="Next photo"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <path d="M9 18l6-6-6-6" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* ── 3-D Arc filmstrip ── */}
-              {/* perspective on the outer div; thumbnails rotateY based on distance from center */}
-              <div
-                className="relative overflow-hidden"
-                style={{ height: `${SLOT_H + 24}px`, perspective: '700px', perspectiveOrigin: '50% 50%' }}
+                className="hidden lg:flex flex-col items-center justify-center flex-shrink-0 relative"
+                style={{
+                  width: SLOT_W + 32,
+                  // total height = (ARC_SLOTS - 1) * STEP + SLOT_H
+                  height: (ARC_SLOTS - 1) * STEP + SLOT_H + 32,
+                  perspective: '560px',
+                  perspectiveOrigin: '150% 50%',
+                }}
               >
                 {Array.from({ length: ARC_SLOTS }, (_, slot) => {
-                  const half   = Math.floor(ARC_SLOTS / 2);       // 4
-                  const offset = slot - half;                       // -4 … +4
-                  const idx    = activeIdx + offset;
+                  const half     = Math.floor(ARC_SLOTS / 2); // 3
+                  const offset   = slot - half;               // -3 … +3
+                  const idx      = activeIdx + offset;
                   if (idx < 0 || idx >= circlePhotos.length) return null;
 
-                  const photo  = circlePhotos[idx];
-                  const absOff = Math.abs(offset);
-                  const scale  = Math.max(0.50, 1 - absOff * 0.11);
-                  const rotY   = offset * -18;                      // curves into screen
-                  const opac   = Math.max(0.22, 1 - absOff * 0.19);
+                  const photo    = circlePhotos[idx];
+                  const absOff   = Math.abs(offset);
                   const isActive = offset === 0;
+                  const scale    = Math.max(0.48, 1 - absOff * 0.13);
+                  // rotateX curves items away from viewer top/bottom
+                  const rotX     = offset * -ROT_DEG;
+                  const opac     = Math.max(0.20, 1 - absOff * 0.22);
 
                   return (
                     <button
                       key={photo.key}
                       onClick={() => setActiveIdx(idx)}
                       aria-label={`View photo ${idx + 1}`}
-                      className="absolute top-1/2 left-1/2 overflow-hidden rounded-xl"
+                      className="absolute left-1/2 top-1/2 overflow-hidden rounded-xl"
                       style={{
                         width:  SLOT_W,
                         height: SLOT_H,
-                        transform: `translate(calc(-50% + ${offset * STEP}px), -50%) rotateY(${rotY}deg) scale(${scale})`,
+                        // translate to arc position, then rotateX for 3-D curve
+                        transform: `translate(-50%, calc(-50% + ${offset * STEP}px)) rotateX(${rotX}deg) scale(${scale})`,
                         opacity: opac,
-                        zIndex: ARC_SLOTS - absOff,
+                        zIndex:  ARC_SLOTS - absOff,
                         boxShadow: isActive
-                          ? `0 0 0 2.5px ${TED_RED}, 0 8px 28px rgba(0,0,0,0.35)`
-                          : '0 2px 10px rgba(0,0,0,0.18)',
-                        transition: 'transform 480ms cubic-bezier(0.25,0.46,0.45,0.94), opacity 480ms ease, box-shadow 300ms ease',
+                          ? `0 0 0 2.5px ${TED_RED}, 0 6px 20px rgba(0,0,0,0.40)`
+                          : '0 2px 8px rgba(0,0,0,0.15)',
+                        transition: [
+                          'transform 440ms cubic-bezier(0.25,0.46,0.45,0.94)',
+                          'opacity 440ms ease',
+                          'box-shadow 280ms ease',
+                        ].join(', '),
                         cursor: isActive ? 'default' : 'pointer',
                       }}
                     >
@@ -266,35 +230,111 @@ export default function CommunityPage() {
                         loading="lazy"
                         className="w-full h-full object-cover"
                         style={{
-                          filter: isActive ? 'none' : 'brightness(0.75)',
-                          transition: 'filter 480ms ease',
+                          filter: isActive ? 'none' : 'brightness(0.68)',
+                          transition: 'filter 440ms ease',
                         }}
                       />
                     </button>
                   );
                 })}
+
+                {/* Up / Down nav arrows flanking the arc */}
+                <button
+                  onClick={prev}
+                  disabled={activeIdx === 0}
+                  className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full flex items-center justify-center text-neutral-400 hover:text-neutral-700 transition-colors disabled:opacity-20"
+                  aria-label="Previous photo"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M18 15l-6-6-6 6" />
+                  </svg>
+                </button>
+                <button
+                  onClick={next}
+                  disabled={activeIdx === circlePhotos.length - 1}
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full flex items-center justify-center text-neutral-400 hover:text-neutral-700 transition-colors disabled:opacity-20"
+                  aria-label="Next photo"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
               </div>
 
-              {/* ── Pill-dot progress ── */}
-              <div className="flex items-center justify-center gap-1.5 mt-5">
-                {circlePhotos.map((_, i) => {
-                  const isActive = i === activeIdx;
-                  const isNear   = Math.abs(i - activeIdx) <= 1;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => setActiveIdx(i)}
-                      aria-label={`Go to photo ${i + 1}`}
-                      className="rounded-full transition-all duration-300"
+              {/* ══════════════════════════════════════════════
+                  RIGHT — Featured display (crossfade stack)
+              ══════════════════════════════════════════════ */}
+              <div className="flex-1 flex flex-col gap-4">
+                <div
+                  className="relative rounded-2xl overflow-hidden bg-neutral-950 shadow-2xl w-full"
+                  style={{ aspectRatio: '4 / 3' }}
+                >
+                  {/* Crossfade image stack */}
+                  {circlePhotos.map((photo, i) => (
+                    <img
+                      key={photo.key}
+                      src={photo.src}
+                      alt={photo.alt || `TED Circles moment ${i + 1}`}
+                      loading={Math.abs(i - activeIdx) <= 1 ? 'eager' : 'lazy'}
+                      className="absolute inset-0 w-full h-full object-cover"
                       style={{
-                        width:           isActive ? 22 : isNear ? 7 : 5,
-                        height:          isActive ? 6  : isNear ? 7 : 5,
-                        backgroundColor: isActive ? TED_RED : '#d4d4d4',
-                        opacity:         isActive ? 1 : isNear ? 0.7 : 0.45,
+                        opacity: i === activeIdx ? 1 : 0,
+                        transition: 'opacity 550ms ease',
+                        pointerEvents: 'none',
                       }}
                     />
-                  );
-                })}
+                  ))}
+
+                  {/* Bottom gradient + counter */}
+                  <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+                  <div className="absolute bottom-3.5 right-4 pointer-events-none">
+                    <span className="text-white/45 text-[11px] font-mono tabular-nums">
+                      {String(activeIdx + 1).padStart(2, '0')}&thinsp;/&thinsp;{String(circlePhotos.length).padStart(2, '0')}
+                    </span>
+                  </div>
+
+                  {/* Mobile prev / next (hidden on lg+) */}
+                  <button
+                    onClick={prev}
+                    disabled={activeIdx === 0}
+                    className="lg:hidden absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center text-white transition-all hover:scale-110 disabled:opacity-20"
+                    style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+                    aria-label="Previous photo"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6" /></svg>
+                  </button>
+                  <button
+                    onClick={next}
+                    disabled={activeIdx === circlePhotos.length - 1}
+                    className="lg:hidden absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center text-white transition-all hover:scale-110 disabled:opacity-20"
+                    style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+                    aria-label="Next photo"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+                  </button>
+                </div>
+
+                {/* ── Pill-dot progress (always visible) ── */}
+                <div className="flex items-center justify-center gap-1.5">
+                  {circlePhotos.map((_, i) => {
+                    const isActive = i === activeIdx;
+                    const isNear   = Math.abs(i - activeIdx) <= 1;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setActiveIdx(i)}
+                        aria-label={`Go to photo ${i + 1}`}
+                        className="rounded-full transition-all duration-300"
+                        style={{
+                          width:           isActive ? 20 : isNear ? 7 : 5,
+                          height:          6,
+                          backgroundColor: isActive ? TED_RED : '#d4d4d4',
+                          opacity:         isActive ? 1 : isNear ? 0.65 : 0.40,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
               </div>
 
             </div>
