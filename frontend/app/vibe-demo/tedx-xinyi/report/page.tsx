@@ -122,6 +122,25 @@ const SALON_ACTIONS = [
   '將 AI 視為磨刀石，而不是主角——我們要練的，是人的感受力與策展力',
 ];
 
+
+// ── TED AI Vienna content ──
+const TALKS = [
+  { title: 'Will AI make us the last generation to read and write?', speaker: 'Victor Riparbelli' },
+  { title: 'How a deepfake almost ruined my political career', speaker: 'Cara Hunter' },
+  { title: 'How AI is decoding ancient scrolls', speaker: 'Julian Schilliger and Youssef Nader' },
+  { title: 'What if AI could spot your lies?', speaker: 'Riccardo Loconte' },
+  { title: "The AI breakthroughs we've overlooked — and how they're transforming science", speaker: 'Raia Hadsell' },
+];
+
+const PHENOMENA = [
+  { num: '01', tag: '#職涯', title: 'AI 正在重塑「學習與職涯結構」', text: 'AI 不只是一工具，而是成為人的「外腦」，模糊了專業門檻，卻放大了學習能力的差距。' },
+  { num: '02', tag: '#關係', title: '真實與信任變得前所未有地脆弱', text: '在多層次 AI 判斷與 deepfake 技術下，人類第一次無法輕易相信「所見即所得」。' },
+  { num: '03', tag: '#自然永續', title: 'AI 讓人類思考與環境面對「自然永續」', text: 'AI 讓人與自然更和諧，科技可以協助環境更賦能，萬物繫會。' },
+  { num: '04', tag: '#競爭優勢', title: '人類全球化越 AI 越體驗', text: '當 AI 能完成效率與知識，人類價值轉向關係、體驗與社群。人的 community 發展出了一種人跟社區結合的模式 New Experience。' },
+  { num: '05', tag: '#敘事經濟', title: '我們正進入一個全新的「AI 敘事世代」', text: 'AI 星帶來臨，所有的東西都要有新的面貌（讓眼睛的更新）迎來新的閱讀方式，AI 敘事。' },
+  { num: '06', tag: '#AllItself', title: 'AI Literacy', text: 'AI 與人性的底層邏輯' },
+];
+
 export default function ReportPage() {
   return (
     <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
@@ -399,6 +418,131 @@ export default function ReportPage() {
                 </Link>
               </div>
             </FadeIn>
+          </div>
+        </section>
+
+
+        {/* ==================== TED AI — TALKS + PHENOMENA ==================== */}
+        <section className="overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-[5fr_7fr]">
+
+            {/* ── LEFT: Dark editorial panel — 5 Talks ── */}
+            <div className="bg-neutral-950 text-white px-8 py-14 md:px-12 md:py-20 flex flex-col justify-between relative">
+              {/* Subtle red left border accent */}
+              <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: TED_RED }} />
+
+              <div>
+                {/* Conference badge */}
+                <div className="flex flex-wrap items-center gap-3 mb-10">
+                  <span
+                    className="px-2.5 py-1 text-[10px] font-black tracking-[0.18em] rounded text-white"
+                    style={{ backgroundColor: TED_RED }}
+                  >TED AI</span>
+                  <span className="text-white/30 text-[11px] font-mono tracking-wider">24–26.9 · Vienna, Austria</span>
+                </div>
+
+                {/* Title */}
+                <FadeIn>
+                  <h2 className="text-3xl md:text-4xl xl:text-[2.6rem] font-black leading-[1.15] mb-12 max-w-sm">
+                    5 TED Talks showing AI&apos;s impact on our{' '}
+                    <em className="not-italic" style={{ color: WARM_AMBER }}>past, present</em>
+                    {' '}and{' '}
+                    <em className="not-italic" style={{ color: TED_RED }}>future</em>
+                  </h2>
+                </FadeIn>
+
+                {/* Talk list */}
+                <ol className="space-y-0">
+                  {TALKS.map((talk, i) => (
+                    <FadeIn key={i} delay={i * 80}>
+                      <li className="group flex items-start gap-4 py-5 border-t border-white/[0.07] hover:border-white/20 transition-colors">
+                        {/* Ghost number */}
+                        <span
+                          className="flex-shrink-0 text-[42px] md:text-[52px] font-black leading-none select-none mt-0.5 tabular-nums"
+                          style={{ color: 'rgba(255,255,255,0.06)' }}
+                        >
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <div className="pt-1">
+                          <p className="text-sm md:text-[0.9rem] font-bold leading-snug text-white/80 group-hover:text-white transition-colors mb-1.5">
+                            {talk.title}
+                          </p>
+                          <p className="text-[11px] font-mono text-white/35 tracking-wider">{talk.speaker}</p>
+                        </div>
+                      </li>
+                    </FadeIn>
+                  ))}
+                  <li className="border-t border-white/[0.07]" />
+                </ol>
+              </div>
+
+              {/* Footer */}
+              <FadeIn delay={500}>
+                <div className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span className="text-[11px] font-black tracking-[0.2em] text-white/25">TED</span>
+                  <span className="w-px h-3 bg-white/10" />
+                  <span className="text-[11px] font-black tracking-[0.2em]" style={{ color: WARM_AMBER }}>TED AI</span>
+                  <span className="w-px h-3 bg-white/10" />
+                  <span className="text-[11px] font-mono text-white/25">24–26.9 · Vienna, Austria</span>
+                </div>
+              </FadeIn>
+            </div>
+
+            {/* ── RIGHT: Light panel — 6 Phenomena ── */}
+            <div className="bg-neutral-50 px-8 py-14 md:px-10 md:py-20">
+              <FadeIn>
+                <div className="flex items-center gap-3 mb-8">
+                  <span className="text-[11px] font-black tracking-[0.18em] text-neutral-400 uppercase">六個關鍵現象</span>
+                  <span className="flex-1 h-px bg-neutral-200" />
+                </div>
+              </FadeIn>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                {PHENOMENA.map((ph, i) => (
+                  <FadeIn key={i} delay={i * 60}>
+                    <div className="relative rounded-2xl p-5 bg-white border border-neutral-100 hover:border-neutral-300 hover:shadow-md transition-all duration-300 overflow-hidden group h-full flex flex-col">
+                      {/* Ghost number watermark */}
+                      <span
+                        className="absolute -bottom-3 -right-2 text-[72px] font-black leading-none select-none pointer-events-none tabular-nums"
+                        style={{ color: `${TED_RED}07` }}
+                      >
+                        {ph.num}
+                      </span>
+
+                      {/* Top row: hashtag pill */}
+                      <div className="flex items-start justify-between mb-3">
+                        <span
+                          className="inline-block px-2.5 py-0.5 text-[9px] font-black tracking-wider rounded-full"
+                          style={{ backgroundColor: `${WARM_AMBER}18`, color: WARM_AMBER }}
+                        >
+                          {ph.tag}
+                        </span>
+                        <span className="text-[10px] font-black text-neutral-200 tabular-nums">現象{ph.num}</span>
+                      </div>
+
+                      {/* Title */}
+                      <h3
+                        className="text-[0.8rem] font-black leading-snug text-neutral-900 mb-2.5 relative z-10"
+                        lang="zh-TW"
+                      >
+                        {ph.title}
+                      </h3>
+
+                      {/* Red divider */}
+                      <div className="w-5 h-0.5 mb-2.5" style={{ backgroundColor: TED_RED, opacity: 0.4 }} />
+
+                      {/* Body */}
+                      {ph.text && (
+                        <p className="text-[11px] text-neutral-500 leading-[1.85] relative z-10 flex-1" lang="zh-TW">
+                          {ph.text}
+                        </p>
+                      )}
+                    </div>
+                  </FadeIn>
+                ))}
+              </div>
+            </div>
+
           </div>
         </section>
 

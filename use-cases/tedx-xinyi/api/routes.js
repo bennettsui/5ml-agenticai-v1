@@ -45,10 +45,16 @@ async function initMediaTable() {
         alt TEXT DEFAULT '',
         source VARCHAR(50) DEFAULT 'uploaded',
         description TEXT DEFAULT '',
+        circles_gallery BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    // Add circles_gallery to any existing table that predates this column
+    await pool.query(`
+      ALTER TABLE tedx_media_assets
+        ADD COLUMN IF NOT EXISTS circles_gallery BOOLEAN DEFAULT FALSE
+    `).catch(() => {});
     console.log('[TEDxXinyi] Media assets table ready');
   } catch (err) {
     console.error('[TEDxXinyi] Failed to create media table:', err.message);
@@ -74,14 +80,28 @@ async function saveMediaUrlToDb(key, publicUrl, { alt, source, description } = {
   }
 }
 
+async function saveCirclesGalleryToDb(key, inCircles) {
+  const pool = getDbPool();
+  if (!pool) return;
+  try {
+    await pool.query(`
+      INSERT INTO tedx_media_assets (key, circles_gallery, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (key) DO UPDATE SET circles_gallery = $2, updated_at = NOW()
+    `, [key, !!inCircles]);
+  } catch (err) {
+    console.error('[TEDxXinyi] DB circles_gallery save failed:', err.message);
+  }
+}
+
 async function loadMediaUrlsFromDb() {
   const pool = getDbPool();
   if (!pool) return {};
   try {
-    const { rows } = await pool.query('SELECT key, public_url, alt, source, description, created_at FROM tedx_media_assets ORDER BY created_at');
+    const { rows } = await pool.query('SELECT key, public_url, alt, source, description, circles_gallery, created_at FROM tedx_media_assets ORDER BY created_at');
     const map = {};
     for (const row of rows) {
-      map[row.key] = { publicUrl: row.public_url, alt: row.alt || '', source: row.source, description: row.description, dbStored: true };
+      map[row.key] = { publicUrl: row.public_url, alt: row.alt || '', source: row.source, description: row.description, circlesGallery: !!row.circles_gallery, dbStored: true };
     }
     return map;
   } catch (err) {
@@ -829,20 +849,40 @@ async function backupMetadataToMmdb(meta) {
 }
 
 // ---- API: public TED Circles photo listing (no auth required) ----
-router.get('/circles', (req, res) => {
+router.get('/circles', async (req, res) => {
   const meta = loadMetadata();
+  const dbUrls = await loadMediaUrlsFromDb();
   const photos = [];
+  const seen = new Set();
+
+  // Helper: is this key included in circles gallery?
+  function inCircles(key, data) {
+    if (key.startsWith('ted-circles/')) return true;
+    // Check both JSON metadata and DB (DB wins after Fly restarts)
+    const dbData = dbUrls[key];
+    return (data && data.circlesGallery === true) || (dbData && dbData.circlesGallery === true);
+  }
+
   for (const [key, data] of Object.entries(meta)) {
     if (!data || typeof data !== 'object') continue;
-    const inCircles = key.startsWith('ted-circles/') || data.circlesGallery === true;
-    if (!inCircles) continue;
+    if (!inCircles(key, data)) continue;
+    if (key.includes('--archived-')) continue;
+    seen.add(key);
+    const localExists = fs.existsSync(path.join(OUTPUT_DIR, key));
+    const src = (data.publicUrl || dbUrls[key]?.publicUrl) || (localExists ? `/tedx-xinyi/${key}` : null);
+    if (src) photos.push({ key, src, publicUrl: data.publicUrl || dbUrls[key]?.publicUrl || null, alt: data.alt || '' });
+  }
+
+  // Also check DB for any circles_gallery items not in JSON metadata
+  for (const [key, data] of Object.entries(dbUrls)) {
+    if (seen.has(key)) continue;
+    if (!data.circlesGallery && !key.startsWith('ted-circles/')) continue;
     if (key.includes('--archived-')) continue;
     const localExists = fs.existsSync(path.join(OUTPUT_DIR, key));
     const src = data.publicUrl || (localExists ? `/tedx-xinyi/${key}` : null);
-    if (src) {
-      photos.push({ key, src, publicUrl: data.publicUrl || null, alt: data.alt || '' });
-    }
+    if (src) photos.push({ key, src, publicUrl: data.publicUrl || null, alt: data.alt || '' });
   }
+
   res.json({ photos });
 });
 
@@ -854,6 +894,8 @@ router.post('/media/toggle-circles', express.json(), (req, res) => {
   if (!meta[key]) meta[key] = {};
   meta[key].circlesGallery = !!inCircles;
   saveMetadata(meta);
+  // Persist to DB so it survives Fly.dev machine restarts
+  saveCirclesGalleryToDb(key, !!inCircles).catch(() => {});
   res.json({ success: true, key, circlesGallery: !!inCircles });
 });
 
@@ -913,7 +955,7 @@ router.get('/media', async (req, res) => {
       source: 'generated', description: v.description,
       publicUrl: m.publicUrl, localExists: local, alt: m.alt,
       missing: !m.publicUrl && !local,
-      circlesGallery: !!(meta[key] && meta[key].circlesGallery),
+      circlesGallery: !!(meta[key] && meta[key].circlesGallery) || !!(dbUrls[key] && dbUrls[key].circlesGallery),
     });
   }
 
@@ -968,7 +1010,7 @@ router.get('/media', async (req, res) => {
       source: 'uploaded', description: '',
       publicUrl: data.publicUrl || null, localExists: local, alt: data.alt || '',
       missing: !data.publicUrl && !local,
-      circlesGallery: !!data.circlesGallery,
+      circlesGallery: !!data.circlesGallery || !!(dbUrls[key] && dbUrls[key].circlesGallery),
     });
   }
 

@@ -159,31 +159,44 @@ export default function SustainabilityPage() {
       <Section bg="white">
         <FadeIn>
           <SectionLabel>OUR APPROACH</SectionLabel>
-          <h2 className="text-3xl md:text-4xl font-black mb-14" lang="zh-TW">我們怎麼做？</h2>
+          <h2 className="text-3xl md:text-4xl font-black mb-16" lang="zh-TW">我們怎麼做？</h2>
         </FadeIn>
 
-        <div className="space-y-12">
+        <div className="space-y-20 md:space-y-28">
           {APPROACH_BLOCKS.map((block, i) => (
-            <FadeIn key={block.title} delay={i * 80}>
-              <div className={`flex flex-col ${i % 2 === 1 ? 'md:flex-row-reverse' : 'md:flex-row'} gap-0 items-stretch rounded-2xl overflow-hidden shadow-sm border border-neutral-100`}>
-                {/* Image */}
-                <div className="w-full md:w-1/2 aspect-[4/3] md:aspect-auto">
-                  <img
-                    src={block.img}
-                    alt={block.imgAlt}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                {/* Text */}
-                <div className="w-full md:w-1/2 p-8 md:p-10 flex flex-col justify-center bg-white">
+            <FadeIn key={block.title} delay={i * 60}>
+              <div className={`grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 items-center`}>
+                {/* Image column — 7 cols, alternates side */}
+                <div className={`md:col-span-7 ${i % 2 === 1 ? 'md:order-2' : ''} relative`}>
+                  {/* Ghost step number */}
                   <span
-                    className="inline-block text-xs font-black px-3 py-1 rounded-full mb-4 self-start"
-                    style={{ backgroundColor: `${TED_RED}10`, color: TED_RED }}
+                    className="absolute -top-5 -left-2 md:-top-8 md:-left-4 text-[96px] md:text-[144px] leading-none font-black select-none pointer-events-none z-0"
+                    style={{ color: `${TED_RED}09` }}
                   >
-                    STEP {String(i + 1).padStart(2, '0')}
+                    {String(i + 1).padStart(2, '0')}
                   </span>
-                  <h3 className="text-xl md:text-2xl font-black mb-4" lang="zh-TW">{block.title}</h3>
-                  <p className="text-neutral-500 text-sm sm:text-base leading-relaxed whitespace-pre-line" lang="zh-TW">
+                  {/* Image */}
+                  <div className="relative z-10 rounded-2xl overflow-hidden shadow-lg aspect-[4/3]">
+                    <img
+                      src={block.img}
+                      alt={block.imgAlt}
+                      className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                    />
+                    {/* Bottom-right step badge */}
+                    <div
+                      className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full text-[11px] font-black tracking-widest"
+                      style={{ backgroundColor: TED_RED, color: '#fff' }}
+                    >
+                      STEP {String(i + 1).padStart(2, '0')}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Text column — 5 cols */}
+                <div className={`md:col-span-5 ${i % 2 === 1 ? 'md:order-1' : ''}`}>
+                  <h3 className="text-2xl md:text-3xl font-black mb-5 leading-tight" lang="zh-TW">{block.title}</h3>
+                  <div className="w-8 h-0.5 mb-5" style={{ backgroundColor: TED_RED }} />
+                  <p className="text-neutral-500 text-sm sm:text-base leading-[2] whitespace-pre-line" lang="zh-TW">
                     {block.text}
                   </p>
                 </div>
