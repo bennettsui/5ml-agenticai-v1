@@ -399,13 +399,13 @@ export default function ReportPage() {
                 </div>
               </FadeIn>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {PHENOMENA.map((ph, i) => (
                   <FadeIn key={i} delay={i * 60}>
                     <div className="relative rounded-2xl p-5 bg-white border border-neutral-100 hover:border-neutral-300 hover:shadow-md transition-all duration-300 overflow-hidden group h-full flex flex-col">
                       {/* Ghost number watermark */}
                       <span
-                        className="absolute -bottom-3 -right-2 text-[72px] font-black leading-none select-none pointer-events-none tabular-nums"
+                        className="absolute -bottom-3 -right-2 text-[80px] font-black leading-none select-none pointer-events-none tabular-nums"
                         style={{ color: `${TED_RED}07` }}
                       >
                         {ph.num}
@@ -414,7 +414,7 @@ export default function ReportPage() {
                       {/* Top row: hashtag pill */}
                       <div className="flex items-start justify-between mb-3">
                         <span
-                          className="inline-block px-2.5 py-0.5 text-[11px] font-black tracking-wide rounded-full"
+                          className="inline-block px-2.5 py-0.5 text-xs font-black tracking-wide rounded-full"
                           style={{ backgroundColor: `${WARM_AMBER}18`, color: WARM_AMBER }}
                         >
                           {ph.tag}
@@ -424,7 +424,7 @@ export default function ReportPage() {
 
                       {/* Title */}
                       <h3
-                        className="text-sm font-black leading-snug text-neutral-900 mb-2.5 relative z-10"
+                        className="text-base sm:text-lg font-black leading-snug text-neutral-900 mb-2.5 relative z-10"
                         lang="zh-TW"
                       >
                         {ph.title}
@@ -435,7 +435,7 @@ export default function ReportPage() {
 
                       {/* Body */}
                       {ph.text && (
-                        <p className="text-xs text-neutral-500 leading-[1.85] relative z-10 flex-1" lang="zh-TW">
+                        <p className="text-sm text-neutral-500 leading-[1.85] relative z-10 flex-1" lang="zh-TW">
                           {ph.text}
                         </p>
                       )}
