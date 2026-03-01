@@ -114,6 +114,7 @@ export default function TEDxXinyiAdmin() {
   const downloadRef = useRef<HTMLAnchorElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceTargetRef = useRef<string | null>(null);
+  const pickerFileInputRef = useRef<HTMLInputElement>(null);
 
   function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
     setToast({ msg, type });
@@ -452,6 +453,45 @@ export default function TEDxXinyiAdmin() {
     }
   }
 
+  async function handlePickerUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !editSlot?.metaKey) return;
+    setActionLoading(editSlot.metaKey);
+    try {
+      const reader = new FileReader();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const uploadRes = await fetch(`${API_BASE}/api/tedx-xinyi/media/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: dataUrl, filename: file.name }),
+      });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadData.error || `HTTP ${uploadRes.status}`);
+      const cdnUrl = uploadData.publicUrl;
+      if (!cdnUrl) throw new Error('No CDN URL returned from upload');
+      const mapRes = await fetch(`${API_BASE}/api/tedx-xinyi/media/metadata`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: editSlot.metaKey, cdnUrl }),
+      });
+      if (!mapRes.ok) throw new Error(`Map failed: HTTP ${mapRes.status}`);
+      showToast(`Uploaded and mapped to ${editSlot.metaKey}`);
+      setImagePickerOpen(false);
+      setEditSlot(null);
+      await loadMedia();
+      if (slotsLoaded) await loadSlots();
+    } catch (err) {
+      showToast(`Upload failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setActionLoading(null);
+      if (pickerFileInputRef.current) pickerFileInputRef.current.value = '';
+    }
+  }
+
   // Archive (deactivate, keep asset in storage with --archived- prefix)
   async function handleArchive(key: string) {
     setActionLoading(key);
@@ -568,6 +608,13 @@ export default function TEDxXinyiAdmin() {
         accept="image/jpeg,image/png,image/webp"
         className="hidden"
         onChange={handleFileSelected}
+      />
+      <input
+        ref={pickerFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handlePickerUpload}
       />
 
       {/* Toast */}
@@ -766,7 +813,15 @@ export default function TEDxXinyiAdmin() {
               {/* Image Picker Grid */}
               {imagePickerOpen && (
                 <div className="border-t border-neutral-800 pt-4">
-                  <p className="text-xs text-neutral-500 font-bold mb-3">Select an image from the Media Library to use for this slot:</p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <p className="text-xs text-neutral-500 font-bold flex-1">Select an image from the Media Library to use for this slot:</p>
+                    <button
+                      onClick={() => pickerFileInputRef.current?.click()}
+                      className="px-3 py-1.5 text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded-lg transition-colors shrink-0"
+                    >
+                      Upload Photo
+                    </button>
+                  </div>
                   {!mediaLoaded ? (
                     <p className="text-xs text-neutral-600">Loading media\u2026</p>
                   ) : pickableMedia.length === 0 ? (
