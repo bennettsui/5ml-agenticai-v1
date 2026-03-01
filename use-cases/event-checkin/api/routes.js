@@ -264,56 +264,83 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(req.file.buffer);
 
+      // Normalize a color string to proper-case (handles PURPLE → Purple, blue → Blue)
+      const normalizeColor = (c) =>
+        VALID_COLORS.find(v => v.toLowerCase() === (c ?? '').toLowerCase()) ?? null;
+
+      // Safely extract text from any ExcelJS cell value (string, number, rich-text object, Date)
+      const cellText = (val) => {
+        if (val == null) return null;
+        if (typeof val === 'object' && Array.isArray(val.richText))
+          return val.richText.map(r => r.text ?? '').join('').trim() || null;
+        if (val instanceof Date) return null; // skip date cells
+        const s = String(val).trim();
+        return s || null;
+      };
+
       for (const ws of workbook.worksheets) {
-        const sheetColor = VALID_COLORS.includes(ws.name) ? ws.name : null;
+        // Case-insensitive sheet name → color (handles PURPLE, BLUE, etc.)
+        const sheetColor = normalizeColor(ws.name.trim());
 
-        // Build column index map from header row
+        // Detect whether row 1 is a header row or data row.
+        // Heuristic: if col A is purely numeric (e.g. "001", "1") → no headers.
+        const firstRow    = ws.getRow(1);
+        const firstCellA  = cellText(firstRow.getCell(1).value) ?? '';
+        const hasHeaders  = !/^\d+$/.test(firstCellA);
+        const dataStart   = hasHeaders ? 2 : 1;
+
+        // Build named column index from header row (only when headers exist)
         const colIndex = {};
-        ws.getRow(1).eachCell((cell, colNum) => {
-          if (cell.value) colIndex[String(cell.value).trim()] = colNum;
-        });
+        if (hasHeaders) {
+          firstRow.eachCell((cell, colNum) => {
+            const h = cellText(cell.value);
+            if (h) colIndex[h] = colNum;
+          });
+        }
 
-        // TUNE: Excel column mapping — adjust property names to match your Excel headers
-        const cellText = (val) => {
-          if (val == null) return null;
-          // ExcelJS may return rich text objects: { richText: [{text:'...'}, ...] }
-          if (typeof val === 'object' && Array.isArray(val.richText)) {
-            return val.richText.map(r => r.text ?? '').join('').trim() || null;
-          }
-          const s = String(val).trim();
-          return s || null;
-        };
-        const getCell = (row, ...names) => {
+        // Look up a cell by one or more candidate header names
+        const getByName = (row, ...names) => {
           for (const name of names) {
             const idx = colIndex[name];
             if (idx) {
-              const val = cellText(row.getCell(idx).value);
-              if (val) return val;
+              const v = cellText(row.getCell(idx).value);
+              if (v) return v;
             }
           }
           return null;
         };
 
         ws.eachRow((row, rowNum) => {
-          if (rowNum === 1) return;
-          const full_name = getCell(row,
-            'FullName', 'full_name', 'Full Name',
-            'Name', 'English Name', 'EnglishName',
-            'Participant Name', 'Display Name', 'Badge Name',
-          );
-          if (!full_name) return;
-          rows.push({
-            color:        sheetColor || getCell(row,
+          if (rowNum < dataStart) return;
+
+          let color, title, first_name, last_name, full_name, organization;
+
+          if (hasHeaders) {
+            // Named-column mapping (flexible header names)
+            full_name    = getByName(row,
+              'FullName', 'full_name', 'Full Name',
+              'Name', 'English Name', 'EnglishName',
+              'Participant Name', 'Display Name', 'Badge Name');
+            color        = sheetColor ?? normalizeColor(getByName(row,
               'Color', 'color', 'Colour', 'colour',
-              'Group', 'group', 'Table', 'table',
-              'Table Color', 'TableColor', 'Badge Color',
-            ) || null,
-            title:        getCell(row, 'Title', 'title', 'Salutation', 'salutation', 'Title/Salutation') || null,
-            first_name:   getCell(row, 'FirstName', 'first_name', 'First Name', 'Given Name') || null,
-            last_name:    getCell(row, 'LastName', 'last_name', 'Last Name', 'Family Name', 'Surname') || null,
-            full_name,
-            organization: getCell(row, 'Organization', 'organization', 'Organisation', 'Org', 'Company', 'Affiliation') || null,
-          });
+              'Group', 'group', 'Table', 'table', 'Table Color', 'Badge Color'));
+            title        = getByName(row, 'Title', 'title', 'Salutation', 'salutation', 'Title/Salutation');
+            first_name   = getByName(row, 'FirstName', 'first_name', 'First Name', 'Given Name');
+            last_name    = getByName(row, 'LastName',  'last_name',  'Last Name',  'Surname');
+            organization = getByName(row, 'Organization', 'organization', 'Organisation', 'Org', 'Company', 'Affiliation');
+          } else {
+            // No header row — positional mapping based on observed column layout:
+            // A=No.  B=Color  C=Title  D=FirstName  E=LastName  F=FullName  G=Organization
+            color        = sheetColor ?? normalizeColor(cellText(row.getCell(2).value));
+            title        = cellText(row.getCell(3).value);
+            first_name   = cellText(row.getCell(4).value);
+            last_name    = cellText(row.getCell(5).value);
+            full_name    = cellText(row.getCell(6).value);
+            organization = cellText(row.getCell(7).value);
+          }
+
+          if (!full_name) return;
+          rows.push({ color, title, first_name, last_name, full_name, organization });
         });
       }
     } else {
@@ -325,6 +352,8 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
     const newRows = [];
 
     for (const row of rows) {
+      // Normalize color one final time (handles any remaining case mismatches)
+      if (row.color) row.color = VALID_COLORS.find(v => v.toLowerCase() === row.color.toLowerCase()) ?? row.color;
       if (!row.full_name || !VALID_COLORS.includes(row.color)) { skipped++; continue; }
 
       // TUNE: deduplication key is (full_name, organization, color)
