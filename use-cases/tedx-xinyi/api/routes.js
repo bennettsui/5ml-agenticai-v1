@@ -1064,6 +1064,11 @@ router.post('/media/metadata', express.json(), (req, res) => {
     // Also persist to DB so it survives Fly.dev restarts
     if (newUrl) {
       saveMediaUrlToDb(key, newUrl, { alt: meta[key].alt, source: 'manual' }).catch(() => {});
+      // Update TSX source files so the CDN URL is baked into the next build
+      const parts = key.split('/');
+      const filename = parts.pop();
+      const folder = parts.join('/');
+      updateWebpageImageUrl(filename, folder, newUrl);
     }
   }
   saveMetadata(meta);
@@ -2444,47 +2449,46 @@ router.post('/publish-html-pack', async (req, res) => {
     archive.on('error', err => { throw err; });
     archive.pipe(res);
 
-    // index.html (homepage)
+    // Collect sub-pages (exclude admin.html)
+    const EXCLUDE_PAGES = new Set(['admin']);
+    const htmlFiles = fs.existsSync(TEDX_OUT)
+      ? fs.readdirSync(TEDX_OUT).filter(f => f.endsWith('.html') && !EXCLUDE_PAGES.has(f.replace('.html', '')))
+      : [];
+
+    // Homepage at vibe-demo/tedx-xinyi/index.html (matches the URL structure baked into Next.js output)
     if (fs.existsSync(TEDX_HOME_HTML)) {
-      archive.file(TEDX_HOME_HTML, { name: 'index.html' });
+      archive.file(TEDX_HOME_HTML, { name: 'vibe-demo/tedx-xinyi/index.html' });
     }
 
-    // Sub-pages (about.html, salon.html, etc.)
-    if (fs.existsSync(TEDX_OUT)) {
-      for (const f of fs.readdirSync(TEDX_OUT)) {
-        if (f.endsWith('.html')) {
-          archive.file(path.join(TEDX_OUT, f), { name: f });
-        }
-      }
+    // Sub-pages at vibe-demo/tedx-xinyi/<page>.html
+    for (const f of htmlFiles) {
+      archive.file(path.join(TEDX_OUT, f), { name: `vibe-demo/tedx-xinyi/${f}` });
     }
 
-    // _next/ static assets (JS, CSS)
+    // _next/ static assets (JS, CSS) — at root since HTML references /_next/...
     if (fs.existsSync(NEXT_DIR)) {
       archive.directory(NEXT_DIR, '_next');
     }
 
-    // tedx-xinyi/ images from public folder
+    // tedx-xinyi/ images from public folder — at root since HTML references /tedx-xinyi/...
     if (fs.existsSync(PUBLIC_IMAGES)) {
       archive.directory(PUBLIC_IMAGES, 'tedx-xinyi');
     }
 
     // index.php — PHP router for Apache/PHP hosting
-    const htmlFiles = fs.existsSync(TEDX_OUT)
-      ? fs.readdirSync(TEDX_OUT).filter(f => f.endsWith('.html'))
-      : [];
     const phpPages = htmlFiles.map(f => f.replace('.html', ''));
     const phpRouter = `<?php
 /**
  * TEDxXinyi — PHP Router
  * Drop this folder on any Apache + PHP host. No Python or Node needed.
  *
- * Supports:
- *   /              → index.html
- *   /salon         → salon.html
- *   /about         → about.html
- *   /speakers      → speakers.html
- *   /_next/...     → static JS/CSS assets
- *   /tedx-xinyi/.. → images
+ * Supports clean URLs with the /vibe-demo/tedx-xinyi/ prefix that
+ * Next.js bakes into all internal links:
+ *   /vibe-demo/tedx-xinyi/        → homepage
+ *   /vibe-demo/tedx-xinyi/salon   → salon page
+ *   /vibe-demo/tedx-xinyi/about   → about page
+ *   /_next/...                    → static JS/CSS assets
+ *   /tedx-xinyi/...               → images
  *
  * For Apache: add .htaccess (included) to enable clean URLs.
  * For PHP built-in server: php -S localhost:8000 index.php
@@ -2493,7 +2497,7 @@ router.post('/publish-html-pack', async (req, res) => {
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $uri = rtrim($uri, '/');
 
-// Static files — serve directly
+// Static files — serve directly (handles /_next/, /tedx-xinyi/, etc.)
 if ($uri !== '' && file_exists(__DIR__ . $uri)) {
     $ext = pathinfo($uri, PATHINFO_EXTENSION);
     $mimeTypes = [
@@ -2518,21 +2522,21 @@ if ($uri !== '' && file_exists(__DIR__ . $uri)) {
     return;
 }
 
-// Clean URL routing — /salon → salon.html
-$pages = [${phpPages.map(p => `'${p}'`).join(', ')}];
-$page = ltrim($uri, '/');
+// Strip /vibe-demo/tedx-xinyi prefix (Next.js bakes this into all links)
+$prefix = '/vibe-demo/tedx-xinyi';
+$page_uri = (strpos($uri, $prefix) === 0) ? substr($uri, strlen($prefix)) : $uri;
+$page_uri = ltrim(rtrim($page_uri, '/'), '/');
 
-if ($page === '' || $page === 'index') {
-    include __DIR__ . '/index.html';
-} elseif (in_array($page, $pages) && file_exists(__DIR__ . '/' . $page . '.html')) {
-    include __DIR__ . '/' . $page . '.html';
+// Clean URL routing
+$pages = [${phpPages.map(p => `'${p}'`).join(', ')}];
+
+if ($page_uri === '' || $page_uri === 'index') {
+    include __DIR__ . '/vibe-demo/tedx-xinyi/index.html';
+} elseif (in_array($page_uri, $pages) && file_exists(__DIR__ . '/vibe-demo/tedx-xinyi/' . $page_uri . '.html')) {
+    include __DIR__ . '/vibe-demo/tedx-xinyi/' . $page_uri . '.html';
 } else {
     http_response_code(404);
-    if (file_exists(__DIR__ . '/index.html')) {
-        include __DIR__ . '/index.html';
-    } else {
-        echo '<h1>404 Not Found</h1>';
-    }
+    include __DIR__ . '/vibe-demo/tedx-xinyi/index.html';
 }
 `;
     archive.append(phpRouter, { name: 'index.php' });
@@ -2559,13 +2563,13 @@ RewriteRule ^ index.php [L]
     const manifest = {
       name: 'TEDxXinyi Static HTML + PHP Pack',
       built: new Date().toISOString(),
-      pages: ['index.html', ...htmlFiles],
+      pages: ['vibe-demo/tedx-xinyi/index.html', ...htmlFiles.map(f => `vibe-demo/tedx-xinyi/${f}`)],
       phpRouter: 'index.php',
       htaccess: '.htaccess',
       usage: {
-        apache: 'Upload entire folder to Apache web root. .htaccess handles routing.',
-        phpBuiltIn: 'php -S localhost:8000 index.php',
-        staticOnly: 'Serve index.html and sub-pages directly (clean URLs won\'t work without server)',
+        apache: 'Upload entire folder to Apache web root. .htaccess + index.php handle routing for /vibe-demo/tedx-xinyi/ URLs.',
+        phpBuiltIn: 'php -S localhost:8000 index.php  (then open http://localhost:8000/vibe-demo/tedx-xinyi/)',
+        staticOnly: 'Open vibe-demo/tedx-xinyi/index.html directly. Navigation links won\'t work without a server.',
       },
     };
     archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
