@@ -3,14 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Event Check-in — Admin</title>
+  <title>RD Symposium — Admin</title>
   <link rel="stylesheet" href="/event-checkin/static/css/style.css" />
 </head>
 <body>
 
 <!-- ─── Header ──────────────────────────────────────────────────────────── -->
 <header class="page-header">
-  <h1>🎟️ Event Check-in — Admin</h1>
+  <div class="header-brand">
+    <h1>🎟️ RD Symposium</h1>
+    <span class="header-subtitle">Admin Panel</span>
+  </div>
   <nav>
     <a href="/event-checkin">Check-in</a>
     <a href="/">← Home</a>
@@ -57,6 +60,38 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- ─── AI Tools panel ────────────────────────────────────────────────── -->
+  <div class="panel" style="margin-bottom:20px;">
+    <div class="panel-title">✨ AI Tools</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+      <!-- Explain + Report -->
+      <div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+          Get a plain-English summary of live stats, or generate a full post-event report.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" id="explainBtn">💬 Explain Stats</button>
+          <button class="btn btn-outline btn-sm" id="reportBtn">📊 Generate Report</button>
+        </div>
+        <div id="explainOutput" class="ai-output hidden"></div>
+      </div>
+
+      <!-- Concierge -->
+      <div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+          Ask anything about the guest list — who's not checked in, org breakdowns, etc.
+        </p>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="conciergeInput" placeholder="e.g. Who from Red hasn't arrived?" style="flex:1;font-size:13px;" />
+          <button class="btn btn-primary btn-sm" id="conciergeBtn">Ask</button>
+        </div>
+        <div id="conciergeOutput" class="ai-output hidden"></div>
+      </div>
+
+    </div>
   </div>
 
   <!-- ─── Participants table ─────────────────────────────────────────────── -->
@@ -125,6 +160,36 @@
 
   </div>
 
+</div>
+
+<!-- ─── AI Enrich Modal ───────────────────────────────────────────────────── -->
+<div id="enrichModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <span class="modal-title">✨ AI Enrich Participant</span>
+      <button class="modal-close" id="enrichModalClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body" id="enrichModalBody">
+      <div class="ai-thinking">Analysing record…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="enrichModalCancel">Cancel</button>
+      <button class="btn btn-primary hidden" id="enrichModalApply">Apply Suggestions</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── AI Report Modal ────────────────────────────────────────────────────── -->
+<div id="reportModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title">📊 Post-Event Report — RD Symposium</span>
+      <button class="modal-close" id="reportModalClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="reportContent" class="report-content"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ─── Add/Edit Modal ────────────────────────────────────────────────────── -->
