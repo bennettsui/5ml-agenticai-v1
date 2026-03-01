@@ -152,6 +152,53 @@
       50%       { opacity: .4; }
     }
 
+    /* ─── Guest list ─────────────────────────────────────────────── */
+    .list-toolbar {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    }
+    .list-search {
+      flex: 1; min-width: 180px; max-width: 320px;
+      padding: 7px 12px; font-size: 13px;
+      border: 1px solid var(--border-mid); border-radius: var(--radius-sm);
+      background: rgba(255,255,255,0.04); color: var(--text);
+    }
+    .list-search:focus { outline: none; border-color: var(--color-blue); box-shadow: var(--ring-blue); }
+    .pill-group { display: flex; gap: 5px; flex-wrap: wrap; }
+    .pill {
+      padding: 4px 11px; border-radius: 999px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      border: 1px solid var(--border-mid);
+      background: rgba(255,255,255,0.04); color: var(--text-muted);
+      transition: all .15s;
+    }
+    .pill:hover     { background: rgba(255,255,255,0.08); color: var(--text); }
+    .pill.active    { color: var(--text); border-color: var(--border-mid); background: rgba(255,255,255,0.10); }
+    .pill-Red.active    { background: rgba(239,68,68,.2);  color: #fca5a5; border-color: rgba(239,68,68,.4); }
+    .pill-Purple.active { background: rgba(168,85,247,.2); color: #d8b4fe; border-color: rgba(168,85,247,.4); }
+    .pill-Blue.active   { background: rgba(59,130,246,.2); color: #93c5fd; border-color: rgba(59,130,246,.4); }
+    .pill-Green.active  { background: rgba(34,197,94,.2);  color: #86efac; border-color: rgba(34,197,94,.4); }
+    .list-count { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+
+    .list-table-wrap { overflow-x: auto; }
+    .list-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .list-table thead th {
+      background: rgba(255,255,255,0.04);
+      text-align: left; padding: 9px 14px;
+      font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+      color: var(--text-muted); border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+    .list-table thead th.sortable { cursor: pointer; }
+    .list-table thead th.sortable:hover { color: var(--text); }
+    .sort-icon { font-size: 10px; margin-left: 4px; opacity: .5; }
+    .sort-icon.active { opacity: 1; color: var(--color-blue); }
+    .list-table tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+    .list-table tbody tr:last-child { border-bottom: none; }
+    .list-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+    .list-table tbody td { padding: 9px 14px; vertical-align: middle; }
+
     @media (max-width: 768px) {
       .dashboard-grid { grid-template-columns: 1fr; }
       .groups-grid    { grid-template-columns: 1fr 1fr; }
@@ -234,6 +281,51 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- ─── Full guest list ───────────────────────────────────────────── -->
+  <div class="section-card" style="margin-top:16px;">
+    <div class="section-header" style="justify-content:space-between;">
+      <span>Guest List</span>
+      <span id="listLoading" style="font-size:12px;color:var(--text-muted);font-weight:400;">Loading…</span>
+    </div>
+
+    <div class="list-toolbar">
+      <input type="search" id="listSearch" class="list-search"
+        placeholder="Search name or organization…" autocomplete="off" />
+
+      <div class="pill-group" id="colorPills">
+        <button class="pill active" data-color="">All Colors</button>
+        <button class="pill pill-Red"    data-color="Red">Red</button>
+        <button class="pill pill-Purple" data-color="Purple">Purple</button>
+        <button class="pill pill-Blue"   data-color="Blue">Blue</button>
+        <button class="pill pill-Green"  data-color="Green">Green</button>
+      </div>
+
+      <div class="pill-group" id="statusPills">
+        <button class="pill active" data-status="">All</button>
+        <button class="pill" data-status="checked_in">Checked-in</button>
+        <button class="pill" data-status="not_checked_in">Not yet</button>
+      </div>
+
+      <span class="list-count" id="listCount"></span>
+    </div>
+
+    <div class="list-table-wrap">
+      <table class="list-table">
+        <thead>
+          <tr>
+            <th style="width:80px;">Color</th>
+            <th class="sortable" data-col="name">Name <span class="sort-icon" id="sort-name">↕</span></th>
+            <th class="sortable" data-col="organization">Organization <span class="sort-icon" id="sort-organization">↕</span></th>
+            <th class="sortable" data-col="status" style="width:120px;">Status <span class="sort-icon" id="sort-status">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="listBody">
+          <tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
 </div>

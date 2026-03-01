@@ -20,6 +20,10 @@ const chatMessages = document.getElementById('chatMessages');
 const chatInput    = document.getElementById('chatInput');
 const chatSend     = document.getElementById('chatSend');
 const toastCont    = document.getElementById('toastContainer');
+const listSearch   = document.getElementById('listSearch');
+const listBody     = document.getElementById('listBody');
+const listCount    = document.getElementById('listCount');
+const listLoading  = document.getElementById('listLoading');
 
 // ─── SSE connection ───────────────────────────────────────────────────────────
 
@@ -38,6 +42,7 @@ function connectSSE() {
   src.addEventListener('participant_updated', (e) => {
     const { payload } = JSON.parse(e.data);
     if (payload.status === 'checked_in') addActivity(payload);
+    listUpdateOne(payload);
   });
 
   src.addEventListener('bulk_status_updated', (e) => {
@@ -45,6 +50,34 @@ function connectSSE() {
     if (payload.status === 'checked_in') {
       for (const p of (payload.rows || [])) addActivity(p);
     }
+    for (const p of (payload.rows || [])) listUpdateOne(p);
+  });
+
+  src.addEventListener('participant_created', (e) => {
+    const { payload } = JSON.parse(e.data);
+    allParticipants.unshift(payload);
+    applyFilter();
+  });
+
+  src.addEventListener('bulk_imported', (e) => {
+    const { payload } = JSON.parse(e.data);
+    if (Array.isArray(payload)) {
+      allParticipants.unshift(...payload);
+      applyFilter();
+    }
+  });
+
+  src.addEventListener('participant_deleted', (e) => {
+    const { payload } = JSON.parse(e.data);
+    const idx = allParticipants.findIndex(p => p.id === payload.id);
+    if (idx !== -1) { allParticipants.splice(idx, 1); applyFilter(); }
+  });
+
+  src.addEventListener('bulk_deleted', (e) => {
+    const { payload } = JSON.parse(e.data);
+    const ids = new Set(payload.ids || []);
+    allParticipants = allParticipants.filter(p => !ids.has(p.id));
+    applyFilter();
   });
 }
 
@@ -176,6 +209,145 @@ async function sendMessage() {
 
 chatSend.addEventListener('click', sendMessage);
 chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+// ─── Guest list ───────────────────────────────────────────────────────────────
+
+let allParticipants = [];
+let listFilterColor  = '';
+let listFilterStatus = '';
+let listSearchQ      = '';
+let sortCol = 'name';
+let sortDir = 1; // 1=asc, -1=desc
+
+async function loadParticipants() {
+  try {
+    const resp = await fetch(`${API}/admin/participants?pageSize=2000`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error);
+    allParticipants = data.rows || [];
+    listLoading.textContent = '';
+    applyFilter();
+  } catch (err) {
+    listLoading.textContent = 'Failed to load';
+    listBody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--color-red);font-size:13px;">Error: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function applyFilter() {
+  const q = listSearchQ.toLowerCase();
+  let rows = allParticipants.filter(p => {
+    if (listFilterColor  && p.color  !== listFilterColor)  return false;
+    if (listFilterStatus && p.status !== listFilterStatus) return false;
+    if (q) {
+      const name = composeName(p).toLowerCase();
+      const org  = (p.organization || '').toLowerCase();
+      if (!name.includes(q) && !org.includes(q)) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  rows.sort((a, b) => {
+    let av, bv;
+    if (sortCol === 'name')         { av = composeName(a); bv = composeName(b); }
+    else if (sortCol === 'organization') { av = a.organization || ''; bv = b.organization || ''; }
+    else if (sortCol === 'status')  { av = a.status; bv = b.status; }
+    else if (sortCol === 'color')   { av = a.color;  bv = b.color; }
+    return av.localeCompare(bv) * sortDir;
+  });
+
+  listCount.textContent = `${rows.length} / ${allParticipants.length} guests`;
+  renderListRows(rows);
+}
+
+function renderListRows(rows) {
+  if (!rows.length) {
+    listBody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">No guests match the current filter.</td></tr>`;
+    return;
+  }
+  listBody.innerHTML = rows.map(p => {
+    const name    = esc(composeName(p));
+    const org     = esc(p.organization || '');
+    const checked = p.status === 'checked_in';
+    return `<tr data-id="${p.id}">
+      <td><span class="tag tag-${p.color}">${p.color}</span></td>
+      <td style="font-weight:600;">${name}</td>
+      <td style="color:var(--text-muted);">${org}</td>
+      <td>${checked
+        ? '<span class="status-checked">✓ Checked-in</span>'
+        : '<span class="status-not-checked">○ Not yet</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Update a single participant in allParticipants and re-render
+function listUpdateOne(p) {
+  const idx = allParticipants.findIndex(r => r.id === p.id);
+  if (idx !== -1) {
+    allParticipants[idx] = p;
+    // Patch just the status cell if the row is visible — avoids full re-render on every check-in
+    const tr = listBody.querySelector(`tr[data-id="${p.id}"]`);
+    if (tr) {
+      const checked = p.status === 'checked_in';
+      tr.cells[3].innerHTML = checked
+        ? '<span class="status-checked">✓ Checked-in</span>'
+        : '<span class="status-not-checked">○ Not yet</span>';
+    }
+  } else {
+    allParticipants.unshift(p);
+    applyFilter();
+  }
+}
+
+// ─── Sort controls ────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.list-table thead th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sortCol === col) { sortDir *= -1; }
+    else { sortCol = col; sortDir = 1; }
+    // Update icons
+    document.querySelectorAll('.sort-icon').forEach(el => {
+      el.textContent = '↕'; el.classList.remove('active');
+    });
+    const icon = document.getElementById(`sort-${col}`);
+    if (icon) { icon.textContent = sortDir === 1 ? '↑' : '↓'; icon.classList.add('active'); }
+    applyFilter();
+  });
+});
+
+// ─── Filter pills ────────────────────────────────────────────────────────────
+
+document.getElementById('colorPills').addEventListener('click', (e) => {
+  const btn = e.target.closest('.pill');
+  if (!btn) return;
+  document.querySelectorAll('#colorPills .pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  listFilterColor = btn.dataset.color;
+  applyFilter();
+});
+
+document.getElementById('statusPills').addEventListener('click', (e) => {
+  const btn = e.target.closest('.pill');
+  if (!btn) return;
+  document.querySelectorAll('#statusPills .pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  listFilterStatus = btn.dataset.status;
+  applyFilter();
+});
+
+// ─── Quick search ─────────────────────────────────────────────────────────────
+
+let listSearchTimer;
+listSearch.addEventListener('input', () => {
+  clearTimeout(listSearchTimer);
+  listSearchTimer = setTimeout(() => {
+    listSearchQ = listSearch.value.trim();
+    applyFilter();
+  }, 120);
+});
+
+loadParticipants();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
