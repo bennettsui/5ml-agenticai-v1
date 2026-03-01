@@ -1248,7 +1248,9 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
 
     // Sanitize filename
     const safeName = (filename || `upload-${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase();
-    const targetDir = folder === 'speakers' ? SPEAKERS_DIR : OUTPUT_DIR;
+    const isSpeakerFolder = folder === 'speakers';
+    const subFolder = folder && !isSpeakerFolder ? folder : null;
+    const targetDir = isSpeakerFolder ? SPEAKERS_DIR : (subFolder ? path.join(OUTPUT_DIR, subFolder) : OUTPUT_DIR);
     if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
 
     // Compress with sharp
@@ -1267,7 +1269,7 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
     fs.writeFileSync(outPath, compressed);
 
     // Always save metadata entry for uploaded file (so /media finds it)
-    const metaKey = folder === 'speakers' ? `speakers/${safeName}` : safeName;
+    const metaKey = isSpeakerFolder ? `speakers/${safeName}` : (subFolder ? `${subFolder}/${safeName}` : safeName);
     {
       const meta = loadMetadata();
       if (!meta[metaKey]) meta[metaKey] = {};
@@ -1277,16 +1279,16 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
     }
 
     const ratio = ((1 - compressed.length / rawBuffer.length) * 100).toFixed(0);
-    const urlPath = folder === 'speakers' ? `/tedx-xinyi/speakers/${safeName}` : `/tedx-xinyi/${safeName}`;
-    console.log(`[TEDxXinyi] Upload: ${safeName} — ${(rawBuffer.length / 1024).toFixed(0)} KB -> ${(compressed.length / 1024).toFixed(0)} KB (${ratio}% smaller)`);
+    const urlPath = isSpeakerFolder ? `/tedx-xinyi/speakers/${safeName}` : (subFolder ? `/tedx-xinyi/${subFolder}/${safeName}` : `/tedx-xinyi/${safeName}`);
+    console.log(`[TEDxXinyi] Upload: ${metaKey} — ${(rawBuffer.length / 1024).toFixed(0)} KB -> ${(compressed.length / 1024).toFixed(0)} KB (${ratio}% smaller)`);
 
     // Upload to mmdbfiles
     let publicUrl = null;
     try {
       publicUrl = await uploadToMmdb(compressed);
-      savePublicUrl(metaKey, publicUrl, { source: folder === 'speakers' ? 'speaker' : 'uploaded' });
-      updateWebpageImageUrl(safeName, folder === 'speakers' ? 'speakers' : '', publicUrl);
-      console.log(`[TEDxXinyi] ${safeName} → ${publicUrl}`);
+      savePublicUrl(metaKey, publicUrl, { source: isSpeakerFolder ? 'speaker' : 'uploaded' });
+      updateWebpageImageUrl(safeName, isSpeakerFolder ? 'speakers' : (subFolder || ''), publicUrl);
+      console.log(`[TEDxXinyi] ${metaKey} → ${publicUrl}`);
     } catch (uploadErr) {
       console.error(`[TEDxXinyi] mmdbfiles upload failed for ${safeName}:`, uploadErr.message);
     }

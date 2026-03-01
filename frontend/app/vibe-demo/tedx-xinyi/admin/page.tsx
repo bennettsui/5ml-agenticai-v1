@@ -1600,7 +1600,7 @@ export default function TEDxXinyiAdmin() {
             )}
 
             {mediaLoaded && (() => {
-              const circleImgs = media.filter(m => m.key.startsWith('ted-circles/'));
+              const circleImgs = media.filter(m => m.key === 'ted-circles.webp' || m.key.startsWith('ted-circles/'));
               if (circleImgs.length === 0) return (
                 <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-2xl">
                   <p className="text-neutral-500 text-sm mb-3">No TED Circles photos uploaded yet.</p>
