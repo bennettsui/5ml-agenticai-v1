@@ -5,18 +5,15 @@ import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_R
 const APPROACH_BLOCKS = [
   {
     title: '再製與再利用',
-    text: '第一步，是承認『舞台可以被重複使用』這件事。\n我們開始設計可以拆解、重組的結構，\n讓上一屆留下來的物料，不是變成垃圾，而是下一個故事的起點。',
-    image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E8%9E%A2%E5%B9%95%E5%BF%AB%E7%85%A7-2021-07-21-%E4%B8%8A%E5%8D%8811.05.38.png',
+    text: '第一步，是承認「舞台可以被重複使用」這件事。\n我們開始設計可以拆解、重組的結構，\n讓上一屆留下來的物料，不是變成垃圾，而是下一個故事的起點。',
   },
   {
     title: '3D 列印燈具（與 Signify 合作）',
     text: '第二步，是和 Signify 合作，以 3D 列印技術製作燈具。\n這些燈不是大量生產的制式產品，而是專為 TEDxXinyi 舞台設計。\n3D 列印讓我們可以在減少浪費的前提下，\n做出既獨特、又能被反覆使用與維修的舞台光線。',
-    image: 'https://tedxxinyi.com/wp-content/uploads/2021/08/%E8%9E%A2%E5%B9%95%E5%BF%AB%E7%85%A7-2021-08-24-%E4%B8%8B%E5%8D%882.36.35.png',
   },
   {
     title: '可回收與可持續材質',
-    text: '第三步，是選擇可以被回收、再製或回到生活現場的材質。\n我們希望舞台結束之後，物料可以變成家具、展示架、或其他活動的一部分。\n舞台不只是被使用一次的『效果』，\n而是延伸進日常的長期存在。',
-    image: 'https://tedxxinyi.com/wp-content/uploads/2021/07/%E7%AD%96%E5%B1%95%E7%89%B9%E9%82%802-e1627376423498.jpg',
+    text: '第三步，是選擇可以被回收、再製或回到生活現場的材質。\n我們希望舞台結束之後，物料可以變成家具、展示架、或其他活動的一部分。\n舞台不只是被使用一次的「效果」，\n而是延伸進日常的長期存在。',
   },
 ];
 
@@ -57,29 +54,20 @@ export default function SustainabilityPage() {
 
       {/* ==================== PROBLEM STATEMENT ==================== */}
       <Section bg="white">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-          <div>
-            <FadeIn>
-              <SectionLabel>THE PROBLEM</SectionLabel>
-              <h2 className="text-3xl md:text-4xl font-black mb-6" lang="zh-TW">
-                為什麼要重新思考<br />「用完就丟」？
-              </h2>
-            </FadeIn>
-            <FadeIn delay={150}>
-              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9]" lang="zh-TW">
-                我們曾經習慣：一個活動結束，舞台就被拆掉，材料被丟棄。
-                那是一種很方便、很理所當然的做法，
-                也是對地球最昂貴的一種懶惰。
-                如果我們真的在乎永續，就必須從最顯眼、也最容易被忽略的舞台開始。
-              </p>
-            </FadeIn>
-          </div>
-          <FadeIn delay={200}>
-            <div className="flex items-center justify-center p-8">
-              <div className="text-8xl md:text-9xl font-black select-none" style={{ color: `${WARM_AMBER}30` }}>
-                ?
-              </div>
-            </div>
+        <div className="max-w-3xl">
+          <FadeIn>
+            <SectionLabel>THE PROBLEM</SectionLabel>
+            <h2 className="text-3xl md:text-4xl font-black mb-6" lang="zh-TW">
+              為什麼要重新思考「用完就丟」？
+            </h2>
+          </FadeIn>
+          <FadeIn delay={150}>
+            <p className="text-neutral-600 text-base sm:text-lg leading-[1.9]" lang="zh-TW">
+              我們曾經習慣：一個活動結束，舞台就被拆掉，材料被丟棄。
+              那是一種很方便、很理所當然的做法，
+              也是對地球最昂貴的一種懶惰。
+              如果我們真的在乎永續，就必須從最顯眼、也最容易被忽略的舞台開始。
+            </p>
           </FadeIn>
         </div>
       </Section>
@@ -115,7 +103,6 @@ export default function SustainabilityPage() {
                 loading="lazy"
                 className="w-full h-full border-0"
               ></iframe>
-              {/* Fallback if video unavailable */}
               <noscript>
                 <a href="https://www.youtube.com/watch?v=-i9MntW94Bs" className="absolute inset-0 flex items-center justify-center text-white/60 text-sm">
                   Watch on YouTube →
@@ -133,30 +120,29 @@ export default function SustainabilityPage() {
           <h2 className="text-3xl md:text-4xl font-black mb-14" lang="zh-TW">我們怎麼做？</h2>
         </FadeIn>
 
-        <div className="space-y-12">
+        <div className="space-y-6">
           {APPROACH_BLOCKS.map((block, i) => (
             <FadeIn key={block.title} delay={i * 80}>
-              <div className={`flex flex-col ${i % 2 === 1 ? 'md:flex-row-reverse' : 'md:flex-row'} gap-8 md:gap-10 items-center bg-white rounded-2xl overflow-hidden shadow-sm border border-neutral-100`}>
-                <div className="w-full md:w-1/2">
-                  <div className="aspect-[16/10] overflow-hidden">
-                    <img
-                      src={block.image}
-                      alt=""
-                      className="w-full h-full object-cover opacity-0 transition-opacity duration-500"
-                      onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  </div>
-                </div>
-                <div className="w-full md:w-1/2 p-6 md:p-8">
+              <div className="flex gap-8 md:gap-12 p-8 md:p-10 rounded-2xl border border-neutral-100 bg-white shadow-sm hover:shadow-md transition-shadow">
+                {/* Step number */}
+                <div className="flex-shrink-0 w-16 md:w-20">
                   <span
-                    className="inline-block text-xs font-black px-3 py-1 rounded-full mb-4"
+                    className="text-5xl md:text-6xl font-black leading-none select-none"
+                    style={{ color: `${WARM_AMBER}40` }}
+                  >
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                </div>
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <span
+                    className="inline-block text-xs font-black px-3 py-1 rounded-full mb-3"
                     style={{ backgroundColor: `${TED_RED}10`, color: TED_RED }}
                   >
                     STEP {String(i + 1).padStart(2, '0')}
                   </span>
-                  <h3 className="text-xl font-black mb-4" lang="zh-TW">{block.title}</h3>
-                  <p className="text-neutral-500 text-sm leading-relaxed whitespace-pre-line" lang="zh-TW">
+                  <h3 className="text-xl md:text-2xl font-black mb-3" lang="zh-TW">{block.title}</h3>
+                  <p className="text-neutral-500 text-sm sm:text-base leading-relaxed whitespace-pre-line" lang="zh-TW">
                     {block.text}
                   </p>
                 </div>
