@@ -668,53 +668,35 @@ module.exports = function createCrmRoutes(db) {
   const fs = require('fs');
   const deepseekService = require('../services/deepseekService');
 
-  // pdf-parse uses pdfjs-dist which requires DOM APIs (DOMMatrix etc.).
-  // Require it lazily inside tryReadAsText so a failure is caught gracefully
-  // rather than crashing the server at startup (e.g. on Fly.io Node.js).
-
-  const crmStorage = multer.diskStorage({
-    destination: (req, file, cb) => {
-      const dir = path.join(__dirname, '..', 'uploads', 'crm', req.params.id);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname);
-      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-    },
-  });
-
+  // Files are stored as bytea in Postgres — no disk writes, no ephemeral-filesystem issues.
   const crmUpload = multer({
-    storage: crmStorage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
   });
 
-  /** Try to read a file as text; returns null if it can't be decoded */
-  async function tryReadAsText(filePath, mimeType) {
-    // PDF extraction — lazy-require so startup doesn't crash if pdfjs
-    // DOM polyfills are unavailable in the current Node.js environment.
-    if ((mimeType || '').includes('pdf') || filePath.toLowerCase().endsWith('.pdf')) {
+  /** Try to extract text from a Buffer; returns null if unsupported */
+  async function tryExtractText(buf, mimeType, originalName) {
+    const isPdf = (mimeType || '').includes('pdf') || (originalName || '').toLowerCase().endsWith('.pdf');
+    if (isPdf) {
       try {
-        const pdfParse = require('pdf-parse'); // may throw in some envs
-        const buf = fs.readFileSync(filePath);
+        const pdfParse = require('pdf-parse');
         const data = await pdfParse(buf);
         const text = (data.text || '').trim();
         if (!text) return null;
         return text.length > 40000 ? text.slice(0, 40000) + '\n[truncated]' : text;
       } catch {
-        return null; // PDF parsing unavailable — no summary, but server keeps running
+        return null;
       }
     }
 
     const textMimes = ['text/', 'application/json', 'application/xml'];
-    const couldBeText = textMimes.some(m => (mimeType || '').startsWith(m));
     const textExts = ['.txt', '.md', '.csv', '.json', '.xml', '.html', '.htm', '.js', '.ts', '.py', '.log'];
-    const hasTextExt = textExts.some(e => filePath.toLowerCase().endsWith(e));
-
+    const couldBeText = textMimes.some(m => (mimeType || '').startsWith(m));
+    const hasTextExt = textExts.some(e => (originalName || '').toLowerCase().endsWith(e));
     if (!couldBeText && !hasTextExt) return null;
 
     try {
-      const content = fs.readFileSync(filePath, 'utf8');
+      const content = buf.toString('utf8');
       return content.length > 40000 ? content.slice(0, 40000) + '\n[truncated]' : content;
     } catch {
       return null;
@@ -735,42 +717,35 @@ module.exports = function createCrmRoutes(db) {
     }
   }
 
-  // Upload attachment to a project
+  // Upload attachment — file stored as bytea in Postgres, no disk I/O
   router.post('/projects/:id/attachments', crmUpload.single('file'), async (req, res) => {
     try {
-      if (!req.file) {
-        return res.status(400).json({ detail: 'No file uploaded' });
-      }
+      if (!req.file) return res.status(400).json({ detail: 'No file uploaded' });
 
-      // Verify project exists
       const projectCheck = await pool.query('SELECT id FROM crm_projects WHERE id = $1', [req.params.id]);
-      if (projectCheck.rows.length === 0) {
-        fs.unlinkSync(req.file.path);
-        return res.status(404).json({ detail: 'Project not found' });
-      }
+      if (projectCheck.rows.length === 0) return res.status(404).json({ detail: 'Project not found' });
 
-      const relPath = `/uploads/crm/${req.params.id}/${req.file.filename}`;
-
-      // Try to read file content and generate a DeepSeek summary
+      // Auto-summarize if content is readable
       let summary = null;
-      const textContent = await tryReadAsText(req.file.path, req.file.mimetype);
-      if (textContent) {
-        summary = await generateSummary(textContent, req.file.originalname);
-      }
+      const textContent = await tryExtractText(req.file.buffer, req.file.mimetype, req.file.originalname);
+      if (textContent) summary = await generateSummary(textContent, req.file.originalname);
+
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(req.file.originalname)}`;
 
       const result = await pool.query(
         `INSERT INTO crm_project_attachments
-           (project_id, original_name, filename, file_path, mime_type, size, summary)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING *`,
+           (project_id, original_name, filename, file_path, mime_type, size, summary, file_data)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, project_id, original_name, filename, file_path, mime_type, size, summary, uploaded_at`,
         [
           req.params.id,
           req.file.originalname,
-          req.file.filename,
-          relPath,
+          filename,
+          `/uploads/crm/${req.params.id}/${filename}`, // kept for legacy compatibility
           req.file.mimetype || null,
           req.file.size || null,
           summary,
+          req.file.buffer,
         ]
       );
 
@@ -781,11 +756,12 @@ module.exports = function createCrmRoutes(db) {
     }
   });
 
-  // List attachments for a project
+  // List attachments — exclude file_data (raw bytes) from list response
   router.get('/projects/:id/attachments', async (req, res) => {
     try {
       const result = await pool.query(
-        'SELECT * FROM crm_project_attachments WHERE project_id = $1 ORDER BY uploaded_at DESC',
+        `SELECT id, project_id, original_name, filename, file_path, mime_type, size, summary, uploaded_at
+         FROM crm_project_attachments WHERE project_id = $1 ORDER BY uploaded_at DESC`,
         [req.params.id]
       );
       res.json(result.rows);
@@ -795,56 +771,69 @@ module.exports = function createCrmRoutes(db) {
     }
   });
 
-  // (Re-)generate AI summary for an attachment
-  // Uses Claude Haiku for PDFs (native PDF reading, no DOM deps) and DeepSeek for text files.
+  // Download attachment — reads bytes from Postgres
+  router.get('/projects/:id/attachments/:attachmentId/download', async (req, res) => {
+    try {
+      const result = await pool.query(
+        'SELECT original_name, mime_type, file_data FROM crm_project_attachments WHERE id = $1 AND project_id = $2',
+        [req.params.attachmentId, req.params.id]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ detail: 'Attachment not found' });
+      const { original_name, mime_type, file_data } = result.rows[0];
+      if (!file_data) return res.status(404).json({ detail: 'File data not stored in database' });
+      res.setHeader('Content-Type', mime_type || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(original_name)}"`);
+      res.send(file_data);
+    } catch (error) {
+      console.error('Error downloading attachment:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
+  // (Re-)generate AI summary — reads bytes from Postgres, no disk needed
   router.post('/projects/:id/attachments/:attachmentId/summarize', async (req, res) => {
     try {
       const attResult = await pool.query(
-        'SELECT * FROM crm_project_attachments WHERE id = $1 AND project_id = $2',
+        'SELECT id, original_name, mime_type, file_data FROM crm_project_attachments WHERE id = $1 AND project_id = $2',
         [req.params.attachmentId, req.params.id]
       );
-      if (attResult.rows.length === 0) {
-        return res.status(404).json({ detail: 'Attachment not found' });
-      }
+      if (attResult.rows.length === 0) return res.status(404).json({ detail: 'Attachment not found' });
       const att = attResult.rows[0];
-      const absPath = path.join(__dirname, '..', att.file_path);
-      if (!fs.existsSync(absPath)) {
-        return res.status(422).json({ detail: 'File not found on disk' });
+
+      if (!att.file_data) {
+        return res.status(422).json({ detail: 'No file data stored. Re-upload the file to generate a summary.' });
       }
 
-      let summary = null;
+      const buf = Buffer.isBuffer(att.file_data) ? att.file_data : Buffer.from(att.file_data);
       const isPdf = (att.mime_type || '').includes('pdf') || att.original_name.toLowerCase().endsWith('.pdf');
 
+      let summary = null;
       if (isPdf) {
-        // Use Claude Haiku — natively reads PDFs without DOM/canvas dependencies
         try {
           const llm = require('../lib/llm');
-          const buf = fs.readFileSync(absPath);
           const base64 = buf.toString('base64');
           const result = await llm.chat('haiku', [
             {
               role: 'user',
               content: [
                 { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-                { type: 'text', text: `Summarize this PDF document concisely in 2-4 sentences, focusing on key information and purpose. File name: ${att.original_name}` },
+                { type: 'text', text: `Summarize this PDF concisely in 2-4 sentences. File: ${att.original_name}` },
               ],
             },
           ], { maxTokens: 300 });
           summary = result.text || null;
         } catch (e) {
-          console.error('PDF summarization error:', e);
-          return res.status(500).json({ detail: 'Failed to summarize PDF: ' + e.message });
+          return res.status(500).json({ detail: 'PDF summarization failed: ' + e.message });
         }
       } else {
-        const textContent = await tryReadAsText(absPath, att.mime_type);
-        if (!textContent) {
-          return res.status(422).json({ detail: 'File cannot be read as text' });
-        }
-        summary = await generateSummary(textContent, att.original_name);
+        const text = await tryExtractText(buf, att.mime_type, att.original_name);
+        if (!text) return res.status(422).json({ detail: 'File cannot be read as text' });
+        summary = await generateSummary(text, att.original_name);
       }
 
       const updated = await pool.query(
-        'UPDATE crm_project_attachments SET summary = $1 WHERE id = $2 RETURNING *',
+        `UPDATE crm_project_attachments SET summary = $1 WHERE id = $2
+         RETURNING id, project_id, original_name, filename, file_path, mime_type, size, summary, uploaded_at`,
         [summary, att.id]
       );
       res.json(updated.rows[0]);
@@ -854,19 +843,14 @@ module.exports = function createCrmRoutes(db) {
     }
   });
 
-  // Delete an attachment
+  // Delete an attachment — no disk cleanup needed
   router.delete('/projects/:id/attachments/:attachmentId', async (req, res) => {
     try {
       const result = await pool.query(
-        'DELETE FROM crm_project_attachments WHERE id = $1 AND project_id = $2 RETURNING *',
+        'DELETE FROM crm_project_attachments WHERE id = $1 AND project_id = $2 RETURNING id',
         [req.params.attachmentId, req.params.id]
       );
-      if (result.rows.length === 0) {
-        return res.status(404).json({ detail: 'Attachment not found' });
-      }
-      // Remove file from disk (best-effort)
-      const absPath = path.join(__dirname, '..', result.rows[0].file_path);
-      try { fs.unlinkSync(absPath); } catch { /* ignore if already gone */ }
+      if (result.rows.length === 0) return res.status(404).json({ detail: 'Attachment not found' });
       res.status(204).send();
     } catch (error) {
       console.error('Error deleting attachment:', error);

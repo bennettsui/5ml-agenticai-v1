@@ -371,7 +371,7 @@ function AttachmentChip({ att, onRemove }: { att: Attachment; onRemove: () => vo
 // ---------------------------------------------------------------------------
 
 export function AiAssistant() {
-  const { pageState, formUpdateRef, navigate, refreshRef } = useCrmAi();
+  const { pageState, formUpdateRef, navigate, refreshRef, registerSendFileCallback } = useCrmAi();
 
   const [collapsed, setCollapsed] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -435,6 +435,18 @@ export function AiAssistant() {
       setSuggestions([]);
     }
   }, [pageState.pageType, pageState.pageTitle]);
+
+  // Register "send file to chat" so the project detail page can inject
+  // an attachment directly into this panel.
+  useEffect(() => {
+    registerSendFileCallback(async (file: File) => {
+      setCollapsed(false);
+      setHasUnread(false);
+      await processFiles([file]);
+    });
+    return () => registerSendFileCallback(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registerSendFileCallback]);
 
   // -----------------------------------------------------------------------
   // Execute AI action
