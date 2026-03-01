@@ -72,11 +72,31 @@ export interface BrandCreate {
   client_value_tier?: BrandValueTier | null;
 }
 
+export type DeliverablePriority = 'critical' | 'high' | 'medium' | 'low';
+
+// ---------------------------------------------------------------------------
+// Use-case registry — single source of truth for CRM deliverable linking
+// ---------------------------------------------------------------------------
+
+export const USE_CASES: Record<string, { label: string; color: string; href: string }> = {
+  'social-content-ops':    { label: 'Social Content',  color: 'emerald', href: '/use-cases/social-content-ops' },
+  'growth-architect':      { label: 'Growth Strategy', color: 'violet',  href: '/use-cases/growth-architect' },
+  'growth-hacking-studio': { label: 'Growth Hacking',  color: 'blue',    href: '/use-cases/growth-hacking-studio' },
+  'ai-media-generation':   { label: 'AI Media',        color: 'pink',    href: '/use-cases/ai-media-generation' },
+  'sme-growth':            { label: 'SME Growth',      color: 'amber',   href: '/use-cases/sme-growth' },
+  'government-tenders':    { label: 'Tenders',         color: 'sky',     href: '/use-cases/government-tenders' },
+  'hk-sg-tender-intel':    { label: 'HK/SG Tenders',  color: 'cyan',    href: '/use-cases/hk-sg-tender-intel' },
+  'mans-accounting':       { label: 'Accounting',      color: 'orange',  href: '/use-cases/mans-accounting' },
+};
+
 export interface Deliverable {
   id: string;
   title: string;
   deadline: string | null;
-  status: "pending" | "in_progress" | "done";
+  status: 'pending' | 'in_progress' | 'done';
+  priority?: DeliverablePriority | null;
+  notes?: string | null;
+  use_case?: string | null;
 }
 
 export interface Project {
