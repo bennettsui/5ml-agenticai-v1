@@ -72,6 +72,13 @@ export interface BrandCreate {
   client_value_tier?: BrandValueTier | null;
 }
 
+export interface Deliverable {
+  id: string;
+  title: string;
+  deadline: string | null;
+  status: "pending" | "in_progress" | "done";
+}
+
 export interface Project {
   id: string;
   client_id: string;
@@ -82,6 +89,7 @@ export interface Project {
   end_date: string | null;
   status: ProjectStatus;
   success_flag: string | null;
+  deliverables: Deliverable[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +102,17 @@ export interface ProjectCreate {
   start_date?: string | null;
   end_date?: string | null;
   status?: ProjectStatus;
+}
+
+export interface ProjectUpdate {
+  name?: string;
+  type?: ProjectType;
+  brief?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  status?: ProjectStatus;
+  success_flag?: string | null;
+  deliverables?: Deliverable[];
 }
 
 export interface FeedbackEvent {
@@ -370,6 +389,12 @@ export const crmApi = {
     create(data: ProjectCreate) {
       return request<Project>("/projects", {
         method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    update(id: string, data: ProjectUpdate) {
+      return request<Project>(`/projects/${id}`, {
+        method: "PUT",
         body: JSON.stringify(data),
       });
     },
