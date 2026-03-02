@@ -804,29 +804,7 @@ export default function SalonPage() {
         </div>
       </Section>
 
-      {/* ==================== PHOTO GALLERY ==================== */}
-      {circlePhotos.length > 0 && (
-        <Section bg="white">
-          <FadeIn>
-            <SectionLabel>PHOTO GALLERY</SectionLabel>
-            <h2 className="text-3xl md:text-4xl font-black mb-8" lang="zh-TW">活動現場</h2>
-          </FadeIn>
-          <div className="columns-2 sm:columns-3 md:columns-4 gap-3 space-y-3">
-            {circlePhotos.map((photo, i) => (
-              <div key={photo.key} className="break-inside-avoid rounded-xl overflow-hidden bg-neutral-100">
-                <img
-                  src={photo.src}
-                  alt={photo.alt || '活動照片'}
-                  loading="lazy"
-                  className="w-full h-auto block opacity-0 transition-opacity duration-500"
-                  onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
+      {/* PHOTO GALLERY — hidden for now */}
 
             {/* ==================== BLOCK F — CTA ==================== */}
       <section className="py-20 md:py-28 text-white" style={{ backgroundColor: TED_RED }}>

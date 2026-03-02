@@ -400,7 +400,7 @@ export default function TEDxXinyiHome() {
               className="px-8 py-3.5 bg-white font-black text-sm rounded-full transition-all hover:scale-105 hover:shadow-lg inline-block"
               style={{ color: TED_RED }}
             >
-              關注本年度大會
+              未來活動
             </Link>
           </FadeIn>
         </div>
