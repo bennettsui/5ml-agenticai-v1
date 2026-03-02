@@ -121,8 +121,15 @@ export default function SponsorsPage() {
 
       {/* ── HERO ─────────────────────────────────────── */}
       <section className="relative min-h-[52vh] flex items-end bg-neutral-900 overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 50% 70% at 5% 50%, rgba(245,158,11,0.07) 0%, transparent 65%), radial-gradient(ellipse 50% 70% at 95% 50%, rgba(230,43,30,0.07) 0%, transparent 65%)' }} />
+        <img
+          src="/tedx-xinyi/hero-sponsors.webp"
+          alt=""
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
+          onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.65'; }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
         <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/20 via-neutral-900/60 to-white" />
         <div className="relative z-10 max-w-6xl mx-auto px-6 pb-20 pt-36 w-full">
           <FadeIn>

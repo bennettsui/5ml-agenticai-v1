@@ -605,6 +605,12 @@ const VISUALS = [
     prompt: 'Cinematic photograph of a cave interior, rough dark brown and charcoal rock walls and floor in the foreground with deep shadows and visible texture, the cave narrows into an arched tunnel passage, strong bright golden-white light floods in from the cave mouth creating a glowing halo effect, a single lone human figure stands backlit at the cave opening as a silhouette — full upright posture, no facial features visible, facing away from camera toward the light, the contrast between the dark cave interior and the blinding white-gold exterior light is extreme and dramatic, mood: emergence, awakening, walking out of darkness into light, metaphorical and cinematic, no text, no watermarks',
   },
   {
+    id: 'hero-sponsors',
+    filename: 'hero-sponsors.webp',
+    description: 'Sponsors hero — partnership and ideas, warm Taipei networking',
+    prompt: 'Wide 16:9 cinematic banner of a warmly lit modern creative venue interior in Taipei, floor-to-ceiling windows revealing Xinyi district skyline at dusk bathed in amber and soft violet light, inside the space warm golden overhead lights illuminate a networking scene, in the middle ground two pairs of hands connecting in a gentle handshake gesture slightly motion-blurred suggesting trust and partnership, surrounding them blurred silhouettes of diverse people in animated conversation forming small clusters, clean minimalist modern furniture with a few potted plants, the overall atmosphere is optimistic warm and collaborative like the networking break at a TEDx event, palette of warm cream amber and soft neutral tones with a single bold red accent object visible in the decor, no text no watermarks no logos, cinematic depth of field with bokeh on background figures, festival-poster quality photography that feels genuine and aspirational',
+  },
+  {
     id: 'ted-circles',
     filename: 'ted-circles.webp',
     description: 'TED Circles — iconic red circle carpet in dramatic dark venue',
