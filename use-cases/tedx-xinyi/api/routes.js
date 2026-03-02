@@ -336,8 +336,14 @@ router.get('/image-slots', (req, res) => {
             localExists = fs.existsSync(path.join(OUTPUT_DIR, metaKey));
           }
 
-          // Skip if already added as a VISUAL baseline entry (avoid duplicate rows)
-          if (isLocal && metaKey && seenVisualKeys.has(metaKey)) continue;
+          // When Phase 1 finds a VISUAL that Phase 0 already added, update its page
+          // from the generic 'visuals' bucket to the actual page filename so the
+          // admin's page-filter shows it under the correct page.
+          if (isLocal && metaKey && seenVisualKeys.has(metaKey)) {
+            const existing = slots.find(s => s.metaKey === metaKey && s.page === 'visuals');
+            if (existing) existing.page = pageName;
+            continue;
+          }
 
           slots.push({
             page: pageName,
@@ -360,8 +366,12 @@ router.get('/image-slots', (req, res) => {
           if (seen.has(url)) continue;
           seen.add(url);
           const metaKey = url.replace('/tedx-xinyi/', '');
-          // Skip if already added as a VISUAL baseline entry
-          if (seenVisualKeys.has(metaKey)) continue;
+          // If already a VISUAL baseline, update its page to this actual page
+          if (seenVisualKeys.has(metaKey)) {
+            const existing = slots.find(s => s.metaKey === metaKey && s.page === 'visuals');
+            if (existing) existing.page = pageName;
+            continue;
+          }
           const metaEntry = meta[metaKey];
           const localEx = fs.existsSync(path.join(OUTPUT_DIR, metaKey));
           const isSpeakerImg = url.includes('speakers/');

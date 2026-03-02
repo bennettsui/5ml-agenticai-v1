@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRef, useEffect } from 'react';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY, WARM_AMBER } from '../components';
 
 /* ── SVG icon helpers ── */
@@ -142,6 +143,29 @@ const PHENOMENA = [
 ];
 
 export default function ReportPage() {
+  const caveSectionRef = useRef<HTMLElement>(null);
+  const caveBgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const section = caveSectionRef.current;
+    const bg = caveBgRef.current;
+    if (!section || !bg) return;
+
+    const onScroll = () => {
+      const rect = section.getBoundingClientRect();
+      // Only apply effect while section is in / near the viewport
+      const viewH = window.innerHeight;
+      if (rect.bottom < -viewH || rect.top > viewH * 2) return;
+      // Parallax: bg moves at 35% of scroll speed relative to section
+      const offset = rect.top * 0.35;
+      bg.style.transform = `translateY(calc(-15% + ${offset}px))`;
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll(); // initialise on mount
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
     <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
@@ -241,22 +265,25 @@ export default function ReportPage() {
           </div>
         </section>
 
-        {/* ==================== CAVE FOREWORD ==================== */}
-        <section className="relative overflow-hidden" style={{ minHeight: '92vh' }}>
-          {/* Cave illustration background */}
+        {/* ==================== CAVE FOREWORD — parallax ==================== */}
+        <section ref={caveSectionRef} className="relative overflow-hidden" style={{ minHeight: '92vh' }}>
+          {/* Fallback bg if image missing */}
+          <div className="absolute inset-0 -z-10 bg-neutral-950" />
+
+          {/* Cave illustration background — taller than section for parallax travel */}
           <img
+            ref={caveBgRef}
             src="/tedx-xinyi/report-cave-intro.webp"
             alt=""
-            loading="lazy"
+            loading="eager"
             decoding="async"
-            className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+            className="absolute inset-x-0 w-full object-cover opacity-0 transition-opacity duration-700 will-change-transform"
+            style={{ height: '130%', top: 0, transform: 'translateY(-15%)' }}
             onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
           {/* Dark overlay — heavier at top and bottom, lighter at cave mouth centre */}
           <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(8,6,4,0.88) 0%, rgba(8,6,4,0.55) 40%, rgba(8,6,4,0.72) 75%, rgba(8,6,4,0.94) 100%)' }} />
-          {/* Fallback bg if image missing */}
-          <div className="absolute inset-0 -z-10 bg-neutral-950" />
 
           <div className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 md:px-14 py-24 md:py-36">
 
