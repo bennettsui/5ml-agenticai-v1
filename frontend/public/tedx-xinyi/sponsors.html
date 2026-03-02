@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Partner with TEDxXinyi — Sponsorship plans and partner opportunities for Ideas Worth Spreading in Xinyi, Taipei.">
+  <title>Partners &amp; Sponsors — TEDxXinyi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    /* ─────────────────────────────── VARIABLES */
+    :root {
+      --bg:          #09090c;
+      --bg-card:     #111116;
+      --bg-card-alt: #0e0e12;
+      --bg-table-ev: #0c0c10;
+      --border:      rgba(255,255,255,0.07);
+      --border-sub:  rgba(255,255,255,0.035);
+
+      --gold:        #C9A44A;
+      --gold-lt:     #E8C86A;
+      --gold-dim:    rgba(201,164,74,0.13);
+      --gold-glow:   rgba(201,164,74,0.08);
+      --silver:      #9BAFC4;
+      --bronze:      #C88D4A;
+      --red:         #E62B1E;
+      --red-dim:     rgba(230,43,30,0.12);
+
+      --text:        #f0ede8;
+      --text-sec:    #9a9590;
+      --text-dim:    #4e4c49;
+
+      --r:           12px;
+      --r-lg:        18px;
+      --max-w:       1200px;
+      --px:          clamp(20px, 5vw, 80px);
+      --section-py:  clamp(72px, 10vw, 128px);
+    }
+
+    /* ─────────────────────────────── RESET */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', 'Noto Sans TC', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    img  { display: block; max-width: 100%; }
+    a    { color: inherit; text-decoration: none; }
+    ul   { list-style: none; }
+
+    /* ─────────────────────────────── LAYOUT */
+    .container {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding-left: var(--px);
+      padding-right: var(--px);
+    }
+    .section-py { padding-top: var(--section-py); padding-bottom: var(--section-py); }
+
+    /* ─────────────────────────────── TYPE HELPERS */
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 14px;
+    }
+    .eyebrow::after {
+      content: '';
+      display: inline-block;
+      width: 24px; height: 1px;
+      background: var(--gold);
+      opacity: 0.4;
+    }
+    .h-section {
+      font-size: clamp(28px, 4vw, 46px);
+      font-weight: 900;
+      line-height: 1.15;
+      letter-spacing: -0.025em;
+      margin-bottom: 10px;
+    }
+    .h-section .zh {
+      display: block;
+      font-size: 0.6em;
+      font-weight: 500;
+      color: var(--text-sec);
+      letter-spacing: -0.01em;
+      margin-top: 4px;
+    }
+    .subtitle {
+      font-size: clamp(14px, 1.7vw, 17px);
+      color: var(--text-sec);
+      line-height: 1.85;
+    }
+    .divider {
+      width: 40px; height: 2px;
+      background: var(--gold);
+      margin: 20px 0 28px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: var(--gold-dim);
+      color: var(--gold);
+      border: 1px solid rgba(201,164,74,0.22);
+      margin-bottom: 14px;
+    }
+
+    /* ─────────────────────────────── NAV */
+    .nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 200;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--px);
+      background: rgba(9,9,12,0.82);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+    }
+    .nav-brand .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      flex-shrink: 0;
+    }
+    .nav-brand .ted  { color: var(--red); }
+    .nav-links {
+      display: flex;
+      gap: 28px;
+    }
+    .nav-links a {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-sec);
+      letter-spacing: 0.03em;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    @media (max-width: 680px) { .nav-links { display: none; } }
+
+    /* ─────────────────────────────── HERO */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding-top: 60px;
+      overflow: hidden;
+    }
+    /* Ambient gold glow — left and right edges */
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse 55% 65% at  0% 48%, rgba(201,164,74,0.095) 0%, transparent 70%),
+        radial-gradient(ellipse 55% 65% at 100% 52%, rgba(201,164,74,0.07)  0%, transparent 70%),
+        radial-gradient(ellipse 70% 30% at 50% 100%, rgba(201,164,74,0.04)  0%, transparent 60%);
+    }
+    /* Bottom separator line */
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent 0%, var(--border) 40%, var(--border) 60%, transparent 100%);
+    }
+    .hero-body {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      text-align: center;
+    }
+    .hero-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 28px;
+    }
+    .hero-label::before, .hero-label::after {
+      content: '';
+      display: inline-block;
+      width: 28px; height: 1px;
+      background: currentColor;
+      opacity: 0.45;
+    }
+    .hero-h1 {
+      font-size: clamp(34px, 5.5vw, 66px);
+      font-weight: 900;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 28px;
+      max-width: 820px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .hero-sub {
+      font-size: clamp(15px, 1.8vw, 19px);
+      color: var(--text-sec);
+      line-height: 1.85;
+      max-width: 600px;
+      margin: 0 auto 14px;
+    }
+    .hero-note {
+      font-size: 13.5px;
+      color: var(--text-dim);
+      margin-bottom: 0;
+    }
+
+    /* Logo Strip */
+    .logo-strip {
+      margin-top: 60px;
+      padding-top: 36px;
+      border-top: 1px solid var(--border);
+    }
+    .logo-strip-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 22px;
+      text-align: center;
+    }
+    .logo-strip-row {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .logo-strip-row::-webkit-scrollbar { display: none; }
+    .logo-strip-row .logo-slot {
+      flex: 0 0 136px;
+      height: 68px;
+    }
+    @media (max-width: 560px) {
+      .logo-strip-row { flex-wrap: nowrap; justify-content: flex-start; }
+    }
+
+    /* ─────────────────────────────── LOGO SLOT (universal placeholder) */
+    .logo-slot {
+      border: 1.5px dashed rgba(255,255,255,0.17);
+      background: rgba(255,255,255,0.018);
+      border-radius: var(--r);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255,255,255,0.2);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1.5;
+      transition: border-color 0.25s, box-shadow 0.25s, background 0.25s, color 0.25s;
+      cursor: pointer;
+      user-select: none;
+    }
+    .logo-slot:hover {
+      border-color: rgba(201,164,74,0.5);
+      box-shadow: 0 0 22px rgba(201,164,74,0.1);
+      background: rgba(201,164,74,0.03);
+      color: rgba(201,164,74,0.45);
+    }
+
+    /* ─────────────────────────────── SECTION HEADER BLOCK */
+    .sec-hd           { margin-bottom: 52px; }
+    .sec-hd.centered  { text-align: center; }
+    .sec-hd.centered .divider { margin-left: auto; margin-right: auto; }
+
+    /* ─────────────────────────────── § 2 — WHY PARTNER */
+    .cards-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(276px, 1fr));
+      gap: 22px;
+    }
+    .benefit-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 36px 30px;
+      transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+    }
+    .benefit-card:hover {
+      border-color: rgba(201,164,74,0.22);
+      transform: translateY(-5px);
+      box-shadow: 0 20px 48px rgba(0,0,0,0.35);
+    }
+    .bc-icon {
+      width: 50px; height: 50px;
+      border-radius: 50%;
+      background: var(--gold-dim);
+      border: 1px solid rgba(201,164,74,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      margin-bottom: 22px;
+    }
+    .benefit-card h3 {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      line-height: 1.3;
+    }
+    .benefit-card h3 .zh {
+      display: block;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-sec);
+      margin-top: 3px;
+    }
+    .benefit-card p {
+      font-size: 13.5px;
+      color: var(--text-sec);
+      line-height: 1.85;
+      margin-top: 14px;
+    }
+    .benefit-card p.zh { color: var(--text-dim); font-size: 13px; margin-top: 8px; }
+
+    /* ─────────────────────────────── § 3 — STRATEGIC PARTNERS */
+    .strategic-wrap { background: linear-gradient(180deg, var(--bg) 0%, var(--bg-card-alt) 40%, var(--bg-card-alt) 60%, var(--bg) 100%); }
+
+    .logo-cards-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 22px;
+      margin-bottom: 56px;
+    }
+    .logo-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 30px 28px;
+      transition: border-color 0.25s, transform 0.25s;
+    }
+    .logo-card:hover { border-color: rgba(201,164,74,0.2); transform: translateY(-4px); }
+    .logo-card .logo-slot { height: 84px; width: 100%; margin-bottom: 18px; }
+    .logo-card .lc-name {
+      font-size: 16px;
+      font-weight: 800;
+      margin-bottom: 4px;
+      line-height: 1.3;
+    }
+    .logo-card .lc-name small {
+      display: block;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--text-sec);
+      margin-top: 3px;
+    }
+    .logo-card .lc-desc { font-size: 13px; color: var(--text-sec); line-height: 1.75; margin-top: 6px; }
+
+    /* iKala card */
+    .ikala-outer {
+      display: flex;
+      justify-content: center;
+    }
+    .ikala-card {
+      width: 100%;
+      max-width: 760px;
+      background: linear-gradient(140deg, #111116 0%, #15151e 100%);
+      border: 1px solid rgba(201,164,74,0.22);
+      border-radius: var(--r-lg);
+      padding: 40px 44px;
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 36px;
+      align-items: start;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 64px rgba(201,164,74,0.05);
+    }
+    /* Gold top line */
+    .ikala-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent 0%, var(--gold) 40%, var(--gold) 60%, transparent 100%);
+    }
+    .ikala-card .logo-slot { height: 116px; width: 100%; }
+    .ikala-card .ik-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 10px;
+    }
+    .ikala-card h3 { font-size: 22px; font-weight: 900; margin-bottom: 14px; line-height: 1.25; }
+    .ikala-card p  { font-size: 13.5px; color: var(--text-sec); line-height: 1.85; margin-bottom: 8px; }
+    .ikala-card p.zh { color: var(--text-dim); font-size: 13px; }
+    .ikala-card ul {
+      margin-top: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+    .ikala-card ul li {
+      font-size: 13px;
+      color: var(--text-sec);
+      padding-left: 18px;
+      position: relative;
+      line-height: 1.6;
+    }
+    .ikala-card ul li::before { content: '•'; position: absolute; left: 0; color: var(--gold); }
+    @media (max-width: 600px) {
+      .ikala-card { grid-template-columns: 1fr; padding: 28px 24px; gap: 22px; }
+      .ikala-card .logo-slot { height: 84px; }
+    }
+
+    /* ─────────────────────────────── § 4 — PLANS */
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 18px;
+      margin-bottom: 60px;
+    }
+    .plan-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-top: 3px solid transparent;
+      border-radius: var(--r-lg);
+      padding: 30px 26px;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+    }
+    .plan-card:hover {
+      transform: translateY(-7px);
+      box-shadow: 0 28px 56px rgba(0,0,0,0.45);
+    }
+    .plan-card[data-tier="patron"]    { border-top-color: var(--gold); }
+    .plan-card[data-tier="honor"]     { border-top-color: var(--silver); }
+    .plan-card[data-tier="basic"]     { border-top-color: var(--bronze); }
+    .plan-card[data-tier="individual"]{ border-top-color: #4a4a52; }
+
+    .plan-card[data-tier="patron"]:hover     { border-color: rgba(201,164,74,0.28);  border-top-color: var(--gold); }
+    .plan-card[data-tier="honor"]:hover      { border-color: rgba(155,175,196,0.25); border-top-color: var(--silver); }
+    .plan-card[data-tier="basic"]:hover      { border-color: rgba(200,141,74,0.25);  border-top-color: var(--bronze); }
+    .plan-card[data-tier="individual"]:hover { border-color: rgba(255,255,255,0.12); border-top-color: #4a4a52; }
+
+    .plan-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      margin-bottom: 18px;
+    }
+    .plan-card[data-tier="patron"]     .plan-dot { background: var(--gold); }
+    .plan-card[data-tier="honor"]      .plan-dot { background: var(--silver); }
+    .plan-card[data-tier="basic"]      .plan-dot { background: var(--bronze); }
+    .plan-card[data-tier="individual"] .plan-dot { background: #4a4a52; }
+
+    .plan-code   { font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-sec); margin-bottom: 5px; }
+    .plan-name   { font-size: 21px; font-weight: 900; line-height: 1.2; margin-bottom: 3px; }
+    .plan-sub    { font-size: 12.5px; color: var(--text-sec); margin-bottom: 18px; }
+    .plan-amount {
+      font-size: 13px; font-weight: 700;
+      padding: 9px 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 22px;
+      letter-spacing: 0.01em;
+    }
+    .plan-bullets { flex: 1; display: flex; flex-direction: column; gap: 9px; }
+    .plan-bullets li {
+      font-size: 12.5px;
+      color: var(--text-sec);
+      padding-left: 16px;
+      position: relative;
+      line-height: 1.6;
+    }
+    .plan-bullets li::before { content: '—'; position: absolute; left: 0; color: var(--text-dim); font-size: 10px; top: 4px; }
+
+    /* Benefits comparison table */
+    .table-caption {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-sec);
+      margin-bottom: 16px;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+    }
+    table.bt {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 580px;
+    }
+    table.bt thead tr { background: rgba(255,255,255,0.025); }
+    table.bt th {
+      padding: 16px 18px;
+      font-size: 11.5px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+      white-space: nowrap;
+    }
+    table.bt th:first-child { text-align: left; padding-left: 24px; width: 38%; }
+    table.bt th.c-p { color: var(--gold); }
+    table.bt th.c-h { color: var(--silver); }
+    table.bt th.c-b { color: var(--bronze); }
+    table.bt th.c-i { color: #606065; }
+
+    table.bt tbody tr { border-bottom: 1px solid var(--border-sub); transition: background 0.15s; }
+    table.bt tbody tr:last-child { border-bottom: none; }
+    table.bt tbody tr:nth-child(even) { background: rgba(255,255,255,0.016); }
+    table.bt tbody tr:hover { background: rgba(255,255,255,0.04); }
+
+    table.bt td {
+      padding: 15px 18px;
+      font-size: 13px;
+      color: var(--text-sec);
+      text-align: center;
+      vertical-align: middle;
+    }
+    table.bt td:first-child {
+      text-align: left;
+      padding-left: 24px;
+      color: var(--text);
+      font-weight: 500;
+      /* sticky on mobile scroll */
+      position: sticky; left: 0;
+      background: var(--bg-card);
+      z-index: 1;
+    }
+    table.bt tbody tr:nth-child(even) td:first-child { background: var(--bg-table-ev); }
+    table.bt th:first-child { position: sticky; left: 0; background: #111116; z-index: 2; }
+
+    .ck  { font-size: 15px; color: var(--gold); }
+    .dsh { font-size: 18px; color: var(--text-dim); line-height: 1; }
+
+    /* ─────────────────────────────── § 5 — LOGO WALLS */
+    .walls-wrap { background: var(--bg-card-alt); }
+    .partner-group { margin-bottom: 58px; }
+    .partner-group:last-child { margin-bottom: 0; }
+    .pg-header { margin-bottom: 24px; }
+    .pg-header h3 {
+      font-size: 17px;
+      font-weight: 800;
+      margin-bottom: 5px;
+      line-height: 1.3;
+    }
+    .pg-header h3 .zh { font-weight: 500; color: var(--text-sec); }
+    .pg-header p  { font-size: 13.5px; color: var(--text-sec); line-height: 1.75; }
+    .logo-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 560px) { .logo-grid { grid-template-columns: repeat(2, 1fr); } }
+    .logo-item .logo-slot { height: 88px; width: 100%; margin-bottom: 9px; }
+    .logo-caption { font-size: 11.5px; color: var(--text-dim); text-align: center; font-weight: 600; letter-spacing: 0.04em; }
+
+    /* ─────────────────────────────── § 6 — CONTACT */
+    .contact-wrap {
+      background: linear-gradient(145deg, #0e0e14 0%, #111118 100%);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .contact-inner { max-width: 600px; margin: 0 auto; text-align: center; }
+    .contact-inner .subtitle { margin-bottom: 10px; }
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      justify-content: center;
+      margin-top: 38px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 13px 26px;
+      border-radius: 100px;
+      font-size: 13.5px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      transition: all 0.22s;
+      cursor: pointer;
+    }
+    .btn-gold {
+      background: var(--gold);
+      color: #0a0a0c;
+    }
+    .btn-gold:hover {
+      background: var(--gold-lt);
+      box-shadow: 0 8px 28px rgba(201,164,74,0.32);
+      transform: translateY(-2px);
+    }
+    .btn-outline {
+      background: transparent;
+      color: var(--text);
+      border: 1.5px solid rgba(255,255,255,0.18);
+    }
+    .btn-outline:hover {
+      border-color: rgba(255,255,255,0.36);
+      background: rgba(255,255,255,0.05);
+      transform: translateY(-2px);
+    }
+    .disclaimer {
+      margin-top: 44px;
+      padding-top: 28px;
+      border-top: 1px solid var(--border-sub);
+      font-size: 11.5px;
+      color: var(--text-dim);
+      line-height: 1.75;
+    }
+
+    /* ─────────────────────────────── FOOTER */
+    .site-footer {
+      padding: 28px var(--px);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .site-footer .f-brand {
+      font-size: 13.5px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .site-footer .f-brand .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+    .site-footer .f-brand .ted { color: var(--red); }
+    .site-footer .f-copy { font-size: 11.5px; color: var(--text-dim); }
+  </style>
+</head>
+
+<body>
+
+<!-- ═══════════════════════════════════════════ NAV -->
+<nav class="nav">
+  <div class="nav-brand">
+    <span class="dot"></span>
+    <span><span class="ted">TEDx</span>Xinyi</span>
+  </div>
+  <ul class="nav-links">
+    <li><a href="#why-partner">Why Partner</a></li>
+    <li><a href="#strategic">Partners</a></li>
+    <li><a href="#plans">Plans</a></li>
+    <li><a href="#community">Community</a></li>
+    <li><a href="#contact">Contact</a></li>
+  </ul>
+</nav>
+
+
+<!-- ═══════════════════════════════════════════ § 1 — HERO -->
+<header class="hero">
+  <div class="hero-body container">
+    <div class="hero-label">TEDxXinyi Partners &amp; Sponsors</div>
+
+    <h1 class="hero-h1">
+      好點子要落地，<br>需要一起冒險的夥伴。
+    </h1>
+
+    <p class="hero-sub">
+      TEDxXinyi collaborates with partners across industries to bring
+      Ideas Worth Spreading to life in Xinyi, Taipei.
+    </p>
+    <p class="hero-note">感謝歷屆所有合作夥伴、志工與社群朋友的支持。</p>
+
+    <!-- Logo strip -->
+    <div class="logo-strip">
+      <div class="logo-strip-label">Highlighted Partners 精選夥伴</div>
+      <div class="logo-strip-row">
+        <div class="logo-slot">Logo</div>
+        <div class="logo-slot">Logo</div>
+        <div class="logo-slot">Logo</div>
+        <div class="logo-slot">Logo</div>
+        <div class="logo-slot">Logo</div>
+        <div class="logo-slot">Logo</div>
+        <div class="logo-slot">Logo</div>
+        <div class="logo-slot">Logo</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+
+<main>
+
+<!-- ═══════════════════════════════════════════ § 2 — WHY PARTNER -->
+<section id="why-partner" class="section-py">
+  <div class="container">
+
+    <div class="sec-hd">
+      <span class="eyebrow">The Value</span>
+      <h2 class="h-section">
+        Why Partner with TEDxXinyi
+        <span class="zh">為何與 TEDxXinyi 合作</span>
+      </h2>
+      <div class="divider"></div>
+    </div>
+
+    <div class="cards-3">
+
+      <div class="benefit-card">
+        <div class="bc-icon">💡</div>
+        <h3>
+          Brand with ideas
+          <span class="zh">與好點子站在一起</span>
+        </h3>
+        <p>Align your brand with Ideas Worth Spreading and a global TEDx community that values curiosity, creativity, and impact.</p>
+        <p class="zh">把品牌與「好點子、創造力與社會影響力」連結在一起，走進以故事與內容為核心的國際社群。</p>
+      </div>
+
+      <div class="benefit-card">
+        <div class="bc-icon">🔗</div>
+        <h3>
+          Engage an idea-driven community
+          <span class="zh">接觸行動派社群</span>
+        </h3>
+        <p>Reach participants who care about the future, innovation, and meaningful conversations — ideal for brand experiences and product trials.</p>
+        <p class="zh">參與者關心未來、創新與議題，是最適合品牌體驗與產品試用的一群人。</p>
+      </div>
+
+      <div class="benefit-card">
+        <div class="bc-icon">🌱</div>
+        <h3>
+          Create lasting impact
+          <span class="zh">讓影響力延續活動之外</span>
+        </h3>
+        <p>Talks and stories from TEDxXinyi continue to live online, in media, and in communities long after the event night.</p>
+        <p class="zh">講者故事與內容在活動後，會持續透過影片、社群與媒體被看見與分享。</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════ § 3 — STRATEGIC PARTNERS -->
+<section id="strategic" class="section-py strategic-wrap">
+  <div class="container">
+
+    <!-- 3.1 Strategic Impact Partners -->
+    <div class="sec-hd">
+      <span class="eyebrow">Strategic</span>
+      <h2 class="h-section">
+        Strategic Impact Partners
+        <span class="zh">策略影響夥伴</span>
+      </h2>
+      <div class="divider"></div>
+      <p class="subtitle" style="max-width:540px;">
+        These partners go beyond one-time support and work with TEDxXinyi on long-term conversations and experiments for the city.<br>
+        <span style="color:var(--text-dim);font-size:13px;">這些夥伴不只提供資源，而是與 TEDxXinyi 一起為城市策劃長期對話與實驗。</span>
+      </p>
+    </div>
+
+    <div class="logo-cards-row">
+      <div class="logo-card">
+        <div class="logo-slot">Logo</div>
+        <span class="tag">Official Growth Partner / 大會官方成長夥伴</span>
+        <div class="lc-name">Moleskine</div>
+        <div class="lc-desc">Creativity, craft, and the tools that carry ideas forward.</div>
+      </div>
+      <div class="logo-card">
+        <div class="logo-slot">Logo</div>
+        <span class="tag">Impact Partner / 影響力夥伴</span>
+        <div class="lc-name">
+          Taiwan Fund for Children and Families
+          <small>家扶基金會</small>
+        </div>
+        <div class="lc-desc">A long-term partner building meaningful community connections.</div>
+      </div>
+    </div>
+
+    <!-- 3.2 iKala AI Strategic Partner -->
+    <div style="margin-bottom:28px;">
+      <span class="eyebrow">AI Strategic Partner</span>
+      <h3 style="font-size:clamp(19px,2.5vw,26px);font-weight:900;margin-top:6px;">AI 戰略合作夥伴 iKala</h3>
+    </div>
+
+    <div class="ikala-outer">
+      <div class="ikala-card">
+        <div class="logo-slot">iKala<br>Logo</div>
+        <div>
+          <div class="ik-label">AI Strategic Partner · iKala</div>
+          <h3>AI 戰略合作夥伴 iKala</h3>
+          <p>Together with iKala, TEDxXinyi explores how AI can enhance event experiences, content curation, and community engagement.</p>
+          <p class="zh">與 iKala 合作，TEDxXinyi 正在探索如何運用 AI 強化活動體驗、內容策展與社群經營，讓每一位參與者的影響力被科技放大。</p>
+          <ul>
+            <li>AI tools integrated into communication and event workflows</li>
+            <li>Co-creating content and insights with data and community feedback</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════ § 4 — SPONSORSHIP PLANS -->
+<section id="plans" class="section-py">
+  <div class="container">
+
+    <div class="sec-hd">
+      <span class="eyebrow">Sponsorship</span>
+      <h2 class="h-section">
+        Sponsorship Plans
+        <span class="zh">贊助方案</span>
+      </h2>
+      <div class="divider"></div>
+      <p class="subtitle" style="max-width:600px;">
+        我們提供不同層級與形式的贊助方案，從全年策略合作到單場活動支持，依品牌需求客製合作內容。
+        以下為 TEDxXinyi 贊助方案概覽，詳細項目可向我們索取完整簡章。
+      </p>
+    </div>
+
+    <!-- Plan cards -->
+    <div class="plans-grid">
+
+      <!-- Patron -->
+      <div class="plan-card" data-tier="patron">
+        <div class="plan-dot"></div>
+        <div class="plan-code">Patron / Donor</div>
+        <div class="plan-name">全年戰略<br>合作夥伴</div>
+        <div class="plan-sub">Annual Strategic Partner</div>
+        <div class="plan-amount">贊助金額：NT$500,000 起</div>
+        <ul class="plan-bullets">
+          <li>全年大會與相關活動之場地概念合作與品牌呈現</li>
+          <li>工作坊展示合作與 F&amp;B 體驗合作</li>
+          <li>永續體驗裝置合作（含設計與現場佈置）</li>
+          <li>官方視覺、LED、KV 等物料之品牌 Logo 露出</li>
+          <li>活動前、中、後社群貼文與 EDM 置入</li>
+          <li>舞台口頭致謝與個人／品牌答謝會機會</li>
+        </ul>
+      </div>
+
+      <!-- Honor -->
+      <div class="plan-card" data-tier="honor">
+        <div class="plan-dot"></div>
+        <div class="plan-code">Honor Donation</div>
+        <div class="plan-name">單場主<br>合作夥伴</div>
+        <div class="plan-sub">Main Event Partner</div>
+        <div class="plan-amount">贊助金額：NT$300,000</div>
+        <ul class="plan-bullets">
+          <li>當年度旗艦活動之主題區或場地佈置合作</li>
+          <li>現場展位或體驗區，可進行產品導入與互動</li>
+          <li>網站 Sponsors 區與社群貼文之顯著 Logo 露出</li>
+          <li>活動現場主視覺、指示牌與背板 Logo 呈現</li>
+          <li>提供一定數量貴賓票與座位保留</li>
+        </ul>
+      </div>
+
+      <!-- Basic -->
+      <div class="plan-card" data-tier="basic">
+        <div class="plan-dot"></div>
+        <div class="plan-code">Basic Donation</div>
+        <div class="plan-name">金牌<br>合作夥伴</div>
+        <div class="plan-sub">Gold Partner</div>
+        <div class="plan-amount">贊助金額：NT$100,000 以下</div>
+        <ul class="plan-bullets">
+          <li>網站與現場物料（贊助牆、節目冊）Logo 露出</li>
+          <li>社群貼文感謝一次</li>
+          <li>視活動類型安排小型展示或產品置放</li>
+          <li>提供一定數量一般票券回饋</li>
+        </ul>
+      </div>
+
+      <!-- Individual -->
+      <div class="plan-card" data-tier="individual">
+        <div class="plan-dot"></div>
+        <div class="plan-code">Individual Support</div>
+        <div class="plan-name">個人<br>贊助</div>
+        <div class="plan-sub">Personal Contribution</div>
+        <div class="plan-amount">贊助金額：不限</div>
+        <ul class="plan-bullets">
+          <li>網站「個人支持名單」公開或匿名致謝</li>
+          <li>活動現場投影感謝名單</li>
+          <li>有機會受邀參與小型分享會或謝票活動</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Benefits comparison table -->
+    <p class="table-caption">主要權益一覽 &nbsp;Benefits Overview</p>
+    <div class="table-wrap">
+      <table class="bt">
+        <thead>
+          <tr>
+            <th>Benefits 權益項目</th>
+            <th class="c-p">Patron<br><span style="font-size:9.5px;font-weight:500;opacity:.55;">全年戰略</span></th>
+            <th class="c-h">Honor<br><span style="font-size:9.5px;font-weight:500;opacity:.55;">單場主合</span></th>
+            <th class="c-b">Basic<br><span style="font-size:9.5px;font-weight:500;opacity:.55;">金牌</span></th>
+            <th class="c-i">Individual<br><span style="font-size:9.5px;font-weight:500;opacity:.55;">個人</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>場地概念合作 / 主題區合作</td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="dsh">–</span></td>
+            <td><span class="dsh">–</span></td>
+          </tr>
+          <tr>
+            <td>工作坊展示合作</td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="dsh">–</span></td>
+            <td><span class="dsh">–</span></td>
+            <td><span class="dsh">–</span></td>
+          </tr>
+          <tr>
+            <td>F&amp;B 體驗合作</td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="dsh">–</span></td>
+            <td><span class="dsh">–</span></td>
+            <td><span class="dsh">–</span></td>
+          </tr>
+          <tr>
+            <td>永續體驗裝置合作</td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="dsh">–</span></td>
+            <td><span class="dsh">–</span></td>
+            <td><span class="dsh">–</span></td>
+          </tr>
+          <tr>
+            <td>網站與活動視覺 Logo 露出</td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="dsh">–</span></td>
+          </tr>
+          <tr>
+            <td>社群與 EDM 露出</td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="dsh">–</span></td>
+          </tr>
+          <tr>
+            <td>現場展位或產品展示</td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="dsh">–</span></td>
+          </tr>
+          <tr>
+            <td>票券與貴賓席次回饋</td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="dsh">–</span></td>
+          </tr>
+          <tr>
+            <td>舞台口頭致謝 / 感謝名單</td>
+            <td><span class="ck">✔</span></td>
+            <td><span class="dsh">–</span></td>
+            <td><span class="dsh">–</span></td>
+            <td><span class="ck">✔</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════ § 5 — IN-KIND & COMMUNITY PARTNERS -->
+<section id="community" class="section-py walls-wrap">
+  <div class="container">
+
+    <div class="sec-hd">
+      <span class="eyebrow">Community</span>
+      <h2 class="h-section">
+        In-kind &amp; Community Partners
+        <span class="zh">實物與社群夥伴</span>
+      </h2>
+      <div class="divider"></div>
+    </div>
+
+    <!-- Group 1 -->
+    <div class="partner-group">
+      <div class="pg-header">
+        <h3>In-kind Growth Partners <span class="zh">大會官方成長夥伴</span></h3>
+        <p>提供從文具、禮品到體驗設計等資源，陪伴參與者把靈感帶回家。</p>
+      </div>
+      <div class="logo-grid">
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Moleskine</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+      </div>
+    </div>
+
+    <!-- Group 2 -->
+    <div class="partner-group">
+      <div class="pg-header">
+        <h3>Video &amp; Creative Partners <span class="zh">影音與創意夥伴</span></h3>
+        <p>提供攝影、錄影與視覺創作，讓講者內容在活動後持續被看見。</p>
+      </div>
+      <div class="logo-grid">
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+      </div>
+    </div>
+
+    <!-- Group 3 -->
+    <div class="partner-group">
+      <div class="pg-header">
+        <h3>Experience Partners <span class="zh">體驗夥伴</span></h3>
+        <p>在活動前後與會場中打造飲食、旅遊與生活風格體驗。</p>
+      </div>
+      <div class="logo-grid">
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+      </div>
+    </div>
+
+    <!-- Group 4 -->
+    <div class="partner-group">
+      <div class="pg-header">
+        <h3>Media &amp; Publication Partners <span class="zh">媒體與出版夥伴</span></h3>
+        <p>透過媒體報導與專題合作，讓更多人認識 TEDxXinyi 的故事與講者。</p>
+      </div>
+      <div class="logo-grid">
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Partner Name</div></div>
+      </div>
+    </div>
+
+    <!-- Group 5 -->
+    <div class="partner-group">
+      <div class="pg-header">
+        <h3>Community Partners <span class="zh">社區夥伴</span></h3>
+        <p>從其他 TEDx 團隊到社會創新與科技組織，跨城市、跨領域一起擴散影響力。</p>
+      </div>
+      <div class="logo-grid">
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">TEDx Partner</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Community Org</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Tech Partner</div></div>
+        <div class="logo-item"><div class="logo-slot">Logo</div><div class="logo-caption">Innovation Hub</div></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════ § 6 — CONTACT -->
+<section id="contact" class="section-py contact-wrap">
+  <div class="container">
+    <div class="contact-inner">
+      <span class="eyebrow">Get in Touch</span>
+      <h2 class="h-section">
+        Partner with TEDxXinyi
+        <span class="zh">與 TEDxXinyi 合作</span>
+      </h2>
+      <div class="divider" style="margin-left:auto;margin-right:auto;"></div>
+      <p class="subtitle">
+        無論是現金贊助、實物支持、媒體合作，或是 AI 與科技共創，我們都期待與你一起設計專屬的合作方式。
+      </p>
+      <p class="subtitle">
+        若想了解完整贊助簡章或客製方案，歡迎與 TEDxXinyi 團隊聯繫。
+      </p>
+      <div class="cta-row">
+        <a href="#" class="btn btn-gold">下載完整贊助簡介&nbsp; Download Full Deck</a>
+        <a href="#" class="btn btn-outline">與我們聊聊合作&nbsp; Contact Us</a>
+      </div>
+      <div class="disclaimer">
+        TEDxXinyi 為 TED 授權之獨立策劃活動，所有贊助款項僅用於節目製作與相關成本。
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+
+<!-- ═══════════════════════════════════════════ FOOTER -->
+<footer class="site-footer">
+  <div class="f-brand">
+    <span class="dot"></span>
+    <span><span class="ted">TEDx</span>Xinyi</span>
+  </div>
+  <div class="f-copy">© 2025 TEDxXinyi. Independently organized TED event.</div>
+</footer>
+
+</body>
+</html>
