@@ -266,10 +266,14 @@ export default function ReportPage() {
         </section>
 
         {/* ==================== CAVE FOREWORD — parallax ==================== */}
-        {/* Base is white so the seamless fade-to-next-section has no black gap */}
-        <section ref={caveSectionRef} className="relative overflow-hidden bg-white" style={{ minHeight: '92vh' }}>
-
-          {/* Cave illustration background — 130% tall for parallax travel room */}
+        {/* Section bg = dark→white gradient. Works as atmospheric fallback when the cave
+            image is missing (not yet generated), AND provides the white base for 無縫對拉. */}
+        <section
+          ref={caveSectionRef}
+          className="relative overflow-hidden"
+          style={{ minHeight: '92vh', background: 'linear-gradient(to bottom, #080604 0%, #0e0a06 45%, #2a1a0a 75%, #ffffff 100%)' }}
+        >
+          {/* Cave photo — 130% tall for parallax travel room; fades in on load */}
           <img
             ref={caveBgRef}
             src="/tedx-xinyi/report-cave-intro.webp"
@@ -281,12 +285,10 @@ export default function ReportPage() {
             onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
-
-          {/* Dark overlay — fades to transparent before the bottom so the white base bleeds through */}
+          {/* Dark overlay — fades to transparent near bottom so the white bleeds through */}
           <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(8,6,4,0.90) 0%, rgba(8,6,4,0.55) 38%, rgba(8,6,4,0.68) 68%, rgba(8,6,4,0.10) 90%, rgba(8,6,4,0.00) 100%)' }} />
-
-          {/* White fade — sits on top of everything, creates 無縫對拉 into the next section */}
-          <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{ height: '22%', background: 'linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.6) 50%, #ffffff 100%)', zIndex: 8 }} />
+          {/* White fade — 無縫對拉 into the next white section, sits above image/overlay */}
+          <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{ height: '22%', background: 'linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.7) 55%, #ffffff 100%)', zIndex: 8 }} />
 
           <div className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 md:px-14 py-24 md:py-36">
 
@@ -434,9 +436,6 @@ export default function ReportPage() {
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
-                <p className="text-center text-[11px] text-neutral-400 mt-2 font-mono tracking-wider" lang="zh-TW">
-                  底層設定的四個維度
-                </p>
               </div>
             </FadeIn>
 
