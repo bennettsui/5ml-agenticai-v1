@@ -813,7 +813,7 @@ export default function TEDxXinyiAdmin() {
               <div className="flex gap-6">
                 <div className="w-40 h-28 rounded-lg bg-neutral-800 overflow-hidden flex items-center justify-center flex-shrink-0">
                   {(() => {
-                    const previewUrl = editSlot.cdnUrl || (editSlot.isExternal ? editSlot.src : (editSlot.isLocal ? `${API_BASE}${editSlot.src}` : null));
+                    const previewUrl = editSlot.cdnUrl || (editSlot.isExternal ? editSlot.src : (editSlot.isLocal && editSlot.localExists ? `${API_BASE}${editSlot.src}` : null));
                     return previewUrl ? (
                       <img src={previewUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     ) : (
@@ -1125,7 +1125,7 @@ export default function TEDxXinyiAdmin() {
                     </thead>
                     <tbody>
                       {filteredSlots.map((slot, i) => {
-                        const previewUrl = slot.cdnUrl || (slot.isExternal ? slot.src : (slot.isLocal ? `${API_BASE}${slot.src}` : null));
+                        const previewUrl = slot.cdnUrl || (slot.isExternal ? slot.src : (slot.isLocal && slot.localExists ? `${API_BASE}${slot.src}` : null));
                         return (
                           <tr
                             key={`${slot.page}-${slot.src}-${i}`}
