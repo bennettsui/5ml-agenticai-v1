@@ -266,32 +266,39 @@ function buildCard(p) {
   card.dataset.id = p.id;
 
   const displayName = composeName(p);
+  const hasRemarks  = !!(p.remarks && p.remarks.trim());
   card.innerHTML = `
     <div class="card-badge-col">
       <span class="badge badge-${p.color}">${p.color}</span>
+      <span class="card-num">#${p.id}</span>
     </div>
     <div class="card-body">
       <div class="card-name">${esc(displayName)}</div>
       <div class="card-org">${esc(p.organization || '')}</div>
       <div class="card-actions">
-        <div>
-          ${checked
-            ? `<span class="status-checked">✓ Checked-in</span>`
-            : `<span class="status-not-checked">○ Not checked-in</span>`}
-        </div>
+        ${checked
+          ? `<span class="status-checked">✓ Checked-in</span>`
+          : `<span class="status-not-checked">○ Not checked-in</span>`}
         <button
-          class="btn btn-sm ${checked ? 'btn-outline' : `btn-color-${p.color}`}"
+          class="btn btn-checkin ${checked ? 'btn-outline' : `btn-color-${p.color}`}"
           data-action="checkin"
           ${checked ? 'disabled' : ''}
-          style="min-width:110px;"
-        >${checked ? 'Checked-in' : 'Check In'}</button>
-        <div class="card-remarks">
-          <textarea data-action="remarks" placeholder="Remarks…" rows="1">${esc(p.remarks || '')}</textarea>
-        </div>
-        <button class="btn btn-sm btn-outline" data-action="save-remarks">Save</button>
+        >${checked ? 'Checked-in ✓' : 'Check In'}</button>
+        <button class="btn btn-outline" data-action="toggle-remarks"
+          style="font-size:14px;">
+          📝 Remarks${hasRemarks ? ' ●' : ''}
+        </button>
+      </div>
+      <div class="card-remarks-wrap hidden" data-remarks-wrap>
+        <textarea data-action="remarks" placeholder="Add remarks…" rows="2">${esc(p.remarks || '')}</textarea>
+        <button class="btn btn-sm btn-outline" data-action="save-remarks" style="margin-top:8px;">Save Remarks</button>
       </div>
     </div>
   `;
+
+  card.querySelector('[data-action="toggle-remarks"]').addEventListener('click', () => {
+    card.querySelector('[data-remarks-wrap]').classList.toggle('hidden');
+  });
 
   card.querySelector('[data-action="checkin"]').addEventListener('click', async (e) => {
     const btn     = e.currentTarget;
@@ -336,13 +343,23 @@ function updateCard(card, p) {
   card.className = `participant-card${checked ? ' is-checked' : ''}`;
 
   const statusEl = card.querySelector('.status-checked, .status-not-checked');
-  if (statusEl) { statusEl.className = checked ? 'status-checked' : 'status-not-checked'; statusEl.textContent = checked ? '✓ Checked-in' : '○ Not checked-in'; }
+  if (statusEl) {
+    statusEl.className   = checked ? 'status-checked' : 'status-not-checked';
+    statusEl.textContent = checked ? '✓ Checked-in' : '○ Not checked-in';
+  }
 
   const btn = card.querySelector('[data-action="checkin"]');
-  if (btn) { btn.disabled = checked; btn.textContent = checked ? 'Checked-in' : 'Check In'; btn.className = `btn btn-sm ${checked ? 'btn-outline' : `btn-color-${p.color}`}`; }
+  if (btn) {
+    btn.disabled  = checked;
+    btn.textContent = checked ? 'Checked-in ✓' : 'Check In';
+    btn.className = `btn btn-checkin ${checked ? 'btn-outline' : `btn-color-${p.color}`}`;
+  }
 
   const ta = card.querySelector('[data-action="remarks"]');
   if (ta && document.activeElement !== ta) ta.value = p.remarks || '';
+
+  const toggle = card.querySelector('[data-action="toggle-remarks"]');
+  if (toggle) toggle.textContent = `📝 Remarks${p.remarks ? ' ●' : ''}`;
 }
 
 // ─── Add participant modal ─────────────────────────────────────────────────────
