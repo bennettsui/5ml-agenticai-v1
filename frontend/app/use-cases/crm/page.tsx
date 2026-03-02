@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Users,
@@ -22,8 +22,11 @@ import {
   Bell,
   Calendar,
   Zap,
+  LayoutList,
+  ExternalLink,
+  Circle,
 } from 'lucide-react';
-import { crmApi } from '@/lib/crm-kb-api';
+import { crmApi, USE_CASES, type Project, type Deliverable, type DeliverablePriority } from '@/lib/crm-kb-api';
 import { useCrmAi } from './context';
 import MessageActions from '@/components/MessageActions';
 
@@ -87,7 +90,7 @@ const quickLinks = [
   },
 ];
 
-// ── Mock signals (simulated real-time relationship signals) ──
+// ── Mock signals ──
 
 interface Signal {
   id: string;
@@ -145,8 +148,6 @@ const SIGNAL_CONFIG: Record<Signal['type'], { icon: typeof AlertTriangle; color:
   connection: { icon: Network, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20', label: 'Connection' },
 };
 
-// ── Mock pending actions ──
-
 const MOCK_ACTIONS = [
   { id: 'a1', label: 'Send follow-up to Alex @FinTech', due: 'Due tomorrow', done: false },
   { id: 'a2', label: 'Schedule Q4 review with TechCorp team', due: 'Next week', done: false },
@@ -161,10 +162,274 @@ const MOCK_AUTO_ACTIONS = [
   { label: 'Birthday reminders (configure)', done: false },
 ];
 
+// ── Priority helpers ──────────────────────────────────────
+
+const PRIORITY_DOT: Record<DeliverablePriority, string> = {
+  critical: 'bg-red-500',
+  high:     'bg-orange-400',
+  medium:   'bg-yellow-400',
+  low:      'bg-slate-500',
+};
+
+const UC_BADGE: Record<string, string> = {
+  emerald: 'bg-emerald-900/30 text-emerald-400 border-emerald-700/40',
+  violet:  'bg-violet-900/30 text-violet-400 border-violet-700/40',
+  blue:    'bg-blue-900/30 text-blue-400 border-blue-700/40',
+  pink:    'bg-pink-900/30 text-pink-400 border-pink-700/40',
+  amber:   'bg-amber-900/30 text-amber-400 border-amber-700/40',
+  sky:     'bg-sky-900/30 text-sky-400 border-sky-700/40',
+  cyan:    'bg-cyan-900/30 text-cyan-400 border-cyan-700/40',
+  orange:  'bg-orange-900/30 text-orange-400 border-orange-700/40',
+};
+
+function deadlineColor(iso: string | null): string {
+  if (!iso) return 'text-slate-500';
+  const d = new Date(iso);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diff < 0) return 'text-red-400';
+  if (diff <= 3) return 'text-orange-400';
+  if (diff <= 7) return 'text-yellow-400';
+  return 'text-slate-400';
+}
+
+function formatDeadline(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (diff < 0) return `${label} (overdue)`;
+  if (diff === 0) return `${label} (today)`;
+  if (diff <= 7) return `${label} (in ${diff}d)`;
+  return label;
+}
+
+// ── Delivery Board component ──────────────────────────────
+
+type BoardDeliverable = Deliverable & { projectId: string; projectName: string };
+
+function DeliveryBoard() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'in_progress' | 'done'>('all');
+  const [filterUseCase, setFilterUseCase] = useState<string>('all');
+  const [filterPriority, setFilterPriority] = useState<string>('all');
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await crmApi.projects.list({ page: 1, size: 100 });
+      setProjects(res.items ?? []);
+      setLoaded(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load projects');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Flatten all deliverables across all projects
+  const allDeliverables: BoardDeliverable[] = useMemo(() => {
+    const flat: BoardDeliverable[] = [];
+    for (const p of projects) {
+      for (const d of p.deliverables ?? []) {
+        flat.push({ ...d, projectId: p.id, projectName: p.name });
+      }
+    }
+    return flat;
+  }, [projects]);
+
+  // Apply filters
+  const filtered = useMemo(() => {
+    return allDeliverables.filter(d => {
+      if (filterStatus !== 'all' && d.status !== filterStatus) return false;
+      if (filterUseCase !== 'all' && (d.use_case ?? '') !== filterUseCase) return false;
+      if (filterPriority !== 'all' && (d.priority ?? '') !== filterPriority) return false;
+      return true;
+    });
+  }, [allDeliverables, filterStatus, filterUseCase, filterPriority]);
+
+  // Group filtered deliverables by project
+  const grouped = useMemo(() => {
+    const map = new Map<string, { name: string; items: BoardDeliverable[] }>();
+    for (const d of filtered) {
+      if (!map.has(d.projectId)) map.set(d.projectId, { name: d.projectName, items: [] });
+      map.get(d.projectId)!.items.push(d);
+    }
+    return Array.from(map.entries()).map(([id, v]) => ({ projectId: id, ...v }));
+  }, [filtered]);
+
+  // Unique use cases present in the data
+  const useCasesInData = useMemo(() => {
+    const slugs = new Set<string>();
+    for (const d of allDeliverables) { if (d.use_case) slugs.add(d.use_case); }
+    return Array.from(slugs);
+  }, [allDeliverables]);
+
+  const overdue = allDeliverables.filter(d => {
+    if (d.status === 'done' || !d.deadline) return false;
+    return new Date(d.deadline) < new Date();
+  }).length;
+
+  if (!loaded) {
+    return (
+      <div className="text-center py-16">
+        <LayoutList className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+        <p className="text-slate-400 text-sm mb-4">Load deliverables across all projects</p>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LayoutList className="w-4 h-4" />}
+          {loading ? 'Loading…' : 'Load Board'}
+        </button>
+        {error && <p className="mt-3 text-red-400 text-xs">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Summary bar */}
+      <div className="flex items-center gap-4 flex-wrap text-sm">
+        <span className="text-slate-400">{allDeliverables.length} total deliverables</span>
+        {overdue > 0 && (
+          <span className="text-red-400 font-medium">{overdue} overdue</span>
+        )}
+        <span className="text-slate-500">{allDeliverables.filter(d => d.status === 'done').length} done</span>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="ml-auto text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
+        >
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+          Refresh
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          value={filterStatus}
+          onChange={e => setFilterStatus(e.target.value as typeof filterStatus)}
+          className="bg-slate-700/50 border border-slate-600/50 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+        >
+          <option value="all">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="in_progress">In Progress</option>
+          <option value="done">Done</option>
+        </select>
+        <select
+          value={filterPriority}
+          onChange={e => setFilterPriority(e.target.value)}
+          className="bg-slate-700/50 border border-slate-600/50 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+        >
+          <option value="all">All priorities</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        {useCasesInData.length > 0 && (
+          <select
+            value={filterUseCase}
+            onChange={e => setFilterUseCase(e.target.value)}
+            className="bg-slate-700/50 border border-slate-600/50 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+          >
+            <option value="all">All use cases</option>
+            {useCasesInData.map(slug => (
+              <option key={slug} value={slug}>{USE_CASES[slug]?.label ?? slug}</option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      {/* Board */}
+      {grouped.length === 0 ? (
+        <div className="text-center py-10 text-slate-500 text-sm">No deliverables match your filters.</div>
+      ) : (
+        <div className="space-y-4">
+          {grouped.map(({ projectId, name, items }) => {
+            const doneCount = items.filter(d => d.status === 'done').length;
+            return (
+              <div key={projectId} className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
+                {/* Project header */}
+                <div className="flex items-center justify-between px-4 py-2.5 bg-slate-700/30 border-b border-slate-700/40">
+                  <Link
+                    href={`/use-cases/crm/projects/detail?id=${projectId}`}
+                    className="text-sm font-medium text-white hover:text-emerald-400 transition-colors flex items-center gap-1.5"
+                  >
+                    {name}
+                    <ExternalLink className="w-3 h-3 opacity-50" />
+                  </Link>
+                  <span className="text-[11px] text-slate-500">{doneCount}/{items.length} done</span>
+                </div>
+
+                {/* Deliverable rows */}
+                <div className="divide-y divide-slate-700/30">
+                  {items.map(d => {
+                    const uc = d.use_case ? USE_CASES[d.use_case] : null;
+                    const ucBadge = uc ? UC_BADGE[uc.color] ?? UC_BADGE.blue : '';
+                    return (
+                      <div key={d.id} className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-white/[0.02] transition-colors">
+                        {/* Priority dot */}
+                        <span className={`flex-shrink-0 w-2 h-2 rounded-full ${d.priority ? PRIORITY_DOT[d.priority] : 'bg-slate-700'}`} />
+
+                        {/* Status icon */}
+                        {d.status === 'done' ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        ) : d.status === 'in_progress' ? (
+                          <Clock className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                        ) : (
+                          <Circle className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />
+                        )}
+
+                        {/* Title */}
+                        <span className={`flex-1 text-sm min-w-0 truncate ${d.status === 'done' ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                          {d.title}
+                        </span>
+
+                        {/* Use-case badge */}
+                        {uc && (
+                          <a
+                            href={uc.href}
+                            className={`hidden sm:inline-flex items-center gap-1 flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border ${ucBadge} hover:opacity-80 transition-opacity`}
+                          >
+                            {uc.label}
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        )}
+
+                        {/* Deadline */}
+                        {d.deadline && (
+                          <span className={`text-[11px] flex-shrink-0 ${deadlineColor(d.deadline)}`}>
+                            {formatDeadline(d.deadline)}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────
+
+type Tab = 'dashboard' | 'board';
 
 export default function DashboardPage() {
   const { setPageState } = useCrmAi();
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
 
   useEffect(() => {
     setPageState({ pageType: 'dashboard', pageTitle: 'Relationship Intelligence' });
@@ -261,7 +526,6 @@ export default function DashboardPage() {
     }
   }
 
-  // ── Stat cards (Relationship Intelligence themed) ──
   const statCards = [
     { label: 'Relationship Score', value: loading ? '...' : stats.healthScore + '%', color: 'text-emerald-400', icon: Activity },
     { label: 'At-Risk Brands', value: loading ? '...' : Math.max(0, Math.round(stats.totalBrands * 0.03)), color: 'text-red-400', icon: AlertTriangle },
@@ -270,7 +534,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -297,321 +561,325 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-slate-700/50">
+        {([
+          { id: 'dashboard', label: 'Dashboard', icon: Activity },
+          { id: 'board', label: 'Delivery Board', icon: LayoutList },
+        ] as { id: Tab; label: string; icon: typeof Activity }[]).map(tab => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                activeTab === tab.id
+                  ? 'border-emerald-500 text-emerald-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Error banner */}
-      {error && (
+      {error && activeTab === 'dashboard' && (
         <div className="flex items-center gap-3 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           {error}
         </div>
       )}
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div
-              key={stat.label}
-              className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-slate-400">{stat.label}</p>
-                <Icon className={'w-4 h-4 ' + stat.color} />
-              </div>
-              {loading ? (
-                <div className="h-8 w-16 bg-slate-700/50 animate-pulse rounded" />
-              ) : (
-                <p className={'text-2xl font-bold ' + stat.color}>{stat.value}</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Signal Feed + Action Center (side by side) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Signal Feed */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Zap className="w-5 h-5 text-amber-400" />
-              Signal Feed
-            </h2>
-            <span className="text-xs text-slate-500">Real-time relationship signals</span>
-          </div>
-          <div className="space-y-3">
-            {MOCK_SIGNALS.map((signal) => {
-              const cfg = SIGNAL_CONFIG[signal.type];
-              const SIcon = cfg.icon;
+      {/* ── Dashboard tab ── */}
+      {activeTab === 'dashboard' && (
+        <div className="space-y-8">
+          {/* Stat cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {statCards.map((stat) => {
+              const Icon = stat.icon;
               return (
                 <div
-                  key={signal.id}
-                  className={'bg-slate-800/60 border rounded-xl p-4 ' + cfg.bg}
+                  key={stat.label}
+                  className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className={'p-1.5 rounded-lg mt-0.5 ' + cfg.bg}>
-                      <SIcon className={'w-4 h-4 ' + cfg.color} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium text-white">{signal.title}</span>
-                        <span className={'text-[10px] px-1.5 py-0.5 rounded-full font-medium ' + cfg.bg + ' ' + cfg.color}>
-                          {cfg.label}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 mb-2">{signal.description}</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] text-slate-500">{signal.brand} &middot; {signal.timestamp}</span>
-                        {signal.actions.map((action) => (
-                          <button
-                            key={action}
-                            className="text-[11px] px-2 py-0.5 rounded bg-slate-700/80 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
-                          >
-                            {action}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-slate-400">{stat.label}</p>
+                    <Icon className={'w-4 h-4 ' + stat.color} />
                   </div>
+                  {loading ? (
+                    <div className="h-8 w-16 bg-slate-700/50 animate-pulse rounded" />
+                  ) : (
+                    <p className={'text-2xl font-bold ' + stat.color}>{stat.value}</p>
+                  )}
                 </div>
               );
             })}
           </div>
-        </div>
 
-        {/* Action Center */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-              Action Center
-            </h2>
-            <span className="text-xs text-slate-500">{MOCK_ACTIONS.length} pending</span>
-          </div>
-
-          {/* Pending actions */}
-          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 mb-4">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Pending Actions</h3>
-            <div className="space-y-2">
-              {MOCK_ACTIONS.map((action) => (
-                <div key={action.id} className="flex items-center gap-3 group">
-                  <button className="w-4 h-4 rounded border border-slate-600 hover:border-emerald-500 transition-colors shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-slate-300 truncate">{action.label}</p>
-                  </div>
-                  <span className="text-[10px] text-slate-500 whitespace-nowrap flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {action.due}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Automated actions */}
-          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 mb-4">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Automated Actions</h3>
-            <div className="space-y-2">
-              {MOCK_AUTO_ACTIONS.map((action) => (
-                <div key={action.label} className="flex items-center gap-2">
-                  {action.done ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  ) : (
-                    <div className="w-3.5 h-3.5 rounded-full border border-slate-600 shrink-0" />
-                  )}
-                  <span className={'text-xs ' + (action.done ? 'text-slate-400' : 'text-slate-500')}>
-                    {action.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Quick actions */}
-          <div className="flex flex-wrap gap-2">
-            {['New Check-in', 'Schedule Review', 'Log Interaction', 'Send Update'].map((label) => (
-              <button
-                key={label}
-                className="text-xs px-3 py-1.5 rounded-lg bg-slate-700/60 text-slate-300 border border-slate-600/50 hover:bg-slate-600 hover:text-white transition-colors"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Relationship Analytics */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-purple-400" />
-            Relationship Analytics
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Health distribution */}
-          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
-            <h3 className="text-sm font-medium text-white mb-3">Health Distribution</h3>
-            <div className="space-y-3">
-              <div>
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="text-green-400">Strong</span>
-                  <span className="text-slate-400">25%</span>
-                </div>
-                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-green-500/70 rounded-full" style={{ width: '25%' }} />
-                </div>
+          {/* Signal Feed + Action Center */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Signal Feed */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-amber-400" />
+                  Signal Feed
+                </h2>
+                <span className="text-xs text-slate-500">Real-time relationship signals</span>
               </div>
-              <div>
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="text-slate-300">Stable</span>
-                  <span className="text-slate-400">72%</span>
-                </div>
-                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-slate-400/50 rounded-full" style={{ width: '72%' }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="text-red-400">At Risk</span>
-                  <span className="text-slate-400">3%</span>
-                </div>
-                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-red-500/70 rounded-full" style={{ width: '3%' }} />
-                </div>
+              <div className="space-y-3">
+                {MOCK_SIGNALS.map((signal) => {
+                  const cfg = SIGNAL_CONFIG[signal.type];
+                  const SIcon = cfg.icon;
+                  return (
+                    <div
+                      key={signal.id}
+                      className={'bg-slate-800/60 border rounded-xl p-4 ' + cfg.bg}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={'p-1.5 rounded-lg mt-0.5 ' + cfg.bg}>
+                          <SIcon className={'w-4 h-4 ' + cfg.color} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-white">{signal.title}</span>
+                            <span className={'text-[10px] px-1.5 py-0.5 rounded-full font-medium ' + cfg.bg + ' ' + cfg.color}>
+                              {cfg.label}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mb-2">{signal.description}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] text-slate-500">{signal.brand} &middot; {signal.timestamp}</span>
+                            {signal.actions.map((action) => (
+                              <button
+                                key={action}
+                                className="text-[11px] px-2 py-0.5 rounded bg-slate-700/80 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
+                              >
+                                {action}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </div>
 
-          {/* Trends */}
-          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
-            <h3 className="text-sm font-medium text-white mb-3">Trends</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">Communication freq.</span>
-                <span className="text-xs text-green-400 font-medium">+15%</span>
+            {/* Action Center */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  Action Center
+                </h2>
+                <span className="text-xs text-slate-500">{MOCK_ACTIONS.length} pending</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">Positive feedback</span>
-                <span className="text-xs text-green-400 font-medium">+22%</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">Avg response time</span>
-                <span className="text-xs text-green-400 font-medium">-3.2h</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">Project renewals</span>
-                <span className="text-xs text-green-400 font-medium">+22%</span>
-              </div>
-            </div>
-          </div>
 
-          {/* Key Insights */}
-          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
-            <h3 className="text-sm font-medium text-white mb-3">Key Insights</h3>
-            <div className="space-y-2.5">
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Clients with monthly check-ins have <span className="text-emerald-400 font-medium">40% higher satisfaction</span>
-              </p>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Email follow-ups within 24h increase project renewal by <span className="text-emerald-400 font-medium">35%</span>
-              </p>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Personal touches improve relationship scores by avg <span className="text-emerald-400 font-medium">12 points</span>
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick links grid */}
-      <div>
-        <h2 className="text-lg font-semibold text-white mb-4">Quick Access</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {quickLinks.map((link) => {
-            const Icon = link.icon;
-            return (
-              <Link
-                key={link.title}
-                href={link.href}
-                className="group bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 hover:border-slate-600 hover:bg-slate-800 transition-colors"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={'p-2 rounded-lg ' + link.bg}>
-                    <Icon className={'w-5 h-5 ' + link.color} />
-                  </div>
-                  <h3 className="text-sm font-semibold text-white group-hover:text-emerald-400 transition-colors">
-                    {link.title}
-                  </h3>
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 mb-4">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Pending Actions</h3>
+                <div className="space-y-2">
+                  {MOCK_ACTIONS.map((action) => (
+                    <div key={action.id} className="flex items-center gap-3 group">
+                      <button className="w-4 h-4 rounded border border-slate-600 hover:border-emerald-500 transition-colors shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-300 truncate">{action.label}</p>
+                      </div>
+                      <span className="text-[10px] text-slate-500 whitespace-nowrap flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {action.due}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  {link.description}
-                </p>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+              </div>
 
-      {/* AI Chatbot */}
-      <div>
-        <h2 className="text-lg font-semibold text-white mb-4">AI Assistant</h2>
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
-          {/* Chat messages */}
-          {chatMessages.length > 0 && (
-            <div className="max-h-72 overflow-y-auto p-4 space-y-3">
-              {chatMessages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={
-                    'flex group ' + (msg.role === 'user' ? 'justify-end' : 'justify-start')
-                  }
-                >
-                  <div
-                    className={
-                      'max-w-[80%] px-4 py-2.5 rounded-lg text-sm ' +
-                      (msg.role === 'user'
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-slate-700 text-slate-200')
-                    }
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 mb-4">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Automated Actions</h3>
+                <div className="space-y-2">
+                  {MOCK_AUTO_ACTIONS.map((action) => (
+                    <div key={action.label} className="flex items-center gap-2">
+                      {action.done ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      ) : (
+                        <div className="w-3.5 h-3.5 rounded-full border border-slate-600 shrink-0" />
+                      )}
+                      <span className={'text-xs ' + (action.done ? 'text-slate-400' : 'text-slate-500')}>
+                        {action.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {['New Check-in', 'Schedule Review', 'Log Interaction', 'Send Update'].map((label) => (
+                  <button
+                    key={label}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-slate-700/60 text-slate-300 border border-slate-600/50 hover:bg-slate-600 hover:text-white transition-colors"
                   >
-                    {msg.content}
-                    <MessageActions content={msg.content} variant={msg.role === 'user' ? 'user' : 'assistant'} />
-                  </div>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Relationship Analytics */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-purple-400" />
+                Relationship Analytics
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
+                <h3 className="text-sm font-medium text-white mb-3">Health Distribution</h3>
+                <div className="space-y-3">
+                  {[
+                    { label: 'Strong', pct: 25, color: 'bg-green-500/70', text: 'text-green-400' },
+                    { label: 'Stable', pct: 72, color: 'bg-slate-400/50', text: 'text-slate-300' },
+                    { label: 'At Risk', pct: 3, color: 'bg-red-500/70', text: 'text-red-400' },
+                  ].map(row => (
+                    <div key={row.label}>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className={row.text}>{row.label}</span>
+                        <span className="text-slate-400">{row.pct}%</span>
+                      </div>
+                      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div className={`h-full ${row.color} rounded-full`} style={{ width: `${row.pct}%` }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              {chatLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-slate-700 text-slate-400 px-4 py-2.5 rounded-lg text-sm flex items-center gap-2">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Thinking...
-                  </div>
+              </div>
+
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
+                <h3 className="text-sm font-medium text-white mb-3">Trends</h3>
+                <div className="space-y-3">
+                  {[
+                    ['Communication freq.', '+15%'],
+                    ['Positive feedback', '+22%'],
+                    ['Avg response time', '-3.2h'],
+                    ['Project renewals', '+22%'],
+                  ].map(([k, v]) => (
+                    <div key={k} className="flex items-center justify-between">
+                      <span className="text-xs text-slate-400">{k}</span>
+                      <span className="text-xs text-green-400 font-medium">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
+                <h3 className="text-sm font-medium text-white mb-3">Key Insights</h3>
+                <div className="space-y-2.5">
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Clients with monthly check-ins have <span className="text-emerald-400 font-medium">40% higher satisfaction</span>
+                  </p>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Email follow-ups within 24h increase project renewal by <span className="text-emerald-400 font-medium">35%</span>
+                  </p>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Personal touches improve relationship scores by avg <span className="text-emerald-400 font-medium">12 points</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick links grid */}
+          <div>
+            <h2 className="text-lg font-semibold text-white mb-4">Quick Access</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {quickLinks.map((link) => {
+                const Icon = link.icon;
+                return (
+                  <Link
+                    key={link.title}
+                    href={link.href}
+                    className="group bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 hover:border-slate-600 hover:bg-slate-800 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className={'p-2 rounded-lg ' + link.bg}>
+                        <Icon className={'w-5 h-5 ' + link.color} />
+                      </div>
+                      <h3 className="text-sm font-semibold text-white group-hover:text-emerald-400 transition-colors">
+                        {link.title}
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      {link.description}
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* AI Chatbot */}
+          <div>
+            <h2 className="text-lg font-semibold text-white mb-4">AI Assistant</h2>
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
+              {chatMessages.length > 0 && (
+                <div className="max-h-72 overflow-y-auto p-4 space-y-3">
+                  {chatMessages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={'flex group ' + (msg.role === 'user' ? 'justify-end' : 'justify-start')}
+                    >
+                      <div
+                        className={
+                          'max-w-[80%] px-4 py-2.5 rounded-lg text-sm ' +
+                          (msg.role === 'user'
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-700 text-slate-200')
+                        }
+                      >
+                        {msg.content}
+                        <MessageActions content={msg.content} variant={msg.role === 'user' ? 'user' : 'assistant'} />
+                      </div>
+                    </div>
+                  ))}
+                  {chatLoading && (
+                    <div className="flex justify-start">
+                      <div className="bg-slate-700 text-slate-400 px-4 py-2.5 rounded-lg text-sm flex items-center gap-2">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Thinking...
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
+              <form onSubmit={handleChatSubmit} className="flex items-center border-t border-slate-700/50">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Ask about relationships, brands, signals, or projects..."
+                  className="flex-1 bg-transparent text-white text-sm px-4 py-3.5 placeholder-slate-500 focus:outline-none"
+                  disabled={chatLoading}
+                />
+                <button
+                  type="submit"
+                  disabled={chatLoading || !chatInput.trim()}
+                  className="px-4 py-3.5 text-slate-400 hover:text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
             </div>
-          )}
-
-          {/* Chat input */}
-          <form onSubmit={handleChatSubmit} className="flex items-center border-t border-slate-700/50">
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Ask about relationships, brands, signals, or projects..."
-              className="flex-1 bg-transparent text-white text-sm px-4 py-3.5 placeholder-slate-500 focus:outline-none"
-              disabled={chatLoading}
-            />
-            <button
-              type="submit"
-              disabled={chatLoading || !chatInput.trim()}
-              className="px-4 py-3.5 text-slate-400 hover:text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ── Board tab ── */}
+      {activeTab === 'board' && <DeliveryBoard />}
     </div>
   );
 }

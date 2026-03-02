@@ -30,8 +30,11 @@ import {
   Download,
   Sparkles,
   Bot,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
-import { crmApi, type Project, type Brand, type FeedbackEvent, type Deliverable, type ProjectAttachment } from '@/lib/crm-kb-api';
+import { crmApi, USE_CASES, type Project, type Brand, type FeedbackEvent, type Deliverable, type DeliverablePriority, type ProjectAttachment } from '@/lib/crm-kb-api';
 import { useCrmAi } from '../../context';
 
 // ---------------------------------------------------------------------------
@@ -95,6 +98,42 @@ function nanoid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
+// ---------------------------------------------------------------------------
+// Use-case badge styling (bg+text) keyed by USE_CASES[slug].color
+// ---------------------------------------------------------------------------
+
+// Tailwind class pairs per color (bg+text) for use-case badges
+const UC_BADGE: Record<string, string> = {
+  emerald: 'bg-emerald-900/30 text-emerald-400 border-emerald-700/40',
+  violet:  'bg-violet-900/30 text-violet-400 border-violet-700/40',
+  blue:    'bg-blue-900/30 text-blue-400 border-blue-700/40',
+  pink:    'bg-pink-900/30 text-pink-400 border-pink-700/40',
+  amber:   'bg-amber-900/30 text-amber-400 border-amber-700/40',
+  sky:     'bg-sky-900/30 text-sky-400 border-sky-700/40',
+  cyan:    'bg-cyan-900/30 text-cyan-400 border-cyan-700/40',
+  orange:  'bg-orange-900/30 text-orange-400 border-orange-700/40',
+};
+
+// ---------------------------------------------------------------------------
+// Priority config
+// ---------------------------------------------------------------------------
+
+const PRIORITY_CYCLE: (DeliverablePriority | null)[] = [null, 'low', 'medium', 'high', 'critical'];
+
+const PRIORITY_DOT: Record<DeliverablePriority, string> = {
+  critical: 'bg-red-500',
+  high:     'bg-orange-400',
+  medium:   'bg-yellow-400',
+  low:      'bg-slate-500',
+};
+
+const PRIORITY_LABEL: Record<DeliverablePriority, string> = {
+  critical: 'Critical',
+  high:     'High',
+  medium:   'Medium',
+  low:      'Low',
+};
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -108,7 +147,7 @@ function formatFileSize(bytes: number): string {
 function ProjectDetailInner() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('id');
-  const { setPageState, sendFileToChat } = useCrmAi();
+  const { setPageState, sendFileToChat, registerFormCallback } = useCrmAi();
 
   const [project, setProject] = useState<Project | null>(null);
   const [brand, setBrand] = useState<Brand | null>(null);
@@ -126,10 +165,13 @@ function ProjectDetailInner() {
   // Deliverables
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [savingDeliverables, setSavingDeliverables] = useState(false);
+  const [expandedDeliverableId, setExpandedDeliverableId] = useState<string | null>(null);
   // New deliverable form
   const [showAddDeliverable, setShowAddDeliverable] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDeadline, setNewDeadline] = useState('');
+  const [newPriority, setNewPriority] = useState<DeliverablePriority | null>(null);
+  const [newUseCase, setNewUseCase] = useState<string>('');
   const newTitleRef = useRef<HTMLInputElement>(null);
 
   // Attachments
@@ -187,15 +229,29 @@ function ProjectDetailInner() {
     [attachments]
   );
 
-  // Keep AI page context in sync with project + attachments
+  const deliverableContext = useMemo(
+    () => deliverables.map(d => ({
+      id: d.id, title: d.title, status: d.status,
+      priority: d.priority ?? null, deadline: d.deadline ?? null,
+      use_case: d.use_case ?? null,
+    })),
+    [deliverables]
+  );
+
+  // Keep AI page context in sync with project + attachments + deliverables
   useEffect(() => {
     if (!project) return;
     setPageState({
       pageType: 'project-detail',
       pageTitle: project.name,
-      formData: { projectId: project.id, projectName: project.name, attachments: attachmentContext },
+      formData: {
+        projectId: project.id,
+        projectName: project.name,
+        attachments: attachmentContext,
+        deliverables: deliverableContext,
+      },
     });
-  }, [project, attachmentContext, setPageState]);
+  }, [project, attachmentContext, deliverableContext, setPageState]);
 
   // Focus the new-deliverable title input when form opens
   useEffect(() => {
@@ -229,6 +285,36 @@ function ProjectDetailInner() {
   // -----------------------------------------------------------------------
   // Deliverables helpers (all local mutations → save to API)
   // -----------------------------------------------------------------------
+
+  // Register AI form callback so the chat assistant can add/update/delete
+  // deliverables by sending update_form with special keys.
+  useEffect(() => {
+    registerFormCallback((updates) => {
+      setDeliverables((prev) => {
+        let next = [...prev];
+        if (updates._deliverableAdd) {
+          const d = updates._deliverableAdd as Partial<Deliverable> & { title: string };
+          next = [...next, { id: nanoid(), status: 'pending', deadline: null, ...d }];
+        }
+        if (updates._deliverableUpdate) {
+          const patch = updates._deliverableUpdate as Partial<Deliverable> & { id: string };
+          next = next.map(d => d.id === patch.id ? { ...d, ...patch } : d);
+        }
+        if (updates._deliverableDelete) {
+          const { id } = updates._deliverableDelete as { id: string };
+          next = next.filter(d => d.id !== id);
+        }
+        // fire-and-forget save — mutations already optimistically applied
+        if (updates._deliverableAdd || updates._deliverableUpdate || updates._deliverableDelete) {
+          crmApi.projects.update(projectId!, { deliverables: next }).catch(() => {});
+        }
+        return next;
+      });
+    });
+    return () => registerFormCallback(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registerFormCallback, projectId]);
+
   const saveDeliverables = useCallback(async (next: Deliverable[]) => {
     if (!projectId) return;
     setSavingDeliverables(true);
@@ -251,21 +337,42 @@ function ProjectDetailInner() {
       title,
       deadline: newDeadline || null,
       status: 'pending',
+      priority: newPriority,
+      use_case: newUseCase || null,
     };
     const next = [...deliverables, item];
     setDeliverables(next);
     setNewTitle('');
     setNewDeadline('');
+    setNewPriority(null);
+    setNewUseCase('');
     setShowAddDeliverable(false);
     await saveDeliverables(next);
   };
 
-  const handleCycleStatus = async (id: string) => {
-    const next = deliverables.map((d) =>
-      d.id === id ? { ...d, status: DELIVERABLE_STATUS_CYCLE[d.status] } : d
-    );
+  const handlePatchDeliverable = useCallback(async (id: string, patch: Partial<Deliverable>) => {
+    const next = deliverables.map((d) => d.id === id ? { ...d, ...patch } : d);
     setDeliverables(next);
     await saveDeliverables(next);
+  }, [deliverables, saveDeliverables]);
+
+  const handleCycleStatus = async (id: string) => {
+    const d = deliverables.find(d => d.id === id);
+    if (!d) return;
+    await handlePatchDeliverable(id, { status: DELIVERABLE_STATUS_CYCLE[d.status] });
+  };
+
+  const handleCyclePriority = async (id: string) => {
+    const d = deliverables.find(d => d.id === id);
+    if (!d) return;
+    const cur = d.priority ?? null;
+    const idx = PRIORITY_CYCLE.indexOf(cur);
+    const next = PRIORITY_CYCLE[(idx + 1) % PRIORITY_CYCLE.length];
+    await handlePatchDeliverable(id, { priority: next });
+  };
+
+  const handleSaveNotes = async (id: string, notes: string) => {
+    await handlePatchDeliverable(id, { notes: notes.trim() || null });
   };
 
   const handleDeleteDeliverable = async (id: string) => {
@@ -273,6 +380,31 @@ function ProjectDetailInner() {
     setDeliverables(next);
     await saveDeliverables(next);
   };
+
+  // Deliverables sorted for display: pending/in_progress first sorted by urgency +
+  // priority, then done items at the bottom.
+  const sortedDeliverables = useMemo(() => {
+    const priorityRank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return [...deliverables].sort((a, b) => {
+      const aDone = a.status === 'done' ? 1 : 0;
+      const bDone = b.status === 'done' ? 1 : 0;
+      if (aDone !== bDone) return aDone - bDone;
+      // overdue first
+      const aOverdue = a.deadline && new Date(a.deadline) < today ? 1 : 0;
+      const bOverdue = b.deadline && new Date(b.deadline) < today ? 1 : 0;
+      if (aOverdue !== bOverdue) return bOverdue - aOverdue;
+      // higher priority first
+      const ap = priorityRank[a.priority ?? ''] ?? 0;
+      const bp = priorityRank[b.priority ?? ''] ?? 0;
+      if (ap !== bp) return bp - ap;
+      // earlier deadline first
+      if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+      if (a.deadline) return -1;
+      if (b.deadline) return 1;
+      return 0;
+    });
+  }, [deliverables]);
 
   // -----------------------------------------------------------------------
   // Email sync
@@ -605,71 +737,131 @@ function ProjectDetailInner() {
         )}
 
         {deliverables.length > 0 && (
-          <div className="space-y-1.5 mb-3">
-            {deliverables.map((d) => (
-              <div
-                key={d.id}
-                className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors ${
-                  d.status === 'done'
-                    ? 'bg-emerald-900/10 border-emerald-800/30'
-                    : d.status === 'in_progress'
-                    ? 'bg-blue-900/10 border-blue-800/30'
-                    : 'bg-slate-700/20 border-slate-700/40'
-                }`}
-              >
-                {/* Status toggle button */}
-                <button
-                  onClick={() => handleCycleStatus(d.id)}
-                  className="flex-shrink-0 transition-colors"
-                  title={`Status: ${d.status} — click to advance`}
-                >
-                  {d.status === 'done' ? (
-                    <CheckCircle2 className="w-4.5 h-4.5 text-emerald-400" />
-                  ) : d.status === 'in_progress' ? (
-                    <Clock className="w-4.5 h-4.5 text-blue-400" />
-                  ) : (
-                    <Circle className="w-4.5 h-4.5 text-slate-500 group-hover:text-slate-300 transition-colors" />
+          <div className="space-y-1 mb-3">
+            {sortedDeliverables.map((d) => {
+              const uc = d.use_case ? USE_CASES[d.use_case] : null;
+              const ucBadge = uc ? UC_BADGE[uc.color] ?? UC_BADGE.blue : '';
+              const isExpanded = expandedDeliverableId === d.id;
+              return (
+                <div key={d.id}>
+                  {/* Main row */}
+                  <div
+                    className={`group flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-colors ${
+                      d.status === 'done'
+                        ? 'bg-emerald-900/10 border-emerald-800/30'
+                        : d.status === 'in_progress'
+                        ? 'bg-blue-900/10 border-blue-800/30'
+                        : 'bg-slate-700/20 border-slate-700/40'
+                    } ${isExpanded ? 'rounded-b-none border-b-0' : ''}`}
+                  >
+                    {/* Priority dot — click to cycle */}
+                    <button
+                      onClick={() => handleCyclePriority(d.id)}
+                      className="flex-shrink-0 w-3 h-3 flex items-center justify-center"
+                      title={d.priority ? `Priority: ${PRIORITY_LABEL[d.priority]} — click to change` : 'No priority — click to set'}
+                    >
+                      <span className={`w-2 h-2 rounded-full transition-colors ${
+                        d.priority ? PRIORITY_DOT[d.priority] : 'bg-slate-700 group-hover:bg-slate-600'
+                      }`} />
+                    </button>
+
+                    {/* Status toggle */}
+                    <button
+                      onClick={() => handleCycleStatus(d.id)}
+                      className="flex-shrink-0 transition-colors"
+                      title={`Status: ${d.status} — click to advance`}
+                    >
+                      {d.status === 'done' ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      ) : d.status === 'in_progress' ? (
+                        <Clock className="w-4 h-4 text-blue-400" />
+                      ) : (
+                        <Circle className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />
+                      )}
+                    </button>
+
+                    {/* Title */}
+                    <span className={`flex-1 text-sm leading-tight min-w-0 truncate ${
+                      d.status === 'done' ? 'line-through text-slate-500' : 'text-slate-200'
+                    }`}>
+                      {d.title}
+                    </span>
+
+                    {/* Use-case badge */}
+                    {uc && (
+                      <a
+                        href={uc.href}
+                        className={`hidden sm:inline-flex items-center gap-1 flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border ${ucBadge} hover:opacity-80 transition-opacity`}
+                        title={`Go to ${uc.label}`}
+                      >
+                        {uc.label}
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    )}
+
+                    {/* Status badge */}
+                    {d.status === 'in_progress' && (
+                      <span className="hidden sm:block text-[10px] text-blue-400 font-medium flex-shrink-0">In Progress</span>
+                    )}
+
+                    {/* Deadline */}
+                    {d.deadline && (
+                      <span className={`text-[11px] flex-shrink-0 ${deadlineColor(d.deadline)}`}>
+                        {formatDeadline(d.deadline)}
+                      </span>
+                    )}
+
+                    {/* Notes toggle */}
+                    <button
+                      onClick={() => setExpandedDeliverableId(isExpanded ? null : d.id)}
+                      className={`flex-shrink-0 p-1 rounded transition-all ${
+                        isExpanded
+                          ? 'text-slate-300 bg-slate-600/40'
+                          : 'opacity-0 group-hover:opacity-100 text-slate-600 hover:text-slate-400'
+                      }`}
+                      title={isExpanded ? 'Collapse notes' : 'Add / view notes'}
+                    >
+                      {isExpanded
+                        ? <ChevronDown className="w-3.5 h-3.5" />
+                        : <ChevronRight className="w-3.5 h-3.5" />}
+                      {d.notes && !isExpanded && (
+                        <span className="absolute w-1.5 h-1.5 bg-slate-400 rounded-full -top-0.5 -right-0.5" />
+                      )}
+                    </button>
+
+                    {/* Delete */}
+                    <button
+                      onClick={() => handleDeleteDeliverable(d.id)}
+                      className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-400/10 transition-all"
+                      title="Delete deliverable"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Notes expansion */}
+                  {isExpanded && (
+                    <div className="px-3 py-2 bg-slate-700/10 border border-slate-700/40 border-t-0 rounded-b-lg">
+                      <textarea
+                        defaultValue={d.notes ?? ''}
+                        onBlur={(e) => handleSaveNotes(d.id, e.target.value)}
+                        placeholder="Add notes, requirements, or context…"
+                        rows={2}
+                        className="w-full bg-transparent text-xs text-slate-300 placeholder-slate-600 resize-none focus:outline-none"
+                      />
+                    </div>
                   )}
-                </button>
-
-                {/* Title */}
-                <span
-                  className={`flex-1 text-sm leading-tight ${
-                    d.status === 'done' ? 'line-through text-slate-500' : 'text-slate-200'
-                  }`}
-                >
-                  {d.title}
-                </span>
-
-                {/* Status badge */}
-                {d.status === 'in_progress' && (
-                  <span className="text-[10px] text-blue-400 font-medium flex-shrink-0">In Progress</span>
-                )}
-
-                {/* Deadline */}
-                {d.deadline && (
-                  <span className={`text-[11px] flex-shrink-0 ${deadlineColor(d.deadline)}`}>
-                    {formatDeadline(d.deadline)}
-                  </span>
-                )}
-
-                {/* Delete */}
-                <button
-                  onClick={() => handleDeleteDeliverable(d.id)}
-                  className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-400/10 transition-all"
-                  title="Delete deliverable"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
 
         {/* Add deliverable form */}
         {showAddDeliverable && (
-          <div className="mt-3 p-3 bg-slate-700/30 border border-slate-600/50 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="mt-3 p-3 bg-slate-700/30 border border-slate-600/50 rounded-lg space-y-2">
+            {/* Row 1: title + deadline */}
+            <div className="flex items-center gap-2">
               <input
                 ref={newTitleRef}
                 type="text"
@@ -686,6 +878,41 @@ function ProjectDetailInner() {
                 className="w-36 bg-slate-700/50 border border-slate-600/50 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-colors"
               />
             </div>
+            {/* Row 2: priority + use case */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Priority buttons */}
+              <div className="flex items-center gap-1">
+                {([null, 'low', 'medium', 'high', 'critical'] as (DeliverablePriority | null)[]).map((p) => (
+                  <button
+                    key={p ?? 'none'}
+                    onClick={() => setNewPriority(p)}
+                    className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
+                      newPriority === p
+                        ? p === null ? 'bg-slate-600 text-white' :
+                          p === 'critical' ? 'bg-red-600 text-white' :
+                          p === 'high' ? 'bg-orange-600 text-white' :
+                          p === 'medium' ? 'bg-yellow-600 text-white' :
+                          'bg-slate-500 text-white'
+                        : 'bg-slate-700/50 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {p === null ? 'No priority' : PRIORITY_LABEL[p]}
+                  </button>
+                ))}
+              </div>
+              {/* Use-case picker */}
+              <select
+                value={newUseCase}
+                onChange={(e) => setNewUseCase(e.target.value)}
+                className="bg-slate-700/50 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+              >
+                <option value="">No use case</option>
+                {Object.entries(USE_CASES).map(([slug, { label }]) => (
+                  <option key={slug} value={slug}>{label}</option>
+                ))}
+              </select>
+            </div>
+            {/* Row 3: actions */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleAddDeliverable}
@@ -696,7 +923,7 @@ function ProjectDetailInner() {
                 Add
               </button>
               <button
-                onClick={() => { setShowAddDeliverable(false); setNewTitle(''); setNewDeadline(''); }}
+                onClick={() => { setShowAddDeliverable(false); setNewTitle(''); setNewDeadline(''); setNewPriority(null); setNewUseCase(''); }}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-300 rounded-lg text-xs font-medium transition-colors"
               >
                 Cancel
