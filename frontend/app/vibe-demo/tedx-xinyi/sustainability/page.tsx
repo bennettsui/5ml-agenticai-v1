@@ -169,9 +169,9 @@ export default function SustainabilityPage() {
         <div className="space-y-20 md:space-y-28">
           {APPROACH_BLOCKS.map((block, i) => (
             <FadeIn key={block.title} delay={i * 60}>
-              <div className={`grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 items-start`}>
-                {/* Image column — 7 cols, alternates side */}
-                <div className={`md:col-span-7 ${i % 2 === 1 ? 'md:order-2' : ''} relative`}>
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-20 items-start`}>
+                {/* Image column — left or right, alternates side */}
+                <div className={`${i % 2 === 1 ? 'md:order-2' : ''} relative`}>
                   {/* Ghost step number */}
                   <span
                     className="absolute -top-5 -left-2 md:-top-8 md:-left-4 text-[96px] md:text-[144px] leading-none font-black select-none pointer-events-none z-0"
@@ -198,8 +198,8 @@ export default function SustainabilityPage() {
                   </div>
                 </div>
 
-                {/* Text column — 5 cols */}
-                <div className={`md:col-span-5 ${i % 2 === 1 ? 'md:order-1' : ''} md:pt-8`}>
+                {/* Text column */}
+                <div className={`${i % 2 === 1 ? 'md:order-1' : ''} md:pt-6`}>
                   <h3 className="text-2xl md:text-3xl font-black mb-5 leading-tight" lang="zh-TW">{block.title}</h3>
                   <div className="w-8 h-0.5 mb-5" style={{ backgroundColor: TED_RED }} />
                   <p className="text-neutral-500 text-sm sm:text-base leading-[2] whitespace-pre-line" lang="zh-TW">
