@@ -53,6 +53,15 @@ async function init() {
     END $$;
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS event_checkin_chats (
+      id         SERIAL PRIMARY KEY,
+      question   TEXT        NOT NULL,
+      answer     TEXT        NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
   console.log(`[event-checkin] DB table "${TABLE}" ready`);
 }
 
@@ -179,4 +188,20 @@ async function getCheckedIn() {
   return rows;
 }
 
-module.exports = { init, findById, search, insert, update, remove, list, bulkStatus, bulkDelete, findDuplicate, getCheckedIn };
+async function saveChat(question, answer) {
+  const { rows } = await pool.query(
+    `INSERT INTO event_checkin_chats (question, answer) VALUES ($1, $2) RETURNING *`,
+    [question, answer]
+  );
+  return rows[0];
+}
+
+async function getChats({ limit = 200 } = {}) {
+  const { rows } = await pool.query(
+    `SELECT * FROM event_checkin_chats ORDER BY created_at DESC LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+module.exports = { init, findById, search, insert, update, remove, list, bulkStatus, bulkDelete, findDuplicate, getCheckedIn, saveChat, getChats };
