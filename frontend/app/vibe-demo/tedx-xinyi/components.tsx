@@ -17,6 +17,7 @@ export const NAV_ITEMS = [
   { label: '趨勢報告', href: '/vibe-demo/tedx-xinyi/report' },
   { label: '永續設計', href: '/vibe-demo/tedx-xinyi/sustainability' },
   { label: '社群', href: '/vibe-demo/tedx-xinyi/community' },
+  { label: '合作夥伴', href: '/tedx-xinyi/sponsors.html' },
 ];
 
 export const FOOTER_LINKS = [
