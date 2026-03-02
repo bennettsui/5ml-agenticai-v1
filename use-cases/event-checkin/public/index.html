@@ -15,8 +15,8 @@
     <span class="header-subtitle">Reception</span>
   </div>
   <nav>
-    <a href="/event-checkin/client">Client</a>
-    <a href="/event-checkin/admin">Admin</a>
+    <a href="/event-checkin/client" data-panel="dashboard">Dashboard</a>
+    <a href="/event-checkin/admin"  data-panel="admin">Admin</a>
   </nav>
   <span class="conn-status">
     <span class="conn-dot" id="connDot"></span>
@@ -107,9 +107,10 @@
 
 <!-- ─── Scripts ───────────────────────────────────────────────────────────── -->
 <script>
-  // Make the API base path available to checkin.js
   window.API_BASE = '/api/event-checkin';
 </script>
+<script src="/event-checkin/static/js/auth.js"></script>
+<script>requireAuth('reception');</script>
 <script src="/event-checkin/static/js/checkin.js"></script>
 </body>
 </html>

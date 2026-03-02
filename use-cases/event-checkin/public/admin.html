@@ -15,8 +15,8 @@
     <span class="header-subtitle">Admin Panel</span>
   </div>
   <nav>
-    <a href="/event-checkin">Reception</a>
-    <a href="/event-checkin/client">Client</a>
+    <a href="/event-checkin"        data-panel="reception">Reception</a>
+    <a href="/event-checkin/client" data-panel="dashboard">Dashboard</a>
   </nav>
   <span class="conn-status">
     <span class="conn-dot" id="connDot"></span>
@@ -263,6 +263,8 @@
 <script>
   window.API_BASE = '/api/event-checkin';
 </script>
+<script src="/event-checkin/static/js/auth.js"></script>
+<script>requireAuth('admin');</script>
 <script src="/event-checkin/static/js/admin.js"></script>
 </body>
 </html>
