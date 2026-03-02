@@ -153,11 +153,11 @@ export default function ReportPage() {
 
     const onScroll = () => {
       const rect = section.getBoundingClientRect();
-      // Only apply effect while section is in / near the viewport
       const viewH = window.innerHeight;
       if (rect.bottom < -viewH || rect.top > viewH * 2) return;
-      // Parallax: bg moves at 35% of scroll speed relative to section
-      const offset = rect.top * 0.35;
+      // Background moves at only 8% of scroll speed — nearly still.
+      // Text (normal DOM flow) moves at 100%, creating a strong "copy races past bg" feel.
+      const offset = rect.top * 0.08;
       bg.style.transform = `translateY(calc(-15% + ${offset}px))`;
     };
 
@@ -266,11 +266,10 @@ export default function ReportPage() {
         </section>
 
         {/* ==================== CAVE FOREWORD — parallax ==================== */}
-        <section ref={caveSectionRef} className="relative overflow-hidden" style={{ minHeight: '92vh' }}>
-          {/* Fallback bg if image missing */}
-          <div className="absolute inset-0 -z-10 bg-neutral-950" />
+        {/* Base is white so the seamless fade-to-next-section has no black gap */}
+        <section ref={caveSectionRef} className="relative overflow-hidden bg-white" style={{ minHeight: '92vh' }}>
 
-          {/* Cave illustration background — taller than section for parallax travel */}
+          {/* Cave illustration background — 130% tall for parallax travel room */}
           <img
             ref={caveBgRef}
             src="/tedx-xinyi/report-cave-intro.webp"
@@ -282,8 +281,12 @@ export default function ReportPage() {
             onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
-          {/* Dark overlay — heavier at top and bottom, lighter at cave mouth centre */}
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(8,6,4,0.88) 0%, rgba(8,6,4,0.55) 40%, rgba(8,6,4,0.72) 75%, rgba(8,6,4,0.94) 100%)' }} />
+
+          {/* Dark overlay — fades to transparent before the bottom so the white base bleeds through */}
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(8,6,4,0.90) 0%, rgba(8,6,4,0.55) 38%, rgba(8,6,4,0.68) 68%, rgba(8,6,4,0.10) 90%, rgba(8,6,4,0.00) 100%)' }} />
+
+          {/* White fade — sits on top of everything, creates 無縫對拉 into the next section */}
+          <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{ height: '22%', background: 'linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.6) 50%, #ffffff 100%)', zIndex: 8 }} />
 
           <div className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 md:px-14 py-24 md:py-36">
 
