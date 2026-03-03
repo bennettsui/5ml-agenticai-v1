@@ -16,7 +16,7 @@
   </div>
   <nav>
     <a href="/event-checkin"        data-panel="reception">Reception</a>
-    <a href="/event-checkin/client" data-panel="dashboard">Dashboard</a>
+    <a href="/event-checkin/dashboard" data-panel="dashboard">Dashboard</a>
   </nav>
   <span class="conn-status">
     <span class="conn-dot" id="connDot"></span>
@@ -150,13 +150,15 @@
             <th>First</th>
             <th>Last</th>
             <th>Organization</th>
+            <th>電話</th>
+            <th>電郵</th>
             <th>Status</th>
             <th>Remarks</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody id="adminTableBody">
-          <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</td></tr>
+          <tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -250,6 +252,16 @@
         <div style="margin-bottom:12px;">
           <label for="ef-org">Organization</label>
           <input type="text" id="ef-org" name="organization" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div>
+            <label for="ef-phone">電話 (Phone)</label>
+            <input type="tel" id="ef-phone" name="phone" placeholder="e.g. 91234567" />
+          </div>
+          <div>
+            <label for="ef-email">電郵 (Email)</label>
+            <input type="email" id="ef-email" name="email" placeholder="e.g. name@example.com" />
+          </div>
         </div>
         <div style="margin-bottom:12px;">
           <label for="ef-status">Status</label>

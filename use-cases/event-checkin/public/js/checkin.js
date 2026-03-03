@@ -367,6 +367,7 @@ function updateCard(card, p) {
 function openAddModal()  { addForm.reset(); addModal.classList.remove('hidden'); }
 function closeAddModal() { addModal.classList.add('hidden'); }
 
+document.getElementById('headerAddBtn').addEventListener('click', openAddModal);
 document.getElementById('addModalClose').addEventListener('click', closeAddModal);
 document.getElementById('addModalCancel').addEventListener('click', closeAddModal);
 addModal.addEventListener('click', (e) => { if (e.target === addModal) closeAddModal(); });

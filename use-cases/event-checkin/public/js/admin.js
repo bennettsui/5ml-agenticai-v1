@@ -88,7 +88,7 @@ async function loadPage(page = 1) {
 
 function renderTable(rows) {
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text-muted);">No participants found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text-muted);">No participants found.</td></tr>`;
     return;
   }
 
@@ -104,6 +104,8 @@ function renderTable(rows) {
         <td>${esc(p.first_name || '')}</td>
         <td>${esc(p.last_name || '')}</td>
         <td>${esc(p.organization || '')}</td>
+        <td style="white-space:nowrap;">${esc(p.phone || '')}</td>
+        <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(p.email||'')}">${esc(p.email || '')}</td>
         <td>${checked ? `<span class="status-checked">✓ Checked-in</span>` : `<span class="status-not-checked">○ Not checked-in</span>`}</td>
         <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(p.remarks||'')}">${esc(p.remarks || '')}</td>
         <td style="white-space:nowrap;">
@@ -232,8 +234,10 @@ function openEditModal(id) {
       setField('ef-first',   cells[5]?.textContent?.trim() || '');
       setField('ef-last',    cells[6]?.textContent?.trim() || '');
       setField('ef-org',     cells[7]?.textContent?.trim() || '');
+      setField('ef-phone',   cells[8]?.textContent?.trim() || '');
+      setField('ef-email',   cells[9]?.getAttribute('title') || cells[9]?.textContent?.trim() || '');
       setField('ef-status',  row.querySelector('.status-checked') ? 'checked_in' : 'not_checked_in');
-      setField('ef-remarks', cells[9]?.getAttribute('title') || '');
+      setField('ef-remarks', cells[11]?.getAttribute('title') || '');
     }
   } else {
     titleEl.textContent    = 'Add Participant';

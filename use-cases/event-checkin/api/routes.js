@@ -30,6 +30,7 @@ const router  = express.Router();
 
 const db  = require('./db');
 const sse = require('./sse');
+const { searchParticipants } = require('./search');
 
 // Initialise the PostgreSQL table when this module is first loaded
 db.init().catch(err => console.error('[event-checkin] DB init error:', err));
@@ -48,11 +49,17 @@ router.get('/events', sse.handler);
 // ═══════════════════════════════════════════════════════════════
 
 // GET /participants/search?query=...
+// Uses in-process fuzzy BoW engine (no external deps).
+// Returns results sorted by relevance; name_search field is stripped before
+// sending to the client so only name_original (full_name) is ever displayed.
 router.get('/participants/search', async (req, res) => {
   const query = (req.query.query || '').trim();
   if (!query) return res.json([]);
   try {
-    res.json(await db.search(query));
+    const all     = await db.listAll();
+    const results = searchParticipants(query, all);
+    // Strip internal name_search and _score fields before sending to client
+    res.json(results.map(({ name_search: _ns, _score: _s, ...p }) => p));
   } catch (err) {
     console.error('[event-checkin search]', err);
     res.status(500).json({ error: 'Search failed' });
@@ -98,11 +105,11 @@ router.post('/participants/:id/remarks', async (req, res) => {
 
 // POST /participants  — create from check-in "add new" form
 router.post('/participants', async (req, res) => {
-  const { id, color, title, first_name, last_name, full_name, organization, remarks } = req.body;
+  const { id, color, title, first_name, last_name, full_name, organization, phone, email, remarks } = req.body;
   if (!color || !full_name)               return res.status(400).json({ error: 'color and full_name are required' });
   if (!VALID_COLORS.includes(color))      return res.status(400).json({ error: 'Invalid color' });
   try {
-    const p = await db.insert({ id, color, title, first_name, last_name, full_name, organization, remarks });
+    const p = await db.insert({ id, color, title, first_name, last_name, full_name, organization, phone, email, remarks });
     sse.broadcast('participant_created', { type: 'participant_created', payload: p });
     res.status(201).json(p);
   } catch (err) {
@@ -132,11 +139,11 @@ router.get('/admin/participants', async (req, res) => {
 
 // POST /admin/participants — create from admin
 router.post('/admin/participants', async (req, res) => {
-  const { id, color, title, first_name, last_name, full_name, organization, status, remarks } = req.body;
+  const { id, color, title, first_name, last_name, full_name, organization, phone, email, status, remarks } = req.body;
   if (!color || !full_name)          return res.status(400).json({ error: 'color and full_name are required' });
   if (!VALID_COLORS.includes(color)) return res.status(400).json({ error: 'Invalid color' });
   try {
-    const p = await db.insert({ id, color, title, first_name, last_name, full_name, organization, status, remarks });
+    const p = await db.insert({ id, color, title, first_name, last_name, full_name, organization, phone, email, status, remarks });
     sse.broadcast('participant_created', { type: 'participant_created', payload: p });
     res.status(201).json(p);
   } catch (err) {

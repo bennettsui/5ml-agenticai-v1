@@ -7,9 +7,15 @@
  * across Fly.io restarts (no more ephemeral SQLite).
  *
  * Table: event_checkin_participants
+ *
+ * Two-field name design:
+ *   full_name    — name_original: stored as-is, only used for display
+ *   name_search  — pre-normalised (T2S + lowercase + no punct), used only for
+ *                  fuzzy matching; never shown in the UI
  */
 
-const { pool } = require('../../../db');
+const { pool }            = require('../../../db');
+const { computeNameSearch } = require('./search');
 
 const TABLE = 'event_checkin_participants';
 
@@ -24,7 +30,10 @@ async function init() {
       first_name   TEXT,
       last_name    TEXT,
       full_name    TEXT        NOT NULL,
+      name_search  TEXT,
       organization TEXT,
+      phone        TEXT,
+      email        TEXT,
       status       TEXT        NOT NULL DEFAULT 'not_checked_in'
                                CHECK(status IN ('not_checked_in','checked_in')),
       remarks      TEXT,
@@ -32,6 +41,11 @@ async function init() {
       updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  // Add columns to existing tables that pre-date this migration
+  await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS name_search TEXT;`);
+  await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS phone TEXT;`);
+  await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS email TEXT;`);
 
   // Trigger to keep updated_at current on every UPDATE
   await pool.query(`
@@ -62,6 +76,18 @@ async function init() {
     );
   `);
 
+  // Backfill name_search for existing rows that don't have it yet
+  const { rows: nullRows } = await pool.query(
+    `SELECT id, full_name, first_name, last_name FROM ${TABLE} WHERE name_search IS NULL`
+  );
+  for (const row of nullRows) {
+    const ns = computeNameSearch(row);
+    await pool.query(`UPDATE ${TABLE} SET name_search = $1 WHERE id = $2`, [ns, row.id]);
+  }
+  if (nullRows.length > 0) {
+    console.log(`[event-checkin] Backfilled name_search for ${nullRows.length} rows`);
+  }
+
   console.log(`[event-checkin] DB table "${TABLE}" ready`);
 }
 
@@ -72,6 +98,7 @@ async function findById(id) {
   return rows[0] || null;
 }
 
+/** Legacy ILIKE search — kept for admin list filtering, not used for fuzzy search. */
 async function search(query) {
   const like = `%${query}%`;
   const trimmed = query.trim();
@@ -94,14 +121,23 @@ async function search(query) {
   return rows;
 }
 
+/** Return ALL participants (used by the fuzzy search engine). */
+async function listAll() {
+  const { rows } = await pool.query(
+    `SELECT * FROM ${TABLE} ORDER BY id`
+  );
+  return rows;
+}
+
 async function insert(data) {
-  const customId = data.id ? parseInt(data.id, 10) : null;
+  const customId  = data.id ? parseInt(data.id, 10) : null;
+  const nameSearch = computeNameSearch(data);
 
   if (customId) {
     const { rows } = await pool.query(`
       INSERT INTO ${TABLE}
-        (id, color, title, first_name, last_name, full_name, organization, status, remarks)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        (id, color, title, first_name, last_name, full_name, name_search, organization, phone, email, status, remarks)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `, [
       customId,
@@ -110,7 +146,10 @@ async function insert(data) {
       data.first_name   || null,
       data.last_name    || null,
       data.full_name,
+      nameSearch,
       data.organization || null,
+      data.phone        || null,
+      data.email        || null,
       data.status       || 'not_checked_in',
       data.remarks      || null,
     ]);
@@ -123,8 +162,8 @@ async function insert(data) {
 
   const { rows } = await pool.query(`
     INSERT INTO ${TABLE}
-      (color, title, first_name, last_name, full_name, organization, status, remarks)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      (color, title, first_name, last_name, full_name, name_search, organization, phone, email, status, remarks)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     RETURNING *
   `, [
     data.color,
@@ -132,7 +171,10 @@ async function insert(data) {
     data.first_name   || null,
     data.last_name    || null,
     data.full_name,
+    nameSearch,
     data.organization || null,
+    data.phone        || null,
+    data.email        || null,
     data.status       || 'not_checked_in',
     data.remarks      || null,
   ]);
@@ -140,9 +182,19 @@ async function insert(data) {
 }
 
 async function update(id, fields) {
-  const allowed = ['color','title','first_name','last_name','full_name','organization','status','remarks'];
+  const allowed = ['color','title','first_name','last_name','full_name','organization','phone','email','status','remarks'];
   const entries = Object.entries(fields).filter(([k]) => allowed.includes(k));
   if (!entries.length) return findById(id);
+
+  // Recompute name_search whenever name-related fields change
+  const nameFields = ['full_name','first_name','last_name'];
+  const affectsName = entries.some(([k]) => nameFields.includes(k));
+  if (affectsName) {
+    // Fetch current row to fill in any missing name parts
+    const current = await findById(id);
+    const merged = { ...current, ...Object.fromEntries(entries) };
+    entries.push(['name_search', computeNameSearch(merged)]);
+  }
 
   const setClauses = entries.map(([k], i) => `${k} = $${i + 1}`).join(', ');
   const values     = [...entries.map(([, v]) => v), id];
@@ -168,11 +220,11 @@ async function list({ page = 1, pageSize = 50, color, status, query } = {}) {
   if (query) {
     const trimmedQ = String(query).trim();
     if (/^\d+$/.test(trimmedQ)) {
-      conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx} OR id = $${idx + 1})`);
+      conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx} OR phone ILIKE $${idx} OR email ILIKE $${idx} OR id = $${idx + 1})`);
       params.push(`%${trimmedQ}%`, parseInt(trimmedQ, 10));
       idx += 2;
     } else {
-      conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx})`);
+      conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx} OR phone ILIKE $${idx} OR email ILIKE $${idx})`);
       params.push(`%${trimmedQ}%`);
       idx++;
     }
@@ -245,4 +297,4 @@ async function getChats({ limit = 200 } = {}) {
   return rows;
 }
 
-module.exports = { init, findById, search, insert, update, remove, list, bulkStatus, bulkDelete, findDuplicate, getCheckedIn, saveChat, getChats };
+module.exports = { init, findById, search, listAll, insert, update, remove, list, bulkStatus, bulkDelete, findDuplicate, getCheckedIn, saveChat, getChats };
