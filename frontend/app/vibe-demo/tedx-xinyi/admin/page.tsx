@@ -8,7 +8,7 @@ const API_BASE = typeof window !== 'undefined'
   : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080');
 const ADMIN_PASSWORD = '5milesLab01@';
 
-type Tab = 'slots' | 'media' | 'circles' | 'social' | 'publish' | 'records';
+type Tab = 'slots' | 'media' | 'circles' | 'social' | 'publish' | 'records' | 'sponsor-logos';
 
 interface MediaImage {
   key: string;
@@ -34,6 +34,8 @@ interface ImageSlot {
   localExists: boolean;
   status: 'cdn' | 'local-only' | 'missing' | 'external';
   note?: string;
+  generatable?: boolean;
+  visualId?: string;
 }
 
 interface SlotSummary {
@@ -53,6 +55,22 @@ interface SocialPost {
   platform: string;
   createdAt: string;
   updatedAt: string;
+}
+
+interface SponsorLogo {
+  key: string;
+  name: string;
+  category: string;
+  filename: string | null;
+  publicUrl?: string;
+  localExists: boolean;
+  uploadedAt: string;
+}
+
+interface SponsorCategory {
+  id: string;
+  label: string;
+  label_en: string;
 }
 
 export default function TEDxXinyiAdmin() {
@@ -112,11 +130,24 @@ export default function TEDxXinyiAdmin() {
   const [editCdnSaving, setEditCdnSaving] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // Sponsor logos state
+  const [sponsorLogos, setSponsorLogos] = useState<Record<string, SponsorLogo>>({});
+  const [sponsorCategories, setSponsorCategories] = useState<SponsorCategory[]>([]);
+  const [sponsorLogosLoading, setSponsorLogosLoading] = useState(false);
+  const [sponsorLogosLoaded, setSponsorLogosLoaded] = useState(false);
+  const [sponsorCategoryTab, setSponsorCategoryTab] = useState<string>('featured');
+  const [addLogoModal, setAddLogoModal] = useState<{ category: string } | null>(null);
+  const [newLogoName, setNewLogoName] = useState('');
+  const [logoUploading, setLogoUploading] = useState(false);
+
   const downloadRef = useRef<HTMLAnchorElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceTargetRef = useRef<string | null>(null);
   const pickerFileInputRef = useRef<HTMLInputElement>(null);
   const circlesFileInputRef = useRef<HTMLInputElement>(null);
+  const sponsorLogoFileInputRef = useRef<HTMLInputElement>(null);
+  const pendingLogoCategory = useRef<string>('');
+  const pendingLogoName = useRef<string>('');
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [circlesSaving, setCirclesSaving] = useState(false);
   // draft = keys the user has toggled but not yet saved; null means "no picker open / no draft"
@@ -409,12 +440,79 @@ export default function TEDxXinyiAdmin() {
     }
   }, [authed, tab, socialLoaded, socialLoading, loadSocialPosts]);
 
+  useEffect(() => {
+    if (authed && tab === 'sponsor-logos' && !sponsorLogosLoaded && !sponsorLogosLoading) {
+      loadSponsorLogos();
+    }
+  }, [authed, tab, sponsorLogosLoaded, sponsorLogosLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Also preload media when opening image picker from slots tab
   useEffect(() => {
     if (imagePickerOpen && !mediaLoaded && !mediaLoading) {
       loadMedia();
     }
   }, [imagePickerOpen, mediaLoaded, mediaLoading, loadMedia]);
+
+  // ---- Sponsor logo functions ----
+  async function loadSponsorLogos() {
+    setSponsorLogosLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/sponsors/logos`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setSponsorLogos(data.logos || {});
+      setSponsorCategories(data.categories || []);
+      setSponsorLogosLoaded(true);
+    } catch (err) {
+      showToast(`Failed to load logos: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setSponsorLogosLoading(false);
+    }
+  }
+
+  async function handleSponsorLogoFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const category = pendingLogoCategory.current;
+    const name = pendingLogoName.current;
+    if (!category || !name) return;
+    setLogoUploading(true);
+    try {
+      const reader = new FileReader();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/sponsors/logos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: dataUrl, name, category }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      showToast(`Uploaded: ${name}`);
+      await loadSponsorLogos();
+    } catch (err) {
+      showToast(`Upload failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setLogoUploading(false);
+      pendingLogoCategory.current = '';
+      pendingLogoName.current = '';
+      if (sponsorLogoFileInputRef.current) sponsorLogoFileInputRef.current.value = '';
+    }
+  }
+
+  async function deleteSponsorLogo(key: string) {
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/sponsors/logos/${key}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast('Logo removed');
+      setSponsorLogos(prev => { const next = { ...prev }; delete next[key]; return next; });
+    } catch (err) {
+      showToast(`Delete failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    }
+  }
 
   // Upload (replace) handler
   function triggerUpload(key: string) {
@@ -694,6 +792,7 @@ export default function TEDxXinyiAdmin() {
     { id: 'records', label: 'Image Records' },
     { id: 'media', label: 'Media Library' },
     { id: 'circles', label: 'TED Circles' },
+    { id: 'sponsor-logos', label: 'Sponsor Logos' },
     { id: 'social', label: 'Social Media' },
     { id: 'publish', label: 'Publish Site Pack' },
   ];
@@ -733,6 +832,64 @@ export default function TEDxXinyiAdmin() {
           if (circlesFileInputRef.current) circlesFileInputRef.current.value = '';
         }}
       />
+      <input
+        ref={sponsorLogoFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/svg+xml"
+        className="hidden"
+        onChange={handleSponsorLogoFileSelected}
+      />
+
+      {/* Add Sponsor Logo Modal */}
+      {addLogoModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-4">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-6 max-w-sm w-full">
+            <h3 className="font-bold text-base mb-1">Upload Logo</h3>
+            <p className="text-neutral-500 text-xs mb-4">
+              {sponsorCategories.find(c => c.id === addLogoModal.category)?.label} — {sponsorCategories.find(c => c.id === addLogoModal.category)?.label_en}
+            </p>
+            <input
+              type="text"
+              value={newLogoName}
+              onChange={e => setNewLogoName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && newLogoName.trim()) {
+                  pendingLogoCategory.current = addLogoModal.category;
+                  pendingLogoName.current = newLogoName.trim();
+                  setAddLogoModal(null);
+                  setNewLogoName('');
+                  sponsorLogoFileInputRef.current?.click();
+                }
+              }}
+              placeholder="Company / Partner name"
+              autoFocus
+              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white focus:outline-none focus:border-red-500 mb-3"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (!newLogoName.trim()) return showToast('Enter a name first', 'err');
+                  pendingLogoCategory.current = addLogoModal.category;
+                  pendingLogoName.current = newLogoName.trim();
+                  setAddLogoModal(null);
+                  setNewLogoName('');
+                  sponsorLogoFileInputRef.current?.click();
+                }}
+                disabled={!newLogoName.trim()}
+                className="flex-1 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-sm font-bold rounded-lg transition-colors"
+              >
+                Choose File &rarr;
+              </button>
+              <button
+                onClick={() => { setAddLogoModal(null); setNewLogoName(''); }}
+                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-sm rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
@@ -1172,7 +1329,16 @@ export default function TEDxXinyiAdmin() {
                                 if (!effectiveKey) return null;
                                 const loading = actionLoading === effectiveKey;
                                 return (
-                                  <div className="flex gap-1 items-center">
+                                  <div className="flex gap-1 items-center flex-wrap">
+                                    {slot.generatable && slot.visualId && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleGenerate(slot.visualId!); }}
+                                        disabled={loading}
+                                        className="px-2 py-1 text-[10px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40 whitespace-nowrap"
+                                      >
+                                        {loading ? '\u2026' : slot.localExists || slot.cdnUrl ? 'Re-gen' : 'Generate'}
+                                      </button>
+                                    )}
                                     {slot.localExists && (
                                       <button
                                         onClick={(e) => { e.stopPropagation(); pushToCdn(effectiveKey); }}
@@ -1618,7 +1784,7 @@ export default function TEDxXinyiAdmin() {
 
         {/* ==================== TED CIRCLES TAB ==================== */}
         {tab === 'circles' && (
-          <div className="p-6">
+          <div>
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-2xl font-black">TED Circles Photos</h2>
@@ -1804,9 +1970,133 @@ export default function TEDxXinyiAdmin() {
           </div>
         )}
 
+        {/* ==================== SPONSOR LOGOS TAB ==================== */}
+        {tab === 'sponsor-logos' && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-black">Sponsor Logos</h2>
+                <p className="text-neutral-500 text-sm mt-1">Manage partner and sponsor logos organized by tier. Logos are uploaded to CDN and displayed on the Sponsors page.</p>
+              </div>
+              <div className="flex gap-2">
+                {logoUploading && <span className="text-xs text-amber-400 self-center">Uploading…</span>}
+                <button
+                  onClick={loadSponsorLogos}
+                  disabled={sponsorLogosLoading}
+                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {sponsorLogosLoading ? 'Loading…' : sponsorLogosLoaded ? 'Refresh' : 'Load Logos'}
+                </button>
+              </div>
+            </div>
+
+            {!sponsorLogosLoaded && !sponsorLogosLoading && (
+              <p className="text-neutral-500 text-sm">Click &quot;Load Logos&quot; to view sponsor logos.</p>
+            )}
+
+            {sponsorLogosLoaded && (
+              <>
+                {/* Category tabs */}
+                <div className="flex flex-wrap gap-1 mb-6 pb-3 border-b border-neutral-800">
+                  {sponsorCategories.map(cat => {
+                    const count = Object.values(sponsorLogos).filter(l => l.category === cat.id).length;
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => setSponsorCategoryTab(cat.id)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+                          sponsorCategoryTab === cat.id
+                            ? 'bg-red-600/20 text-red-400 border border-red-600/30'
+                            : 'text-neutral-500 hover:text-neutral-300 border border-transparent'
+                        }`}
+                      >
+                        {cat.label_en}
+                        {count > 0 && (
+                          <span className={`text-[10px] px-1 rounded ${sponsorCategoryTab === cat.id ? 'bg-red-600/30 text-red-300' : 'bg-neutral-800 text-neutral-500'}`}>
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Active category content */}
+                {sponsorCategories.filter(c => c.id === sponsorCategoryTab).map(cat => {
+                  const catLogos = Object.values(sponsorLogos).filter(l => l.category === cat.id);
+                  return (
+                    <div key={cat.id}>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-base font-bold">
+                          {cat.label}
+                          <span className="text-neutral-500 font-normal text-sm ml-2">{cat.label_en}</span>
+                        </h3>
+                        <button
+                          onClick={() => { setAddLogoModal({ category: cat.id }); setNewLogoName(''); }}
+                          className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs font-bold rounded-lg border border-red-600/30 transition-colors"
+                        >
+                          + Upload Logo
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                        {catLogos.map(logo => {
+                          const imgSrc = logo.publicUrl || (logo.localExists && logo.filename ? `${API_BASE}/tedx-xinyi/sponsors/${logo.filename}` : null);
+                          return (
+                            <div key={logo.key} className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden group">
+                              <div className="aspect-[3/2] bg-neutral-800 flex items-center justify-center relative">
+                                {imgSrc ? (
+                                  <img
+                                    src={imgSrc}
+                                    alt={logo.name}
+                                    className="w-full h-full object-contain p-3"
+                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  <span className="text-neutral-700 text-[10px]">No image</span>
+                                )}
+                                <button
+                                  onClick={() => deleteSponsorLogo(logo.key)}
+                                  className="absolute top-1 right-1 w-5 h-5 bg-red-600/80 hover:bg-red-600 text-white text-xs rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Remove"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                              <div className="px-2 py-1.5 border-t border-neutral-800">
+                                <p className="text-[11px] text-neutral-200 font-bold truncate">{logo.name}</p>
+                                <div className="flex gap-1 mt-0.5">
+                                  {logo.publicUrl && <span className="text-[9px] text-green-500 font-bold">CDN</span>}
+                                  {logo.localExists && !logo.publicUrl && <span className="text-[9px] text-amber-500 font-bold">Local</span>}
+                                  {!logo.publicUrl && !logo.localExists && <span className="text-[9px] text-red-500 font-bold">Missing</span>}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Empty state */}
+                        {catLogos.length === 0 && (
+                          <div
+                            className="col-span-full flex flex-col items-center justify-center border border-dashed border-neutral-800 rounded-lg py-10 text-neutral-600 cursor-pointer hover:border-neutral-600 hover:text-neutral-500 transition-colors"
+                            onClick={() => { setAddLogoModal({ category: cat.id }); setNewLogoName(''); }}
+                          >
+                            <span className="text-2xl mb-2">+</span>
+                            <span className="text-xs">No logos yet — click to add</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
+
         {/* ==================== IMAGE RECORDS TAB ==================== */}
         {tab === 'records' && (
-          <div className="p-6">
+          <div>
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-2xl font-black">Image Records</h2>
