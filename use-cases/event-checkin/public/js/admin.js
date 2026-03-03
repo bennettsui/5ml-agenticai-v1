@@ -101,7 +101,7 @@ function renderTable(rows) {
         <td><input type="checkbox" class="row-check" data-id="${p.id}" /></td>
         <td style="color:var(--text-muted);font-size:11px;">${p.id}</td>
         <td style="font-size:13px;font-weight:600;">${esc(p.ref_id || '')}</td>
-        <td><span class="tag tag-${p.color}">${p.color}</span></td>
+        <td><span class="tag" data-color="${esc(p.color)}">${esc(p.color)}</span></td>
         <td style="font-weight:600;">${esc(p.full_name)}</td>
         <td>${esc(p.title || '')}</td>
         <td>${esc(p.first_name || '')}</td>
@@ -332,7 +332,7 @@ document.getElementById('importBtn').addEventListener('click', async () => {
       Rows processed: ${data.processed} &nbsp;|&nbsp;
       Inserted: <strong>${data.inserted}</strong> &nbsp;|&nbsp;
       Skipped: ${data.skipped}${skipNote}
-      ${data.skipped_no_color > 0 ? '<br/><span style="color:#fbbf24;font-size:12px;">⚠️ Color must be exactly: Red, Purple, Blue, or Green (sheet name or Color column)</span>' : ''}
+      ${data.skipped_no_color > 0 ? '<br/><span style="color:#fbbf24;font-size:12px;">⚠️ Color/Type must be: Red, Purple, Blue, Green, 策略影響夥伴, AI 戰略合作夥伴 iKala, 實物與社群夥伴</span>' : ''}
     `;
     if (data.inserted === 0 && data.skipped > 0) {
       toast(`Import: 0 inserted — ${skipDetails.join(', ')}`, 'error');

@@ -101,10 +101,13 @@ a { color: inherit; text-decoration: none; }
   display: inline-block; padding: 1px 8px; border-radius: 4px;
   font-size: 11px; font-weight: 600;
 }
-.tag-Red    { background: rgba(239,68,68,.2);  color: #fca5a5; }
-.tag-Purple { background: rgba(168,85,247,.2); color: #d8b4fe; }
-.tag-Blue   { background: rgba(59,130,246,.2); color: #93c5fd; }
-.tag-Green  { background: rgba(34,197,94,.2);  color: #86efac; }
+.tag[data-color="Red"]                    { background: rgba(239,68,68,.2);   color: #fca5a5; }
+.tag[data-color="Purple"]                 { background: rgba(168,85,247,.2);  color: #d8b4fe; }
+.tag[data-color="Blue"]                   { background: rgba(59,130,246,.2);  color: #93c5fd; }
+.tag[data-color="Green"]                  { background: rgba(34,197,94,.2);   color: #86efac; }
+.tag[data-color="策略影響夥伴"]            { background: rgba(20,184,166,.2);  color: #5eead4; }
+.tag[data-color="AI 戰略合作夥伴 iKala"]   { background: rgba(245,158,11,.2);  color: #fcd34d; }
+.tag[data-color="實物與社群夥伴"]          { background: rgba(249,115,22,.2);  color: #fdba74; }
 
 /* ─── Status ──────────────────────────────────────────────────── */
 .status-checked {

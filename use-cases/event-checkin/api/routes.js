@@ -38,7 +38,10 @@ db.init().catch(err => console.error('[event-checkin] DB init error:', err));
 // Multer: store uploaded files in memory
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
-const VALID_COLORS = ['Red', 'Purple', 'Blue', 'Green'];
+const VALID_COLORS = [
+  'Red', 'Purple', 'Blue', 'Green',
+  '策略影響夥伴', 'AI 戰略合作夥伴 iKala', '實物與社群夥伴',
+];
 
 // ─── SSE stream ───────────────────────────────────────────────────────────────
 // Clients connect here once and receive all real-time events.

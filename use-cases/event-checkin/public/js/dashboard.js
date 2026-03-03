@@ -6,7 +6,7 @@
    ═══════════════════════════════════════════════════════════════ */
 
 const API = window.API_BASE || '/api/event-checkin';
-const COLORS = ['Red', 'Purple', 'Blue', 'Green'];
+const COLORS = ['Red', 'Purple', 'Blue', 'Green', '策略影響夥伴', 'AI 戰略合作夥伴 iKala', '實物與社群夥伴'];
 const MAX_ACTIVITY = 20;
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
@@ -273,7 +273,7 @@ function renderListRows(rows) {
     const checked = p.status === 'checked_in';
     return `<tr data-id="${p.id}">
       <td style="color:var(--text-muted);font-size:12px;">${p.id}</td>
-      <td><span class="tag tag-${p.color}">${p.color}</span></td>
+      <td><span class="tag" data-color="${p.color}">${p.color}</span></td>
       <td style="font-weight:600;">${name}</td>
       <td style="color:var(--text-muted);">${org}</td>
       <td style="font-size:13px;">${phone}</td>
