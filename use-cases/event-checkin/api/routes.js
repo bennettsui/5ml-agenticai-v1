@@ -205,6 +205,18 @@ router.post('/admin/participants/bulk-delete', async (req, res) => {
   }
 });
 
+// DELETE /admin/participants/all
+router.delete('/admin/participants/all', async (req, res) => {
+  try {
+    const count = await db.deleteAll();
+    sse.broadcast('bulk_deleted', { type: 'bulk_deleted', payload: { all: true } });
+    res.json({ deleted: count });
+  } catch (err) {
+    console.error('[event-checkin delete-all]', err);
+    res.status(500).json({ error: 'Delete all failed' });
+  }
+});
+
 // POST /admin/participants/bulk-status
 router.post('/admin/participants/bulk-status', async (req, res) => {
   const ids    = Array.isArray(req.body.ids) ? req.body.ids.map(Number).filter(Boolean) : [];

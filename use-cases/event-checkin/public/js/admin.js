@@ -99,8 +99,8 @@ function renderTable(rows) {
     return `
       <tr data-id="${p.id}">
         <td><input type="checkbox" class="row-check" data-id="${p.id}" /></td>
-        <td style="color:var(--text-muted);font-size:12px;">${p.id}</td>
-        <td style="color:var(--text-muted);font-size:12px;">${esc(p.ref_id || '')}</td>
+        <td style="color:var(--text-muted);font-size:11px;">${p.id}</td>
+        <td style="font-size:13px;font-weight:600;">${esc(p.ref_id || '')}</td>
         <td><span class="tag tag-${p.color}">${p.color}</span></td>
         <td style="font-weight:600;">${esc(p.full_name)}</td>
         <td>${esc(p.title || '')}</td>
@@ -210,6 +210,20 @@ async function deleteOne(id) {
     loadPage(currentPage);
   } catch { toast('Delete failed.', 'error'); }
 }
+
+// ─── Delete All ───────────────────────────────────────────────────────────────
+
+document.getElementById('deleteAllBtn').addEventListener('click', async () => {
+  if (!confirm('Delete ALL participants? This cannot be undone.')) return;
+  if (!confirm('Are you sure? This will permanently delete every participant record.')) return;
+  try {
+    const resp = await fetch(`${API}/admin/participants/all`, { method: 'DELETE' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    toast(`Deleted all ${data.deleted} participant(s).`, 'success');
+    loadPage(1);
+  } catch (err) { toast(`Delete all failed: ${err.message}`, 'error'); }
+});
 
 // ─── Add/Edit Modal ───────────────────────────────────────────────────────────
 

@@ -271,6 +271,11 @@ async function bulkDelete(ids) {
   return rowCount;
 }
 
+async function deleteAll() {
+  const { rowCount } = await pool.query(`DELETE FROM ${TABLE}`);
+  return rowCount;
+}
+
 async function findDuplicate(fullName, organization, color) {
   const { rows } = await pool.query(`
     SELECT * FROM ${TABLE}
@@ -305,4 +310,4 @@ async function getChats({ limit = 200 } = {}) {
   return rows;
 }
 
-module.exports = { init, findById, findByRefId, search, listAll, insert, update, remove, list, bulkStatus, bulkDelete, findDuplicate, getCheckedIn, saveChat, getChats };
+module.exports = { init, findById, findByRefId, search, listAll, insert, update, remove, list, bulkStatus, bulkDelete, deleteAll, findDuplicate, getCheckedIn, saveChat, getChats };
