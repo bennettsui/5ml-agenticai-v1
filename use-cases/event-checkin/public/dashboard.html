@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RD Symposium — Dashboard</title>
+  <link rel="stylesheet" href="/event-checkin/static/css/style.css" />
+  <style>
+    /* ─── Client dashboard layout ──────────────────────────────── */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .stat-hero {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; text-align: center; gap: 6px;
+    }
+    .stat-hero .big-num {
+      font-size: 56px; font-weight: 800; line-height: 1;
+      color: var(--color-green);
+    }
+    .stat-hero .big-denom {
+      font-size: 22px; color: var(--text-muted); font-weight: 500;
+    }
+    .stat-hero .stat-label {
+      font-size: 13px; color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: .06em; margin-top: 6px;
+    }
+    .stat-hero .pct-badge {
+      margin-top: 10px; padding: 4px 14px;
+      background: rgba(34,197,94,.15); color: #86efac;
+      border: 1px solid rgba(34,197,94,.3);
+      border-radius: 999px; font-size: 15px; font-weight: 700;
+    }
+
+    /* Color group cards */
+    .groups-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 12px;
+    }
+    .group-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+    }
+    .group-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .group-name {
+      font-size: 14px; font-weight: 700;
+    }
+    .group-count {
+      font-size: 13px; color: var(--text-muted);
+    }
+    .progress-track {
+      height: 8px; border-radius: 4px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden; margin-bottom: 8px;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 4px;
+      transition: width .6s ease;
+    }
+    .fill-Red    { background: var(--color-red); }
+    .fill-Purple { background: var(--color-purple); }
+    .fill-Blue   { background: var(--color-blue); }
+    .fill-Green  { background: var(--color-green); }
+    .group-footer {
+      display: flex; justify-content: space-between;
+      font-size: 12px; color: var(--text-muted);
+    }
+    .group-pct { font-weight: 700; }
+
+    /* Bottom two-col section */
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .section-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .section-header {
+      padding: 14px 18px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px; font-weight: 700;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    /* Recent activity feed */
+    .activity-list {
+      list-style: none; max-height: 340px; overflow-y: auto;
+    }
+    .activity-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 18px; border-bottom: 1px solid var(--border);
+      font-size: 13px; animation: slideIn .25s ease;
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-time { font-size: 11px; color: var(--text-muted); white-space: nowrap; min-width: 48px; }
+    .activity-name { flex: 1; font-weight: 600; }
+    .activity-org  { font-size: 11px; color: var(--text-muted); }
+
+    /* AI Chatbot */
+    .chat-messages {
+      padding: 14px 18px;
+      max-height: 240px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .chat-msg {
+      font-size: 13px; line-height: 1.55;
+      padding: 10px 13px; border-radius: var(--radius-sm);
+      max-width: 90%;
+    }
+    .chat-msg.user {
+      background: rgba(59,130,246,.15); color: #93c5fd;
+      align-self: flex-end;
+    }
+    .chat-msg.bot {
+      background: rgba(255,255,255,0.05); color: var(--text);
+      align-self: flex-start;
+    }
+    .chat-msg.thinking {
+      color: var(--text-muted); font-style: italic;
+      background: none; padding: 4px 0;
+    }
+    .chat-input-row {
+      display: flex; gap: 8px;
+      padding: 12px 18px;
+      border-top: 1px solid var(--border);
+    }
+    .chat-input-row input {
+      flex: 1; font-size: 13px;
+    }
+
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .4; }
+    }
+
+    /* ─── Guest list ─────────────────────────────────────────────── */
+    .list-toolbar {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    }
+    .list-search {
+      flex: 1; min-width: 180px; max-width: 320px;
+      padding: 7px 12px; font-size: 13px;
+      border: 1px solid var(--border-mid); border-radius: var(--radius-sm);
+      background: rgba(255,255,255,0.04); color: var(--text);
+    }
+    .list-search:focus { outline: none; border-color: var(--color-blue); box-shadow: var(--ring-blue); }
+    .pill-group { display: flex; gap: 5px; flex-wrap: wrap; }
+    .pill {
+      padding: 4px 11px; border-radius: 999px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      border: 1px solid var(--border-mid);
+      background: rgba(255,255,255,0.04); color: var(--text-muted);
+      transition: all .15s;
+    }
+    .pill:hover     { background: rgba(255,255,255,0.08); color: var(--text); }
+    .pill.active    { color: var(--text); border-color: var(--border-mid); background: rgba(255,255,255,0.10); }
+    .pill-Red.active    { background: rgba(239,68,68,.2);  color: #fca5a5; border-color: rgba(239,68,68,.4); }
+    .pill-Purple.active { background: rgba(168,85,247,.2); color: #d8b4fe; border-color: rgba(168,85,247,.4); }
+    .pill-Blue.active   { background: rgba(59,130,246,.2); color: #93c5fd; border-color: rgba(59,130,246,.4); }
+    .pill-Green.active  { background: rgba(34,197,94,.2);  color: #86efac; border-color: rgba(34,197,94,.4); }
+    .list-count { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+
+    .list-table-wrap { overflow-x: auto; }
+    .list-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .list-table thead th {
+      background: rgba(255,255,255,0.04);
+      text-align: left; padding: 9px 14px;
+      font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+      color: var(--text-muted); border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+    .list-table thead th.sortable { cursor: pointer; }
+    .list-table thead th.sortable:hover { color: var(--text); }
+    .sort-icon { font-size: 10px; margin-left: 4px; opacity: .5; }
+    .sort-icon.active { opacity: 1; color: var(--color-blue); }
+    .list-table tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+    .list-table tbody tr:last-child { border-bottom: none; }
+    .list-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+    .list-table tbody td { padding: 9px 14px; vertical-align: middle; }
+
+    @media (max-width: 768px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+      .groups-grid    { grid-template-columns: 1fr 1fr; }
+      .bottom-grid    { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Header ──────────────────────────────────────────────────────────── -->
+<header class="page-header">
+  <div class="header-brand">
+    <h1>🎟️ RD Symposium</h1>
+    <span class="header-subtitle">Dashboard</span>
+  </div>
+  <nav>
+    <a href="/event-checkin"       data-panel="reception">Reception</a>
+    <a href="/event-checkin/admin" data-panel="admin">Admin</a>
+  </nav>
+  <span class="conn-status">
+    <span class="conn-dot" id="connDot"></span>
+    <span id="connLabel">Connecting…</span>
+  </span>
+</header>
+
+<div class="container-wide">
+
+  <!-- ─── Stats row ──────────────────────────────────────────────────── -->
+  <div class="dashboard-grid" style="margin-top:20px;">
+
+    <!-- Overall hero stat -->
+    <div class="stat-hero">
+      <div>
+        <span class="big-num" id="heroChecked">—</span>
+        <span class="big-denom"> / <span id="heroTotal">—</span></span>
+      </div>
+      <div class="stat-label">Guests Checked-in</div>
+      <div class="pct-badge" id="heroPct">—%</div>
+      <div id="lastRefresh" style="font-size:11px;color:var(--text-muted);margin-top:10px;">Refreshing…</div>
+    </div>
+
+    <!-- Color group breakdown -->
+    <div class="groups-grid" id="groupsGrid">
+      <!-- Rendered by client.js -->
+      <div class="group-card"><div style="color:var(--text-muted);font-size:13px;">Loading…</div></div>
+      <div class="group-card"></div>
+      <div class="group-card"></div>
+      <div class="group-card"></div>
+    </div>
+
+  </div>
+
+  <!-- ─── Bottom row: activity feed + AI chatbot ───────────────────── -->
+  <div class="bottom-grid">
+
+    <!-- Recent check-ins -->
+    <div class="section-card">
+      <div class="section-header">
+        <span class="conn-dot connected pulse" style="width:7px;height:7px;box-shadow:none;flex-shrink:0;"></span>
+        Recent Check-ins
+      </div>
+      <ul class="activity-list" id="activityList">
+        <li style="padding:20px 18px;color:var(--text-muted);font-size:13px;">Waiting for check-in events…</li>
+      </ul>
+    </div>
+
+    <!-- AI Chatbot -->
+    <div class="section-card" style="display:flex;flex-direction:column;">
+      <div class="section-header">✨ AI Assistant</div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg bot">
+          Hi! I can answer questions about today's guest list — who's checked in, group breakdowns, missing guests, and more.
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput"
+          placeholder="e.g. Who from Red hasn't arrived yet?"
+          autocomplete="off" />
+        <button class="btn btn-primary btn-sm" id="chatSend">Ask</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ─── Full guest list ───────────────────────────────────────────── -->
+  <div class="section-card" style="margin-top:16px;">
+    <div class="section-header" style="justify-content:space-between;">
+      <span>Guest List</span>
+      <span id="listLoading" style="font-size:12px;color:var(--text-muted);font-weight:400;">Loading…</span>
+    </div>
+
+    <div class="list-toolbar">
+      <input type="search" id="listSearch" class="list-search"
+        placeholder="Search name or organization…" autocomplete="off" />
+
+      <div class="pill-group" id="colorPills">
+        <button class="pill active" data-color="">All Colors</button>
+        <button class="pill pill-Red"    data-color="Red">Red</button>
+        <button class="pill pill-Purple" data-color="Purple">Purple</button>
+        <button class="pill pill-Blue"   data-color="Blue">Blue</button>
+        <button class="pill pill-Green"  data-color="Green">Green</button>
+      </div>
+
+      <div class="pill-group" id="statusPills">
+        <button class="pill active" data-status="">All</button>
+        <button class="pill" data-status="checked_in">Checked-in</button>
+        <button class="pill" data-status="not_checked_in">Not yet</button>
+      </div>
+
+      <span class="list-count" id="listCount"></span>
+    </div>
+
+    <div class="list-table-wrap">
+      <table class="list-table">
+        <thead>
+          <tr>
+            <th style="width:80px;">Color</th>
+            <th class="sortable" data-col="name">Name <span class="sort-icon" id="sort-name">↕</span></th>
+            <th class="sortable" data-col="organization">Organization <span class="sort-icon" id="sort-organization">↕</span></th>
+            <th class="sortable" data-col="status" style="width:120px;">Status <span class="sort-icon" id="sort-status">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="listBody">
+          <tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─── Toast container ───────────────────────────────────────────────────── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ─── Scripts ───────────────────────────────────────────────────────────── -->
+<script>
+  window.API_BASE = '/api/event-checkin';
+</script>
+<script src="/event-checkin/static/js/auth.js"></script>
+<script>requireAuth('dashboard');</script>
+<script src="/event-checkin/static/js/dashboard.js"></script>
+</body>
+</html>

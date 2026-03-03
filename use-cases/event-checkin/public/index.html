@@ -15,7 +15,7 @@
     <span class="header-subtitle">Reception</span>
   </div>
   <nav>
-    <a href="/event-checkin/client" data-panel="dashboard">Dashboard</a>
+    <a href="/event-checkin/dashboard" data-panel="dashboard">Dashboard</a>
     <a href="/event-checkin/admin"  data-panel="admin">Admin</a>
   </nav>
   <span class="conn-status">
@@ -27,17 +27,20 @@
 <!-- ─── Main ─────────────────────────────────────────────────────────────── -->
 <main class="container">
 
-  <!-- Search bar + autocomplete -->
-  <div class="search-wrap" style="margin-bottom:24px;">
-    <input
-      type="search"
-      id="searchInput"
-      class="search-input"
-      placeholder="Search by name, organization, color…"
-      autocomplete="off"
-      aria-label="Search participants"
-    />
-    <div id="autocomplete" class="autocomplete hidden" role="listbox"></div>
+  <!-- Search bar + Add Participant button -->
+  <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:24px;">
+    <div class="search-wrap" style="flex:1;margin-bottom:0;">
+      <input
+        type="search"
+        id="searchInput"
+        class="search-input"
+        placeholder="Search by name, organization, color…"
+        autocomplete="off"
+        aria-label="Search participants"
+      />
+      <div id="autocomplete" class="autocomplete hidden" role="listbox"></div>
+    </div>
+    <button class="btn btn-primary" id="headerAddBtn" style="white-space:nowrap;flex-shrink:0;">+ Add Participant</button>
   </div>
 
   <!-- Results list -->
@@ -92,6 +95,16 @@
         <div style="margin-bottom:12px;">
           <label for="af-org">Organization</label>
           <input type="text" id="af-org" name="organization" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div>
+            <label for="af-phone">電話 (Phone)</label>
+            <input type="tel" id="af-phone" name="phone" placeholder="e.g. 91234567" />
+          </div>
+          <div>
+            <label for="af-email">電郵 (Email)</label>
+            <input type="email" id="af-email" name="email" placeholder="e.g. name@example.com" />
+          </div>
         </div>
         <div>
           <label for="af-remarks">Remarks</label>

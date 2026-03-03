@@ -8,7 +8,7 @@
 
 const AUTH_PANELS = {
   reception: { pass: 'RD2026',      label: 'Reception',  href: '/event-checkin' },
-  dashboard:  { pass: 'RD2026!',    label: 'Dashboard',  href: '/event-checkin/client' },
+  dashboard:  { pass: 'RD2026!',    label: 'Dashboard',  href: '/event-checkin/dashboard' },
   admin:      { pass: 'RD2026admin', label: 'Admin Panel', href: '/event-checkin/admin' },
 };
 
