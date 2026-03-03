@@ -25,6 +25,7 @@ async function init() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS ${TABLE} (
       id           SERIAL PRIMARY KEY,
+      ref_id       TEXT,
       color        TEXT        NOT NULL CHECK(color IN ('Red','Purple','Blue','Green')),
       title        TEXT,
       first_name   TEXT,
@@ -46,6 +47,7 @@ async function init() {
   await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS name_search TEXT;`);
   await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS phone TEXT;`);
   await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS email TEXT;`);
+  await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS ref_id TEXT;`);
 
   // Trigger to keep updated_at current on every UPDATE
   await pool.query(`
@@ -98,6 +100,11 @@ async function findById(id) {
   return rows[0] || null;
 }
 
+async function findByRefId(refId) {
+  const { rows } = await pool.query(`SELECT * FROM ${TABLE} WHERE ref_id = $1 LIMIT 1`, [refId]);
+  return rows[0] || null;
+}
+
 /** Legacy ILIKE search — kept for admin list filtering, not used for fuzzy search. */
 async function search(query) {
   const like = `%${query}%`;
@@ -136,11 +143,12 @@ async function insert(data) {
   if (customId) {
     const { rows } = await pool.query(`
       INSERT INTO ${TABLE}
-        (id, color, title, first_name, last_name, full_name, name_search, organization, phone, email, status, remarks)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        (id, ref_id, color, title, first_name, last_name, full_name, name_search, organization, phone, email, status, remarks)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `, [
       customId,
+      data.ref_id       || null,
       data.color,
       data.title        || null,
       data.first_name   || null,
@@ -153,7 +161,6 @@ async function insert(data) {
       data.status       || 'not_checked_in',
       data.remarks      || null,
     ]);
-    // Keep the sequence ahead of the manually assigned ID
     await pool.query(
       `SELECT setval(pg_get_serial_sequence('${TABLE}', 'id'), GREATEST((SELECT MAX(id) FROM ${TABLE}), 1))`
     );
@@ -162,10 +169,11 @@ async function insert(data) {
 
   const { rows } = await pool.query(`
     INSERT INTO ${TABLE}
-      (color, title, first_name, last_name, full_name, name_search, organization, phone, email, status, remarks)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      (ref_id, color, title, first_name, last_name, full_name, name_search, organization, phone, email, status, remarks)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     RETURNING *
   `, [
+    data.ref_id       || null,
     data.color,
     data.title        || null,
     data.first_name   || null,
@@ -182,7 +190,7 @@ async function insert(data) {
 }
 
 async function update(id, fields) {
-  const allowed = ['color','title','first_name','last_name','full_name','organization','phone','email','status','remarks'];
+  const allowed = ['ref_id','color','title','first_name','last_name','full_name','organization','phone','email','status','remarks'];
   const entries = Object.entries(fields).filter(([k]) => allowed.includes(k));
   if (!entries.length) return findById(id);
 
@@ -297,4 +305,4 @@ async function getChats({ limit = 200 } = {}) {
   return rows;
 }
 
-module.exports = { init, findById, search, listAll, insert, update, remove, list, bulkStatus, bulkDelete, findDuplicate, getCheckedIn, saveChat, getChats };
+module.exports = { init, findById, findByRefId, search, listAll, insert, update, remove, list, bulkStatus, bulkDelete, findDuplicate, getCheckedIn, saveChat, getChats };

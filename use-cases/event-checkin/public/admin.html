@@ -111,6 +111,7 @@
     <!-- Toolbar -->
     <div class="admin-toolbar" style="padding:16px 20px;border-bottom:1px solid var(--border);">
       <button class="btn btn-primary btn-sm" id="addParticipantBtn">+ Add Participant</button>
+      <span id="entryCountBadge" style="font-size:13px;font-weight:600;color:var(--text-muted);margin-left:4px;"></span>
 
       <div class="filters">
         <select id="filterColor" aria-label="Filter by color">
@@ -143,7 +144,8 @@
         <thead>
           <tr>
             <th style="width:36px;"><input type="checkbox" id="selectAll" title="Select all on page" /></th>
-            <th>ID</th>
+            <th style="width:52px;">ID</th>
+            <th style="width:70px;">Ref#</th>
             <th>Color</th>
             <th>Full Name</th>
             <th>Title</th>
@@ -158,7 +160,7 @@
           </tr>
         </thead>
         <tbody id="adminTableBody">
-          <tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</td></tr>
+          <tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -218,6 +220,10 @@
         <div id="ef-new-id-row" style="margin-bottom:12px;">
           <label for="ef-new-id">ID <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(optional — leave blank to auto-assign)</span></label>
           <input type="number" id="ef-new-id" min="1" placeholder="e.g. 42" style="width:140px;" />
+        </div>
+        <div style="margin-bottom:12px;">
+          <label for="ef-ref-id">Ref# <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(external ID from Excel / your own reference)</span></label>
+          <input type="text" id="ef-ref-id" name="ref_id" placeholder="e.g. A001" style="width:160px;" />
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div>
