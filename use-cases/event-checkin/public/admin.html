@@ -213,6 +213,10 @@
     <div class="modal-body">
       <form id="editForm" autocomplete="off">
         <input type="hidden" id="ef-id" name="id" />
+        <div id="ef-new-id-row" style="margin-bottom:12px;">
+          <label for="ef-new-id">ID <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(optional — leave blank to auto-assign)</span></label>
+          <input type="number" id="ef-new-id" min="1" placeholder="e.g. 42" style="width:140px;" />
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div>
             <label for="ef-color">Color <span style="color:red">*</span></label>

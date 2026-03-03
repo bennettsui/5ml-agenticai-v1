@@ -379,6 +379,10 @@ document.getElementById('addModalSubmit').addEventListener('click', async () => 
   if (!body.color)      { toast('Color is required.', 'error'); return; }
   if (!body.first_name) { toast('First Name is required.', 'error'); return; }
 
+  // Parse optional custom ID
+  if (body.id) body.id = parseInt(body.id, 10) || undefined;
+  else delete body.id;
+
   // Auto-build full_name from title + first + last
   body.full_name = [body.title, body.first_name, body.last_name].filter(Boolean).join(' ');
 

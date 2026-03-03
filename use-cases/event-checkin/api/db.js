@@ -95,6 +95,32 @@ async function search(query) {
 }
 
 async function insert(data) {
+  const customId = data.id ? parseInt(data.id, 10) : null;
+
+  if (customId) {
+    const { rows } = await pool.query(`
+      INSERT INTO ${TABLE}
+        (id, color, title, first_name, last_name, full_name, organization, status, remarks)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `, [
+      customId,
+      data.color,
+      data.title        || null,
+      data.first_name   || null,
+      data.last_name    || null,
+      data.full_name,
+      data.organization || null,
+      data.status       || 'not_checked_in',
+      data.remarks      || null,
+    ]);
+    // Keep the sequence ahead of the manually assigned ID
+    await pool.query(
+      `SELECT setval(pg_get_serial_sequence('${TABLE}', 'id'), GREATEST((SELECT MAX(id) FROM ${TABLE}), 1))`
+    );
+    return rows[0];
+  }
+
   const { rows } = await pool.query(`
     INSERT INTO ${TABLE}
       (color, title, first_name, last_name, full_name, organization, status, remarks)

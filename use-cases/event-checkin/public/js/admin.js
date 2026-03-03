@@ -215,10 +215,13 @@ function openEditModal(id) {
   document.getElementById('ef-id').value = id || '';
   const titleEl   = document.getElementById('editModalTitle');
   const submitBtn = document.getElementById('editModalSubmit');
+  const newIdRow  = document.getElementById('ef-new-id-row');
+  const newIdInput = document.getElementById('ef-new-id');
 
   if (id) {
     titleEl.textContent   = 'Edit Participant';
     submitBtn.textContent = 'Save Changes';
+    newIdRow.style.display = 'none'; // ID can't change on edit
     // Pre-fill from current row
     const row = tbody.querySelector(`tr[data-id="${id}"]`);
     if (row) {
@@ -233,8 +236,10 @@ function openEditModal(id) {
       setField('ef-remarks', cells[9]?.getAttribute('title') || '');
     }
   } else {
-    titleEl.textContent   = 'Add Participant';
-    submitBtn.textContent = 'Add';
+    titleEl.textContent    = 'Add Participant';
+    submitBtn.textContent  = 'Add';
+    newIdRow.style.display = '';
+    newIdInput.value       = '';
   }
   editModal.classList.remove('hidden');
 }
@@ -255,6 +260,12 @@ document.getElementById('editModalSubmit').addEventListener('click', async () =>
   const body = formToObj(editForm);
 
   if (!body.color || !body.full_name) { toast('Color and Full Name are required.', 'error'); return; }
+
+  // Include optional custom ID when creating a new participant
+  if (!id) {
+    const rawNewId = document.getElementById('ef-new-id').value;
+    if (rawNewId) body.id = parseInt(rawNewId, 10) || undefined;
+  }
 
   const url    = id ? `${API}/admin/participants/${id}` : `${API}/admin/participants`;
   const method = id ? 'PUT' : 'POST';

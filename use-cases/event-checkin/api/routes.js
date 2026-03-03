@@ -98,11 +98,11 @@ router.post('/participants/:id/remarks', async (req, res) => {
 
 // POST /participants  — create from check-in "add new" form
 router.post('/participants', async (req, res) => {
-  const { color, title, first_name, last_name, full_name, organization, remarks } = req.body;
+  const { id, color, title, first_name, last_name, full_name, organization, remarks } = req.body;
   if (!color || !full_name)               return res.status(400).json({ error: 'color and full_name are required' });
   if (!VALID_COLORS.includes(color))      return res.status(400).json({ error: 'Invalid color' });
   try {
-    const p = await db.insert({ color, title, first_name, last_name, full_name, organization, remarks });
+    const p = await db.insert({ id, color, title, first_name, last_name, full_name, organization, remarks });
     sse.broadcast('participant_created', { type: 'participant_created', payload: p });
     res.status(201).json(p);
   } catch (err) {
@@ -132,11 +132,11 @@ router.get('/admin/participants', async (req, res) => {
 
 // POST /admin/participants — create from admin
 router.post('/admin/participants', async (req, res) => {
-  const { color, title, first_name, last_name, full_name, organization, status, remarks } = req.body;
+  const { id, color, title, first_name, last_name, full_name, organization, status, remarks } = req.body;
   if (!color || !full_name)          return res.status(400).json({ error: 'color and full_name are required' });
   if (!VALID_COLORS.includes(color)) return res.status(400).json({ error: 'Invalid color' });
   try {
-    const p = await db.insert({ color, title, first_name, last_name, full_name, organization, status, remarks });
+    const p = await db.insert({ id, color, title, first_name, last_name, full_name, organization, status, remarks });
     sse.broadcast('participant_created', { type: 'participant_created', payload: p });
     res.status(201).json(p);
   } catch (err) {
