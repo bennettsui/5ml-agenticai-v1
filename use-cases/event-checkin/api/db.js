@@ -53,6 +53,15 @@ async function init() {
     END $$;
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS event_checkin_chats (
+      id         SERIAL PRIMARY KEY,
+      question   TEXT        NOT NULL,
+      answer     TEXT        NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
   console.log(`[event-checkin] DB table "${TABLE}" ready`);
 }
 
@@ -65,6 +74,13 @@ async function findById(id) {
 
 async function search(query) {
   const like = `%${query}%`;
+  const trimmed = query.trim();
+  const params = [like];
+  let idClause = '';
+  if (/^\d+$/.test(trimmed)) {
+    params.push(parseInt(trimmed, 10));
+    idClause = `OR id = $2`;
+  }
   const { rows } = await pool.query(`
     SELECT * FROM ${TABLE}
     WHERE  full_name    ILIKE $1
@@ -72,12 +88,39 @@ async function search(query) {
         OR last_name    ILIKE $1
         OR organization ILIKE $1
         OR color        ILIKE $1
+        ${idClause}
     ORDER BY color, full_name
-  `, [like]);
+  `, params);
   return rows;
 }
 
 async function insert(data) {
+  const customId = data.id ? parseInt(data.id, 10) : null;
+
+  if (customId) {
+    const { rows } = await pool.query(`
+      INSERT INTO ${TABLE}
+        (id, color, title, first_name, last_name, full_name, organization, status, remarks)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `, [
+      customId,
+      data.color,
+      data.title        || null,
+      data.first_name   || null,
+      data.last_name    || null,
+      data.full_name,
+      data.organization || null,
+      data.status       || 'not_checked_in',
+      data.remarks      || null,
+    ]);
+    // Keep the sequence ahead of the manually assigned ID
+    await pool.query(
+      `SELECT setval(pg_get_serial_sequence('${TABLE}', 'id'), GREATEST((SELECT MAX(id) FROM ${TABLE}), 1))`
+    );
+    return rows[0];
+  }
+
   const { rows } = await pool.query(`
     INSERT INTO ${TABLE}
       (color, title, first_name, last_name, full_name, organization, status, remarks)
@@ -123,9 +166,16 @@ async function list({ page = 1, pageSize = 50, color, status, query } = {}) {
   if (color)  { conditions.push(`color = $${idx++}`);  params.push(color); }
   if (status) { conditions.push(`status = $${idx++}`); params.push(status); }
   if (query) {
-    conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx})`);
-    params.push(`%${query}%`);
-    idx++;
+    const trimmedQ = String(query).trim();
+    if (/^\d+$/.test(trimmedQ)) {
+      conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx} OR id = $${idx + 1})`);
+      params.push(`%${trimmedQ}%`, parseInt(trimmedQ, 10));
+      idx += 2;
+    } else {
+      conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx})`);
+      params.push(`%${trimmedQ}%`);
+      idx++;
+    }
   }
 
   const where  = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -179,4 +229,20 @@ async function getCheckedIn() {
   return rows;
 }
 
-module.exports = { init, findById, search, insert, update, remove, list, bulkStatus, bulkDelete, findDuplicate, getCheckedIn };
+async function saveChat(question, answer) {
+  const { rows } = await pool.query(
+    `INSERT INTO event_checkin_chats (question, answer) VALUES ($1, $2) RETURNING *`,
+    [question, answer]
+  );
+  return rows[0];
+}
+
+async function getChats({ limit = 200 } = {}) {
+  const { rows } = await pool.query(
+    `SELECT * FROM event_checkin_chats ORDER BY created_at DESC LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+module.exports = { init, findById, search, insert, update, remove, list, bulkStatus, bulkDelete, findDuplicate, getCheckedIn, saveChat, getChats };

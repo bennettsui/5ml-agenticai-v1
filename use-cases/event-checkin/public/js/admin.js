@@ -215,10 +215,13 @@ function openEditModal(id) {
   document.getElementById('ef-id').value = id || '';
   const titleEl   = document.getElementById('editModalTitle');
   const submitBtn = document.getElementById('editModalSubmit');
+  const newIdRow  = document.getElementById('ef-new-id-row');
+  const newIdInput = document.getElementById('ef-new-id');
 
   if (id) {
     titleEl.textContent   = 'Edit Participant';
     submitBtn.textContent = 'Save Changes';
+    newIdRow.style.display = 'none'; // ID can't change on edit
     // Pre-fill from current row
     const row = tbody.querySelector(`tr[data-id="${id}"]`);
     if (row) {
@@ -233,8 +236,10 @@ function openEditModal(id) {
       setField('ef-remarks', cells[9]?.getAttribute('title') || '');
     }
   } else {
-    titleEl.textContent   = 'Add Participant';
-    submitBtn.textContent = 'Add';
+    titleEl.textContent    = 'Add Participant';
+    submitBtn.textContent  = 'Add';
+    newIdRow.style.display = '';
+    newIdInput.value       = '';
   }
   editModal.classList.remove('hidden');
 }
@@ -255,6 +260,12 @@ document.getElementById('editModalSubmit').addEventListener('click', async () =>
   const body = formToObj(editForm);
 
   if (!body.color || !body.full_name) { toast('Color and Full Name are required.', 'error'); return; }
+
+  // Include optional custom ID when creating a new participant
+  if (!id) {
+    const rawNewId = document.getElementById('ef-new-id').value;
+    if (rawNewId) body.id = parseInt(rawNewId, 10) || undefined;
+  }
 
   const url    = id ? `${API}/admin/participants/${id}` : `${API}/admin/participants`;
   const method = id ? 'PUT' : 'POST';
@@ -517,5 +528,45 @@ function markdownToHtml(md) {
     .replace(/<p><\/p>/g, '');
 }
 
+// ─── Chat History ─────────────────────────────────────────────────────────────
+
+async function loadChatHistory() {
+  const wrap = document.getElementById('chatHistoryWrap');
+  wrap.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">Loading…</p>';
+  try {
+    const resp = await fetch(`${API}/admin/chat-history`);
+    const chats = await resp.json();
+    if (!resp.ok) throw new Error(chats.error || 'Failed');
+
+    if (!chats.length) {
+      wrap.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No conversations yet. Questions asked in the Dashboard AI Assistant will appear here.</p>';
+      return;
+    }
+
+    wrap.innerHTML = chats.map(c => {
+      const ts = new Date(c.created_at).toLocaleString([], {
+        month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+      return `
+        <div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="font-size:11px;font-weight:700;color:var(--color-blue);text-transform:uppercase;letter-spacing:.05em;">Question</span>
+            <span style="font-size:11px;color:var(--text-muted);">${esc(ts)}</span>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;">${esc(c.question)}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--color-green);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Answer</div>
+          <div style="font-size:13px;color:var(--text-muted);line-height:1.6;">${esc(c.answer).replace(/\n/g, '<br/>')}</div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    wrap.innerHTML = `<p style="color:var(--color-red);font-size:13px;">Error: ${esc(err.message)}</p>`;
+  }
+}
+
+document.getElementById('refreshChatBtn').addEventListener('click', loadChatHistory);
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 loadPage(1);
+loadChatHistory();

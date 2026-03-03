@@ -15,8 +15,8 @@
     <span class="header-subtitle">Admin Panel</span>
   </div>
   <nav>
-    <a href="/event-checkin">Reception</a>
-    <a href="/event-checkin/client">Client</a>
+    <a href="/event-checkin"        data-panel="reception">Reception</a>
+    <a href="/event-checkin/client" data-panel="dashboard">Dashboard</a>
   </nav>
   <span class="conn-status">
     <span class="conn-dot" id="connDot"></span>
@@ -60,6 +60,17 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- ─── Chat History panel ────────────────────────────────────────────── -->
+  <div class="panel" style="margin-bottom:20px;padding:0;overflow:hidden;">
+    <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:13px;font-weight:700;">💬 Dashboard AI Chat History</span>
+      <button class="btn btn-outline btn-sm" id="refreshChatBtn">↻ Refresh</button>
+    </div>
+    <div id="chatHistoryWrap" style="max-height:420px;overflow-y:auto;padding:16px 20px;">
+      <p style="color:var(--text-muted);font-size:13px;">Loading…</p>
+    </div>
   </div>
 
   <!-- ─── AI Tools panel ────────────────────────────────────────────────── -->
@@ -202,6 +213,10 @@
     <div class="modal-body">
       <form id="editForm" autocomplete="off">
         <input type="hidden" id="ef-id" name="id" />
+        <div id="ef-new-id-row" style="margin-bottom:12px;">
+          <label for="ef-new-id">ID <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(optional — leave blank to auto-assign)</span></label>
+          <input type="number" id="ef-new-id" min="1" placeholder="e.g. 42" style="width:140px;" />
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div>
             <label for="ef-color">Color <span style="color:red">*</span></label>
@@ -263,6 +278,8 @@
 <script>
   window.API_BASE = '/api/event-checkin';
 </script>
+<script src="/event-checkin/static/js/auth.js"></script>
+<script>requireAuth('admin');</script>
 <script src="/event-checkin/static/js/admin.js"></script>
 </body>
 </html>

@@ -15,8 +15,8 @@
     <span class="header-subtitle">Reception</span>
   </div>
   <nav>
-    <a href="/event-checkin/client">Client</a>
-    <a href="/event-checkin/admin">Admin</a>
+    <a href="/event-checkin/client" data-panel="dashboard">Dashboard</a>
+    <a href="/event-checkin/admin"  data-panel="admin">Admin</a>
   </nav>
   <span class="conn-status">
     <span class="conn-dot" id="connDot"></span>
@@ -59,6 +59,10 @@
     </div>
     <div class="modal-body">
       <form id="addForm" autocomplete="off">
+        <div style="margin-bottom:12px;">
+          <label for="af-id">ID <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(optional — leave blank to auto-assign)</span></label>
+          <input type="number" id="af-id" name="id" min="1" placeholder="e.g. 42" style="width:140px;" />
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div>
             <label for="af-color">Color <span style="color:red">*</span></label>
@@ -107,9 +111,10 @@
 
 <!-- ─── Scripts ───────────────────────────────────────────────────────────── -->
 <script>
-  // Make the API base path available to checkin.js
   window.API_BASE = '/api/event-checkin';
 </script>
+<script src="/event-checkin/static/js/auth.js"></script>
+<script>requireAuth('reception');</script>
 <script src="/event-checkin/static/js/checkin.js"></script>
 </body>
 </html>

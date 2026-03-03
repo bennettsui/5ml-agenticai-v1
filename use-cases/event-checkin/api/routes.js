@@ -98,11 +98,11 @@ router.post('/participants/:id/remarks', async (req, res) => {
 
 // POST /participants  — create from check-in "add new" form
 router.post('/participants', async (req, res) => {
-  const { color, title, first_name, last_name, full_name, organization, remarks } = req.body;
+  const { id, color, title, first_name, last_name, full_name, organization, remarks } = req.body;
   if (!color || !full_name)               return res.status(400).json({ error: 'color and full_name are required' });
   if (!VALID_COLORS.includes(color))      return res.status(400).json({ error: 'Invalid color' });
   try {
-    const p = await db.insert({ color, title, first_name, last_name, full_name, organization, remarks });
+    const p = await db.insert({ id, color, title, first_name, last_name, full_name, organization, remarks });
     sse.broadcast('participant_created', { type: 'participant_created', payload: p });
     res.status(201).json(p);
   } catch (err) {
@@ -118,7 +118,7 @@ router.post('/participants', async (req, res) => {
 // GET /admin/participants  — paginated list with filters
 router.get('/admin/participants', async (req, res) => {
   const page     = Math.max(1, parseInt(req.query.page, 10)      || 1);
-  const pageSize = Math.min(200, parseInt(req.query.pageSize, 10) || 50);
+  const pageSize = Math.min(5000, parseInt(req.query.pageSize, 10) || 50);
   const color    = VALID_COLORS.includes(req.query.color)  ? req.query.color  : undefined;
   const status   = ['checked_in','not_checked_in'].includes(req.query.status) ? req.query.status : undefined;
   const query    = (req.query.query || '').trim() || undefined;
@@ -132,11 +132,11 @@ router.get('/admin/participants', async (req, res) => {
 
 // POST /admin/participants — create from admin
 router.post('/admin/participants', async (req, res) => {
-  const { color, title, first_name, last_name, full_name, organization, status, remarks } = req.body;
+  const { id, color, title, first_name, last_name, full_name, organization, status, remarks } = req.body;
   if (!color || !full_name)          return res.status(400).json({ error: 'color and full_name are required' });
   if (!VALID_COLORS.includes(color)) return res.status(400).json({ error: 'Invalid color' });
   try {
-    const p = await db.insert({ color, title, first_name, last_name, full_name, organization, status, remarks });
+    const p = await db.insert({ id, color, title, first_name, last_name, full_name, organization, status, remarks });
     sse.broadcast('participant_created', { type: 'participant_created', payload: p });
     res.status(201).json(p);
   } catch (err) {
@@ -612,10 +612,24 @@ Answer the coordinator's question accurately and concisely.`,
       `Question: ${question}\n\nGuest list (name|color|org|status):\n${compact}`,
       { maxTokens: 800, temperature: 0.3 }
     );
+    // Persist conversation to DB (fire-and-forget; don't block the response)
+    db.saveChat(question, result.content).catch(e => console.error('[checkin chat save]', e));
     res.json({ answer: result.content });
   } catch (err) {
     console.error('[checkin ai concierge]', err);
     res.status(500).json({ error: 'Concierge failed: ' + err.message });
+  }
+});
+
+// GET /admin/chat-history — all Dashboard AI chat conversations
+router.get('/admin/chat-history', async (req, res) => {
+  try {
+    const limit = Math.min(500, parseInt(req.query.limit, 10) || 200);
+    const chats = await db.getChats({ limit });
+    res.json(chats);
+  } catch (err) {
+    console.error('[checkin chat history]', err);
+    res.status(500).json({ error: 'Failed to load chat history' });
   }
 });
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RD Symposium — Live Status</title>
+  <title>RD Symposium — Dashboard</title>
   <link rel="stylesheet" href="/event-checkin/static/css/style.css" />
   <style>
     /* ─── Client dashboard layout ──────────────────────────────── */
@@ -212,11 +212,11 @@
 <header class="page-header">
   <div class="header-brand">
     <h1>🎟️ RD Symposium</h1>
-    <span class="header-subtitle">Live Status</span>
+    <span class="header-subtitle">Dashboard</span>
   </div>
   <nav>
-    <a href="/event-checkin">Reception</a>
-    <a href="/event-checkin/admin">Admin</a>
+    <a href="/event-checkin"       data-panel="reception">Reception</a>
+    <a href="/event-checkin/admin" data-panel="admin">Admin</a>
   </nav>
   <span class="conn-status">
     <span class="conn-dot" id="connDot"></span>
@@ -337,6 +337,8 @@
 <script>
   window.API_BASE = '/api/event-checkin';
 </script>
+<script src="/event-checkin/static/js/auth.js"></script>
+<script>requireAuth('dashboard');</script>
 <script src="/event-checkin/static/js/client.js"></script>
 </body>
 </html>
