@@ -224,11 +224,14 @@ router.post('/admin/participants/bulk-status', async (req, res) => {
 
 // ─── Import ───────────────────────────────────────────────────────────────────
 //
-// TUNE: Change DEDUP_MODE to control import behaviour:
-//   "skip"   → skip rows that match (full_name, organization, color)  ← default
-//   "update" → update non-status fields on duplicates
-//   "insert" → always insert, no dedup
-const DEDUP_MODE = 'skip';
+// Import policy (non-negotiable):
+//   • NEVER modify existing records — only INSERT new ones.
+//   • NEVER set or change the `id` (SERIAL) column from the file.
+//   • `ref_id` is the stable external identifier read from the file (e.g. "No.",
+//     "ID" column). Stored as TEXT, used only for dedup — NOT the system `id`.
+//   • Deduplication priority:
+//       1. If the row has a non-empty ref_id → skip if any DB row has that ref_id.
+//       2. Fallback → skip if (full_name, organization, color) already exists.
 
 router.post('/admin/import', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -242,15 +245,17 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
       const lines   = text.split(/\r?\n/);
       if (lines.length < 2) return res.status(400).json({ error: 'CSV missing header' });
 
-      // TUNE: CSV column mapping — adjust candidate names to match your CSV headers
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\s-]/g, '_'));
       const colMap  = {
-        color:        findCol(headers, ['color']),
+        ref_id:       findCol(headers, ['ref_id','id','no','no.','number','编号','編號']),
+        color:        findCol(headers, ['color','colour']),
         title:        findCol(headers, ['title']),
         first_name:   findCol(headers, ['first_name','firstname']),
         last_name:    findCol(headers, ['last_name','lastname']),
-        full_name:    findCol(headers, ['full_name','fullname']),
-        organization: findCol(headers, ['organization','org']),
+        full_name:    findCol(headers, ['full_name','fullname','name']),
+        organization: findCol(headers, ['organization','org','company']),
+        phone:        findCol(headers, ['phone','tel','telephone']),
+        email:        findCol(headers, ['email','e-mail']),
       };
 
       for (let i = 1; i < lines.length; i++) {
@@ -258,12 +263,15 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         if (!line) continue;
         const cells = parseCsvLine(line);
         rows.push({
+          ref_id:       cells[colMap.ref_id]       || null,
           color:        cells[colMap.color]        || null,
           title:        cells[colMap.title]        || null,
           first_name:   cells[colMap.first_name]   || null,
           last_name:    cells[colMap.last_name]     || null,
           full_name:    cells[colMap.full_name]     || null,
           organization: cells[colMap.organization] || null,
+          phone:        cells[colMap.phone]        || null,
+          email:        cells[colMap.email]        || null,
         });
       }
 
@@ -271,32 +279,27 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(req.file.buffer);
 
-      // Normalize a color string to proper-case (handles PURPLE → Purple, blue → Blue)
       const normalizeColor = (c) =>
         VALID_COLORS.find(v => v.toLowerCase() === (c ?? '').toLowerCase()) ?? null;
 
-      // Safely extract text from any ExcelJS cell value (string, number, rich-text object, Date)
       const cellText = (val) => {
         if (val == null) return null;
         if (typeof val === 'object' && Array.isArray(val.richText))
           return val.richText.map(r => r.text ?? '').join('').trim() || null;
-        if (val instanceof Date) return null; // skip date cells
+        if (val instanceof Date) return null;
         const s = String(val).trim();
         return s || null;
       };
 
       for (const ws of workbook.worksheets) {
-        // Case-insensitive sheet name → color (handles PURPLE, BLUE, etc.)
         const sheetColor = normalizeColor(ws.name.trim());
 
-        // Detect whether row 1 is a header row or data row.
-        // Heuristic: if col A is purely numeric (e.g. "001", "1") → no headers.
-        const firstRow    = ws.getRow(1);
-        const firstCellA  = cellText(firstRow.getCell(1).value) ?? '';
-        const hasHeaders  = !/^\d+$/.test(firstCellA);
-        const dataStart   = hasHeaders ? 2 : 1;
+        // Heuristic: col A purely numeric → no header row (e.g. "1", "001")
+        const firstRow   = ws.getRow(1);
+        const firstCellA = cellText(firstRow.getCell(1).value) ?? '';
+        const hasHeaders = !/^\d+$/.test(firstCellA);
+        const dataStart  = hasHeaders ? 2 : 1;
 
-        // Build named column index from header row (only when headers exist)
         const colIndex = {};
         if (hasHeaders) {
           firstRow.eachCell((cell, colNum) => {
@@ -305,14 +308,10 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
           });
         }
 
-        // Look up a cell by one or more candidate header names
         const getByName = (row, ...names) => {
           for (const name of names) {
             const idx = colIndex[name];
-            if (idx) {
-              const v = cellText(row.getCell(idx).value);
-              if (v) return v;
-            }
+            if (idx) { const v = cellText(row.getCell(idx).value); if (v) return v; }
           }
           return null;
         };
@@ -320,24 +319,25 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         ws.eachRow((row, rowNum) => {
           if (rowNum < dataStart) return;
 
-          let color, title, first_name, last_name, full_name, organization;
+          let ref_id, color, title, first_name, last_name, full_name, organization, phone, email;
 
           if (hasHeaders) {
-            // Named-column mapping (flexible header names)
+            ref_id       = getByName(row,
+              'ID', 'id', 'No.', 'No', '編號', '编号', 'Number', 'RefId', 'ref_id', 'Ref', 'Reference');
             full_name    = getByName(row,
-              'FullName', 'full_name', 'Full Name',
-              'Name', 'English Name', 'EnglishName',
+              'FullName', 'full_name', 'Full Name', 'Name', 'English Name', 'EnglishName',
               'Participant Name', 'Display Name', 'Badge Name');
             color        = sheetColor ?? normalizeColor(getByName(row,
-              'Color', 'color', 'Colour', 'colour',
-              'Group', 'group', 'Table', 'table', 'Table Color', 'Badge Color'));
+              'Color', 'color', 'Colour', 'colour', 'Group', 'group', 'Table', 'table', 'Table Color', 'Badge Color'));
             title        = getByName(row, 'Title', 'title', 'Salutation', 'salutation', 'Title/Salutation');
             first_name   = getByName(row, 'FirstName', 'first_name', 'First Name', 'Given Name');
             last_name    = getByName(row, 'LastName',  'last_name',  'Last Name',  'Surname');
             organization = getByName(row, 'Organization', 'organization', 'Organisation', 'Org', 'Company', 'Affiliation');
+            phone        = getByName(row, 'Phone', 'phone', 'Tel', 'Telephone', '電話');
+            email        = getByName(row, 'Email', 'email', 'E-mail', '電郵');
           } else {
-            // No header row — positional mapping based on observed column layout:
-            // A=No.  B=Color  C=Title  D=FirstName  E=LastName  F=FullName  G=Organization
+            // Positional: A=ref_id  B=Color  C=Title  D=First  E=Last  F=FullName  G=Org
+            ref_id       = cellText(row.getCell(1).value);
             color        = sheetColor ?? normalizeColor(cellText(row.getCell(2).value));
             title        = cellText(row.getCell(3).value);
             first_name   = cellText(row.getCell(4).value);
@@ -347,43 +347,37 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
           }
 
           if (!full_name) return;
-          rows.push({ color, title, first_name, last_name, full_name, organization });
+          rows.push({ ref_id, color, title, first_name, last_name, full_name, organization, phone, email });
         });
       }
     } else {
       return res.status(400).json({ error: 'Unsupported file type. Use .xlsx or .csv' });
     }
 
-    // ── Deduplication + insert ─────────────────────────────────────────────────
-    let inserted = 0, skipped = 0, updated = 0, skipped_no_color = 0, skipped_no_name = 0;
+    // ── Insert new rows only — NEVER modify existing records ───────────────────
+    let inserted = 0, skipped = 0, skipped_no_color = 0, skipped_no_name = 0;
     const newRows = [];
 
     for (const row of rows) {
-      // Normalize color one final time (handles any remaining case mismatches)
       if (row.color) row.color = VALID_COLORS.find(v => v.toLowerCase() === row.color.toLowerCase()) ?? row.color;
       if (!row.full_name) { skipped++; skipped_no_name++; continue; }
       if (!VALID_COLORS.includes(row.color)) { skipped++; skipped_no_color++; continue; }
 
-      // TUNE: deduplication key is (full_name, organization, color)
-      const existing = DEDUP_MODE !== 'insert'
-        ? await db.findDuplicate(row.full_name, row.organization, row.color)
-        : null;
-
-      if (existing) {
-        if (DEDUP_MODE === 'skip') {
-          skipped++;
-        } else if (DEDUP_MODE === 'update') {
-          const p = await db.update(existing.id, { title: row.title, first_name: row.first_name, last_name: row.last_name, organization: row.organization });
-          newRows.push(p); updated++;
-        }
-      } else {
-        const p = await db.insert({ ...row, status: 'not_checked_in' });
-        newRows.push(p); inserted++;
+      // Dedup 1: by ref_id (exact external identifier)
+      if (row.ref_id) {
+        if (await db.findByRefId(row.ref_id)) { skipped++; continue; }
       }
+      // Dedup 2: by (full_name, organization, color)
+      if (await db.findDuplicate(row.full_name, row.organization, row.color)) { skipped++; continue; }
+
+      // id is auto-assigned by DB SERIAL — never set from file
+      const p = await db.insert({ ...row, status: 'not_checked_in' });
+      newRows.push(p);
+      inserted++;
     }
 
     if (newRows.length) sse.broadcast('bulk_imported', { type: 'bulk_imported', payload: newRows });
-    res.json({ processed: rows.length, inserted, skipped, updated, dedup_mode: DEDUP_MODE, skipped_no_color, skipped_no_name });
+    res.json({ processed: rows.length, inserted, skipped, skipped_no_color, skipped_no_name });
 
   } catch (err) {
     console.error('[event-checkin import]', err);

@@ -74,6 +74,8 @@ async function loadPage(page = 1) {
     totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
     pageInfo.textContent  = `Page ${currentPage} of ${totalPages}`;
     totalInfo.textContent = `${data.total} participant(s)`;
+    const badge = document.getElementById('entryCountBadge');
+    if (badge) badge.textContent = `— ${data.total} entries`;
     prevPageBtn.disabled  = currentPage <= 1;
     nextPageBtn.disabled  = currentPage >= totalPages;
 
@@ -88,7 +90,7 @@ async function loadPage(page = 1) {
 
 function renderTable(rows) {
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text-muted);">No participants found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text-muted);">No participants found.</td></tr>`;
     return;
   }
 
@@ -98,6 +100,7 @@ function renderTable(rows) {
       <tr data-id="${p.id}">
         <td><input type="checkbox" class="row-check" data-id="${p.id}" /></td>
         <td style="color:var(--text-muted);font-size:12px;">${p.id}</td>
+        <td style="color:var(--text-muted);font-size:12px;">${esc(p.ref_id || '')}</td>
         <td><span class="tag tag-${p.color}">${p.color}</span></td>
         <td style="font-weight:600;">${esc(p.full_name)}</td>
         <td>${esc(p.title || '')}</td>
@@ -228,16 +231,17 @@ function openEditModal(id) {
     const row = tbody.querySelector(`tr[data-id="${id}"]`);
     if (row) {
       const cells = row.querySelectorAll('td');
+      setField('ef-ref-id',  cells[2]?.textContent?.trim() || '');
       setField('ef-color',   row.querySelector('.tag')?.textContent?.trim() || '');
-      setField('ef-full',    cells[3]?.textContent?.trim() || '');
-      setField('ef-title',   cells[4]?.textContent?.trim() || '');
-      setField('ef-first',   cells[5]?.textContent?.trim() || '');
-      setField('ef-last',    cells[6]?.textContent?.trim() || '');
-      setField('ef-org',     cells[7]?.textContent?.trim() || '');
-      setField('ef-phone',   cells[8]?.textContent?.trim() || '');
-      setField('ef-email',   cells[9]?.getAttribute('title') || cells[9]?.textContent?.trim() || '');
+      setField('ef-full',    cells[4]?.textContent?.trim() || '');
+      setField('ef-title',   cells[5]?.textContent?.trim() || '');
+      setField('ef-first',   cells[6]?.textContent?.trim() || '');
+      setField('ef-last',    cells[7]?.textContent?.trim() || '');
+      setField('ef-org',     cells[8]?.textContent?.trim() || '');
+      setField('ef-phone',   cells[9]?.textContent?.trim() || '');
+      setField('ef-email',   cells[10]?.getAttribute('title') || cells[10]?.textContent?.trim() || '');
       setField('ef-status',  row.querySelector('.status-checked') ? 'checked_in' : 'not_checked_in');
-      setField('ef-remarks', cells[11]?.getAttribute('title') || '');
+      setField('ef-remarks', cells[12]?.getAttribute('title') || '');
     }
   } else {
     titleEl.textContent    = 'Add Participant';
@@ -313,9 +317,7 @@ document.getElementById('importBtn').addEventListener('click', async () => {
       <strong>Import complete</strong><br/>
       Rows processed: ${data.processed} &nbsp;|&nbsp;
       Inserted: <strong>${data.inserted}</strong> &nbsp;|&nbsp;
-      Skipped: ${data.skipped}${skipNote} &nbsp;|&nbsp;
-      Updated: ${data.updated} &nbsp;|&nbsp;
-      Mode: <em>${data.dedup_mode}</em>
+      Skipped: ${data.skipped}${skipNote}
       ${data.skipped_no_color > 0 ? '<br/><span style="color:#fbbf24;font-size:12px;">⚠️ Color must be exactly: Red, Purple, Blue, or Green (sheet name or Color column)</span>' : ''}
     `;
     if (data.inserted === 0 && data.skipped > 0) {
