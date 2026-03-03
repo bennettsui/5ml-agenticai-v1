@@ -34,7 +34,7 @@
       <div class="panel-title">📥 Import Participants (Excel / CSV)</div>
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
         Excel: auto-detects Color, Name, English Name, Organisation columns.
-        Sheets named Red/Purple/Blue/Green set the color automatically.
+        Sheets named Red/Purple/Blue/Green/策略影響夥伴/AI 戰略合作夥伴 iKala/實物與社群夥伴 set the type automatically.
         CSV: requires <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:4px;font-family:monospace;">color</code> and <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:4px;font-family:monospace;">full_name</code> columns.
       </p>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
@@ -112,14 +112,18 @@
     <div class="admin-toolbar" style="padding:16px 20px;border-bottom:1px solid var(--border);">
       <button class="btn btn-primary btn-sm" id="addParticipantBtn">+ Add Participant</button>
       <span id="entryCountBadge" style="font-size:13px;font-weight:600;color:var(--text-muted);margin-left:4px;"></span>
+      <button class="btn btn-danger btn-sm" id="deleteAllBtn" style="margin-left:auto;">🗑 Delete All</button>
 
       <div class="filters">
         <select id="filterColor" aria-label="Filter by color">
-          <option value="">All Colors</option>
+          <option value="">All</option>
           <option value="Red">Red</option>
           <option value="Purple">Purple</option>
           <option value="Blue">Blue</option>
           <option value="Green">Green</option>
+          <option value="策略影響夥伴">策略影響夥伴</option>
+          <option value="AI 戰略合作夥伴 iKala">AI 戰略合作夥伴 iKala</option>
+          <option value="實物與社群夥伴">實物與社群夥伴</option>
         </select>
         <select id="filterStatus" aria-label="Filter by status">
           <option value="">All Status</option>
@@ -144,8 +148,8 @@
         <thead>
           <tr>
             <th style="width:36px;"><input type="checkbox" id="selectAll" title="Select all on page" /></th>
-            <th style="width:52px;">ID</th>
-            <th style="width:70px;">Ref#</th>
+            <th style="width:44px;">#</th>
+            <th style="width:80px;">ID</th>
             <th>Color</th>
             <th>Full Name</th>
             <th>Title</th>
@@ -218,22 +222,25 @@
       <form id="editForm" autocomplete="off">
         <input type="hidden" id="ef-id" name="id" />
         <div id="ef-new-id-row" style="margin-bottom:12px;">
-          <label for="ef-new-id">ID <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(optional — leave blank to auto-assign)</span></label>
+          <label for="ef-new-id">System # <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(optional — leave blank to auto-assign)</span></label>
           <input type="number" id="ef-new-id" min="1" placeholder="e.g. 42" style="width:140px;" />
         </div>
         <div style="margin-bottom:12px;">
-          <label for="ef-ref-id">Ref# <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(external ID from Excel / your own reference)</span></label>
+          <label for="ef-ref-id">ID <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(external ID from Excel / your own reference)</span></label>
           <input type="text" id="ef-ref-id" name="ref_id" placeholder="e.g. A001" style="width:160px;" />
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div>
-            <label for="ef-color">Color <span style="color:red">*</span></label>
+            <label for="ef-color">Color / Type <span style="color:red">*</span></label>
             <select id="ef-color" name="color" required>
               <option value="">— select —</option>
               <option value="Red">Red</option>
               <option value="Purple">Purple</option>
               <option value="Blue">Blue</option>
               <option value="Green">Green</option>
+              <option value="策略影響夥伴">策略影響夥伴</option>
+              <option value="AI 戰略合作夥伴 iKala">AI 戰略合作夥伴 iKala</option>
+              <option value="實物與社群夥伴">實物與社群夥伴</option>
             </select>
           </div>
           <div>

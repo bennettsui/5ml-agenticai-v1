@@ -78,6 +78,18 @@ async function init() {
     );
   `);
 
+  // Widen color CHECK constraint to include partner types
+  await pool.query(`
+    ALTER TABLE ${TABLE} DROP CONSTRAINT IF EXISTS event_checkin_participants_color_check;
+  `);
+  await pool.query(`
+    ALTER TABLE ${TABLE} ADD CONSTRAINT event_checkin_participants_color_check
+      CHECK(color IN (
+        'Red','Purple','Blue','Green',
+        '策略影響夥伴','AI 戰略合作夥伴 iKala','實物與社群夥伴'
+      ));
+  `);
+
   // Backfill name_search for existing rows that don't have it yet
   const { rows: nullRows } = await pool.query(
     `SELECT id, full_name, first_name, last_name FROM ${TABLE} WHERE name_search IS NULL`
@@ -271,6 +283,11 @@ async function bulkDelete(ids) {
   return rowCount;
 }
 
+async function deleteAll() {
+  const { rowCount } = await pool.query(`DELETE FROM ${TABLE}`);
+  return rowCount;
+}
+
 async function findDuplicate(fullName, organization, color) {
   const { rows } = await pool.query(`
     SELECT * FROM ${TABLE}
@@ -305,4 +322,4 @@ async function getChats({ limit = 200 } = {}) {
   return rows;
 }
 
-module.exports = { init, findById, findByRefId, search, listAll, insert, update, remove, list, bulkStatus, bulkDelete, findDuplicate, getCheckedIn, saveChat, getChats };
+module.exports = { init, findById, findByRefId, search, listAll, insert, update, remove, list, bulkStatus, bulkDelete, deleteAll, findDuplicate, getCheckedIn, saveChat, getChats };

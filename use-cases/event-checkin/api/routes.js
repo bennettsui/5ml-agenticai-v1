@@ -38,7 +38,10 @@ db.init().catch(err => console.error('[event-checkin] DB init error:', err));
 // Multer: store uploaded files in memory
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
-const VALID_COLORS = ['Red', 'Purple', 'Blue', 'Green'];
+const VALID_COLORS = [
+  'Red', 'Purple', 'Blue', 'Green',
+  '策略影響夥伴', 'AI 戰略合作夥伴 iKala', '實物與社群夥伴',
+];
 
 // ─── SSE stream ───────────────────────────────────────────────────────────────
 // Clients connect here once and receive all real-time events.
@@ -202,6 +205,18 @@ router.post('/admin/participants/bulk-delete', async (req, res) => {
   } catch (err) {
     console.error('[event-checkin bulk delete]', err);
     res.status(500).json({ error: 'Bulk delete failed' });
+  }
+});
+
+// DELETE /admin/participants/all
+router.delete('/admin/participants/all', async (req, res) => {
+  try {
+    const count = await db.deleteAll();
+    sse.broadcast('bulk_deleted', { type: 'bulk_deleted', payload: { all: true } });
+    res.json({ deleted: count });
+  } catch (err) {
+    console.error('[event-checkin delete-all]', err);
+    res.status(500).json({ error: 'Delete all failed' });
   }
 });
 
