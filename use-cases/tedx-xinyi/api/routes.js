@@ -285,6 +285,8 @@ router.get('/image-slots', (req, res) => {
       localExists,
       status: cdnUrl ? 'cdn' : localExists ? 'local-only' : 'missing',
       note: v.description || '',
+      generatable: true,
+      visualId: v.id,
     });
   }
 
@@ -824,6 +826,30 @@ router.get('/visuals/:id', (req, res) => {
 const SPEAKERS_DIR = path.join(OUTPUT_DIR, 'speakers');
 if (!fs.existsSync(SPEAKERS_DIR)) {
   fs.mkdirSync(SPEAKERS_DIR, { recursive: true });
+}
+
+// ---- Sponsor Logos ----
+const SPONSORS_LOGOS_DIR = path.join(OUTPUT_DIR, 'sponsors');
+const SPONSOR_LOGOS_FILE = path.join(__dirname, '.sponsor-logos.json');
+
+const SPONSOR_CATEGORIES = [
+  { id: 'featured',   label: '精選夥伴', label_en: 'Featured Partners' },
+  { id: 'strategic',  label: '策略夥伴', label_en: 'Strategic Partners' },
+  { id: 'patron',     label: '主贊助',   label_en: 'Patron' },
+  { id: 'honor',      label: '榮譽贊助', label_en: 'Honor' },
+  { id: 'basic',      label: '基礎贊助', label_en: 'Basic' },
+  { id: 'individual', label: '個人贊助', label_en: 'Individual' },
+  { id: 'in-kind',    label: '實物贊助', label_en: 'In-Kind' },
+  { id: 'community',  label: '社區夥伴', label_en: 'Community Partners' },
+];
+
+function loadSponsorLogos() {
+  try { return JSON.parse(fs.readFileSync(SPONSOR_LOGOS_FILE, 'utf8')); }
+  catch { return {}; }
+}
+
+function saveSponsorLogos(data) {
+  fs.writeFileSync(SPONSOR_LOGOS_FILE, JSON.stringify(data, null, 2));
 }
 
 const METADATA_PATH = path.join(OUTPUT_DIR, '.media-metadata.json');
@@ -3037,6 +3063,90 @@ Do NOT include any placeholder text. All text in the image should be real, final
     });
   } catch (err) {
     console.error('[TEDxXinyi] Generate social image error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== SPONSOR LOGOS ====================
+
+router.get('/sponsors/logos', (req, res) => {
+  const data = loadSponsorLogos();
+  const result = {};
+  for (const [key, logo] of Object.entries(data)) {
+    const localExists = logo.filename ? fs.existsSync(path.join(SPONSORS_LOGOS_DIR, logo.filename)) : false;
+    result[key] = { ...logo, localExists };
+  }
+  res.json({ logos: result, categories: SPONSOR_CATEGORIES });
+});
+
+router.post('/sponsors/logos', express.json({ limit: '10mb' }), async (req, res) => {
+  try {
+    const { data: imgData, name, category } = req.body;
+    if (!name || !category) return res.status(400).json({ error: 'name and category required' });
+    if (!SPONSOR_CATEGORIES.find(c => c.id === category)) return res.status(400).json({ error: 'Invalid category' });
+
+    if (!fs.existsSync(SPONSORS_LOGOS_DIR)) fs.mkdirSync(SPONSORS_LOGOS_DIR, { recursive: true });
+
+    const slug = name.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase().slice(0, 40);
+    const key = `sponsor-${category}-${slug}-${Date.now()}`;
+    let filename = null;
+    let publicUrl = null;
+
+    if (imgData && imgData.startsWith('data:image/')) {
+      const match = imgData.match(/^data:image\/(jpeg|png|webp|gif);base64,(.+)$/);
+      if (match) {
+        const rawBuffer = Buffer.from(match[2], 'base64');
+        const sharp = require('sharp');
+        const compressed = await sharp(rawBuffer).webp({ quality: 82, effort: 4 }).toBuffer();
+        filename = `${key}.webp`;
+        fs.writeFileSync(path.join(SPONSORS_LOGOS_DIR, filename), compressed);
+        try {
+          publicUrl = await uploadToMmdb(compressed);
+        } catch (err) {
+          console.error('[TEDxXinyi] Sponsor logo CDN upload failed:', err.message);
+        }
+      }
+    }
+
+    const logos = loadSponsorLogos();
+    logos[key] = { key, name, category, filename, publicUrl, uploadedAt: new Date().toISOString() };
+    saveSponsorLogos(logos);
+    res.json({ success: true, logo: { ...logos[key], localExists: !!filename } });
+  } catch (err) {
+    console.error('[TEDxXinyi] Sponsor logo upload error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/sponsors/logos/:key', express.json(), (req, res) => {
+  try {
+    const { key } = req.params;
+    const { name, category } = req.body;
+    const logos = loadSponsorLogos();
+    if (!logos[key]) return res.status(404).json({ error: 'Logo not found' });
+    if (name) logos[key].name = name;
+    if (category && SPONSOR_CATEGORIES.find(c => c.id === category)) logos[key].category = category;
+    saveSponsorLogos(logos);
+    res.json({ success: true, logo: logos[key] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/sponsors/logos/:key', (req, res) => {
+  try {
+    const { key } = req.params;
+    const logos = loadSponsorLogos();
+    const logo = logos[key];
+    if (!logo) return res.status(404).json({ error: 'Logo not found' });
+    if (logo.filename) {
+      const fp = path.join(SPONSORS_LOGOS_DIR, logo.filename);
+      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+    }
+    delete logos[key];
+    saveSponsorLogos(logos);
+    res.json({ success: true });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
