@@ -74,6 +74,13 @@ async function findById(id) {
 
 async function search(query) {
   const like = `%${query}%`;
+  const trimmed = query.trim();
+  const params = [like];
+  let idClause = '';
+  if (/^\d+$/.test(trimmed)) {
+    params.push(parseInt(trimmed, 10));
+    idClause = `OR id = $2`;
+  }
   const { rows } = await pool.query(`
     SELECT * FROM ${TABLE}
     WHERE  full_name    ILIKE $1
@@ -81,8 +88,9 @@ async function search(query) {
         OR last_name    ILIKE $1
         OR organization ILIKE $1
         OR color        ILIKE $1
+        ${idClause}
     ORDER BY color, full_name
-  `, [like]);
+  `, params);
   return rows;
 }
 
@@ -132,9 +140,16 @@ async function list({ page = 1, pageSize = 50, color, status, query } = {}) {
   if (color)  { conditions.push(`color = $${idx++}`);  params.push(color); }
   if (status) { conditions.push(`status = $${idx++}`); params.push(status); }
   if (query) {
-    conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx})`);
-    params.push(`%${query}%`);
-    idx++;
+    const trimmedQ = String(query).trim();
+    if (/^\d+$/.test(trimmedQ)) {
+      conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx} OR id = $${idx + 1})`);
+      params.push(`%${trimmedQ}%`, parseInt(trimmedQ, 10));
+      idx += 2;
+    } else {
+      conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx})`);
+      params.push(`%${trimmedQ}%`);
+      idx++;
+    }
   }
 
   const where  = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';

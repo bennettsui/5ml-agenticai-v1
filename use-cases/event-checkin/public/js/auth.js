@@ -7,9 +7,9 @@
    ═══════════════════════════════════════════════════════════════ */
 
 const AUTH_PANELS = {
-  reception: { pass: 'rd2026',      label: 'Reception',  href: '/event-checkin' },
-  dashboard:  { pass: 'rd2026!',     label: 'Dashboard',  href: '/event-checkin/client' },
-  admin:      { pass: '5milesLab01', label: 'Admin Panel', href: '/event-checkin/admin' },
+  reception: { pass: 'RD2026',      label: 'Reception',  href: '/event-checkin' },
+  dashboard:  { pass: 'RD2026!',    label: 'Dashboard',  href: '/event-checkin/client' },
+  admin:      { pass: 'RD2026admin', label: 'Admin Panel', href: '/event-checkin/admin' },
 };
 
 const SESSION_KEY = (panel) => `rds_auth_${panel}`;
