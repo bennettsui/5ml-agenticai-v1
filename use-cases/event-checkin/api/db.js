@@ -8,10 +8,9 @@
  *
  * Table: event_checkin_participants
  *
- * Two-field name design:
- *   full_name    — name_original: stored as-is, only used for display
- *   name_search  — pre-normalised (T2S + lowercase + no punct), used only for
- *                  fuzzy matching; never shown in the UI
+ * Name fields: first_name + last_name  (no full_name column)
+ * name_search  — pre-normalised (T2S + lowercase + no punct), used only for
+ *                fuzzy matching; never shown in the UI
  */
 
 const { pool }            = require('../../../db');
@@ -29,7 +28,6 @@ async function init() {
       title        TEXT,
       first_name   TEXT,
       last_name    TEXT,
-      full_name    TEXT        NOT NULL,
       name_search  TEXT,
       organization TEXT,
       phone        TEXT,
@@ -47,6 +45,7 @@ async function init() {
   await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS phone TEXT;`);
   await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS email TEXT;`);
   await pool.query(`ALTER TABLE ${TABLE} DROP COLUMN IF EXISTS ref_id;`);
+  await pool.query(`ALTER TABLE ${TABLE} DROP COLUMN IF EXISTS full_name;`);
 
   // Trigger to keep updated_at current on every UPDATE
   await pool.query(`
@@ -91,7 +90,7 @@ async function init() {
 
   // Backfill name_search for existing rows that don't have it yet
   const { rows: nullRows } = await pool.query(
-    `SELECT id, full_name, first_name, last_name FROM ${TABLE} WHERE name_search IS NULL`
+    `SELECT id, first_name, last_name FROM ${TABLE} WHERE name_search IS NULL`
   );
   for (const row of nullRows) {
     const ns = computeNameSearch(row);
@@ -114,23 +113,14 @@ async function findById(id) {
 /** Legacy ILIKE search — kept for admin list filtering, not used for fuzzy search. */
 async function search(query) {
   const like = `%${query}%`;
-  const trimmed = query.trim();
-  const params = [like];
-  let idClause = '';
-  if (/^\d+$/.test(trimmed)) {
-    params.push(parseInt(trimmed, 10));
-    idClause = `OR id = $2`;
-  }
   const { rows } = await pool.query(`
     SELECT * FROM ${TABLE}
-    WHERE  full_name    ILIKE $1
-        OR first_name   ILIKE $1
+    WHERE  first_name   ILIKE $1
         OR last_name    ILIKE $1
         OR organization ILIKE $1
         OR color        ILIKE $1
-        ${idClause}
-    ORDER BY color, full_name
-  `, params);
+    ORDER BY color, last_name, first_name
+  `, [like]);
   return rows;
 }
 
@@ -149,8 +139,8 @@ async function insert(data) {
   if (customId) {
     const { rows } = await pool.query(`
       INSERT INTO ${TABLE}
-        (id, color, title, first_name, last_name, full_name, name_search, organization, phone, email, status, remarks)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        (id, color, title, first_name, last_name, name_search, organization, phone, email, status, remarks)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `, [
       customId,
@@ -158,7 +148,6 @@ async function insert(data) {
       data.title        || null,
       data.first_name   || null,
       data.last_name    || null,
-      data.full_name,
       nameSearch,
       data.organization || null,
       data.phone        || null,
@@ -174,15 +163,14 @@ async function insert(data) {
 
   const { rows } = await pool.query(`
     INSERT INTO ${TABLE}
-      (color, title, first_name, last_name, full_name, name_search, organization, phone, email, status, remarks)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      (color, title, first_name, last_name, name_search, organization, phone, email, status, remarks)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     RETURNING *
   `, [
     data.color,
     data.title        || null,
     data.first_name   || null,
     data.last_name    || null,
-    data.full_name,
     nameSearch,
     data.organization || null,
     data.phone        || null,
@@ -194,12 +182,12 @@ async function insert(data) {
 }
 
 async function update(id, fields) {
-  const allowed = ['color','title','first_name','last_name','full_name','organization','phone','email','status','remarks'];
+  const allowed = ['color','title','first_name','last_name','organization','phone','email','status','remarks'];
   const entries = Object.entries(fields).filter(([k]) => allowed.includes(k));
   if (!entries.length) return findById(id);
 
   // Recompute name_search whenever name-related fields change
-  const nameFields = ['full_name','first_name','last_name'];
+  const nameFields = ['first_name','last_name'];
   const affectsName = entries.some(([k]) => nameFields.includes(k));
   if (affectsName) {
     // Fetch current row to fill in any missing name parts
@@ -237,7 +225,7 @@ async function list({ page = 1, pageSize = 50, color, status, query } = {}) {
       params.push(`%${trimmedQ}%`);
       idx++;
     } else {
-      conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx} OR phone ILIKE $${idx} OR email ILIKE $${idx})`);
+      conditions.push(`(first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx} OR phone ILIKE $${idx} OR email ILIKE $${idx})`);
       params.push(`%${trimmedQ}%`);
       idx++;
     }
@@ -281,20 +269,21 @@ async function deleteAll() {
   return rowCount;
 }
 
-async function findDuplicate(fullName, organization, color) {
+async function findDuplicate(firstName, lastName, organization, color) {
   const { rows } = await pool.query(`
     SELECT * FROM ${TABLE}
-    WHERE full_name = $1
-      AND color     = $2
-      AND (organization = $3 OR (organization IS NULL AND $3 IS NULL))
+    WHERE (first_name = $1 OR (first_name IS NULL AND $1 IS NULL))
+      AND (last_name  = $2 OR (last_name  IS NULL AND $2 IS NULL))
+      AND color = $3
+      AND (organization = $4 OR (organization IS NULL AND $4 IS NULL))
     LIMIT 1
-  `, [fullName, color, organization || null]);
+  `, [firstName || null, lastName || null, color, organization || null]);
   return rows[0] || null;
 }
 
 async function getCheckedIn() {
   const { rows } = await pool.query(
-    `SELECT * FROM ${TABLE} WHERE status = 'checked_in' ORDER BY color, full_name`
+    `SELECT * FROM ${TABLE} WHERE status = 'checked_in' ORDER BY color, last_name, first_name`
   );
   return rows;
 }

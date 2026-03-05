@@ -301,7 +301,7 @@ function scorePair(qNorm, cNorm, qTokens, cTokens) {
  * Call on every INSERT and UPDATE.
  */
 function computeNameSearch(p) {
-  const parts = [p.full_name, p.first_name, p.last_name].filter(Boolean);
+  const parts = [p.first_name, p.last_name].filter(Boolean);
   return normalise(parts.join(' '));
 }
 

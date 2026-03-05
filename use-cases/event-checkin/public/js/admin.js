@@ -100,7 +100,6 @@ function renderTable(rows) {
       <tr data-id="${p.id}">
         <td><input type="checkbox" class="row-check" data-id="${p.id}" /></td>
         <td><span class="tag" data-color="${esc(p.color)}">${esc(p.color)}</span></td>
-        <td style="font-weight:600;">${esc(p.full_name)}</td>
         <td>${esc(p.title || '')}</td>
         <td>${esc(p.first_name || '')}</td>
         <td>${esc(p.last_name || '')}</td>
@@ -244,15 +243,14 @@ function openEditModal(id) {
     if (row) {
       const cells = row.querySelectorAll('td');
       setField('ef-color',   row.querySelector('.tag')?.textContent?.trim() || '');
-      setField('ef-full',    cells[3]?.textContent?.trim() || '');
-      setField('ef-title',   cells[4]?.textContent?.trim() || '');
-      setField('ef-first',   cells[5]?.textContent?.trim() || '');
-      setField('ef-last',    cells[6]?.textContent?.trim() || '');
-      setField('ef-org',     cells[7]?.textContent?.trim() || '');
-      setField('ef-phone',   cells[8]?.textContent?.trim() || '');
-      setField('ef-email',   cells[9]?.getAttribute('title') || cells[9]?.textContent?.trim() || '');
+      setField('ef-title',   cells[2]?.textContent?.trim() || '');
+      setField('ef-first',   cells[3]?.textContent?.trim() || '');
+      setField('ef-last',    cells[4]?.textContent?.trim() || '');
+      setField('ef-org',     cells[5]?.textContent?.trim() || '');
+      setField('ef-phone',   cells[6]?.textContent?.trim() || '');
+      setField('ef-email',   cells[7]?.getAttribute('title') || cells[7]?.textContent?.trim() || '');
       setField('ef-status',  row.querySelector('.status-checked') ? 'checked_in' : 'not_checked_in');
-      setField('ef-remarks', cells[11]?.getAttribute('title') || '');
+      setField('ef-remarks', cells[9]?.getAttribute('title') || '');
     }
   } else {
     titleEl.textContent    = 'Add Participant';
@@ -278,7 +276,7 @@ document.getElementById('editModalSubmit').addEventListener('click', async () =>
   const id   = document.getElementById('ef-id').value;
   const body = formToObj(editForm);
 
-  if (!body.color || !body.full_name) { toast('Color and Full Name are required.', 'error'); return; }
+  if (!body.color || (!body.first_name && !body.last_name)) { toast('Color and at least one name field are required.', 'error'); return; }
 
   // Include optional custom ID when creating a new participant
   if (!id) {

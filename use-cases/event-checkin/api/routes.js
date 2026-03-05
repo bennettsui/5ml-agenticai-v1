@@ -108,11 +108,11 @@ router.post('/participants/:id/remarks', async (req, res) => {
 
 // POST /participants  — create from check-in "add new" form
 router.post('/participants', async (req, res) => {
-  const { id, color, title, first_name, last_name, full_name, organization, phone, email, remarks } = req.body;
-  if (!color || !full_name)               return res.status(400).json({ error: 'color and full_name are required' });
-  if (!VALID_COLORS.includes(color))      return res.status(400).json({ error: 'Invalid color' });
+  const { id, color, title, first_name, last_name, organization, phone, email, remarks } = req.body;
+  if (!color || (!first_name && !last_name)) return res.status(400).json({ error: 'color and at least one of first_name/last_name are required' });
+  if (!VALID_COLORS.includes(color))         return res.status(400).json({ error: 'Invalid color' });
   try {
-    const p = await db.insert({ id, color, title, first_name, last_name, full_name, organization, phone, email, remarks });
+    const p = await db.insert({ id, color, title, first_name, last_name, organization, phone, email, remarks });
     sse.broadcast('participant_created', { type: 'participant_created', payload: p });
     res.status(201).json(p);
   } catch (err) {
@@ -142,11 +142,11 @@ router.get('/admin/participants', async (req, res) => {
 
 // POST /admin/participants — create from admin
 router.post('/admin/participants', async (req, res) => {
-  const { id, color, title, first_name, last_name, full_name, organization, phone, email, status, remarks } = req.body;
-  if (!color || !full_name)          return res.status(400).json({ error: 'color and full_name are required' });
-  if (!VALID_COLORS.includes(color)) return res.status(400).json({ error: 'Invalid color' });
+  const { id, color, title, first_name, last_name, organization, phone, email, status, remarks } = req.body;
+  if (!color || (!first_name && !last_name)) return res.status(400).json({ error: 'color and at least one of first_name/last_name are required' });
+  if (!VALID_COLORS.includes(color))         return res.status(400).json({ error: 'Invalid color' });
   try {
-    const p = await db.insert({ id, color, title, first_name, last_name, full_name, organization, phone, email, status, remarks });
+    const p = await db.insert({ id, color, title, first_name, last_name, organization, phone, email, status, remarks });
     sse.broadcast('participant_created', { type: 'participant_created', payload: p });
     res.status(201).json(p);
   } catch (err) {
@@ -158,7 +158,7 @@ router.post('/admin/participants', async (req, res) => {
 // PUT /admin/participants/:id — update
 router.put('/admin/participants/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const { color, title, first_name, last_name, full_name, organization, status, remarks } = req.body;
+  const { color, title, first_name, last_name, organization, status, remarks } = req.body;
   if (color && !VALID_COLORS.includes(color)) return res.status(400).json({ error: 'Invalid color' });
   try {
     if (!(await db.findById(id))) return res.status(404).json({ error: 'Not found' });
@@ -167,7 +167,6 @@ router.put('/admin/participants/:id', async (req, res) => {
     if (title        !== undefined) fields.title        = title;
     if (first_name   !== undefined) fields.first_name   = first_name;
     if (last_name    !== undefined) fields.last_name    = last_name;
-    if (full_name    !== undefined) fields.full_name    = full_name;
     if (organization !== undefined) fields.organization = organization;
     if (status       !== undefined) fields.status       = status;
     if (remarks      !== undefined) fields.remarks      = remarks;
@@ -242,7 +241,7 @@ router.post('/admin/participants/bulk-status', async (req, res) => {
 // Import policy (non-negotiable):
 //   • NEVER modify existing records — only INSERT new ones.
 //   • NEVER set or change the `id` (SERIAL) column from the file.
-//   • Deduplication: skip if (full_name, organization, color) already exists.
+//   • Deduplication: skip if (first_name, last_name, organization, color) already exists.
 
 router.post('/admin/import', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -260,12 +259,11 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
       const colMap  = {
         color:        findCol(headers, ['color','colour']),
         title:        findCol(headers, ['title']),
-        first_name:   findCol(headers, ['first_name','firstname']),
-        last_name:    findCol(headers, ['last_name','lastname']),
-        full_name:    findCol(headers, ['full_name','fullname','name']),
-        organization: findCol(headers, ['organization','org','company']),
-        phone:        findCol(headers, ['phone','tel','telephone']),
-        email:        findCol(headers, ['email','e-mail']),
+        first_name:   findCol(headers, ['first_name','firstname','first name']),
+        last_name:    findCol(headers, ['last_name','lastname','last name']),
+        organization: findCol(headers, ['organization','org','company','機構名']),
+        phone:        findCol(headers, ['phone','tel','telephone','電話']),
+        email:        findCol(headers, ['email','e-mail','電郵']),
       };
 
       for (let i = 1; i < lines.length; i++) {
@@ -279,7 +277,6 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
           title:        cells[colMap.title]        || null,
           first_name:   cells[colMap.first_name]   || null,
           last_name:    cells[colMap.last_name]     || null,
-          full_name:    cells[colMap.full_name]     || null,
           organization: cells[colMap.organization] || null,
           phone:        cells[colMap.phone]        || null,
           email:        cells[colMap.email]        || null,
@@ -335,31 +332,27 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         ws.eachRow((row, rowNum) => {
           if (rowNum < dataStart) return;
 
-          let color, title, first_name, last_name, full_name, organization, phone, email;
+          let color, title, first_name, last_name, organization, phone, email;
 
           if (hasHeaders) {
-            full_name    = getByName(row,
-              'FullName', 'full_name', 'Full Name', 'Name', 'English Name', 'EnglishName',
-              'Participant Name', 'Display Name', 'Badge Name', '姓名', '中文姓名', '英文姓名', '名字');
             color        = sheetColor ?? normalizeColor(getByName(row,
               'Color', 'color', 'Colour', 'colour', 'Group', 'group', 'Table', 'table', 'Table Color', 'Badge Color'));
-            title        = getByName(row, 'Title', 'title', 'Salutation', 'salutation', 'Title/Salutation', '稱謂', '職稱');
+            title        = getByName(row, 'Title', 'title', 'Ttle', 'Salutation', 'salutation', 'Title/Salutation', '稱謂', '職稱');
             first_name   = getByName(row, 'FirstName', 'first_name', 'First Name', 'Given Name', '名');
             last_name    = getByName(row, 'LastName',  'last_name',  'Last Name',  'Surname', '姓');
-            organization = getByName(row, 'Organization', 'organization', 'Organisation', 'Org', 'Company', 'Affiliation', '公司', '機構', '單位');
+            organization = getByName(row, 'Organization', 'organization', 'Organisation', 'Org', 'Company', 'Affiliation', '機構名', '公司', '機構', '單位');
             phone        = getByName(row, 'Phone', 'phone', 'Tel', 'Telephone', '電話', '手機');
             email        = getByName(row, 'Email', 'email', 'E-mail', '電郵', '電子郵件');
           } else {
-            // Positional: A=Color  B=Title  C=First  D=Last  E=FullName  F=Org
+            // Positional: A=Color  B=Title  C=First  D=Last  E=Org
             color        = sheetColor ?? normalizeColor(cellText(row.getCell(1).value));
             title        = cellText(row.getCell(2).value);
             first_name   = cellText(row.getCell(3).value);
             last_name    = cellText(row.getCell(4).value);
-            full_name    = cellText(row.getCell(5).value);
-            organization = cellText(row.getCell(6).value);
+            organization = cellText(row.getCell(5).value);
           }
 
-          rows.push({ _sheet: sheetName, _row: rowNum, color, title, first_name, last_name, full_name, organization, phone, email });
+          rows.push({ _sheet: sheetName, _row: rowNum, color, title, first_name, last_name, organization, phone, email });
         });
       }
     } else {
@@ -372,10 +365,11 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
     const detail  = [];
 
     for (const row of rows) {
+      const composedName = [row.first_name, row.last_name].filter(Boolean).join(' ') || null;
       const entry = {
         n:     row._row   || null,
         sheet: row._sheet || null,
-        name:  row.full_name || null,
+        name:  composedName,
         color: row.color  || null,
         title: row.title  || null,
         org:   row.organization || null,
@@ -384,9 +378,9 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
 
       if (row.color) row.color = VALID_COLORS.find(v => v.toLowerCase() === row.color.toLowerCase()) ?? row.color;
 
-      if (!row.full_name) {
+      if (!row.first_name && !row.last_name) {
         skipped++; skipped_no_name++;
-        detail.push({ ...entry, status: 'skipped', reason: `No name — full_name column empty or not found` });
+        detail.push({ ...entry, status: 'skipped', reason: `No name — First Name and Last Name both empty` });
         continue;
       }
       if (!VALID_COLORS.includes(row.color)) {
@@ -395,8 +389,8 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         continue;
       }
 
-      // Dedup: skip if (full_name, organization, color) already exists
-      if (await db.findDuplicate(row.full_name, row.organization, row.color)) {
+      // Dedup: skip if (first_name, last_name, organization, color) already exists
+      if (await db.findDuplicate(row.first_name, row.last_name, row.organization, row.color)) {
         skipped++;
         detail.push({ ...entry, status: 'skipped', reason: `Duplicate: same name + org + color already in database` });
         continue;
@@ -423,7 +417,7 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
 router.get('/admin/export-checkedin.csv', async (req, res) => {
   try {
     const rows    = await db.getCheckedIn();
-    const headers = ['id','color','title','first_name','last_name','full_name','organization','status','remarks','created_at','updated_at'];
+    const headers = ['id','color','title','first_name','last_name','organization','phone','email','status','remarks','created_at','updated_at'];
     const lines   = [
       headers.join(','),
       ...rows.map(r => headers.map(h => {
@@ -444,7 +438,7 @@ router.get('/admin/export-checkedin.csv', async (req, res) => {
 router.get('/admin/export-checkedin.xlsx', async (req, res) => {
   try {
     const rows    = await db.getCheckedIn();
-    const headers = ['id','color','title','first_name','last_name','full_name','organization','status','remarks','created_at','updated_at'];
+    const headers = ['id','color','title','first_name','last_name','organization','phone','email','status','remarks','created_at','updated_at'];
     const wb      = new ExcelJS.Workbook();
     const ws      = wb.addWorksheet('Checked-in Participants');
     ws.addRow(headers);
@@ -519,7 +513,7 @@ router.post('/ai/search-assist', async (req, res) => {
   if (!query) return res.status(400).json({ error: 'query required' });
 
   const { rows } = await db.list({ pageSize: 2000 });
-  const list = rows.map(p => `${p.id}|${p.full_name}|${p.organization || ''}|${p.color}`).join('\n');
+  const list = rows.map(p => `${p.id}|${[p.first_name,p.last_name].filter(Boolean).join(' ')}|${p.organization || ''}|${p.color}`).join('\n');
 
   try {
     const result = await deepseek.analyze(
@@ -591,7 +585,7 @@ router.post('/ai/report', async (req, res) => {
   if (!requireAI(res)) return;
   const stats = await getStats();
   const { rows } = await db.list({ pageSize: 5000 });
-  const noShows = rows.filter(p => p.status === 'not_checked_in').map(p => `${p.full_name} (${p.color})`).slice(0, 30);
+  const noShows = rows.filter(p => p.status === 'not_checked_in').map(p => `${[p.first_name,p.last_name].filter(Boolean).join(' ')} (${p.color})`).slice(0, 30);
 
   try {
     const result = await deepseek.analyze(
@@ -636,7 +630,7 @@ router.post('/ai/concierge', async (req, res) => {
 
   const { rows } = await db.list({ pageSize: 5000 });
   const compact = rows.map(p =>
-    `${p.full_name}|${p.color}|${p.organization || ''}|${p.status === 'checked_in' ? '✓' : '○'}`
+    `${[p.first_name,p.last_name].filter(Boolean).join(' ')}|${p.color}|${p.organization || ''}|${p.status === 'checked_in' ? '✓' : '○'}`
   ).join('\n');
 
   try {
