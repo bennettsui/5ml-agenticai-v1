@@ -299,6 +299,21 @@ document.getElementById('editModalSubmit').addEventListener('click', async () =>
 
 // ─── Import ───────────────────────────────────────────────────────────────────
 
+const importLogPanel = document.getElementById('importLogPanel');
+const importLogEl    = document.getElementById('importLog');
+const importLogTitle = document.getElementById('importLogTitle');
+
+document.getElementById('importLogClose').addEventListener('click', () => {
+  importLogPanel.classList.add('hidden');
+});
+
+function showImportLog(html, title) {
+  importLogTitle.textContent = title || '📋 Import Log';
+  importLogEl.innerHTML = html;
+  importLogPanel.classList.remove('hidden');
+  importLogPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 document.getElementById('importBtn').addEventListener('click', async () => {
   const file = document.getElementById('importFile').files[0];
   if (!file) { toast('Please select a file first.', 'error'); return; }
@@ -308,10 +323,21 @@ document.getElementById('importBtn').addEventListener('click', async () => {
   const btn = document.getElementById('importBtn');
   btn.disabled = true; btn.textContent = 'Uploading…';
 
+  showImportLog(`
+    <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted);">
+      <span style="font-size:18px;">⏳</span>
+      <span>Uploading <strong>${esc(file.name)}</strong> and processing rows…</span>
+    </div>
+  `, '📋 Import Log — Uploading…');
+
   try {
     const resp = await fetch(`${API}/admin/import`, { method: 'POST', body: fd });
     const data = await resp.json();
-    if (!resp.ok) { toast(data.error || 'Import failed.', 'error'); return; }
+    if (!resp.ok) {
+      showImportLog(`<div style="color:#fca5a5;">❌ ${esc(data.error || 'Import failed.')}</div>`, '📋 Import Log — Failed');
+      toast(data.error || 'Import failed.', 'error');
+      return;
+    }
 
     const summary = document.getElementById('importSummary');
     summary.classList.remove('hidden');
@@ -331,6 +357,7 @@ document.getElementById('importBtn').addEventListener('click', async () => {
       Skipped: ${data.skipped}${skipNote}
       ${data.skipped_no_color > 0 ? '<br/><span style="color:#fbbf24;font-size:12px;">⚠️ Color/Type must be: Red, Purple, Blue, Green, 策略影響夥伴, AI 戰略合作夥伴 iKala, 實物與社群夥伴</span>' : ''}
     `;
+
     if (data.inserted === 0 && data.skipped > 0) {
       toast(`Import: 0 inserted — ${skipDetails.join(', ')}`, 'error');
     } else {
@@ -338,57 +365,46 @@ document.getElementById('importBtn').addEventListener('click', async () => {
     }
 
     // ── Per-row detail log ──────────────────────────────────────────────────
-    const logEl = document.getElementById('importLog');
     if (data.detail && data.detail.length) {
       const skippedRows = data.detail.filter(r => r.status === 'skipped');
-      const btnId = 'importLogToggle';
-      logEl.className = '';
-      logEl.innerHTML = `
-        <button id="${btnId}" class="btn btn-outline btn-sm" style="margin-bottom:6px;font-size:12px;">
-          Show row details (${data.detail.length} rows, ${skippedRows.length} skipped)
-        </button>
-        <div id="importLogTable" class="hidden" style="max-height:320px;overflow-y:auto;font-size:12px;border:1px solid var(--border);border-radius:6px;">
-          <table style="width:100%;border-collapse:collapse;">
-            <thead><tr style="background:rgba(255,255,255,0.05);position:sticky;top:0;">
-              <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Row</th>
-              <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Sheet</th>
-              <th style="padding:6px 10px;text-align:left;">Name</th>
-              <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Color/Type</th>
-              <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Title</th>
-              <th style="padding:6px 10px;text-align:left;">Org</th>
-              <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Status / Reason</th>
-            </tr></thead>
-            <tbody>
-              ${data.detail.map(r => {
-                const ok = r.status === 'inserted';
-                const rowColor = ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
-                const statusHtml = ok
-                  ? '<span style="color:#86efac;font-weight:600;">✓ Inserted</span>'
-                  : `<span style="color:#fca5a5;">✗ Skipped</span><br/><span style="color:var(--text-muted);font-size:11px;">${esc(r.reason || '')}</span>`;
-                return `<tr style="border-top:1px solid var(--border);background:${rowColor};">
-                  <td style="padding:5px 10px;color:var(--text-muted);">${r.n ?? ''}</td>
-                  <td style="padding:5px 10px;color:var(--text-muted);">${esc(r.sheet || '')}</td>
-                  <td style="padding:5px 10px;font-weight:600;">${esc(r.name || '—')}</td>
-                  <td style="padding:5px 10px;">${esc(r.color || '')}</td>
-                  <td style="padding:5px 10px;">${esc(r.title || '')}</td>
-                  <td style="padding:5px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.org||'')}">${esc(r.org || '')}</td>
-                  <td style="padding:5px 10px;">${statusHtml}</td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
+      const rows = data.detail.map(r => {
+        const ok = r.status === 'inserted';
+        const bg = ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+        const statusHtml = ok
+          ? '<span style="color:#86efac;font-weight:600;">✓ Inserted</span>'
+          : `<span style="color:#fca5a5;">✗ Skipped</span><br/><span style="color:var(--text-muted);font-size:11px;">${esc(r.reason || '')}</span>`;
+        return `<tr style="border-top:1px solid var(--border);background:${bg};">
+          <td style="padding:5px 10px;color:var(--text-muted);">${r.n ?? ''}</td>
+          <td style="padding:5px 10px;color:var(--text-muted);">${esc(r.sheet || '')}</td>
+          <td style="padding:5px 10px;font-weight:600;">${esc(r.name || '—')}</td>
+          <td style="padding:5px 10px;">${esc(r.color || '')}</td>
+          <td style="padding:5px 10px;">${esc(r.title || '')}</td>
+          <td style="padding:5px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.org||'')}">${esc(r.org || '')}</td>
+          <td style="padding:5px 10px;">${statusHtml}</td>
+        </tr>`;
+      }).join('');
+
+      showImportLog(`
+        <div style="margin-bottom:10px;font-size:12px;color:var(--text-muted);">
+          ${data.detail.length} rows read &nbsp;·&nbsp;
+          <span style="color:#86efac;font-weight:600;">${data.inserted} inserted</span> &nbsp;·&nbsp;
+          <span style="color:${skippedRows.length ? '#fbbf24' : 'var(--text-muted)'};">${skippedRows.length} skipped</span>
         </div>
-      `;
-      document.getElementById(btnId).addEventListener('click', () => {
-        const tbl = document.getElementById('importLogTable');
-        const btn2 = document.getElementById(btnId);
-        tbl.classList.toggle('hidden');
-        btn2.textContent = tbl.classList.contains('hidden')
-          ? `Show row details (${data.detail.length} rows, ${skippedRows.length} skipped)`
-          : `Hide row details`;
-      });
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:rgba(255,255,255,0.05);">
+            <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Row</th>
+            <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Sheet</th>
+            <th style="padding:6px 10px;text-align:left;">Name</th>
+            <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Color/Type</th>
+            <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Title</th>
+            <th style="padding:6px 10px;text-align:left;">Org</th>
+            <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Status / Reason</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `, `📋 Import Log — ${file.name}`);
     } else {
-      logEl.className = 'hidden';
+      showImportLog(`<div style="color:var(--text-muted);">No row detail returned.</div>`, '📋 Import Log');
     }
 
     loadPage(1);
