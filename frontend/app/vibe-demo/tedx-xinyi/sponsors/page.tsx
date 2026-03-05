@@ -92,26 +92,21 @@ const TABLE_ROWS: [string, boolean, boolean, boolean, boolean][] = [
 ];
 
 
-function LogoSlot() {
-  return (
-    <div className="border-2 border-dashed border-neutral-200 bg-neutral-50 rounded-xl h-20 flex items-center justify-center text-xs font-bold text-neutral-300 tracking-widest uppercase cursor-pointer hover:border-neutral-400 hover:bg-white transition-colors select-none">
-      Logo
-    </div>
-  );
-}
 
-function LogoImage({ logo }: { logo: SponsorLogo }) {
+function StrategicCard({ logo }: { logo: SponsorLogo }) {
   const [errored, setErrored] = useState(false);
   const src = logo.publicUrl || (logo.localExists && logo.filename ? `${API_BASE}/tedx-xinyi/sponsors/${logo.filename}` : null);
-  if (!src || errored) return <LogoSlot />;
   return (
-    <div className="bg-white rounded-xl h-24 flex items-center justify-center overflow-hidden px-6 py-3 border border-neutral-100">
-      <img
-        src={src}
-        alt={logo.name}
-        className="w-full h-full object-contain"
-        onError={() => setErrored(true)}
-      />
+    <div className="bg-white border border-neutral-100 rounded-2xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+      <div className="aspect-[5/3] flex items-center justify-center p-10 bg-white">
+        {src && !errored
+          ? <img src={src} alt={logo.name} className="max-w-full max-h-full object-contain" onError={() => setErrored(true)} />
+          : <span className="text-xs font-bold text-neutral-300 tracking-widest uppercase">Logo</span>
+        }
+      </div>
+      <div className="px-5 py-3.5 border-t border-neutral-100">
+        <p className="text-sm font-black text-neutral-800" lang="zh-TW">{logo.name}</p>
+      </div>
     </div>
   );
 }
@@ -201,40 +196,48 @@ export default function SponsorsPage() {
 
       {/* ── STRATEGIC PARTNERS ───────────────────────── */}
       <Section bg="white" id="strategic-partners">
-        <FadeIn>
-          <SectionLabel>Strategic</SectionLabel>
-          <h2 className="text-3xl md:text-4xl font-black mb-3" lang="zh-TW">策略影響夥伴</h2>
-          <p className="text-neutral-500 text-sm leading-relaxed max-w-xl mb-12" lang="zh-TW">
-            這些夥伴不只提供資源，而是與 TEDxXinyi 一起為城市策劃長期對話與實驗。
-          </p>
-        </FadeIn>
+        {/* Split header: title left, description right */}
+        <div className="flex flex-col md:flex-row md:items-end gap-3 md:gap-12 mb-10">
+          <FadeIn>
+            <SectionLabel>Strategic</SectionLabel>
+            <h2 className="text-3xl md:text-4xl font-black" lang="zh-TW">策略影響夥伴</h2>
+          </FadeIn>
+          <FadeIn delay={80}>
+            <p className="text-neutral-400 text-sm leading-relaxed max-w-sm md:pb-1" lang="zh-TW">
+              這些夥伴不只提供資源，而是與 TEDxXinyi 一起為城市策劃長期對話與實驗。
+            </p>
+          </FadeIn>
+        </div>
 
-        {/* Logo cards — dynamic from admin */}
         {(() => {
           const strategic = byCategory('strategic');
-          const cards = strategic.length > 0 ? strategic : null;
-          if (!cards) {
+          if (strategic.length === 0) {
             return (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                {[0, 1].map(i => (
-                  <div key={i} className="border border-neutral-100 rounded-2xl p-6">
-                    <LogoSlot />
-                    <p className="font-black text-base mt-4 text-neutral-300" lang="zh-TW">策略夥伴名稱</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="aspect-[5/3] bg-neutral-50 rounded-2xl border-2 border-dashed border-neutral-200 flex items-center justify-center">
+                    <span className="text-xs font-bold text-neutral-300 tracking-widest uppercase">Logo</span>
                   </div>
                 ))}
               </div>
             );
           }
           return (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-              {cards.map((logo) => (
+            <div className={`grid gap-4 ${
+              strategic.length === 1 ? 'grid-cols-1 sm:grid-cols-2' :
+              strategic.length === 2 ? 'grid-cols-2' :
+              'grid-cols-2 md:grid-cols-3'
+            }`}>
+              {strategic.map((logo) => (
                 <FadeIn key={logo.key}>
-                  <div className="border border-neutral-100 rounded-2xl p-6 hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                    <LogoImage logo={logo} />
-                    <p className="font-black text-base mt-4" lang="zh-TW">{logo.name}</p>
-                  </div>
+                  <StrategicCard logo={logo} />
                 </FadeIn>
               ))}
+              {strategic.length === 1 && (
+                <div className="aspect-[5/3] bg-neutral-50 rounded-2xl border-2 border-dashed border-neutral-200 flex items-center justify-center">
+                  <span className="text-xs font-bold text-neutral-300 tracking-widest uppercase">Coming Soon</span>
+                </div>
+              )}
             </div>
           );
         })()}
