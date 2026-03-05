@@ -1,224 +1,171 @@
 /**
- * S1-S2 Adaptive Math Agent
+ * Adaptive Learning Orchestrator
  *
- * A concept-centric, interest-aware educational AI agent for Hong Kong junior secondary
- * mathematics (S1-S2). Handles 6 operational modes via structured JSON I/O.
+ * Routes incoming requests to the appropriate specialist agent based on mode.
  *
- * System prompt follows the engineering spec provided in the use-case brief.
+ * Agent routing:
+ *   EXPLAIN_ONE_QUESTION  → StudentAgent
+ *   SESSION_SUMMARY       → StudentAgent
+ *   CLASS_SUMMARY         → TeacherAgent
+ *   STUDENT_PROFILE       → TeacherAgent
+ *   QUESTION_AUTHORING    → QuestionAgent
+ *   GAMIFICATION_MESSAGE  → (inline — uses Haiku with concise prompt)
+ *   ADMIN_SUMMARY         → (inline — uses Haiku with concise prompt)
+ *
+ * All legacy mode aliases are mapped for backwards compatibility:
+ *   STUDENT_EXPLANATION        → EXPLAIN_ONE_QUESTION
+ *   STUDENT_SESSION_SUMMARY    → SESSION_SUMMARY
+ *   TEACHER_CLASS_SUMMARY      → CLASS_SUMMARY
  */
 
+const { StudentAgent } = require('./student-agent');
+const { TeacherAgent } = require('./teacher-agent');
+const { QuestionAgent } = require('./question-agent');
 const Anthropic = require('@anthropic-ai/sdk');
 
-const SYSTEM_PROMPT = `You are an AI assistant embedded inside an S1–S2 adaptive mathematics learning platform for Hong Kong junior secondary students.
-You are designed as an engineering-aware educational agent: you understand pedagogy, HK EDB junior secondary math curriculum, and the platform's data model and workflows.
-You never generate code; you focus on reasoning, text generation, structuring outputs, and interacting with other services via well-defined JSON schemas.
+// Mode aliases for backwards-compatibility with the original generic agent
+const MODE_ALIASES = {
+  STUDENT_EXPLANATION: 'EXPLAIN_ONE_QUESTION',
+  STUDENT_SESSION_SUMMARY: 'SESSION_SUMMARY',
+  TEACHER_CLASS_SUMMARY: 'CLASS_SUMMARY',
+};
 
-The platform is concept-centric and interest-aware, not an exam drilling tool.
-
-CONTEXT ABOUT THE PLATFORM:
-
-1. Curriculum & Concepts
-- Subject: Mathematics, Grades: S1–S2.
-- Concepts are represented as learning_objectives with fields: code, topic, subtopic, name_en, name_zh, description_en, description_zh.
-- Every question is linked to 1–3 learning objectives via question_objective_map.
-
-2. Questions
-- Questions table fields: stem_en/stem_zh, options_*, answer, explanation_*, difficulty_estimate, source_type, has_image, image_url.
-- Sources: Past papers (OCR), teacher-created, system-generated variants.
-- Tagged to specific learning objectives.
-
-3. Student State
-- mastery_state per student per learning objective: mastery_level (0-4), interest_level (1.0-5.0), evidence_count, last_practiced_at.
-- interactions table logs: correctness, time taken, hint usage, self-ratings for understanding (1-5) and interest (1-5).
-
-4. Panels & Users
-- Student Panel: 20-minute adaptive sessions, concept explanations, personal visualizations, gamification.
-- Teacher Panel: class heatmaps, individual profiles, AI summaries and recommendations, PDF upload & question editing.
-- Admin Panel: manage curriculum map, question bank, users and roles.
-
-5. Language
-- Platform is bilingual (Chinese/English). All field names and JSON stay in English.
-- Follow requested language for explanations; ZH uses traditional Chinese suitable for HK secondary.
-
-WHAT YOU DO:
-
-1. Generate Student-facing Explanations — explain concepts and questions in clear, age-appropriate language. Prefer concept understanding over exam tricks. Refer to linked learning_objectives.
-2. Summarise Student Sessions — session summary with concept coverage, mastery deltas, interest trends, and 2-3 concrete next steps.
-3. Generate Teacher-facing Summaries — class strengths/weaknesses in bullets, 2-3 priority concepts, specific teaching actions. Constructive, never blaming.
-4. Help with Question Authoring — clean up OCR/raw question text, suggest type/difficulty/objectives/explanations.
-5. Gamification Text & Missions — exploration-focused missions and badge messages. Reward growth and curiosity, not grinding.
-6. RAG with Knowledge Base — use provided curriculum/policy chunks authoritatively. Acknowledge uncertainty rather than inventing.
-
-PEDAGOGICAL RULES:
-- Support learning, don't bypass it. Avoid full step-by-step solutions unless explicitly allowed.
-- Warm, concise, non-patronising tone. No slang, no sarcasm, no emojis.
-- Reward concept exploration, improvement, and honest self-assessment.
-- Do not help with cheating. If asked to "just give the answer", redirect to strategy first.
-- Respect provided policies; ask for clarification if unclear.
-
-INPUT / OUTPUT CONTRACT:
-You will be called with structured JSON inputs. Respond ONLY with valid JSON matching the schema for the given mode. No markdown, no extra text — pure JSON only.
-
-MODES AND OUTPUT SCHEMAS:
-
-STUDENT_EXPLANATION output:
-{
-  "concept_explanation": "string",
-  "why_correct_or_not": "string",
-  "next_tip": "string"
-}
-
-STUDENT_SESSION_SUMMARY output:
-{
-  "summary": "string",
-  "concepts_highlighted": ["objective_code", "..."],
-  "strengths": ["string", "..."],
-  "areas_to_improve": ["string", "..."],
-  "suggested_next_steps": ["string", "..."]
-}
-
-TEACHER_CLASS_SUMMARY output:
-{
-  "class_overview": ["string", "..."],
-  "priority_concepts": [{"objective_code": "string", "reason": "string"}],
-  "teaching_recommendations": ["string", "..."],
-  "notes_on_engagement": ["string", "..."]
-}
-
-QUESTION_AUTHORING output:
-{
-  "clean_stem_en": "string",
-  "clean_stem_zh": "string",
-  "question_type": "MCQ | OPEN_ENDED | FILL_IN | MULTI_STEP",
-  "difficulty_estimate": 1,
-  "selected_objective_codes": ["code1"],
-  "explanation_en": "string",
-  "explanation_zh": "string"
-}
-
-GAMIFICATION_MESSAGE output:
+// Inline system prompts for lighter utility modes
+const GAMIFICATION_SYSTEM = `You are a gamification message writer for an S1–S2 math learning platform.
+Given a student's recent mastery changes, sessions, and badges, write a short encouraging message and suggest 2–3 exploration-focused missions.
+Reward curiosity, growth, and honest self-assessment — not raw question counts or competition.
+Tone: warm, concise, age-appropriate. No sarcasm, no emojis unless language is ZH.
+Use the requested language (EN = English, ZH = Traditional Chinese).
+Output ONLY valid JSON:
 {
   "short_message": "string",
   "suggested_missions": ["string", "..."]
-}
+}`;
 
-ADMIN_SUMMARY output:
+const ADMIN_SYSTEM = `You are an admin summary agent for an S1–S2 math learning platform.
+Given platform-level data (usage stats, error rates, content gaps, engagement signals), produce an operational summary.
+Be concise and factual. Output ONLY valid JSON:
 {
   "summary": "string",
   "flags": ["string", "..."],
   "recommendations": ["string", "..."]
-}
-
-Think step-by-step internally. Output only the requested JSON.`;
+}`;
 
 class AdaptiveAgent {
   constructor() {
-    this.client = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+    this._student = null;
+    this._teacher = null;
+    this._question = null;
+    this._anthropic = null;
     this.model = 'claude-haiku-4-5-20251001';
   }
 
+  get student() {
+    if (!this._student) this._student = new StudentAgent();
+    return this._student;
+  }
+
+  get teacher() {
+    if (!this._teacher) this._teacher = new TeacherAgent();
+    return this._teacher;
+  }
+
+  get question() {
+    if (!this._question) this._question = new QuestionAgent();
+    return this._question;
+  }
+
+  get anthropic() {
+    if (!this._anthropic) this._anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    return this._anthropic;
+  }
+
   /**
-   * Run the agent for any mode.
-   * @param {string} mode - One of the 6 supported modes
-   * @param {string} language - 'EN' or 'ZH'
-   * @param {object} payload - Mode-specific input payload
-   * @returns {object} - Parsed JSON output matching the mode's output schema
+   * Route any mode to the right specialist agent.
+   * @param {string} mode
+   * @param {'EN'|'ZH'} language
+   * @param {object} payload
    */
   async run(mode, language, payload) {
-    const validModes = [
-      'STUDENT_EXPLANATION',
-      'STUDENT_SESSION_SUMMARY',
-      'TEACHER_CLASS_SUMMARY',
-      'QUESTION_AUTHORING',
-      'GAMIFICATION_MESSAGE',
-      'ADMIN_SUMMARY',
-    ];
+    // Resolve legacy aliases
+    const resolvedMode = MODE_ALIASES[mode] || mode;
 
-    if (!validModes.includes(mode)) {
-      throw new Error(`Invalid mode: ${mode}. Must be one of: ${validModes.join(', ')}`);
+    switch (resolvedMode) {
+      case 'EXPLAIN_ONE_QUESTION':
+      case 'SESSION_SUMMARY':
+        return this.student.run(resolvedMode, language, payload);
+
+      case 'CLASS_SUMMARY':
+      case 'STUDENT_PROFILE':
+        return this.teacher.run(resolvedMode, language, payload);
+
+      case 'QUESTION_AUTHORING':
+        return this.question.run(resolvedMode, language, payload);
+
+      case 'GAMIFICATION_MESSAGE':
+        return this._runInline(GAMIFICATION_SYSTEM, language, payload);
+
+      case 'ADMIN_SUMMARY':
+        return this._runInline(ADMIN_SYSTEM, language, payload);
+
+      default:
+        throw new Error(`Unknown mode: ${mode}`);
     }
+  }
 
-    const userMessage = JSON.stringify({ mode, language: language || 'EN', payload });
-
-    const response = await this.client.messages.create({
+  /** Run a lightweight inline agent (no dedicated class). */
+  async _runInline(systemPrompt, language, payload) {
+    const response = await this.anthropic.messages.create({
       model: this.model,
-      max_tokens: 2048,
-      system: SYSTEM_PROMPT,
+      max_tokens: 512,
+      system: systemPrompt,
       messages: [
         {
           role: 'user',
-          content: userMessage,
+          content: JSON.stringify({ language: language || 'EN', payload }),
         },
       ],
     });
 
-    const rawText = response.content[0]?.text || '{}';
-
-    // Strip any accidental markdown code fences
-    const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-
+    const raw = response.content[0]?.text || '{}';
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
     try {
       return JSON.parse(cleaned);
     } catch {
-      throw new Error(`Agent returned invalid JSON: ${cleaned.substring(0, 200)}`);
+      throw new Error(`Inline agent returned invalid JSON: ${cleaned.substring(0, 200)}`);
     }
   }
 
-  /**
-   * Explain a question to a student.
-   */
-  async explainQuestion({ question, studentAnswer, studentState, language }) {
-    return this.run('STUDENT_EXPLANATION', language, {
+  // ─── Convenience methods (kept for backwards compat with routes.js) ──────────
+
+  explainQuestion({ question, studentAnswer, studentState, language }) {
+    return this.student.explainQuestion({
       question,
-      student_answer: studentAnswer,
-      student_state: studentState,
+      studentAnswer,
+      studentStateForObjectives: studentState ? [studentState] : undefined,
+      language,
     });
   }
 
-  /**
-   * Summarise a completed student session.
-   */
-  async summariseSession({ sessionInfo, interactions, masteryDeltas, language }) {
-    return this.run('STUDENT_SESSION_SUMMARY', language, {
-      session_info: sessionInfo,
-      interactions,
-      mastery_deltas: masteryDeltas,
+  summariseSession({ sessionInfo, interactions, masteryDeltas, language }) {
+    return this.student.summariseSession({ sessionInfo, interactions, masteryDeltas, language });
+  }
+
+  summariseClass({ classInfo, objectiveStats, examplesOfCommonErrors, language }) {
+    return this.teacher.summariseClass({
+      classInfo,
+      objectiveStats,
+      exampleItems: examplesOfCommonErrors,
+      language,
     });
   }
 
-  /**
-   * Generate teacher-facing class summary.
-   */
-  async summariseClass({ classInfo, objectiveStats, examplesOfCommonErrors, language }) {
-    return this.run('TEACHER_CLASS_SUMMARY', language, {
-      class_info: classInfo,
-      objective_stats: objectiveStats,
-      examples_of_common_errors: examplesOfCommonErrors,
-    });
+  authorQuestion({ rawTextEn, rawTextZh, imageDescription, candidateObjectives, gradeBand, topic, subtopic, language }) {
+    return this.question.authorQuestion({ rawTextEn, rawTextZh, imageDescription, candidateObjectives, gradeBand, topic, subtopic, language });
   }
 
-  /**
-   * Help author/tag a question.
-   */
-  async authorQuestion({ rawTextEn, rawTextZh, imageDescription, candidateObjectives, gradeBand, topic, subtopic, language }) {
-    return this.run('QUESTION_AUTHORING', language, {
-      raw_text_en: rawTextEn,
-      raw_text_zh: rawTextZh,
-      image_description: imageDescription,
-      candidate_objectives: candidateObjectives,
-      grade_band: gradeBand,
-      topic,
-      subtopic,
-    });
-  }
-
-  /**
-   * Generate gamification messages and missions for a student.
-   */
-  async generateGamification({ recentMasteryChanges, recentSessions, currentBadges, language }) {
-    return this.run('GAMIFICATION_MESSAGE', language, {
+  generateGamification({ recentMasteryChanges, recentSessions, currentBadges, language }) {
+    return this._runInline(GAMIFICATION_SYSTEM, language, {
       recent_mastery_changes: recentMasteryChanges,
       recent_sessions: recentSessions,
       current_badges: currentBadges,
