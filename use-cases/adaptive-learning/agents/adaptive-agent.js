@@ -15,6 +15,7 @@
  * │  TechArchAgent       │  HIGH_LEVEL_ARCH, SEQUENCE_STUDENT_SESSION,     │
  * │                      │  SEQUENCE_TEACHER_UPLOAD, SEQUENCE_TEACHER_DASHBOARD │
  * │  GamificationAgent   │  BADGE_MESSAGE, SUGGEST_MISSIONS, PROGRESS_NUDGE│
+ * │  AdminReportAgent    │  TERM_REPORT, GRADE_REPORT, CLASS_REPORT        │
  * └──────────────────────┴─────────────────────────────────────────────────┘
  *
  * Legacy mode aliases (backwards-compat):
@@ -31,6 +32,7 @@ const { StudentUxAgent }     = require('./student-ux-agent');
 const { TeacherGuideAgent }  = require('./teacher-guide-agent');
 const { TechArchAgent }      = require('./tech-arch-agent');
 const { GamificationAgent }  = require('./gamification-agent');
+const { AdminReportAgent }   = require('./admin-report-agent');
 
 const MODE_ALIASES = {
   STUDENT_EXPLANATION:     'EXPLAIN_ONE_QUESTION',
@@ -67,6 +69,10 @@ const MODE_TO_AGENT = {
   BADGE_MESSAGE:              'gamification',
   SUGGEST_MISSIONS:           'gamification',
   PROGRESS_NUDGE:             'gamification',
+  // AdminReportAgent
+  TERM_REPORT:                'adminReport',
+  GRADE_REPORT:               'adminReport',
+  CLASS_REPORT:               'adminReport',
   // Legacy inline
   ADMIN_SUMMARY:              'inlineAdmin',
 };
@@ -80,6 +86,7 @@ class AdaptiveAgent {
     this._teacherGuide  = null;
     this._techArch      = null;
     this._gamification  = null;
+    this._adminReport   = null;
   }
 
   get student()      { return (this._student      ??= new StudentAgent()); }
@@ -89,6 +96,7 @@ class AdaptiveAgent {
   get teacherGuide() { return (this._teacherGuide ??= new TeacherGuideAgent()); }
   get techArch()     { return (this._techArch     ??= new TechArchAgent()); }
   get gamification() { return (this._gamification ??= new GamificationAgent()); }
+  get adminReport()  { return (this._adminReport  ??= new AdminReportAgent()); }
 
   /**
    * Route any mode to the right specialist agent.
@@ -117,6 +125,8 @@ class AdaptiveAgent {
         return this.techArch.run(resolved, payload);
       case 'gamification':
         return this.gamification.run(resolved, language, payload);
+      case 'adminReport':
+        return this.adminReport.run(resolved, language, payload);
       case 'inlineAdmin':
         return this._runAdminSummary(language, payload);
       default:

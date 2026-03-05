@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import {
   Brain, BookOpen, Users, PenLine, Gamepad2, ChevronRight,
   Loader2, CheckCircle2, AlertCircle, UserCircle, MessageSquare,
@@ -110,6 +111,17 @@ const AGENT_GROUPS: AgentGroup[] = [
       { id: 'nudge',    label: 'Progress Nudge',   mode: 'PROGRESS_NUDGE',   icon: ChevronRight },
     ],
   },
+  {
+    id: 'adminReport',
+    label: 'AdminReportAgent',
+    agent: 'AdminReportAgent',
+    color: 'bg-slate-500/10 text-slate-300 border-slate-500/20',
+    tabs: [
+      { id: 'term-report',  label: 'Term Report',  mode: 'TERM_REPORT',  icon: BookOpen },
+      { id: 'grade-report', label: 'Grade Report', mode: 'GRADE_REPORT', icon: GraduationCap },
+      { id: 'class-report', label: 'Class Report', mode: 'CLASS_REPORT', icon: Users },
+    ],
+  },
 ];
 
 // Flat tab lookup
@@ -214,6 +226,51 @@ const DEMO_PAYLOADS: Record<string, Record<string, unknown>> = {
     days_since_last_session: 7,
     last_focus_concepts_en: ['Adding fractions', 'Linear equations'],
     last_focus_concepts_zh: ['分數加法', '一元一次方程'],
+  },
+  TERM_REPORT: {
+    school_name: 'XXX 中學',
+    term_label: '2026-27 上學期',
+    usage_stats: { active_students: 120, total_sessions: 860, avg_sessions_per_student: 7.2 },
+    learning_stats: {
+      concept_groups: [
+        { group_name_zh: '分數與百分比', group_name_en: 'Fractions & Percentages', avg_mastery_change: 0.8, students_reaching_target_pct: 0.72 },
+        { group_name_zh: '一元一次方程', group_name_en: 'Linear Equations', avg_mastery_change: 0.4, students_reaching_target_pct: 0.55 },
+        { group_name_zh: '幾何與測量', group_name_en: 'Geometry & Measures', avg_mastery_change: 0.6, students_reaching_target_pct: 0.68 },
+      ],
+    },
+    engagement_stats: { avg_interest_change: 0.3, sessions_per_week_trend: 'STABLE' },
+    teacher_feedback_summary: [
+      '學生在課堂上對分數題的反應比以前主動。',
+      '老師反映可以更清楚知道哪些同學需要補底。',
+    ],
+  },
+  GRADE_REPORT: {
+    grade_name: 'S1',
+    term_label: '2026-27 上學期',
+    usage_stats: { active_students: 60, total_sessions: 430, avg_sessions_per_student: 7.2 },
+    learning_stats: {
+      concept_groups: [
+        { group_name_zh: '分數與百分比', group_name_en: 'Fractions & Percentages', avg_mastery_change: 0.9, students_reaching_target_pct: 0.75 },
+        { group_name_zh: '一元一次方程', group_name_en: 'Linear Equations', avg_mastery_change: 0.5, students_reaching_target_pct: 0.60 },
+      ],
+    },
+    engagement_stats: { avg_interest_change: 0.4, sessions_per_week_trend: 'INCREASING' },
+    school_avg_for_comparison: { avg_sessions_per_student: 7.2, avg_mastery_change: 0.6 },
+  },
+  CLASS_REPORT: {
+    class_name: 'S1A',
+    grade_name: 'S1',
+    term_label: '2026-27 上學期',
+    usage_stats: { active_students: 30, total_sessions: 185, avg_sessions_per_student: 6.2 },
+    learning_stats: {
+      concept_groups: [
+        { group_name_zh: '分數與百分比', group_name_en: 'Fractions & Percentages', avg_mastery_change: 0.6, students_reaching_target_pct: 0.63 },
+        { group_name_zh: '一元一次方程', group_name_en: 'Linear Equations', avg_mastery_change: 0.3, students_reaching_target_pct: 0.47 },
+      ],
+    },
+    engagement_stats: { avg_interest_change: 0.2, sessions_per_week_trend: 'DECLINING' },
+    grade_avg_for_comparison: { avg_sessions_per_student: 7.2 },
+    teacher_notes: 'Class S1A joined 2 weeks late due to device setup issues.',
   },
 };
 
@@ -379,7 +436,7 @@ export default function AdaptiveLearningPage() {
             </div>
             <div>
               <h1 className="text-xl font-semibold text-white">Adaptive Learning for Schools</h1>
-              <p className="text-sm text-slate-400 mt-0.5">S1–S2 Adaptive Mathematics · HK EDB Curriculum · 7 Specialist Claude Agents</p>
+              <p className="text-sm text-slate-400 mt-0.5">S1–S2 Adaptive Mathematics · HK EDB Curriculum · 8 Specialist Claude Agents</p>
             </div>
           </div>
 
@@ -404,6 +461,10 @@ export default function AdaptiveLearningPage() {
               ))}
             </div>
             <span className="text-xs text-slate-500">claude-haiku-4-5-20251001</span>
+            <Link href="/use-cases/adaptive-learning/pitch"
+              className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors ml-2">
+              <BookMarked className="w-3.5 h-3.5" />Pitch Deck
+            </Link>
           </div>
         </div>
       </div>
@@ -491,7 +552,7 @@ export default function AdaptiveLearningPage() {
 
         {/* Architecture reference table */}
         <div className="mt-8 dark:bg-slate-800/60 rounded-xl border border-slate-700/50 p-6">
-          <h3 className="text-sm font-semibold text-white mb-5">7-Agent Architecture Reference</h3>
+          <h3 className="text-sm font-semibold text-white mb-5">8-Agent Architecture Reference</h3>
           <div className="grid md:grid-cols-3 gap-4">
             {AGENT_GROUPS.map(group => (
               <div key={group.id} className={`rounded-xl border p-4 ${group.color.replace('text-', 'border-').replace('bg-', 'bg-')}`}
@@ -530,6 +591,7 @@ export default function AdaptiveLearningPage() {
                   { endpoint: '/teacher-guide',    agent: 'TeacherGuideAgent', modes: 'INTRO_PAGE · STEP_BY_STEP_FEATURE · FAQ' },
                   { endpoint: '/tech-arch',        agent: 'TechArchAgent',     modes: 'HIGH_LEVEL_ARCH · SEQUENCE_STUDENT_SESSION · SEQUENCE_TEACHER_UPLOAD · SEQUENCE_TEACHER_DASHBOARD' },
                   { endpoint: '/gamification',     agent: 'GamificationAgent', modes: 'BADGE_MESSAGE · SUGGEST_MISSIONS · PROGRESS_NUDGE' },
+                  { endpoint: '/admin-report',     agent: 'AdminReportAgent',  modes: 'TERM_REPORT · GRADE_REPORT · CLASS_REPORT' },
                   { endpoint: '/demo',             agent: 'Orchestrator',      modes: 'all modes + legacy aliases' },
                 ].map(row => (
                   <tr key={row.endpoint} className="border-b border-slate-700/30">

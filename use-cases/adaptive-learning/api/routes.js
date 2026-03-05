@@ -56,7 +56,8 @@ router.get('/health', (req, res) => {
     hasApiKey: !!process.env.ANTHROPIC_API_KEY,
     agents: [
       'StudentAgent', 'TeacherAgent', 'QuestionAgent',
-      'StudentUxAgent', 'TeacherGuideAgent', 'TechArchAgent', 'GamificationAgent',
+      'StudentUxAgent', 'TeacherGuideAgent', 'TechArchAgent',
+      'GamificationAgent', 'AdminReportAgent',
     ],
     modes: {
       StudentAgent:       ['EXPLAIN_ONE_QUESTION', 'SESSION_SUMMARY'],
@@ -66,6 +67,7 @@ router.get('/health', (req, res) => {
       TeacherGuideAgent:  ['INTRO_PAGE', 'STEP_BY_STEP_FEATURE', 'FAQ'],
       TechArchAgent:      ['HIGH_LEVEL_ARCH', 'SEQUENCE_STUDENT_SESSION', 'SEQUENCE_TEACHER_UPLOAD', 'SEQUENCE_TEACHER_DASHBOARD'],
       GamificationAgent:  ['BADGE_MESSAGE', 'SUGGEST_MISSIONS', 'PROGRESS_NUDGE'],
+      AdminReportAgent:   ['TERM_REPORT', 'GRADE_REPORT', 'CLASS_REPORT'],
     },
   });
 });
@@ -280,6 +282,29 @@ router.post('/gamification', async (req, res) => {
   }
 });
 
+// ─── AdminReportAgent ─────────────────────────────────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/admin-report
+ * Body: { mode, language, payload }
+ * mode: TERM_REPORT | GRADE_REPORT | CLASS_REPORT
+ */
+const ADMIN_REPORT_MODES = ['TERM_REPORT', 'GRADE_REPORT', 'CLASS_REPORT'];
+
+router.post('/admin-report', async (req, res) => {
+  if (!requireApiKey(res)) return;
+  const { mode, language, payload } = req.body || {};
+  if (!mode || !ADMIN_REPORT_MODES.includes(mode)) {
+    return res.status(400).json({ success: false, error: `mode must be one of: ${ADMIN_REPORT_MODES.join(', ')}` });
+  }
+  try {
+    const result = await getAgent().adminReport.run(mode, language || 'ZH', payload || {});
+    res.json({ success: true, mode, result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── Generic demo/playground (any mode) ──────────────────────────────────────
 
 /**
@@ -295,6 +320,7 @@ const ALL_MODES = [
   'INTRO_PAGE', 'STEP_BY_STEP_FEATURE', 'FAQ',
   'HIGH_LEVEL_ARCH', 'SEQUENCE_STUDENT_SESSION', 'SEQUENCE_TEACHER_UPLOAD', 'SEQUENCE_TEACHER_DASHBOARD',
   'BADGE_MESSAGE', 'SUGGEST_MISSIONS', 'PROGRESS_NUDGE',
+  'TERM_REPORT', 'GRADE_REPORT', 'CLASS_REPORT',
   'ADMIN_SUMMARY',
   // Legacy aliases
   'STUDENT_EXPLANATION', 'STUDENT_SESSION_SUMMARY', 'TEACHER_CLASS_SUMMARY', 'GAMIFICATION_MESSAGE',

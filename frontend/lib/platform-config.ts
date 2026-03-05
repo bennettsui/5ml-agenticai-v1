@@ -721,13 +721,13 @@ export const USE_CASES: UseCaseConfig[] = [
   {
     id: 'adaptive-learning-schools',
     name: 'Adaptive Learning for Schools',
-    description: 'S1–S2 adaptive mathematics platform for Hong Kong: 7 specialist AI agents covering student coaching, teacher insights, question authoring, UX copy, step-by-step guides, architecture visualisation, and gamification.',
+    description: 'S1–S2 adaptive mathematics platform for Hong Kong: 8 specialist AI agents covering student coaching, teacher insights, question authoring, UX copy, step-by-step guides, architecture visualisation, gamification, and principal reports.',
     solutionLine: 'ExpLab',
     status: 'in_progress',
-    progress: 0.65,
+    progress: 0.70,
     priority: 'high',
     path: '/use-cases/adaptive-learning',
-    agentCount: 7,
+    agentCount: 8,
     features: [
       'StudentAgent (explain + session summary)',
       'TeacherAgent (class + student profile)',
@@ -736,8 +736,8 @@ export const USE_CASES: UseCaseConfig[] = [
       'TeacherGuideAgent (intro · step-by-step · FAQ)',
       'TechArchAgent (diagrams · sequences)',
       'GamificationAgent (badges · missions · nudges)',
-      'HK EDB S1–S2 Curriculum',
-      'Bilingual EN / ZH',
+      'AdminReportAgent (term · grade · class reports)',
+      'HK EDB S1–S2 Curriculum · Bilingual EN / ZH',
     ],
   },
 
