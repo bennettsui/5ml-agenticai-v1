@@ -362,11 +362,11 @@ const SLIDES: Slide[] = [
         ))}
         <div className="text-center pt-2">
           <Link
-            href="/use-cases/adaptive-learning"
+            href="/use-cases/adaptive-learning/agents"
             className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
           >
             <Network className="w-3.5 h-3.5" />
-            Live agent demo → /use-cases/adaptive-learning
+            Live agent demo → /use-cases/adaptive-learning/agents
           </Link>
         </div>
       </div>
@@ -509,7 +509,7 @@ export default function PitchPage() {
               className="flex items-center gap-1.5 text-slate-400 hover:text-white text-sm transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              Agent Demo
+              Overview
             </Link>
             <span className="text-slate-700">·</span>
             <span className="text-sm text-white font-medium">Pitch Deck</span>
@@ -557,7 +557,7 @@ export default function PitchPage() {
               所有 8 個 AI Agent 都可以在 demo 頁面即時試用，包括概念解說、班級摘要、成效報告。
             </p>
             <Link
-              href="/use-cases/adaptive-learning"
+              href="/use-cases/adaptive-learning/agents"
               className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
             >
               <Brain className="w-4 h-4" />
