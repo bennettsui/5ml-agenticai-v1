@@ -322,10 +322,10 @@ function searchParticipants(query, participants) {
 
   const trimmed = query.trim();
 
-  // Pure numeric → match phone or ref_id only (not the auto-increment row index)
+  // Pure numeric → match phone only
   if (/^\d+$/.test(trimmed)) {
     return participants
-      .filter(p => (p.phone && p.phone.includes(trimmed)) || (p.ref_id && p.ref_id.includes(trimmed)))
+      .filter(p => p.phone && p.phone.includes(trimmed))
       .slice(0, TOP_K);
   }
 

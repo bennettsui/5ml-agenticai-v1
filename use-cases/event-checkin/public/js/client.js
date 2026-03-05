@@ -262,7 +262,7 @@ function applyFilter() {
 
 function renderListRows(rows) {
   if (!rows.length) {
-    listBody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">No guests match the current filter.</td></tr>`;
+    listBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">No guests match the current filter.</td></tr>`;
     return;
   }
   listBody.innerHTML = rows.map(p => {
@@ -270,10 +270,8 @@ function renderListRows(rows) {
     const org     = esc(p.organization || '');
     const phone   = esc(p.phone  || '');
     const email   = esc(p.email  || '');
-    const refId   = esc(p.ref_id || '—');
     const checked = p.status === 'checked_in';
     return `<tr data-id="${p.id}">
-      <td style="color:var(--text-muted);font-size:12px;">${refId}</td>
       <td><span class="tag" data-color="${p.color}">${p.color}</span></td>
       <td style="font-weight:600;">${name}</td>
       <td style="color:var(--text-muted);">${org}</td>
@@ -295,7 +293,7 @@ function listUpdateOne(p) {
     const tr = listBody.querySelector(`tr[data-id="${p.id}"]`);
     if (tr) {
       const checked = p.status === 'checked_in';
-      tr.cells[6].innerHTML = checked
+      tr.cells[5].innerHTML = checked
         ? '<span class="status-checked">✓ Checked-in</span>'
         : '<span class="status-not-checked">○ Not yet</span>';
     }

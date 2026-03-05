@@ -242,11 +242,7 @@ router.post('/admin/participants/bulk-status', async (req, res) => {
 // Import policy (non-negotiable):
 //   • NEVER modify existing records — only INSERT new ones.
 //   • NEVER set or change the `id` (SERIAL) column from the file.
-//   • `ref_id` is the stable external identifier read from the file (e.g. "No.",
-//     "ID" column). Stored as TEXT, used only for dedup — NOT the system `id`.
-//   • Deduplication priority:
-//       1. If the row has a non-empty ref_id → skip if any DB row has that ref_id.
-//       2. Fallback → skip if (full_name, organization, color) already exists.
+//   • Deduplication: skip if (full_name, organization, color) already exists.
 
 router.post('/admin/import', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -262,7 +258,6 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
 
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\s-]/g, '_'));
       const colMap  = {
-        ref_id:       findCol(headers, ['ref_id','id','no','no.','number','编号','編號']),
         color:        findCol(headers, ['color','colour']),
         title:        findCol(headers, ['title']),
         first_name:   findCol(headers, ['first_name','firstname']),
@@ -280,7 +275,6 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         rows.push({
           _sheet:       'CSV',
           _row:         i + 1,
-          ref_id:       cells[colMap.ref_id]       || null,
           color:        cells[colMap.color]        || null,
           title:        cells[colMap.title]        || null,
           first_name:   cells[colMap.first_name]   || null,
@@ -341,11 +335,9 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         ws.eachRow((row, rowNum) => {
           if (rowNum < dataStart) return;
 
-          let ref_id, color, title, first_name, last_name, full_name, organization, phone, email;
+          let color, title, first_name, last_name, full_name, organization, phone, email;
 
           if (hasHeaders) {
-            ref_id       = getByName(row,
-              'ID', 'id', 'No.', 'No', '編號', '编号', 'Number', 'RefId', 'ref_id', 'Ref', 'Reference');
             full_name    = getByName(row,
               'FullName', 'full_name', 'Full Name', 'Name', 'English Name', 'EnglishName',
               'Participant Name', 'Display Name', 'Badge Name', '姓名', '中文姓名', '英文姓名', '名字');
@@ -358,17 +350,16 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
             phone        = getByName(row, 'Phone', 'phone', 'Tel', 'Telephone', '電話', '手機');
             email        = getByName(row, 'Email', 'email', 'E-mail', '電郵', '電子郵件');
           } else {
-            // Positional: A=ref_id  B=Color  C=Title  D=First  E=Last  F=FullName  G=Org
-            ref_id       = cellText(row.getCell(1).value);
-            color        = sheetColor ?? normalizeColor(cellText(row.getCell(2).value));
-            title        = cellText(row.getCell(3).value);
-            first_name   = cellText(row.getCell(4).value);
-            last_name    = cellText(row.getCell(5).value);
-            full_name    = cellText(row.getCell(6).value);
-            organization = cellText(row.getCell(7).value);
+            // Positional: A=Color  B=Title  C=First  D=Last  E=FullName  F=Org
+            color        = sheetColor ?? normalizeColor(cellText(row.getCell(1).value));
+            title        = cellText(row.getCell(2).value);
+            first_name   = cellText(row.getCell(3).value);
+            last_name    = cellText(row.getCell(4).value);
+            full_name    = cellText(row.getCell(5).value);
+            organization = cellText(row.getCell(6).value);
           }
 
-          rows.push({ _sheet: sheetName, _row: rowNum, ref_id, color, title, first_name, last_name, full_name, organization, phone, email });
+          rows.push({ _sheet: sheetName, _row: rowNum, color, title, first_name, last_name, full_name, organization, phone, email });
         });
       }
     } else {
@@ -384,7 +375,6 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
       const entry = {
         n:     row._row   || null,
         sheet: row._sheet || null,
-        ref_id: row.ref_id || null,
         name:  row.full_name || null,
         color: row.color  || null,
         title: row.title  || null,
@@ -405,15 +395,7 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         continue;
       }
 
-      // Dedup 1: by ref_id (exact external identifier)
-      if (row.ref_id) {
-        if (await db.findByRefId(row.ref_id)) {
-          skipped++;
-          detail.push({ ...entry, status: 'skipped', reason: `Duplicate ID "${row.ref_id}" already in database` });
-          continue;
-        }
-      }
-      // Dedup 2: by (full_name, organization, color)
+      // Dedup: skip if (full_name, organization, color) already exists
       if (await db.findDuplicate(row.full_name, row.organization, row.color)) {
         skipped++;
         detail.push({ ...entry, status: 'skipped', reason: `Duplicate: same name + org + color already in database` });
