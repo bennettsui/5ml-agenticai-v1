@@ -719,8 +719,6 @@ export default function SalonPage() {
             </FadeIn>
           ))}
         </div>
-
-        </div>
       </Section>
 
       {/* ==================== BLOCK D2 — TICKETS & PRICING ==================== */}
