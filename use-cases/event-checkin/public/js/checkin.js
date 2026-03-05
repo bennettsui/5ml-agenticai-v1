@@ -270,7 +270,7 @@ function buildCard(p) {
   card.innerHTML = `
     <div class="card-badge-col">
       <span class="badge badge-${p.color}">${p.color}</span>
-      ${p.ref_id ? `<span class="card-num">#${esc(p.ref_id)}</span>` : ''}
+      ${(p.ref_id || p.id) ? `<span class="card-num">#${esc(String(p.ref_id || p.id))}</span>` : ''}
     </div>
     <div class="card-body">
       <div class="card-name">${esc(displayName)}</div>
