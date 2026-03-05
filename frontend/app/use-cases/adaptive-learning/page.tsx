@@ -93,10 +93,21 @@ const AGENT_GROUPS: AgentGroup[] = [
     agent: 'TechArchAgent',
     color: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20',
     tabs: [
-      { id: 'arch',           label: 'Architecture',       mode: 'HIGH_LEVEL_ARCH',           icon: Network },
-      { id: 'seq-session',    label: 'Student Session Seq', mode: 'SEQUENCE_STUDENT_SESSION', icon: GitBranch },
-      { id: 'seq-upload',     label: 'Teacher Upload Seq', mode: 'SEQUENCE_TEACHER_UPLOAD',   icon: GitBranch },
-      { id: 'seq-dash',       label: 'Dashboard Seq',      mode: 'SEQUENCE_TEACHER_DASHBOARD',icon: GitBranch },
+      { id: 'arch',           label: 'Architecture',        mode: 'HIGH_LEVEL_ARCH',            icon: Network },
+      { id: 'seq-session',    label: 'Student Session Seq', mode: 'SEQUENCE_STUDENT_SESSION',   icon: GitBranch },
+      { id: 'seq-upload',     label: 'Teacher Upload Seq',  mode: 'SEQUENCE_TEACHER_UPLOAD',    icon: GitBranch },
+      { id: 'seq-dash',       label: 'Dashboard Seq',       mode: 'SEQUENCE_TEACHER_DASHBOARD', icon: GitBranch },
+    ],
+  },
+  {
+    id: 'gamification',
+    label: 'GamificationAgent',
+    agent: 'GamificationAgent',
+    color: 'bg-orange-500/10 text-orange-300 border-orange-500/20',
+    tabs: [
+      { id: 'badge',    label: 'Badge Message',    mode: 'BADGE_MESSAGE',    icon: Star },
+      { id: 'missions', label: 'Suggest Missions', mode: 'SUGGEST_MISSIONS', icon: Gamepad2 },
+      { id: 'nudge',    label: 'Progress Nudge',   mode: 'PROGRESS_NUDGE',   icon: ChevronRight },
     ],
   },
 ];
@@ -181,6 +192,29 @@ const DEMO_PAYLOADS: Record<string, Record<string, unknown>> = {
   SEQUENCE_STUDENT_SESSION: { format: 'MERMAID' },
   SEQUENCE_TEACHER_UPLOAD: { format: 'MERMAID' },
   SEQUENCE_TEACHER_DASHBOARD: { format: 'MERMAID' },
+  BADGE_MESSAGE: {
+    badge_code: 'CONCEPT_EXPLORER',
+    badge_name_en: 'Concept Explorer',
+    badge_name_zh: '概念探險家',
+    context: {
+      recent_concepts: ['MATH.S1.FRACTION.ADD', 'MATH.S1.ALGEBRA.EQUATION1'],
+      recent_concept_names_en: ['Adding fractions', 'Solving linear equations'],
+      recent_concept_names_zh: ['分數加法', '一元一次方程'],
+    },
+  },
+  SUGGEST_MISSIONS: {
+    recent_mastery_changes: [
+      { objective_code: 'MATH.S1.FRACTION.ADD', objective_name_en: 'Adding fractions', objective_name_zh: '分數加法', delta_mastery: 1, delta_interest: 0.5 },
+      { objective_code: 'MATH.S1.GEOMETRY.ANGLE', objective_name_en: 'Angles in a triangle', objective_name_zh: '三角形內角', delta_mastery: 0, delta_interest: 1.0 },
+    ],
+    recent_sessions_count: 3,
+    days_since_last_session: 2,
+  },
+  PROGRESS_NUDGE: {
+    days_since_last_session: 7,
+    last_focus_concepts_en: ['Adding fractions', 'Linear equations'],
+    last_focus_concepts_zh: ['分數加法', '一元一次方程'],
+  },
 };
 
 // ─── Helper components ────────────────────────────────────────────────────────
@@ -345,7 +379,7 @@ export default function AdaptiveLearningPage() {
             </div>
             <div>
               <h1 className="text-xl font-semibold text-white">Adaptive Learning for Schools</h1>
-              <p className="text-sm text-slate-400 mt-0.5">S1–S2 Adaptive Mathematics · HK EDB Curriculum · 6 Specialist Claude Agents</p>
+              <p className="text-sm text-slate-400 mt-0.5">S1–S2 Adaptive Mathematics · HK EDB Curriculum · 7 Specialist Claude Agents</p>
             </div>
           </div>
 
@@ -457,7 +491,7 @@ export default function AdaptiveLearningPage() {
 
         {/* Architecture reference table */}
         <div className="mt-8 dark:bg-slate-800/60 rounded-xl border border-slate-700/50 p-6">
-          <h3 className="text-sm font-semibold text-white mb-5">6-Agent Architecture Reference</h3>
+          <h3 className="text-sm font-semibold text-white mb-5">7-Agent Architecture Reference</h3>
           <div className="grid md:grid-cols-3 gap-4">
             {AGENT_GROUPS.map(group => (
               <div key={group.id} className={`rounded-xl border p-4 ${group.color.replace('text-', 'border-').replace('bg-', 'bg-')}`}
@@ -495,6 +529,7 @@ export default function AdaptiveLearningPage() {
                   { endpoint: '/student-ux',       agent: 'StudentUxAgent',    modes: 'WELCOME · SESSION_INTRO · QUESTION_FEEDBACK · SESSION_SUMMARY_STUDENT · GAMIFICATION_EVENT' },
                   { endpoint: '/teacher-guide',    agent: 'TeacherGuideAgent', modes: 'INTRO_PAGE · STEP_BY_STEP_FEATURE · FAQ' },
                   { endpoint: '/tech-arch',        agent: 'TechArchAgent',     modes: 'HIGH_LEVEL_ARCH · SEQUENCE_STUDENT_SESSION · SEQUENCE_TEACHER_UPLOAD · SEQUENCE_TEACHER_DASHBOARD' },
+                  { endpoint: '/gamification',     agent: 'GamificationAgent', modes: 'BADGE_MESSAGE · SUGGEST_MISSIONS · PROGRESS_NUDGE' },
                   { endpoint: '/demo',             agent: 'Orchestrator',      modes: 'all modes + legacy aliases' },
                 ].map(row => (
                   <tr key={row.endpoint} className="border-b border-slate-700/30">

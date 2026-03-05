@@ -3,36 +3,34 @@
  *
  * Routes incoming requests to the appropriate specialist agent based on mode.
  *
- * ┌─────────────────────────────────────────────────────────────────┐
- * │  Agent              │  Modes                                    │
- * ├─────────────────────┼───────────────────────────────────────────┤
- * │  StudentAgent       │  EXPLAIN_ONE_QUESTION, SESSION_SUMMARY    │
- * │  TeacherAgent       │  CLASS_SUMMARY, STUDENT_PROFILE           │
- * │  QuestionAgent      │  QUESTION_AUTHORING                       │
- * │  StudentUxAgent     │  WELCOME, SESSION_INTRO,                  │
- * │                     │  QUESTION_FEEDBACK,                       │
- * │                     │  SESSION_SUMMARY_STUDENT,                 │
- * │                     │  GAMIFICATION_EVENT                       │
- * │  TeacherGuideAgent  │  INTRO_PAGE, STEP_BY_STEP_FEATURE, FAQ    │
- * │  TechArchAgent      │  HIGH_LEVEL_ARCH,                         │
- * │                     │  SEQUENCE_STUDENT_SESSION,                │
- * │                     │  SEQUENCE_TEACHER_UPLOAD,                 │
- * │                     │  SEQUENCE_TEACHER_DASHBOARD               │
- * └─────────────────────┴───────────────────────────────────────────┘
+ * ┌──────────────────────┬─────────────────────────────────────────────────┐
+ * │  Agent               │  Modes                                          │
+ * ├──────────────────────┼─────────────────────────────────────────────────┤
+ * │  StudentAgent        │  EXPLAIN_ONE_QUESTION, SESSION_SUMMARY          │
+ * │  TeacherAgent        │  CLASS_SUMMARY, STUDENT_PROFILE                 │
+ * │  QuestionAgent       │  QUESTION_AUTHORING                             │
+ * │  StudentUxAgent      │  WELCOME, SESSION_INTRO, QUESTION_FEEDBACK,     │
+ * │                      │  SESSION_SUMMARY_STUDENT, GAMIFICATION_EVENT    │
+ * │  TeacherGuideAgent   │  INTRO_PAGE, STEP_BY_STEP_FEATURE, FAQ          │
+ * │  TechArchAgent       │  HIGH_LEVEL_ARCH, SEQUENCE_STUDENT_SESSION,     │
+ * │                      │  SEQUENCE_TEACHER_UPLOAD, SEQUENCE_TEACHER_DASHBOARD │
+ * │  GamificationAgent   │  BADGE_MESSAGE, SUGGEST_MISSIONS, PROGRESS_NUDGE│
+ * └──────────────────────┴─────────────────────────────────────────────────┘
  *
  * Legacy mode aliases (backwards-compat):
- *   STUDENT_EXPLANATION       → EXPLAIN_ONE_QUESTION
- *   STUDENT_SESSION_SUMMARY   → SESSION_SUMMARY
- *   TEACHER_CLASS_SUMMARY     → CLASS_SUMMARY
- *   GAMIFICATION_MESSAGE      → GAMIFICATION_EVENT  (old inline → StudentUxAgent)
+ *   STUDENT_EXPLANATION     → EXPLAIN_ONE_QUESTION
+ *   STUDENT_SESSION_SUMMARY → SESSION_SUMMARY
+ *   TEACHER_CLASS_SUMMARY   → CLASS_SUMMARY
+ *   GAMIFICATION_MESSAGE    → GAMIFICATION_EVENT  (StudentUxAgent)
  */
 
-const { StudentAgent }      = require('./student-agent');
-const { TeacherAgent }      = require('./teacher-agent');
-const { QuestionAgent }     = require('./question-agent');
-const { StudentUxAgent }    = require('./student-ux-agent');
-const { TeacherGuideAgent } = require('./teacher-guide-agent');
-const { TechArchAgent }     = require('./tech-arch-agent');
+const { StudentAgent }       = require('./student-agent');
+const { TeacherAgent }       = require('./teacher-agent');
+const { QuestionAgent }      = require('./question-agent');
+const { StudentUxAgent }     = require('./student-ux-agent');
+const { TeacherGuideAgent }  = require('./teacher-guide-agent');
+const { TechArchAgent }      = require('./tech-arch-agent');
+const { GamificationAgent }  = require('./gamification-agent');
 
 const MODE_ALIASES = {
   STUDENT_EXPLANATION:     'EXPLAIN_ONE_QUESTION',
@@ -43,40 +41,45 @@ const MODE_ALIASES = {
 
 const MODE_TO_AGENT = {
   // StudentAgent
-  EXPLAIN_ONE_QUESTION:      'student',
-  SESSION_SUMMARY:           'student',
+  EXPLAIN_ONE_QUESTION:       'student',
+  SESSION_SUMMARY:            'student',
   // TeacherAgent
-  CLASS_SUMMARY:             'teacher',
-  STUDENT_PROFILE:           'teacher',
+  CLASS_SUMMARY:              'teacher',
+  STUDENT_PROFILE:            'teacher',
   // QuestionAgent
-  QUESTION_AUTHORING:        'question',
-  // StudentUxAgent
-  WELCOME:                   'studentUx',
-  SESSION_INTRO:             'studentUx',
-  QUESTION_FEEDBACK:         'studentUx',
-  SESSION_SUMMARY_STUDENT:   'studentUx',
-  GAMIFICATION_EVENT:        'studentUx',
+  QUESTION_AUTHORING:         'question',
+  // StudentUxAgent (in-app copy)
+  WELCOME:                    'studentUx',
+  SESSION_INTRO:              'studentUx',
+  QUESTION_FEEDBACK:          'studentUx',
+  SESSION_SUMMARY_STUDENT:    'studentUx',
+  GAMIFICATION_EVENT:         'studentUx',
   // TeacherGuideAgent
-  INTRO_PAGE:                'teacherGuide',
-  STEP_BY_STEP_FEATURE:      'teacherGuide',
-  FAQ:                       'teacherGuide',
+  INTRO_PAGE:                 'teacherGuide',
+  STEP_BY_STEP_FEATURE:       'teacherGuide',
+  FAQ:                        'teacherGuide',
   // TechArchAgent
-  HIGH_LEVEL_ARCH:           'techArch',
-  SEQUENCE_STUDENT_SESSION:  'techArch',
-  SEQUENCE_TEACHER_UPLOAD:   'techArch',
-  SEQUENCE_TEACHER_DASHBOARD:'techArch',
+  HIGH_LEVEL_ARCH:            'techArch',
+  SEQUENCE_STUDENT_SESSION:   'techArch',
+  SEQUENCE_TEACHER_UPLOAD:    'techArch',
+  SEQUENCE_TEACHER_DASHBOARD: 'techArch',
+  // GamificationAgent (missions + badges)
+  BADGE_MESSAGE:              'gamification',
+  SUGGEST_MISSIONS:           'gamification',
+  PROGRESS_NUDGE:             'gamification',
   // Legacy inline
-  ADMIN_SUMMARY:             'inlineAdmin',
+  ADMIN_SUMMARY:              'inlineAdmin',
 };
 
 class AdaptiveAgent {
   constructor() {
-    this._student      = null;
-    this._teacher      = null;
-    this._question     = null;
-    this._studentUx    = null;
-    this._teacherGuide = null;
-    this._techArch     = null;
+    this._student       = null;
+    this._teacher       = null;
+    this._question      = null;
+    this._studentUx     = null;
+    this._teacherGuide  = null;
+    this._techArch      = null;
+    this._gamification  = null;
   }
 
   get student()      { return (this._student      ??= new StudentAgent()); }
@@ -85,6 +88,7 @@ class AdaptiveAgent {
   get studentUx()    { return (this._studentUx    ??= new StudentUxAgent()); }
   get teacherGuide() { return (this._teacherGuide ??= new TeacherGuideAgent()); }
   get techArch()     { return (this._techArch     ??= new TechArchAgent()); }
+  get gamification() { return (this._gamification ??= new GamificationAgent()); }
 
   /**
    * Route any mode to the right specialist agent.
@@ -110,8 +114,9 @@ class AdaptiveAgent {
       case 'teacherGuide':
         return this.teacherGuide.run(resolved, language, payload);
       case 'techArch':
-        // TechArchAgent is language-agnostic (diagrams); language param ignored
         return this.techArch.run(resolved, payload);
+      case 'gamification':
+        return this.gamification.run(resolved, language, payload);
       case 'inlineAdmin':
         return this._runAdminSummary(language, payload);
       default:
@@ -137,7 +142,7 @@ Be factual. Output ONLY valid JSON:
     return JSON.parse(cleaned);
   }
 
-  // ─── Convenience pass-throughs (backwards compat with routes.js) ─────────────
+  // ─── Convenience pass-throughs (backwards compat) ────────────────────────────
 
   explainQuestion({ question, studentAnswer, studentState, language }) {
     return this.student.explainQuestion({
@@ -163,8 +168,8 @@ Be factual. Output ONLY valid JSON:
     return this.question.authorQuestion(opts);
   }
 
+  // Old generateGamification → StudentUxAgent (in-app copy layer)
   generateGamification({ recentMasteryChanges, recentSessions, currentBadges, language }) {
-    // Routed to StudentUxAgent → GAMIFICATION_EVENT
     return this.studentUx.run('GAMIFICATION_EVENT', language, {
       event_type: 'MISSION_SUGGESTION',
       recent_mastery_changes: recentMasteryChanges,
