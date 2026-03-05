@@ -323,92 +323,145 @@ document.getElementById('importBtn').addEventListener('click', async () => {
   const btn = document.getElementById('importBtn');
   btn.disabled = true; btn.textContent = 'Uploading…';
 
-  showImportLog(`
-    <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted);">
-      <span style="font-size:18px;">⏳</span>
-      <span>Uploading <strong>${esc(file.name)}</strong> and processing rows…</span>
-    </div>
-  `, '📋 Import Log — Uploading…');
+  const fileSizeKB = Math.round(file.size / 1024);
+  const fileExt    = file.name.split('.').pop().toUpperCase();
+  const startTime  = Date.now();
+
+  // ── Step-by-step progress box ──────────────────────────────────────────────
+  const STEPS = [
+    { id: 's1', label: 'File validated',       detail: `${esc(file.name)} · ${fileSizeKB} KB · ${fileExt}` },
+    { id: 's2', label: 'Uploading to server',  detail: '' },
+    { id: 's3', label: 'Parsing file',         detail: '' },
+    { id: 's4', label: 'Reading rows',         detail: '' },
+    { id: 's5', label: 'Deduplication check',  detail: '' },
+    { id: 's6', label: 'Inserting records',    detail: '' },
+  ];
+
+  function stepHtml(s, status) {
+    const icons  = { pending: '○', active: '⟳', done: '✓', error: '✗' };
+    const colors = { pending: 'var(--text-muted)', active: '#93c5fd', done: '#86efac', error: '#fca5a5' };
+    const c = colors[status] || colors.pending;
+    return `
+      <div id="${s.id}" style="display:flex;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13px;">
+        <span style="width:16px;text-align:center;font-size:12px;flex-shrink:0;color:${c};">${icons[status]}</span>
+        <span style="color:${status === 'pending' ? 'var(--text-muted)' : 'var(--text)'};">${s.label}</span>
+        <span id="${s.id}-detail" style="color:var(--text-muted);font-size:12px;margin-left:auto;">${s.detail}</span>
+      </div>`;
+  }
+
+  importLogTitle.textContent = `📋 Import — ${esc(file.name)}`;
+  importLogEl.innerHTML = STEPS.map((s, i) => stepHtml(s, i === 0 ? 'done' : i === 1 ? 'active' : 'pending')).join('') +
+    `<div id="importResultArea" style="margin-top:14px;"></div>`;
+  importLogPanel.classList.remove('hidden');
+  importLogPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  function setStep(id, status, detail) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const icons  = { pending: '○', active: '⟳', done: '✓', error: '✗' };
+    const colors = { pending: 'var(--text-muted)', active: '#93c5fd', done: '#86efac', error: '#fca5a5' };
+    const c = colors[status];
+    el.style.opacity = status === 'pending' ? '0.45' : '1';
+    el.innerHTML = `
+      <span style="width:16px;text-align:center;font-size:12px;flex-shrink:0;color:${c};">${icons[status]}</span>
+      <span style="color:${status === 'pending' ? 'var(--text-muted)' : 'var(--text)'};">${STEPS.find(s=>s.id===id)?.label ?? id}</span>
+      <span style="color:var(--text-muted);font-size:12px;margin-left:auto;">${detail ?? ''}</span>`;
+  }
+
+  // Simulate server-side progress while waiting
+  const timers = [
+    setTimeout(() => setStep('s3', 'active', ''), 700),
+    setTimeout(() => setStep('s4', 'active', ''), 1500),
+    setTimeout(() => setStep('s5', 'active', ''), 2500),
+    setTimeout(() => setStep('s6', 'active', ''), 3700),
+  ];
 
   try {
     const resp = await fetch(`${API}/admin/import`, { method: 'POST', body: fd });
     const data = await resp.json();
+    timers.forEach(clearTimeout);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
     if (!resp.ok) {
-      showImportLog(`<div style="color:#fca5a5;">❌ ${esc(data.error || 'Import failed.')}</div>`, '📋 Import Log — Failed');
+      setStep('s2', 'error', data.error || 'Server error');
+      ['s3','s4','s5','s6'].forEach(id => setStep(id, 'error', ''));
+      document.getElementById('importResultArea').innerHTML =
+        `<div style="color:#fca5a5;font-size:13px;padding:10px 0;">❌ ${esc(data.error || 'Import failed.')}</div>`;
       toast(data.error || 'Import failed.', 'error');
       return;
     }
 
-    const summary = document.getElementById('importSummary');
-    summary.classList.remove('hidden');
-    const skipDetails = [];
-    if (data.skipped_no_color > 0) skipDetails.push(`${data.skipped_no_color} missing/invalid Color`);
-    if (data.skipped_no_name  > 0) skipDetails.push(`${data.skipped_no_name} missing Name`);
-    if (data.skipped > (data.skipped_no_color || 0) + (data.skipped_no_name || 0)) {
-      skipDetails.push(`${data.skipped - (data.skipped_no_color||0) - (data.skipped_no_name||0)} duplicates`);
-    }
-    const skipNote = data.skipped > 0
-      ? ` <span style="color:#fbbf24;">(${skipDetails.join(', ') || data.skipped + ' skipped'})</span>`
-      : '';
-    summary.innerHTML = `
-      <strong>Import complete</strong><br/>
-      Rows processed: ${data.processed} &nbsp;|&nbsp;
-      Inserted: <strong>${data.inserted}</strong> &nbsp;|&nbsp;
-      Skipped: ${data.skipped}${skipNote}
-      ${data.skipped_no_color > 0 ? '<br/><span style="color:#fbbf24;font-size:12px;">⚠️ Color/Type must be: Red, Purple, Blue, Green, 策略影響夥伴, AI 戰略合作夥伴 iKala, 實物與社群夥伴</span>' : ''}
-    `;
+    // Mark all steps done with real data from server
+    const sheetsStr = data.sheets && data.sheets.length
+      ? `${data.sheets.length} sheet${data.sheets.length > 1 ? 's' : ''}: ${data.sheets.map(esc).join(', ')}`
+      : fileExt;
+    const dupeCount   = data.skipped - (data.skipped_no_color || 0) - (data.skipped_no_name || 0);
+    const skipParts   = [];
+    if (data.skipped_no_name  > 0) skipParts.push(`${data.skipped_no_name} missing name`);
+    if (data.skipped_no_color > 0) skipParts.push(`${data.skipped_no_color} invalid color`);
+    if (dupeCount > 0)             skipParts.push(`${dupeCount} duplicate${dupeCount > 1 ? 's' : ''}`);
+
+    setStep('s2', 'done', `${elapsed}s`);
+    setStep('s3', 'done', sheetsStr);
+    setStep('s4', 'done', `${data.processed} row${data.processed !== 1 ? 's' : ''} read`);
+    setStep('s5', 'done', data.skipped > 0 ? `${data.skipped} skipped — ${skipParts.join(', ')}` : 'No duplicates');
+    setStep('s6', data.inserted > 0 ? 'done' : 'error',
+      `${data.inserted} inserted${data.skipped > 0 ? `, ${data.skipped} skipped` : ''}`);
 
     if (data.inserted === 0 && data.skipped > 0) {
-      toast(`Import: 0 inserted — ${skipDetails.join(', ')}`, 'error');
+      toast(`Import: 0 inserted — ${skipParts.join(', ')}`, 'error');
     } else {
       toast(`Imported ${data.inserted} new participant(s).`, 'success');
     }
 
-    // ── Per-row detail log ──────────────────────────────────────────────────
+    // ── Per-row detail table ────────────────────────────────────────────────
+    const resultArea = document.getElementById('importResultArea');
     if (data.detail && data.detail.length) {
       const skippedRows = data.detail.filter(r => r.status === 'skipped');
-      const rows = data.detail.map(r => {
+      const tableRows = data.detail.map(r => {
         const ok = r.status === 'inserted';
-        const bg = ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+        const bg = ok ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)';
         const statusHtml = ok
           ? '<span style="color:#86efac;font-weight:600;">✓ Inserted</span>'
           : `<span style="color:#fca5a5;">✗ Skipped</span><br/><span style="color:var(--text-muted);font-size:11px;">${esc(r.reason || '')}</span>`;
         return `<tr style="border-top:1px solid var(--border);background:${bg};">
-          <td style="padding:5px 10px;color:var(--text-muted);">${r.n ?? ''}</td>
-          <td style="padding:5px 10px;color:var(--text-muted);">${esc(r.sheet || '')}</td>
-          <td style="padding:5px 10px;font-weight:600;">${esc(r.name || '—')}</td>
-          <td style="padding:5px 10px;">${esc(r.color || '')}</td>
-          <td style="padding:5px 10px;">${esc(r.title || '')}</td>
-          <td style="padding:5px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.org||'')}">${esc(r.org || '')}</td>
-          <td style="padding:5px 10px;">${statusHtml}</td>
+          <td style="padding:5px 8px;color:var(--text-muted);font-size:11px;">${r.n ?? ''}</td>
+          <td style="padding:5px 8px;color:var(--text-muted);font-size:11px;">${esc(r.sheet || '')}</td>
+          <td style="padding:5px 8px;color:var(--text-muted);font-size:11px;">${esc(r.no || '')}</td>
+          <td style="padding:5px 8px;font-weight:600;">${esc(r.name || '—')}</td>
+          <td style="padding:5px 8px;">${esc(r.color || '')}</td>
+          <td style="padding:5px 8px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.org||'')}">${esc(r.org || '')}</td>
+          <td style="padding:5px 8px;">${statusHtml}</td>
         </tr>`;
       }).join('');
 
-      showImportLog(`
-        <div style="margin-bottom:10px;font-size:12px;color:var(--text-muted);">
-          ${data.detail.length} rows read &nbsp;·&nbsp;
-          <span style="color:#86efac;font-weight:600;">${data.inserted} inserted</span> &nbsp;·&nbsp;
-          <span style="color:${skippedRows.length ? '#fbbf24' : 'var(--text-muted)'};">${skippedRows.length} skipped</span>
+      resultArea.innerHTML = `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding-top:10px;border-top:1px solid var(--border);">
+          <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">Row Detail</span>
+          <span style="font-size:12px;color:var(--text-muted);">${data.detail.length} rows</span>
+          <span style="font-size:12px;color:#86efac;font-weight:600;">${data.inserted} inserted</span>
+          ${skippedRows.length ? `<span style="font-size:12px;color:#fbbf24;">${skippedRows.length} skipped</span>` : ''}
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <thead><tr style="background:rgba(255,255,255,0.05);">
-            <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Row</th>
-            <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Sheet</th>
-            <th style="padding:6px 10px;text-align:left;">Name</th>
-            <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Color/Type</th>
-            <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Title</th>
-            <th style="padding:6px 10px;text-align:left;">Org</th>
-            <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Status / Reason</th>
+          <thead><tr style="background:rgba(255,255,255,0.04);">
+            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">Row #</th>
+            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">Sheet</th>
+            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">No</th>
+            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">Name</th>
+            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">Color</th>
+            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">Org</th>
+            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">Result</th>
           </tr></thead>
-          <tbody>${rows}</tbody>
+          <tbody>${tableRows}</tbody>
         </table>
-      `, `📋 Import Log — ${file.name}`);
+        ${data.skipped_no_color > 0 ? `<p style="font-size:12px;color:#fbbf24;margin-top:10px;">⚠️ Valid colors: Red, Purple, Blue, Green, 策略影響夥伴, AI 戰略合作夥伴 iKala, 實物與社群夥伴</p>` : ''}
+      `;
     } else {
-      showImportLog(`<div style="color:var(--text-muted);">No row detail returned.</div>`, '📋 Import Log');
+      resultArea.innerHTML = `<div style="color:var(--text-muted);font-size:13px;padding-top:10px;">No row detail returned.</div>`;
     }
 
     loadPage(1);
-  } catch { toast('Import request failed.', 'error'); }
+  } catch (err) { toast('Import request failed.', 'error'); }
   finally { btn.disabled = false; btn.textContent = 'Upload'; }
 });
 
