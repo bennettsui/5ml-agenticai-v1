@@ -132,11 +132,11 @@ function LogoImage({ logo }: { logo: SponsorLogo }) {
   const src = logo.publicUrl || (logo.localExists && logo.filename ? `${API_BASE}/tedx-xinyi/sponsors/${logo.filename}` : null);
   if (!src || errored) return <LogoSlot />;
   return (
-    <div className="border-2 border-neutral-100 bg-neutral-50 rounded-xl h-20 flex items-center justify-center overflow-hidden px-4">
+    <div className="bg-white rounded-xl h-24 flex items-center justify-center overflow-hidden px-6 py-3 border border-neutral-100">
       <img
         src={src}
         alt={logo.name}
-        className="max-h-12 max-w-full object-contain"
+        className="w-full h-full object-contain"
         onError={() => setErrored(true)}
       />
     </div>
