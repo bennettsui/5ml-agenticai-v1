@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS users (
   id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name                TEXT NOT NULL,
   email               TEXT UNIQUE,
+  password_hash       TEXT,
   role                user_role NOT NULL DEFAULT 'student',
   grade               TEXT,                    -- S1 / S2 (for students)
   class_name          TEXT,                    -- e.g. 1A, 2B
@@ -152,6 +153,37 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
 CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_idx
   ON knowledge_chunks USING ivfflat (embedding vector_cosine_ops)
   WITH (lists = 100);
+
+-- ─── TEACHER PAPER UPLOAD ──────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS papers (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  teacher_id  UUID REFERENCES users(id),
+  subject     TEXT DEFAULT 'MATH',
+  grade_band  TEXT,
+  exam_name   TEXT,
+  year        INT,
+  file_url    TEXT,
+  file_key    TEXT,
+  status      TEXT DEFAULT 'UPLOADED',   -- UPLOADED | OCR_RUNNING | DRAFT_READY | CONFIRMED | NEEDS_REVIEW
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS draft_questions (
+  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  paper_id              UUID NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+  stem_en               TEXT,
+  stem_zh               TEXT,
+  has_image             BOOLEAN DEFAULT FALSE,
+  image_url             TEXT,
+  suggested_type        TEXT DEFAULT 'MCQ',
+  suggested_difficulty  SMALLINT DEFAULT 2,
+  candidate_objectives  JSONB,
+  raw_ocr_text          TEXT,
+  status                TEXT DEFAULT 'DRAFT',  -- DRAFT | EDITED | CONFIRMED | SKIPPED | NEEDS_REVIEW
+  created_at            TIMESTAMPTZ DEFAULT NOW()
+);
 
 -- ─── BADGES & GAMIFICATION ─────────────────────────────────
 

@@ -26,14 +26,27 @@
  *   GET  /api/adaptive-learning/health       — health + mode list
  */
 
-const express = require('express');
-const router = express.Router();
-const { AdaptiveAgent } = require('../agents/adaptive-agent');
+const express  = require('express');
+const multer   = require('multer');
+const router   = express.Router();
+const { AdaptiveAgent }  = require('../agents/adaptive-agent');
+const sessionService     = require('../services/session-service');
+const ocrService         = require('../services/ocr-service');
+const db                 = require('../db');
+
+// Multer: memory storage for PDF uploads (max 20 MB)
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 let agent;
 function getAgent() {
   if (!agent) agent = new AdaptiveAgent();
   return agent;
+}
+
+// ─── Simple student-id helper (pilot: no full auth yet) ───────────────────────
+// Pass X-Student-Id header or student_id in body for pilot usage.
+function getStudentId(req) {
+  return req.headers['x-student-id'] || req.body?.student_id || null;
 }
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
@@ -342,5 +355,298 @@ router.post('/demo', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ─── Student Session Engine ───────────────────────────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/student/sessions/start
+ * Body: { student_id, target_objective_codes, language, mode }
+ * Header: X-Student-Id (alternative to body.student_id)
+ */
+router.post('/student/sessions/start', async (req, res) => {
+  const { target_objective_codes, language, mode } = req.body || {};
+  const studentId = getStudentId(req);
+  if (!studentId) return res.status(400).json({ success: false, error: 'student_id is required (body or X-Student-Id header)' });
+  if (!Array.isArray(target_objective_codes) || target_objective_codes.length === 0) {
+    return res.status(400).json({ success: false, error: 'target_objective_codes array is required' });
+  }
+  try {
+    const result = await sessionService.startSession(studentId, target_objective_codes, language || 'EN', mode || 'adaptive');
+    res.json({ success: true, session_id: result.session.id, initial_question: result.question });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/adaptive-learning/student/sessions/:id/answer
+ * Body: { question_id, answer_payload, self_ratings, time_taken_seconds, hint_used, language }
+ */
+router.post('/student/sessions/:id/answer', async (req, res) => {
+  const { question_id, answer_payload, self_ratings, time_taken_seconds, hint_used, language } = req.body || {};
+  if (!question_id || !answer_payload) {
+    return res.status(400).json({ success: false, error: 'question_id and answer_payload are required' });
+  }
+  try {
+    const result = await sessionService.submitAnswer(
+      req.params.id, question_id, answer_payload,
+      self_ratings || {}, time_taken_seconds, hint_used || false, language || 'EN'
+    );
+    res.json({ success: true, ...result });
+  } catch (err) {
+    const status = err.message.includes('not found') ? 404 : 500;
+    res.status(status).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/adaptive-learning/student/sessions/:id/end
+ * Body: { language }
+ */
+router.post('/student/sessions/:id/end', async (req, res) => {
+  const { language } = req.body || {};
+  try {
+    const result = await sessionService.endSession(req.params.id, language || 'EN');
+    res.json({ success: true, ...result });
+  } catch (err) {
+    const status = err.message.includes('not found') ? 404 : 500;
+    res.status(status).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Student concept overview ─────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/student/concepts/overview
+ * Header: X-Student-Id  or  Query: student_id
+ */
+router.get('/student/concepts/overview', async (req, res) => {
+  const studentId = req.headers['x-student-id'] || req.query.student_id;
+  if (!studentId) return res.status(400).json({ success: false, error: 'student_id is required' });
+  try {
+    const mastery = await db.getStudentMasteryState(studentId);
+    res.json({ success: true, student_id: studentId, objectives: mastery });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: paper upload ────────────────────────────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/teachers/papers/upload
+ * multipart/form-data: file (PDF), subject, grade_band, exam_name, year
+ * Header: X-Teacher-Id
+ */
+router.post('/teachers/papers/upload', upload.single('file'), async (req, res) => {
+  const teacherId = req.headers['x-teacher-id'] || req.body?.teacher_id;
+  if (!req.file) return res.status(400).json({ success: false, error: 'PDF file is required' });
+  if (req.file.mimetype !== 'application/pdf') return res.status(400).json({ success: false, error: 'Only PDF files are accepted' });
+
+  try {
+    // Store on Fly persistent volume if available, else keep in-memory reference
+    const fileKey  = `papers/${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const fileUrl  = `/uploads/${fileKey}`; // will be served from Fly volume
+
+    // Write to volume
+    const fs   = require('fs');
+    const path = require('path');
+    const dir  = path.join('/app/uploads/papers');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join('/app/uploads', fileKey), req.file.buffer);
+
+    const paper = await db.createPaper({
+      teacherId: teacherId || null,
+      subject:   req.body.subject   || 'MATH',
+      gradeBand: req.body.grade_band || 'S1-S2',
+      examName:  req.body.exam_name  || req.file.originalname,
+      year:      req.body.year       || new Date().getFullYear(),
+      fileUrl,
+      fileKey,
+    });
+
+    // Fire OCR + QuestionAgent pipeline async (non-blocking)
+    _runOcrPipeline(paper.id, req.file.buffer, req.body.grade_band || 'S1-S2').catch(err =>
+      console.error(`OCR pipeline failed for paper ${paper.id}:`, err.message)
+    );
+
+    res.json({ success: true, paper_id: paper.id, status: 'UPLOADED', message: 'PDF uploaded. Draft questions will be ready shortly.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/adaptive-learning/teachers/papers/:id/draft-questions
+ */
+router.get('/teachers/papers/:id/draft-questions', async (req, res) => {
+  try {
+    const paper  = await db.getPaper(req.params.id);
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
+    const drafts = await db.getDraftQuestions(req.params.id);
+    res.json({ success: true, paper_id: paper.id, status: paper.status, exam_name: paper.exam_name, draft_questions: drafts });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: confirm questions ───────────────────────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/teachers/questions/confirm
+ * Body: { paper_id, questions: [{ draft_id, stem_en, stem_zh, answer, question_type, difficulty_estimate, objective_codes, explanation_en, explanation_zh, options }] }
+ */
+router.post('/teachers/questions/confirm', async (req, res) => {
+  if (!requireApiKey(res)) return;
+  const { paper_id, questions } = req.body || {};
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return res.status(400).json({ success: false, error: 'questions array is required' });
+  }
+  const { pool } = require('../../../db');
+  const results = [];
+  try {
+    for (const q of questions) {
+      // Upsert question
+      const { rows: qRows } = await pool.query(
+        `INSERT INTO questions (stem_en, stem_zh, answer, question_type, difficulty_estimate,
+           option_a_en, option_b_en, option_c_en, option_d_en,
+           explanation_en, explanation_zh, source_type, grade)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'PAST_PAPER',$12)
+         RETURNING id`,
+        [q.stem_en, q.stem_zh || null, q.answer, q.question_type || 'MCQ',
+         q.difficulty_estimate || 2,
+         q.options?.[0] || null, q.options?.[1] || null, q.options?.[2] || null, q.options?.[3] || null,
+         q.explanation_en || null, q.explanation_zh || null, q.grade || null]
+      );
+      const questionId = qRows[0].id;
+
+      // Map to objectives
+      for (const code of (q.objective_codes || [])) {
+        const lo = await db.getLearningObjectiveByCode(code);
+        if (lo) {
+          await pool.query(
+            `INSERT INTO question_objective_map (question_id, objective_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+            [questionId, lo.id]
+          );
+        }
+      }
+
+      // Mark draft confirmed
+      if (q.draft_id) {
+        await pool.query(`UPDATE draft_questions SET status='CONFIRMED' WHERE id=$1`, [q.draft_id]);
+      }
+
+      results.push({ draft_id: q.draft_id || null, question_id: questionId });
+    }
+
+    if (paper_id) await db.updatePaperStatus(paper_id, 'CONFIRMED');
+
+    res.json({ success: true, created_questions: results });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher dashboard ────────────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/teacher/classes/:className/mastery
+ * Query: grade
+ */
+router.get('/teacher/classes/:className/mastery', async (req, res) => {
+  if (!requireApiKey(res)) return;
+  const { grade } = req.query;
+  if (!grade) return res.status(400).json({ success: false, error: 'grade query param is required' });
+  try {
+    const mastery = await db.getClassMastery(req.params.className, grade);
+
+    // Generate AI class summary
+    let aiSummary = null;
+    if (mastery.length > 0) {
+      const objectiveStats = mastery.map(m => ({
+        objective_code: m.objective_code,
+        name_en: m.name_en, name_zh: m.name_zh,
+        avg_mastery: parseFloat(m.avg_mastery),
+        avg_interest: parseFloat(m.avg_interest),
+        student_count: parseInt(m.student_count),
+        distribution: { not_seen: m.not_seen, introduced: m.introduced, practicing: m.practicing, consolidating: m.consolidating, mastered: m.mastered },
+      }));
+
+      try {
+        aiSummary = await getAgent().teacher.summariseClass({
+          classInfo: { class_name: req.params.className, grade },
+          objectiveStats,
+          language: req.query.language || 'EN',
+        });
+      } catch (err) {
+        console.warn('TeacherAgent CLASS_SUMMARY failed (non-fatal):', err.message);
+      }
+    }
+
+    res.json({ success: true, class_name: req.params.className, grade, objectives: mastery, ai_summary: aiSummary });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── OCR pipeline (async) ─────────────────────────────────────────────────────
+
+async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
+  await db.updatePaperStatus(paperId, 'OCR_RUNNING');
+
+  let rawBlocks = [];
+  if (await ocrService.isAvailable()) {
+    rawBlocks = await ocrService.extractFromPdf(pdfBuffer);
+  } else {
+    console.warn(`Paper ${paperId}: Google Document AI not configured, skipping OCR`);
+    await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
+    return;
+  }
+
+  if (rawBlocks.length === 0) {
+    await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
+    return;
+  }
+
+  await db.updatePaperStatus(paperId, 'DRAFT_READY');
+
+  // Get candidate LOs for this grade
+  const los = await db.getLearningObjectives({ grade: gradeBand.split('-')[0] || 'S1' });
+  const candidateObjectives = los.slice(0, 20).map(lo => ({ code: lo.code, name_en: lo.name_en, name_zh: lo.name_zh }));
+
+  // Run QuestionAgent on each block
+  for (const block of rawBlocks) {
+    let draft = {
+      paperId,
+      rawOcrText:  block.raw_text,
+      hasImage:    block.has_image,
+      stemEn:      block.raw_text,
+      suggestedDifficulty: 2,
+      candidateObjectives,
+    };
+
+    if (process.env.ANTHROPIC_API_KEY && block.raw_text.length > 20) {
+      try {
+        const result = await getAgent().question.authorQuestion({
+          rawTextEn:            block.raw_text,
+          imageDescription:     block.has_image ? 'Question contains a diagram or figure' : null,
+          candidateObjectives,
+          gradeBand,
+        });
+        draft.stemEn               = result.clean_stem_en  || block.raw_text;
+        draft.stemZh               = result.clean_stem_zh  || null;
+        draft.suggestedType        = result.question_type  || 'MCQ';
+        draft.suggestedDifficulty  = result.difficulty_estimate || 2;
+        draft.candidateObjectives  = result.selected_objective_codes?.map(code =>
+          candidateObjectives.find(lo => lo.code === code)
+        ).filter(Boolean) || candidateObjectives;
+      } catch (err) {
+        console.warn(`QuestionAgent failed for block (non-fatal):`, err.message);
+      }
+    }
+
+    await db.createDraftQuestion(draft);
+  }
+}
 
 module.exports = router;
