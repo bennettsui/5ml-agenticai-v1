@@ -1,8 +1,22 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_AMBER } from '../components';
 
 const CURRENT_PATH = '/vibe-demo/tedx-xinyi/sponsors';
+
+const API_BASE = typeof window !== 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_URL || '')
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080');
+
+interface SponsorLogo {
+  key: string;
+  name: string;
+  category: string;
+  filename: string | null;
+  publicUrl?: string;
+  localExists: boolean;
+}
 
 const TIER_COLORS: Record<string, string> = {
   patron:     TED_RED,
@@ -113,7 +127,34 @@ function LogoSlot() {
   );
 }
 
+function LogoImage({ logo }: { logo: SponsorLogo }) {
+  const [errored, setErrored] = useState(false);
+  const src = logo.publicUrl || (logo.localExists && logo.filename ? `${API_BASE}/tedx-xinyi/sponsors/${logo.filename}` : null);
+  if (!src || errored) return <LogoSlot />;
+  return (
+    <div className="border-2 border-neutral-100 bg-neutral-50 rounded-xl h-20 flex items-center justify-center overflow-hidden px-4">
+      <img
+        src={src}
+        alt={logo.name}
+        className="max-h-12 max-w-full object-contain"
+        onError={() => setErrored(true)}
+      />
+    </div>
+  );
+}
+
 export default function SponsorsPage() {
+  const [logos, setLogos] = useState<Record<string, SponsorLogo>>({});
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/tedx-xinyi/sponsors/logos`)
+      .then(r => r.json())
+      .then(d => setLogos(d.logos || {}))
+      .catch(() => {});
+  }, []);
+
+  const byCategory = (cat: string) => Object.values(logos).filter(l => l.category === cat);
+
   return (
     <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
@@ -149,14 +190,30 @@ export default function SponsorsPage() {
         <FadeIn>
           <SectionLabel>精選夥伴</SectionLabel>
           <div className="flex flex-wrap gap-3 sm:gap-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex-shrink-0 w-32 h-16 border-2 border-dashed border-neutral-200 bg-neutral-50 rounded-xl flex items-center justify-center text-xs font-bold text-neutral-300 tracking-widest uppercase cursor-pointer hover:border-neutral-400 hover:bg-white transition-colors select-none"
-              >
-                Logo
-              </div>
-            ))}
+            {(() => {
+              const featured = byCategory('featured');
+              const slots = Math.max(8, featured.length);
+              return Array.from({ length: slots }).map((_, i) => {
+                const logo = featured[i];
+                if (logo) {
+                  const src = logo.publicUrl || (logo.localExists && logo.filename ? `${API_BASE}/tedx-xinyi/sponsors/${logo.filename}` : null);
+                  return (
+                    <div key={logo.key} className="flex-shrink-0 w-32 h-16 border-2 border-neutral-100 bg-neutral-50 rounded-xl flex items-center justify-center overflow-hidden px-3">
+                      {src ? (
+                        <img src={src} alt={logo.name} className="max-h-10 max-w-full object-contain" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      ) : (
+                        <span className="text-xs font-bold text-neutral-400 text-center leading-tight">{logo.name}</span>
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <div key={i} className="flex-shrink-0 w-32 h-16 border-2 border-dashed border-neutral-200 bg-neutral-50 rounded-xl flex items-center justify-center text-xs font-bold text-neutral-300 tracking-widest uppercase select-none">
+                    Logo
+                  </div>
+                );
+              });
+            })()}
           </div>
         </FadeIn>
       </Section>
@@ -212,66 +269,35 @@ export default function SponsorsPage() {
           </p>
         </FadeIn>
 
-        {/* Logo cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-16">
-          {[
-            { tag: '大會官方成長夥伴', name: 'Moleskine', desc: '以創意文具與設計工具，陪伴參與者把靈感帶回日常。' },
-            { tag: '影響力夥伴', name: '家扶基金會', desc: '長期夥伴，與我們一起連結公益與社群力量。' },
-          ].map((card) => (
-            <FadeIn key={card.name}>
-              <div className="border border-neutral-100 rounded-2xl p-6 hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                <LogoSlot />
-                <span
-                  className="inline-block mt-4 mb-3 px-3 py-1 rounded-full text-xs font-bold tracking-wide"
-                  style={{ backgroundColor: `${TED_RED}10`, color: TED_RED }}
-                >
-                  {card.tag}
-                </span>
-                <p className="font-black text-base" lang="zh-TW">{card.name}</p>
-                <p className="text-sm text-neutral-500 mt-1" lang="zh-TW">{card.desc}</p>
+        {/* Logo cards — dynamic from admin */}
+        {(() => {
+          const strategic = byCategory('strategic');
+          const cards = strategic.length > 0 ? strategic : null;
+          if (!cards) {
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {[0, 1].map(i => (
+                  <div key={i} className="border border-neutral-100 rounded-2xl p-6">
+                    <LogoSlot />
+                    <p className="font-black text-base mt-4 text-neutral-300" lang="zh-TW">策略夥伴名稱</p>
+                  </div>
+                ))}
               </div>
-            </FadeIn>
-          ))}
-        </div>
-
-        {/* iKala featured card */}
-        <FadeIn>
-          <SectionLabel>AI Strategic Partner</SectionLabel>
-          <h3 className="text-2xl font-black mb-6" lang="zh-TW">AI 戰略合作夥伴 iKala</h3>
-          <div className="flex justify-center">
-            <div
-              className="w-full max-w-2xl rounded-2xl p-8 sm:p-10 border"
-              style={{ borderColor: `${TED_RED}25`, backgroundColor: `${TED_RED}04` }}
-            >
-              <div className="h-1 w-12 rounded-full mb-8" style={{ backgroundColor: TED_RED }} />
-              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-8 items-start">
-                <div className="border-2 border-dashed border-neutral-200 bg-white rounded-xl h-28 flex items-center justify-center text-xs font-bold text-neutral-300 tracking-widest uppercase select-none">
-                  iKala Logo
-                </div>
-                <div>
-                  <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: TED_RED }}>
-                    AI Strategic Partner · iKala
-                  </p>
-                  <h4 className="text-xl font-black mb-3" lang="zh-TW">AI 戰略合作夥伴 iKala</h4>
-                  <p className="text-sm text-neutral-600 leading-relaxed mb-4" lang="zh-TW">
-                    與 iKala 合作，TEDxXinyi 正在探索如何運用 AI 強化活動體驗、內容策展與社群經營，讓每一位參與者的影響力被科技放大。
-                  </p>
-                  <ul className="space-y-2">
-                    {[
-                      '將 AI 工具整合進溝通流程與活動執行',
-                      '以數據與社群回饋共同創作內容與洞察報告',
-                    ].map((b) => (
-                      <li key={b} className="flex gap-2 text-sm text-neutral-500" lang="zh-TW">
-                        <span style={{ color: TED_RED }} className="mt-0.5 flex-shrink-0">•</span>
-                        {b}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
+            );
+          }
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+              {cards.map((logo) => (
+                <FadeIn key={logo.key}>
+                  <div className="border border-neutral-100 rounded-2xl p-6 hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                    <LogoImage logo={logo} />
+                    <p className="font-black text-base mt-4" lang="zh-TW">{logo.name}</p>
+                  </div>
+                </FadeIn>
+              ))}
             </div>
-          </div>
-        </FadeIn>
+          );
+        })()}
       </Section>
 
       {/* ── SPONSORSHIP PLANS ────────────────────────── */}
