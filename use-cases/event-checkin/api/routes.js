@@ -324,6 +324,12 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
             if (h) colIndex[h.toLowerCase().replace(/[.\s]+$/g, '')] = colNum;
           });
         }
+        console.log('[import] sheet=%s hasHeaders=%s firstCellA=%j colIndex=%j', sheetName, hasHeaders, firstCellA, colIndex);
+        // Log raw cell values for first data row
+        const debugRow = ws.getRow(dataStart);
+        const debugCells = {};
+        debugRow.eachCell((cell, colNum) => { debugCells[colNum] = { type: typeof cell.value, val: cell.value }; });
+        console.log('[import] row%d cells=%j', dataStart, debugCells);
 
         const getByName = (row, ...names) => {
           for (const name of names) {
