@@ -132,8 +132,10 @@ router.get('/admin/participants', async (req, res) => {
   const color    = VALID_COLORS.includes(req.query.color)  ? req.query.color  : undefined;
   const status   = ['checked_in','not_checked_in'].includes(req.query.status) ? req.query.status : undefined;
   const query    = (req.query.query || '').trim() || undefined;
+  const sortBy   = req.query.sortBy  || 'id';
+  const sortDir  = req.query.sortDir || 'desc';
   try {
-    res.json({ ...(await db.list({ page, pageSize, color, status, query })), page, pageSize });
+    res.json({ ...(await db.list({ page, pageSize, color, status, query, sortBy, sortDir })), page, pageSize });
   } catch (err) {
     console.error('[event-checkin admin list]', err);
     res.status(500).json({ error: 'Failed to list participants' });

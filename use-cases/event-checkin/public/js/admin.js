@@ -9,10 +9,15 @@
 const API = window.API_BASE || '/api/event-checkin';
 
 // ─── State ────────────────────────────────────────────────────────────────────
-let currentPage = 1;
-let totalPages  = 1;
-const PAGE_SIZE = 50;
-let selectedIds = new Set();
+let currentPage  = 1;
+let totalPages   = 1;
+const PAGE_SIZE  = 50;
+let selectedIds  = new Set();
+let adminSortCol  = 'id';
+let adminSortDir  = 'desc';
+let importDetail  = [];
+let importSortCol = 'n';
+let importSortDir = 1; // 1=asc, -1=desc
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 const tbody       = document.getElementById('adminTableBody');
@@ -62,9 +67,11 @@ async function loadPage(page = 1) {
   selectAll.checked = false;
 
   const params = new URLSearchParams({ page, pageSize: PAGE_SIZE });
-  if (filterColor.value)         params.set('color',  filterColor.value);
-  if (filterStatus.value)        params.set('status', filterStatus.value);
-  if (filterQuery.value.trim())  params.set('query',  filterQuery.value.trim());
+  if (filterColor.value)         params.set('color',   filterColor.value);
+  if (filterStatus.value)        params.set('status',  filterStatus.value);
+  if (filterQuery.value.trim())  params.set('query',   filterQuery.value.trim());
+  params.set('sortBy',  adminSortCol);
+  params.set('sortDir', adminSortDir);
 
   try {
     const resp = await fetch(`${API}/admin/participants?${params}`);
@@ -418,23 +425,11 @@ document.getElementById('importBtn').addEventListener('click', async () => {
     const resultArea = document.getElementById('importResultArea');
     if (data.detail && data.detail.length) {
       const skippedRows = data.detail.filter(r => r.status === 'skipped');
-      const tableRows = data.detail.map(r => {
-        const ok = r.status === 'inserted';
-        const bg = ok ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)';
-        const statusHtml = ok
-          ? '<span style="color:#86efac;font-weight:600;">✓ Inserted</span>'
-          : `<span style="color:#fca5a5;">✗ Skipped</span><br/><span style="color:var(--text-muted);font-size:11px;">${esc(r.reason || '')}</span>`;
-        return `<tr style="border-top:1px solid var(--border);background:${bg};">
-          <td style="padding:5px 8px;color:var(--text-muted);font-size:11px;">${r.n ?? ''}</td>
-          <td style="padding:5px 8px;color:var(--text-muted);font-size:11px;">${esc(r.sheet || '')}</td>
-          <td style="padding:5px 8px;color:var(--text-muted);font-size:11px;">${esc(r.no || '')}</td>
-          <td style="padding:5px 8px;font-weight:600;">${esc(r.name || '—')}</td>
-          <td style="padding:5px 8px;">${esc(r.color || '')}</td>
-          <td style="padding:5px 8px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.org||'')}">${esc(r.org || '')}</td>
-          <td style="padding:5px 8px;">${statusHtml}</td>
-        </tr>`;
-      }).join('');
+      importDetail    = data.detail;
+      importSortCol   = 'n';
+      importSortDir   = 1;
 
+      const IMPORT_TH_STYLE = 'padding:6px 8px;text-align:left;color:var(--text-muted);cursor:pointer;user-select:none;';
       resultArea.innerHTML = `
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding-top:10px;border-top:1px solid var(--border);">
           <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">Row Detail</span>
@@ -443,19 +438,32 @@ document.getElementById('importBtn').addEventListener('click', async () => {
           ${skippedRows.length ? `<span style="font-size:12px;color:#fbbf24;">${skippedRows.length} skipped</span>` : ''}
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <thead><tr style="background:rgba(255,255,255,0.04);">
-            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">Row #</th>
-            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">Sheet</th>
-            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">No</th>
-            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">Name</th>
-            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">Color</th>
-            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">Org</th>
-            <th style="padding:6px 8px;text-align:left;color:var(--text-muted);">Result</th>
+          <thead><tr style="background:rgba(255,255,255,0.04);" id="importDetailHead">
+            <th style="${IMPORT_TH_STYLE}" data-icol="n">Row # <span class="sort-icon active" id="isort-n">↑</span></th>
+            <th style="${IMPORT_TH_STYLE}" data-icol="sheet">Sheet <span class="sort-icon" id="isort-sheet">↕</span></th>
+            <th style="${IMPORT_TH_STYLE}" data-icol="no">No <span class="sort-icon" id="isort-no">↕</span></th>
+            <th style="${IMPORT_TH_STYLE}" data-icol="name">Name <span class="sort-icon" id="isort-name">↕</span></th>
+            <th style="${IMPORT_TH_STYLE}" data-icol="color">Color <span class="sort-icon" id="isort-color">↕</span></th>
+            <th style="${IMPORT_TH_STYLE}" data-icol="org">Org <span class="sort-icon" id="isort-org">↕</span></th>
+            <th style="${IMPORT_TH_STYLE}" data-icol="status">Result <span class="sort-icon" id="isort-status">↕</span></th>
           </tr></thead>
-          <tbody>${tableRows}</tbody>
+          <tbody id="importDetailBody"></tbody>
         </table>
         ${data.skipped_no_color > 0 ? `<p style="font-size:12px;color:#fbbf24;margin-top:10px;">⚠️ Valid colors: Red, Purple, Blue, Green, 策略影響夥伴, AI 戰略合作夥伴 iKala, 實物與社群夥伴</p>` : ''}
       `;
+      renderImportDetailRows();
+
+      resultArea.querySelector('#importDetailHead').addEventListener('click', e => {
+        const th = e.target.closest('th[data-icol]');
+        if (!th) return;
+        const col = th.dataset.icol;
+        if (importSortCol === col) { importSortDir *= -1; }
+        else { importSortCol = col; importSortDir = 1; }
+        resultArea.querySelectorAll('#importDetailHead .sort-icon').forEach(el => { el.textContent = '↕'; el.classList.remove('active'); });
+        const icon = document.getElementById(`isort-${col}`);
+        if (icon) { icon.textContent = importSortDir === 1 ? '↑' : '↓'; icon.classList.add('active'); }
+        renderImportDetailRows();
+      });
     } else {
       resultArea.innerHTML = `<div style="color:var(--text-muted);font-size:13px;padding-top:10px;">No row detail returned.</div>`;
     }
@@ -466,6 +474,34 @@ document.getElementById('importBtn').addEventListener('click', async () => {
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function renderImportDetailRows() {
+  const body = document.getElementById('importDetailBody');
+  if (!body) return;
+  const sorted = [...importDetail].sort((a, b) => {
+    const col = importSortCol;
+    const av = col === 'n' ? (a.n ?? 0) : String(a[col] ?? '');
+    const bv = col === 'n' ? (b.n ?? 0) : String(b[col] ?? '');
+    if (col === 'n') return (av - bv) * importSortDir;
+    return av.localeCompare(bv, undefined, { numeric: true }) * importSortDir;
+  });
+  body.innerHTML = sorted.map(r => {
+    const ok = r.status === 'inserted';
+    const bg = ok ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)';
+    const statusHtml = ok
+      ? '<span style="color:#86efac;font-weight:600;">✓ Inserted</span>'
+      : `<span style="color:#fca5a5;">✗ Skipped</span><br/><span style="color:var(--text-muted);font-size:11px;">${esc(r.reason || '')}</span>`;
+    return `<tr style="border-top:1px solid var(--border);background:${bg};">
+      <td style="padding:5px 8px;color:var(--text-muted);font-size:11px;">${r.n ?? ''}</td>
+      <td style="padding:5px 8px;color:var(--text-muted);font-size:11px;">${esc(r.sheet || '')}</td>
+      <td style="padding:5px 8px;color:var(--text-muted);font-size:11px;">${esc(r.no || '')}</td>
+      <td style="padding:5px 8px;font-weight:600;">${esc(r.name || '—')}</td>
+      <td style="padding:5px 8px;">${esc(r.color || '')}</td>
+      <td style="padding:5px 8px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.org||'')}">${esc(r.org || '')}</td>
+      <td style="padding:5px 8px;">${statusHtml}</td>
+    </tr>`;
+  }).join('');
+}
 
 function formToObj(form) {
   const obj = {};
@@ -707,6 +743,19 @@ async function loadChatHistory() {
 }
 
 document.getElementById('refreshChatBtn').addEventListener('click', loadChatHistory);
+
+// ─── Admin table sort ─────────────────────────────────────────────────────────
+document.querySelectorAll('#adminTable thead th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (adminSortCol === col) { adminSortDir = adminSortDir === 'asc' ? 'desc' : 'asc'; }
+    else { adminSortCol = col; adminSortDir = 'asc'; }
+    document.querySelectorAll('#adminTable .sort-icon').forEach(el => { el.textContent = '↕'; el.classList.remove('active'); });
+    const icon = document.getElementById(`asort-${col}`);
+    if (icon) { icon.textContent = adminSortDir === 'asc' ? '↑' : '↓'; icon.classList.add('active'); }
+    loadPage(1);
+  });
+});
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 loadPage(1);
