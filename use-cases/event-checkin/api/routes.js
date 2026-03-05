@@ -397,9 +397,17 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
       }
 
       // Dedup: skip if (first_name, last_name, organization, color) already exists
-      if (await db.findDuplicate(row.first_name, row.last_name, row.organization, row.color)) {
-        skipped++;
-        detail.push({ ...entry, status: 'skipped', reason: `Duplicate: same name + org + color already in database` });
+      const existing = await db.findDuplicate(row.first_name, row.last_name, row.organization, row.color);
+      if (existing) {
+        // Back-fill `no` if the existing record is missing it and we have a value now
+        if (!existing.no && row.no) {
+          await db.update(existing.id, { no: row.no });
+          skipped++;
+          detail.push({ ...entry, status: 'skipped', reason: `Duplicate — patched missing No: ${row.no}` });
+        } else {
+          skipped++;
+          detail.push({ ...entry, status: 'skipped', reason: `Duplicate: same name + org + color already in database` });
+        }
         continue;
       }
 
