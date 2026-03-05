@@ -180,6 +180,18 @@ router.put('/admin/participants/:id', async (req, res) => {
   }
 });
 
+// DELETE /admin/participants/all  — must come BEFORE /:id to avoid Express capturing "all" as an id
+router.delete('/admin/participants/all', async (req, res) => {
+  try {
+    const count = await db.deleteAll();
+    sse.broadcast('bulk_deleted', { type: 'bulk_deleted', payload: { all: true } });
+    res.json({ deleted: count });
+  } catch (err) {
+    console.error('[event-checkin delete-all]', err);
+    res.status(500).json({ error: 'Delete all failed' });
+  }
+});
+
 // DELETE /admin/participants/:id
 router.delete('/admin/participants/:id', async (req, res) => {
   const id = Number(req.params.id);
@@ -205,18 +217,6 @@ router.post('/admin/participants/bulk-delete', async (req, res) => {
   } catch (err) {
     console.error('[event-checkin bulk delete]', err);
     res.status(500).json({ error: 'Bulk delete failed' });
-  }
-});
-
-// DELETE /admin/participants/all
-router.delete('/admin/participants/all', async (req, res) => {
-  try {
-    const count = await db.deleteAll();
-    sse.broadcast('bulk_deleted', { type: 'bulk_deleted', payload: { all: true } });
-    res.json({ deleted: count });
-  } catch (err) {
-    console.error('[event-checkin delete-all]', err);
-    res.status(500).json({ error: 'Delete all failed' });
   }
 });
 
