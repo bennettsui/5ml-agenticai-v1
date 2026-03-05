@@ -67,6 +67,112 @@ LANGUAGE
 - If language = "EN": use clear, simple English suitable for S1–S2.
 - If language = "ZH": use clear written Traditional Chinese suitable for S1–S2. Keep objective codes in Latin letters.
 
+─── FEW-SHOT EXAMPLES ───────────────────────────────────────────────────────
+
+EXAMPLE A — EXPLAIN_ONE_QUESTION, ZH, student INCORRECT
+
+Input:
+{
+  "mode": "EXPLAIN_ONE_QUESTION",
+  "language": "ZH",
+  "payload": {
+    "question": {
+      "stem_zh": "把 3/8 和 2/8 相加，答案是多少？",
+      "linked_objectives": [{ "code": "MATH.S1.FRACTION.ADD_SAME_DEN", "name_zh": "同分母分數加法" }]
+    },
+    "student_answer": { "value": "6/16", "is_correct": false }
+  }
+}
+
+Expected output:
+{
+  "concept_explanation": "呢條題目係練習同分母分數加法，即係兩個分數分母一樣，只需要加分子，分母保持不變。",
+  "why_correct_or_not": "你答案寫成 6/16，好似係先加分子再加分母，但其實應該只加分子 3+2=5，分母保持 8，所以正確答案係 5/8。",
+  "next_tip": "之後遇到同分母分數加法，可以先問自己：分母一樣嗎？如果一樣，只加分子就可以。"
+}
+
+─────────────────────────────────────────────────────────────────────────────
+
+EXAMPLE B — EXPLAIN_ONE_QUESTION, EN, student CORRECT
+
+Input:
+{
+  "mode": "EXPLAIN_ONE_QUESTION",
+  "language": "EN",
+  "payload": {
+    "question": {
+      "stem_en": "Solve: 3x + 5 = 17",
+      "linked_objectives": [{ "code": "MATH.S2.EQ.LINEAR.ONE_STEP", "name_en": "Solving one-step linear equations" }]
+    },
+    "student_answer": { "value": "4", "is_correct": true }
+  }
+}
+
+Expected output:
+{
+  "concept_explanation": "This question is about solving a simple linear equation of the form ax + b = c by undoing the operations step by step.",
+  "why_correct_or_not": "Your answer x = 4 is correct, because if we subtract 5 from both sides we get 3x = 12, and then divide both sides by 3 to get x = 4.",
+  "next_tip": "When you see an equation like this, keep thinking in reverse: first undo the +5, then undo the ×3."
+}
+
+─────────────────────────────────────────────────────────────────────────────
+
+EXAMPLE C — SESSION_SUMMARY, ZH
+
+Input:
+{
+  "mode": "SESSION_SUMMARY",
+  "language": "ZH",
+  "payload": {
+    "session_info": { "duration_minutes": 20, "question_count": 3 },
+    "interactions": [
+      {
+        "question_stem_zh": "把 3/8 和 2/8 相加",
+        "linked_objectives": ["MATH.S1.FRACTION.ADD_SAME_DEN"],
+        "is_correct": false,
+        "student_self_interest": 3
+      },
+      {
+        "question_stem_zh": "把 1/4 和 2/4 相加",
+        "linked_objectives": ["MATH.S1.FRACTION.ADD_SAME_DEN"],
+        "is_correct": true,
+        "student_self_interest": 4
+      },
+      {
+        "question_stem_zh": "解方程：2x + 3 = 9",
+        "linked_objectives": ["MATH.S2.EQ.LINEAR.ONE_STEP"],
+        "is_correct": false,
+        "hint_used": true,
+        "student_self_interest": 3
+      }
+    ],
+    "mastery_deltas": [
+      { "objective_code": "MATH.S1.FRACTION.ADD_SAME_DEN", "delta": 1 },
+      { "objective_code": "MATH.S2.EQ.LINEAR.ONE_STEP", "delta": 1 }
+    ]
+  }
+}
+
+Expected output:
+{
+  "summary": "今次 20 分鐘裏，你主要練習了同分母分數加法和一元一次方程。雖然兩個課題都有地方需要改進，但你整體上都有進步，繼續保持！",
+  "concepts_highlighted": ["MATH.S1.FRACTION.ADD_SAME_DEN", "MATH.S2.EQ.LINEAR.ONE_STEP"],
+  "strengths": [
+    "同分母分數加法的掌握程度由 1 級升到 2 級，你在做錯了第一題之後，第二題就做對了，顯示你能夠從錯誤中學習。",
+    "面對新型的方程題，你願意使用提示，而不是放棄，這是一個好習慣。"
+  ],
+  "areas_to_improve": [
+    "在一元一次方程上，有時候步驟次序仍然會搞亂，建議多練習「先加減、後乘除」的思路。",
+    "遇到做錯的題目時，可以多看一看解說，了解錯在哪個步驟。"
+  ],
+  "suggested_next_steps": [
+    "下一次練習時，可以先做 1–2 題同分母分數加法暖身，鞏固今次進步。",
+    "之後選擇 2–3 題一元一次方程，試試不用提示完成，看看能否獨立解題。"
+  ]
+}
+
+─────────────────────────────────────────────────────────────────────────────
+
 OUTPUT RULE
 Think step-by-step internally. Output ONLY valid JSON matching the schema for the given mode. No markdown, no code fences, no extra text — pure JSON only.`;
 

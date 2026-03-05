@@ -57,14 +57,17 @@ router.get('/health', (req, res) => {
     agents: [
       'StudentAgent', 'TeacherAgent', 'QuestionAgent',
       'StudentUxAgent', 'TeacherGuideAgent', 'TechArchAgent',
+      'GamificationAgent', 'AdminReportAgent',
     ],
     modes: {
-      StudentAgent:      ['EXPLAIN_ONE_QUESTION', 'SESSION_SUMMARY'],
-      TeacherAgent:      ['CLASS_SUMMARY', 'STUDENT_PROFILE'],
-      QuestionAgent:     ['QUESTION_AUTHORING'],
-      StudentUxAgent:    ['WELCOME', 'SESSION_INTRO', 'QUESTION_FEEDBACK', 'SESSION_SUMMARY_STUDENT', 'GAMIFICATION_EVENT'],
-      TeacherGuideAgent: ['INTRO_PAGE', 'STEP_BY_STEP_FEATURE', 'FAQ'],
-      TechArchAgent:     ['HIGH_LEVEL_ARCH', 'SEQUENCE_STUDENT_SESSION', 'SEQUENCE_TEACHER_UPLOAD', 'SEQUENCE_TEACHER_DASHBOARD'],
+      StudentAgent:       ['EXPLAIN_ONE_QUESTION', 'SESSION_SUMMARY'],
+      TeacherAgent:       ['CLASS_SUMMARY', 'STUDENT_PROFILE'],
+      QuestionAgent:      ['QUESTION_AUTHORING'],
+      StudentUxAgent:     ['WELCOME', 'SESSION_INTRO', 'QUESTION_FEEDBACK', 'SESSION_SUMMARY_STUDENT', 'GAMIFICATION_EVENT'],
+      TeacherGuideAgent:  ['INTRO_PAGE', 'STEP_BY_STEP_FEATURE', 'FAQ'],
+      TechArchAgent:      ['HIGH_LEVEL_ARCH', 'SEQUENCE_STUDENT_SESSION', 'SEQUENCE_TEACHER_UPLOAD', 'SEQUENCE_TEACHER_DASHBOARD'],
+      GamificationAgent:  ['BADGE_MESSAGE', 'SUGGEST_MISSIONS', 'PROGRESS_NUDGE'],
+      AdminReportAgent:   ['TERM_REPORT', 'GRADE_REPORT', 'CLASS_REPORT'],
     },
   });
 });
@@ -256,6 +259,52 @@ router.post('/tech-arch', async (req, res) => {
   }
 });
 
+// ─── GamificationAgent ───────────────────────────────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/gamification
+ * Body: { mode, language, payload }
+ * mode: BADGE_MESSAGE | SUGGEST_MISSIONS | PROGRESS_NUDGE
+ */
+const GAMIFICATION_MODES = ['BADGE_MESSAGE', 'SUGGEST_MISSIONS', 'PROGRESS_NUDGE'];
+
+router.post('/gamification', async (req, res) => {
+  if (!requireApiKey(res)) return;
+  const { mode, language, payload } = req.body || {};
+  if (!mode || !GAMIFICATION_MODES.includes(mode)) {
+    return res.status(400).json({ success: false, error: `mode must be one of: ${GAMIFICATION_MODES.join(', ')}` });
+  }
+  try {
+    const result = await getAgent().gamification.run(mode, language || 'EN', payload || {});
+    res.json({ success: true, mode, result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── AdminReportAgent ─────────────────────────────────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/admin-report
+ * Body: { mode, language, payload }
+ * mode: TERM_REPORT | GRADE_REPORT | CLASS_REPORT
+ */
+const ADMIN_REPORT_MODES = ['TERM_REPORT', 'GRADE_REPORT', 'CLASS_REPORT'];
+
+router.post('/admin-report', async (req, res) => {
+  if (!requireApiKey(res)) return;
+  const { mode, language, payload } = req.body || {};
+  if (!mode || !ADMIN_REPORT_MODES.includes(mode)) {
+    return res.status(400).json({ success: false, error: `mode must be one of: ${ADMIN_REPORT_MODES.join(', ')}` });
+  }
+  try {
+    const result = await getAgent().adminReport.run(mode, language || 'ZH', payload || {});
+    res.json({ success: true, mode, result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── Generic demo/playground (any mode) ──────────────────────────────────────
 
 /**
@@ -270,6 +319,8 @@ const ALL_MODES = [
   'WELCOME', 'SESSION_INTRO', 'QUESTION_FEEDBACK', 'SESSION_SUMMARY_STUDENT', 'GAMIFICATION_EVENT',
   'INTRO_PAGE', 'STEP_BY_STEP_FEATURE', 'FAQ',
   'HIGH_LEVEL_ARCH', 'SEQUENCE_STUDENT_SESSION', 'SEQUENCE_TEACHER_UPLOAD', 'SEQUENCE_TEACHER_DASHBOARD',
+  'BADGE_MESSAGE', 'SUGGEST_MISSIONS', 'PROGRESS_NUDGE',
+  'TERM_REPORT', 'GRADE_REPORT', 'CLASS_REPORT',
   'ADMIN_SUMMARY',
   // Legacy aliases
   'STUDENT_EXPLANATION', 'STUDENT_SESSION_SUMMARY', 'TEACHER_CLASS_SUMMARY', 'GAMIFICATION_MESSAGE',
