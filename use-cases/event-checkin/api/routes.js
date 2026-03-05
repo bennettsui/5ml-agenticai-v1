@@ -108,11 +108,11 @@ router.post('/participants/:id/remarks', async (req, res) => {
 
 // POST /participants  — create from check-in "add new" form
 router.post('/participants', async (req, res) => {
-  const { id, color, title, first_name, last_name, organization, phone, email, remarks } = req.body;
+  const { id, color, no, title, first_name, last_name, organization, phone, email, remarks } = req.body;
   if (!color || (!first_name && !last_name)) return res.status(400).json({ error: 'color and at least one of first_name/last_name are required' });
   if (!VALID_COLORS.includes(color))         return res.status(400).json({ error: 'Invalid color' });
   try {
-    const p = await db.insert({ id, color, title, first_name, last_name, organization, phone, email, remarks });
+    const p = await db.insert({ id, color, no, title, first_name, last_name, organization, phone, email, remarks });
     sse.broadcast('participant_created', { type: 'participant_created', payload: p });
     res.status(201).json(p);
   } catch (err) {
@@ -142,11 +142,11 @@ router.get('/admin/participants', async (req, res) => {
 
 // POST /admin/participants — create from admin
 router.post('/admin/participants', async (req, res) => {
-  const { id, color, title, first_name, last_name, organization, phone, email, status, remarks } = req.body;
+  const { id, color, no, title, first_name, last_name, organization, phone, email, status, remarks } = req.body;
   if (!color || (!first_name && !last_name)) return res.status(400).json({ error: 'color and at least one of first_name/last_name are required' });
   if (!VALID_COLORS.includes(color))         return res.status(400).json({ error: 'Invalid color' });
   try {
-    const p = await db.insert({ id, color, title, first_name, last_name, organization, phone, email, status, remarks });
+    const p = await db.insert({ id, color, no, title, first_name, last_name, organization, phone, email, status, remarks });
     sse.broadcast('participant_created', { type: 'participant_created', payload: p });
     res.status(201).json(p);
   } catch (err) {
@@ -158,12 +158,13 @@ router.post('/admin/participants', async (req, res) => {
 // PUT /admin/participants/:id — update
 router.put('/admin/participants/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const { color, title, first_name, last_name, organization, status, remarks } = req.body;
+  const { color, no, title, first_name, last_name, organization, status, remarks } = req.body;
   if (color && !VALID_COLORS.includes(color)) return res.status(400).json({ error: 'Invalid color' });
   try {
     if (!(await db.findById(id))) return res.status(404).json({ error: 'Not found' });
     const fields = {};
     if (color        !== undefined) fields.color        = color;
+    if (no           !== undefined) fields.no           = no;
     if (title        !== undefined) fields.title        = title;
     if (first_name   !== undefined) fields.first_name   = first_name;
     if (last_name    !== undefined) fields.last_name    = last_name;
@@ -257,6 +258,7 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
 
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\s-]/g, '_'));
       const colMap  = {
+        no:           findCol(headers, ['no','number','#','序號','編號']),
         color:        findCol(headers, ['color','colour']),
         title:        findCol(headers, ['title']),
         first_name:   findCol(headers, ['first_name','firstname','first name']),
@@ -273,6 +275,7 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         rows.push({
           _sheet:       'CSV',
           _row:         i + 1,
+          no:           cells[colMap.no]           || null,
           color:        cells[colMap.color]        || null,
           title:        cells[colMap.title]        || null,
           first_name:   cells[colMap.first_name]   || null,
@@ -332,9 +335,10 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         ws.eachRow((row, rowNum) => {
           if (rowNum < dataStart) return;
 
-          let color, title, first_name, last_name, organization, phone, email;
+          let no, color, title, first_name, last_name, organization, phone, email;
 
           if (hasHeaders) {
+            no           = getByName(row, 'No', 'no', 'NO', 'Number', '#', '序號', '編號');
             color        = sheetColor ?? normalizeColor(getByName(row,
               'Color', 'color', 'Colour', 'colour', 'Group', 'group', 'Table', 'table', 'Table Color', 'Badge Color'));
             title        = getByName(row, 'Title', 'title', 'Ttle', 'Salutation', 'salutation', 'Title/Salutation', '稱謂', '職稱');
@@ -344,15 +348,16 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
             phone        = getByName(row, 'Phone', 'phone', 'Tel', 'Telephone', '電話', '手機');
             email        = getByName(row, 'Email', 'email', 'E-mail', '電郵', '電子郵件');
           } else {
-            // Positional: A=Color  B=Title  C=First  D=Last  E=Org
-            color        = sheetColor ?? normalizeColor(cellText(row.getCell(1).value));
-            title        = cellText(row.getCell(2).value);
-            first_name   = cellText(row.getCell(3).value);
-            last_name    = cellText(row.getCell(4).value);
-            organization = cellText(row.getCell(5).value);
+            // Positional: A=No  B=Color  C=Title  D=First  E=Last  F=Org
+            no           = cellText(row.getCell(1).value);
+            color        = sheetColor ?? normalizeColor(cellText(row.getCell(2).value));
+            title        = cellText(row.getCell(3).value);
+            first_name   = cellText(row.getCell(4).value);
+            last_name    = cellText(row.getCell(5).value);
+            organization = cellText(row.getCell(6).value);
           }
 
-          rows.push({ _sheet: sheetName, _row: rowNum, color, title, first_name, last_name, organization, phone, email });
+          rows.push({ _sheet: sheetName, _row: rowNum, no, color, title, first_name, last_name, organization, phone, email });
         });
       }
     } else {
@@ -369,6 +374,7 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
       const entry = {
         n:     row._row   || null,
         sheet: row._sheet || null,
+        no:    row.no     || null,
         name:  composedName,
         color: row.color  || null,
         title: row.title  || null,
@@ -417,7 +423,7 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
 router.get('/admin/export-checkedin.csv', async (req, res) => {
   try {
     const rows    = await db.getCheckedIn();
-    const headers = ['id','color','title','first_name','last_name','organization','phone','email','status','remarks','created_at','updated_at'];
+    const headers = ['id','no','color','title','first_name','last_name','organization','phone','email','status','remarks','created_at','updated_at'];
     const lines   = [
       headers.join(','),
       ...rows.map(r => headers.map(h => {
@@ -438,7 +444,7 @@ router.get('/admin/export-checkedin.csv', async (req, res) => {
 router.get('/admin/export-checkedin.xlsx', async (req, res) => {
   try {
     const rows    = await db.getCheckedIn();
-    const headers = ['id','color','title','first_name','last_name','organization','phone','email','status','remarks','created_at','updated_at'];
+    const headers = ['id','no','color','title','first_name','last_name','organization','phone','email','status','remarks','created_at','updated_at'];
     const wb      = new ExcelJS.Workbook();
     const ws      = wb.addWorksheet('Checked-in Participants');
     ws.addRow(headers);

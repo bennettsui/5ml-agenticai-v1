@@ -262,7 +262,7 @@ function applyFilter() {
 
 function renderListRows(rows) {
   if (!rows.length) {
-    listBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">No guests match the current filter.</td></tr>`;
+    listBody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">No guests match the current filter.</td></tr>`;
     return;
   }
   listBody.innerHTML = rows.map(p => {
@@ -272,6 +272,7 @@ function renderListRows(rows) {
     const email   = esc(p.email  || '');
     const checked = p.status === 'checked_in';
     return `<tr data-id="${p.id}">
+      <td style="color:var(--text-muted);font-size:12px;">${esc(p.no || '')}</td>
       <td><span class="tag" data-color="${p.color}">${p.color}</span></td>
       <td style="font-weight:600;">${name}</td>
       <td style="color:var(--text-muted);">${org}</td>
@@ -293,7 +294,7 @@ function listUpdateOne(p) {
     const tr = listBody.querySelector(`tr[data-id="${p.id}"]`);
     if (tr) {
       const checked = p.status === 'checked_in';
-      tr.cells[6].innerHTML = checked
+      tr.cells[6].innerHTML = checked  // cells[0]=No, [1]=Color, [2]=Name, [3]=Org, [4]=Phone, [5]=Email, [6]=Status
         ? '<span class="status-checked">✓ Checked-in</span>'
         : '<span class="status-not-checked">○ Not yet</span>';
     }
@@ -356,7 +357,7 @@ loadParticipants();
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function composeName(p) {
-  return [p.title, p.first_name, p.last_name].filter(Boolean).join(' ') || p.full_name || '';
+  return [p.title, p.first_name, p.last_name].filter(Boolean).join(' ');
 }
 
 function esc(str) {

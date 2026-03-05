@@ -157,7 +157,7 @@ async function fetchAndShowCards(query) {
 }
 
 function composeName(p) {
-  return [p.title, p.first_name, p.last_name].filter(Boolean).join(' ') || p.full_name || '';
+  return [p.title, p.first_name, p.last_name].filter(Boolean).join(' ');
 }
 
 function renderAutocomplete(participants) {
@@ -270,7 +270,7 @@ function buildCard(p) {
   card.innerHTML = `
     <div class="card-badge-col">
       <span class="badge badge-${p.color}">${p.color}</span>
-      ${p.id ? `<span class="card-num">#${p.id}</span>` : ''}
+      ${p.no ? `<span class="card-num">#${esc(p.no)}</span>` : ''}
     </div>
     <div class="card-body">
       <div class="card-name">${esc(displayName)}</div>
@@ -386,9 +386,6 @@ document.getElementById('addModalSubmit').addEventListener('click', async () => 
   if (body.id) body.id = parseInt(body.id, 10) || undefined;
   else delete body.id;
 
-  // Auto-build full_name from title + first + last
-  body.full_name = [body.title, body.first_name, body.last_name].filter(Boolean).join(' ');
-
   try {
     const resp = await fetch(`${API}/participants`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -412,7 +409,7 @@ function showHint(show) { hint.style.display = show ? '' : 'none'; }
 
 function participantMatchesQuery(p, q) {
   const lq = q.toLowerCase();
-  return [p.full_name, p.first_name, p.last_name, p.organization, p.color]
+  return [p.first_name, p.last_name, p.organization, p.color]
     .some(v => v && v.toLowerCase().includes(lq));
 }
 
