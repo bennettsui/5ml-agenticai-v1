@@ -93,19 +93,19 @@ const TABLE_ROWS: [string, boolean, boolean, boolean, boolean][] = [
 
 
 
-function StrategicCard({ logo }: { logo: SponsorLogo }) {
+function StrategicLogoTile({ logo }: { logo: SponsorLogo }) {
   const [errored, setErrored] = useState(false);
   const src = logo.publicUrl || (logo.localExists && logo.filename ? `${API_BASE}/tedx-xinyi/sponsors/${logo.filename}` : null);
   return (
-    <div className="bg-white border border-neutral-100 rounded-2xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-      <div className="aspect-[5/3] flex items-center justify-center p-10 bg-white">
+    <div className="bg-white rounded-xl border border-neutral-100 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 w-[180px] sm:w-[200px]">
+      <div className="h-[108px] flex items-center justify-center px-6 py-4">
         {src && !errored
           ? <img src={src} alt={logo.name} className="max-w-full max-h-full object-contain" onError={() => setErrored(true)} />
-          : <span className="text-xs font-bold text-neutral-300 tracking-widest uppercase">Logo</span>
+          : <span className="text-[10px] font-bold text-neutral-300 tracking-widest uppercase">Logo</span>
         }
       </div>
-      <div className="px-5 py-3.5 border-t border-neutral-100">
-        <p className="text-sm font-black text-neutral-800" lang="zh-TW">{logo.name}</p>
+      <div className="border-t border-neutral-100 px-4 py-2 bg-neutral-50/60">
+        <p className="text-[11px] font-bold text-neutral-500 truncate">{logo.name}</p>
       </div>
     </div>
   );
@@ -195,49 +195,40 @@ export default function SponsorsPage() {
       </Section>
 
       {/* ── STRATEGIC PARTNERS ───────────────────────── */}
-      <Section bg="white" id="strategic-partners">
-        {/* Split header: title left, description right */}
-        <div className="flex flex-col md:flex-row md:items-end gap-3 md:gap-12 mb-10">
+      <Section bg="warm" id="strategic-partners">
+        {/* Header: red accent bar + title left, description right */}
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5 mb-10">
           <FadeIn>
-            <SectionLabel>Strategic</SectionLabel>
-            <h2 className="text-3xl md:text-4xl font-black" lang="zh-TW">策略影響夥伴</h2>
+            <div className="flex items-start gap-3.5">
+              <div className="w-[3px] h-11 rounded-full mt-0.5 flex-shrink-0" style={{ backgroundColor: TED_RED }} />
+              <div>
+                <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-neutral-400 mb-1">Strategic Partners</p>
+                <h2 className="text-2xl md:text-3xl font-black leading-tight" lang="zh-TW">策略影響夥伴</h2>
+              </div>
+            </div>
           </FadeIn>
           <FadeIn delay={80}>
-            <p className="text-neutral-400 text-sm leading-relaxed max-w-sm md:pb-1" lang="zh-TW">
+            <p className="text-neutral-500 text-sm leading-relaxed max-w-xs sm:text-right sm:pt-5" lang="zh-TW">
               這些夥伴不只提供資源，而是與 TEDxXinyi 一起為城市策劃長期對話與實驗。
             </p>
           </FadeIn>
         </div>
 
+        {/* Logo wall — fixed-width tiles, flex-wrap */}
         {(() => {
           const strategic = byCategory('strategic');
           if (strategic.length === 0) {
             return (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {[0, 1, 2].map(i => (
-                  <div key={i} className="aspect-[5/3] bg-neutral-50 rounded-2xl border-2 border-dashed border-neutral-200 flex items-center justify-center">
-                    <span className="text-xs font-bold text-neutral-300 tracking-widest uppercase">Logo</span>
-                  </div>
-                ))}
-              </div>
+              <p className="text-sm text-neutral-400 italic" lang="zh-TW">策略合作夥伴名單即將公佈。</p>
             );
           }
           return (
-            <div className={`grid gap-4 ${
-              strategic.length === 1 ? 'grid-cols-1 sm:grid-cols-2' :
-              strategic.length === 2 ? 'grid-cols-2' :
-              'grid-cols-2 md:grid-cols-3'
-            }`}>
+            <div className="flex flex-wrap gap-4">
               {strategic.map((logo) => (
                 <FadeIn key={logo.key}>
-                  <StrategicCard logo={logo} />
+                  <StrategicLogoTile logo={logo} />
                 </FadeIn>
               ))}
-              {strategic.length === 1 && (
-                <div className="aspect-[5/3] bg-neutral-50 rounded-2xl border-2 border-dashed border-neutral-200 flex items-center justify-center">
-                  <span className="text-xs font-bold text-neutral-300 tracking-widest uppercase">Coming Soon</span>
-                </div>
-              )}
             </div>
           );
         })()}
