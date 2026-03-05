@@ -670,7 +670,6 @@ export default function SalonPage() {
           </p>
         </FadeIn>
 
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_200px] gap-10 md:gap-14 items-start">
         <div className="space-y-0">
           {PROGRAM_BLOCKS.map((block, i) => (
             <FadeIn key={i} delay={i * 60}>
@@ -719,22 +718,6 @@ export default function SalonPage() {
               </div>
             </FadeIn>
           ))}
-        </div>
-
-        {/* Curiosity zones visual — sticky sidebar on desktop */}
-        <FadeIn delay={120}>
-          <div className="hidden md:block sticky top-28">
-            <img
-              src="/tedx-xinyi/salon-curiosity.webp"
-              alt=""
-              decoding="async"
-              className="w-full rounded-2xl object-cover opacity-0 transition-opacity duration-500 shadow-sm"
-              style={{ aspectRatio: '3/4' }}
-              onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-          </div>
-        </FadeIn>
         </div>
       </Section>
 
