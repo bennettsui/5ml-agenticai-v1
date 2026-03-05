@@ -718,6 +718,27 @@ export const USE_CASES: UseCaseConfig[] = [
     agentCount: 4,
     features: ['Chart Engine', 'Rule Evaluator', 'Pattern Recognition', 'Compatibility Analysis', 'Rule Management', 'Accuracy Tracking'],
   },
+  {
+    id: 'adaptive-learning-schools',
+    name: 'Adaptive Learning for Schools',
+    description: 'S1–S2 adaptive mathematics platform for Hong Kong: 6 specialist AI agents covering student coaching, teacher insights, question authoring, UX copy, step-by-step guides, and architecture visualisation.',
+    solutionLine: 'ExpLab',
+    status: 'in_progress',
+    progress: 0.6,
+    priority: 'high',
+    path: '/use-cases/adaptive-learning',
+    agentCount: 6,
+    features: [
+      'StudentAgent (explain + session summary)',
+      'TeacherAgent (class + student profile)',
+      'QuestionAgent (authoring + tagging)',
+      'StudentUxAgent (welcome · feedback · gamification)',
+      'TeacherGuideAgent (intro · step-by-step · FAQ)',
+      'TechArchAgent (diagrams · sequences)',
+      'HK EDB S1–S2 Curriculum',
+      'Bilingual EN / ZH',
+    ],
+  },
 
   // ========================================================================
   // C-SUITE MANAGEMENT — CSuite
