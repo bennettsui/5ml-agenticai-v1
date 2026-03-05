@@ -241,7 +241,8 @@ function applyFilter() {
     if (q) {
       const name = composeName(p).toLowerCase();
       const org  = (p.organization || '').toLowerCase();
-      if (!name.includes(q) && !org.includes(q)) return false;
+      const no   = (p.no || '').toLowerCase();
+      if (!name.includes(q) && !org.includes(q) && !no.includes(q)) return false;
     }
     return true;
   });
@@ -249,10 +250,12 @@ function applyFilter() {
   // Sort
   rows.sort((a, b) => {
     let av, bv;
-    if (sortCol === 'name')         { av = composeName(a); bv = composeName(b); }
+    if (sortCol === 'name')              { av = composeName(a); bv = composeName(b); }
     else if (sortCol === 'organization') { av = a.organization || ''; bv = b.organization || ''; }
-    else if (sortCol === 'status')  { av = a.status; bv = b.status; }
-    else if (sortCol === 'color')   { av = a.color;  bv = b.color; }
+    else if (sortCol === 'status')       { av = a.status; bv = b.status; }
+    else if (sortCol === 'color')        { av = a.color;  bv = b.color; }
+    else if (sortCol === 'no')           { return (a.no || '').localeCompare(b.no || '', undefined, { numeric: true }) * sortDir; }
+    else { av = ''; bv = ''; }
     return av.localeCompare(bv) * sortDir;
   });
 

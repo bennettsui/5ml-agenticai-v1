@@ -214,7 +214,7 @@ async function remove(id) {
   await pool.query(`DELETE FROM ${TABLE} WHERE id = $1`, [id]);
 }
 
-async function list({ page = 1, pageSize = 50, color, status, query } = {}) {
+async function list({ page = 1, pageSize = 50, color, status, query, sortBy = 'id', sortDir = 'desc' } = {}) {
   const conditions = [];
   const params     = [];
   let   idx        = 1;
@@ -224,8 +224,8 @@ async function list({ page = 1, pageSize = 50, color, status, query } = {}) {
   if (query) {
     const trimmedQ = String(query).trim();
     if (/^\d+$/.test(trimmedQ)) {
-      // Numeric query: search phone only
-      conditions.push(`phone ILIKE $${idx}`);
+      // Numeric query: search no or phone
+      conditions.push(`(no ILIKE $${idx} OR phone ILIKE $${idx})`);
       params.push(`%${trimmedQ}%`);
       idx++;
     } else {
@@ -235,6 +235,10 @@ async function list({ page = 1, pageSize = 50, color, status, query } = {}) {
     }
   }
 
+  const SORT_COLS = { no: 'no', color: 'color', first_name: 'first_name', last_name: 'last_name', organization: 'organization', status: 'status', id: 'id' };
+  const safeSort = SORT_COLS[sortBy] || 'id';
+  const safeDir  = sortDir === 'asc' ? 'ASC' : 'DESC';
+
   const where  = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const offset = (page - 1) * pageSize;
 
@@ -243,7 +247,7 @@ async function list({ page = 1, pageSize = 50, color, status, query } = {}) {
   );
 
   const { rows } = await pool.query(
-    `SELECT * FROM ${TABLE} ${where} ORDER BY id DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+    `SELECT * FROM ${TABLE} ${where} ORDER BY ${safeSort} ${safeDir} LIMIT $${idx} OFFSET $${idx + 1}`,
     [...params, pageSize, offset]
   );
 

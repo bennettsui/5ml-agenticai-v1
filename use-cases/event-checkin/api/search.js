@@ -322,10 +322,10 @@ function searchParticipants(query, participants) {
 
   const trimmed = query.trim();
 
-  // Pure numeric → match phone only
+  // Pure numeric → match no or phone
   if (/^\d+$/.test(trimmed)) {
     return participants
-      .filter(p => p.phone && p.phone.includes(trimmed))
+      .filter(p => (p.no && p.no.includes(trimmed)) || (p.phone && p.phone.includes(trimmed)))
       .slice(0, TOP_K);
   }
 

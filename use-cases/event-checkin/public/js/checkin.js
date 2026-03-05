@@ -409,7 +409,7 @@ function showHint(show) { hint.style.display = show ? '' : 'none'; }
 
 function participantMatchesQuery(p, q) {
   const lq = q.toLowerCase();
-  return [p.first_name, p.last_name, p.organization, p.color]
+  return [p.first_name, p.last_name, p.organization, p.color, p.no]
     .some(v => v && v.toLowerCase().includes(lq));
 }
 

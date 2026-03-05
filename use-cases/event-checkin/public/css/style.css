@@ -380,6 +380,10 @@ thead th {
   color: var(--text-muted);
   border-bottom: 1px solid var(--border);
 }
+thead th.sortable { cursor: pointer; user-select: none; }
+thead th.sortable:hover { color: var(--text); }
+.sort-icon { font-size: 10px; margin-left: 4px; opacity: .5; }
+.sort-icon.active { opacity: 1; color: var(--color-blue); }
 tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
 tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: rgba(255,255,255,0.02); }
