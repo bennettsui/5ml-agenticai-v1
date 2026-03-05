@@ -91,33 +91,6 @@ const TABLE_ROWS: [string, boolean, boolean, boolean, boolean][] = [
   ['舞台口頭致謝 / 感謝名單',   true,  false, false, true ],
 ];
 
-const LOGO_GROUPS = [
-  {
-    title: '大會官方成長夥伴',
-    desc: '提供從文具、禮品到體驗設計等資源，陪伴參與者把靈感帶回家。',
-    slots: ['Moleskine', '夥伴名稱', '夥伴名稱', '夥伴名稱'],
-  },
-  {
-    title: '影音與創意夥伴',
-    desc: '提供攝影、錄影與視覺創作，讓講者內容在活動後持續被看見。',
-    slots: ['夥伴名稱', '夥伴名稱', '夥伴名稱', '夥伴名稱'],
-  },
-  {
-    title: '體驗夥伴',
-    desc: '在活動前後與會場中打造飲食、旅遊與生活風格體驗。',
-    slots: ['夥伴名稱', '夥伴名稱', '夥伴名稱', '夥伴名稱'],
-  },
-  {
-    title: '媒體與出版夥伴',
-    desc: '透過媒體報導與專題合作，讓更多人認識 TEDxXinyi 的故事與講者。',
-    slots: ['夥伴名稱', '夥伴名稱', '夥伴名稱', '夥伴名稱'],
-  },
-  {
-    title: '社區夥伴',
-    desc: '從其他 TEDx 團隊到社會創新與科技組織，跨城市、跨領域一起擴散影響力。',
-    slots: ['夥伴名稱', '夥伴名稱', '夥伴名稱', '夥伴名稱'],
-  },
-];
 
 function LogoSlot() {
   return (
@@ -346,31 +319,6 @@ export default function SponsorsPage() {
             </table>
           </div>
         </FadeIn>
-      </Section>
-
-      {/* ── IN-KIND & COMMUNITY PARTNERS ─────────────── */}
-      <Section bg="white" id="community-partners">
-        <FadeIn>
-          <SectionLabel>Community</SectionLabel>
-          <h2 className="text-3xl md:text-4xl font-black mb-14" lang="zh-TW">實物與社群夥伴</h2>
-        </FadeIn>
-
-        <div className="space-y-14">
-          {LOGO_GROUPS.map((group) => (
-            <FadeIn key={group.title}>
-              <h3 className="text-base font-black mb-1" lang="zh-TW">{group.title}</h3>
-              <p className="text-sm text-neutral-500 mb-5" lang="zh-TW">{group.desc}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {group.slots.map((name, i) => (
-                  <div key={i}>
-                    <LogoSlot />
-                    <p className="text-xs text-neutral-400 text-center font-semibold tracking-wide mt-2" lang="zh-TW">{name}</p>
-                  </div>
-                ))}
-              </div>
-            </FadeIn>
-          ))}
-        </div>
       </Section>
 
       {/* ── CONTACT CTA ──────────────────────────────── */}
