@@ -278,6 +278,8 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         if (!line) continue;
         const cells = parseCsvLine(line);
         rows.push({
+          _sheet:       'CSV',
+          _row:         i + 1,
           ref_id:       cells[colMap.ref_id]       || null,
           color:        cells[colMap.color]        || null,
           title:        cells[colMap.title]        || null,
@@ -301,13 +303,18 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         if (val == null) return null;
         if (typeof val === 'object' && Array.isArray(val.richText))
           return val.richText.map(r => r.text ?? '').join('').trim() || null;
+        // ExcelJS formula cell: { formula: '=...', result: <value> }
+        if (typeof val === 'object' && !(val instanceof Date) && 'result' in val)
+          val = val.result;
+        if (val == null) return null;
         if (val instanceof Date) return null;
         const s = String(val).trim();
         return s || null;
       };
 
       for (const ws of workbook.worksheets) {
-        const sheetColor = normalizeColor(ws.name.trim());
+        const sheetName  = ws.name.trim();
+        const sheetColor = normalizeColor(sheetName);
 
         // Heuristic: col A purely numeric → no header row (e.g. "1", "001")
         const firstRow   = ws.getRow(1);
@@ -341,15 +348,15 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
               'ID', 'id', 'No.', 'No', '編號', '编号', 'Number', 'RefId', 'ref_id', 'Ref', 'Reference');
             full_name    = getByName(row,
               'FullName', 'full_name', 'Full Name', 'Name', 'English Name', 'EnglishName',
-              'Participant Name', 'Display Name', 'Badge Name');
+              'Participant Name', 'Display Name', 'Badge Name', '姓名', '中文姓名', '英文姓名', '名字');
             color        = sheetColor ?? normalizeColor(getByName(row,
               'Color', 'color', 'Colour', 'colour', 'Group', 'group', 'Table', 'table', 'Table Color', 'Badge Color'));
-            title        = getByName(row, 'Title', 'title', 'Salutation', 'salutation', 'Title/Salutation');
-            first_name   = getByName(row, 'FirstName', 'first_name', 'First Name', 'Given Name');
-            last_name    = getByName(row, 'LastName',  'last_name',  'Last Name',  'Surname');
-            organization = getByName(row, 'Organization', 'organization', 'Organisation', 'Org', 'Company', 'Affiliation');
-            phone        = getByName(row, 'Phone', 'phone', 'Tel', 'Telephone', '電話');
-            email        = getByName(row, 'Email', 'email', 'E-mail', '電郵');
+            title        = getByName(row, 'Title', 'title', 'Salutation', 'salutation', 'Title/Salutation', '稱謂', '職稱');
+            first_name   = getByName(row, 'FirstName', 'first_name', 'First Name', 'Given Name', '名');
+            last_name    = getByName(row, 'LastName',  'last_name',  'Last Name',  'Surname', '姓');
+            organization = getByName(row, 'Organization', 'organization', 'Organisation', 'Org', 'Company', 'Affiliation', '公司', '機構', '單位');
+            phone        = getByName(row, 'Phone', 'phone', 'Tel', 'Telephone', '電話', '手機');
+            email        = getByName(row, 'Email', 'email', 'E-mail', '電郵', '電子郵件');
           } else {
             // Positional: A=ref_id  B=Color  C=Title  D=First  E=Last  F=FullName  G=Org
             ref_id       = cellText(row.getCell(1).value);
@@ -361,8 +368,7 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
             organization = cellText(row.getCell(7).value);
           }
 
-          if (!full_name) return;
-          rows.push({ ref_id, color, title, first_name, last_name, full_name, organization, phone, email });
+          rows.push({ _sheet: sheetName, _row: rowNum, ref_id, color, title, first_name, last_name, full_name, organization, phone, email });
         });
       }
     } else {
@@ -372,27 +378,58 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
     // ── Insert new rows only — NEVER modify existing records ───────────────────
     let inserted = 0, skipped = 0, skipped_no_color = 0, skipped_no_name = 0;
     const newRows = [];
+    const detail  = [];
 
     for (const row of rows) {
+      const entry = {
+        n:     row._row   || null,
+        sheet: row._sheet || null,
+        ref_id: row.ref_id || null,
+        name:  row.full_name || null,
+        color: row.color  || null,
+        title: row.title  || null,
+        org:   row.organization || null,
+        phone: row.phone  || null,
+      };
+
       if (row.color) row.color = VALID_COLORS.find(v => v.toLowerCase() === row.color.toLowerCase()) ?? row.color;
-      if (!row.full_name) { skipped++; skipped_no_name++; continue; }
-      if (!VALID_COLORS.includes(row.color)) { skipped++; skipped_no_color++; continue; }
+
+      if (!row.full_name) {
+        skipped++; skipped_no_name++;
+        detail.push({ ...entry, status: 'skipped', reason: `No name — full_name column empty or not found` });
+        continue;
+      }
+      if (!VALID_COLORS.includes(row.color)) {
+        skipped++; skipped_no_color++;
+        detail.push({ ...entry, status: 'skipped', reason: `Invalid/missing color: "${row.color ?? '(none)'}"` });
+        continue;
+      }
 
       // Dedup 1: by ref_id (exact external identifier)
       if (row.ref_id) {
-        if (await db.findByRefId(row.ref_id)) { skipped++; continue; }
+        if (await db.findByRefId(row.ref_id)) {
+          skipped++;
+          detail.push({ ...entry, status: 'skipped', reason: `Duplicate ID "${row.ref_id}" already in database` });
+          continue;
+        }
       }
       // Dedup 2: by (full_name, organization, color)
-      if (await db.findDuplicate(row.full_name, row.organization, row.color)) { skipped++; continue; }
+      if (await db.findDuplicate(row.full_name, row.organization, row.color)) {
+        skipped++;
+        detail.push({ ...entry, status: 'skipped', reason: `Duplicate: same name + org + color already in database` });
+        continue;
+      }
 
-      // id is auto-assigned by DB SERIAL — never set from file
-      const p = await db.insert({ ...row, status: 'not_checked_in' });
+      // Store fields exactly as read from file — no transformation except color case-normalization
+      const { _sheet: _s, _row: _r, ...cleanRow } = row;
+      const p = await db.insert({ ...cleanRow, status: 'not_checked_in' });
       newRows.push(p);
       inserted++;
+      detail.push({ ...entry, status: 'inserted' });
     }
 
     if (newRows.length) sse.broadcast('bulk_imported', { type: 'bulk_imported', payload: newRows });
-    res.json({ processed: rows.length, inserted, skipped, skipped_no_color, skipped_no_name });
+    res.json({ processed: rows.length, inserted, skipped, skipped_no_color, skipped_no_name, detail });
 
   } catch (err) {
     console.error('[event-checkin import]', err);

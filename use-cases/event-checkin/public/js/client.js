@@ -113,8 +113,8 @@ function renderStats(stats) {
   heroTotal.textContent   = total;
   heroPct.textContent     = pct + '%';
 
-  // Color group cards
-  groupsGrid.innerHTML = COLORS.map(color => {
+  // Color group cards — only show groups that have participants
+  groupsGrid.innerHTML = COLORS.filter(color => ((stats.by_color || {})[color] || {}).total > 0).map(color => {
     const g    = (stats.by_color || {})[color] || { total: 0, checked_in: 0 };
     const gpct = g.total ? Math.round((g.checked_in / g.total) * 100) : 0;
     return `
@@ -262,17 +262,23 @@ function applyFilter() {
 
 function renderListRows(rows) {
   if (!rows.length) {
-    listBody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">No guests match the current filter.</td></tr>`;
+    listBody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">No guests match the current filter.</td></tr>`;
     return;
   }
   listBody.innerHTML = rows.map(p => {
     const name    = esc(composeName(p));
     const org     = esc(p.organization || '');
+    const phone   = esc(p.phone  || '');
+    const email   = esc(p.email  || '');
+    const refId   = esc(p.ref_id || '—');
     const checked = p.status === 'checked_in';
     return `<tr data-id="${p.id}">
+      <td style="color:var(--text-muted);font-size:12px;">${refId}</td>
       <td><span class="tag" data-color="${p.color}">${p.color}</span></td>
       <td style="font-weight:600;">${name}</td>
       <td style="color:var(--text-muted);">${org}</td>
+      <td style="font-size:13px;">${phone}</td>
+      <td style="font-size:13px;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${email}">${email}</td>
       <td>${checked
         ? '<span class="status-checked">✓ Checked-in</span>'
         : '<span class="status-not-checked">○ Not yet</span>'}</td>
@@ -289,7 +295,7 @@ function listUpdateOne(p) {
     const tr = listBody.querySelector(`tr[data-id="${p.id}"]`);
     if (tr) {
       const checked = p.status === 'checked_in';
-      tr.cells[3].innerHTML = checked
+      tr.cells[6].innerHTML = checked
         ? '<span class="status-checked">✓ Checked-in</span>'
         : '<span class="status-not-checked">○ Not yet</span>';
     }

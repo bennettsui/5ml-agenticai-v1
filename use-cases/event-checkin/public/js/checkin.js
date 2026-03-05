@@ -270,11 +270,13 @@ function buildCard(p) {
   card.innerHTML = `
     <div class="card-badge-col">
       <span class="badge badge-${p.color}">${p.color}</span>
-      <span class="card-num">#${p.id}</span>
+      ${p.ref_id ? `<span class="card-num">#${esc(p.ref_id)}</span>` : ''}
     </div>
     <div class="card-body">
       <div class="card-name">${esc(displayName)}</div>
       <div class="card-org">${esc(p.organization || '')}</div>
+      ${p.phone ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">📞 ${esc(p.phone)}</div>` : ''}
+      ${p.email ? `<div style="font-size:12px;color:var(--text-muted);">✉ ${esc(p.email)}</div>` : ''}
       <div class="card-actions">
         ${checked
           ? `<span class="status-checked">✓ Checked-in</span>`
