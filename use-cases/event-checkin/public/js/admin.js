@@ -99,7 +99,6 @@ function renderTable(rows) {
     return `
       <tr data-id="${p.id}">
         <td><input type="checkbox" class="row-check" data-id="${p.id}" /></td>
-        <td style="font-size:13px;font-weight:600;">${esc(p.ref_id || '')}</td>
         <td><span class="tag" data-color="${esc(p.color)}">${esc(p.color)}</span></td>
         <td style="font-weight:600;">${esc(p.full_name)}</td>
         <td>${esc(p.title || '')}</td>
@@ -244,17 +243,16 @@ function openEditModal(id) {
     const row = tbody.querySelector(`tr[data-id="${id}"]`);
     if (row) {
       const cells = row.querySelectorAll('td');
-      setField('ef-ref-id',  cells[2]?.textContent?.trim() || '');
       setField('ef-color',   row.querySelector('.tag')?.textContent?.trim() || '');
-      setField('ef-full',    cells[4]?.textContent?.trim() || '');
-      setField('ef-title',   cells[5]?.textContent?.trim() || '');
-      setField('ef-first',   cells[6]?.textContent?.trim() || '');
-      setField('ef-last',    cells[7]?.textContent?.trim() || '');
-      setField('ef-org',     cells[8]?.textContent?.trim() || '');
-      setField('ef-phone',   cells[9]?.textContent?.trim() || '');
-      setField('ef-email',   cells[10]?.getAttribute('title') || cells[10]?.textContent?.trim() || '');
+      setField('ef-full',    cells[3]?.textContent?.trim() || '');
+      setField('ef-title',   cells[4]?.textContent?.trim() || '');
+      setField('ef-first',   cells[5]?.textContent?.trim() || '');
+      setField('ef-last',    cells[6]?.textContent?.trim() || '');
+      setField('ef-org',     cells[7]?.textContent?.trim() || '');
+      setField('ef-phone',   cells[8]?.textContent?.trim() || '');
+      setField('ef-email',   cells[9]?.getAttribute('title') || cells[9]?.textContent?.trim() || '');
       setField('ef-status',  row.querySelector('.status-checked') ? 'checked_in' : 'not_checked_in');
-      setField('ef-remarks', cells[12]?.getAttribute('title') || '');
+      setField('ef-remarks', cells[11]?.getAttribute('title') || '');
     }
   } else {
     titleEl.textContent    = 'Add Participant';
@@ -354,7 +352,6 @@ document.getElementById('importBtn').addEventListener('click', async () => {
             <thead><tr style="background:rgba(255,255,255,0.05);position:sticky;top:0;">
               <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Row</th>
               <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Sheet</th>
-              <th style="padding:6px 10px;text-align:left;white-space:nowrap;">ID</th>
               <th style="padding:6px 10px;text-align:left;">Name</th>
               <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Color/Type</th>
               <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Title</th>
@@ -371,7 +368,6 @@ document.getElementById('importBtn').addEventListener('click', async () => {
                 return `<tr style="border-top:1px solid var(--border);background:${rowColor};">
                   <td style="padding:5px 10px;color:var(--text-muted);">${r.n ?? ''}</td>
                   <td style="padding:5px 10px;color:var(--text-muted);">${esc(r.sheet || '')}</td>
-                  <td style="padding:5px 10px;">${esc(r.ref_id || '')}</td>
                   <td style="padding:5px 10px;font-weight:600;">${esc(r.name || '—')}</td>
                   <td style="padding:5px 10px;">${esc(r.color || '')}</td>
                   <td style="padding:5px 10px;">${esc(r.title || '')}</td>
