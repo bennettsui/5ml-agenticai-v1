@@ -2343,6 +2343,39 @@ app.get('/stats', async (req, res) => {
           ],
         },
         {
+          id: 'adaptive-learning',
+          name: 'Adaptive Learning for Schools',
+          description: 'S1-S2 adaptive mathematics platform for HK schools — concept-centric, interest-aware learning with bilingual AI explanations',
+          agentCount: 1,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 student explanation (STUDENT_EXPLANATION mode)',
+              modelCalls: [
+                { model: 'Claude Haiku', calls: 1, avgTokensIn: 1800, avgTokensOut: 600, costPerMillion: { input: 0.25, output: 1.25 } },
+              ],
+              totalTokens: { input: 1800, output: 600 },
+              estimatedCost: 0.001,
+              notes: 'Session summaries and class summaries ~$0.002-0.003 each. Question authoring ~$0.001. All modes via Claude Haiku.',
+            },
+            daily: { runsPerDay: 100, estimatedCost: 0.10, notes: 'Estimate for 5 classes × 20 students × 1 session/day' },
+            monthly: { runsPerMonth: 2000, estimatedCost: 2.00, notes: 'Scales with number of active students and sessions' },
+          },
+          agents: [
+            { id: 'adaptive-agent', name: 'Adaptive Math Agent', role: 'Handles all 6 modes: explanation, session summary, class summary, question authoring, gamification, admin summary', model: 'Claude Haiku' },
+          ],
+          endpoints: [
+            'POST /api/adaptive-learning/explain          — STUDENT_EXPLANATION: explain question answer',
+            'POST /api/adaptive-learning/session-summary  — STUDENT_SESSION_SUMMARY: 20-min session recap',
+            'POST /api/adaptive-learning/class-summary    — TEACHER_CLASS_SUMMARY: class heatmap + recommendations',
+            'POST /api/adaptive-learning/author-question  — QUESTION_AUTHORING: clean OCR text, tag objectives',
+            'POST /api/adaptive-learning/gamification     — GAMIFICATION_MESSAGE: missions + badge messages',
+            'POST /api/adaptive-learning/demo             — Generic endpoint for any mode',
+            'GET  /api/adaptive-learning/curriculum       — HK S1-S2 math curriculum map',
+            'GET  /api/adaptive-learning/health           — Health check',
+          ],
+        },
+        {
           id: 'pdf-compression',
           name: 'PDF Compression Service',
           description: 'Self-hosted PDF compression pipeline — lossless, balanced, web & small profiles using pdfsizeopt, Ghostscript, pdfEasyCompress, and Paperweight',
@@ -3959,6 +3992,15 @@ try {
   console.log('✅ Event Check-in routes loaded: /event-checkin, /event-checkin/dashboard, /event-checkin/admin, /api/event-checkin');
 } catch (error) {
   console.warn('⚠️ Event Check-in routes not loaded:', error.message);
+}
+
+// Adaptive Learning for Schools
+try {
+  const adaptiveLearningRoutes = require('./use-cases/adaptive-learning/api/routes');
+  app.use('/api/adaptive-learning', adaptiveLearningRoutes);
+  console.log('✅ Adaptive Learning routes loaded: /api/adaptive-learning');
+} catch (error) {
+  console.warn('⚠️ Adaptive Learning routes not loaded:', error.message);
 }
 
 // Scheduler Service
