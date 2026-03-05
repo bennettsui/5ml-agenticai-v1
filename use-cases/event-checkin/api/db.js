@@ -25,6 +25,7 @@ async function init() {
     CREATE TABLE IF NOT EXISTS ${TABLE} (
       id           SERIAL PRIMARY KEY,
       color        TEXT        NOT NULL CHECK(color IN ('Red','Purple','Blue','Green')),
+      no           TEXT,
       title        TEXT,
       first_name   TEXT,
       last_name    TEXT,
@@ -46,6 +47,7 @@ async function init() {
   await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS email TEXT;`);
   await pool.query(`ALTER TABLE ${TABLE} DROP COLUMN IF EXISTS ref_id;`);
   await pool.query(`ALTER TABLE ${TABLE} DROP COLUMN IF EXISTS full_name;`);
+  await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS no TEXT;`);
 
   // Trigger to keep updated_at current on every UPDATE
   await pool.query(`
@@ -139,12 +141,13 @@ async function insert(data) {
   if (customId) {
     const { rows } = await pool.query(`
       INSERT INTO ${TABLE}
-        (id, color, title, first_name, last_name, name_search, organization, phone, email, status, remarks)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        (id, color, no, title, first_name, last_name, name_search, organization, phone, email, status, remarks)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `, [
       customId,
       data.color,
+      data.no           || null,
       data.title        || null,
       data.first_name   || null,
       data.last_name    || null,
@@ -163,11 +166,12 @@ async function insert(data) {
 
   const { rows } = await pool.query(`
     INSERT INTO ${TABLE}
-      (color, title, first_name, last_name, name_search, organization, phone, email, status, remarks)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      (color, no, title, first_name, last_name, name_search, organization, phone, email, status, remarks)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     RETURNING *
   `, [
     data.color,
+    data.no           || null,
     data.title        || null,
     data.first_name   || null,
     data.last_name    || null,
@@ -182,7 +186,7 @@ async function insert(data) {
 }
 
 async function update(id, fields) {
-  const allowed = ['color','title','first_name','last_name','organization','phone','email','status','remarks'];
+  const allowed = ['color','no','title','first_name','last_name','organization','phone','email','status','remarks'];
   const entries = Object.entries(fields).filter(([k]) => allowed.includes(k));
   if (!entries.length) return findById(id);
 

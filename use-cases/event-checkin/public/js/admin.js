@@ -99,7 +99,7 @@ function renderTable(rows) {
     return `
       <tr data-id="${p.id}">
         <td><input type="checkbox" class="row-check" data-id="${p.id}" /></td>
-        <td style="color:var(--text-muted);font-size:12px;">${p.id}</td>
+        <td style="color:var(--text-muted);font-size:12px;">${esc(p.no || '')}</td>
         <td><span class="tag" data-color="${esc(p.color)}">${esc(p.color)}</span></td>
         <td>${esc(p.title || '')}</td>
         <td>${esc(p.first_name || '')}</td>
@@ -243,6 +243,7 @@ function openEditModal(id) {
     const row = tbody.querySelector(`tr[data-id="${id}"]`);
     if (row) {
       const cells = row.querySelectorAll('td');
+      setField('ef-no',      cells[1]?.textContent?.trim() || '');
       setField('ef-color',   row.querySelector('.tag')?.textContent?.trim() || '');
       setField('ef-title',   cells[3]?.textContent?.trim() || '');
       setField('ef-first',   cells[4]?.textContent?.trim() || '');
