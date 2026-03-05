@@ -240,9 +240,10 @@ async function list({ page = 1, pageSize = 50, color, status, query } = {}) {
   if (query) {
     const trimmedQ = String(query).trim();
     if (/^\d+$/.test(trimmedQ)) {
-      conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx} OR phone ILIKE $${idx} OR email ILIKE $${idx} OR id = $${idx + 1})`);
-      params.push(`%${trimmedQ}%`, parseInt(trimmedQ, 10));
-      idx += 2;
+      // Numeric query: search phone and ref_id only — not the auto-increment row index
+      conditions.push(`(phone ILIKE $${idx} OR ref_id ILIKE $${idx})`);
+      params.push(`%${trimmedQ}%`);
+      idx++;
     } else {
       conditions.push(`(full_name ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR organization ILIKE $${idx} OR phone ILIKE $${idx} OR email ILIKE $${idx})`);
       params.push(`%${trimmedQ}%`);
