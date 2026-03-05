@@ -320,13 +320,14 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         if (hasHeaders) {
           firstRow.eachCell((cell, colNum) => {
             const h = cellText(cell.value);
-            if (h) colIndex[h] = colNum;
+            // Store with lowercased key for case-insensitive lookup
+            if (h) colIndex[h.toLowerCase().replace(/[.\s]+$/g, '')] = colNum;
           });
         }
 
         const getByName = (row, ...names) => {
           for (const name of names) {
-            const idx = colIndex[name];
+            const idx = colIndex[name.toLowerCase().replace(/[.\s]+$/g, '')];
             if (idx) { const v = cellText(row.getCell(idx).value); if (v) return v; }
           }
           return null;
