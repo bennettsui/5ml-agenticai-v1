@@ -132,11 +132,11 @@ function LogoImage({ logo }: { logo: SponsorLogo }) {
   const src = logo.publicUrl || (logo.localExists && logo.filename ? `${API_BASE}/tedx-xinyi/sponsors/${logo.filename}` : null);
   if (!src || errored) return <LogoSlot />;
   return (
-    <div className="border-2 border-neutral-100 bg-neutral-50 rounded-xl h-20 flex items-center justify-center overflow-hidden px-4">
+    <div className="bg-white rounded-xl h-24 flex items-center justify-center overflow-hidden px-6 py-3 border border-neutral-100">
       <img
         src={src}
         alt={logo.name}
-        className="max-h-12 max-w-full object-contain"
+        className="w-full h-full object-contain"
         onError={() => setErrored(true)}
       />
     </div>
@@ -184,39 +184,6 @@ export default function SponsorsPage() {
           </FadeIn>
         </div>
       </section>
-
-      {/* ── HIGHLIGHTED PARTNERS STRIP ───────────────── */}
-      <Section bg="white">
-        <FadeIn>
-          <SectionLabel>精選夥伴</SectionLabel>
-          <div className="flex flex-wrap gap-3 sm:gap-4">
-            {(() => {
-              const featured = byCategory('featured');
-              const slots = Math.max(8, featured.length);
-              return Array.from({ length: slots }).map((_, i) => {
-                const logo = featured[i];
-                if (logo) {
-                  const src = logo.publicUrl || (logo.localExists && logo.filename ? `${API_BASE}/tedx-xinyi/sponsors/${logo.filename}` : null);
-                  return (
-                    <div key={logo.key} className="flex-shrink-0 w-32 h-16 border-2 border-neutral-100 bg-neutral-50 rounded-xl flex items-center justify-center overflow-hidden px-3">
-                      {src ? (
-                        <img src={src} alt={logo.name} className="max-h-10 max-w-full object-contain" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      ) : (
-                        <span className="text-xs font-bold text-neutral-400 text-center leading-tight">{logo.name}</span>
-                      )}
-                    </div>
-                  );
-                }
-                return (
-                  <div key={i} className="flex-shrink-0 w-32 h-16 border-2 border-dashed border-neutral-200 bg-neutral-50 rounded-xl flex items-center justify-center text-xs font-bold text-neutral-300 tracking-widest uppercase select-none">
-                    Logo
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        </FadeIn>
-      </Section>
 
       {/* ── WHY PARTNER ──────────────────────────────── */}
       <Section bg="warm" id="why-partner">

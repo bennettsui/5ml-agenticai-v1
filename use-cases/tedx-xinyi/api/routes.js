@@ -3097,7 +3097,11 @@ router.post('/sponsors/logos', express.json({ limit: '10mb' }), async (req, res)
       if (match) {
         const rawBuffer = Buffer.from(match[2], 'base64');
         const sharp = require('sharp');
-        const compressed = await sharp(rawBuffer).webp({ quality: 82, effort: 4 }).toBuffer();
+        // Logos need higher quality + lossless-style to preserve crisp edges
+        const compressed = await sharp(rawBuffer)
+          .resize({ width: 800, height: 400, fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 95, lossless: false, effort: 2 })
+          .toBuffer();
         filename = `${key}.webp`;
         fs.writeFileSync(path.join(SPONSORS_LOGOS_DIR, filename), compressed);
         try {
