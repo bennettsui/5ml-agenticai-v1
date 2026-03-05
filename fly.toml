@@ -14,13 +14,6 @@ PUBLIC_BASE_URL = "https://5ml-agenticai-v1.fly.dev"
 NODE_EXTRA_CA_CERTS = "/etc/ssl/certs/ca-certificates.crt"
 NODE_TLS_REJECT_UNAUTHORIZED = "0"
 
-# Persistent volume for runtime-generated images (AI visuals, uploaded logos, etc.)
-# The volume must be created once with: fly volumes create tedx_media -r iad -s 3
-# The entrypoint.sh seeds the volume with built-in static files on first mount.
-[[mounts]]
-source = "tedx_media"
-destination = "/usr/src/app/frontend/public/tedx-xinyi"
-
 [http_service]
 internal_port = 8080
 force_https = true
