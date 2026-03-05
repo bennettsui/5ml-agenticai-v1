@@ -191,7 +191,7 @@ async function deleteSocialPostFromDb(id) {
 }
 
 // Init media table on module load, then hydrate metadata from DB
-initMediaTable().then(() => hydrateMetadataFromDb()).catch(() => {});
+initMediaTable().then(() => hydrateMetadataFromDb()).then(() => hydrateSponsorLogosFromDb()).catch(() => {});
 initSocialPostsTable().catch(() => {});
 
 // On startup: if .media-metadata.json is empty/missing, populate from DB CDN URLs.
@@ -500,6 +500,27 @@ router.get('/image-slots', (req, res) => {
         });
       }
     } catch {}
+  }
+
+  // Include sponsor logos as image slots
+  const sponsorLogos = loadSponsorLogos();
+  for (const [, logo] of Object.entries(sponsorLogos)) {
+    if (!logo.filename && !logo.publicUrl) continue;
+    const localPath = logo.filename ? `/tedx-xinyi/sponsors/${logo.filename}` : null;
+    const localExists = logo.filename ? fs.existsSync(path.join(SPONSORS_LOGOS_DIR, logo.filename)) : false;
+    let slotStatus = 'missing';
+    if (logo.publicUrl) slotStatus = 'cdn';
+    else if (localExists) slotStatus = 'local-only';
+    slots.push({
+      page: 'sponsors',
+      src: localExists ? localPath : (logo.publicUrl || localPath),
+      type: 'sponsor-logo',
+      status: slotStatus,
+      metaKey: logo.filename ? `sponsors/${logo.filename}` : null,
+      publicUrl: logo.publicUrl || null,
+      alt: logo.name || '',
+      label: `${logo.name} (${logo.category})`,
+    });
   }
 
   // Summary stats
@@ -831,6 +852,7 @@ if (!fs.existsSync(SPEAKERS_DIR)) {
 // ---- Sponsor Logos ----
 const SPONSORS_LOGOS_DIR = path.join(OUTPUT_DIR, 'sponsors');
 const SPONSOR_LOGOS_FILE = path.join(__dirname, '.sponsor-logos.json');
+const SPONSOR_LOGOS_SEED_FILE = path.join(__dirname, '.sponsor-logos-seed.json');
 
 const SPONSOR_CATEGORIES = [
   { id: 'featured',   label: '精選夥伴', label_en: 'Featured Partners' },
@@ -844,12 +866,82 @@ const SPONSOR_CATEGORIES = [
 ];
 
 function loadSponsorLogos() {
-  try { return JSON.parse(fs.readFileSync(SPONSOR_LOGOS_FILE, 'utf8')); }
-  catch { return {}; }
+  try {
+    if (fs.existsSync(SPONSOR_LOGOS_FILE)) {
+      const d = JSON.parse(fs.readFileSync(SPONSOR_LOGOS_FILE, 'utf8'));
+      if (Object.keys(d).length > 0) return d;
+    }
+  } catch { /* ignore */ }
+  // Restore from seed (committed to git)
+  try {
+    if (fs.existsSync(SPONSOR_LOGOS_SEED_FILE)) {
+      const seed = JSON.parse(fs.readFileSync(SPONSOR_LOGOS_SEED_FILE, 'utf8'));
+      if (Object.keys(seed).length > 0) {
+        console.log(`[TEDxXinyi] Restored sponsor logos from seed (${Object.keys(seed).length} entries)`);
+        fs.writeFileSync(SPONSOR_LOGOS_FILE, JSON.stringify(seed, null, 2));
+        return seed;
+      }
+    }
+  } catch { /* ignore */ }
+  return {};
 }
 
 function saveSponsorLogos(data) {
   fs.writeFileSync(SPONSOR_LOGOS_FILE, JSON.stringify(data, null, 2));
+  // Also update seed file so it can be committed to git
+  try {
+    fs.writeFileSync(SPONSOR_LOGOS_SEED_FILE, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('[TEDxXinyi] Failed to update sponsor logos seed:', e.message);
+  }
+}
+
+async function loadSponsorLogosFromDb() {
+  const pool = getDbPool();
+  if (!pool) return {};
+  try {
+    const { rows } = await pool.query(
+      `SELECT key, public_url, alt, description FROM tedx_media_assets WHERE source = 'sponsor-logo' ORDER BY created_at`
+    );
+    const map = {};
+    for (const row of rows) {
+      // key is like "sponsors/sponsor-featured-acme-1234567890.webp"
+      const logoKey = row.key.replace(/^sponsors\//, '').replace(/\.webp$/, '');
+      const parts = logoKey.split('-');
+      // category is stored in description
+      map[logoKey] = {
+        key: logoKey,
+        name: row.alt || '',
+        category: row.description || '',
+        filename: row.key.replace(/^sponsors\//, ''),
+        publicUrl: row.public_url,
+        uploadedAt: new Date().toISOString(),
+      };
+    }
+    return map;
+  } catch (err) {
+    console.error('[TEDxXinyi] Failed to load sponsor logos from DB:', err.message);
+    return {};
+  }
+}
+
+async function hydrateSponsorLogosFromDb() {
+  try {
+    // Only hydrate if logos file is missing or empty
+    if (fs.existsSync(SPONSOR_LOGOS_FILE)) {
+      const d = JSON.parse(fs.readFileSync(SPONSOR_LOGOS_FILE, 'utf8'));
+      if (Object.keys(d).length > 0) return;
+    }
+  } catch { /* ignore */ }
+  const dbLogos = await loadSponsorLogosFromDb();
+  if (Object.keys(dbLogos).length === 0) return;
+  try {
+    fs.writeFileSync(SPONSOR_LOGOS_FILE, JSON.stringify(dbLogos, null, 2));
+    fs.writeFileSync(SPONSOR_LOGOS_SEED_FILE, JSON.stringify(dbLogos, null, 2));
+    console.log(`[TEDxXinyi] Hydrated sponsor logos from DB (${Object.keys(dbLogos).length} logos)`);
+  } catch (e) {
+    console.error('[TEDxXinyi] Failed to hydrate sponsor logos:', e.message);
+  }
 }
 
 const METADATA_PATH = path.join(OUTPUT_DIR, '.media-metadata.json');
@@ -3115,6 +3207,26 @@ router.post('/sponsors/logos', express.json({ limit: '10mb' }), async (req, res)
     const logos = loadSponsorLogos();
     logos[key] = { key, name, category, filename, publicUrl, uploadedAt: new Date().toISOString() };
     saveSponsorLogos(logos);
+
+    // Persist to DB so logos survive Fly.dev restarts
+    const mediaKey = `sponsors/${filename || key}`;
+    if (publicUrl) {
+      saveMediaUrlToDb(mediaKey, publicUrl, { alt: name, source: 'sponsor-logo', description: category }).catch(() => {});
+    }
+
+    // Also add to media metadata so it appears in Media Library
+    if (publicUrl || filename) {
+      const meta = loadMetadata();
+      meta[mediaKey] = {
+        publicUrl: publicUrl || null,
+        alt: name,
+        source: 'sponsor-logo',
+        description: `${category} sponsor logo`,
+        uploadedAt: new Date().toISOString(),
+      };
+      saveMetadata(meta);
+    }
+
     res.json({ success: true, logo: { ...logos[key], localExists: !!filename } });
   } catch (err) {
     console.error('[TEDxXinyi] Sponsor logo upload error:', err.message);
@@ -3147,6 +3259,18 @@ router.delete('/sponsors/logos/:key', (req, res) => {
       const fp = path.join(SPONSORS_LOGOS_DIR, logo.filename);
       if (fs.existsSync(fp)) fs.unlinkSync(fp);
     }
+    // Remove from media metadata
+    const mediaKey = `sponsors/${logo.filename || key}`;
+    try {
+      const meta = loadMetadata();
+      if (meta[mediaKey]) {
+        delete meta[mediaKey];
+        saveMetadata(meta);
+      }
+    } catch { /* ignore */ }
+    // Remove from DB
+    const pool = getDbPool();
+    if (pool) pool.query('DELETE FROM tedx_media_assets WHERE key = $1', [mediaKey]).catch(() => {});
     delete logos[key];
     saveSponsorLogos(logos);
     res.json({ success: true });
