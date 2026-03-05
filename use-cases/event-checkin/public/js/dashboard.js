@@ -113,8 +113,8 @@ function renderStats(stats) {
   heroTotal.textContent   = total;
   heroPct.textContent     = pct + '%';
 
-  // Color group cards
-  groupsGrid.innerHTML = COLORS.map(color => {
+  // Color group cards — only show groups that have participants
+  groupsGrid.innerHTML = COLORS.filter(color => ((stats.by_color || {})[color] || {}).total > 0).map(color => {
     const g    = (stats.by_color || {})[color] || { total: 0, checked_in: 0 };
     const gpct = g.total ? Math.round((g.checked_in / g.total) * 100) : 0;
     return `
@@ -272,7 +272,7 @@ function renderListRows(rows) {
     const email   = esc(p.email  || '');
     const checked = p.status === 'checked_in';
     return `<tr data-id="${p.id}">
-      <td style="color:var(--text-muted);font-size:12px;">${p.id}</td>
+      <td style="color:var(--text-muted);font-size:12px;">${p.ref_id || '—'}</td>
       <td><span class="tag" data-color="${p.color}">${p.color}</span></td>
       <td style="font-weight:600;">${name}</td>
       <td style="color:var(--text-muted);">${org}</td>

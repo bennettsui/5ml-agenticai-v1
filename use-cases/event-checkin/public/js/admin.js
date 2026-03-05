@@ -99,7 +99,6 @@ function renderTable(rows) {
     return `
       <tr data-id="${p.id}">
         <td><input type="checkbox" class="row-check" data-id="${p.id}" /></td>
-        <td style="color:var(--text-muted);font-size:11px;">${p.id}</td>
         <td style="font-size:13px;font-weight:600;">${esc(p.ref_id || '')}</td>
         <td><span class="tag" data-color="${esc(p.color)}">${esc(p.color)}</span></td>
         <td style="font-weight:600;">${esc(p.full_name)}</td>
@@ -339,6 +338,63 @@ document.getElementById('importBtn').addEventListener('click', async () => {
     } else {
       toast(`Imported ${data.inserted} new participant(s).`, 'success');
     }
+
+    // ── Per-row detail log ──────────────────────────────────────────────────
+    const logEl = document.getElementById('importLog');
+    if (data.detail && data.detail.length) {
+      const skippedRows = data.detail.filter(r => r.status === 'skipped');
+      const btnId = 'importLogToggle';
+      logEl.className = '';
+      logEl.innerHTML = `
+        <button id="${btnId}" class="btn btn-outline btn-sm" style="margin-bottom:6px;font-size:12px;">
+          Show row details (${data.detail.length} rows, ${skippedRows.length} skipped)
+        </button>
+        <div id="importLogTable" class="hidden" style="max-height:320px;overflow-y:auto;font-size:12px;border:1px solid var(--border);border-radius:6px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr style="background:rgba(255,255,255,0.05);position:sticky;top:0;">
+              <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Row</th>
+              <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Sheet</th>
+              <th style="padding:6px 10px;text-align:left;white-space:nowrap;">ID</th>
+              <th style="padding:6px 10px;text-align:left;">Name</th>
+              <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Color/Type</th>
+              <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Title</th>
+              <th style="padding:6px 10px;text-align:left;">Org</th>
+              <th style="padding:6px 10px;text-align:left;white-space:nowrap;">Status / Reason</th>
+            </tr></thead>
+            <tbody>
+              ${data.detail.map(r => {
+                const ok = r.status === 'inserted';
+                const rowColor = ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+                const statusHtml = ok
+                  ? '<span style="color:#86efac;font-weight:600;">✓ Inserted</span>'
+                  : `<span style="color:#fca5a5;">✗ Skipped</span><br/><span style="color:var(--text-muted);font-size:11px;">${esc(r.reason || '')}</span>`;
+                return `<tr style="border-top:1px solid var(--border);background:${rowColor};">
+                  <td style="padding:5px 10px;color:var(--text-muted);">${r.n ?? ''}</td>
+                  <td style="padding:5px 10px;color:var(--text-muted);">${esc(r.sheet || '')}</td>
+                  <td style="padding:5px 10px;">${esc(r.ref_id || '')}</td>
+                  <td style="padding:5px 10px;font-weight:600;">${esc(r.name || '—')}</td>
+                  <td style="padding:5px 10px;">${esc(r.color || '')}</td>
+                  <td style="padding:5px 10px;">${esc(r.title || '')}</td>
+                  <td style="padding:5px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.org||'')}">${esc(r.org || '')}</td>
+                  <td style="padding:5px 10px;">${statusHtml}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+      document.getElementById(btnId).addEventListener('click', () => {
+        const tbl = document.getElementById('importLogTable');
+        const btn2 = document.getElementById(btnId);
+        tbl.classList.toggle('hidden');
+        btn2.textContent = tbl.classList.contains('hidden')
+          ? `Show row details (${data.detail.length} rows, ${skippedRows.length} skipped)`
+          : `Hide row details`;
+      });
+    } else {
+      logEl.className = 'hidden';
+    }
+
     loadPage(1);
   } catch { toast('Import request failed.', 'error'); }
   finally { btn.disabled = false; btn.textContent = 'Upload'; }
