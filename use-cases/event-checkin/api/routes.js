@@ -320,13 +320,14 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
         if (hasHeaders) {
           firstRow.eachCell((cell, colNum) => {
             const h = cellText(cell.value);
-            if (h) colIndex[h] = colNum;
+            // Store with lowercased key for case-insensitive lookup
+            if (h) colIndex[h.toLowerCase().replace(/[.\s]+$/g, '')] = colNum;
           });
         }
 
         const getByName = (row, ...names) => {
           for (const name of names) {
-            const idx = colIndex[name];
+            const idx = colIndex[name.toLowerCase().replace(/[.\s]+$/g, '')];
             if (idx) { const v = cellText(row.getCell(idx).value); if (v) return v; }
           }
           return null;
@@ -411,7 +412,8 @@ router.post('/admin/import', upload.single('file'), async (req, res) => {
     }
 
     if (newRows.length) sse.broadcast('bulk_imported', { type: 'bulk_imported', payload: newRows });
-    res.json({ processed: rows.length, inserted, skipped, skipped_no_color, skipped_no_name, detail });
+    const sheets = ext === 'csv' ? ['CSV'] : [...new Set(rows.map(r => r._sheet).filter(Boolean))];
+    res.json({ processed: rows.length, inserted, skipped, skipped_no_color, skipped_no_name, sheets, detail });
 
   } catch (err) {
     console.error('[event-checkin import]', err);

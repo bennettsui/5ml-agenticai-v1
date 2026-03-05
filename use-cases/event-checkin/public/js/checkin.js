@@ -277,7 +277,7 @@ function buildCard(p) {
       <div class="card-org">${esc(p.organization || '')}</div>
       ${p.phone ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">📞 ${esc(p.phone)}</div>` : ''}
       ${p.email ? `<div style="font-size:12px;color:var(--text-muted);">✉ ${esc(p.email)}</div>` : ''}
-      <div class="card-actions">
+      <div class="card-actions" style="margin-top:10px;">
         ${checked
           ? `<span class="status-checked">✓ Checked-in</span>`
           : `<span class="status-not-checked">○ Not checked-in</span>`}
