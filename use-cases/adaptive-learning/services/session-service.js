@@ -15,6 +15,7 @@
 
 const db  = require('../db');
 const bkt = require('./bkt');
+const sr  = require('./spaced-repetition');
 const { AdaptiveAgent } = require('../agents/adaptive-agent');
 
 const MAX_QUESTIONS     = 10;
@@ -35,11 +36,18 @@ function agent() {
  * @param {string} mode  'adaptive'|'practice'|'review'
  */
 async function startSession(studentId, targetObjectiveCodes, language = 'EN', mode = 'adaptive') {
+  // Merge spaced-repetition review objectives (due first) with requested targets
+  const personalConfig = await sr.getPersonalisedConfig(studentId).catch(() => null);
+  const allCodes = [
+    ...(personalConfig?.review_objectives || []),
+    ...targetObjectiveCodes,
+  ].filter((v, i, a) => a.indexOf(v) === i);
+
   const session = await db.createSession(studentId, mode);
 
   // Resolve objective UUIDs
   const objectives = await Promise.all(
-    targetObjectiveCodes.map(code => db.getLearningObjectiveByCode(code))
+    allCodes.map(code => db.getLearningObjectiveByCode(code))
   );
   const validObjectives = objectives.filter(Boolean);
 
@@ -133,6 +141,12 @@ async function submitAnswer(sessionId, questionId, answerPayload, selfRatings = 
       evidenceCount: (current?.evidence_count ?? 0) + 1,
     });
     masteryDelta = newLevel - currentLevel;
+
+    // Update SM-2 spaced repetition schedule
+    await sr.updateSchedule(
+      session.student_id, objectiveId,
+      isCorrect, selfRatings.understanding || null, hintUsed
+    ).catch(err => console.warn('SM-2 update failed (non-fatal):', err.message));
   }
 
   // ── Update session counters ───────────────────────────────
@@ -239,6 +253,19 @@ async function endSession(sessionId, language = 'EN') {
   if (sessionSummary) {
     await db.updateSession(sessionId, { ai_summary: JSON.stringify(sessionSummary) });
   }
+
+  // Learn preference signals from this session
+  await sr.learnFromSession(session.student_id, {
+    duration_minutes: Math.round(durationSecs / 60),
+    questions_done:   interactions.length,
+    correct_count:    interactions.filter(i => i.is_correct).length,
+    interactions:     interactions.map(i => ({
+      objective_code:       i.objective_code,
+      difficulty_estimate:  i.difficulty_estimate,
+      is_correct:           i.is_correct,
+      self_interest:        i.self_interest,
+    })),
+  }).catch(err => console.warn('learnFromSession failed (non-fatal):', err.message));
 
   return {
     session_id:        sessionId,

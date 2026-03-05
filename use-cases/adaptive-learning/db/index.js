@@ -312,4 +312,51 @@ module.exports = {
   getDraftQuestions,
   // Teacher dashboard
   getClassMastery,
+  // Explanation feedback
+  recordExplanationFeedback,
+  // Generated question review
+  getPendingGeneratedQuestions,
+  activateQuestion,
+  // KB evolution log
+  getEvolutionLog,
 };
+
+// ─── Explanation feedback ─────────────────────────────────────────────────────
+
+async function recordExplanationFeedback({ interactionId, studentId, questionId, rating, comment }) {
+  const { rows } = await pool.query(
+    `INSERT INTO explanation_feedback (interaction_id, student_id, question_id, rating, comment)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [interactionId, studentId, questionId, rating, comment || null]
+  );
+  return rows[0];
+}
+
+// ─── Generated question review ────────────────────────────────────────────────
+
+async function getPendingGeneratedQuestions(limit = 20) {
+  const { rows } = await pool.query(
+    `SELECT q.*, lo.code, lo.name_en, lo.name_zh
+     FROM questions q
+     LEFT JOIN question_objective_map qom ON qom.question_id = q.id AND qom.is_primary = TRUE
+     LEFT JOIN learning_objectives lo ON lo.id = qom.objective_id
+     WHERE q.source_type = 'SYSTEM_GENERATED' AND q.is_active = FALSE
+     ORDER BY q.created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+async function activateQuestion(questionId) {
+  await pool.query(`UPDATE questions SET is_active=TRUE, updated_at=NOW() WHERE id=$1`, [questionId]);
+}
+
+// ─── KB evolution log ─────────────────────────────────────────────────────────
+
+async function getEvolutionLog(limit = 50) {
+  const { rows } = await pool.query(
+    `SELECT * FROM kb_evolution_log ORDER BY run_at DESC LIMIT $1`, [limit]
+  );
+  return rows;
+}

@@ -33,6 +33,8 @@ const { AdaptiveAgent }  = require('../agents/adaptive-agent');
 const sessionService     = require('../services/session-service');
 const ocrService         = require('../services/ocr-service');
 const db                 = require('../db');
+const sr                 = require('../services/spaced-repetition');
+const { runEvolutionCycle } = require('../services/kb-evolution');
 
 // Multer: memory storage for PDF uploads (max 20 MB)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -648,5 +650,99 @@ async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
     await db.createDraftQuestion(draft);
   }
 }
+
+// ─── Additional routes appended below ──────────────────────────────────────
+// ─── Explanation feedback ─────────────────────────────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/student/feedback/explanation
+ * Body: { interaction_id, question_id, rating (1|-1), comment }
+ */
+router.post('/student/feedback/explanation', async (req, res) => {
+  const { interaction_id, question_id, rating, comment } = req.body || {};
+  const studentId = getStudentId(req);
+  if (!studentId || !question_id || !rating) {
+    return res.status(400).json({ success: false, error: 'student_id, question_id, and rating are required' });
+  }
+  try {
+    await db.recordExplanationFeedback({ interactionId: interaction_id, studentId, questionId: question_id, rating, comment });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Personalised session config ──────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/student/config
+ * Returns: suggested_duration_mins, target_difficulty, review_objectives
+ */
+router.get('/student/config', async (req, res) => {
+  const studentId = req.headers['x-student-id'] || req.query.student_id;
+  if (!studentId) return res.status(400).json({ success: false, error: 'student_id is required' });
+  try {
+    const config = await sr.getPersonalisedConfig(studentId);
+    res.json({ success: true, student_id: studentId, ...config });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: generated question review ───────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/teachers/questions/pending
+ * Lists AI-generated questions awaiting teacher approval.
+ */
+router.get('/teachers/questions/pending', async (req, res) => {
+  try {
+    const questions = await db.getPendingGeneratedQuestions(parseInt(req.query.limit) || 20);
+    res.json({ success: true, count: questions.length, questions });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/adaptive-learning/teachers/questions/:id/activate
+ * Approve a system-generated question for student use.
+ */
+router.post('/teachers/questions/:id/activate', async (req, res) => {
+  try {
+    await db.activateQuestion(req.params.id);
+    res.json({ success: true, question_id: req.params.id, status: 'active' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── KB evolution ─────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/admin/evolution/log
+ * Returns recent KB evolution actions.
+ */
+router.get('/admin/evolution/log', async (req, res) => {
+  try {
+    const log = await db.getEvolutionLog(parseInt(req.query.limit) || 50);
+    res.json({ success: true, count: log.length, log });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/adaptive-learning/admin/evolution/run
+ * Manually trigger a KB evolution cycle (useful for testing).
+ */
+router.post('/admin/evolution/run', async (req, res) => {
+  try {
+    const summary = await runEvolutionCycle('manual_trigger');
+    res.json({ success: true, summary });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 module.exports = router;

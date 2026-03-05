@@ -165,9 +165,11 @@ if (process.env.DATABASE_URL) {
   // Core schema first, then tender intelligence schema (auto-seeds sources if registry is empty)
   const { initTenderSchema } = require('./services/tender-intel-service');
   const { initAdaptiveLearningDb } = require('./use-cases/adaptive-learning/db');
+  const { startEvolutionCron } = require('./use-cases/adaptive-learning/services/kb-evolution');
   initDatabase()
     .then(() => initTenderSchema(pool))
     .then(() => initAdaptiveLearningDb())
+    .then(() => startEvolutionCron())
     .catch(err => {
       console.error('⚠️ Database initialization failed:', err.message);
       console.log('⚠️ App will continue running without database');

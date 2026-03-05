@@ -256,3 +256,68 @@ INSERT INTO badges (code, name_en, name_zh, description_en, description_zh, icon
   ('STREAK_3',          '3-Day Streak',      '三日連續',       'Practiced 3 days in a row',                        '連續3天練習', '🔥'),
   ('INTEREST_PEAK',     'Interest Peak',     '興趣高峰',       'Gave a 5/5 interest rating to a concept',          '對某概念給出5分興趣評分', '⭐')
 ON CONFLICT (code) DO NOTHING;
+
+-- ─── QUESTION ANALYTICS (IRT / Efficacy Tracking) ─────────────────────────
+
+CREATE TABLE IF NOT EXISTS question_analytics (
+  question_id          UUID PRIMARY KEY REFERENCES questions(id) ON DELETE CASCADE,
+  total_attempts       INT DEFAULT 0,
+  correct_attempts     INT DEFAULT 0,
+  hint_used_count      INT DEFAULT 0,
+  avg_time_secs        NUMERIC(8,2),
+  difficulty_irt       NUMERIC(4,3),
+  discrimination       NUMERIC(4,3),
+  guess_rate           NUMERIC(4,3),
+  flagged_too_easy     BOOLEAN DEFAULT FALSE,
+  flagged_too_hard     BOOLEAN DEFAULT FALSE,
+  flagged_low_disc     BOOLEAN DEFAULT FALSE,
+  last_computed_at     TIMESTAMPTZ,
+  updated_at           TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS explanation_feedback (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  interaction_id  UUID REFERENCES interactions(id) ON DELETE CASCADE,
+  student_id      UUID NOT NULL REFERENCES users(id),
+  question_id     UUID NOT NULL REFERENCES questions(id),
+  rating          SMALLINT CHECK (rating IN (1, -1)),
+  comment         TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ─── SPACED REPETITION (SM-2) ──────────────────────────────
+
+CREATE TABLE IF NOT EXISTS study_schedule (
+  student_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  objective_id     UUID NOT NULL REFERENCES learning_objectives(id) ON DELETE CASCADE,
+  interval_days    INT DEFAULT 1,
+  easiness         NUMERIC(4,2) DEFAULT 2.50,
+  repetitions      INT DEFAULT 0,
+  next_review_at   TIMESTAMPTZ DEFAULT NOW(),
+  last_reviewed_at TIMESTAMPTZ,
+  updated_at       TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (student_id, objective_id)
+);
+
+-- ─── PERSONALISATION SIGNALS ───────────────────────────────
+
+CREATE TABLE IF NOT EXISTS preference_signals (
+  student_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key         TEXT NOT NULL,
+  value       TEXT NOT NULL,
+  confidence  NUMERIC(3,2) DEFAULT 0.50,
+  updated_at  TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (student_id, key)
+);
+
+-- ─── KB EVOLUTION LOG ──────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS kb_evolution_log (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  run_at       TIMESTAMPTZ DEFAULT NOW(),
+  action       TEXT NOT NULL,
+  entity_type  TEXT,
+  entity_id    UUID,
+  detail       JSONB,
+  triggered_by TEXT DEFAULT 'nightly_cron'
+);
