@@ -99,6 +99,7 @@ function renderTable(rows) {
     return `
       <tr data-id="${p.id}">
         <td><input type="checkbox" class="row-check" data-id="${p.id}" /></td>
+        <td style="color:var(--text-muted);font-size:12px;">${p.id}</td>
         <td><span class="tag" data-color="${esc(p.color)}">${esc(p.color)}</span></td>
         <td>${esc(p.title || '')}</td>
         <td>${esc(p.first_name || '')}</td>
@@ -243,14 +244,14 @@ function openEditModal(id) {
     if (row) {
       const cells = row.querySelectorAll('td');
       setField('ef-color',   row.querySelector('.tag')?.textContent?.trim() || '');
-      setField('ef-title',   cells[2]?.textContent?.trim() || '');
-      setField('ef-first',   cells[3]?.textContent?.trim() || '');
-      setField('ef-last',    cells[4]?.textContent?.trim() || '');
-      setField('ef-org',     cells[5]?.textContent?.trim() || '');
-      setField('ef-phone',   cells[6]?.textContent?.trim() || '');
-      setField('ef-email',   cells[7]?.getAttribute('title') || cells[7]?.textContent?.trim() || '');
+      setField('ef-title',   cells[3]?.textContent?.trim() || '');
+      setField('ef-first',   cells[4]?.textContent?.trim() || '');
+      setField('ef-last',    cells[5]?.textContent?.trim() || '');
+      setField('ef-org',     cells[6]?.textContent?.trim() || '');
+      setField('ef-phone',   cells[7]?.textContent?.trim() || '');
+      setField('ef-email',   cells[8]?.getAttribute('title') || cells[8]?.textContent?.trim() || '');
       setField('ef-status',  row.querySelector('.status-checked') ? 'checked_in' : 'not_checked_in');
-      setField('ef-remarks', cells[9]?.getAttribute('title') || '');
+      setField('ef-remarks', cells[10]?.getAttribute('title') || '');
     }
   } else {
     titleEl.textContent    = 'Add Participant';
