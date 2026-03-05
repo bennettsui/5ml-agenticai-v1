@@ -3,82 +3,88 @@
  *
  * Routes incoming requests to the appropriate specialist agent based on mode.
  *
- * Agent routing:
- *   EXPLAIN_ONE_QUESTION  → StudentAgent
- *   SESSION_SUMMARY       → StudentAgent
- *   CLASS_SUMMARY         → TeacherAgent
- *   STUDENT_PROFILE       → TeacherAgent
- *   QUESTION_AUTHORING    → QuestionAgent
- *   GAMIFICATION_MESSAGE  → (inline — uses Haiku with concise prompt)
- *   ADMIN_SUMMARY         → (inline — uses Haiku with concise prompt)
+ * ┌─────────────────────────────────────────────────────────────────┐
+ * │  Agent              │  Modes                                    │
+ * ├─────────────────────┼───────────────────────────────────────────┤
+ * │  StudentAgent       │  EXPLAIN_ONE_QUESTION, SESSION_SUMMARY    │
+ * │  TeacherAgent       │  CLASS_SUMMARY, STUDENT_PROFILE           │
+ * │  QuestionAgent      │  QUESTION_AUTHORING                       │
+ * │  StudentUxAgent     │  WELCOME, SESSION_INTRO,                  │
+ * │                     │  QUESTION_FEEDBACK,                       │
+ * │                     │  SESSION_SUMMARY_STUDENT,                 │
+ * │                     │  GAMIFICATION_EVENT                       │
+ * │  TeacherGuideAgent  │  INTRO_PAGE, STEP_BY_STEP_FEATURE, FAQ    │
+ * │  TechArchAgent      │  HIGH_LEVEL_ARCH,                         │
+ * │                     │  SEQUENCE_STUDENT_SESSION,                │
+ * │                     │  SEQUENCE_TEACHER_UPLOAD,                 │
+ * │                     │  SEQUENCE_TEACHER_DASHBOARD               │
+ * └─────────────────────┴───────────────────────────────────────────┘
  *
- * All legacy mode aliases are mapped for backwards compatibility:
- *   STUDENT_EXPLANATION        → EXPLAIN_ONE_QUESTION
- *   STUDENT_SESSION_SUMMARY    → SESSION_SUMMARY
- *   TEACHER_CLASS_SUMMARY      → CLASS_SUMMARY
+ * Legacy mode aliases (backwards-compat):
+ *   STUDENT_EXPLANATION       → EXPLAIN_ONE_QUESTION
+ *   STUDENT_SESSION_SUMMARY   → SESSION_SUMMARY
+ *   TEACHER_CLASS_SUMMARY     → CLASS_SUMMARY
+ *   GAMIFICATION_MESSAGE      → GAMIFICATION_EVENT  (old inline → StudentUxAgent)
  */
 
-const { StudentAgent } = require('./student-agent');
-const { TeacherAgent } = require('./teacher-agent');
-const { QuestionAgent } = require('./question-agent');
-const Anthropic = require('@anthropic-ai/sdk');
+const { StudentAgent }      = require('./student-agent');
+const { TeacherAgent }      = require('./teacher-agent');
+const { QuestionAgent }     = require('./question-agent');
+const { StudentUxAgent }    = require('./student-ux-agent');
+const { TeacherGuideAgent } = require('./teacher-guide-agent');
+const { TechArchAgent }     = require('./tech-arch-agent');
 
-// Mode aliases for backwards-compatibility with the original generic agent
 const MODE_ALIASES = {
-  STUDENT_EXPLANATION: 'EXPLAIN_ONE_QUESTION',
+  STUDENT_EXPLANATION:     'EXPLAIN_ONE_QUESTION',
   STUDENT_SESSION_SUMMARY: 'SESSION_SUMMARY',
-  TEACHER_CLASS_SUMMARY: 'CLASS_SUMMARY',
+  TEACHER_CLASS_SUMMARY:   'CLASS_SUMMARY',
+  GAMIFICATION_MESSAGE:    'GAMIFICATION_EVENT',
 };
 
-// Inline system prompts for lighter utility modes
-const GAMIFICATION_SYSTEM = `You are a gamification message writer for an S1–S2 math learning platform.
-Given a student's recent mastery changes, sessions, and badges, write a short encouraging message and suggest 2–3 exploration-focused missions.
-Reward curiosity, growth, and honest self-assessment — not raw question counts or competition.
-Tone: warm, concise, age-appropriate. No sarcasm, no emojis unless language is ZH.
-Use the requested language (EN = English, ZH = Traditional Chinese).
-Output ONLY valid JSON:
-{
-  "short_message": "string",
-  "suggested_missions": ["string", "..."]
-}`;
-
-const ADMIN_SYSTEM = `You are an admin summary agent for an S1–S2 math learning platform.
-Given platform-level data (usage stats, error rates, content gaps, engagement signals), produce an operational summary.
-Be concise and factual. Output ONLY valid JSON:
-{
-  "summary": "string",
-  "flags": ["string", "..."],
-  "recommendations": ["string", "..."]
-}`;
+const MODE_TO_AGENT = {
+  // StudentAgent
+  EXPLAIN_ONE_QUESTION:      'student',
+  SESSION_SUMMARY:           'student',
+  // TeacherAgent
+  CLASS_SUMMARY:             'teacher',
+  STUDENT_PROFILE:           'teacher',
+  // QuestionAgent
+  QUESTION_AUTHORING:        'question',
+  // StudentUxAgent
+  WELCOME:                   'studentUx',
+  SESSION_INTRO:             'studentUx',
+  QUESTION_FEEDBACK:         'studentUx',
+  SESSION_SUMMARY_STUDENT:   'studentUx',
+  GAMIFICATION_EVENT:        'studentUx',
+  // TeacherGuideAgent
+  INTRO_PAGE:                'teacherGuide',
+  STEP_BY_STEP_FEATURE:      'teacherGuide',
+  FAQ:                       'teacherGuide',
+  // TechArchAgent
+  HIGH_LEVEL_ARCH:           'techArch',
+  SEQUENCE_STUDENT_SESSION:  'techArch',
+  SEQUENCE_TEACHER_UPLOAD:   'techArch',
+  SEQUENCE_TEACHER_DASHBOARD:'techArch',
+  // Legacy inline
+  ADMIN_SUMMARY:             'inlineAdmin',
+};
 
 class AdaptiveAgent {
   constructor() {
-    this._student = null;
-    this._teacher = null;
-    this._question = null;
-    this._anthropic = null;
-    this.model = 'claude-haiku-4-5-20251001';
+    this._student      = null;
+    this._teacher      = null;
+    this._question     = null;
+    this._studentUx    = null;
+    this._teacherGuide = null;
+    this._techArch     = null;
   }
 
-  get student() {
-    if (!this._student) this._student = new StudentAgent();
-    return this._student;
-  }
-
-  get teacher() {
-    if (!this._teacher) this._teacher = new TeacherAgent();
-    return this._teacher;
-  }
-
-  get question() {
-    if (!this._question) this._question = new QuestionAgent();
-    return this._question;
-  }
-
-  get anthropic() {
-    if (!this._anthropic) this._anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    return this._anthropic;
-  }
+  get student()      { return (this._student      ??= new StudentAgent()); }
+  get teacher()      { return (this._teacher      ??= new TeacherAgent()); }
+  get question()     { return (this._question     ??= new QuestionAgent()); }
+  get studentUx()    { return (this._studentUx    ??= new StudentUxAgent()); }
+  get teacherGuide() { return (this._teacherGuide ??= new TeacherGuideAgent()); }
+  get techArch()     { return (this._techArch     ??= new TechArchAgent()); }
 
   /**
    * Route any mode to the right specialist agent.
@@ -87,61 +93,55 @@ class AdaptiveAgent {
    * @param {object} payload
    */
   async run(mode, language, payload) {
-    // Resolve legacy aliases
-    const resolvedMode = MODE_ALIASES[mode] || mode;
+    const resolved = MODE_ALIASES[mode] || mode;
+    const agentKey = MODE_TO_AGENT[resolved];
 
-    switch (resolvedMode) {
-      case 'EXPLAIN_ONE_QUESTION':
-      case 'SESSION_SUMMARY':
-        return this.student.run(resolvedMode, language, payload);
+    if (!agentKey) throw new Error(`Unknown mode: ${mode}`);
 
-      case 'CLASS_SUMMARY':
-      case 'STUDENT_PROFILE':
-        return this.teacher.run(resolvedMode, language, payload);
-
-      case 'QUESTION_AUTHORING':
-        return this.question.run(resolvedMode, language, payload);
-
-      case 'GAMIFICATION_MESSAGE':
-        return this._runInline(GAMIFICATION_SYSTEM, language, payload);
-
-      case 'ADMIN_SUMMARY':
-        return this._runInline(ADMIN_SYSTEM, language, payload);
-
+    switch (agentKey) {
+      case 'student':
+        return this.student.run(resolved, language, payload);
+      case 'teacher':
+        return this.teacher.run(resolved, language, payload);
+      case 'question':
+        return this.question.run(resolved, language, payload);
+      case 'studentUx':
+        return this.studentUx.run(resolved, language, payload);
+      case 'teacherGuide':
+        return this.teacherGuide.run(resolved, language, payload);
+      case 'techArch':
+        // TechArchAgent is language-agnostic (diagrams); language param ignored
+        return this.techArch.run(resolved, payload);
+      case 'inlineAdmin':
+        return this._runAdminSummary(language, payload);
       default:
-        throw new Error(`Unknown mode: ${mode}`);
+        throw new Error(`Unrouted agent key: ${agentKey}`);
     }
   }
 
-  /** Run a lightweight inline agent (no dedicated class). */
-  async _runInline(systemPrompt, language, payload) {
-    const response = await this.anthropic.messages.create({
-      model: this.model,
+  /** Lightweight inline admin summary (no dedicated agent class needed). */
+  async _runAdminSummary(language, payload) {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 512,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: JSON.stringify({ language: language || 'EN', payload }),
-        },
-      ],
+      system: `You are an admin summary agent for an adaptive S1–S2 math platform.
+Given platform-level data (usage stats, error rates, content gaps, engagement), produce a concise operational summary.
+Be factual. Output ONLY valid JSON:
+{ "summary": "string", "flags": ["string", "..."], "recommendations": ["string", "..."] }`,
+      messages: [{ role: 'user', content: JSON.stringify({ language: language || 'EN', payload }) }],
     });
-
     const raw = response.content[0]?.text || '{}';
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-    try {
-      return JSON.parse(cleaned);
-    } catch {
-      throw new Error(`Inline agent returned invalid JSON: ${cleaned.substring(0, 200)}`);
-    }
+    return JSON.parse(cleaned);
   }
 
-  // ─── Convenience methods (kept for backwards compat with routes.js) ──────────
+  // ─── Convenience pass-throughs (backwards compat with routes.js) ─────────────
 
   explainQuestion({ question, studentAnswer, studentState, language }) {
     return this.student.explainQuestion({
-      question,
-      studentAnswer,
+      question, studentAnswer,
       studentStateForObjectives: studentState ? [studentState] : undefined,
       language,
     });
@@ -153,19 +153,20 @@ class AdaptiveAgent {
 
   summariseClass({ classInfo, objectiveStats, examplesOfCommonErrors, language }) {
     return this.teacher.summariseClass({
-      classInfo,
-      objectiveStats,
+      classInfo, objectiveStats,
       exampleItems: examplesOfCommonErrors,
       language,
     });
   }
 
-  authorQuestion({ rawTextEn, rawTextZh, imageDescription, candidateObjectives, gradeBand, topic, subtopic, language }) {
-    return this.question.authorQuestion({ rawTextEn, rawTextZh, imageDescription, candidateObjectives, gradeBand, topic, subtopic, language });
+  authorQuestion(opts) {
+    return this.question.authorQuestion(opts);
   }
 
   generateGamification({ recentMasteryChanges, recentSessions, currentBadges, language }) {
-    return this._runInline(GAMIFICATION_SYSTEM, language, {
+    // Routed to StudentUxAgent → GAMIFICATION_EVENT
+    return this.studentUx.run('GAMIFICATION_EVENT', language, {
+      event_type: 'MISSION_SUGGESTION',
       recent_mastery_changes: recentMasteryChanges,
       recent_sessions: recentSessions,
       current_badges: currentBadges,
