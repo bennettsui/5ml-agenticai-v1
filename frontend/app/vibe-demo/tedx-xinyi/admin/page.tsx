@@ -139,6 +139,7 @@ export default function TEDxXinyiAdmin() {
   const [addLogoModal, setAddLogoModal] = useState<{ category: string } | null>(null);
   const [newLogoName, setNewLogoName] = useState('');
   const [logoUploading, setLogoUploading] = useState(false);
+  const [uploadStep, setUploadStep] = useState<'reading' | 'uploading' | 'cdn' | null>(null);
 
   const downloadRef = useRef<HTMLAnchorElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -477,6 +478,7 @@ export default function TEDxXinyiAdmin() {
     const name = pendingLogoName.current;
     if (!category || !name) return;
     setLogoUploading(true);
+    setUploadStep('reading');
     try {
       const reader = new FileReader();
       const dataUrl: string = await new Promise((resolve, reject) => {
@@ -484,11 +486,13 @@ export default function TEDxXinyiAdmin() {
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
+      setUploadStep('uploading');
       const res = await fetch(`${API_BASE}/api/tedx-xinyi/sponsors/logos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data: dataUrl, name, category }),
       });
+      setUploadStep('cdn');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       showToast(`Uploaded: ${name}`);
@@ -497,6 +501,7 @@ export default function TEDxXinyiAdmin() {
       showToast(`Upload failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
     } finally {
       setLogoUploading(false);
+      setUploadStep(null);
       pendingLogoCategory.current = '';
       pendingLogoName.current = '';
       if (sponsorLogoFileInputRef.current) sponsorLogoFileInputRef.current.value = '';
@@ -1979,16 +1984,43 @@ export default function TEDxXinyiAdmin() {
                 <p className="text-neutral-500 text-sm mt-1">Manage partner and sponsor logos organized by tier. Logos are uploaded to CDN and displayed on the Sponsors page.</p>
               </div>
               <div className="flex gap-2">
-                {logoUploading && <span className="text-xs text-amber-400 self-center">Uploading…</span>}
                 <button
                   onClick={loadSponsorLogos}
-                  disabled={sponsorLogosLoading}
+                  disabled={sponsorLogosLoading || logoUploading}
                   className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
                 >
                   {sponsorLogosLoading ? 'Loading…' : sponsorLogosLoaded ? 'Refresh' : 'Load Logos'}
                 </button>
               </div>
             </div>
+
+            {logoUploading && (
+              <div className="mb-4 bg-neutral-800/60 border border-neutral-700 rounded-xl px-5 py-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-bold text-white">
+                    {uploadStep === 'reading' && 'Reading file…'}
+                    {uploadStep === 'uploading' && 'Processing & uploading…'}
+                    {uploadStep === 'cdn' && 'Saving to CDN…'}
+                  </span>
+                  <span className="text-xs text-neutral-500">
+                    {uploadStep === 'reading' && '1 / 3'}
+                    {uploadStep === 'uploading' && '2 / 3'}
+                    {uploadStep === 'cdn' && '3 / 3'}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-red-500 rounded-full transition-all duration-500"
+                    style={{ width: uploadStep === 'reading' ? '20%' : uploadStep === 'uploading' ? '65%' : '90%' }}
+                  />
+                </div>
+                <p className="text-xs text-neutral-500 mt-2">
+                  {uploadStep === 'reading' && 'Preparing image data…'}
+                  {uploadStep === 'uploading' && 'Converting to WebP and uploading to server…'}
+                  {uploadStep === 'cdn' && 'Saving CDN URL and updating database…'}
+                </p>
+              </div>
+            )}
 
             {!sponsorLogosLoaded && !sponsorLogosLoading && (
               <p className="text-neutral-500 text-sm">Click &quot;Load Logos&quot; to view sponsor logos.</p>

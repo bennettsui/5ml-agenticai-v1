@@ -144,7 +144,7 @@ export default function SponsorsPage() {
           onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '0.65'; }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/20 via-neutral-900/60 to-white" />
+        <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/20 via-neutral-900/60 to-[#F3F1EC]" />
         <div className="relative z-10 max-w-6xl mx-auto px-6 pb-20 pt-36 w-full">
           <FadeIn>
             <SectionLabel dark>PARTNERS &amp; SPONSORS</SectionLabel>

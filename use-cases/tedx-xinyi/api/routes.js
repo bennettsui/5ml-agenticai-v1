@@ -3208,10 +3208,22 @@ router.post('/sponsors/logos', express.json({ limit: '10mb' }), async (req, res)
     logos[key] = { key, name, category, filename, publicUrl, uploadedAt: new Date().toISOString() };
     saveSponsorLogos(logos);
 
-    // Persist to DB so logos survive Fly.dev restarts
+    // Persist to DB so logos survive Fly.dev restarts (always save, even without CDN URL)
     const mediaKey = `sponsors/${filename || key}`;
-    if (publicUrl) {
-      saveMediaUrlToDb(mediaKey, publicUrl, { alt: name, source: 'sponsor-logo', description: category }).catch(() => {});
+    const pool = getDbPool();
+    if (pool) {
+      pool.query(`
+        INSERT INTO tedx_media_assets (key, public_url, alt, source, description, updated_at)
+        VALUES ($1, $2, $3, $4, $5, NOW())
+        ON CONFLICT (key) DO UPDATE SET
+          public_url = COALESCE(EXCLUDED.public_url, tedx_media_assets.public_url),
+          alt = COALESCE(NULLIF(EXCLUDED.alt, ''), tedx_media_assets.alt),
+          source = COALESCE(EXCLUDED.source, tedx_media_assets.source),
+          description = COALESCE(NULLIF(EXCLUDED.description, ''), tedx_media_assets.description),
+          updated_at = NOW()
+      `, [mediaKey, publicUrl || null, name, 'sponsor-logo', category]).catch(e =>
+        console.error('[TEDxXinyi] Sponsor logo DB save failed:', e.message)
+      );
     }
 
     // Also add to media metadata so it appears in Media Library
