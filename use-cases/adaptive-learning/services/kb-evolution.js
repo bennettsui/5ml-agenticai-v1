@@ -28,6 +28,20 @@ const { pool }          = require('../../../db');
 const scheduleRegistry  = require('../../../services/schedule-registry');
 const { AdaptiveAgent } = require('../agents/adaptive-agent');
 const nodeCron          = require('node-cron');
+const { pool: _dbPool } = require('../../../db');
+
+/** Postgres advisory lock key for the nightly evolution run */
+const EVOLUTION_LOCK_KEY = 0x4b425f45; // 'KB_E' as a positive 32-bit int
+
+async function _tryEvolutionLock() {
+  try {
+    const { rows } = await _dbPool.query('SELECT pg_try_advisory_lock($1) AS ok', [EVOLUTION_LOCK_KEY]);
+    return rows[0].ok;
+  } catch { return true; } // fail-open
+}
+async function _releaseEvolutionLock() {
+  try { await _dbPool.query('SELECT pg_advisory_unlock($1)', [EVOLUTION_LOCK_KEY]); } catch {}
+}
 
 const MIN_QUESTIONS_PER_LO   = 5;   // trigger auto-gen when below this
 const MAX_AUTO_GEN_PER_RUN   = 10;  // cap Claude calls per nightly run
@@ -354,10 +368,19 @@ async function _logEvolution(triggeredBy, action, entityType, entityId, detail) 
 
 function startEvolutionCron() {
   // 02:00 HKT = 18:00 UTC previous day
-  nodeCron.schedule('0 18 * * *', () => {
-    runEvolutionCycle('nightly_cron').catch(err =>
-      console.error('[KB Evolution] Cron failed:', err.message)
-    );
+  nodeCron.schedule('0 18 * * *', async () => {
+    const gotLock = await _tryEvolutionLock();
+    if (!gotLock) {
+      console.log('[KB Evolution] Skipping — another machine is already running the evolution cycle');
+      return;
+    }
+    try {
+      await runEvolutionCycle('nightly_cron');
+    } catch (err) {
+      console.error('[KB Evolution] Cron failed:', err.message);
+    } finally {
+      await _releaseEvolutionLock();
+    }
   }, { timezone: 'UTC' });
 
   scheduleRegistry.register({
