@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Upload, BookOpen, FileText, LogOut, GraduationCap, FolderOpen } from 'lucide-react';
+import { Users, Upload, BookOpen, FileText, LogOut, GraduationCap, FolderOpen, ListChecks } from 'lucide-react';
 import { useTeacherAuth } from '@/components/adaptive/useTeacherAuth';
 
 const NAV = [
@@ -9,6 +9,7 @@ const NAV = [
   { href: '/teach/students',          label: 'Students',  icon: GraduationCap },
   { href: '/teach/papers',            label: 'Papers',    icon: FolderOpen },
   { href: '/teach/questions/pending', label: 'Review',    icon: BookOpen },
+  { href: '/teach/syllabus',          label: 'Syllabus',  icon: ListChecks },
   { href: '/teach/reports',           label: 'Reports',   icon: FileText },
 ];
 
