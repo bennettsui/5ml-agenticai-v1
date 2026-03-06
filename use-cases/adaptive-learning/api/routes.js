@@ -407,8 +407,16 @@ router.post('/student/sessions/:id/answer', async (req, res) => {
  */
 router.post('/student/sessions/:id/end', async (req, res) => {
   const { language } = req.body || {};
+  const studentId = getStudentId(req);
   try {
     const result = await sessionService.endSession(req.params.id, language || 'EN');
+    // Fire-and-forget badge check so it doesn't delay the response
+    if (studentId) {
+      const { pool } = require('../../../db');
+      checkAndAwardBadges(studentId, pool)
+        .then(earned => { if (earned.length > 0) console.log(`[Badges] Student ${studentId} earned: ${earned.join(', ')}`); })
+        .catch(e => console.warn('[Badges] check failed:', e.message));
+    }
     res.json({ success: true, ...result });
   } catch (err) {
     const status = err.message.includes('not found') ? 404 : 500;
@@ -805,6 +813,197 @@ router.post('/teacher/auth', async (req, res) => {
       return res.json({ success: true, teacher_id: rows[0].id });
     }
     res.json({ success: true, teacher_id: teacher.id });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Student stats ─────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/student/stats
+ * Header: X-Student-Id  |  Query: student_id
+ * Returns: { success, total_sessions, mastered_count, streak_days, total_questions, total_correct }
+ */
+router.get('/student/stats', async (req, res) => {
+  const studentId = req.headers['x-student-id'] || req.query.student_id;
+  if (!studentId) return res.status(400).json({ success: false, error: 'student_id required' });
+  try {
+    const { pool } = require('../../../db');
+
+    const [statsRow, streakRow, masteredRow] = await Promise.all([
+      // Total sessions + total questions + total correct
+      pool.query(
+        `SELECT
+           COUNT(DISTINCT s.id)::int              AS total_sessions,
+           COALESCE(SUM(s.questions_seen),0)::int  AS total_questions,
+           COALESCE(SUM(s.questions_correct),0)::int AS total_correct
+         FROM sessions s WHERE s.student_id = $1`,
+        [studentId]
+      ),
+      // Streak: longest consecutive-days run ending on today or yesterday
+      pool.query(
+        `WITH days AS (
+           SELECT DISTINCT DATE(started_at AT TIME ZONE 'Asia/Hong_Kong') AS d
+           FROM sessions WHERE student_id = $1
+         ),
+         numbered AS (
+           SELECT d,
+                  d - (ROW_NUMBER() OVER (ORDER BY d))::int AS grp
+           FROM days
+         ),
+         runs AS (
+           SELECT grp, MIN(d) AS start_d, MAX(d) AS end_d,
+                  COUNT(*)::int AS run_len
+           FROM numbered GROUP BY grp
+         )
+         SELECT COALESCE(
+           (SELECT run_len FROM runs
+            WHERE end_d >= (CURRENT_DATE AT TIME ZONE 'Asia/Hong_Kong')::date - 1
+            ORDER BY end_d DESC LIMIT 1),
+           0
+         ) AS streak_days`,
+        [studentId]
+      ),
+      // Mastered count (mastery_level >= 4)
+      pool.query(
+        `SELECT COUNT(*)::int AS mastered_count
+         FROM mastery_states WHERE student_id = $1 AND mastery_level >= 4`,
+        [studentId]
+      ),
+    ]);
+
+    res.json({
+      success: true,
+      total_sessions:  statsRow.rows[0].total_sessions,
+      total_questions: statsRow.rows[0].total_questions,
+      total_correct:   statsRow.rows[0].total_correct,
+      streak_days:     streakRow.rows[0].streak_days,
+      mastered_count:  masteredRow.rows[0].mastered_count,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Badges ────────────────────────────────────────────────────────────────────
+
+const BADGE_DEFINITIONS = [
+  { code: 'FIRST_SESSION',    icon: '🎯', name_en: 'First Step',       name_zh: '第一步',     description_en: 'Complete your first learning session',     description_zh: '完成第一次學習' },
+  { code: 'CURIOUS_EXPLORER', icon: '🔍', name_en: 'Curious Explorer', name_zh: '好奇探索者',  description_en: 'Explore 5 different concept areas',        description_zh: '探索5個不同概念' },
+  { code: 'CONCEPT_MASTER',   icon: '🏆', name_en: 'Concept Master',   name_zh: '概念達人',    description_en: 'Achieve mastery in 3 or more objectives',  description_zh: '在3個以上目標達到精通' },
+  { code: 'HONEST_SELF',      icon: '💡', name_en: 'Honest Learner',   name_zh: '誠實學者',    description_en: 'Rate your understanding 10 times',          description_zh: '自我評估10次' },
+  { code: 'STREAK_3',         icon: '🔥', name_en: '3-Day Streak',     name_zh: '三日連續',    description_en: 'Practise 3 days in a row',                 description_zh: '連續3天練習' },
+  { code: 'INTEREST_PEAK',    icon: '⭐', name_en: 'Interest Peak',    name_zh: '興趣高峰',    description_en: 'Give a 5/5 interest rating to a concept',  description_zh: '對某概念給出5分興趣評分' },
+];
+
+/** Seed badge definitions into DB (idempotent) */
+async function ensureBadgesSeeded(pool) {
+  for (const b of BADGE_DEFINITIONS) {
+    await pool.query(
+      `INSERT INTO badges (code, name_en, name_zh, description_en, description_zh, icon)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (code) DO UPDATE
+         SET name_en=EXCLUDED.name_en, name_zh=EXCLUDED.name_zh,
+             description_en=EXCLUDED.description_en, description_zh=EXCLUDED.description_zh,
+             icon=EXCLUDED.icon`,
+      [b.code, b.name_en, b.name_zh, b.description_en, b.description_zh, b.icon]
+    );
+  }
+}
+
+/** Check and award any newly-unlocked badges for a student. Returns array of newly earned badge codes. */
+async function checkAndAwardBadges(studentId, pool) {
+  await ensureBadgesSeeded(pool);
+
+  // Gather all conditions in one query
+  const { rows: [c] } = await pool.query(
+    `SELECT
+       COUNT(DISTINCT s.id)::int                                                  AS total_sessions,
+       COUNT(DISTINCT lo.topic)::int                                              AS distinct_topics,
+       COUNT(DISTINCT CASE WHEN ms.mastery_level >= 4 THEN ms.id END)::int        AS mastered_count,
+       COUNT(DISTINCT CASE WHEN i.self_understanding IS NOT NULL THEN i.id END)::int AS self_rated,
+       BOOL_OR(i.self_interest = 5)                                               AS has_peak_interest,
+       (
+         WITH days AS (SELECT DISTINCT DATE(s2.started_at AT TIME ZONE 'Asia/Hong_Kong') AS d
+                       FROM sessions s2 WHERE s2.student_id = $1),
+              numbered AS (SELECT d, d - (ROW_NUMBER() OVER (ORDER BY d))::int AS grp FROM days),
+              runs AS (SELECT MAX(d) AS end_d, COUNT(*)::int AS run_len FROM numbered GROUP BY grp)
+         SELECT COALESCE((SELECT run_len FROM runs
+                          WHERE end_d >= (CURRENT_DATE AT TIME ZONE 'Asia/Hong_Kong')::date - 1
+                          ORDER BY end_d DESC LIMIT 1), 0)
+       )                                                                           AS streak_days
+     FROM sessions s
+     LEFT JOIN interactions i ON i.session_id = s.id
+     LEFT JOIN mastery_states ms ON ms.student_id = s.student_id
+     LEFT JOIN learning_objectives lo ON lo.id = ms.objective_id
+     WHERE s.student_id = $1`,
+    [studentId]
+  );
+
+  const conditions = {
+    FIRST_SESSION:    c.total_sessions >= 1,
+    CURIOUS_EXPLORER: c.distinct_topics >= 5,
+    CONCEPT_MASTER:   c.mastered_count >= 3,
+    HONEST_SELF:      c.self_rated >= 10,
+    STREAK_3:         c.streak_days >= 3,
+    INTEREST_PEAK:    c.has_peak_interest,
+  };
+
+  const newlyEarned = [];
+  for (const [code, unlocked] of Object.entries(conditions)) {
+    if (!unlocked) continue;
+    const { rows: [badge] } = await pool.query('SELECT id FROM badges WHERE code=$1', [code]);
+    if (!badge) continue;
+    const { rowCount } = await pool.query(
+      `INSERT INTO student_badges (student_id, badge_id) VALUES ($1,$2)
+       ON CONFLICT DO NOTHING`,
+      [studentId, badge.id]
+    );
+    if (rowCount > 0) newlyEarned.push(code);
+  }
+  return newlyEarned;
+}
+
+/**
+ * GET /api/adaptive-learning/student/badges
+ * Header: X-Student-Id  |  Query: student_id
+ * Returns all badge definitions, marking which are earned.
+ */
+router.get('/student/badges', async (req, res) => {
+  const studentId = req.headers['x-student-id'] || req.query.student_id;
+  if (!studentId) return res.status(400).json({ success: false, error: 'student_id required' });
+  try {
+    const { pool } = require('../../../db');
+    await ensureBadgesSeeded(pool);
+
+    const { rows } = await pool.query(
+      `SELECT b.code, b.name_en, b.name_zh, b.description_en, b.description_zh, b.icon,
+              sb.earned_at
+       FROM badges b
+       LEFT JOIN student_badges sb ON sb.badge_id = b.id AND sb.student_id = $1
+       ORDER BY b.code`,
+      [studentId]
+    );
+    res.json({ success: true, badges: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/adaptive-learning/student/badges/check
+ * Triggered after each session end to award any newly-unlocked badges.
+ * Header: X-Student-Id
+ * Returns: { success, newly_earned: ['FIRST_SESSION', ...] }
+ */
+router.post('/student/badges/check', async (req, res) => {
+  const studentId = req.headers['x-student-id'] || req.body?.student_id;
+  if (!studentId) return res.status(400).json({ success: false, error: 'student_id required' });
+  try {
+    const { pool } = require('../../../db');
+    const newlyEarned = await checkAndAwardBadges(studentId, pool);
+    res.json({ success: true, newly_earned: newlyEarned });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

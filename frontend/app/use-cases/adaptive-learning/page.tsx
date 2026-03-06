@@ -277,6 +277,36 @@ export default function AdaptiveLearningPage() {
           </div>
         </div>
 
+        {/* Live portals */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Link
+            href="/learn"
+            className="flex items-center gap-4 p-4 bg-gradient-to-br from-indigo-600/15 to-purple-600/10 border border-indigo-500/30 hover:border-indigo-500/50 rounded-2xl transition-colors group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
+              <Brain className="w-5 h-5 text-indigo-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-semibold text-sm">Student Portal</p>
+              <p className="text-indigo-300/70 text-xs mt-0.5">Adaptive sessions · Progress · Badges</p>
+            </div>
+            <ArrowRight className="w-4 h-4 text-indigo-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+          </Link>
+          <Link
+            href="/teach"
+            className="flex items-center gap-4 p-4 bg-gradient-to-br from-purple-600/15 to-indigo-600/10 border border-purple-500/30 hover:border-purple-500/50 rounded-2xl transition-colors group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center shrink-0">
+              <GraduationCap className="w-5 h-5 text-purple-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-semibold text-sm">Teacher Portal</p>
+              <p className="text-purple-300/70 text-xs mt-0.5">Class heatmap · Upload papers · Reports</p>
+            </div>
+            <ArrowRight className="w-4 h-4 text-purple-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+          </Link>
+        </div>
+
         {/* CTA strip */}
         <div className="flex flex-col sm:flex-row gap-3">
           <Link
