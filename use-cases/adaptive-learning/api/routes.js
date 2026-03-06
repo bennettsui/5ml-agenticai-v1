@@ -746,3 +746,66 @@ router.post('/admin/evolution/run', async (req, res) => {
 });
 
 module.exports = router;
+
+// ─── Pilot auth (no passwords — name-based identity for school pilot) ─────────
+
+/**
+ * POST /api/adaptive-learning/student/auth
+ * Body: { name, class_name, grade, language }
+ * Returns: { success, student_id }
+ */
+router.post('/student/auth', async (req, res) => {
+  const { name, class_name, grade, language } = req.body || {};
+  if (!name) return res.status(400).json({ success: false, error: 'name is required' });
+  try {
+    const bcrypt = require('bcryptjs');
+    const hash = await bcrypt.hash(name + (class_name || ''), 8); // lightweight hash as placeholder
+    const student = await db.createUser({
+      name, email: `${name.toLowerCase().replace(/\s+/g,'-')}-${class_name || 'x'}@pilot.local`,
+      passwordHash: hash, role: 'student', grade, className: class_name,
+      preferredLanguage: language || 'ZH',
+    });
+    if (!student) {
+      // User exists — fetch by name+class
+      const { pool } = require('../../../db');
+      const { rows } = await pool.query(
+        `SELECT id FROM users WHERE name=$1 AND class_name=$2 AND role='student' LIMIT 1`,
+        [name, class_name || null]
+      );
+      if (rows.length === 0) return res.status(404).json({ success: false, error: 'User not found' });
+      return res.json({ success: true, student_id: rows[0].id });
+    }
+    res.json({ success: true, student_id: student.id });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/adaptive-learning/teacher/auth
+ * Body: { name }
+ * Returns: { success, teacher_id }
+ */
+router.post('/teacher/auth', async (req, res) => {
+  const { name } = req.body || {};
+  if (!name) return res.status(400).json({ success: false, error: 'name is required' });
+  try {
+    const bcrypt = require('bcryptjs');
+    const hash = await bcrypt.hash(name + '-teacher', 8);
+    const teacher = await db.createUser({
+      name, email: `${name.toLowerCase().replace(/\s+/g,'-')}-teacher@pilot.local`,
+      passwordHash: hash, role: 'teacher',
+    });
+    if (!teacher) {
+      const { pool } = require('../../../db');
+      const { rows } = await pool.query(
+        `SELECT id FROM users WHERE name=$1 AND role='teacher' LIMIT 1`, [name]
+      );
+      if (rows.length === 0) return res.status(404).json({ success: false, error: 'User not found' });
+      return res.json({ success: true, teacher_id: rows[0].id });
+    }
+    res.json({ success: true, teacher_id: teacher.id });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
