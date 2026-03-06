@@ -140,9 +140,9 @@ app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'rad
 app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
 app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
 
-// Serve TEDx Xinyi pack zip for download — generated on-the-fly from local files
+// Serve TEDx Xinyi pack zip for download — generated on-the-fly using archiver
 app.get('/tedx-xinyi-pack.zip', (req, res) => {
-  const { spawn } = require('child_process');
+  const archiver = require('archiver');
   const sourceDir = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi');
 
   if (!fs.existsSync(sourceDir)) {
@@ -152,17 +152,14 @@ app.get('/tedx-xinyi-pack.zip', (req, res) => {
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', 'attachment; filename="tedx-xinyi-pack.zip"');
 
-  // Stream zip directly to response: `zip -r - .` outputs to stdout
-  const zip = spawn('zip', ['-r', '-', '.'], { cwd: sourceDir });
-  zip.stdout.pipe(res);
-  zip.stderr.on('data', (d) => console.error('[tedx-pack zip]', d.toString()));
-  zip.on('error', (err) => {
-    console.error('[tedx-pack] spawn error:', err);
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', (err) => {
+    console.error('[tedx-pack] archiver error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   });
-  zip.on('close', (code) => {
-    if (code !== 0) console.error('[tedx-pack] zip exited with code', code);
-  });
+  archive.pipe(res);
+  archive.directory(sourceDir, false);
+  archive.finalize();
 });
 
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
