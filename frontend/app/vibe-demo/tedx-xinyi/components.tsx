@@ -28,9 +28,9 @@ export const FOOTER_LINKS = [
 ];
 
 export const SOCIAL_LINKS = [
-  { label: 'YouTube', href: 'https://www.youtube.com/channel/UCCa-iL8BoZvPOXazJyUqF7A' },
   { label: 'Facebook', href: 'https://www.facebook.com/TEDxXinyi-107091491148122' },
   { label: 'Instagram', href: 'https://www.instagram.com/tedxxinyi/' },
+  { label: 'YouTube', href: 'https://www.youtube.com/channel/UCCa-iL8BoZvPOXazJyUqF7A' },
 ];
 
 // ==================== GLOBAL STYLES ====================
