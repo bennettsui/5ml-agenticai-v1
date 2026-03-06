@@ -72,6 +72,33 @@ export interface BrandCreate {
   client_value_tier?: BrandValueTier | null;
 }
 
+export type DeliverablePriority = 'critical' | 'high' | 'medium' | 'low';
+
+// ---------------------------------------------------------------------------
+// Use-case registry — single source of truth for CRM deliverable linking
+// ---------------------------------------------------------------------------
+
+export const USE_CASES: Record<string, { label: string; color: string; href: string }> = {
+  'social-content-ops':    { label: 'Social Content',  color: 'emerald', href: '/use-cases/social-content-ops' },
+  'growth-architect':      { label: 'Growth Strategy', color: 'violet',  href: '/use-cases/growth-architect' },
+  'growth-hacking-studio': { label: 'Growth Hacking',  color: 'blue',    href: '/use-cases/growth-hacking-studio' },
+  'ai-media-generation':   { label: 'AI Media',        color: 'pink',    href: '/use-cases/ai-media-generation' },
+  'sme-growth':            { label: 'SME Growth',      color: 'amber',   href: '/use-cases/sme-growth' },
+  'government-tenders':    { label: 'Tenders',         color: 'sky',     href: '/use-cases/government-tenders' },
+  'hk-sg-tender-intel':    { label: 'HK/SG Tenders',  color: 'cyan',    href: '/use-cases/hk-sg-tender-intel' },
+  'mans-accounting':       { label: 'Accounting',      color: 'orange',  href: '/use-cases/mans-accounting' },
+};
+
+export interface Deliverable {
+  id: string;
+  title: string;
+  deadline: string | null;
+  status: 'pending' | 'in_progress' | 'done';
+  priority?: DeliverablePriority | null;
+  notes?: string | null;
+  use_case?: string | null;
+}
+
 export interface Project {
   id: string;
   client_id: string;
@@ -82,6 +109,7 @@ export interface Project {
   end_date: string | null;
   status: ProjectStatus;
   success_flag: string | null;
+  deliverables: Deliverable[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +122,29 @@ export interface ProjectCreate {
   start_date?: string | null;
   end_date?: string | null;
   status?: ProjectStatus;
+}
+
+export interface ProjectUpdate {
+  name?: string;
+  type?: ProjectType;
+  brief?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  status?: ProjectStatus;
+  success_flag?: string | null;
+  deliverables?: Deliverable[];
+}
+
+export interface ProjectAttachment {
+  id: string;
+  project_id: string;
+  original_name: string;
+  filename: string;
+  file_path: string;
+  mime_type: string | null;
+  size: number | null;
+  summary: string | null;
+  uploaded_at: string;
 }
 
 export interface FeedbackEvent {
@@ -373,8 +424,44 @@ export const crmApi = {
         body: JSON.stringify(data),
       });
     },
+    update(id: string, data: ProjectUpdate) {
+      return request<Project>(`/projects/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
     delete(id: string) {
       return request<void>(`/projects/${id}`, { method: "DELETE" });
+    },
+    attachments: {
+      list(projectId: string) {
+        return request<ProjectAttachment[]>(`/projects/${projectId}/attachments`);
+      },
+      upload(projectId: string, file: File): Promise<ProjectAttachment> {
+        const form = new FormData();
+        form.append("file", file);
+        return fetch(`/api/projects/${projectId}/attachments`, {
+          method: "POST",
+          body: form,
+        }).then(async (r) => {
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({ detail: r.statusText }));
+            throw new Error(err.detail || "Upload failed");
+          }
+          return r.json();
+        });
+      },
+      delete(projectId: string, attachmentId: string) {
+        return request<void>(`/projects/${projectId}/attachments/${attachmentId}`, {
+          method: "DELETE",
+        });
+      },
+      summarize(projectId: string, attachmentId: string) {
+        return request<ProjectAttachment>(
+          `/projects/${projectId}/attachments/${attachmentId}/summarize`,
+          { method: "POST" }
+        );
+      },
     },
   },
 

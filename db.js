@@ -310,9 +310,31 @@ async function initDatabase() {
         end_date DATE,
         status VARCHAR(50) DEFAULT 'planning',
         success_flag VARCHAR(50),
+        deliverables JSONB DEFAULT '[]',
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       );
+
+      -- Add deliverables column to existing tables (idempotent migration)
+      ALTER TABLE crm_projects ADD COLUMN IF NOT EXISTS deliverables JSONB DEFAULT '[]';
+
+      CREATE TABLE IF NOT EXISTS crm_project_attachments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        project_id UUID REFERENCES crm_projects(id) ON DELETE CASCADE,
+        original_name TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        mime_type TEXT,
+        size INTEGER,
+        summary TEXT,
+        file_data BYTEA,
+        uploaded_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- Migrate existing rows to add file_data column if this is an older DB
+      ALTER TABLE crm_project_attachments ADD COLUMN IF NOT EXISTS file_data BYTEA;
+
+      CREATE INDEX IF NOT EXISTS idx_crm_attachments_project ON crm_project_attachments(project_id);
 
       CREATE INDEX IF NOT EXISTS idx_crm_projects_client ON crm_projects(client_id);
       CREATE INDEX IF NOT EXISTS idx_crm_projects_status ON crm_projects(status);

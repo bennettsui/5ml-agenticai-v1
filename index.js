@@ -136,6 +136,9 @@ app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public',
 // Serve Radiance uploaded media
 app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
 
+// Serve CRM project attachments
+app.use('/uploads/crm', express.static(path.join(__dirname, 'uploads', 'crm')));
+
 // Serve compressed image/PDF outputs
 app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
 app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
@@ -183,8 +186,12 @@ const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAl
 if (process.env.DATABASE_URL) {
   // Core schema first, then tender intelligence schema (auto-seeds sources if registry is empty)
   const { initTenderSchema } = require('./services/tender-intel-service');
+  const { initAdaptiveLearningDb } = require('./use-cases/adaptive-learning/db');
+  const { startEvolutionCron } = require('./use-cases/adaptive-learning/services/kb-evolution');
   initDatabase()
     .then(() => initTenderSchema(pool))
+    .then(() => initAdaptiveLearningDb())
+    .then(() => startEvolutionCron())
     .catch(err => {
       console.error('⚠️ Database initialization failed:', err.message);
       console.log('⚠️ App will continue running without database');
@@ -2362,6 +2369,39 @@ app.get('/stats', async (req, res) => {
           ],
         },
         {
+          id: 'adaptive-learning',
+          name: 'Adaptive Learning for Schools',
+          description: 'S1-S2 adaptive mathematics platform for HK schools — concept-centric, interest-aware learning with bilingual AI explanations',
+          agentCount: 1,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 student explanation (STUDENT_EXPLANATION mode)',
+              modelCalls: [
+                { model: 'Claude Haiku', calls: 1, avgTokensIn: 1800, avgTokensOut: 600, costPerMillion: { input: 0.25, output: 1.25 } },
+              ],
+              totalTokens: { input: 1800, output: 600 },
+              estimatedCost: 0.001,
+              notes: 'Session summaries and class summaries ~$0.002-0.003 each. Question authoring ~$0.001. All modes via Claude Haiku.',
+            },
+            daily: { runsPerDay: 100, estimatedCost: 0.10, notes: 'Estimate for 5 classes × 20 students × 1 session/day' },
+            monthly: { runsPerMonth: 2000, estimatedCost: 2.00, notes: 'Scales with number of active students and sessions' },
+          },
+          agents: [
+            { id: 'adaptive-agent', name: 'Adaptive Math Agent', role: 'Handles all 6 modes: explanation, session summary, class summary, question authoring, gamification, admin summary', model: 'Claude Haiku' },
+          ],
+          endpoints: [
+            'POST /api/adaptive-learning/explain          — STUDENT_EXPLANATION: explain question answer',
+            'POST /api/adaptive-learning/session-summary  — STUDENT_SESSION_SUMMARY: 20-min session recap',
+            'POST /api/adaptive-learning/class-summary    — TEACHER_CLASS_SUMMARY: class heatmap + recommendations',
+            'POST /api/adaptive-learning/author-question  — QUESTION_AUTHORING: clean OCR text, tag objectives',
+            'POST /api/adaptive-learning/gamification     — GAMIFICATION_MESSAGE: missions + badge messages',
+            'POST /api/adaptive-learning/demo             — Generic endpoint for any mode',
+            'GET  /api/adaptive-learning/curriculum       — HK S1-S2 math curriculum map',
+            'GET  /api/adaptive-learning/health           — Health check',
+          ],
+        },
+        {
           id: 'pdf-compression',
           name: 'PDF Compression Service',
           description: 'Self-hosted PDF compression pipeline — lossless, balanced, web & small profiles using pdfsizeopt, Ghostscript, pdfEasyCompress, and Paperweight',
@@ -2509,7 +2549,15 @@ console.log('✅ Debug routes loaded: /api/debug/sessions, /api/debug/modules, /
 const llm = require('./lib/llm');
 
 // Helper: read use case source code for chatbot context
+const _useCaseCodeCache = new Map();
 function readUseCaseCode(useCaseId, maxChars = 8000) {
+  const key = `${useCaseId}:${maxChars}`;
+  if (_useCaseCodeCache.has(key)) return _useCaseCodeCache.get(key);
+  const result = _readUseCaseCode(useCaseId, maxChars);
+  _useCaseCodeCache.set(key, result);
+  return result;
+}
+function _readUseCaseCode(useCaseId, maxChars = 8000) {
   const baseDir = path.join(__dirname, 'frontend', 'app', 'use-cases', useCaseId);
   if (!fs.existsSync(baseDir)) return '';
   const files = [];
@@ -2559,10 +2607,16 @@ app.post('/api/crm/chat', async (req, res) => {
       return res.status(400).json({ error: 'messages array is required' });
     }
 
-    // RAG: retrieve relevant CRM + company context
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-    const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'crm', 3) : '';
-    const companyContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
+    // RAG: retrieve relevant CRM + company context.
+    // content may be a string or a multimodal array — extract text blocks for the RAG query.
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
+    const ragQuery = lastUserMsg
+      ? (Array.isArray(lastUserMsg.content)
+          ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text || '').join('\n')
+          : lastUserMsg.content || '')
+      : '';
+    const ragContext = ragQuery ? ragService.getContext(ragQuery, 'crm', 3) : '';
+    const companyContext = ragQuery ? ragService.getContext(ragQuery, 'company', 2) : '';
 
     // Include use case source code for code-aware assistance
     const codeContext = readUseCaseCode(use_case_id || 'crm', 6000);
@@ -2604,6 +2658,20 @@ Create a project directly:
 {"type": "create_project", "data": {"name": "Website Redesign", "type": "website", "client_id": "uuid-here"}, "label": "Create Project"}
 \`\`\`
 
+Manage deliverables on the current project page (only when page_context.pageType === "project-detail"):
+\`\`\`action
+{"type": "update_form", "data": {"_deliverableAdd": {"title": "Design mockups", "deadline": "2026-03-20", "priority": "high", "use_case": "ai-media-generation"}}, "label": "Add deliverable"}
+\`\`\`
+\`\`\`action
+{"type": "update_form", "data": {"_deliverableUpdate": {"id": "DELIVERABLE_ID", "status": "done", "priority": "critical"}}, "label": "Update deliverable"}
+\`\`\`
+\`\`\`action
+{"type": "update_form", "data": {"_deliverableDelete": {"id": "DELIVERABLE_ID"}}, "label": "Delete deliverable"}
+\`\`\`
+Deliverable fields: title, deadline (YYYY-MM-DD|null), status ("pending"|"in_progress"|"done"), priority ("critical"|"high"|"medium"|"low"|null), notes (string|null), use_case (slug|null).
+Valid use_case slugs: "social-content-ops", "growth-architect", "growth-hacking-studio", "ai-media-generation", "sme-growth", "government-tenders", "hk-sg-tender-intel", "mans-accounting".
+Current deliverables are in page_context.formData.deliverables (each has id, title, status, priority, deadline, use_case).
+
 Available pages: /use-cases/crm (Dashboard), /use-cases/crm/brands (Brands list), /use-cases/crm/brands/new (New Brand form), /use-cases/crm/brands/detail?id=BRAND_ID (Brand detail with projects and feedback), /use-cases/crm/projects (Projects list), /use-cases/crm/projects/new (New Project form), /use-cases/crm/projects/detail?id=PROJECT_ID (Project detail), /use-cases/crm/feedback (Feedback), /use-cases/crm/integrations (Integrations)
 
 When the user asks you to do something actionable (create, navigate, fill in, etc.), include the appropriate action block so it can be executed in the UI.
@@ -2612,7 +2680,16 @@ ${page_context ? `Current page context: ${JSON.stringify(page_context)}` : ''}
 
 Respond concisely. Use English or the language the user writes in.`;
 
-    const result = await llm.chat(modelKey || 'sonnet', messages, {
+    // Model routing per CLAUDE.md:
+    //   DeepSeek  → default for text-only CRM chat (cheap, no Anthropic quota)
+    //   Haiku     → multimodal messages (images / PDF document blocks require Claude)
+    const hasMultimodal = messages.some(m =>
+      Array.isArray(m.content) &&
+      m.content.some(b => b.type === 'image' || b.type === 'document')
+    );
+    const defaultModel = hasMultimodal ? 'haiku' : 'deepseek';
+
+    const result = await llm.chat(modelKey || defaultModel, messages, {
       system,
       maxTokens: 4096,
     });
@@ -2701,7 +2778,7 @@ app.post('/api/social/chat', async (req, res) => {
     // Triggered when the caller provides a task_id (new Sarah chat panel).
     // Module-specific pages that don't send task_id fall through to legacy path.
     if (task_id) {
-      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+      const lastUserMsg = messages.findLast(m => m.role === 'user');
       const userInput = lastUserMsg?.content || '';
 
       // Detect research-related requests (bypass orchestrator for simpler handling)
@@ -2852,7 +2929,7 @@ ${ragContext ? `\n${ragContext}` : ''}`;
     }
     // ── Legacy path (module pages: strategy, content-dev, calendar, etc.) ────
 
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 3) : '';
     const codeContext = readUseCaseCode(use_case_id || 'social-content-ops', 6000);
 
@@ -3920,6 +3997,38 @@ try {
   console.warn('⚠️ Image Compression routes not loaded:', error.message);
 }
 
+// Event Check-in System
+try {
+  const eventCheckinRoutes = require('./use-cases/event-checkin/api/routes');
+  app.use('/api/event-checkin', eventCheckinRoutes);
+  // Serve vanilla HTML pages (not part of the Next.js build)
+  app.get('/event-checkin', (req, res) =>
+    res.sendFile(path.join(__dirname, 'use-cases', 'event-checkin', 'public', 'index.html'))
+  );
+  app.get('/event-checkin/admin', (req, res) =>
+    res.sendFile(path.join(__dirname, 'use-cases', 'event-checkin', 'public', 'admin.html'))
+  );
+  app.get('/event-checkin/dashboard', (req, res) =>
+    res.sendFile(path.join(__dirname, 'use-cases', 'event-checkin', 'public', 'dashboard.html'))
+  );
+  // Legacy redirect: /event-checkin/client → /event-checkin/dashboard
+  app.get('/event-checkin/client', (req, res) => res.redirect(301, '/event-checkin/dashboard'));
+  // Serve static assets (CSS, JS) under /event-checkin/static/
+  app.use('/event-checkin/static', express.static(path.join(__dirname, 'use-cases', 'event-checkin', 'public')));
+  console.log('✅ Event Check-in routes loaded: /event-checkin, /event-checkin/dashboard, /event-checkin/admin, /api/event-checkin');
+} catch (error) {
+  console.warn('⚠️ Event Check-in routes not loaded:', error.message);
+}
+
+// Adaptive Learning for Schools
+try {
+  const adaptiveLearningRoutes = require('./use-cases/adaptive-learning/api/routes');
+  app.use('/api/adaptive-learning', adaptiveLearningRoutes);
+  console.log('✅ Adaptive Learning routes loaded: /api/adaptive-learning');
+} catch (error) {
+  console.warn('⚠️ Adaptive Learning routes not loaded:', error.message);
+}
+
 // Scheduler Service
 const scheduler = require('./services/scheduler');
 const scheduleRegistry = require('./services/schedule-registry');
@@ -4166,7 +4275,7 @@ app.post('/api/workflow-chat', async (req, res) => {
     }, null, 2);
 
     // RAG: retrieve relevant context for the latest user message
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'workflows', 3) : '';
     const companyRag = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
 
@@ -4221,7 +4330,7 @@ app.post('/api/agent-chat', async (req, res) => {
     }
 
     // RAG: retrieve relevant context for the latest user message
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, null, 3) : '';
 
     const systemPrompt = `You are the 5ML Platform Agent Assistant — an expert on the 5ML Agentic AI Platform.
