@@ -85,12 +85,56 @@ jobs:
               exit 1
             fi
 
-            chmod 600 .env
-
             if ! command -v aws >/dev/null 2>&1; then
               sudo apt-get update -y
               sudo apt-get install -y awscli
             fi
+
+            if ! command -v python3 >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y python3
+            fi
+
+            # Resolve DATABASE_URL from AWS Secrets Manager at deploy time
+            DB_SECRET_ID=$(awk -F= '/^DB_SECRET_ID=/{sub(/^DB_SECRET_ID=/, ""); print; exit}' .env)
+            if [ -z "$DB_SECRET_ID" ]; then
+              echo "DB_SECRET_ID is missing in ENV_FILE/.env; aborting deploy."
+              exit 1
+            fi
+
+            SECRET_JSON=$(aws secretsmanager get-secret-value \
+              --region "$AWS_REGION" \
+              --secret-id "$DB_SECRET_ID" \
+              --query SecretString \
+              --output text)
+            if [ -z "$SECRET_JSON" ] || [ "$SECRET_JSON" = "None" ]; then
+              echo "Failed to load secret value for DB_SECRET_ID=$DB_SECRET_ID"
+              exit 1
+            fi
+
+            DATABASE_URL=$(SECRET_JSON="$SECRET_JSON" python3 - <<'PY'
+import json
+import os
+import urllib.parse
+
+s = json.loads(os.environ["SECRET_JSON"])
+username = urllib.parse.quote(str(s.get("username", "")), safe="")
+password = urllib.parse.quote(str(s.get("password", "")), safe="")
+host = s.get("host", "")
+port = str(s.get("port", 5432))
+dbname = s.get("dbname") or "postgres"
+
+if not username or not password or not host:
+    raise SystemExit("Secret is missing username/password/host")
+
+print(f"postgresql://{username}:{password}@{host}:{port}/{dbname}?sslmode=require")
+PY
+)
+
+            sed -i '/^DATABASE_URL=/d' .env
+            printf 'DATABASE_URL=%s\n' "$DATABASE_URL" >> .env
+
+            chmod 600 .env
 
             aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
             docker pull "$ECR_REGISTRY/5ml-agenticai-v1:latest"
