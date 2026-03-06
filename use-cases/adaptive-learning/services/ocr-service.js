@@ -5,7 +5,7 @@
  * PDFs and images natively (math notation, diagrams, bilingual text).
  *
  * Required Fly secret:
- *   GOOGLE_AI_API_KEY   — Google AI Studio API key (aistudio.google.com)
+ *   GEMINI_API_KEY   — Google AI Studio API key (aistudio.google.com)
  *
  * Returns: Array of { raw_text, stem_en, stem_zh, page_number, has_image,
  *                     suggested_type, difficulty_hint }
@@ -29,8 +29,8 @@ const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${
  * }>>}
  */
 async function extractFromPdf(pdfBuffer) {
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY env var not set');
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY env var not set');
 
   const base64 = pdfBuffer.toString('base64');
 
@@ -95,8 +95,8 @@ Rules:
  * Returns { description_en, description_zh }
  */
 async function describeQuestionImage(imageBuffer, mimeType = 'image/png') {
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY env var not set');
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY env var not set');
 
   const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
     method: 'POST',
@@ -118,7 +118,7 @@ async function describeQuestionImage(imageBuffer, mimeType = 'image/png') {
 }
 
 function isAvailable() {
-  return !!(process.env.GOOGLE_AI_API_KEY);
+  return !!(process.env.GEMINI_API_KEY);
 }
 
 module.exports = { extractFromPdf, describeQuestionImage, isAvailable };
