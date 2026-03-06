@@ -140,6 +140,12 @@ app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'rad
 app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
 app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
 
+// Serve TEDx Xinyi pack zip for download
+app.get('/tedx-xinyi-pack.zip', (req, res) => {
+  const zipPath = path.join(__dirname, 'tedx-xinyi-pack.zip');
+  res.download(zipPath, 'tedx-xinyi-pack.zip');
+});
+
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
 app.use(express.static(nextJsPath));
