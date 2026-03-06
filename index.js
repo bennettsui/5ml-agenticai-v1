@@ -143,26 +143,30 @@ app.use('/uploads/crm', express.static(path.join(__dirname, 'uploads', 'crm')));
 app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
 app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
 
-// Serve TEDx Xinyi pack zip for download — generated on-the-fly using archiver
-app.get('/tedx-xinyi-pack.zip', (req, res) => {
-  const archiver = require('archiver');
+// Serve TEDx Xinyi pack as tar.gz — uses built-in tar (no extra npm packages)
+app.get('/tedx-xinyi-pack.tar.gz', (req, res) => {
+  const { spawn } = require('child_process');
   const sourceDir = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi');
 
   if (!fs.existsSync(sourceDir)) {
     return res.status(404).json({ error: 'TEDx Xinyi media directory not found' });
   }
 
-  res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Disposition', 'attachment; filename="tedx-xinyi-pack.zip"');
+  res.setHeader('Content-Type', 'application/gzip');
+  res.setHeader('Content-Disposition', 'attachment; filename="tedx-xinyi-pack.tar.gz"');
 
-  const archive = archiver('zip', { zlib: { level: 6 } });
-  archive.on('error', (err) => {
-    console.error('[tedx-pack] archiver error:', err);
+  const tar = spawn('tar', ['-czf', '-', '-C', sourceDir, '.']);
+  tar.stdout.pipe(res);
+  tar.stderr.on('data', (d) => console.error('[tedx-pack tar]', d.toString()));
+  tar.on('error', (err) => {
+    console.error('[tedx-pack] spawn error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   });
-  archive.pipe(res);
-  archive.directory(sourceDir, false);
-  archive.finalize();
+});
+
+// Backward-compat redirect
+app.get('/tedx-xinyi-pack.zip', (req, res) => {
+  res.redirect('/tedx-xinyi-pack.tar.gz');
 });
 
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
