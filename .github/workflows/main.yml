@@ -62,6 +62,8 @@ jobs:
           envs: ENV_FILE,AWS_REGION,ECR_REGISTRY
           command_timeout: 90m
           script: |
+            set -euo pipefail
+
             # 確保 repo 存在
             if [ ! -d "5ml-agenticai-v1" ]; then
               git clone https://github.com/bennettsui/5ml-agenticai-v1.git
@@ -101,6 +103,7 @@ jobs:
               echo "DB_SECRET_ID is missing in ENV_FILE/.env; aborting deploy."
               exit 1
             fi
+            DB_SECRET_ID=$(printf '%s' "$DB_SECRET_ID" | tr -d '\r' | xargs)
 
             SECRET_JSON=$(aws secretsmanager get-secret-value \
               --region "$AWS_REGION" \
@@ -112,7 +115,73 @@ jobs:
               exit 1
             fi
 
-            DATABASE_URL=$(SECRET_JSON="$SECRET_JSON" python3 -c "import json, os, urllib.parse, sys; s = json.loads(os.environ['SECRET_JSON']); username = urllib.parse.quote(str(s.get('username', '')), safe=''); password = urllib.parse.quote(str(s.get('password', '')), safe=''); host = s.get('host', ''); port = str(s.get('port', 5432)); dbname = s.get('dbname') or 'postgres'; (username and password and host) or sys.exit('Secret is missing username/password/host'); print(f'postgresql://{username}:{password}@{host}:{port}/{dbname}?sslmode=require')")
+            EXISTING_DATABASE_URL=$(awk -F= '/^DATABASE_URL=/{sub(/^DATABASE_URL=/, ""); print; exit}' .env || true)
+            DATABASE_URL=$(
+              SECRET_JSON="$SECRET_JSON" EXISTING_DATABASE_URL="$EXISTING_DATABASE_URL" python3 - <<'PY'
+            import json
+            import os
+            import sys
+            import urllib.parse
+
+            s_raw = os.environ.get('SECRET_JSON', '').strip()
+            existing_raw = os.environ.get('EXISTING_DATABASE_URL', '').strip()
+
+            def pick(d, keys, default=''):
+                if not isinstance(d, dict):
+                    return default
+                for k in keys:
+                    v = d.get(k)
+                    if v not in (None, ''):
+                        return str(v)
+                return default
+
+            def parse_url(url):
+                if not url:
+                    return {}
+                try:
+                    u = urllib.parse.urlparse(url)
+                    return {
+                        'username': urllib.parse.unquote(u.username or ''),
+                        'password': urllib.parse.unquote(u.password or ''),
+                        'host': u.hostname or '',
+                        'port': str(u.port or '5432'),
+                        'dbname': (u.path or '/').lstrip('/') or 'postgres',
+                    }
+                except Exception:
+                    return {}
+
+            try:
+                s = json.loads(s_raw) if s_raw else {}
+            except Exception:
+                s = {'DATABASE_URL': s_raw}
+
+            direct = pick(s, ['url', 'connectionString', 'DATABASE_URL'])
+            if direct:
+                if 'sslmode=' not in direct:
+                    direct = f"{direct}{'&' if '?' in direct else '?'}sslmode=require"
+                print(direct)
+                sys.exit(0)
+
+            existing = parse_url(existing_raw)
+            username = pick(s, ['username', 'user', 'master_username'], existing.get('username', ''))
+            password = pick(s, ['password', 'pass', 'master_password'], existing.get('password', ''))
+            host = pick(s, ['host', 'hostname', 'endpoint', 'address'], existing.get('host', ''))
+            port = pick(s, ['port'], existing.get('port', '5432'))
+            dbname = pick(s, ['dbname', 'database', 'dbName'], existing.get('dbname', 'postgres'))
+
+            if not (username and password and host):
+                keys = ','.join(sorted(s.keys())) if isinstance(s, dict) else '<non-json-secret>'
+                sys.exit(f'Secret missing required fields. Need username/password/host. Available keys: {keys}')
+
+            u = urllib.parse.quote(username, safe='')
+            p = urllib.parse.quote(password, safe='')
+            print(f'postgresql://{u}:{p}@{host}:{port}/{dbname}?sslmode=require')
+            PY
+            ) || { echo "Failed to build DATABASE_URL from Secrets Manager"; exit 1; }
+            if [ -z "$DATABASE_URL" ]; then
+              echo "Generated DATABASE_URL is empty; aborting deploy."
+              exit 1
+            fi
 
             sed -i '/^DATABASE_URL=/d' .env
             printf 'DATABASE_URL=%s\n' "$DATABASE_URL" >> .env
