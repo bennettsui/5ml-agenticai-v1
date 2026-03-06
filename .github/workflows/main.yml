@@ -121,4 +121,10 @@ jobs:
 
             aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
             docker pull "$ECR_REGISTRY/5ml-agenticai-v1:latest"
-            docker compose up -d --no-build app
+            docker compose up -d --no-build --force-recreate app
+
+            if ! docker compose exec -T app sh -lc 'test -n "$DATABASE_URL"'; then
+              echo "DATABASE_URL is still empty inside app container after deploy."
+              echo "Check .env generation and container environment wiring."
+              exit 1
+            fi

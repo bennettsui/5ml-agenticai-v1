@@ -205,7 +205,7 @@ router.post('/process', async (req, res) => {
         success: false,
         error: 'Database not configured',
         details: 'DATABASE_URL environment variable is not set. Please configure PostgreSQL database.',
-        help: 'Run: fly postgres create && fly postgres attach <postgres-app-name>',
+        help: 'EC2 deploy: set DATABASE_URL in .env, then run docker compose up -d --force-recreate app',
       });
     }
 
@@ -304,7 +304,7 @@ router.post('/process-upload', async (req, res) => {
         success: false,
         error: 'Database not configured',
         details: 'DATABASE_URL environment variable is not set. Please configure PostgreSQL database.',
-        help: 'Run: fly postgres create && fly postgres attach <postgres-app-name>',
+        help: 'EC2 deploy: set DATABASE_URL in .env, then run docker compose up -d --force-recreate app',
       });
     }
 
