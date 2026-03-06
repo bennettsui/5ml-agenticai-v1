@@ -1,4 +1,4 @@
-name: Deploy to EC2
+name: EC2 Deploy
 
 on:
   workflow_dispatch:        # 手動觸發
@@ -112,24 +112,7 @@ jobs:
               exit 1
             fi
 
-            DATABASE_URL=$(SECRET_JSON="$SECRET_JSON" python3 - <<'PY'
-import json
-import os
-import urllib.parse
-
-s = json.loads(os.environ["SECRET_JSON"])
-username = urllib.parse.quote(str(s.get("username", "")), safe="")
-password = urllib.parse.quote(str(s.get("password", "")), safe="")
-host = s.get("host", "")
-port = str(s.get("port", 5432))
-dbname = s.get("dbname") or "postgres"
-
-if not username or not password or not host:
-    raise SystemExit("Secret is missing username/password/host")
-
-print(f"postgresql://{username}:{password}@{host}:{port}/{dbname}?sslmode=require")
-PY
-)
+            DATABASE_URL=$(SECRET_JSON="$SECRET_JSON" python3 -c "import json, os, urllib.parse, sys; s = json.loads(os.environ['SECRET_JSON']); username = urllib.parse.quote(str(s.get('username', '')), safe=''); password = urllib.parse.quote(str(s.get('password', '')), safe=''); host = s.get('host', ''); port = str(s.get('port', 5432)); dbname = s.get('dbname') or 'postgres'; (username and password and host) or sys.exit('Secret is missing username/password/host'); print(f'postgresql://{username}:{password}@{host}:{port}/{dbname}?sslmode=require')")
 
             sed -i '/^DATABASE_URL=/d' .env
             printf 'DATABASE_URL=%s\n' "$DATABASE_URL" >> .env
