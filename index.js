@@ -143,6 +143,57 @@ app.use('/uploads/crm', express.static(path.join(__dirname, 'uploads', 'crm')));
 app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
 app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
 
+// Serve TEDx Xinyi static site pack for deployment (HTML + _next assets)
+app.get('/tedx-xinyi-site.tar.gz', (req, res) => {
+  const { spawn } = require('child_process');
+  const outDir = path.join(__dirname, 'frontend', 'out');
+
+  // Build a temp dir with the site structure:
+  //   index.html            ← home page
+  //   about.html, salon.html, ...  ← sub-pages
+  //   _next/                ← CSS/JS assets
+  const os = require('os');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tedx-site-'));
+
+  try {
+    // Copy _next assets (CSS/JS required by all pages)
+    const { execSync } = require('child_process');
+    execSync(`cp -r "${path.join(outDir, '_next')}" "${tmpDir}/_next"`);
+
+    // Copy home page as index.html
+    fs.copyFileSync(
+      path.join(outDir, 'vibe-demo', 'tedx-xinyi.html'),
+      path.join(tmpDir, 'index.html')
+    );
+
+    // Copy sub-pages: about, salon, report, sustainability, community, sponsors, speakers, blog, admin
+    const pages = ['about', 'salon', 'report', 'sustainability', 'community', 'sponsors', 'speakers', 'blog', 'admin'];
+    for (const page of pages) {
+      const src = path.join(outDir, 'vibe-demo', 'tedx-xinyi', `${page}.html`);
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, path.join(tmpDir, `${page}.html`));
+      }
+    }
+
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', 'attachment; filename="tedx-xinyi-site.tar.gz"');
+
+    const tar = spawn('tar', ['-czf', '-', '-C', tmpDir, '.']);
+    tar.stdout.pipe(res);
+    tar.stderr.on('data', (d) => console.error('[tedx-site tar]', d.toString()));
+    tar.on('close', () => {
+      try { execSync(`rm -rf "${tmpDir}"`); } catch (_) {}
+    });
+    tar.on('error', (err) => {
+      console.error('[tedx-site] spawn error:', err);
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    });
+  } catch (err) {
+    try { require('child_process').execSync(`rm -rf "${tmpDir}"`); } catch (_) {}
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Serve TEDx Xinyi pack as tar.gz — uses built-in tar (no extra npm packages)
 app.get('/tedx-xinyi-pack.tar.gz', (req, res) => {
   const { spawn } = require('child_process');
