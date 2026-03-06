@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ThumbsUp, ThumbsDown, ChevronRight, X, CheckCircle, XCircle, Lightbulb } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, ChevronRight, X, CheckCircle, XCircle, Lightbulb, Star } from 'lucide-react';
 import { useStudentAuth } from '@/components/adaptive/useStudentAuth';
 
 type Phase = 'SETUP' | 'LOADING' | 'QUESTION' | 'ANSWERED' | 'ENDED';
@@ -50,14 +50,43 @@ function getExplanationText(exp: Explanation | null, lang: 'EN' | 'ZH'): string 
 }
 
 const TOPIC_OPTIONS = [
-  { code: 'MATH.S1.INT.BASIC',      label: 'Integers' },
-  { code: 'MATH.S1.FRACTION.BASIC', label: 'Fractions — Concepts' },
-  { code: 'MATH.S1.FRACTION.ADD',   label: 'Fraction Addition' },
-  { code: 'MATH.S1.FRACTION.MULT',  label: 'Fraction Multiplication' },
-  { code: 'MATH.S1.DECIMAL.OPS',    label: 'Decimals' },
-  { code: 'MATH.S1.PERCENT.BASIC',  label: 'Percentages' },
-  { code: 'MATH.S2.ALGEBRA.BASIC',  label: 'Algebra Basics' },
-  { code: 'MATH.S2.EQUATION.LIN',   label: 'Linear Equations' },
+  // S1
+  { code: 'MATH.S1.INT.BASIC',           label: 'Integers',                grade: 'S1' },
+  { code: 'MATH.S1.FRACTION.BASIC',      label: 'Fractions',               grade: 'S1' },
+  { code: 'MATH.S1.FRACTION.ADD',        label: 'Fraction +/−',            grade: 'S1' },
+  { code: 'MATH.S1.FRACTION.MULT',       label: 'Fraction ×/÷',            grade: 'S1' },
+  { code: 'MATH.S1.DECIMAL.OPS',         label: 'Decimals',                grade: 'S1' },
+  { code: 'MATH.S1.PERCENT.BASIC',       label: 'Percentages',             grade: 'S1' },
+  { code: 'MATH.S1.RATIO.BASIC',         label: 'Ratio & Rate',            grade: 'S1' },
+  { code: 'MATH.S1.ALGEBRA.INTRO',       label: 'Algebra Intro',           grade: 'S1' },
+  { code: 'MATH.S1.ALGEBRA.EQUATION1',   label: 'Linear Equations',        grade: 'S1' },
+  { code: 'MATH.S1.MEASURE.PERIMETER',   label: 'Perimeter & Area',        grade: 'S1' },
+  { code: 'MATH.S1.MEASURE.CIRCLE',      label: 'Circles',                 grade: 'S1' },
+  { code: 'MATH.S1.GEOM.ANGLES',         label: 'Angles',                  grade: 'S1' },
+  { code: 'MATH.S1.GEOM.TRIANGLE',       label: 'Triangles',               grade: 'S1' },
+  { code: 'MATH.S1.DATA.BASIC',          label: 'Statistical Diagrams',    grade: 'S1' },
+  { code: 'MATH.S1.DATA.AVERAGE',        label: 'Averages',                grade: 'S1' },
+  // S2
+  { code: 'MATH.S2.ALGEBRA.POLY',        label: 'Polynomials',             grade: 'S2' },
+  { code: 'MATH.S2.ALGEBRA.EQUATION2',   label: 'Simultaneous Equations',  grade: 'S2' },
+  { code: 'MATH.S2.INEQUAL.BASIC',       label: 'Inequalities',            grade: 'S2' },
+  { code: 'MATH.S2.GEOM.QUADRILATERAL',  label: 'Quadrilaterals',          grade: 'S2' },
+  { code: 'MATH.S2.GEOM.3D',             label: '3D Figures',              grade: 'S2' },
+  { code: 'MATH.S2.COORD.BASIC',         label: 'Coordinates',             grade: 'S2' },
+  { code: 'MATH.S2.PROB.BASIC',          label: 'Probability',             grade: 'S2' },
+  // S3
+  { code: 'MATH.S3.NUMBER.RATIONAL',     label: 'Surds & Irrationals',     grade: 'S3' },
+  { code: 'MATH.S3.ALGEBRA.QUADRATIC',   label: 'Quadratic Equations',     grade: 'S3' },
+  { code: 'MATH.S3.ALGEBRA.FUNCTIONS',   label: 'Functions & Graphs',      grade: 'S3' },
+  { code: 'MATH.S3.ALGEBRA.FRACTIONS',   label: 'Algebraic Fractions',     grade: 'S3' },
+  { code: 'MATH.S3.PERCENT.ADVANCED',    label: 'Compound Interest',       grade: 'S3' },
+  { code: 'MATH.S3.GEOM.PYTHAGORAS',     label: "Pythagoras' Theorem",     grade: 'S3' },
+  { code: 'MATH.S3.TRIG.BASIC',          label: 'Trig Ratios',             grade: 'S3' },
+  { code: 'MATH.S3.TRIG.APPLICATIONS',   label: 'Trig Applications',       grade: 'S3' },
+  { code: 'MATH.S3.GEOM.CIRCLES',        label: 'Circle Theorems',         grade: 'S3' },
+  { code: 'MATH.S3.COORD.LINES',         label: 'Line Equations',          grade: 'S3' },
+  { code: 'MATH.S3.DATA.DISPERSION',     label: 'Dispersion',              grade: 'S3' },
+  { code: 'MATH.S3.PROB.ADVANCED',       label: 'Advanced Probability',    grade: 'S3' },
 ];
 
 const EMOJI_SCALE = ['😕', '😐', '🙂', '😊', '🤩'];
@@ -79,6 +108,7 @@ export default function SessionPage() {
   const [hint, setHint] = useState<string | null>(null);
   const [hintUsed, setHintUsed] = useState(false);
   const [hintLoading, setHintLoading] = useState(false);
+  const [showLevelUp, setShowLevelUp] = useState(false);
   const [error, setError] = useState('');
   const startTime = useRef<number>(0);
 
@@ -171,6 +201,10 @@ export default function SessionPage() {
       setResult(data.result);
       setNextPayload(data.next);
       setPhase('ANSWERED');
+      if (data.result?.mastery_delta > 0) {
+        setShowLevelUp(true);
+        setTimeout(() => setShowLevelUp(false), 1800);
+      }
     } catch (err: any) { setError(err.message); setPhase('QUESTION'); }
   };
 
@@ -221,26 +255,38 @@ export default function SessionPage() {
   // ── RENDER ─────────────────────────────────────────────────────────────────
 
   if (phase === 'SETUP') {
+    const grades = ['S1', 'S2', 'S3'];
     return (
       <div className="flex flex-col gap-5">
         <div>
           <h1 className="text-xl font-bold text-white">New Session</h1>
           <p className="text-slate-400 text-sm mt-0.5">Choose topics to practise</p>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          {TOPIC_OPTIONS.map(t => (
-            <button key={t.code}
-              onClick={() => setSelectedTopics(s =>
-                s.includes(t.code) ? s.filter(c => c !== t.code) : [...s, t.code]
-              )}
-              className={`p-3 rounded-xl border text-left text-sm font-medium transition-colors ${
-                selectedTopics.includes(t.code)
-                  ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300'
-                  : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:border-slate-600'
-              }`}
-            >{t.label}</button>
-          ))}
-        </div>
+        {grades.map(g => {
+          const topics = TOPIC_OPTIONS.filter(t => t.grade === g);
+          return (
+            <div key={g}>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{g}</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {topics.map(t => (
+                  <button key={t.code}
+                    onClick={() => setSelectedTopics(s =>
+                      s.includes(t.code) ? s.filter(c => c !== t.code) : [...s, t.code]
+                    )}
+                    className={`px-3 py-2 rounded-xl border text-left text-xs font-medium transition-colors ${
+                      selectedTopics.includes(t.code)
+                        ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300'
+                        : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >{t.label}</button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+        {selectedTopics.length > 0 && (
+          <p className="text-xs text-slate-500">{selectedTopics.length} topic{selectedTopics.length > 1 ? 's' : ''} selected</p>
+        )}
         {error && <p className="text-red-400 text-sm">{error}</p>}
         <button onClick={startSession} disabled={selectedTopics.length === 0}
           className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-xl font-semibold transition-colors"
@@ -265,7 +311,21 @@ export default function SessionPage() {
   const explanationText = getExplanationText(result?.explanation ?? null, student.language);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 relative">
+      {/* Level-up overlay */}
+      {showLevelUp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-3 animate-bounce">
+            <div className="w-20 h-20 rounded-full bg-indigo-600/90 border-4 border-indigo-400 flex items-center justify-center shadow-2xl shadow-indigo-500/50">
+              <Star className="w-10 h-10 text-white fill-white" />
+            </div>
+            <div className="bg-indigo-600/90 backdrop-blur-sm border border-indigo-400/50 rounded-2xl px-6 py-3 text-center shadow-xl">
+              <p className="text-white font-bold text-lg">Level Up!</p>
+              <p className="text-indigo-200 text-sm">Mastery increased</p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Progress + exit */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">

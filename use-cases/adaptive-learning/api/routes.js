@@ -1169,3 +1169,59 @@ router.get('/teacher/classes/:className/students', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ─── Pilot Stats (platform dashboard) ────────────────────────────────────────
+router.get('/teacher/pilot-stats', async (req, res) => {
+  try {
+    const { pool } = require('../../../db');
+    const [overview, gradeBreakdown, weekSessions, weakTopics] = await Promise.all([
+      pool.query(`
+        SELECT
+          COUNT(DISTINCT u.id)::int                                              AS total_students,
+          COUNT(DISTINCT s.id)::int                                              AS total_sessions,
+          COALESCE(AVG(
+            CASE WHEN s.questions_seen > 0
+              THEN s.questions_correct::float / s.questions_seen END), 0)        AS avg_accuracy,
+          COALESCE(AVG(ms.mastery_level), 0)                                     AS avg_mastery,
+          COUNT(ms.id) FILTER (WHERE ms.mastery_level >= 4)::int                 AS mastered_objectives,
+          COALESCE(SUM(s.questions_seen), 0)::int                                AS total_questions_answered
+        FROM users u
+        LEFT JOIN sessions s ON s.student_id = u.id
+        LEFT JOIN mastery_states ms ON ms.student_id = u.id
+        WHERE u.role = 'student'`),
+      pool.query(`
+        SELECT grade, COUNT(*)::int AS count
+        FROM users
+        WHERE role = 'student' AND grade IS NOT NULL
+        GROUP BY grade ORDER BY grade`),
+      pool.query(`
+        SELECT COUNT(*)::int AS sessions_this_week
+        FROM sessions
+        WHERE started_at >= NOW() - INTERVAL '7 days'`),
+      pool.query(`
+        SELECT lo.code AS objective_code, lo.name_en,
+               ROUND(AVG(ms.mastery_level)::numeric, 2) AS avg_mastery
+        FROM mastery_states ms
+        JOIN learning_objectives lo ON lo.id = ms.objective_id
+        GROUP BY lo.id, lo.code, lo.name_en
+        ORDER BY avg_mastery ASC
+        LIMIT 5`),
+    ]);
+    const o = overview.rows[0];
+    res.json({
+      total_students: o.total_students,
+      total_sessions: o.total_sessions,
+      sessions_this_week: weekSessions.rows[0].sessions_this_week,
+      avg_accuracy: parseFloat(o.avg_accuracy) || 0,
+      avg_mastery: parseFloat(o.avg_mastery) || 0,
+      mastered_objectives: o.mastered_objectives,
+      total_questions_answered: o.total_questions_answered,
+      grade_breakdown: gradeBreakdown.rows,
+      top_weak_topics: weakTopics.rows.map(r => ({
+        ...r, avg_mastery: parseFloat(r.avg_mastery) || 0,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});

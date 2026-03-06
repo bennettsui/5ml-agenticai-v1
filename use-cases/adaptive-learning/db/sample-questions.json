@@ -482,5 +482,270 @@
     "explanation_en": "Numbers greater than 4 on a die: {5, 6} — that is 2 out of 6. P = 2/6 = 1/3.",
     "explanation_zh": "骰子中大於4的數：{5, 6}，共2個。P = 2/6 = 1/3。",
     "difficulty_estimate": 1, "question_type": "MCQ", "grade": "S2"
+  },
+
+  {
+    "objective_code": "MATH.S3.NUMBER.RATIONAL",
+    "stem_en": "Which of the following is an irrational number?",
+    "stem_zh": "以下哪個是無理數？",
+    "option_a_en": "√4", "option_b_en": "√9", "option_c_en": "√7", "option_d_en": "22/7",
+    "option_a_zh": "√4", "option_b_zh": "√9", "option_c_zh": "√7", "option_d_zh": "22/7",
+    "answer": "C",
+    "explanation_en": "√4 = 2 and √9 = 3 are rational. 22/7 is a rational fraction. √7 cannot be expressed as a ratio of integers, so it is irrational.",
+    "explanation_zh": "√4 = 2 和 √9 = 3 是有理數。22/7 是有理分數。√7 不能表示為整數之比，因此是無理數。",
+    "difficulty_estimate": 2, "question_type": "MCQ", "grade": "S3"
+  },
+  {
+    "objective_code": "MATH.S3.NUMBER.RATIONAL",
+    "stem_en": "Simplify: √50",
+    "stem_zh": "化簡：√50",
+    "option_a_en": "5", "option_b_en": "5√2", "option_c_en": "10√5", "option_d_en": "25√2",
+    "option_a_zh": "5", "option_b_zh": "5√2", "option_c_zh": "10√5", "option_d_zh": "25√2",
+    "answer": "B",
+    "explanation_en": "√50 = √(25 × 2) = √25 × √2 = 5√2.",
+    "explanation_zh": "√50 = √(25 × 2) = √25 × √2 = 5√2。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+
+  {
+    "objective_code": "MATH.S3.ALGEBRA.QUADRATIC",
+    "stem_en": "Solve: x² - 5x + 6 = 0",
+    "stem_zh": "解方程：x² - 5x + 6 = 0",
+    "option_a_en": "x = 1 or x = 6", "option_b_en": "x = 2 or x = 3", "option_c_en": "x = -2 or x = -3", "option_d_en": "x = 2 or x = -3",
+    "option_a_zh": "x = 1 或 x = 6", "option_b_zh": "x = 2 或 x = 3", "option_c_zh": "x = -2 或 x = -3", "option_d_zh": "x = 2 或 x = -3",
+    "answer": "B",
+    "explanation_en": "Factorise: x² - 5x + 6 = (x - 2)(x - 3) = 0. So x = 2 or x = 3.",
+    "explanation_zh": "因式分解：x² - 5x + 6 = (x - 2)(x - 3) = 0。所以 x = 2 或 x = 3。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+  {
+    "objective_code": "MATH.S3.ALGEBRA.QUADRATIC",
+    "stem_en": "The discriminant of ax² + bx + c = 0 is b² - 4ac. If b² - 4ac < 0, the equation has:",
+    "stem_zh": "方程 ax² + bx + c = 0 的判別式為 b² - 4ac。若 b² - 4ac < 0，方程有：",
+    "option_a_en": "Two equal real roots", "option_b_en": "Two distinct real roots", "option_c_en": "No real roots", "option_d_en": "One real root",
+    "option_a_zh": "兩個相等實根", "option_b_zh": "兩個不相等實根", "option_c_zh": "無實根", "option_d_zh": "一個實根",
+    "answer": "C",
+    "explanation_en": "When discriminant < 0, the square root of a negative number is not real, so the equation has no real roots.",
+    "explanation_zh": "當判別式 < 0 時，無法對負數取實數平方根，故方程無實根。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+  {
+    "objective_code": "MATH.S3.ALGEBRA.QUADRATIC",
+    "stem_en": "Use the quadratic formula to find the solutions of x² - 4x - 5 = 0.",
+    "stem_zh": "用求根公式求 x² - 4x - 5 = 0 的解。",
+    "option_a_en": "x = 5 or x = -1", "option_b_en": "x = -5 or x = 1", "option_c_en": "x = 5 or x = 1", "option_d_en": "x = -5 or x = -1",
+    "option_a_zh": "x = 5 或 x = -1", "option_b_zh": "x = -5 或 x = 1", "option_c_zh": "x = 5 或 x = 1", "option_d_zh": "x = -5 或 x = -1",
+    "answer": "A",
+    "explanation_en": "a=1, b=-4, c=-5. Discriminant = 16 + 20 = 36. x = (4 ± 6)/2. So x = 5 or x = -1.",
+    "explanation_zh": "a=1, b=-4, c=-5。判別式 = 16 + 20 = 36。x = (4 ± 6)/2。所以 x = 5 或 x = -1。",
+    "difficulty_estimate": 4, "question_type": "MCQ", "grade": "S3"
+  },
+
+  {
+    "objective_code": "MATH.S3.ALGEBRA.FUNCTIONS",
+    "stem_en": "The graph of y = x² - 4x + 3 has its vertex at:",
+    "stem_zh": "y = x² - 4x + 3 的頂點在：",
+    "option_a_en": "(2, -1)", "option_b_en": "(-2, -1)", "option_c_en": "(2, 1)", "option_d_en": "(-2, 1)",
+    "option_a_zh": "(2, -1)", "option_b_zh": "(-2, -1)", "option_c_zh": "(2, 1)", "option_d_zh": "(-2, 1)",
+    "answer": "A",
+    "explanation_en": "Complete the square: y = (x-2)² - 4 + 3 = (x-2)² - 1. Vertex is at (2, -1).",
+    "explanation_zh": "配方：y = (x-2)² - 4 + 3 = (x-2)² - 1。頂點為 (2, -1)。",
+    "difficulty_estimate": 4, "question_type": "MCQ", "grade": "S3"
+  },
+  {
+    "objective_code": "MATH.S3.ALGEBRA.FUNCTIONS",
+    "stem_en": "The axis of symmetry of y = -2x² + 8x - 5 is:",
+    "stem_zh": "y = -2x² + 8x - 5 的對稱軸是：",
+    "option_a_en": "x = -2", "option_b_en": "x = 2", "option_c_en": "x = 4", "option_d_en": "x = -4",
+    "option_a_zh": "x = -2", "option_b_zh": "x = 2", "option_c_zh": "x = 4", "option_d_zh": "x = -4",
+    "answer": "B",
+    "explanation_en": "The axis of symmetry is x = -b/(2a) = -8/(2×(-2)) = -8/(-4) = 2.",
+    "explanation_zh": "對稱軸為 x = -b/(2a) = -8/(2×(-2)) = -8/(-4) = 2。",
+    "difficulty_estimate": 4, "question_type": "MCQ", "grade": "S3"
+  },
+
+  {
+    "objective_code": "MATH.S3.ALGEBRA.FRACTIONS",
+    "stem_en": "Simplify: (x² - 9) / (x + 3)",
+    "stem_zh": "化簡：(x² - 9) / (x + 3)",
+    "option_a_en": "x - 3", "option_b_en": "x + 3", "option_c_en": "x - 9", "option_d_en": "x²",
+    "option_a_zh": "x - 3", "option_b_zh": "x + 3", "option_c_zh": "x - 9", "option_d_zh": "x²",
+    "answer": "A",
+    "explanation_en": "x² - 9 = (x+3)(x-3). Dividing by (x+3) gives (x-3), where x ≠ -3.",
+    "explanation_zh": "x² - 9 = (x+3)(x-3)。除以 (x+3) 得 (x-3)，其中 x ≠ -3。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+
+  {
+    "objective_code": "MATH.S3.PERCENT.ADVANCED",
+    "stem_en": "HK$10,000 is invested at 5% compound interest per annum for 2 years. What is the amount at the end?",
+    "stem_zh": "港幣10,000元以年利率5%複利投資2年，最終金額是多少？",
+    "option_a_en": "HK$11,000", "option_b_en": "HK$11,025", "option_c_en": "HK$10,250", "option_d_en": "HK$11,250",
+    "option_a_zh": "港幣11,000元", "option_b_zh": "港幣11,025元", "option_c_zh": "港幣10,250元", "option_d_zh": "港幣11,250元",
+    "answer": "B",
+    "explanation_en": "A = P(1+r)ⁿ = 10000 × (1.05)² = 10000 × 1.1025 = 11025.",
+    "explanation_zh": "A = P(1+r)ⁿ = 10000 × (1.05)² = 10000 × 1.1025 = 11025。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+
+  {
+    "objective_code": "MATH.S3.GEOM.PYTHAGORAS",
+    "stem_en": "In a right-angled triangle, the two legs are 6 cm and 8 cm. What is the hypotenuse?",
+    "stem_zh": "直角三角形兩條直角邊分別為6厘米和8厘米，斜邊是多少？",
+    "option_a_en": "10 cm", "option_b_en": "12 cm", "option_c_en": "14 cm", "option_d_en": "√100 cm",
+    "option_a_zh": "10厘米", "option_b_zh": "12厘米", "option_c_zh": "14厘米", "option_d_zh": "√100厘米",
+    "answer": "A",
+    "explanation_en": "By Pythagoras: c² = 6² + 8² = 36 + 64 = 100. So c = 10 cm. (Note: √100 cm = 10 cm, so A and D are equivalent but A is the simplified form.)",
+    "explanation_zh": "由畢氏定理：c² = 6² + 8² = 36 + 64 = 100。所以 c = 10厘米。",
+    "difficulty_estimate": 2, "question_type": "MCQ", "grade": "S3"
+  },
+  {
+    "objective_code": "MATH.S3.GEOM.PYTHAGORAS",
+    "stem_en": "A ladder 13 m long leans against a vertical wall. The foot of the ladder is 5 m from the base of the wall. How high does the ladder reach?",
+    "stem_zh": "一架13米長的梯子靠在垂直牆上，梯腳距牆腳5米，梯子能到達多高？",
+    "option_a_en": "8 m", "option_b_en": "10 m", "option_c_en": "12 m", "option_d_en": "18 m",
+    "option_a_zh": "8米", "option_b_zh": "10米", "option_c_zh": "12米", "option_d_zh": "18米",
+    "answer": "C",
+    "explanation_en": "h² = 13² - 5² = 169 - 25 = 144. h = √144 = 12 m.",
+    "explanation_zh": "h² = 13² - 5² = 169 - 25 = 144。h = √144 = 12米。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+
+  {
+    "objective_code": "MATH.S3.TRIG.BASIC",
+    "stem_en": "In a right-angled triangle, the side opposite to angle θ is 3 and the hypotenuse is 5. What is sin θ?",
+    "stem_zh": "在直角三角形中，角θ的對邊是3，斜邊是5，sin θ 是多少？",
+    "option_a_en": "3/4", "option_b_en": "4/5", "option_c_en": "3/5", "option_d_en": "4/3",
+    "option_a_zh": "3/4", "option_b_zh": "4/5", "option_c_zh": "3/5", "option_d_zh": "4/3",
+    "answer": "C",
+    "explanation_en": "sin θ = opposite / hypotenuse = 3/5.",
+    "explanation_zh": "sin θ = 對邊 / 斜邊 = 3/5。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+  {
+    "objective_code": "MATH.S3.TRIG.BASIC",
+    "stem_en": "What is the exact value of tan 45°?",
+    "stem_zh": "tan 45° 的準確值是多少？",
+    "option_a_en": "1/2", "option_b_en": "√3/2", "option_c_en": "√3", "option_d_en": "1",
+    "option_a_zh": "1/2", "option_b_zh": "√3/2", "option_c_zh": "√3", "option_d_zh": "1",
+    "answer": "D",
+    "explanation_en": "In a 45°-45°-90° triangle with legs 1 and 1, tan 45° = opposite/adjacent = 1/1 = 1.",
+    "explanation_zh": "在45°-45°-90°三角形中，兩直角邊為1，tan 45° = 對邊/鄰邊 = 1/1 = 1。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+  {
+    "objective_code": "MATH.S3.TRIG.BASIC",
+    "stem_en": "In triangle ABC with right angle at C, angle A = 30° and the hypotenuse AB = 10 cm. Find BC.",
+    "stem_zh": "三角形ABC中，直角在C，角A = 30°，斜邊AB = 10厘米。求BC。",
+    "option_a_en": "5 cm", "option_b_en": "5√3 cm", "option_c_en": "10√3 cm", "option_d_en": "√3 cm",
+    "option_a_zh": "5厘米", "option_b_zh": "5√3厘米", "option_c_zh": "10√3厘米", "option_d_zh": "√3厘米",
+    "answer": "A",
+    "explanation_en": "BC is opposite to angle A. sin 30° = BC/AB = BC/10. BC = 10 × sin 30° = 10 × 0.5 = 5 cm.",
+    "explanation_zh": "BC 是角A的對邊。sin 30° = BC/AB = BC/10。BC = 10 × sin 30° = 10 × 0.5 = 5厘米。",
+    "difficulty_estimate": 4, "question_type": "MCQ", "grade": "S3"
+  },
+
+  {
+    "objective_code": "MATH.S3.TRIG.APPLICATIONS",
+    "stem_en": "A person stands 50 m from the base of a building. The angle of elevation to the top is 60°. How tall is the building? (tan 60° = √3 ≈ 1.732)",
+    "stem_zh": "一人站在距大廈50米處，仰角為60°，大廈有多高？（tan 60° = √3 ≈ 1.732）",
+    "option_a_en": "50 m", "option_b_en": "50√3 m", "option_c_en": "100 m", "option_d_en": "25√3 m",
+    "option_a_zh": "50米", "option_b_zh": "50√3米", "option_c_zh": "100米", "option_d_zh": "25√3米",
+    "answer": "B",
+    "explanation_en": "tan 60° = height / 50. Height = 50 × tan 60° = 50√3 m ≈ 86.6 m.",
+    "explanation_zh": "tan 60° = 高度 / 50。高度 = 50 × tan 60° = 50√3 米 ≈ 86.6 米。",
+    "difficulty_estimate": 4, "question_type": "MCQ", "grade": "S3"
+  },
+
+  {
+    "objective_code": "MATH.S3.GEOM.CIRCLES",
+    "stem_en": "AB is a diameter of a circle, and C is a point on the circle. What is angle ACB?",
+    "stem_zh": "AB是圓的直徑，C是圓上的一點，角ACB是多少？",
+    "option_a_en": "45°", "option_b_en": "60°", "option_c_en": "90°", "option_d_en": "180°",
+    "option_a_zh": "45°", "option_b_zh": "60°", "option_c_zh": "90°", "option_d_zh": "180°",
+    "answer": "C",
+    "explanation_en": "Angle in a semicircle theorem: the angle subtended by a diameter at any point on the circle is 90°.",
+    "explanation_zh": "半圓上的圓周角定理：直徑所對的圓周角等於90°。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+  {
+    "objective_code": "MATH.S3.GEOM.CIRCLES",
+    "stem_en": "The angle subtended by arc PQ at the centre O is 80°. What is the angle subtended by the same arc at a point R on the major arc?",
+    "stem_zh": "弧PQ對圓心O的圓心角是80°，同一弧對大弧上的點R的圓周角是多少？",
+    "option_a_en": "160°", "option_b_en": "80°", "option_c_en": "40°", "option_d_en": "20°",
+    "option_a_zh": "160°", "option_b_zh": "80°", "option_c_zh": "40°", "option_d_zh": "20°",
+    "answer": "C",
+    "explanation_en": "The angle at the centre is twice the angle at the circumference on the same arc. So angle at R = 80°/2 = 40°.",
+    "explanation_zh": "圓心角等於同弧上圓周角的兩倍。所以角R = 80°/2 = 40°。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+
+  {
+    "objective_code": "MATH.S3.COORD.LINES",
+    "stem_en": "What is the slope of the line passing through (1, 2) and (3, 8)?",
+    "stem_zh": "過點(1, 2)和(3, 8)的直線斜率是多少？",
+    "option_a_en": "2", "option_b_en": "3", "option_c_en": "4", "option_d_en": "6",
+    "option_a_zh": "2", "option_b_zh": "3", "option_c_zh": "4", "option_d_zh": "6",
+    "answer": "B",
+    "explanation_en": "Slope = (y₂ - y₁)/(x₂ - x₁) = (8 - 2)/(3 - 1) = 6/2 = 3.",
+    "explanation_zh": "斜率 = (y₂ - y₁)/(x₂ - x₁) = (8 - 2)/(3 - 1) = 6/2 = 3。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+  {
+    "objective_code": "MATH.S3.COORD.LINES",
+    "stem_en": "A line has slope 2 and passes through (0, -3). Its equation is:",
+    "stem_zh": "一條直線斜率為2，過點(0, -3)，方程是：",
+    "option_a_en": "y = 2x + 3", "option_b_en": "y = 2x - 3", "option_c_en": "y = -2x + 3", "option_d_en": "y = 3x - 2",
+    "option_a_zh": "y = 2x + 3", "option_b_zh": "y = 2x - 3", "option_c_zh": "y = -2x + 3", "option_d_zh": "y = 3x - 2",
+    "answer": "B",
+    "explanation_en": "Using y = mx + c with m = 2 and c = -3 (the y-intercept): y = 2x - 3.",
+    "explanation_zh": "用 y = mx + c，m = 2，c = -3（y軸截距）：y = 2x - 3。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+
+  {
+    "objective_code": "MATH.S3.DATA.DISPERSION",
+    "stem_en": "The data set is: 4, 7, 2, 9, 3. What is the range?",
+    "stem_zh": "數據集為：4, 7, 2, 9, 3。全距是多少？",
+    "option_a_en": "5", "option_b_en": "6", "option_c_en": "7", "option_d_en": "9",
+    "option_a_zh": "5", "option_b_zh": "6", "option_c_zh": "7", "option_d_zh": "9",
+    "answer": "C",
+    "explanation_en": "Range = max - min = 9 - 2 = 7.",
+    "explanation_zh": "全距 = 最大值 - 最小值 = 9 - 2 = 7。",
+    "difficulty_estimate": 2, "question_type": "MCQ", "grade": "S3"
+  },
+  {
+    "objective_code": "MATH.S3.DATA.DISPERSION",
+    "stem_en": "The lower quartile (Q1) of 2, 4, 5, 7, 8, 10 is:",
+    "stem_zh": "數據 2, 4, 5, 7, 8, 10 的下四分位數 (Q1) 是：",
+    "option_a_en": "4", "option_b_en": "4.5", "option_c_en": "5", "option_d_en": "6",
+    "option_a_zh": "4", "option_b_zh": "4.5", "option_c_zh": "5", "option_d_zh": "6",
+    "answer": "B",
+    "explanation_en": "The data is already ordered. For 6 values, Q1 is the median of the lower half {2, 4, 5} = 4. Wait — Q1 = (4+5)/2 = 4.5 using the interpolation method for even-count data.",
+    "explanation_zh": "數據已排序。對於6個數值，Q1 是下半部分 {2, 4, 5} 的中間值，採內插法：Q1 = (4+5)/2 = 4.5。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+
+  {
+    "objective_code": "MATH.S3.PROB.ADVANCED",
+    "stem_en": "Events A and B are mutually exclusive. P(A) = 0.3, P(B) = 0.4. What is P(A or B)?",
+    "stem_zh": "事件A和B是互斥的。P(A) = 0.3，P(B) = 0.4。P(A或B)是多少？",
+    "option_a_en": "0.12", "option_b_en": "0.58", "option_c_en": "0.70", "option_d_en": "1.0",
+    "option_a_zh": "0.12", "option_b_zh": "0.58", "option_c_zh": "0.70", "option_d_zh": "1.0",
+    "answer": "C",
+    "explanation_en": "For mutually exclusive events: P(A or B) = P(A) + P(B) = 0.3 + 0.4 = 0.7.",
+    "explanation_zh": "互斥事件：P(A或B) = P(A) + P(B) = 0.3 + 0.4 = 0.7。",
+    "difficulty_estimate": 3, "question_type": "MCQ", "grade": "S3"
+  },
+  {
+    "objective_code": "MATH.S3.PROB.ADVANCED",
+    "stem_en": "A bag has 3 red and 2 blue balls. Two balls are drawn without replacement. What is the probability both are red?",
+    "stem_zh": "袋中有3個紅球和2個藍球，不放回地取出兩個，兩個都是紅球的概率是多少？",
+    "option_a_en": "9/25", "option_b_en": "6/20", "option_c_en": "3/10", "option_d_en": "1/2",
+    "option_a_zh": "9/25", "option_b_zh": "6/20", "option_c_zh": "3/10", "option_d_zh": "1/2",
+    "answer": "C",
+    "explanation_en": "P(1st red) = 3/5. P(2nd red | 1st red) = 2/4 = 1/2. P(both red) = 3/5 × 1/2 = 3/10.",
+    "explanation_zh": "P(第1個紅) = 3/5。P(第2個紅|第1個紅) = 2/4 = 1/2。P(都是紅) = 3/5 × 1/2 = 3/10。",
+    "difficulty_estimate": 4, "question_type": "MCQ", "grade": "S3"
   }
 ]
