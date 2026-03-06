@@ -1008,3 +1008,164 @@ router.post('/student/badges/check', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ─── Question hint ─────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/student/questions/:id/hint
+ * Returns a single hint sentence for the question without revealing the answer.
+ * Query: language (EN|ZH)
+ */
+router.get('/student/questions/:id/hint', async (req, res) => {
+  const { id } = req.params;
+  const language = (req.query.language || 'ZH').toUpperCase();
+  try {
+    const question = await db.getQuestion(id);
+    if (!question) return res.status(404).json({ success: false, error: 'Question not found' });
+
+    // Use stored explanation if available (first sentence = safe hint)
+    const stored = language === 'ZH'
+      ? (question.explanation_zh || question.explanation_en)
+      : (question.explanation_en || question.explanation_zh);
+
+    if (stored) {
+      // Return just the first sentence so it's a nudge, not a full explanation
+      const firstSentence = stored.split(/[.。！!]/)[0].trim();
+      return res.json({ success: true, hint: firstSentence + (stored.includes('。') ? '。' : '.') });
+    }
+
+    // No stored explanation — generate a short concept nudge via LLM
+    const objectives = (question.objectives || []).filter(Boolean);
+    const conceptName = language === 'ZH'
+      ? (objectives[0]?.name_zh || objectives[0]?.name_en || '本概念')
+      : (objectives[0]?.name_en || 'this concept');
+
+    if (process.env.ANTHROPIC_API_KEY) {
+      try {
+        const { AdaptiveAgent } = require('../agents/adaptive-agent');
+        const ag = new AdaptiveAgent();
+        // Use studentUx to generate a short hint prompt
+        const stem = language === 'ZH' ? (question.stem_zh || question.stem_en) : question.stem_en;
+        const result = await ag.studentUx.run('QUESTION_FEEDBACK', language, {
+          question_stem: stem,
+          objective_name: conceptName,
+          is_correct: null,
+          hint_mode: true,
+        });
+        const hintText = result?.hint || result?.text || `Think about: ${conceptName}`;
+        return res.json({ success: true, hint: hintText });
+      } catch {}
+    }
+
+    // Ultimate fallback
+    res.json({
+      success: true,
+      hint: language === 'ZH'
+        ? `想想關於「${conceptName}」的基本概念。`
+        : `Think about the key idea of "${conceptName}".`,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Student session history ───────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/student/sessions
+ * Header: X-Student-Id  |  Query: student_id, limit, offset
+ */
+router.get('/student/sessions', async (req, res) => {
+  const studentId = req.headers['x-student-id'] || req.query.student_id;
+  if (!studentId) return res.status(400).json({ success: false, error: 'student_id required' });
+  const limit  = Math.min(parseInt(req.query.limit  || '20'), 50);
+  const offset = parseInt(req.query.offset || '0');
+  try {
+    const { pool } = require('../../../db');
+    const { rows } = await pool.query(
+      `SELECT id, mode, started_at, ended_at, duration_secs,
+              questions_seen, questions_correct, ai_summary
+       FROM sessions
+       WHERE student_id = $1
+       ORDER BY started_at DESC
+       LIMIT $2 OFFSET $3`,
+      [studentId, limit, offset]
+    );
+    const { rows: [{ total }] } = await pool.query(
+      'SELECT COUNT(*)::int AS total FROM sessions WHERE student_id = $1',
+      [studentId]
+    );
+    res.json({ success: true, sessions: rows, total, limit, offset });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: list papers ──────────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/teachers/papers
+ * Query: teacher_id, limit, offset
+ */
+router.get('/teachers/papers', async (req, res) => {
+  const { limit = 20, offset = 0 } = req.query;
+  try {
+    const { pool } = require('../../../db');
+    const { rows } = await pool.query(
+      `SELECT p.id, p.exam_name, p.grade_band, p.year, p.status,
+              p.file_url, p.created_at,
+              COUNT(dq.id)::int AS draft_count,
+              COUNT(dq.id) FILTER (WHERE dq.status = 'CONFIRMED')::int AS confirmed_count
+       FROM papers p
+       LEFT JOIN draft_questions dq ON dq.paper_id = p.id
+       GROUP BY p.id
+       ORDER BY p.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [parseInt(limit), parseInt(offset)]
+    );
+    res.json({ success: true, papers: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: per-student mastery drilldown ────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/teacher/classes/:className/students
+ * Query: grade
+ * Returns list of students in the class with their overall mastery stats.
+ */
+router.get('/teacher/classes/:className/students', async (req, res) => {
+  const { className } = req.params;
+  const { grade } = req.query;
+  try {
+    const { pool } = require('../../../db');
+    const { rows } = await pool.query(
+      `SELECT
+         u.id AS student_id,
+         u.name,
+         u.grade,
+         u.preferred_language,
+         COUNT(DISTINCT s.id)::int                                             AS total_sessions,
+         COALESCE(SUM(s.questions_seen),0)::int                                AS total_questions,
+         COALESCE(SUM(s.questions_correct),0)::int                             AS total_correct,
+         COUNT(DISTINCT ms.id)::int                                            AS objectives_seen,
+         COUNT(DISTINCT ms.id) FILTER (WHERE ms.mastery_level >= 4)::int       AS mastered_count,
+         ROUND(AVG(ms.mastery_level)::numeric, 2)                              AS avg_mastery,
+         MAX(s.started_at)                                                     AS last_active_at
+       FROM users u
+       LEFT JOIN sessions s    ON s.student_id = u.id
+       LEFT JOIN mastery_states ms ON ms.student_id = u.id
+       WHERE u.role = 'student'
+         AND u.class_name = $1
+         ${grade ? 'AND u.grade = $2' : ''}
+       GROUP BY u.id
+       ORDER BY avg_mastery DESC NULLS LAST, u.name`,
+      grade ? [className, grade] : [className]
+    );
+    res.json({ success: true, students: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});

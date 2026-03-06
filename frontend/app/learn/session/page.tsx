@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ThumbsUp, ThumbsDown, ChevronRight, X, CheckCircle, XCircle } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, ChevronRight, X, CheckCircle, XCircle, Lightbulb } from 'lucide-react';
 import { useStudentAuth } from '@/components/adaptive/useStudentAuth';
 
 type Phase = 'SETUP' | 'LOADING' | 'QUESTION' | 'ANSWERED' | 'ENDED';
@@ -16,11 +16,37 @@ interface Question {
   difficulty: number;
 }
 
+interface Explanation {
+  // Fields from StudentAgent EXPLAIN_ONE_QUESTION
+  concept_explanation?: string;
+  why_correct_or_not?: string;
+  next_tip?: string;
+  // Fallback field names (legacy / direct DB)
+  explanation_en?: string;
+  explanation_zh?: string;
+  text?: string;
+}
+
 interface AnswerResult {
   correctness: 'CORRECT' | 'INCORRECT';
   correct_answer: string;
-  explanation: any;
+  explanation: Explanation | null;
   mastery_delta: number;
+}
+
+/** Extract readable text from whatever explanation shape the API returns */
+function getExplanationText(exp: Explanation | null, lang: 'EN' | 'ZH'): string {
+  if (!exp) return '';
+  // StudentAgent format (primary)
+  if (exp.concept_explanation) {
+    const parts = [exp.concept_explanation];
+    if (exp.why_correct_or_not) parts.push(exp.why_correct_or_not);
+    if (exp.next_tip) parts.push(`💡 ${exp.next_tip}`);
+    return parts.join('\n\n');
+  }
+  // Legacy / DB fallback
+  if (lang === 'ZH') return exp.explanation_zh || exp.explanation_en || exp.text || '';
+  return exp.explanation_en || exp.text || '';
 }
 
 const TOPIC_OPTIONS = [
@@ -34,8 +60,7 @@ const TOPIC_OPTIONS = [
   { code: 'MATH.S2.EQUATION.LIN',   label: 'Linear Equations' },
 ];
 
-const UNDERSTAND_LABELS = ['😕', '😐', '🙂', '😊', '🤩'];
-const INTEREST_LABELS   = ['😕', '😐', '🙂', '😊', '🤩'];
+const EMOJI_SCALE = ['😕', '😐', '🙂', '😊', '🤩'];
 
 export default function SessionPage() {
   const router = useRouter();
@@ -51,16 +76,23 @@ export default function SessionPage() {
   const [understanding, setUnderstanding] = useState<number | null>(null);
   const [interest, setInterest] = useState<number | null>(null);
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+  const [hintUsed, setHintUsed] = useState(false);
+  const [hintLoading, setHintLoading] = useState(false);
   const [error, setError] = useState('');
   const startTime = useRef<number>(0);
 
-  // Restore in-progress session from localStorage
   useEffect(() => {
     if (!student) return;
     const saved = localStorage.getItem('al_session');
     if (saved) {
-      const { sessionId: sid, question: q, questionNum: n } = JSON.parse(saved);
-      if (sid && q) { setSessionId(sid); setQuestion(q); setQuestionNum(n || 1); setPhase('QUESTION'); startTime.current = Date.now(); }
+      try {
+        const { sessionId: sid, question: q, questionNum: n } = JSON.parse(saved);
+        if (sid && q) {
+          setSessionId(sid); setQuestion(q); setQuestionNum(n || 1);
+          setPhase('QUESTION'); startTime.current = Date.now();
+        }
+      } catch {}
     }
   }, [student]);
 
@@ -73,7 +105,7 @@ export default function SessionPage() {
     );
   }
 
-  // ── SETUP ───────────────────────────────────────────────────────────────────
+  // ── SETUP ──────────────────────────────────────────────────────────────────
 
   const startSession = async () => {
     if (selectedTopics.length === 0) { setError('Please select at least one topic.'); return; }
@@ -91,13 +123,31 @@ export default function SessionPage() {
       setQuestionNum(1);
       setPhase('QUESTION');
       startTime.current = Date.now();
-      localStorage.setItem('al_session', JSON.stringify({ sessionId: data.session_id, question: data.initial_question, questionNum: 1 }));
-    } catch (err: any) {
-      setError(err.message); setPhase('SETUP');
-    }
+      localStorage.setItem('al_session', JSON.stringify({
+        sessionId: data.session_id, question: data.initial_question, questionNum: 1,
+      }));
+    } catch (err: any) { setError(err.message); setPhase('SETUP'); }
   };
 
-  // ── ANSWER ──────────────────────────────────────────────────────────────────
+  // ── HINT ───────────────────────────────────────────────────────────────────
+
+  const showHint = async () => {
+    if (!question || hint) { setHintUsed(true); return; }
+    setHintLoading(true);
+    try {
+      const res = await fetch(
+        `/api/adaptive-learning/student/questions/${question.question_id}/hint?language=${student.language}`
+      );
+      const data = await res.json();
+      setHint(data.hint || 'Think carefully about the key concept in this question.');
+      setHintUsed(true);
+    } catch {
+      setHint('Think carefully about the key concept in this question.');
+      setHintUsed(true);
+    } finally { setHintLoading(false); }
+  };
+
+  // ── ANSWER ─────────────────────────────────────────────────────────────────
 
   const submitAnswer = async () => {
     if (selected === null || !sessionId || !question) return;
@@ -112,6 +162,7 @@ export default function SessionPage() {
           answer_payload: { selectedOptionIndex: selected },
           self_ratings: { understanding: understanding ?? 3, interest: interest ?? 3 },
           time_taken_seconds: timeTaken,
+          hint_used: hintUsed,
           language: student.language,
         }),
       });
@@ -120,25 +171,24 @@ export default function SessionPage() {
       setResult(data.result);
       setNextPayload(data.next);
       setPhase('ANSWERED');
-    } catch (err: any) {
-      setError(err.message); setPhase('QUESTION');
-    }
+    } catch (err: any) { setError(err.message); setPhase('QUESTION'); }
   };
 
-  // ── NEXT ────────────────────────────────────────────────────────────────────
+  // ── NEXT ───────────────────────────────────────────────────────────────────
 
   const advance = () => {
     if (!nextPayload) return;
-    if (nextPayload.type === 'END') {
-      endSession(); return;
-    }
+    if (nextPayload.type === 'END') { endSession(); return; }
     setQuestion(nextPayload.question);
     setQuestionNum(n => n + 1);
     setSelected(null); setResult(null); setNextPayload(null);
-    setUnderstanding(null); setInterest(null); setFeedbackSent(false);
+    setUnderstanding(null); setInterest(null);
+    setFeedbackSent(false); setHint(null); setHintUsed(false);
     setPhase('QUESTION');
     startTime.current = Date.now();
-    localStorage.setItem('al_session', JSON.stringify({ sessionId, question: nextPayload.question, questionNum: questionNum + 1 }));
+    localStorage.setItem('al_session', JSON.stringify({
+      sessionId, question: nextPayload.question, questionNum: questionNum + 1,
+    }));
   };
 
   const endSession = async () => {
@@ -147,16 +197,15 @@ export default function SessionPage() {
     try {
       const res = await fetch(`/api/adaptive-learning/student/sessions/${sessionId}/end`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Student-Id': student.id },
         body: JSON.stringify({ language: student.language }),
       });
       const data = await res.json();
       localStorage.removeItem('al_session');
       localStorage.setItem('al_last_summary', JSON.stringify(data));
+      sessionStorage.setItem('al_session_just_ended', '1');
       router.push('/learn/session/summary');
-    } catch (err: any) {
-      setError(err.message); setPhase('ANSWERED');
-    }
+    } catch (err: any) { setError(err.message); setPhase('ANSWERED'); }
   };
 
   const sendExplanationFeedback = async (rating: 1 | -1) => {
@@ -169,7 +218,7 @@ export default function SessionPage() {
     }).catch(() => {});
   };
 
-  // ── RENDER ──────────────────────────────────────────────────────────────────
+  // ── RENDER ─────────────────────────────────────────────────────────────────
 
   if (phase === 'SETUP') {
     return (
@@ -180,23 +229,20 @@ export default function SessionPage() {
         </div>
         <div className="grid grid-cols-2 gap-2">
           {TOPIC_OPTIONS.map(t => (
-            <button
-              key={t.code}
-              onClick={() => setSelectedTopics(s => s.includes(t.code) ? s.filter(c => c !== t.code) : [...s, t.code])}
+            <button key={t.code}
+              onClick={() => setSelectedTopics(s =>
+                s.includes(t.code) ? s.filter(c => c !== t.code) : [...s, t.code]
+              )}
               className={`p-3 rounded-xl border text-left text-sm font-medium transition-colors ${
                 selectedTopics.includes(t.code)
                   ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300'
                   : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:border-slate-600'
               }`}
-            >
-              {t.label}
-            </button>
+            >{t.label}</button>
           ))}
         </div>
         {error && <p className="text-red-400 text-sm">{error}</p>}
-        <button
-          onClick={startSession}
-          disabled={selectedTopics.length === 0}
+        <button onClick={startSession} disabled={selectedTopics.length === 0}
           className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-xl font-semibold transition-colors"
         >
           Start Practice →
@@ -216,34 +262,56 @@ export default function SessionPage() {
 
   if (!question) return null;
 
+  const explanationText = getExplanationText(result?.explanation ?? null, student.language);
+
   return (
     <div className="flex flex-col gap-4">
       {/* Progress + exit */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-            style={{ width: `${Math.min(100, (questionNum / 10) * 100)}%` }}
-          />
+          <div className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+            style={{ width: `${Math.min(100, (questionNum / 10) * 100)}%` }} />
         </div>
         <span className="text-xs text-slate-400 whitespace-nowrap">Q {questionNum}/10</span>
-        <button onClick={() => { if (confirm('End session?')) endSession(); }} className="text-slate-500 hover:text-red-400 transition-colors">
+        <button onClick={() => { if (confirm('End session?')) endSession(); }}
+          className="text-slate-500 hover:text-red-400 transition-colors">
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Difficulty dots */}
-      <div className="flex gap-1">
-        {[1,2,3,4,5].map(d => (
-          <div key={d} className={`w-1.5 h-1.5 rounded-full ${d <= (question.difficulty || 2) ? 'bg-indigo-500' : 'bg-slate-700'}`} />
-        ))}
+      {/* Difficulty + hint button row */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1">
+          {[1,2,3,4,5].map(d => (
+            <div key={d} className={`w-1.5 h-1.5 rounded-full ${d <= (question.difficulty || 2) ? 'bg-indigo-500' : 'bg-slate-700'}`} />
+          ))}
+        </div>
+        {phase === 'QUESTION' && (
+          <button onClick={showHint} disabled={hintLoading}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+              hintUsed
+                ? 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+                : 'text-slate-500 border-slate-700/50 hover:text-amber-400 hover:border-amber-500/30'
+            }`}
+          >
+            <Lightbulb className="w-3 h-3" />
+            {hintLoading ? 'Loading…' : hintUsed ? 'Hint shown' : 'Need a hint?'}
+          </button>
+        )}
       </div>
 
-      {/* Question */}
-      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5">
+      {/* Question stem */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 space-y-3">
         <p className="text-white text-base leading-relaxed font-medium">{question.stem}</p>
         {question.has_image && question.image_url && (
-          <img src={question.image_url} alt="Question diagram" className="mt-3 rounded-lg max-w-full" />
+          <img src={question.image_url} alt="Question diagram" className="rounded-lg max-w-full" />
+        )}
+        {/* Hint bubble */}
+        {hint && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5 flex gap-2 items-start">
+            <Lightbulb className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
+            <p className="text-xs text-amber-200 leading-relaxed">{hint}</p>
+          </div>
         )}
       </div>
 
@@ -262,10 +330,7 @@ export default function SessionPage() {
             if (isWrong) style = 'bg-red-600/20 border-red-500/50 text-red-300';
 
             return (
-              <button
-                key={i}
-                disabled={phase === 'ANSWERED'}
-                onClick={() => setSelected(i)}
+              <button key={i} disabled={phase === 'ANSWERED'} onClick={() => setSelected(i)}
                 className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-colors ${style}`}
               >
                 <span className="text-xs font-bold w-5 text-center shrink-0 opacity-60">{letter}</span>
@@ -278,22 +343,24 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* Submit button (pre-answer) */}
+      {/* Pre-answer: self-rate before submitting (optional) + submit */}
       {phase === 'QUESTION' && (
-        <button
-          disabled={selected === null}
-          onClick={submitAnswer}
+        <button disabled={selected === null} onClick={submitAnswer}
           className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 text-white rounded-xl font-semibold transition-colors"
         >
           Submit Answer
         </button>
       )}
 
-      {/* Post-answer */}
+      {/* Post-answer panel */}
       {phase === 'ANSWERED' && result && (
         <div className="space-y-3">
           {/* Result badge */}
-          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl ${result.correctness === 'CORRECT' ? 'bg-emerald-600/15 border border-emerald-500/30' : 'bg-red-600/15 border border-red-500/30'}`}>
+          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl ${
+            result.correctness === 'CORRECT'
+              ? 'bg-emerald-600/15 border border-emerald-500/30'
+              : 'bg-red-600/15 border border-red-500/30'
+          }`}>
             {result.correctness === 'CORRECT'
               ? <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
               : <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
@@ -304,22 +371,23 @@ export default function SessionPage() {
           </div>
 
           {/* AI Explanation */}
-          {result.explanation && (
+          {explanationText && (
             <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl p-4 space-y-2">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">AI Explanation</p>
-              <p className="text-sm text-slate-200 leading-relaxed">
-                {student.language === 'ZH'
-                  ? (result.explanation.explanation_zh || result.explanation.explanation_en || result.explanation.text)
-                  : (result.explanation.explanation_en || result.explanation.text)}
-              </p>
-              {!feedbackSent && (
+              <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-line">{explanationText}</p>
+              {!feedbackSent ? (
                 <div className="flex items-center gap-2 pt-1">
                   <span className="text-xs text-slate-500">Helpful?</span>
-                  <button onClick={() => sendExplanationFeedback(1)} className="text-slate-500 hover:text-emerald-400 transition-colors"><ThumbsUp className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => sendExplanationFeedback(-1)} className="text-slate-500 hover:text-red-400 transition-colors"><ThumbsDown className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => sendExplanationFeedback(1)} className="text-slate-500 hover:text-emerald-400 transition-colors">
+                    <ThumbsUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => sendExplanationFeedback(-1)} className="text-slate-500 hover:text-red-400 transition-colors">
+                    <ThumbsDown className="w-3.5 h-3.5" />
+                  </button>
                 </div>
+              ) : (
+                <p className="text-xs text-slate-500">Thanks for your feedback!</p>
               )}
-              {feedbackSent && <p className="text-xs text-slate-500">Thanks for your feedback!</p>}
             </div>
           )}
 
@@ -328,7 +396,7 @@ export default function SessionPage() {
             <div>
               <p className="text-xs text-slate-400 mb-2">How well did you understand?</p>
               <div className="flex justify-between">
-                {UNDERSTAND_LABELS.map((e, i) => (
+                {EMOJI_SCALE.map((e, i) => (
                   <button key={i} onClick={() => setUnderstanding(i + 1)}
                     className={`text-xl transition-all ${understanding === i + 1 ? 'scale-125' : 'opacity-40 hover:opacity-80'}`}
                   >{e}</button>
@@ -338,7 +406,7 @@ export default function SessionPage() {
             <div>
               <p className="text-xs text-slate-400 mb-2">How interesting was this?</p>
               <div className="flex justify-between">
-                {INTEREST_LABELS.map((e, i) => (
+                {EMOJI_SCALE.map((e, i) => (
                   <button key={i} onClick={() => setInterest(i + 1)}
                     className={`text-xl transition-all ${interest === i + 1 ? 'scale-125' : 'opacity-40 hover:opacity-80'}`}
                   >{e}</button>
@@ -348,8 +416,7 @@ export default function SessionPage() {
           </div>
 
           {/* Next / End */}
-          <button
-            onClick={advance}
+          <button onClick={advance}
             className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
           >
             {nextPayload?.type === 'END' ? 'End Session' : 'Next Question'}
