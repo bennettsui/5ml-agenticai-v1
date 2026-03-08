@@ -1197,180 +1197,58 @@ router.get('/teacher/classes/:className/students', async (req, res) => {
   }
 });
 
-// ─── Teacher: storage management ──────────────────────────────────────────────
-
-/**
- * GET /api/adaptive-learning/teachers/papers/storage
- * Returns all papers with local file existence, file_url, cdn_url, file_size_bytes.
- */
-router.get('/teachers/papers/storage', async (req, res) => {
+// ─── Pilot Stats (platform dashboard) ────────────────────────────────────────
+router.get('/teacher/pilot-stats', async (req, res) => {
   try {
     const { pool } = require('../../../db');
-    const fs   = require('fs');
-    const path = require('path');
-    const { rows } = await pool.query(
-      `SELECT id, exam_name, grade_band, year, status,
-              file_url, file_key, cdn_url, file_size_bytes, created_at, updated_at
-       FROM papers
-       ORDER BY created_at DESC`
-    );
-    const papers = rows.map(p => ({
-      ...p,
-      file_exists_locally: p.file_key
-        ? fs.existsSync(path.join('/app/uploads', p.file_key))
-        : false,
-      serve_url: p.cdn_url || (p.file_key ? `/api/adaptive-learning/teachers/papers/${p.id}/file` : null),
-    }));
-    res.json({ success: true, papers });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
- * GET /api/adaptive-learning/teachers/papers/:id/file
- * Serve the PDF — CDN redirect if available, otherwise local file.
- */
-router.get('/teachers/papers/:id/file', async (req, res) => {
-  try {
-    const fs   = require('fs');
-    const path = require('path');
-    const paper = await db.getPaper(req.params.id);
-    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
-
-    if (paper.cdn_url) return res.redirect(302, paper.cdn_url);
-
-    const localPath = paper.file_key ? path.join('/app/uploads', paper.file_key) : null;
-    if (localPath && fs.existsSync(localPath)) {
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `inline; filename="${paper.exam_name || 'paper'}.pdf"`);
-      return res.sendFile(localPath);
-    }
-    res.status(404).json({ success: false, error: 'File not available locally and no CDN URL set. Re-upload to restore.' });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
- * POST /api/adaptive-learning/teachers/papers/:id/push-cdn
- * Manually push paper to CDN (re-reads from local disk or accepts base64 body).
- * Body (optional): { pdf_base64: "..." }
- */
-router.post('/teachers/papers/:id/push-cdn', async (req, res) => {
-  try {
-    const fs   = require('fs');
-    const path = require('path');
-    const paper = await db.getPaper(req.params.id);
-    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
-
-    let pdfBuffer;
-    if (req.body?.pdf_base64) {
-      pdfBuffer = Buffer.from(req.body.pdf_base64, 'base64');
-    } else if (paper.file_key) {
-      const localPath = path.join('/app/uploads', paper.file_key);
-      if (!fs.existsSync(localPath)) {
-        return res.status(404).json({ success: false, error: 'Local file not found. Please re-upload the PDF first.' });
-      }
-      pdfBuffer = fs.readFileSync(localPath);
-    } else {
-      return res.status(400).json({ success: false, error: 'No local file and no pdf_base64 provided.' });
-    }
-
-    const cdnUrl = await _uploadPdfToCdn(pdfBuffer, paper.file_key ? path.basename(paper.file_key) : `paper-${paper.id}.pdf`);
-    await db.updatePaperCdnUrl(paper.id, cdnUrl);
-    res.json({ success: true, cdn_url: cdnUrl });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
- * POST /api/adaptive-learning/teachers/papers/:id/visual-extract
- * Accepts a base64 image of a single PDF page and runs Gemini visual analysis.
- * Returns detected elements with approximate bounding boxes for overlay display.
- * Body: { page_image_base64: "...", page_number: 1, mime_type: "image/png" }
- */
-router.post('/teachers/papers/:id/visual-extract', async (req, res) => {
-  const { page_image_base64, page_number = 1, mime_type = 'image/png' } = req.body || {};
-  if (!page_image_base64) return res.status(400).json({ success: false, error: 'page_image_base64 is required' });
-
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
-
-  try {
-    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
-
-    const prompt = `You are analyzing a page from a Hong Kong secondary school exam paper (math or science).
-
-Identify EVERY distinct element on this page: question numbers, question stems, sub-parts, math expressions, diagrams, figures, graphs, tables, answer lines, and instructions.
-
-For each element return a JSON object with:
-{
-  "id": <unique integer starting at 1>,
-  "type": "question_number" | "question_stem" | "sub_part" | "math_expression" | "diagram" | "graph" | "table" | "answer_line" | "instruction" | "option",
-  "content": "<the exact text or description of the element>",
-  "content_zh": "<Traditional Chinese version if the element is bilingual, else empty string>",
-  "bbox": { "x": <left edge 0-100>, "y": <top edge 0-100>, "w": <width 0-100>, "h": <height 0-100> },
-  "confidence": <0.0-1.0>,
-  "needs_review": <true if OCR might be wrong — math symbols, unclear diagrams, etc.>
-}
-
-bbox values are percentages of the total page dimensions (0=top-left, 100=bottom-right).
-
-Rules:
-- For diagrams/graphs with no readable text, set content to a description like "Geometric figure: triangle ABC with angle labels"
-- For math expressions, use Unicode: x², √x, ½, etc.
-- Mark needs_review=true for: hand-drawn figures, complex equations, ambiguous symbols, overlapping text
-- Include EVERY element, even page numbers and headers
-
-Output ONLY a valid JSON array. No explanation, no markdown fences.`;
-
-    const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { inline_data: { mime_type, data: page_image_base64 } },
-            { text: prompt },
-          ],
-        }],
-        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
-      }),
+    const [overview, gradeBreakdown, weekSessions, weakTopics] = await Promise.all([
+      pool.query(`
+        SELECT
+          COUNT(DISTINCT u.id)::int                                              AS total_students,
+          COUNT(DISTINCT s.id)::int                                              AS total_sessions,
+          COALESCE(AVG(
+            CASE WHEN s.questions_seen > 0
+              THEN s.questions_correct::float / s.questions_seen END), 0)        AS avg_accuracy,
+          COALESCE(AVG(ms.mastery_level), 0)                                     AS avg_mastery,
+          COUNT(ms.id) FILTER (WHERE ms.mastery_level >= 4)::int                 AS mastered_objectives,
+          COALESCE(SUM(s.questions_seen), 0)::int                                AS total_questions_answered
+        FROM users u
+        LEFT JOIN sessions s ON s.student_id = u.id
+        LEFT JOIN mastery_states ms ON ms.student_id = u.id
+        WHERE u.role = 'student'`),
+      pool.query(`
+        SELECT grade, COUNT(*)::int AS count
+        FROM users
+        WHERE role = 'student' AND grade IS NOT NULL
+        GROUP BY grade ORDER BY grade`),
+      pool.query(`
+        SELECT COUNT(*)::int AS sessions_this_week
+        FROM sessions
+        WHERE started_at >= NOW() - INTERVAL '7 days'`),
+      pool.query(`
+        SELECT lo.code AS objective_code, lo.name_en,
+               ROUND(AVG(ms.mastery_level)::numeric, 2) AS avg_mastery
+        FROM mastery_states ms
+        JOIN learning_objectives lo ON lo.id = ms.objective_id
+        GROUP BY lo.id, lo.code, lo.name_en
+        ORDER BY avg_mastery ASC
+        LIMIT 5`),
+    ]);
+    const o = overview.rows[0];
+    res.json({
+      total_students: o.total_students,
+      total_sessions: o.total_sessions,
+      sessions_this_week: weekSessions.rows[0].sessions_this_week,
+      avg_accuracy: parseFloat(o.avg_accuracy) || 0,
+      avg_mastery: parseFloat(o.avg_mastery) || 0,
+      mastered_objectives: o.mastered_objectives,
+      total_questions_answered: o.total_questions_answered,
+      grade_breakdown: gradeBreakdown.rows,
+      top_weak_topics: weakTopics.rows.map(r => ({
+        ...r, avg_mastery: parseFloat(r.avg_mastery) || 0,
+      })),
     });
-
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Gemini API ${response.status}: ${err.slice(0, 200)}`);
-    }
-
-    const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-
-    let elements;
-    try {
-      elements = JSON.parse(text);
-      if (!Array.isArray(elements)) elements = [];
-    } catch {
-      console.warn('[VisualExtract] Gemini returned non-JSON:', text.slice(0, 200));
-      elements = [];
-    }
-
-    res.json({ success: true, paper_id: req.params.id, page_number, elements });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
-});
-
-/**
- * PATCH /api/adaptive-learning/teachers/papers/:id/visual-extract/:elementId
- * Save teacher correction for a visually extracted element.
- * Body: { page_number, content, content_zh, type }
- * Stored as a draft_question correction note (lightweight — no dedicated table needed yet).
- */
-router.patch('/teachers/papers/:id/visual-extract/:elementId', async (req, res) => {
-  // Corrections are handled client-side in the validation UI and submitted as part of
-  // the final confirm-questions flow. This endpoint is a no-op acknowledgement.
-  res.json({ success: true, message: 'Correction noted — will apply on confirm.' });
 });

@@ -40,6 +40,66 @@ async function seedLearningObjectives() {
     }
   }
   console.log(`✅ Seeded ${seeded} learning objectives`);
+  await seedSampleQuestions();
+}
+
+// ─── Seed sample questions ────────────────────────────────────────────────────
+
+async function seedSampleQuestions() {
+  let filePath;
+  try {
+    filePath = path.join(__dirname, 'sample-questions.json');
+    if (!fs.existsSync(filePath)) return;
+  } catch { return; }
+
+  const questions = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  let inserted = 0;
+  for (const q of questions) {
+    // Find the objective
+    const { rows: objRows } = await pool.query(
+      'SELECT id FROM learning_objectives WHERE code = $1', [q.objective_code]
+    );
+    if (!objRows.length) continue;
+    const objectiveId = objRows[0].id;
+
+    // Insert question (skip if identical stem_en already exists for this objective)
+    const { rows: existing } = await pool.query(
+      `SELECT q.id FROM questions q
+       JOIN question_objective_map qom ON qom.question_id = q.id
+       WHERE q.stem_en = $1 AND qom.objective_id = $2 LIMIT 1`,
+      [q.stem_en, objectiveId]
+    );
+    if (existing.length) continue;
+
+    const { rows: qRows } = await pool.query(
+      `INSERT INTO questions
+         (stem_en, stem_zh, option_a_en, option_b_en, option_c_en, option_d_en,
+          option_a_zh, option_b_zh, option_c_zh, option_d_zh,
+          answer, explanation_en, explanation_zh,
+          question_type, difficulty_estimate, source_type, grade, is_active)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::question_type,$15,'TEACHER_CREATED',$16,TRUE)
+       RETURNING id`,
+      [
+        q.stem_en, q.stem_zh || null,
+        q.option_a_en || null, q.option_b_en || null, q.option_c_en || null, q.option_d_en || null,
+        q.option_a_zh || null, q.option_b_zh || null, q.option_c_zh || null, q.option_d_zh || null,
+        q.answer,
+        q.explanation_en || null, q.explanation_zh || null,
+        q.question_type || 'MCQ',
+        q.difficulty_estimate || 2,
+        q.grade || 'S1',
+      ]
+    );
+    const questionId = qRows[0].id;
+
+    await pool.query(
+      `INSERT INTO question_objective_map (question_id, objective_id, is_primary)
+       VALUES ($1,$2,TRUE) ON CONFLICT DO NOTHING`,
+      [questionId, objectiveId]
+    );
+    inserted++;
+  }
+  console.log(`✅ Seeded ${inserted} sample questions`);
 }
 
 // ─── Learning Objectives ──────────────────────────────────────────────────────

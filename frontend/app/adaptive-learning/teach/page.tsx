@@ -331,9 +331,9 @@ export default function TeachDashboard() {
       {/* Quick links */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { href: '/teach/upload',            label: 'Upload Past Paper',    desc: 'Add questions via PDF' },
-          { href: '/teach/questions/pending', label: 'Review Questions',     desc: 'Approve AI-generated Qs' },
-          { href: '/teach/reports',           label: 'Generate Report',      desc: 'Term or class summary' },
+          { href: '/adaptive-learning/teach/upload',            label: 'Upload Past Paper',    desc: 'Add questions via PDF' },
+          { href: '/adaptive-learning/teach/questions/pending', label: 'Review Questions',     desc: 'Approve AI-generated Qs' },
+          { href: '/adaptive-learning/teach/reports',           label: 'Generate Report',      desc: 'Term or class summary' },
         ].map(({ href, label, desc }) => (
           <Link key={href} href={href}
             className="flex items-center gap-3 p-4 bg-slate-800/60 hover:bg-slate-800/80 border border-slate-700/50 rounded-xl transition-colors"

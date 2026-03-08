@@ -8,9 +8,7 @@ import {
   Check, Image as ImageIcon, FileText, BookOpen, Wand2, X,
 } from 'lucide-react';
 
-const API_BASE = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
-  : 'http://localhost:8080';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 const ADMIN_PASSWORD = '5milesLab01@';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -205,7 +203,7 @@ function MediaLibraryTab() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -227,46 +225,20 @@ function MediaLibraryTab() {
     setUploading(true);
     setUploadError('');
     try {
-      // Read file as base64 DataURL
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-      // Upload to external service
-      const extRes = await fetch('http://5ml.mmdbfiles.com/api/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_data: base64 }),
-      });
-      const extData = await extRes.json();
-      if (!extData.success) throw new Error(extData.error || 'External upload failed');
-
-      // Register in local DB
-      const regRes = await fetch(
-        `${API_BASE}/api/radiance/admin/media/register?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: extData.filename,
-            original_name: file.name,
-            url: extData.public_url,
-            mime_type: extData.mime,
-            size: extData.size,
-          }),
-        }
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(
+        `${API_BASE}/api/radiance/admin/media/upload?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
+        { method: 'POST', body: formData }
       );
-      const regData = await regRes.json();
-      if (regData.success) {
+      const data = await res.json();
+      if (data.success) {
         await loadMedia();
       } else {
-        setUploadError(regData.error || 'Failed to register upload');
+        setUploadError(data.error || 'Upload failed');
       }
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed');
+      setUploadError('Network error — could not reach server');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -286,11 +258,14 @@ function MediaLibraryTab() {
     finally { setDeletingId(null); }
   }
 
-  function copyUrl(item: MediaItem) {
-    const fullUrl = `${API_BASE}${item.url}`;
-    navigator.clipboard.writeText(fullUrl);
-    setCopiedId(item.id);
-    setTimeout(() => setCopiedId(null), 2000);
+  function copyText(key: string, text: string) {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  }
+
+  function localUrl(item: MediaItem) {
+    return `${API_BASE}/uploads/radiance/${item.filename}`;
   }
 
   return (
@@ -342,31 +317,84 @@ function MediaLibraryTab() {
             <div key={item.id} className="group bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
               <div className="aspect-square bg-slate-900 relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`${API_BASE}${item.url}`} alt={item.original_name} className="w-full h-full object-cover" />
+                <img src={item.url} alt={item.original_name} className="w-full h-full object-cover" />
               </div>
               <div className="p-2.5 space-y-2">
                 <p className="text-xs text-slate-400 truncate" title={item.original_name}>{item.original_name}</p>
                 <p className="text-xs text-slate-600">{(item.size / 1024).toFixed(0)} KB</p>
-                <div className="flex gap-1.5">
+                <div className="flex flex-col gap-1">
                   <button
-                    onClick={() => copyUrl(item)}
-                    className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs bg-slate-700/60 hover:bg-slate-700 text-slate-300 transition-colors"
+                    onClick={() => copyText(`${item.id}-cdn`, item.url)}
+                    className="flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs bg-blue-900/30 hover:bg-blue-900/60 text-blue-300 transition-colors"
                   >
-                    {copiedId === item.id
+                    {copiedKey === `${item.id}-cdn`
                       ? <><Check className="w-3 h-3 text-emerald-400" /> Copied</>
-                      : <><Copy className="w-3 h-3" /> Copy URL</>}
+                      : <><Copy className="w-3 h-3" /> CDN URL</>}
                   </button>
                   <button
-                    onClick={() => handleDelete(item.id)}
-                    disabled={deletingId === item.id}
-                    className="p-1.5 rounded-lg bg-red-900/30 hover:bg-red-900/60 text-red-400 transition-colors"
+                    onClick={() => copyText(`${item.id}-local`, localUrl(item))}
+                    className="flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs bg-slate-700/60 hover:bg-slate-700 text-slate-300 transition-colors"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    {copiedKey === `${item.id}-local`
+                      ? <><Check className="w-3 h-3 text-emerald-400" /> Copied</>
+                      : <><Copy className="w-3 h-3" /> Local URL</>}
                   </button>
                 </div>
+                <button
+                  onClick={() => handleDelete(item.id)}
+                  disabled={deletingId === item.id}
+                  className="w-full flex items-center justify-center gap-1 py-1 rounded-lg text-xs bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors"
+                >
+                  <Trash2 className="w-3 h-3" /> Delete
+                </button>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── CDN URL Reference Table ── */}
+      {media.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-sm font-semibold text-slate-300 mb-3">CDN URL Reference</h3>
+          <div className="overflow-x-auto rounded-xl border border-slate-700/50">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="border-b border-slate-700/50 bg-slate-800/60">
+                  <th className="px-4 py-2.5 text-slate-400 font-medium">File</th>
+                  <th className="px-4 py-2.5 text-slate-400 font-medium">CDN URL</th>
+                  <th className="px-4 py-2.5 text-slate-400 font-medium">Local URL</th>
+                  <th className="px-4 py-2.5 text-slate-400 font-medium w-20">Size</th>
+                </tr>
+              </thead>
+              <tbody>
+                {media.map((item, i) => (
+                  <tr key={item.id} className={`border-b border-slate-700/50 ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`}>
+                    <td className="px-4 py-2.5 text-slate-300 max-w-[120px] truncate" title={item.original_name}>
+                      {item.original_name}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-blue-400 truncate max-w-[280px]" title={item.url}>{item.url}</span>
+                        <button onClick={() => copyText(`t-${item.id}-cdn`, item.url)} className="shrink-0 text-slate-500 hover:text-blue-400 transition-colors">
+                          {copiedKey === `t-${item.id}-cdn` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 truncate max-w-[200px]" title={localUrl(item)}>{localUrl(item)}</span>
+                        <button onClick={() => copyText(`t-${item.id}-local`, localUrl(item))} className="shrink-0 text-slate-500 hover:text-slate-300 transition-colors">
+                          {copiedKey === `t-${item.id}-local` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500">{(item.size / 1024).toFixed(0)} KB</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -406,12 +434,12 @@ function MediaPickerModal({ onSelect, onClose }: { onSelect: (url: string) => vo
               {media.map(item => (
                 <button
                   key={item.id}
-                  onClick={() => { onSelect(`${API_BASE}${item.url}`); onClose(); }}
+                  onClick={() => { onSelect(item.url); onClose(); }}
                   className="group aspect-square bg-slate-900 rounded-lg overflow-hidden border border-slate-700/50 hover:border-purple-500 transition-colors"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`${API_BASE}${item.url}`}
+                    src={item.url}
                     alt={item.original_name}
                     className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
                   />
@@ -1082,6 +1110,7 @@ function ImageGenerationTab() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [publishingRadiance, setPublishingRadiance] = useState(false);
 
   useEffect(() => { loadVisuals(); loadMedia(); }, []); // eslint-disable-line
 
@@ -1101,6 +1130,26 @@ function ImageGenerationTab() {
       setError('Failed to load visual list: ' + (err as Error).message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function publishRadiancePack() {
+    setPublishingRadiance(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/radiance/admin/site-pack?password=${encodeURIComponent(ADMIN_PASSWORD)}`);
+      if (!res.ok) throw new Error('Server error');
+      const blob = await res.blob();
+      const date = new Date().toISOString().slice(0, 10);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `radiance-site-pack-${date}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to download site pack: ' + (err as Error).message);
+    } finally {
+      setPublishingRadiance(false);
     }
   }
 
@@ -1151,7 +1200,7 @@ function ImageGenerationTab() {
   }
 
   function copyMediaUrl(item: MediaItem) {
-    navigator.clipboard.writeText(`${API_BASE}${item.url}`);
+    navigator.clipboard.writeText(item.url);
     setCopiedId(item.id);
     setTimeout(() => setCopiedId(null), 2000);
   }
@@ -1171,35 +1220,11 @@ function ImageGenerationTab() {
     if (!file) return;
     setUploading(true);
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const extRes = await fetch('http://5ml.mmdbfiles.com/api/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_data: base64 }),
-      });
-      const extData = await extRes.json();
-      if (!extData.success) throw new Error(extData.error || 'Upload failed');
-      const regRes = await fetch(
-        `${API_BASE}/api/radiance/admin/media/register?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: extData.filename,
-            original_name: file.name,
-            url: extData.public_url,
-            mime_type: extData.mime,
-            size: extData.size,
-          }),
-        }
-      );
-      const regData = await regRes.json();
-      if (regData.success) await loadMedia();
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/api/radiance/admin/media/upload?password=${encodeURIComponent(ADMIN_PASSWORD)}`, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.success) await loadMedia();
     } catch { /* ignore */ }
     finally { setUploading(false); if (uploadRef.current) uploadRef.current.value = ''; }
   }
@@ -1246,6 +1271,16 @@ function ImageGenerationTab() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-white">Radiance Media Library</h3>
           <div className="flex items-center gap-2">
+            <button
+              onClick={publishRadiancePack}
+              disabled={publishingRadiance}
+              title="Download full site pack (HTML + images + uploads)"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 transition-colors disabled:opacity-50"
+            >
+              {publishingRadiance
+                ? <><RefreshCw className="w-4 h-4 animate-spin" /> Packing…</>
+                : <><FileText className="w-4 h-4" /> Publish Site Pack</>}
+            </button>
             <button onClick={loadMedia} disabled={mediaLoading} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/50 text-slate-400 transition-colors">
               <RefreshCw className={`w-4 h-4 ${mediaLoading ? 'animate-spin' : ''}`} />
             </button>
@@ -1270,7 +1305,7 @@ function ImageGenerationTab() {
               <div key={item.id} className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
                 <div className="aspect-square bg-slate-900">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`${API_BASE}${item.url}`} alt={item.original_name} className="w-full h-full object-cover" />
+                  <img src={item.url} alt={item.original_name} className="w-full h-full object-cover" />
                 </div>
                 <div className="p-2 space-y-1.5">
                   <p className="text-xs text-slate-400 truncate" title={item.original_name}>{item.original_name}</p>

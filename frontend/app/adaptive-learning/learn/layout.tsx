@@ -5,12 +5,12 @@ import { Brain, BarChart3, BookOpen, Award, History, LogOut, Library } from 'luc
 import { useStudentAuth } from '@/components/adaptive/useStudentAuth';
 
 const NAV = [
-  { href: '/learn',          label: 'Home',     icon: Brain },
-  { href: '/learn/session',  label: 'Practice', icon: BookOpen },
-  { href: '/learn/progress',  label: 'Progress', icon: BarChart3 },
-  { href: '/learn/concepts',  label: 'Concepts', icon: Library },
-  { href: '/learn/history',   label: 'History',  icon: History },
-  { href: '/learn/badges',   label: 'Badges',   icon: Award },
+  { href: '/adaptive-learning/learn',          label: 'Home',     icon: Brain },
+  { href: '/adaptive-learning/learn/session',  label: 'Practice', icon: BookOpen },
+  { href: '/adaptive-learning/learn/progress', label: 'Progress', icon: BarChart3 },
+  { href: '/adaptive-learning/learn/concepts', label: 'Concepts', icon: Library },
+  { href: '/adaptive-learning/learn/history',  label: 'History',  icon: History },
+  { href: '/adaptive-learning/learn/badges',   label: 'Badges',   icon: Award },
 ];
 
 export default function LearnLayout({ children }: { children: React.ReactNode }) {
@@ -21,8 +21,8 @@ export default function LearnLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-slate-950 flex flex-col">
       {/* Top bar */}
       <header className="border-b border-slate-800/60 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
-          <Link href="/learn" className="flex items-center gap-2">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <Link href="/adaptive-learning/learn" className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
               <Brain className="w-4 h-4 text-white" />
             </div>
@@ -30,7 +30,9 @@ export default function LearnLayout({ children }: { children: React.ReactNode })
           </Link>
           {student && (
             <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-400">{student.name} · {student.class_name}</span>
+              <span className="text-xs text-slate-400 truncate max-w-[140px] sm:max-w-none">
+                {student.name} · {student.class_name}
+              </span>
               <button onClick={logout} className="text-slate-500 hover:text-slate-300 transition-colors">
                 <LogOut className="w-4 h-4" />
               </button>
@@ -39,21 +41,21 @@ export default function LearnLayout({ children }: { children: React.ReactNode })
         </div>
       </header>
 
-      {/* Page content */}
-      <main className="flex-1 max-w-lg mx-auto w-full px-4 py-6">
+      {/* Page content — pb-20 leaves space for bottom nav */}
+      <main className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-4 sm:py-6 pb-20">
         {children}
       </main>
 
       {/* Bottom nav */}
-      <nav className="border-t border-slate-800/60 bg-slate-900/80 backdrop-blur-sm sticky bottom-0">
-        <div className="max-w-lg mx-auto px-4 h-16 flex items-center justify-around">
+      <nav className="border-t border-slate-800/60 bg-slate-900/80 backdrop-blur-sm sticky bottom-0 z-40">
+        <div className="max-w-2xl mx-auto px-2 h-16 flex items-center justify-around">
           {NAV.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || (href !== '/learn' && pathname.startsWith(href));
+            const active = pathname === href || (href !== '/adaptive-learning/learn' && pathname.startsWith(href));
             return (
               <Link
                 key={href}
                 href={href}
-                className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition-colors ${
+                className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl transition-colors ${
                   active ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'
                 }`}
               >

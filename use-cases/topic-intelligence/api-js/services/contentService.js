@@ -3,6 +3,7 @@
  * Handles content fetching, article extraction, and analysis
  */
 
+const { setMaxListeners } = require('events');
 const { LLM_CONFIGS, getLLMConfig } = require('./llmService');
 
 /**
@@ -13,6 +14,7 @@ const { LLM_CONFIGS, getLLMConfig } = require('./llmService');
 async function fetchPageContent(url) {
   try {
     const controller = new AbortController();
+    setMaxListeners(50, controller.signal);
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     const response = await fetch(url, {
@@ -200,7 +202,7 @@ ${content.substring(0, 8000)}
         },
         body: JSON.stringify({
           model: config.model,
-          max_tokens: 512,
+          max_tokens: 1500,
           messages: [{ role: 'user', content: prompt }],
           system: '你是一位資深新聞分析師。用繁體中文回覆，語氣輕鬆幽默但專業。只回傳 JSON 格式。',
         }),
@@ -223,7 +225,7 @@ ${content.substring(0, 8000)}
             { role: 'user', content: prompt }
           ],
           temperature: 0.3,
-          max_tokens: 512,
+          max_tokens: 1500,
         }),
       });
 
