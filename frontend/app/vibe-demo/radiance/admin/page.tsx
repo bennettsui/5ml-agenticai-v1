@@ -204,6 +204,7 @@ function MediaLibraryTab() {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -224,6 +225,7 @@ function MediaLibraryTab() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setUploadError('');
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -232,9 +234,14 @@ function MediaLibraryTab() {
         { method: 'POST', body: formData }
       );
       const data = await res.json();
-      if (data.success) await loadMedia();
-    } catch { /* ignore */ }
-    finally {
+      if (data.success) {
+        await loadMedia();
+      } else {
+        setUploadError(data.error || 'Upload failed');
+      }
+    } catch (err) {
+      setUploadError('Network error — could not reach server');
+    } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -288,6 +295,13 @@ function MediaLibraryTab() {
           </label>
         </div>
       </div>
+
+      {uploadError && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+          <span>{uploadError}</span>
+          <button onClick={() => setUploadError('')} className="ml-auto text-red-400/60 hover:text-red-400">✕</button>
+        </div>
+      )}
 
       {loading && media.length === 0 ? (
         <div className="text-center py-16 text-slate-500">Loading...</div>

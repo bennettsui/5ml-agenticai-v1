@@ -6984,6 +6984,24 @@ server.listen(port, '0.0.0.0', async () => {
   // Use GET /api/tedx/visuals + POST /api/tedx/generate to list and generate images.
   console.log('🎨 TEDx visuals: auto-generation disabled — use admin panel to generate images');
 
+  // Ensure radiance_media table exists
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS radiance_media (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        uploaded_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log('✅ radiance_media table ready');
+  } catch (err) {
+    console.error('⚠️  radiance_media table init failed:', err.message);
+  }
+
   // Initialize scheduler for Topic Intelligence
   if (process.env.DATABASE_URL) {
     try {
