@@ -169,7 +169,7 @@ const TICKET_TYPES = [
   {
     name: 'Observer｜線上觀察者',
     nameEn: 'Live Stream Pass',
-    price: 'NT$1,500',
+    price: 'NT$1,200',
     priceNote: null,
     desc: '看見趨勢如何發生\n3/31 線上直播 × 趨勢策展內容精華',
     for: '想參與思考、但此刻身體不在現場的人',
@@ -197,7 +197,7 @@ const TICKET_TYPES = [
   {
     name: 'Participant Standard Pass｜現場參與者',
     nameEn: 'Standard Pass',
-    price: 'NT$3,300',
+    price: 'NT$2,640',
     priceNote: null,
     desc: '走進趨勢現場\n標準入場，完整體驗整日沙龍、Talks、工作坊與互動專區\n3/31 實體活動 × 趨勢策展白皮書（電子版本）',
     for: '願意花一個下午，與不同領域的人一起思考未來',
@@ -211,7 +211,7 @@ const TICKET_TYPES = [
   {
     name: 'Contributor Pass｜深度共創者',
     nameEn: 'Contributor Pass',
-    price: 'NT$4,200',
+    price: 'NT$3,360',
     priceNote: null,
     desc: '把趨勢帶回你的世界\n3/31 實體活動 × 趨勢策展白皮書（電子版本）× 趨勢筆記本（無酸紙 Moleskine 支持贊助）',
     for: '會延伸、會分享、會轉化的人',
@@ -225,7 +225,7 @@ const TICKET_TYPES = [
   {
     name: 'VIP 票種',
     nameEn: 'VIP Pass',
-    price: 'NT$8,888',
+    price: 'NT$888',
     priceNote: null,
     desc: '3/31 活動 × 趨勢策展電子版本 × 趨勢筆記本 × 3/30 藍盒子舞台後場巡迴',
     for: null,
@@ -239,7 +239,7 @@ const TICKET_TYPES = [
   {
     name: 'Student / Youth｜學生／青年票',
     nameEn: 'AI Literacy Pass',
-    price: 'NT$1,750',
+    price: 'NT$1,400',
     priceNote: null,
     desc: '社區教育推廣票\n適用對象：在老師帶領下參與活動之高中生與大學生',
     for: null,
@@ -253,8 +253,8 @@ const TICKET_TYPES = [
   {
     name: 'Group 4 人套票',
     nameEn: 'Group Pass',
-    price: 'NT$10,000',
-    priceNote: '平均 NT$2,500／人',
+    price: 'NT$8,000',
+    priceNote: '平均 NT$2,000／人',
     desc: '和朋友、同事或家人一起來。四個人，四種觀點，一起 becoming。',
     for: null,
     note: '單一訂單一次購買 4 名入場資格，不可拆單部分退票或改票種；4 位可分開報到，座位以現場安排為準。',
