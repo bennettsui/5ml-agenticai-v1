@@ -4603,7 +4603,7 @@ const wsServer = require('./services/websocket-server');
 // Radiance PR Contact Form API
 // ==========================================
 
-// Multer config for Radiance media uploads
+// Multer config for Radiance media uploads (disk storage + proxied to external CDN)
 const multer = require('multer');
 const radianceMediaStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -4784,19 +4784,32 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
   }
 });
 
-// POST /api/radiance/admin/media/upload (legacy local upload — kept as fallback)
+// POST /api/radiance/admin/media/upload — proxy upload to external CDN
 app.post('/api/radiance/admin/media/upload', radianceUpload.single('file'), async (req, res) => {
   try {
     if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const url = `/uploads/radiance/${req.file.filename}`;
+
+    // Read file from disk (diskStorage saves to req.file.path) and convert to base64 for CDN
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const base64 = `data:${req.file.mimetype};base64,${fileBuffer.toString('base64')}`;
+    const cdnRes = await fetch('http://5ml.mmdbfiles.com/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_data: base64 }),
+    });
+    const cdnData = await cdnRes.json();
+    if (!cdnData.success) return res.status(502).json({ error: cdnData.error || 'CDN upload failed' });
+
+    const { public_url, filename, mime, size } = cdnData;
     await pool.query(
       `INSERT INTO radiance_media (filename, original_name, url, mime_type, size) VALUES ($1,$2,$3,$4,$5)`,
-      [req.file.filename, req.file.originalname, url, req.file.mimetype, req.file.size]
+      [filename, req.file.originalname, public_url, mime || req.file.mimetype, size || req.file.size]
     );
-    res.json({ success: true, url, filename: req.file.filename, originalName: req.file.originalname });
+    console.log(`[Radiance] Uploaded: ${req.file.originalname} → ${public_url} (${((size || req.file.size) / 1024).toFixed(0)} KB)`);
+    res.json({ success: true, url: public_url, filename, originalName: req.file.originalname });
   } catch (err) {
-    console.error('Radiance media upload error:', err);
+    console.error('[Radiance] Media upload error:', err);
     res.status(500).json({ error: 'Upload failed' });
   }
 });
