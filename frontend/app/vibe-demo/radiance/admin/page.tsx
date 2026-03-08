@@ -8,9 +8,7 @@ import {
   Check, Image as ImageIcon, FileText, BookOpen, Wand2, X,
 } from 'lucide-react';
 
-const API_BASE = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
-  : 'http://localhost:8080';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 const ADMIN_PASSWORD = '5milesLab01@';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
