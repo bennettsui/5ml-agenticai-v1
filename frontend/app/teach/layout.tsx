@@ -8,6 +8,7 @@ const NAV = [
   { href: '/teach',                   label: 'Dashboard', icon: Users },
   { href: '/teach/students',          label: 'Students',  icon: GraduationCap },
   { href: '/teach/papers',            label: 'Papers',    icon: FolderOpen },
+  { href: '/teach/upload',            label: 'Upload',    icon: Upload },
   { href: '/teach/questions/pending', label: 'Review',    icon: BookOpen },
   { href: '/teach/syllabus',          label: 'Syllabus',  icon: ListChecks },
   { href: '/teach/reports',           label: 'Reports',   icon: FileText },

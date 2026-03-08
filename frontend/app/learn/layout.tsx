@@ -1,14 +1,15 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Brain, BarChart3, BookOpen, Award, History, LogOut } from 'lucide-react';
+import { Brain, BarChart3, BookOpen, Award, History, LogOut, Library } from 'lucide-react';
 import { useStudentAuth } from '@/components/adaptive/useStudentAuth';
 
 const NAV = [
   { href: '/learn',          label: 'Home',     icon: Brain },
   { href: '/learn/session',  label: 'Practice', icon: BookOpen },
-  { href: '/learn/progress', label: 'Progress', icon: BarChart3 },
-  { href: '/learn/history',  label: 'History',  icon: History },
+  { href: '/learn/progress',  label: 'Progress', icon: BarChart3 },
+  { href: '/learn/concepts',  label: 'Concepts', icon: Library },
+  { href: '/learn/history',   label: 'History',  icon: History },
   { href: '/learn/badges',   label: 'Badges',   icon: Award },
 ];
 

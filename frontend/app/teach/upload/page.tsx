@@ -141,7 +141,7 @@ export default function UploadPage() {
                   <select value={gradeBand} onChange={e => setGradeBand(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-purple-500"
                   >
-                    {['S1', 'S2', 'S1-S2'].map(g => <option key={g}>{g}</option>)}
+                    {['S1', 'S2', 'S3', 'S1-S2', 'S2-S3'].map(g => <option key={g}>{g}</option>)}
                   </select>
                 </div>
                 <div>
