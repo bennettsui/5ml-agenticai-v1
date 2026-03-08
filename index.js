@@ -143,37 +143,43 @@ app.use('/uploads/crm', express.static(path.join(__dirname, 'uploads', 'crm')));
 app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
 app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
 
-// Serve TEDx Xinyi static site pack for deployment (HTML + _next assets)
-app.get('/tedx-xinyi-site.tar.gz', (req, res) => {
-  const { spawn } = require('child_process');
-  const outDir = path.join(__dirname, 'frontend', 'out');
+// Rewrite Next.js baked-in paths so the site works at root (https://tedxxinyi.brandpromo.today/)
+function rewriteTedxHtml(html) {
+  return html
+    .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi\//g, 'https://tedxxinyi.brandpromo.today/')
+    .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi/g,  'https://tedxxinyi.brandpromo.today')
+    .replace(/\/vibe-demo\/tedx-xinyi\//g, '/')
+    .replace(/\/vibe-demo\/tedx-xinyi"/g, '/"')
+    .replace(/\/vibe-demo\/tedx-xinyi'/g, "/'");
+}
 
-  // Build a temp dir with the site structure:
-  //   index.html            ← home page
-  //   about.html, salon.html, ...  ← sub-pages
-  //   _next/                ← CSS/JS assets
+// Serve TEDx Xinyi static site pack for deployment (HTML + _next assets, URLs rewritten for root)
+app.get('/tedx-xinyi-site.tar.gz', (req, res) => {
+  const { spawn, execSync } = require('child_process');
   const os = require('os');
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tedx-site-'));
+  const outDir  = path.join(__dirname, 'frontend', 'out');
+  const tedxOut = path.join(outDir, 'vibe-demo', 'tedx-xinyi');
+  const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'tedx-site-'));
 
   try {
-    // Copy _next assets (CSS/JS required by all pages)
-    const { execSync } = require('child_process');
-    execSync(`cp -r "${path.join(outDir, '_next')}" "${tmpDir}/_next"`);
+    // Rewrite and write home page
+    const homeSrc = path.join(outDir, 'vibe-demo', 'tedx-xinyi.html');
+    if (fs.existsSync(homeSrc)) {
+      fs.writeFileSync(path.join(tmpDir, 'index.html'), rewriteTedxHtml(fs.readFileSync(homeSrc, 'utf8')));
+    }
 
-    // Copy home page as index.html
-    fs.copyFileSync(
-      path.join(outDir, 'vibe-demo', 'tedx-xinyi.html'),
-      path.join(tmpDir, 'index.html')
-    );
-
-    // Copy sub-pages: about, salon, report, sustainability, community, sponsors, speakers, blog, admin
-    const pages = ['about', 'salon', 'report', 'sustainability', 'community', 'sponsors', 'speakers', 'blog', 'admin'];
-    for (const page of pages) {
-      const src = path.join(outDir, 'vibe-demo', 'tedx-xinyi', `${page}.html`);
-      if (fs.existsSync(src)) {
-        fs.copyFileSync(src, path.join(tmpDir, `${page}.html`));
+    // Rewrite and write sub-pages (exclude admin)
+    const EXCLUDE = new Set(['admin']);
+    if (fs.existsSync(tedxOut)) {
+      for (const f of fs.readdirSync(tedxOut).filter(f => f.endsWith('.html') && !EXCLUDE.has(f.replace('.html', '')))) {
+        fs.writeFileSync(path.join(tmpDir, f), rewriteTedxHtml(fs.readFileSync(path.join(tedxOut, f), 'utf8')));
       }
     }
+
+    // Copy _next/ assets and tedx-xinyi/ images
+    if (fs.existsSync(path.join(outDir, '_next'))) execSync(`cp -r "${path.join(outDir, '_next')}" "${tmpDir}/_next"`);
+    const pubImgs = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi');
+    if (fs.existsSync(pubImgs)) execSync(`cp -r "${pubImgs}" "${tmpDir}/tedx-xinyi"`);
 
     res.setHeader('Content-Type', 'application/gzip');
     res.setHeader('Content-Disposition', 'attachment; filename="tedx-xinyi-site.tar.gz"');
@@ -181,9 +187,7 @@ app.get('/tedx-xinyi-site.tar.gz', (req, res) => {
     const tar = spawn('tar', ['-czf', '-', '-C', tmpDir, '.']);
     tar.stdout.pipe(res);
     tar.stderr.on('data', (d) => console.error('[tedx-site tar]', d.toString()));
-    tar.on('close', () => {
-      try { execSync(`rm -rf "${tmpDir}"`); } catch (_) {}
-    });
+    tar.on('close', () => { try { execSync(`rm -rf "${tmpDir}"`); } catch (_) {} });
     tar.on('error', (err) => {
       console.error('[tedx-site] spawn error:', err);
       if (!res.headersSent) res.status(500).json({ error: err.message });
