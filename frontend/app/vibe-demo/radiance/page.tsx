@@ -299,7 +299,7 @@ export default function RadiancePage() {
           <p className="text-center text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-10">
             Trusted by leading brands
           </p>
-          <div className="grid grid-cols-5 gap-8 items-center">
+          <div className="grid grid-cols-5 gap-4">
             {[
               'http://5ml.mmdbfiles.com/assets/3808b2fb66ca40525e573461.jpg',
               'http://5ml.mmdbfiles.com/assets/077707a701108f72623ec4bc.png',
@@ -312,13 +312,17 @@ export default function RadiancePage() {
               'http://5ml.mmdbfiles.com/assets/11b120b411e57a7fa62d3933.jpg',
               'http://5ml.mmdbfiles.com/assets/4b87e1e47b865565936c7683.jpg',
             ].map((src, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <div
                 key={i}
-                src={src}
-                alt=""
-                className="h-10 w-full object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
-              />
+                className="flex items-center justify-center h-20 px-4 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/[0.06] hover:border-slate-300 dark:hover:border-white/[0.12] transition-colors group"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt=""
+                  className="max-h-11 max-w-full w-auto object-contain grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-90 transition-all duration-300"
+                />
+              </div>
             ))}
           </div>
         </div>
