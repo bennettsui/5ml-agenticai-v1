@@ -51,12 +51,12 @@ export default function AdaptiveLearningStats() {
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             {stats ? 'Refresh' : 'Load Stats'}
           </button>
-          <Link href="/learn" target="_blank"
+          <Link href="/adaptive-learning/learn" target="_blank"
             className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors px-2 py-1.5">
             <ExternalLink className="w-3.5 h-3.5" />
             Student Portal
           </Link>
-          <Link href="/teach" target="_blank"
+          <Link href="/adaptive-learning/teach" target="_blank"
             className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors px-2 py-1.5">
             <ExternalLink className="w-3.5 h-3.5" />
             Teacher Portal
@@ -181,10 +181,10 @@ export default function AdaptiveLearningStats() {
           {/* Quick links */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: 'Student Portal', href: '/learn', desc: 'Practice & progress' },
-              { label: 'Teacher Dashboard', href: '/teach', desc: 'Class overview' },
-              { label: 'Syllabus Browser', href: '/teach/syllabus', desc: 'S1–S3 curriculum' },
-              { label: 'Upload Papers', href: '/teach/upload', desc: 'Add past papers' },
+              { label: 'Student Portal', href: '/adaptive-learning/learn', desc: 'Practice & progress' },
+              { label: 'Teacher Dashboard', href: '/adaptive-learning/teach', desc: 'Class overview' },
+              { label: 'Syllabus Browser', href: '/adaptive-learning/teach/syllabus', desc: 'S1–S3 curriculum' },
+              { label: 'Upload Papers', href: '/adaptive-learning/teach/upload', desc: 'Add past papers' },
             ].map(l => (
               <Link key={l.href} href={l.href} target="_blank"
                 className="bg-slate-800/40 border border-slate-700/50 hover:border-slate-600/80 rounded-xl p-3.5 transition-colors group"
