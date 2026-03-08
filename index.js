@@ -4784,7 +4784,7 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
   }
 });
 
-// POST /api/radiance/admin/media/upload
+// POST /api/radiance/admin/media/upload (legacy local upload — kept as fallback)
 app.post('/api/radiance/admin/media/upload', radianceUpload.single('file'), async (req, res) => {
   try {
     if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
@@ -4801,6 +4801,24 @@ app.post('/api/radiance/admin/media/upload', radianceUpload.single('file'), asyn
   }
 });
 
+// POST /api/radiance/admin/media/register — save externally-uploaded file record to DB
+app.post('/api/radiance/admin/media/register', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { filename, original_name, url, mime_type, size } = req.body;
+    if (!filename || !url) return res.status(400).json({ error: 'filename and url are required' });
+    await pool.query(
+      `INSERT INTO radiance_media (filename, original_name, url, mime_type, size) VALUES ($1,$2,$3,$4,$5)`,
+      [filename, original_name || filename, url, mime_type || 'image/jpeg', size || 0]
+    );
+    console.log(`[Radiance] Uploaded: ${original_name || filename} → ${url} (${((size || 0) / 1024).toFixed(0)} KB)`);
+    res.json({ success: true, url });
+  } catch (err) {
+    console.error('[Radiance] Media register error:', err);
+    res.status(500).json({ error: 'Failed to register media' });
+  }
+});
+
 // GET /api/radiance/admin/media
 app.get('/api/radiance/admin/media', async (req, res) => {
   if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
@@ -4814,10 +4832,13 @@ app.get('/api/radiance/admin/media', async (req, res) => {
 app.delete('/api/radiance/admin/media/:id', async (req, res) => {
   if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
   try {
-    const result = await pool.query('SELECT filename FROM radiance_media WHERE id=$1', [req.params.id]);
+    const result = await pool.query('SELECT filename, url FROM radiance_media WHERE id=$1', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
-    const filePath = path.join(__dirname, 'uploads', 'radiance', result.rows[0].filename);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // Only delete local file if it's not an external URL
+    if (!result.rows[0].url.startsWith('http')) {
+      const filePath = path.join(__dirname, 'uploads', 'radiance', result.rows[0].filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
     await pool.query('DELETE FROM radiance_media WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: 'Delete failed' }); }
@@ -7267,6 +7288,24 @@ server.listen(port, '0.0.0.0', async () => {
   // TEDx visual generation is now triggered manually from the admin panel.
   // Use GET /api/tedx/visuals + POST /api/tedx/generate to list and generate images.
   console.log('🎨 TEDx visuals: auto-generation disabled — use admin panel to generate images');
+
+  // Ensure radiance_media table exists
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS radiance_media (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        uploaded_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log('✅ radiance_media table ready');
+  } catch (err) {
+    console.error('⚠️  radiance_media table init failed:', err.message);
+  }
 
   // Initialize scheduler for Topic Intelligence
   if (process.env.DATABASE_URL) {
