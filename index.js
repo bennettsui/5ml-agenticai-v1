@@ -4385,10 +4385,21 @@ const wsServer = require('./services/websocket-server');
 // Radiance PR Contact Form API
 // ==========================================
 
-// Multer config for Radiance media uploads (memory storage — file proxied to external CDN)
+// Multer config for Radiance media uploads (disk storage + proxied to external CDN)
 const multer = require('multer');
+const radianceMediaStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, 'uploads', 'radiance');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
 const radianceUpload = multer({
-  storage: multer.memoryStorage(),
+  storage: radianceMediaStorage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
@@ -4561,8 +4572,9 @@ app.post('/api/radiance/admin/media/upload', radianceUpload.single('file'), asyn
     if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    // Convert buffer to base64 DataURL and POST to external CDN
-    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    // Read file from disk (diskStorage saves to req.file.path) and convert to base64 for CDN
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const base64 = `data:${req.file.mimetype};base64,${fileBuffer.toString('base64')}`;
     const cdnRes = await fetch('http://5ml.mmdbfiles.com/api/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
