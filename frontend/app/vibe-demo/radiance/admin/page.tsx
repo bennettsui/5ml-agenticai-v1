@@ -1110,6 +1110,7 @@ function ImageGenerationTab() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [publishingRadiance, setPublishingRadiance] = useState(false);
 
   useEffect(() => { loadVisuals(); loadMedia(); }, []); // eslint-disable-line
 
@@ -1129,6 +1130,26 @@ function ImageGenerationTab() {
       setError('Failed to load visual list: ' + (err as Error).message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function publishRadiancePack() {
+    setPublishingRadiance(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/radiance/admin/site-pack?password=${encodeURIComponent(ADMIN_PASSWORD)}`);
+      if (!res.ok) throw new Error('Server error');
+      const blob = await res.blob();
+      const date = new Date().toISOString().slice(0, 10);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `radiance-site-pack-${date}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to download site pack: ' + (err as Error).message);
+    } finally {
+      setPublishingRadiance(false);
     }
   }
 
@@ -1250,6 +1271,16 @@ function ImageGenerationTab() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-white">Radiance Media Library</h3>
           <div className="flex items-center gap-2">
+            <button
+              onClick={publishRadiancePack}
+              disabled={publishingRadiance}
+              title="Download full site pack (HTML + images + uploads)"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 transition-colors disabled:opacity-50"
+            >
+              {publishingRadiance
+                ? <><RefreshCw className="w-4 h-4 animate-spin" /> Packing…</>
+                : <><FileText className="w-4 h-4" /> Publish Site Pack</>}
+            </button>
             <button onClick={loadMedia} disabled={mediaLoading} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/50 text-slate-400 transition-colors">
               <RefreshCw className={`w-4 h-4 ${mediaLoading ? 'animate-spin' : ''}`} />
             </button>
