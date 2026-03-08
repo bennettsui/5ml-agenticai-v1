@@ -229,12 +229,12 @@ async function getSessionInteractions(sessionId) {
 
 // ─── Papers (teacher upload) ──────────────────────────────────────────────────
 
-async function createPaper({ teacherId, subject, gradeBand, examName, year, fileUrl, fileKey }) {
+async function createPaper({ teacherId, subject, gradeBand, examName, year, fileUrl, fileKey, fileSizeBytes }) {
   const { rows } = await pool.query(
-    `INSERT INTO papers (teacher_id, subject, grade_band, exam_name, year, file_url, file_key, status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,'UPLOADED')
+    `INSERT INTO papers (teacher_id, subject, grade_band, exam_name, year, file_url, file_key, file_size_bytes, status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'UPLOADED')
      RETURNING *`,
-    [teacherId, subject || 'MATH', gradeBand, examName, year || null, fileUrl, fileKey || null]
+    [teacherId, subject || 'MATH', gradeBand, examName, year || null, fileUrl, fileKey || null, fileSizeBytes || null]
   );
   return rows[0];
 }
@@ -246,6 +246,10 @@ async function getPaper(paperId) {
 
 async function updatePaperStatus(paperId, status) {
   await pool.query('UPDATE papers SET status=$1, updated_at=NOW() WHERE id=$2', [status, paperId]);
+}
+
+async function updatePaperCdnUrl(paperId, cdnUrl) {
+  await pool.query('UPDATE papers SET cdn_url=$1, updated_at=NOW() WHERE id=$2', [cdnUrl, paperId]);
 }
 
 async function createDraftQuestion({ paperId, stemEn, stemZh, hasImage, imageUrl, suggestedType, suggestedDifficulty, candidateObjectives, rawOcrText }) {
@@ -308,6 +312,7 @@ module.exports = {
   createPaper,
   getPaper,
   updatePaperStatus,
+  updatePaperCdnUrl,
   createDraftQuestion,
   getDraftQuestions,
   // Teacher dashboard

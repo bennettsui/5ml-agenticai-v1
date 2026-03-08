@@ -83,7 +83,7 @@ export default function UploadPage() {
 
       {/* Step indicator */}
       <div className="flex items-center gap-2 text-xs text-slate-500">
-        {['Upload PDF', 'Gemini OCR', 'Review & Confirm'].map((s, i) => (
+        {['Upload PDF', 'Gemini OCR', 'Validate & Review'].map((s, i) => (
           <div key={i} className="flex items-center gap-2">
             <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
               (status === 'IDLE' || status === 'UPLOADING') && i === 0 ? 'bg-purple-600 text-white' :
@@ -183,13 +183,13 @@ export default function UploadPage() {
           <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto" />
           <div>
             <p className="text-white font-medium text-lg">Questions extracted!</p>
-            <p className="text-slate-400 text-sm mt-1">Review and approve each question before students can see it.</p>
+            <p className="text-slate-400 text-sm mt-1">Validate the visual reading page by page, then approve each question.</p>
           </div>
           <Link
-            href={`/teach/questions/pending${paperId ? `?paper_id=${paperId}` : ''}`}
+            href={paperId ? `/teach/validate?paper_id=${paperId}` : '/teach/questions/pending'}
             className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-semibold text-sm transition-colors"
           >
-            Review Questions
+            Validate & Review
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>

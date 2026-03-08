@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Upload, BookOpen, FileText, LogOut, GraduationCap, FolderOpen } from 'lucide-react';
+import { Users, BookOpen, FileText, LogOut, GraduationCap, FolderOpen, HardDrive } from 'lucide-react';
 import { useTeacherAuth } from '@/components/adaptive/useTeacherAuth';
 
 const NAV = [
@@ -10,6 +10,7 @@ const NAV = [
   { href: '/teach/papers',            label: 'Papers',    icon: FolderOpen },
   { href: '/teach/questions/pending', label: 'Review',    icon: BookOpen },
   { href: '/teach/reports',           label: 'Reports',   icon: FileText },
+  { href: '/teach/storage',           label: 'Storage',   icon: HardDrive },
 ];
 
 export default function TeachLayout({ children }: { children: React.ReactNode }) {
