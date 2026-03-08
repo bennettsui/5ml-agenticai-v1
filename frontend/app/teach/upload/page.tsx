@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 import { useTeacherAuth } from '@/components/adaptive/useTeacherAuth';
@@ -8,8 +8,10 @@ type UploadStatus = 'IDLE' | 'UPLOADING' | 'PROCESSING' | 'READY' | 'ERROR';
 
 export default function UploadPage() {
   const { teacher } = useTeacherAuth();
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRef    = useRef<HTMLInputElement>(null);
+  const dragCount  = useRef(0); // counter to ignore child-element dragLeave events
   const [dragOver, setDragOver] = useState(false);
+  const [pageHasDrag, setPageHasDrag] = useState(false); // file being dragged over page
   const [file, setFile] = useState<File | null>(null);
   const [examName, setExamName] = useState('');
   const [gradeBand, setGradeBand] = useState('S1-S2');
@@ -22,14 +24,73 @@ export default function UploadPage() {
   const handleFile = (f: File) => {
     if (f.type !== 'application/pdf') { setError('Only PDF files are accepted.'); return; }
     setFile(f); setError('');
-    if (!examName) setExamName(f.name.replace('.pdf', '').replace(/_/g, ' '));
+    if (!examName) setExamName(f.name.replace(/\.pdf$/i, '').replace(/_/g, ' '));
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault(); setDragOver(false);
+  // ─── Counter-based drag handlers (fix child-element flickering) ─────────────
+  const onZoneDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCount.current++;
+    setDragOver(true);
+  };
+  const onZoneDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCount.current--;
+    if (dragCount.current === 0) setDragOver(false);
+  };
+  const onZoneDragOver = (e: React.DragEvent) => { e.preventDefault(); }; // required to allow drop
+  const onZoneDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCount.current = 0;
+    setDragOver(false);
+    setPageHasDrag(false);
     const f = e.dataTransfer.files[0];
     if (f) handleFile(f);
   };
+
+  // ─── Page-level drag detection (catches files dragged anywhere on the page) ──
+  useEffect(() => {
+    const isActive = () => status === 'IDLE' || status === 'ERROR';
+    let pageCounter = 0;
+
+    const onDocEnter = (e: DragEvent) => {
+      if (!isActive()) return;
+      if (!e.dataTransfer?.types?.includes('Files')) return;
+      pageCounter++;
+      setPageHasDrag(true);
+    };
+    const onDocLeave = (e: DragEvent) => {
+      if (!isActive()) return;
+      pageCounter--;
+      // Only clear when leaving the browser window entirely (relatedTarget is null)
+      if (pageCounter <= 0 || !e.relatedTarget) {
+        pageCounter = 0;
+        setPageHasDrag(false);
+        setDragOver(false);
+        dragCount.current = 0;
+      }
+    };
+    const onDocOver  = (e: DragEvent) => { e.preventDefault(); };
+    const onDocDrop  = (e: DragEvent) => {
+      // Prevent browser from opening file if dropped outside the zone
+      e.preventDefault();
+      pageCounter = 0;
+      setPageHasDrag(false);
+      setDragOver(false);
+      dragCount.current = 0;
+    };
+
+    document.addEventListener('dragenter', onDocEnter);
+    document.addEventListener('dragleave', onDocLeave);
+    document.addEventListener('dragover',  onDocOver);
+    document.addEventListener('drop',      onDocDrop);
+    return () => {
+      document.removeEventListener('dragenter', onDocEnter);
+      document.removeEventListener('dragleave', onDocLeave);
+      document.removeEventListener('dragover',  onDocOver);
+      document.removeEventListener('drop',      onDocDrop);
+    };
+  }, [status]);
 
   const handleUpload = async () => {
     if (!file) return;
@@ -76,6 +137,18 @@ export default function UploadPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
+      {/* Full-page drop overlay — appears when a file enters the browser window */}
+      {pageHasDrag && (status === 'IDLE' || status === 'ERROR') && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm pointer-events-none"
+        >
+          <div className="flex flex-col items-center gap-4 border-2 border-dashed border-purple-400 rounded-3xl px-20 py-14 bg-slate-900/80">
+            <Upload className="w-12 h-12 text-purple-400 animate-bounce" />
+            <p className="text-xl font-semibold text-white">Drop PDF anywhere</p>
+            <p className="text-slate-400 text-sm">Release to upload the file</p>
+          </div>
+        </div>
+      )}
       <div>
         <h1 className="text-2xl font-bold text-white">Upload Past Paper</h1>
         <p className="text-slate-400 text-sm mt-1">Gemini AI will extract and clean all questions automatically.</p>
@@ -83,7 +156,7 @@ export default function UploadPage() {
 
       {/* Step indicator */}
       <div className="flex items-center gap-2 text-xs text-slate-500">
-        {['Upload PDF', 'Gemini OCR', 'Review & Confirm'].map((s, i) => (
+        {['Upload PDF', 'Gemini OCR', 'Validate & Review'].map((s, i) => (
           <div key={i} className="flex items-center gap-2">
             <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
               (status === 'IDLE' || status === 'UPLOADING') && i === 0 ? 'bg-purple-600 text-white' :
@@ -101,14 +174,15 @@ export default function UploadPage() {
       {status === 'IDLE' || status === 'ERROR' ? (
         <div className="space-y-4">
           <div
-            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
+            onDragEnter={onZoneDragEnter}
+            onDragLeave={onZoneDragLeave}
+            onDragOver={onZoneDragOver}
+            onDrop={onZoneDrop}
             onClick={() => fileRef.current?.click()}
-            className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-colors ${
-              dragOver ? 'border-purple-500 bg-purple-500/5' :
-              file ? 'border-emerald-500/50 bg-emerald-500/5' :
-              'border-slate-700 hover:border-slate-600 bg-slate-800/30'
+            className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-150 ${
+              dragOver ? 'border-purple-400 bg-purple-500/10 scale-[1.01]' :
+              file     ? 'border-emerald-500/50 bg-emerald-500/5' :
+                         'border-slate-700 hover:border-slate-600 bg-slate-800/30'
             }`}
           >
             <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
@@ -183,13 +257,13 @@ export default function UploadPage() {
           <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto" />
           <div>
             <p className="text-white font-medium text-lg">Questions extracted!</p>
-            <p className="text-slate-400 text-sm mt-1">Review and approve each question before students can see it.</p>
+            <p className="text-slate-400 text-sm mt-1">Validate the visual reading page by page, then approve each question.</p>
           </div>
           <Link
-            href={`/teach/questions/pending${paperId ? `?paper_id=${paperId}` : ''}`}
+            href={paperId ? `/teach/validate?paper_id=${paperId}` : '/teach/questions/pending'}
             className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-semibold text-sm transition-colors"
           >
-            Review Questions
+            Validate & Review
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>

@@ -441,6 +441,26 @@ router.get('/student/concepts/overview', async (req, res) => {
   }
 });
 
+// ─── CDN helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Upload a PDF buffer to mmdbfiles CDN.
+ * Returns the public_url string.
+ */
+async function _uploadPdfToCdn(pdfBuffer, filename) {
+  const base64   = pdfBuffer.toString('base64');
+  const fileData = `data:application/pdf;base64,${base64}`;
+  const response = await fetch('http://5ml.mmdbfiles.com/api/upload', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ file_data: fileData, filename }),
+  });
+  if (!response.ok) throw new Error(`mmdbfiles upload failed (${response.status})`);
+  const data = await response.json();
+  if (!data.success) throw new Error('mmdbfiles returned success:false');
+  return data.public_url;
+}
+
 // ─── Teacher: paper upload ────────────────────────────────────────────────────
 
 /**
@@ -454,29 +474,36 @@ router.post('/teachers/papers/upload', upload.single('file'), async (req, res) =
   if (req.file.mimetype !== 'application/pdf') return res.status(400).json({ success: false, error: 'Only PDF files are accepted' });
 
   try {
-    // Store on Fly persistent volume if available, else keep in-memory reference
-    const fileKey  = `papers/${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const fileUrl  = `/uploads/${fileKey}`; // will be served from Fly volume
-
-    // Write to volume
     const fs   = require('fs');
     const path = require('path');
-    const dir  = path.join('/app/uploads/papers');
+    const fileKey  = `papers/${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const fileUrl  = `/uploads/${fileKey}`;
+
+    // Write to local volume (ephemeral on Fly)
+    const dir = path.join('/app/uploads/papers');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join('/app/uploads', fileKey), req.file.buffer);
 
     const paper = await db.createPaper({
-      teacherId: teacherId || null,
-      subject:   req.body.subject   || 'MATH',
-      gradeBand: req.body.grade_band || 'S1-S2',
-      examName:  req.body.exam_name  || req.file.originalname,
-      year:      req.body.year       || new Date().getFullYear(),
+      teacherId:     teacherId || null,
+      subject:       req.body.subject    || 'MATH',
+      gradeBand:     req.body.grade_band || 'S1-S2',
+      examName:      req.body.exam_name  || req.file.originalname,
+      year:          req.body.year       || new Date().getFullYear(),
       fileUrl,
       fileKey,
+      fileSizeBytes: req.file.size || req.file.buffer.length,
     });
 
+    // Fire CDN push async — captures buffer reference before it goes out of scope
+    const bufferCopy = Buffer.from(req.file.buffer);
+    _uploadPdfToCdn(bufferCopy, path.basename(fileKey))
+      .then(cdnUrl => db.updatePaperCdnUrl(paper.id, cdnUrl)
+        .then(() => console.log(`[AdaptiveLearning] Paper ${paper.id} → CDN: ${cdnUrl}`)))
+      .catch(err  => console.warn(`[AdaptiveLearning] CDN push failed for ${paper.id}:`, err.message));
+
     // Fire OCR + QuestionAgent pipeline async (non-blocking)
-    _runOcrPipeline(paper.id, req.file.buffer, req.body.grade_band || 'S1-S2').catch(err =>
+    _runOcrPipeline(paper.id, bufferCopy, req.body.grade_band || 'S1-S2').catch(err =>
       console.error(`OCR pipeline failed for paper ${paper.id}:`, err.message)
     );
 
@@ -1113,7 +1140,7 @@ router.get('/teachers/papers', async (req, res) => {
     const { pool } = require('../../../db');
     const { rows } = await pool.query(
       `SELECT p.id, p.exam_name, p.grade_band, p.year, p.status,
-              p.file_url, p.created_at,
+              p.file_url, p.cdn_url, p.file_size_bytes, p.created_at,
               COUNT(dq.id)::int AS draft_count,
               COUNT(dq.id) FILTER (WHERE dq.status = 'CONFIRMED')::int AS confirmed_count
        FROM papers p

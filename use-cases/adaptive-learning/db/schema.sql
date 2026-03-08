@@ -165,18 +165,24 @@ CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_idx
 -- ─── TEACHER PAPER UPLOAD ──────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS papers (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  teacher_id  UUID REFERENCES users(id),
-  subject     TEXT DEFAULT 'MATH',
-  grade_band  TEXT,
-  exam_name   TEXT,
-  year        INT,
-  file_url    TEXT,
-  file_key    TEXT,
-  status      TEXT DEFAULT 'UPLOADED',   -- UPLOADED | OCR_RUNNING | DRAFT_READY | CONFIRMED | NEEDS_REVIEW
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ DEFAULT NOW()
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  teacher_id       UUID REFERENCES users(id),
+  subject          TEXT DEFAULT 'MATH',
+  grade_band       TEXT,
+  exam_name        TEXT,
+  year             INT,
+  file_url         TEXT,
+  file_key         TEXT,
+  cdn_url          TEXT,                 -- mmdbfiles CDN public URL (survives Fly restarts)
+  file_size_bytes  INT,                  -- original PDF size in bytes
+  status           TEXT DEFAULT 'UPLOADED',   -- UPLOADED | OCR_RUNNING | DRAFT_READY | CONFIRMED | NEEDS_REVIEW
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Safe migration for existing deployments
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS cdn_url TEXT;
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS file_size_bytes INT;
 
 CREATE TABLE IF NOT EXISTS draft_questions (
   id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

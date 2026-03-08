@@ -12,6 +12,7 @@ const NAV = [
   { href: '/teach/questions/pending', label: 'Review',    icon: BookOpen },
   { href: '/teach/syllabus',          label: 'Syllabus',  icon: ListChecks },
   { href: '/teach/reports',           label: 'Reports',   icon: FileText },
+  { href: '/teach/storage',           label: 'Storage',   icon: HardDrive },
 ];
 
 export default function TeachLayout({ children }: { children: React.ReactNode }) {
