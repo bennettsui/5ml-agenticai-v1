@@ -4593,9 +4593,10 @@ app.post('/api/radiance/admin/media/register', async (req, res) => {
       `INSERT INTO radiance_media (filename, original_name, url, mime_type, size) VALUES ($1,$2,$3,$4,$5)`,
       [filename, original_name || filename, url, mime_type || 'image/jpeg', size || 0]
     );
+    console.log(`[Radiance] Uploaded: ${original_name || filename} → ${url} (${((size || 0) / 1024).toFixed(0)} KB)`);
     res.json({ success: true, url });
   } catch (err) {
-    console.error('Radiance media register error:', err);
+    console.error('[Radiance] Media register error:', err);
     res.status(500).json({ error: 'Failed to register media' });
   }
 });
