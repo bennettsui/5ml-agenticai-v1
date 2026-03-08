@@ -2098,19 +2098,18 @@ async function seedZiweiPalacesAndStars() {
       if (existing.rows.length === 0) {
         await pool.query(
           `INSERT INTO ziwei_stars
-           (id, number, chinese, english, meaning, element, archetype, general_nature, key_traits, palace_meanings)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+           (id, number, chinese, english, star_type, nature, attributes, meanings, interpretation)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
             star.id,
             star.number,
             star.chinese,
             star.english,
-            star.meaning,
-            star.element,
-            star.archetype,
-            star.general_nature,
-            JSON.stringify(star.key_traits),
-            JSON.stringify(star.palace_meanings)
+            star.element || null,
+            JSON.stringify(star.key_traits || []),
+            JSON.stringify({ archetype: star.archetype, palace_meanings: star.palace_meanings }),
+            star.meaning || null,
+            star.general_nature || null,
           ]
         );
         starCount++;
