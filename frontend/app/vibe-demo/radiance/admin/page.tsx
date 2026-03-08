@@ -1031,7 +1031,7 @@ interface VisualsResponse {
 }
 
 function VisualSection({
-  title, visuals, generating, onGenerate, onGenerateAll, generatingAll, progress,
+  title, visuals, generating, onGenerate, onGenerateAll, generatingAll, progress, onPublish, publishing,
 }: {
   title: string;
   visuals: VisualItem[];
@@ -1040,6 +1040,8 @@ function VisualSection({
   onGenerateAll: () => void;
   generatingAll: boolean;
   progress: { done: number; total: number } | null;
+  onPublish?: () => void;
+  publishing?: boolean;
 }) {
   const generatedCount = visuals.filter(v => v.exists).length;
 
@@ -1050,17 +1052,31 @@ function VisualSection({
           <h3 className="text-sm font-semibold text-white">{title}</h3>
           <span className="text-xs text-slate-500">{generatedCount}/{visuals.length} generated</span>
         </div>
-        <button
-          onClick={onGenerateAll}
-          disabled={generatingAll}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 rounded-lg transition-colors disabled:opacity-50"
-        >
-          {generatingAll ? (
-            <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> {progress ? `${progress.done}/${progress.total}` : 'Generating…'}</>
-          ) : (
-            <><Wand2 className="w-3.5 h-3.5" /> Generate All</>
+        <div className="flex items-center gap-2">
+          {onPublish && (
+            <button
+              onClick={onPublish}
+              disabled={publishing || generatedCount === 0}
+              title={generatedCount === 0 ? 'Generate images first' : 'Download full site pack (HTML + images + assets)'}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {publishing
+                ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Packing…</>
+                : <><FileText className="w-3.5 h-3.5" /> Publish Site Pack</>}
+            </button>
           )}
-        </button>
+          <button
+            onClick={onGenerateAll}
+            disabled={generatingAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {generatingAll ? (
+              <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> {progress ? `${progress.done}/${progress.total}` : 'Generating…'}</>
+            ) : (
+              <><Wand2 className="w-3.5 h-3.5" /> Generate All</>
+            )}
+          </button>
+        </div>
       </div>
       <div className="divide-y divide-slate-700/30">
         {visuals.map(v => (
@@ -1102,6 +1118,7 @@ function ImageGenerationTab() {
   const [bsProgress, setBsProgress] = useState<{ done: number; total: number } | null>(null);
   const [xinyiProgress, setXinyiProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState('');
+  const [xinyiPublishing, setXinyiPublishing] = useState(false);
 
   // Radiance media library
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -1208,6 +1225,27 @@ function ImageGenerationTab() {
     finally { setUploading(false); if (uploadRef.current) uploadRef.current.value = ''; }
   }
 
+  async function publishSitePack(site: 'xinyi') {
+    if (site === 'xinyi') setXinyiPublishing(true);
+    try {
+      const url = `${API_BASE}/api/tedx-xinyi/site-pack`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      const cd = res.headers.get('Content-Disposition') || '';
+      const match = cd.match(/filename="([^"]+)"/);
+      a.download = match ? match[1] : `tedxxinyi-site-pack.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      alert('Site pack download failed: ' + (err instanceof Error ? err.message : 'unknown error'));
+    } finally {
+      if (site === 'xinyi') setXinyiPublishing(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* TEDx Image Generation */}
@@ -1241,6 +1279,8 @@ function ImageGenerationTab() {
             onGenerateAll={() => generateAll('xinyi')}
             generatingAll={xinyiGeneratingAll}
             progress={xinyiProgress}
+            onPublish={() => publishSitePack('xinyi')}
+            publishing={xinyiPublishing}
           />
         </>
       )}

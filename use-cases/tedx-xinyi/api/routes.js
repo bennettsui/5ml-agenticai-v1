@@ -267,6 +267,133 @@ router.get('/visuals/:id', (req, res) => {
   res.sendFile(filePath);
 });
 
+// ==================== SITE PACK DOWNLOAD ====================
+
+const BUILD_HTML_ROOT = path.join(__dirname, '../../../frontend/out/vibe-demo');
+const NEXT_STATIC_DIR = path.join(__dirname, '../../../frontend/out/_next/static');
+
+router.get('/site-pack', async (req, res) => {
+  const archiver = require('archiver');
+
+  const timestamp = new Date().toISOString().slice(0, 10);
+  const zipName = `tedxxinyi-site-pack-${timestamp}.zip`;
+
+  res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+  res.setHeader('Content-Type', 'application/zip');
+
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', (err) => {
+    console.error('[TEDxXinyi] Site pack error:', err.message);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  });
+  archive.pipe(res);
+
+  // ── Generated images ──────────────────────────────────────────────────
+  if (fs.existsSync(OUTPUT_DIR)) {
+    // Top-level webp/png/jpg visuals
+    const imgFiles = fs.readdirSync(OUTPUT_DIR).filter(f =>
+      /\.(webp|png|jpg|jpeg|gif|svg)$/i.test(f)
+    );
+    for (const f of imgFiles) {
+      archive.file(path.join(OUTPUT_DIR, f), { name: `images/${f}` });
+    }
+    // Speakers sub-folder
+    const speakersDir = path.join(OUTPUT_DIR, 'speakers');
+    if (fs.existsSync(speakersDir)) {
+      const spFiles = fs.readdirSync(speakersDir).filter(f =>
+        /\.(webp|png|jpg|jpeg)$/i.test(f)
+      );
+      for (const f of spFiles) {
+        archive.file(path.join(speakersDir, f), { name: `images/speakers/${f}` });
+      }
+    }
+  }
+
+  // ── Static HTML pages ─────────────────────────────────────────────────
+  // Main index page
+  const mainHtml = path.join(BUILD_HTML_ROOT, 'tedx-xinyi.html');
+  if (fs.existsSync(mainHtml)) {
+    archive.file(mainHtml, { name: 'html/index.html' });
+  }
+  // Sub-pages (about, salon, speakers, sustainability, community, blog …)
+  const subpagesDir = path.join(BUILD_HTML_ROOT, 'tedx-xinyi');
+  if (fs.existsSync(subpagesDir)) {
+    const htmlFiles = fs.readdirSync(subpagesDir).filter(f => f.endsWith('.html'));
+    for (const f of htmlFiles) {
+      archive.file(path.join(subpagesDir, f), { name: `html/${f}` });
+    }
+  }
+
+  // ── Next.js static assets (CSS + key chunks) ─────────────────────────
+  if (fs.existsSync(NEXT_STATIC_DIR)) {
+    const cssDir = path.join(NEXT_STATIC_DIR, 'css');
+    if (fs.existsSync(cssDir)) {
+      const cssFiles = fs.readdirSync(cssDir).filter(f => f.endsWith('.css'));
+      for (const f of cssFiles) {
+        archive.file(path.join(cssDir, f), { name: `_next/static/css/${f}` });
+      }
+    }
+    // Include page-specific chunk for tedx-xinyi
+    const chunksDir = path.join(NEXT_STATIC_DIR, 'chunks');
+    if (fs.existsSync(chunksDir)) {
+      const pageChunks = fs.readdirSync(chunksDir).filter(f =>
+        f.includes('tedx-xinyi') || f.includes('polyfill') || f.startsWith('webpack-')
+      );
+      for (const f of pageChunks) {
+        archive.file(path.join(chunksDir, f), { name: `_next/static/chunks/${f}` });
+      }
+      // app sub-folder
+      const appChunksDir = path.join(chunksDir, 'app');
+      if (fs.existsSync(appChunksDir)) {
+        const appChunks = fs.readdirSync(appChunksDir);
+        // tedx-xinyi page chunk
+        for (const entry of appChunks) {
+          const entryPath = path.join(appChunksDir, entry);
+          if (fs.statSync(entryPath).isDirectory()) {
+            const nested = fs.readdirSync(entryPath);
+            for (const f of nested) {
+              if (f.includes('tedx-xinyi')) {
+                archive.file(path.join(entryPath, f), { name: `_next/static/chunks/app/${entry}/${f}` });
+              }
+            }
+          } else if (entry.includes('tedx-xinyi')) {
+            archive.file(entryPath, { name: `_next/static/chunks/app/${entry}` });
+          }
+        }
+      }
+    }
+  }
+
+  // ── README ────────────────────────────────────────────────────────────
+  const visuals = VISUALS.map(v => `  ${v.id.padEnd(22)} ${v.filename}  — ${v.description}`).join('\n');
+  const readme = [
+    'TEDxXinyi — Site Pack',
+    `Generated: ${new Date().toUTCString()}`,
+    '',
+    'Contents:',
+    '  images/              AI-generated visuals (WebP, Gemini 2.5 Flash)',
+    '  images/speakers/     Speaker portrait photos',
+    '  html/                Static HTML export of all site pages',
+    '  _next/static/        CSS & page JS chunks needed for rendering',
+    '',
+    'Image manifest:',
+    visuals,
+    '',
+    'Deployment:',
+    '  1. Upload the html/ files to your web host at the desired path.',
+    '  2. Upload _next/ alongside or ensure it is served from the same origin.',
+    '  3. Upload images/ to /tedx-xinyi/ on the same origin (HTML pages',
+    '     reference images at that absolute path).',
+    '  4. Speaker images go to /tedx-xinyi/speakers/ on the same origin.',
+    '',
+    'Or deploy the full 5ml-agenticai-v1 app on Fly.io — all paths work out of the box.',
+  ].join('\n');
+  archive.append(readme, { name: 'README.txt' });
+
+  console.log(`[TEDxXinyi] Streaming site pack: ${zipName}`);
+  await archive.finalize();
+});
+
 // ==================== MEDIA LIBRARY ====================
 
 const SPEAKERS_DIR = path.join(OUTPUT_DIR, 'speakers');
