@@ -27,8 +27,12 @@ CREATE TABLE IF NOT EXISTS learning_objectives (
 
 -- ─── QUESTION BANK ─────────────────────────────────────────
 
-CREATE TYPE question_type AS ENUM ('MCQ', 'OPEN_ENDED', 'FILL_IN', 'MULTI_STEP');
-CREATE TYPE source_type AS ENUM ('PAST_PAPER', 'TEACHER_CREATED', 'SYSTEM_GENERATED');
+DO $$ BEGIN
+  CREATE TYPE question_type AS ENUM ('MCQ', 'OPEN_ENDED', 'FILL_IN', 'MULTI_STEP');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE source_type AS ENUM ('PAST_PAPER', 'TEACHER_CREATED', 'SYSTEM_GENERATED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS questions (
   id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -70,7 +74,9 @@ CREATE TABLE IF NOT EXISTS question_objective_map (
 
 -- ─── USERS ─────────────────────────────────────────────────
 
-CREATE TYPE user_role AS ENUM ('student', 'teacher', 'admin');
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('student', 'teacher', 'admin');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS users (
   id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -102,7 +108,9 @@ CREATE TABLE IF NOT EXISTS mastery_states (
 
 -- ─── SESSIONS ──────────────────────────────────────────────
 
-CREATE TYPE session_mode AS ENUM ('adaptive', 'practice', 'review', 'teacher_assigned');
+DO $$ BEGIN
+  CREATE TYPE session_mode AS ENUM ('adaptive', 'practice', 'review', 'teacher_assigned');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS sessions (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
