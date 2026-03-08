@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Upload, BookOpen, FileText, LogOut, GraduationCap, FolderOpen, ListChecks } from 'lucide-react';
+import { Users, Upload, BookOpen, FileText, LogOut, GraduationCap, FolderOpen, ListChecks, HardDrive } from 'lucide-react';
 import { useTeacherAuth } from '@/components/adaptive/useTeacherAuth';
 
 const NAV = [
