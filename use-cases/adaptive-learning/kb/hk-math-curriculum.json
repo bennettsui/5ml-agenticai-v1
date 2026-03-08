@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "HK EDB Junior Secondary Mathematics — S1-S2 Learning Objectives",
-    "grades": ["S1", "S2"],
+    "title": "HK EDB Junior Secondary Mathematics — S1-S3 Learning Objectives",
+    "grades": ["S1", "S2", "S3"],
     "language": "bilingual",
     "version": "2024"
   },
@@ -142,6 +142,61 @@
           "description_en": "Understand inequality symbols. Solve linear inequalities in one unknown and represent solutions on a number line.",
           "description_zh": "理解不等號，解一元一次不等式，並在數線上表示解集。",
           "difficulty_range": [2, 4]
+        },
+        {
+          "code": "MATH.S3.NUMBER.RATIONAL",
+          "grade": "S3",
+          "topic": "Number and Algebra",
+          "subtopic": "Rational and Irrational Numbers",
+          "name_en": "Rational and Irrational Numbers",
+          "name_zh": "有理數與無理數",
+          "description_en": "Distinguish between rational and irrational numbers. Understand surds; simplify and operate on surds. Approximate irrational numbers using a calculator.",
+          "description_zh": "區分有理數與無理數，理解根式，能化簡及運算根式，並用計算器近似無理數。",
+          "difficulty_range": [2, 4]
+        },
+        {
+          "code": "MATH.S3.ALGEBRA.QUADRATIC",
+          "grade": "S3",
+          "topic": "Number and Algebra",
+          "subtopic": "Quadratic Equations",
+          "name_en": "Quadratic Equations in One Unknown",
+          "name_zh": "一元二次方程",
+          "description_en": "Solve quadratic equations by factorisation, completing the square, and the quadratic formula. Determine the nature of roots using the discriminant. Formulate equations from word problems.",
+          "description_zh": "以因式分解、配方法及求根公式解一元二次方程，利用判別式判斷根的性質，並由文字題建立方程。",
+          "difficulty_range": [3, 5]
+        },
+        {
+          "code": "MATH.S3.ALGEBRA.FUNCTIONS",
+          "grade": "S3",
+          "topic": "Number and Algebra",
+          "subtopic": "Functions and Graphs",
+          "name_en": "Functions and their Graphs",
+          "name_zh": "函數及其圖形",
+          "description_en": "Understand the concept of a function, domain, co-domain, and range. Sketch graphs of linear and quadratic functions; identify key features (vertex, axis of symmetry, intercepts).",
+          "description_zh": "理解函數的概念，包括定義域、值域。繪製一次及二次函數的圖形，識別頂點、對稱軸及截距等特徵。",
+          "difficulty_range": [3, 5]
+        },
+        {
+          "code": "MATH.S3.ALGEBRA.FRACTIONS",
+          "grade": "S3",
+          "topic": "Number and Algebra",
+          "subtopic": "Algebraic Fractions",
+          "name_en": "Algebraic Fractions and Equations",
+          "name_zh": "代數分式與方程",
+          "description_en": "Simplify algebraic fractions. Add, subtract, multiply, and divide algebraic fractions. Solve fractional equations and check for extraneous solutions.",
+          "description_zh": "化簡代數分式，對代數分式進行加減乘除，解分式方程並檢驗外來根。",
+          "difficulty_range": [3, 5]
+        },
+        {
+          "code": "MATH.S3.PERCENT.ADVANCED",
+          "grade": "S3",
+          "topic": "Number and Algebra",
+          "subtopic": "Percentages",
+          "name_en": "Compound Interest and Financial Mathematics",
+          "name_zh": "複利息與金融數學",
+          "description_en": "Apply compound interest formula A = P(1 + r)^n. Solve problems involving hire purchase, taxation, and foreign exchange.",
+          "description_zh": "應用複利息公式 A = P(1 + r)^n，解決分期付款、稅務及外幣兌換等問題。",
+          "difficulty_range": [3, 5]
         }
       ]
     },
@@ -226,6 +281,61 @@
           "description_en": "Plot points in the Cartesian plane. Find distance and midpoint between two points. Understand slope of a line.",
           "description_zh": "在笛卡兒坐標平面上描點，求兩點間的距離與中點，理解直線的斜率。",
           "difficulty_range": [2, 4]
+        },
+        {
+          "code": "MATH.S3.GEOM.PYTHAGORAS",
+          "grade": "S3",
+          "topic": "Measures, Shape and Space",
+          "subtopic": "Pythagoras' Theorem",
+          "name_en": "Pythagoras' Theorem",
+          "name_zh": "畢氏定理",
+          "description_en": "Understand and apply Pythagoras' theorem to find unknown sides in right-angled triangles. Identify Pythagorean triples. Apply to 2D and 3D problems.",
+          "description_zh": "理解並應用畢氏定理求直角三角形的未知邊長，識別畢氏數，應用於二維及三維問題。",
+          "difficulty_range": [2, 4]
+        },
+        {
+          "code": "MATH.S3.TRIG.BASIC",
+          "grade": "S3",
+          "topic": "Measures, Shape and Space",
+          "subtopic": "Trigonometry",
+          "name_en": "Trigonometric Ratios",
+          "name_zh": "三角比",
+          "description_en": "Define sine, cosine, and tangent (SOH-CAH-TOA). Find trigonometric ratios for special angles (30°, 45°, 60°). Solve right-angled triangle problems using trig ratios.",
+          "description_zh": "定義正弦、餘弦和正切（SOH-CAH-TOA），求特殊角（30°、45°、60°）的三角比，用三角比解直角三角形問題。",
+          "difficulty_range": [3, 5]
+        },
+        {
+          "code": "MATH.S3.TRIG.APPLICATIONS",
+          "grade": "S3",
+          "topic": "Measures, Shape and Space",
+          "subtopic": "Trigonometry",
+          "name_en": "Applications of Trigonometry",
+          "name_zh": "三角學的應用",
+          "description_en": "Apply trigonometry to solve problems involving angles of elevation and depression. Solve bearings and 3D trigonometry problems.",
+          "description_zh": "應用三角學解仰角與俯角的問題，解方位角及三維三角學問題。",
+          "difficulty_range": [3, 5]
+        },
+        {
+          "code": "MATH.S3.GEOM.CIRCLES",
+          "grade": "S3",
+          "topic": "Measures, Shape and Space",
+          "subtopic": "Circles",
+          "name_en": "Properties of Circles",
+          "name_zh": "圓的性質",
+          "description_en": "Apply circle theorems: angle at centre, angle in semicircle, angles in the same segment, cyclic quadrilaterals. Understand tangent properties.",
+          "description_zh": "應用圓的定理：圓心角、半圓上的圓周角、同弓形上的圓周角、圓內接四邊形，理解切線的性質。",
+          "difficulty_range": [3, 5]
+        },
+        {
+          "code": "MATH.S3.COORD.LINES",
+          "grade": "S3",
+          "topic": "Measures, Shape and Space",
+          "subtopic": "Coordinate Geometry",
+          "name_en": "Equations of Straight Lines",
+          "name_zh": "直線方程",
+          "description_en": "Write equations of straight lines in slope-intercept (y = mx + c) and general form. Find intersections of lines. Understand parallel and perpendicular line conditions.",
+          "description_zh": "以斜截式（y = mx + c）及一般式表達直線方程，求直線的交點，理解平行線及垂直線的條件。",
+          "difficulty_range": [3, 5]
         }
       ]
     },
@@ -266,6 +376,28 @@
           "description_en": "Understand probability as a measure of likelihood (0 to 1). List sample spaces, calculate simple and complementary probabilities.",
           "description_zh": "理解概率作為可能性的量度（0至1），列出樣本空間，計算簡單及互補概率。",
           "difficulty_range": [2, 4]
+        },
+        {
+          "code": "MATH.S3.DATA.DISPERSION",
+          "grade": "S3",
+          "topic": "Data Handling",
+          "subtopic": "Measures of Dispersion",
+          "name_en": "Measures of Dispersion",
+          "name_zh": "離差的量度",
+          "description_en": "Calculate range, inter-quartile range, and standard deviation. Interpret and compare variability of data sets using box-and-whisker plots.",
+          "description_zh": "計算全距、四分位距及標準差，用箱線圖詮釋及比較數據集的分散程度。",
+          "difficulty_range": [3, 5]
+        },
+        {
+          "code": "MATH.S3.PROB.ADVANCED",
+          "grade": "S3",
+          "topic": "Data Handling",
+          "subtopic": "Probability",
+          "name_en": "Advanced Probability",
+          "name_zh": "進階概率",
+          "description_en": "Calculate probabilities of mutually exclusive and independent events using addition and multiplication laws. Understand conditional probability. Use tree diagrams and tables.",
+          "description_zh": "用加法和乘法定律計算互斥及獨立事件的概率，理解條件概率，運用樹形圖及列表法。",
+          "difficulty_range": [3, 5]
         }
       ]
     }

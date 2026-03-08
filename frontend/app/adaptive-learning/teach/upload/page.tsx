@@ -57,7 +57,7 @@ export default function UploadPage() {
       let tries = 0;
       const poll = setInterval(async () => {
         tries++;
-        if (tries > 24) { clearInterval(poll); setStatus('READY'); return; } // stop after ~2 min
+        if (tries > 24) { clearInterval(poll); setStatus('READY'); return; }
         try {
           const r = await fetch(`/api/adaptive-learning/teachers/papers/${data.paper_id}/draft-questions`);
           const d = await r.json();
@@ -186,7 +186,7 @@ export default function UploadPage() {
             <p className="text-slate-400 text-sm mt-1">Review and approve each question before students can see it.</p>
           </div>
           <Link
-            href={`/teach/questions/pending${paperId ? `?paper_id=${paperId}` : ''}`}
+            href={`/adaptive-learning/teach/questions/pending${paperId ? `?paper_id=${paperId}` : ''}`}
             className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-semibold text-sm transition-colors"
           >
             Review Questions

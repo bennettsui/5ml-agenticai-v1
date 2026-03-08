@@ -130,7 +130,7 @@ export default function SessionPage() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <p className="text-slate-400 text-sm">Please sign in first.</p>
-        <button onClick={() => router.push('/learn')} className="text-indigo-400 text-sm underline">Go to Home</button>
+        <button onClick={() => router.push('/adaptive-learning/learn')} className="text-indigo-400 text-sm underline">Go to Home</button>
       </div>
     );
   }
@@ -238,7 +238,7 @@ export default function SessionPage() {
       localStorage.removeItem('al_session');
       localStorage.setItem('al_last_summary', JSON.stringify(data));
       sessionStorage.setItem('al_session_just_ended', '1');
-      router.push('/learn/session/summary');
+      router.push('/adaptive-learning/learn/session/summary');
     } catch (err: any) { setError(err.message); setPhase('ANSWERED'); }
   };
 
@@ -403,7 +403,7 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* Pre-answer: self-rate before submitting (optional) + submit */}
+      {/* Pre-answer: submit */}
       {phase === 'QUESTION' && (
         <button disabled={selected === null} onClick={submitAnswer}
           className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 text-white rounded-xl font-semibold transition-colors"
