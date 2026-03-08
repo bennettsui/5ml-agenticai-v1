@@ -227,46 +227,20 @@ function MediaLibraryTab() {
     setUploading(true);
     setUploadError('');
     try {
-      // Read file as base64 DataURL
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-      // Upload to external service
-      const extRes = await fetch('http://5ml.mmdbfiles.com/api/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_data: base64 }),
-      });
-      const extData = await extRes.json();
-      if (!extData.success) throw new Error(extData.error || 'External upload failed');
-
-      // Register in local DB
-      const regRes = await fetch(
-        `${API_BASE}/api/radiance/admin/media/register?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: extData.filename,
-            original_name: file.name,
-            url: extData.public_url,
-            mime_type: extData.mime,
-            size: extData.size,
-          }),
-        }
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(
+        `${API_BASE}/api/radiance/admin/media/upload?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
+        { method: 'POST', body: formData }
       );
-      const regData = await regRes.json();
-      if (regData.success) {
+      const data = await res.json();
+      if (data.success) {
         await loadMedia();
       } else {
-        setUploadError(regData.error || 'Failed to register upload');
+        setUploadError(data.error || 'Upload failed');
       }
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed');
+      setUploadError('Network error — could not reach server');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -1171,35 +1145,11 @@ function ImageGenerationTab() {
     if (!file) return;
     setUploading(true);
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const extRes = await fetch('http://5ml.mmdbfiles.com/api/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_data: base64 }),
-      });
-      const extData = await extRes.json();
-      if (!extData.success) throw new Error(extData.error || 'Upload failed');
-      const regRes = await fetch(
-        `${API_BASE}/api/radiance/admin/media/register?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: extData.filename,
-            original_name: file.name,
-            url: extData.public_url,
-            mime_type: extData.mime,
-            size: extData.size,
-          }),
-        }
-      );
-      const regData = await regRes.json();
-      if (regData.success) await loadMedia();
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/api/radiance/admin/media/upload?password=${encodeURIComponent(ADMIN_PASSWORD)}`, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.success) await loadMedia();
     } catch { /* ignore */ }
     finally { setUploading(false); if (uploadRef.current) uploadRef.current.value = ''; }
   }
