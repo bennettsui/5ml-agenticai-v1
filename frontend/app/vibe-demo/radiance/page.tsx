@@ -293,6 +293,37 @@ export default function RadiancePage() {
       {/* ── Services Showcase ── */}
       <ServicesShowcase />
 
+      {/* ── Client Logos ── */}
+      <section className="py-16 px-6 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800/50">
+        <div className="max-w-5xl mx-auto">
+          <p className="text-center text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-10">
+            Trusted by leading brands
+          </p>
+          <div className="grid grid-cols-5 gap-8 items-center">
+            {[
+              'http://5ml.mmdbfiles.com/assets/3808b2fb66ca40525e573461.jpg',
+              'http://5ml.mmdbfiles.com/assets/077707a701108f72623ec4bc.png',
+              'http://5ml.mmdbfiles.com/assets/5cd8f4f3226ac0e3c93e4393.png',
+              'http://5ml.mmdbfiles.com/assets/7c99bdf01d6cf2a586add91a.jpg',
+              'http://5ml.mmdbfiles.com/assets/b0f34a35f4e82d61546656d1.png',
+              'http://5ml.mmdbfiles.com/assets/de9d1b833bc5d93ff62e2e41.jpg',
+              'http://5ml.mmdbfiles.com/assets/8cb61dc159f35088617837b1.png',
+              'http://5ml.mmdbfiles.com/assets/489f18198b4127d98d307f43.jpg',
+              'http://5ml.mmdbfiles.com/assets/11b120b411e57a7fa62d3933.jpg',
+              'http://5ml.mmdbfiles.com/assets/4b87e1e47b865565936c7683.jpg',
+            ].map((src, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={src}
+                alt=""
+                className="h-10 w-full object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Why Radiance — stat grid ── */}
       <section className="py-24 px-6 bg-white dark:bg-slate-950">
         <div className="max-w-6xl mx-auto">
