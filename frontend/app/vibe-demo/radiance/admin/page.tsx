@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Lock, RefreshCw, ChevronDown, ChevronUp,
   Users, Mail, Clock, Search, Star, Upload, Trash2, Copy,
-  Check, Image as ImageIcon, FileText, BookOpen, Wand2, X,
+  Check, Image as ImageIcon, FileText, BookOpen, Wand2, X, Download,
 } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -1091,6 +1091,48 @@ function VisualSection({
   );
 }
 
+function SitePackTab() {
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadPack() {
+    setDownloading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/radiance/admin/site-pack?password=${encodeURIComponent(ADMIN_PASSWORD)}`);
+      if (!res.ok) throw new Error('Server error ' + res.status);
+      const blob = await res.blob();
+      const date = new Date().toISOString().slice(0, 10);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `radiance-site-pack-${date}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to download site pack: ' + (err as Error).message);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  return (
+    <div className="max-w-lg">
+      <h2 className="text-lg font-semibold text-white mb-2">Pack Website Files</h2>
+      <p className="text-sm text-slate-400 mb-6">
+        Downloads a ZIP of all Radiance static HTML pages, uploaded media, and assets — ready for handoff or backup.
+      </p>
+      <button
+        onClick={downloadPack}
+        disabled={downloading}
+        className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 transition-colors disabled:opacity-50"
+      >
+        {downloading
+          ? <><RefreshCw className="w-4 h-4 animate-spin" /> Packing…</>
+          : <><Download className="w-4 h-4" /> Download Site Pack</>}
+      </button>
+    </div>
+  );
+}
+
 function ImageGenerationTab() {
   const [bsVisuals, setBsVisuals] = useState<VisualItem[]>([]);
   const [xinyiVisuals, setXinyiVisuals] = useState<VisualItem[]>([]);
@@ -1330,7 +1372,7 @@ function ImageGenerationTab() {
 
 // ─── Main Admin Panel ─────────────────────────────────────────────────────────
 
-type AdminTab = 'enquiries' | 'media' | 'blog' | 'case-studies' | 'images';
+type AdminTab = 'enquiries' | 'media' | 'blog' | 'case-studies' | 'images' | 'site-pack';
 
 const NAV_ITEMS: { id: AdminTab; label: string; icon: React.ReactNode }[] = [
   { id: 'enquiries', label: 'Enquiries', icon: <Mail className="w-4 h-4" /> },
@@ -1338,6 +1380,7 @@ const NAV_ITEMS: { id: AdminTab; label: string; icon: React.ReactNode }[] = [
   { id: 'blog', label: 'Blog CMS', icon: <FileText className="w-4 h-4" /> },
   { id: 'case-studies', label: 'Case Studies', icon: <BookOpen className="w-4 h-4" /> },
   { id: 'images', label: 'Image Gen', icon: <Wand2 className="w-4 h-4" /> },
+  { id: 'site-pack', label: 'Pack Website Files', icon: <Download className="w-4 h-4" /> },
 ];
 
 export default function RadianceAdminPage() {
@@ -1429,6 +1472,7 @@ export default function RadianceAdminPage() {
           {activeTab === 'blog' && <BlogCmsTab />}
           {activeTab === 'case-studies' && <CaseStudiesCmsTab />}
           {activeTab === 'images' && <ImageGenerationTab />}
+          {activeTab === 'site-pack' && <SitePackTab />}
         </main>
       </div>
     </div>
