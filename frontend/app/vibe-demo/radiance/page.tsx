@@ -314,13 +314,13 @@ export default function RadiancePage() {
             ].map((src, i) => (
               <div
                 key={i}
-                className="flex items-center justify-center h-20 px-4 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/[0.06] hover:border-slate-300 dark:hover:border-white/[0.12] transition-colors group"
+                className="flex items-center justify-center h-24 px-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/[0.06] hover:border-slate-300 dark:hover:border-white/[0.14] transition-colors"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={src}
                   alt=""
-                  className="max-h-11 max-w-full w-auto object-contain grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-90 transition-all duration-300"
+                  className="max-h-16 max-w-full w-auto object-contain opacity-85 hover:opacity-100 transition-opacity duration-300"
                 />
               </div>
             ))}
