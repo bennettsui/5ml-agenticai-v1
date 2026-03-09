@@ -143,9 +143,18 @@ app.use('/uploads/crm', express.static(path.join(__dirname, 'uploads', 'crm')));
 app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
 app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
 
-// Rewrite Next.js baked-in paths and strip JS hydration for pure static HTML deployment
-function rewriteTedxHtml(html) {
-  return html
+// Rewrite Next.js baked-in paths, inject visibility fix, rewrite image CDN URLs
+function rewriteTedxHtml(html, cdnMap = {}) {
+  // Inject CSS before </head> to fix opacity:0 elements hidden by JS animations
+  const visibilityCss = `<style>
+/* Static deployment fix: reveal elements hidden by JS-driven animations */
+*{animation:none!important;transition:none!important}
+[style*="opacity:0"],[style*="opacity: 0"]{opacity:1!important}
+[style*="transform:translateY"],[style*="transform: translateY"]{transform:none!important}
+</style>`;
+
+  let out = html
+    .replace('</head>', visibilityCss + '</head>')
     // Rewrite absolute canonical/OG URLs
     .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi\//g, 'https://tedxxinyi.brandpromo.today/')
     .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi/g,  'https://tedxxinyi.brandpromo.today')
@@ -153,13 +162,20 @@ function rewriteTedxHtml(html) {
     .replace(/\/vibe-demo\/tedx-xinyi\//g, '/')
     .replace(/\/vibe-demo\/tedx-xinyi"/g, '/"')
     .replace(/\/vibe-demo\/tedx-xinyi'/g, "/'")
-    // Strip ALL <script> tags — Next.js hydration JS causes client errors on non-Next hosts.
-    // The HTML is already fully server-rendered; CSS keeps all styling; links work without JS.
+    // Strip ALL <script> tags (Next.js hydration crashes on non-Next hosts)
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+  // Rewrite local image paths to CDN URLs
+  out = out.replace(/src="\/tedx-xinyi\/([^"]+)"/g, (match, key) => {
+    const cdnUrl = cdnMap[key];
+    return cdnUrl ? `src="${cdnUrl}"` : match;
+  });
+
+  return out;
 }
 
-// Serve TEDx Xinyi static site pack for deployment (pure HTML+CSS, no JS hydration)
-app.get('/tedx-xinyi-site.tar.gz', (req, res) => {
+// Serve TEDx Xinyi static site pack for deployment (pure HTML+CSS, CDN images)
+app.get('/tedx-xinyi-site.tar.gz', async (req, res) => {
   const { spawn, execSync } = require('child_process');
   const os = require('os');
   const outDir  = path.join(__dirname, 'frontend', 'out');
@@ -167,21 +183,28 @@ app.get('/tedx-xinyi-site.tar.gz', (req, res) => {
   const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'tedx-site-'));
 
   try {
+    // Fetch CDN URL map from DB
+    const cdnMap = {};
+    try {
+      const { rows } = await pool.query('SELECT key, public_url FROM tedx_media_assets WHERE public_url IS NOT NULL');
+      for (const r of rows) cdnMap[r.key] = r.public_url;
+    } catch (_) {}
+
     // Rewrite and write home page
     const homeSrc = path.join(outDir, 'vibe-demo', 'tedx-xinyi.html');
     if (fs.existsSync(homeSrc)) {
-      fs.writeFileSync(path.join(tmpDir, 'index.html'), rewriteTedxHtml(fs.readFileSync(homeSrc, 'utf8')));
+      fs.writeFileSync(path.join(tmpDir, 'index.html'), rewriteTedxHtml(fs.readFileSync(homeSrc, 'utf8'), cdnMap));
     }
 
     // Rewrite and write sub-pages (exclude admin)
     const EXCLUDE = new Set(['admin']);
     if (fs.existsSync(tedxOut)) {
       for (const f of fs.readdirSync(tedxOut).filter(f => f.endsWith('.html') && !EXCLUDE.has(f.replace('.html', '')))) {
-        fs.writeFileSync(path.join(tmpDir, f), rewriteTedxHtml(fs.readFileSync(path.join(tedxOut, f), 'utf8')));
+        fs.writeFileSync(path.join(tmpDir, f), rewriteTedxHtml(fs.readFileSync(path.join(tedxOut, f), 'utf8'), cdnMap));
       }
     }
 
-    // Only copy CSS (not JS chunks — hydration is stripped)
+    // Only copy CSS (JS chunks stripped)
     const cssDir = path.join(outDir, '_next', 'static', 'css');
     if (fs.existsSync(cssDir)) {
       fs.mkdirSync(path.join(tmpDir, '_next', 'static', 'css'), { recursive: true });
@@ -189,7 +212,7 @@ app.get('/tedx-xinyi-site.tar.gz', (req, res) => {
         fs.copyFileSync(path.join(cssDir, f), path.join(tmpDir, '_next', 'static', 'css', f));
       }
     }
-    // Copy tedx-xinyi/ images
+    // Copy any local tedx-xinyi/ images (fallback for images not on CDN)
     const pubImgs = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi');
     if (fs.existsSync(pubImgs)) execSync(`cp -r "${pubImgs}" "${tmpDir}/tedx-xinyi"`);
 
