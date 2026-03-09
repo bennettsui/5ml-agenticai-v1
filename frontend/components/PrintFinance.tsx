@@ -2675,7 +2675,7 @@ function UploadTab() {
                 <button key={t.id} onClick={() => setImportType(t.id)}
                   className={`text-left p-3.5 rounded-xl border transition-colors ${
                     importType === t.id
-                      ? 'border-blue-500/60 bg-blue-500/12 ring-1 ring-blue-500/20'
+                      ? 'border-blue-500/60 bg-blue-500/10 ring-1 ring-blue-500/30'
                       : 'border-slate-700/40 hover:border-slate-600/60 bg-white/[0.02]'
                   }`}>
                   <div className={`text-xs font-semibold mb-1 ${importType === t.id ? 'text-blue-300' : 'text-slate-200'}`}>
