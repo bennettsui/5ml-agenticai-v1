@@ -111,6 +111,30 @@ interface PfSetting {
   category: string;
 }
 
+interface AIAnalysis {
+  table: string;
+  category: string;
+  cost_type: string;
+  sub_category: string | null;
+  field_mapping: Record<string, string | null>;
+  is_new_category: boolean;
+  confidence: number;
+  reasoning: string;
+}
+
+interface ImportAnalysis {
+  columns: string[];
+  sample_rows: Record<string, string>[];
+  row_count: number;
+  sheet_count: number;
+  sheets: string[];
+  heuristic_type: string;
+  ai: AIAnalysis | null;
+  ai_error: string | null;
+  categories: { id: number; name: string; parent: string; cost_type: string }[];
+}
+
+// kept for legacy /preview fallback
 interface ImportPreview {
   detected_type: string;
   columns: string[];
@@ -2549,44 +2573,75 @@ function Settings() {
 // ---------------------------------------------------------------------------
 
 const IMPORT_TYPES = [
-  { id: 'revenue',    label: 'Revenue Entries',  desc: 'period, channel, revenue, notes' },
-  { id: 'costs',      label: 'Cost Entries',     desc: 'category, type, amount, period, notes' },
-  { id: 'work-units', label: 'Work Units',       desc: 'name, job_id, material, grams, hours, revenue, notes' },
-  { id: 'inventory',  label: 'Inventory',        desc: 'material, brand, color, stock_kg, price_per_kg, supplier' },
-] as const;
+  { id: 'revenue',        label: 'Revenue',             parent: 'revenue',   desc: 'period, channel, amount, notes' },
+  { id: 'costs',          label: 'General Cost Entry',  parent: 'costs',     desc: 'category, type, amount, period, notes' },
+  { id: 'material_usage', label: 'Material Usage',      parent: 'materials', desc: 'material, weight_g, cost_per_g, job_id' },
+  { id: 'machine_log',    label: 'Machine Log',         parent: 'machine',   desc: 'printer, hours, electricity, maintenance' },
+  { id: 'labour_log',     label: 'Labour / HR',         parent: 'labour',    desc: 'person, role, hours, hourly_rate' },
+  { id: 'work-units',     label: 'Work Units / Jobs',   parent: 'jobs',      desc: 'name, job_id, material, grams, hours, revenue' },
+  { id: 'inventory',      label: 'Inventory',           parent: 'inventory', desc: 'material, brand, stock_kg, price_per_kg' },
+];
+
+const PARENT_COLORS: Record<string, string> = {
+  revenue:   'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+  costs:     'text-rose-400 bg-rose-500/10 border-rose-500/20',
+  materials: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  machine:   'text-blue-400 bg-blue-500/10 border-blue-500/20',
+  labour:    'text-purple-400 bg-purple-500/10 border-purple-500/20',
+  jobs:      'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+  inventory: 'text-slate-400 bg-slate-500/10 border-slate-500/20',
+};
+
+function FieldMappingRow({ field, column, allColumns }: { field: string; column: string | null; allColumns: string[]; }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="text-slate-500 w-24 flex-shrink-0 font-mono">{field}</span>
+      <span className="text-slate-600">←</span>
+      {column
+        ? <span className="px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 text-blue-300 rounded font-mono">{column}</span>
+        : <span className="text-slate-600 italic">not mapped</span>}
+    </div>
+  );
+}
 
 function UploadTab() {
   const [file, setFile] = useState<File | null>(null);
-  const [previewing, setPreviewing] = useState(false);
-  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [analysing, setAnalysing] = useState(false);
+  const [analysis, setAnalysis] = useState<ImportAnalysis | null>(null);
   const [importType, setImportType] = useState('');
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [showMapping, setShowMapping] = useState(false);
 
-  const doPreview = async (f: File) => {
-    setPreviewing(true);
-    setPreview(null);
+  const doAnalyse = async (f: File) => {
+    setAnalysing(true);
+    setAnalysis(null);
     setResult(null);
     const fd = new FormData();
     fd.append('file', f);
     try {
-      const res = await fetch('/api/print-finance/import/preview', { method: 'POST', body: fd });
+      const res = await fetch('/api/print-finance/import/analyze', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setPreview(data);
-      setImportType(data.detected_type !== 'unknown' ? data.detected_type : '');
+      setAnalysis(data);
+      // Auto-select: prefer AI suggestion, fall back to heuristic
+      const suggested = data.ai?.table || (data.heuristic_type !== 'unknown' ? data.heuristic_type : '');
+      setImportType(suggested);
     } catch (e: unknown) {
       alert((e as Error).message);
-    } finally { setPreviewing(false); }
+    } finally { setAnalysing(false); }
   };
 
   const doImport = async () => {
-    if (!file || !importType) return;
+    if (!file || !importType || !analysis) return;
     setImporting(true);
     const fd = new FormData();
     fd.append('file', file);
     fd.append('type', importType);
+    if (analysis.ai?.field_mapping) fd.append('field_mapping', JSON.stringify(analysis.ai.field_mapping));
+    if (analysis.ai?.category) fd.append('category', analysis.ai.category);
+    if (analysis.ai?.cost_type) fd.append('cost_type', analysis.ai.cost_type);
     try {
       const res = await fetch('/api/print-finance/import/confirm', { method: 'POST', body: fd });
       const data = await res.json();
@@ -2597,27 +2652,24 @@ function UploadTab() {
     } finally { setImporting(false); }
   };
 
-  const reset = () => { setFile(null); setPreview(null); setResult(null); setImportType(''); };
-
-  const handleFile = (f: File) => { setFile(f); doPreview(f); };
-
+  const reset = () => { setFile(null); setAnalysis(null); setResult(null); setImportType(''); setShowMapping(false); };
+  const handleFile = (f: File) => { setFile(f); doAnalyse(f); };
   const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) handleFile(f);
+    e.preventDefault(); setDragging(false);
+    const f = e.dataTransfer.files?.[0]; if (f) handleFile(f);
   };
 
-  const detectedLabel = IMPORT_TYPES.find(t => t.id === importType)?.label;
+  const selectedType = IMPORT_TYPES.find(t => t.id === importType);
+  const ai = analysis?.ai;
+  const confidence = ai ? Math.round(ai.confidence * 100) : null;
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      {/* Header */}
+    <div className="space-y-5 max-w-3xl">
       <div>
-        <h3 className="text-base font-semibold text-white">Import Data</h3>
+        <h3 className="text-base font-semibold text-white">Smart Import</h3>
         <p className="text-sm text-slate-400 mt-1">
-          Drop any CSV or Excel file — the system will analyse the columns and suggest where the data belongs.
-          You can confirm or override before anything is saved.
+          Drop any CSV or Excel file. An AI agent analyses the columns and sample data to determine
+          the cost layer, field mappings, and whether a new category is needed — before anything is saved.
         </p>
       </div>
 
@@ -2627,23 +2679,23 @@ function UploadTab() {
           onDragOver={e => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
-          className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl p-10 cursor-pointer transition-all ${
+          className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl p-8 cursor-pointer transition-all ${
             dragging ? 'border-blue-400/70 bg-blue-500/10 scale-[1.01]' :
-            file    ? 'border-blue-500/40 bg-blue-500/5' :
-                      'border-slate-600/50 hover:border-slate-500/70 hover:bg-white/[0.02]'
+            file     ? 'border-blue-500/40 bg-blue-500/5' :
+                       'border-slate-600/50 hover:border-slate-500/70 hover:bg-white/[0.02]'
           }`}>
-          <div className={`p-3 rounded-xl transition-colors ${file ? 'bg-blue-500/15' : 'bg-slate-700/60'}`}>
-            <Upload className={`w-6 h-6 ${file ? 'text-blue-400' : 'text-slate-400'}`} />
+          <div className={`p-3 rounded-xl ${file ? 'bg-blue-500/15' : 'bg-slate-700/60'}`}>
+            <Upload className={`w-5 h-5 ${file ? 'text-blue-400' : 'text-slate-400'}`} />
           </div>
           {file ? (
             <div className="text-center">
               <div className="text-sm font-medium text-white">{file.name}</div>
-              <div className="text-xs text-slate-500 mt-0.5">{(file.size / 1024).toFixed(1)} KB</div>
+              <div className="text-xs text-slate-500 mt-0.5">{(file.size / 1024).toFixed(1)} KB · {analysis?.sheet_count ?? '?'} sheet{(analysis?.sheet_count ?? 1) !== 1 ? 's' : ''} · {analysis?.row_count ?? '…'} rows</div>
             </div>
           ) : (
             <div className="text-center">
               <div className="text-sm text-slate-300">Drop a CSV or Excel file here</div>
-              <div className="text-xs text-slate-500 mt-0.5">or click to browse · .csv · .xlsx · .xls</div>
+              <div className="text-xs text-slate-500 mt-0.5">or click to browse · .csv · .xlsx · .xls · all sheets read</div>
             </div>
           )}
           <input type="file" accept=".csv,.xlsx,.xls" className="hidden"
@@ -2651,100 +2703,152 @@ function UploadTab() {
         </label>
       )}
 
-      {previewing && (
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
-          Analysing file…
+      {/* AI analysing spinner */}
+      {analysing && (
+        <div className="flex items-center gap-3 p-4 bg-slate-800/60 border border-slate-700/50 rounded-xl">
+          <Loader2 className="w-4 h-4 animate-spin text-blue-400 flex-shrink-0" />
+          <div>
+            <div className="text-sm text-white">AI agent analysing…</div>
+            <div className="text-xs text-slate-500 mt-0.5">Reading columns, detecting cost layer, mapping fields</div>
+          </div>
         </div>
       )}
 
-      {/* Preview + type selection */}
-      {preview && !result && (
-        <div className="space-y-5">
+      {/* AI analysis result */}
+      {analysis && !result && (
+        <div className="space-y-4">
 
-          {/* Detected type banner */}
-          <div className={`flex items-start gap-3 p-4 rounded-xl border ${importType ? 'bg-blue-500/8 border-blue-500/25' : 'bg-amber-500/8 border-amber-500/25'}`}>
-            <div className={`p-1.5 rounded-lg mt-0.5 ${importType ? 'bg-blue-500/15' : 'bg-amber-500/15'}`}>
-              {importType
-                ? <CheckCircle2 className="w-4 h-4 text-blue-400" />
-                : <AlertCircle className="w-4 h-4 text-amber-400" />}
-            </div>
-            <div>
-              <div className="text-sm font-medium text-white">
-                {importType
-                  ? <>Detected: <span className="text-blue-300">{detectedLabel}</span> — {preview.row_count} rows</>
-                  : <>Could not auto-detect data type — please select below</>}
-              </div>
-              <div className="text-xs text-slate-400 mt-0.5">
-                {preview.sheet_count > 1
-                  ? <><span className="text-slate-300">{preview.sheet_count} sheets:</span> {preview.sheets.join(' · ')} · </>
-                  : null}
-                Columns: {preview.columns.join(' · ')}
-              </div>
-            </div>
-          </div>
-
-          {/* Type selector */}
-          <div>
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-              Where should this data go?
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {IMPORT_TYPES.map(t => (
-                <button key={t.id} onClick={() => setImportType(t.id)}
-                  className={`text-left p-3.5 rounded-xl border transition-colors ${
-                    importType === t.id
-                      ? 'border-blue-500/60 bg-blue-500/10 ring-1 ring-blue-500/30'
-                      : 'border-slate-700/40 hover:border-slate-600/60 bg-white/[0.02]'
-                  }`}>
-                  <div className={`text-xs font-semibold mb-1 ${importType === t.id ? 'text-blue-300' : 'text-slate-200'}`}>
-                    {t.label}
-                  </div>
-                  <div className="text-xs text-slate-500 leading-relaxed font-mono">{t.desc}</div>
+          {/* AI verdict card */}
+          {ai && (
+            <div className="p-4 bg-slate-800/60 border border-slate-700/50 rounded-xl space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${confidence! >= 80 ? 'bg-emerald-400' : confidence! >= 50 ? 'bg-amber-400' : 'bg-rose-400'}`} />
+                  <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">AI Analysis</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded border ${confidence! >= 80 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : confidence! >= 50 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-rose-400 bg-rose-500/10 border-rose-500/20'}`}>
+                    {confidence}% confidence
+                  </span>
+                  {ai.is_new_category && (
+                    <span className="text-xs px-1.5 py-0.5 rounded border text-purple-400 bg-purple-500/10 border-purple-500/20">
+                      New category
+                    </span>
+                  )}
+                </div>
+                <button onClick={() => setShowMapping(v => !v)} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                  {showMapping ? 'Hide' : 'Show'} field map
                 </button>
-              ))}
-            </div>
-          </div>
+              </div>
 
-          {/* Data preview table */}
-          {preview.sample_rows.length > 0 && (
-            <div>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                Preview — first {preview.sample_rows.length} of {preview.row_count} rows
+              <div className="grid grid-cols-3 gap-3 text-xs">
+                <div>
+                  <div className="text-slate-500 mb-1">Destination table</div>
+                  <div className="font-mono text-blue-300">{ai.table}</div>
+                </div>
+                <div>
+                  <div className="text-slate-500 mb-1">Category</div>
+                  <div className="text-white font-medium">{ai.category}</div>
+                  {ai.sub_category && <div className="text-slate-500">{ai.sub_category}</div>}
+                </div>
+                <div>
+                  <div className="text-slate-500 mb-1">Cost type</div>
+                  <div className={`inline-flex px-1.5 py-0.5 rounded border text-xs font-medium ${
+                    ai.cost_type === 'direct' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
+                    ai.cost_type === 'overhead' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                    ai.cost_type === 'fixed' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
+                    'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                  }`}>{ai.cost_type}</div>
+                </div>
               </div>
-              <div className="overflow-x-auto border border-slate-700/40 rounded-xl">
-                <table className="text-xs w-full">
-                  <thead>
-                    <tr className="border-b border-slate-700/50 bg-white/[0.03]">
-                      {preview.columns.map(c => (
-                        <th key={c} className="px-3 py-2.5 text-left text-slate-400 font-medium whitespace-nowrap">{c}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.sample_rows.map((row, i) => (
-                      <tr key={i} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
-                        {preview.columns.map(c => (
-                          <td key={c} className="px-3 py-2 text-slate-300 whitespace-nowrap max-w-[140px] truncate">{String(row[c] ?? '')}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+              <div className="text-xs text-slate-400 italic border-t border-slate-700/40 pt-2">
+                {ai.reasoning}
               </div>
+
+              {showMapping && (
+                <div className="border-t border-slate-700/40 pt-3 grid grid-cols-2 gap-1.5">
+                  {Object.entries(ai.field_mapping).filter(([, v]) => v).map(([field, col]) => (
+                    <FieldMappingRow key={field} field={field} column={col} allColumns={analysis.columns} />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Import CTA */}
+          {analysis.ai_error && (
+            <div className="text-xs text-amber-400 px-3 py-2 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+              AI unavailable ({analysis.ai_error}) — using heuristic detection. You can still select manually below.
+            </div>
+          )}
+
+          {/* Sheet/column info */}
+          <div className="text-xs text-slate-500">
+            {analysis.sheet_count > 1 && <><span className="text-slate-300">{analysis.sheet_count} sheets:</span> {analysis.sheets.join(' · ')} · </>}
+            {analysis.row_count} rows · columns: {analysis.columns.join(' · ')}
+          </div>
+
+          {/* Override selector */}
+          <div>
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+              {ai ? 'Override destination (optional)' : 'Select destination'}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {IMPORT_TYPES.map(t => {
+                const colorClass = PARENT_COLORS[t.parent] || PARENT_COLORS.costs;
+                const isSelected = importType === t.id;
+                const isAiPick = ai?.table === t.id;
+                return (
+                  <button key={t.id} onClick={() => setImportType(t.id)}
+                    className={`text-left p-3 rounded-xl border transition-colors relative ${
+                      isSelected ? 'border-blue-500/60 bg-blue-500/10 ring-1 ring-blue-500/30' : 'border-slate-700/40 hover:border-slate-600/60 bg-white/[0.02]'
+                    }`}>
+                    {isAiPick && !isSelected && (
+                      <span className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0 bg-purple-500/20 text-purple-300 rounded border border-purple-500/20">AI</span>
+                    )}
+                    <div className={`text-xs font-semibold mb-0.5 ${isSelected ? 'text-blue-300' : 'text-slate-200'}`}>{t.label}</div>
+                    <div className="text-xs text-slate-600 font-mono leading-relaxed">{t.desc}</div>
+                    <div className={`mt-1.5 inline-flex text-[10px] px-1 py-0 rounded border font-medium ${colorClass}`}>{t.parent}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Sample preview */}
+          {analysis.sample_rows.length > 0 && (
+            <div className="overflow-x-auto border border-slate-700/40 rounded-xl">
+              <table className="text-xs w-full">
+                <thead>
+                  <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+                    {analysis.columns.map(c => {
+                      const isMapped = ai && Object.values(ai.field_mapping).includes(c);
+                      return (
+                        <th key={c} className={`px-3 py-2 text-left font-medium whitespace-nowrap ${isMapped ? 'text-blue-400' : 'text-slate-500'}`}>
+                          {c}{isMapped && <span className="ml-1 text-[10px] text-blue-500">✓</span>}
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {analysis.sample_rows.map((row, i) => (
+                    <tr key={i} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
+                      {analysis.columns.map(c => (
+                        <td key={c} className="px-3 py-2 text-slate-300 whitespace-nowrap max-w-[160px] truncate">{String(row[c] ?? '')}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           <div className="flex items-center gap-3">
             <button onClick={doImport} disabled={!importType || importing}
-              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-colors">
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-colors">
               {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {importing ? 'Importing…' : `Import ${preview.row_count} rows into ${detectedLabel || '…'}`}
+              {importing ? 'Importing…' : `Import ${analysis.row_count} rows → ${selectedType?.label || '…'}`}
             </button>
-            <button onClick={reset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
-              Upload different file
-            </button>
+            <button onClick={reset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Upload different file</button>
           </div>
         </div>
       )}
@@ -2752,7 +2856,6 @@ function UploadTab() {
       {/* Result */}
       {result && (
         <div className="space-y-4">
-          {/* Summary bar */}
           <div className="flex items-center gap-4 p-4 bg-slate-800/60 border border-slate-700/50 rounded-xl">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -2764,16 +2867,13 @@ function UploadTab() {
                 <span className="text-sm font-semibold text-amber-300">{result.skipped} skipped</span>
               </div>
             )}
-            <span className="text-xs text-slate-500 ml-auto">
-              into <span className="text-slate-300">{detectedLabel}</span>
-            </span>
+            <span className="text-xs text-slate-500 ml-auto">→ <span className="text-slate-300">{selectedType?.label}</span></span>
           </div>
 
-          {/* Row-by-row log */}
           <div className="border border-slate-700/50 rounded-xl overflow-hidden">
             <div className="bg-white/[0.03] border-b border-slate-700/50 px-3 py-2 flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Import Log</span>
-              <span className="text-xs text-slate-600">{result.results.length} rows processed</span>
+              <span className="text-xs text-slate-600">{result.results.length} rows</span>
             </div>
             <div className="max-h-80 overflow-y-auto">
               {result.results.map((r, i) => (
@@ -2782,40 +2882,19 @@ function UploadTab() {
                     ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
                     : <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />}
                   <div className="flex-1 min-w-0">
-                    <span className={r.status === 'accepted' ? 'text-slate-300' : 'text-slate-400'}>
-                      {r.status === 'accepted' ? r.label : <span className="text-amber-300/80">Skipped: {r.reason}</span>}
-                    </span>
+                    {r.status === 'accepted'
+                      ? <span className="text-slate-300">{r.label}</span>
+                      : <span className="text-amber-300/80">Skipped: {r.reason}</span>}
                   </div>
-                  <div className="flex-shrink-0 text-slate-600 tabular-nums">
-                    {r.sheet} · row {r.row_num}
-                  </div>
+                  <div className="flex-shrink-0 text-slate-600 tabular-nums">{r.sheet} · row {r.row_num}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          <button onClick={reset}
-            className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors">
+          <button onClick={reset} className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors">
             <Upload className="w-3.5 h-3.5" /> Import another file
           </button>
-        </div>
-      )}
-
-      {/* Format guide */}
-      {!file && (
-        <div className="border border-slate-700/40 rounded-xl p-4 space-y-3">
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Supported formats</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {IMPORT_TYPES.map(t => (
-              <div key={t.id} className="text-xs">
-                <span className="text-slate-300 font-medium">{t.label}:</span>{' '}
-                <span className="text-slate-600 font-mono">{t.desc}</span>
-              </div>
-            ))}
-          </div>
-          <div className="text-xs text-slate-600">
-            Column names are matched flexibly — spaces, underscores, and casing are ignored.
-          </div>
         </div>
       )}
     </div>
