@@ -111,7 +111,7 @@ app.use('/tedx-xinyi', async (req, res, next) => {
       if (!fs.existsSync(p)) continue;
       const meta = JSON.parse(fs.readFileSync(p, 'utf8'));
       if (meta[key] && meta[key].publicUrl) {
-        return res.redirect(302, meta[key].publicUrl);
+        return res.redirect(302, meta[key].publicUrl.replace(/^http:\/\//i, 'https://'));
       }
     } catch { /* ignore */ }
   }
@@ -124,7 +124,7 @@ app.use('/tedx-xinyi', async (req, res, next) => {
         [key]
       );
       if (rows.length > 0 && rows[0].public_url) {
-        return res.redirect(302, rows[0].public_url);
+        return res.redirect(302, rows[0].public_url.replace(/^http:\/\//i, 'https://'));
       }
     }
   } catch { /* DB not available */ }
@@ -192,7 +192,8 @@ app.get('/tedx-xinyi-site.tar.gz', async (req, res) => {
     const cdnMap = {};
     try {
       const { rows } = await pool.query('SELECT key, public_url FROM tedx_media_assets WHERE public_url IS NOT NULL');
-      for (const r of rows) cdnMap[r.key] = r.public_url;
+      // Force https:// — stored URLs are http:// but browsers block mixed content on HTTPS pages
+      for (const r of rows) cdnMap[r.key] = r.public_url.replace(/^http:\/\//i, 'https://');
       console.log(`[tedx-site] cdnMap loaded: ${Object.keys(cdnMap).length} entries`);
     } catch (e) { console.error('[tedx-site] cdnMap load failed:', e.message); }
 
