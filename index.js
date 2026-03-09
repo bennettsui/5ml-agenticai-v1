@@ -165,10 +165,15 @@ function rewriteTedxHtml(html, cdnMap = {}) {
     // Strip ALL <script> tags (Next.js hydration crashes on non-Next hosts)
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
 
-  // Rewrite local image paths to CDN URLs
+  // Rewrite local image paths to CDN URLs (src= and href= for preload links)
+  const rewriteKey = (key) => cdnMap[key] || null;
   out = out.replace(/src="\/tedx-xinyi\/([^"]+)"/g, (match, key) => {
-    const cdnUrl = cdnMap[key];
+    const cdnUrl = rewriteKey(key);
     return cdnUrl ? `src="${cdnUrl}"` : match;
+  });
+  out = out.replace(/href="\/tedx-xinyi\/([^"]+)"/g, (match, key) => {
+    const cdnUrl = rewriteKey(key);
+    return cdnUrl ? `href="${cdnUrl}"` : match;
   });
 
   return out;
@@ -188,7 +193,8 @@ app.get('/tedx-xinyi-site.tar.gz', async (req, res) => {
     try {
       const { rows } = await pool.query('SELECT key, public_url FROM tedx_media_assets WHERE public_url IS NOT NULL');
       for (const r of rows) cdnMap[r.key] = r.public_url;
-    } catch (_) {}
+      console.log(`[tedx-site] cdnMap loaded: ${Object.keys(cdnMap).length} entries`);
+    } catch (e) { console.error('[tedx-site] cdnMap load failed:', e.message); }
 
     // Rewrite and write home page
     const homeSrc = path.join(outDir, 'vibe-demo', 'tedx-xinyi.html');
