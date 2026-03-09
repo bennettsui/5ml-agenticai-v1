@@ -629,60 +629,65 @@ router.get('/teacher/classes/:className/mastery', async (req, res) => {
 // ─── OCR pipeline (async) ─────────────────────────────────────────────────────
 
 async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
-  await db.updatePaperStatus(paperId, 'OCR_RUNNING');
+  try {
+    await db.updatePaperStatus(paperId, 'OCR_RUNNING');
 
-  let rawBlocks = [];
-  if (await ocrService.isAvailable()) {
-    rawBlocks = await ocrService.extractFromPdf(pdfBuffer);
-  } else {
-    console.warn(`Paper ${paperId}: Google Document AI not configured, skipping OCR`);
-    await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
-    return;
-  }
-
-  if (rawBlocks.length === 0) {
-    await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
-    return;
-  }
-
-  await db.updatePaperStatus(paperId, 'DRAFT_READY');
-
-  // Get candidate LOs for this grade
-  const los = await db.getLearningObjectives({ grade: gradeBand.split('-')[0] || 'S1' });
-  const candidateObjectives = los.slice(0, 20).map(lo => ({ code: lo.code, name_en: lo.name_en, name_zh: lo.name_zh }));
-
-  // Run QuestionAgent on each block
-  for (const block of rawBlocks) {
-    let draft = {
-      paperId,
-      rawOcrText:  block.raw_text,
-      hasImage:    block.has_image,
-      stemEn:      block.raw_text,
-      suggestedDifficulty: 2,
-      candidateObjectives,
-    };
-
-    if (process.env.ANTHROPIC_API_KEY && block.raw_text.length > 20) {
-      try {
-        const result = await getAgent().question.authorQuestion({
-          rawTextEn:            block.raw_text,
-          imageDescription:     block.has_image ? 'Question contains a diagram or figure' : null,
-          candidateObjectives,
-          gradeBand,
-        });
-        draft.stemEn               = result.clean_stem_en  || block.raw_text;
-        draft.stemZh               = result.clean_stem_zh  || null;
-        draft.suggestedType        = result.question_type  || 'MCQ';
-        draft.suggestedDifficulty  = result.difficulty_estimate || 2;
-        draft.candidateObjectives  = result.selected_objective_codes?.map(code =>
-          candidateObjectives.find(lo => lo.code === code)
-        ).filter(Boolean) || candidateObjectives;
-      } catch (err) {
-        console.warn(`QuestionAgent failed for block (non-fatal):`, err.message);
-      }
+    let rawBlocks = [];
+    if (await ocrService.isAvailable()) {
+      rawBlocks = await ocrService.extractFromPdf(pdfBuffer);
+    } else {
+      console.warn(`Paper ${paperId}: Google Document AI not configured, skipping OCR`);
+      await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
+      return;
     }
 
-    await db.createDraftQuestion(draft);
+    if (rawBlocks.length === 0) {
+      await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
+      return;
+    }
+
+    await db.updatePaperStatus(paperId, 'DRAFT_READY');
+
+    // Get candidate LOs for this grade
+    const los = await db.getLearningObjectives({ grade: gradeBand.split('-')[0] || 'S1' });
+    const candidateObjectives = los.slice(0, 20).map(lo => ({ code: lo.code, name_en: lo.name_en, name_zh: lo.name_zh }));
+
+    // Run QuestionAgent on each block
+    for (const block of rawBlocks) {
+      let draft = {
+        paperId,
+        rawOcrText:  block.raw_text,
+        hasImage:    block.has_image,
+        stemEn:      block.raw_text,
+        suggestedDifficulty: 2,
+        candidateObjectives,
+      };
+
+      if (process.env.ANTHROPIC_API_KEY && block.raw_text.length > 20) {
+        try {
+          const result = await getAgent().question.authorQuestion({
+            rawTextEn:            block.raw_text,
+            imageDescription:     block.has_image ? 'Question contains a diagram or figure' : null,
+            candidateObjectives,
+            gradeBand,
+          });
+          draft.stemEn               = result.clean_stem_en  || block.raw_text;
+          draft.stemZh               = result.clean_stem_zh  || null;
+          draft.suggestedType        = result.question_type  || 'MCQ';
+          draft.suggestedDifficulty  = result.difficulty_estimate || 2;
+          draft.candidateObjectives  = result.selected_objective_codes?.map(code =>
+            candidateObjectives.find(lo => lo.code === code)
+          ).filter(Boolean) || candidateObjectives;
+        } catch (err) {
+          console.warn(`QuestionAgent failed for block (non-fatal):`, err.message);
+        }
+      }
+
+      await db.createDraftQuestion(draft);
+    }
+  } catch (err) {
+    console.error(`[OCR] Pipeline failed for paper ${paperId}:`, err.message);
+    await db.updatePaperStatus(paperId, 'NEEDS_REVIEW').catch(() => {});
   }
 }
 
@@ -1211,6 +1216,57 @@ router.get('/teachers/papers', async (req, res) => {
       [parseInt(limit), parseInt(offset)]
     );
     res.json({ success: true, papers: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: update paper metadata ───────────────────────────────────────────
+
+/**
+ * PATCH /api/adaptive-learning/teachers/papers/:id
+ * Body: { exam_name?, grade_band?, year?, status? }
+ * Allows editing metadata and manually resetting a stuck paper to NEEDS_REVIEW.
+ */
+router.patch('/teachers/papers/:id', async (req, res) => {
+  try {
+    const { pool } = require('../../../db');
+    const { exam_name, grade_band, year, status } = req.body || {};
+    const allowed = ['UPLOADED', 'OCR_RUNNING', 'DRAFT_READY', 'CONFIRMED', 'NEEDS_REVIEW'];
+    if (status && !allowed.includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid status' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE papers
+       SET exam_name  = COALESCE($1, exam_name),
+           grade_band = COALESCE($2, grade_band),
+           year       = COALESCE($3, year),
+           status     = COALESCE($4, status),
+           updated_at = NOW()
+       WHERE id = $5
+       RETURNING *`,
+      [exam_name || null, grade_band || null, year ? parseInt(year) : null, status || null, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ success: false, error: 'Paper not found' });
+    res.json({ success: true, paper: rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: delete paper ─────────────────────────────────────────────────────
+
+/**
+ * DELETE /api/adaptive-learning/teachers/papers/:id
+ * Removes paper and all associated draft questions.
+ */
+router.delete('/teachers/papers/:id', async (req, res) => {
+  try {
+    const { pool } = require('../../../db');
+    await pool.query('DELETE FROM draft_questions WHERE paper_id = $1', [req.params.id]);
+    const { rowCount } = await pool.query('DELETE FROM papers WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ success: false, error: 'Paper not found' });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
