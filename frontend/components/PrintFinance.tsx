@@ -2592,14 +2592,23 @@ const PARENT_COLORS: Record<string, string> = {
   inventory: 'text-slate-400 bg-slate-500/10 border-slate-500/20',
 };
 
-function FieldMappingRow({ field, column, allColumns }: { field: string; column: string | null; allColumns: string[]; }) {
+function FieldMappingRow({ field, column, allColumns, sampleRow, onChange }: {
+  field: string; column: string | null; allColumns: string[];
+  sampleRow: Record<string, string>; onChange: (col: string | null) => void;
+}) {
+  const sample = column ? sampleRow[column] : null;
   return (
     <div className="flex items-center gap-2 text-xs">
-      <span className="text-slate-500 w-24 flex-shrink-0 font-mono">{field}</span>
-      <span className="text-slate-600">←</span>
-      {column
-        ? <span className="px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 text-blue-300 rounded font-mono">{column}</span>
-        : <span className="text-slate-600 italic">not mapped</span>}
+      <span className="text-slate-500 w-24 flex-shrink-0 font-mono truncate">{field}</span>
+      <span className="text-slate-700">←</span>
+      <select value={column ?? ''} onChange={e => onChange(e.target.value || null)}
+        className="flex-1 bg-slate-700/80 border border-slate-600/50 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500/50 min-w-0">
+        <option value="">(not mapped)</option>
+        {allColumns.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+      {sample != null && (
+        <span className="text-slate-600 truncate max-w-[80px]" title={sample}>{sample}</span>
+      )}
     </div>
   );
 }
@@ -2609,6 +2618,7 @@ function UploadTab() {
   const [analysing, setAnalysing] = useState(false);
   const [analysis, setAnalysis] = useState<ImportAnalysis | null>(null);
   const [importType, setImportType] = useState('');
+  const [fieldMapping, setFieldMapping] = useState<Record<string, string | null>>({});
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -2618,6 +2628,7 @@ function UploadTab() {
     setAnalysing(true);
     setAnalysis(null);
     setResult(null);
+    setFieldMapping({});
     const fd = new FormData();
     fd.append('file', f);
     try {
@@ -2625,9 +2636,9 @@ function UploadTab() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setAnalysis(data);
-      // Auto-select: prefer AI suggestion, fall back to heuristic
       const suggested = data.ai?.table || (data.heuristic_type !== 'unknown' ? data.heuristic_type : '');
       setImportType(suggested);
+      if (data.ai?.field_mapping) setFieldMapping(data.ai.field_mapping);
     } catch (e: unknown) {
       alert((e as Error).message);
     } finally { setAnalysing(false); }
@@ -2639,7 +2650,7 @@ function UploadTab() {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('type', importType);
-    if (analysis.ai?.field_mapping) fd.append('field_mapping', JSON.stringify(analysis.ai.field_mapping));
+    if (Object.keys(fieldMapping).length) fd.append('field_mapping', JSON.stringify(fieldMapping));
     if (analysis.ai?.category) fd.append('category', analysis.ai.category);
     if (analysis.ai?.cost_type) fd.append('cost_type', analysis.ai.cost_type);
     try {
@@ -2652,7 +2663,7 @@ function UploadTab() {
     } finally { setImporting(false); }
   };
 
-  const reset = () => { setFile(null); setAnalysis(null); setResult(null); setImportType(''); setShowMapping(false); };
+  const reset = () => { setFile(null); setAnalysis(null); setResult(null); setImportType(''); setShowMapping(false); setFieldMapping({}); };
   const handleFile = (f: File) => { setFile(f); doAnalyse(f); };
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragging(false);
@@ -2766,8 +2777,12 @@ function UploadTab() {
 
               {showMapping && (
                 <div className="border-t border-slate-700/40 pt-3 grid grid-cols-2 gap-1.5">
-                  {Object.entries(ai.field_mapping).filter(([, v]) => v).map(([field, col]) => (
-                    <FieldMappingRow key={field} field={field} column={col} allColumns={analysis.columns} />
+                  {Object.entries(ai.field_mapping).map(([field, col]) => (
+                    <FieldMappingRow key={field} field={field}
+                      column={fieldMapping[field] ?? col}
+                      allColumns={analysis.columns}
+                      sampleRow={analysis.sample_rows?.[0] ?? {}}
+                      onChange={newCol => setFieldMapping(prev => ({ ...prev, [field]: newCol }))} />
                   ))}
                 </div>
               )}
