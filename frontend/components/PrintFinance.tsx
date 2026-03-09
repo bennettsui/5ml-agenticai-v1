@@ -6,7 +6,7 @@ import {
   FlaskConical, FileText, ArrowUpRight, ArrowDownRight,
   AlertCircle, CheckCircle2, Clock, Zap, Plus, Trash2,
   Upload, Download, X, Loader2, RefreshCw, Pencil, Save,
-  Calculator, Filter, Receipt, ChevronDown, ChevronUp,
+  Calculator, Filter, Receipt, ChevronDown, ChevronUp, Settings as SettingsIcon,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -17,7 +17,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-type SubTab = 'overview' | 'work-units' | 'revenue' | 'costs' | 'inventory' | 'scenarios' | 'reports' | 'estimator' | 'invoices';
+type SubTab = 'overview' | 'work-units' | 'revenue' | 'costs' | 'inventory' | 'scenarios' | 'reports' | 'estimator' | 'invoices' | 'settings';
 
 interface WorkUnit {
   id: number;
@@ -102,6 +102,20 @@ interface InventoryItem {
   reorder_point: number;
   unit_cost: number;
   supplier?: string;
+}
+
+interface PfSetting {
+  key: string;
+  value: string;
+  label: string;
+  category: string;
+}
+
+interface ImportPreview {
+  detected_type: string;
+  columns: string[];
+  sample_rows: Record<string, string>[];
+  row_count: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -2356,6 +2370,338 @@ function Invoices() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Sub-tab: Settings
+// ---------------------------------------------------------------------------
+
+const SETTING_GROUPS: { category: string; label: string }[] = [
+  { category: 'general',   label: 'General' },
+  { category: 'hr',        label: 'Labour Rates' },
+  { category: 'overhead',  label: 'Overhead' },
+  { category: 'pricing',   label: 'Pricing' },
+  { category: 'invoicing', label: 'Invoicing' },
+];
+
+function Settings() {
+  const { data: settings, reload } = useApi<PfSetting[]>('/api/print-finance/settings');
+  const { data: rates, reload: reloadRates } = useApi<MaterialRate[]>('/api/print-finance/material-rates');
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [addRate, setAddRate] = useState(false);
+  const [rateForm, setRateForm] = useState({ material: '', machine_rate_per_hr: '', filament_cost_per_g: '', notes: '' });
+
+  // Sync settings into draft once loaded
+  const settingsMap = Object.fromEntries((settings || []).map(s => [s.key, s.value]));
+  const get = (key: string) => (draft[key] !== undefined ? draft[key] : settingsMap[key] ?? '');
+  const set = (key: string, value: string) => setDraft(p => ({ ...p, [key]: value }));
+
+  const saveSettings = async () => {
+    if (!Object.keys(draft).length) return;
+    setSaving(true);
+    await fetch('/api/print-finance/settings', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(draft),
+    });
+    setSaving(false);
+    setDraft({});
+    reload();
+  };
+
+  const saveRate = async () => {
+    await fetch('/api/print-finance/material-rates', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...rateForm, machine_rate_per_hr: parseFloat(rateForm.machine_rate_per_hr)||0, filament_cost_per_g: parseFloat(rateForm.filament_cost_per_g)||0 }),
+    });
+    setAddRate(false);
+    setRateForm({ material: '', machine_rate_per_hr: '', filament_cost_per_g: '', notes: '' });
+    reloadRates();
+  };
+
+  const delRate = async (id: number) => {
+    await fetch(`/api/print-finance/material-rates/${id}`, { method: 'DELETE' });
+    reloadRates();
+  };
+
+  const hasDraft = Object.keys(draft).length > 0;
+
+  return (
+    <div className="space-y-6">
+      {/* General + HR + Pricing settings */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-white">Platform Settings</h3>
+          <button onClick={saveSettings} disabled={!hasDraft || saving}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 disabled:opacity-40 border border-blue-500/30 text-blue-300 text-xs font-medium rounded-lg transition-colors">
+            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+            {saving ? 'Saving…' : hasDraft ? 'Save Changes' : 'Saved'}
+          </button>
+        </div>
+        <div className="space-y-5">
+          {SETTING_GROUPS.map(group => {
+            const groupSettings = (settings || []).filter(s => s.category === group.category);
+            if (!groupSettings.length) return null;
+            return (
+              <div key={group.category}>
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{group.label}</div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {groupSettings.map(s => (
+                    <div key={s.key}>
+                      <label className="text-xs text-slate-400 block mb-1">{s.label}</label>
+                      <input
+                        value={get(s.key)}
+                        onChange={e => set(s.key, e.target.value)}
+                        className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Material Rates */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-white">Material Rates</h3>
+          <button onClick={() => setAddRate(v => !v)}
+            className="flex items-center gap-1 px-3 py-1.5 bg-slate-700/60 hover:bg-slate-700 border border-slate-600/50 text-slate-300 text-xs rounded-lg transition-colors">
+            <Plus className="w-3.5 h-3.5" />{addRate ? 'Cancel' : 'Add Material'}
+          </button>
+        </div>
+
+        {addRate && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 p-3 bg-white/[0.03] border border-slate-700/40 rounded-lg">
+            {[
+              { key: 'material', label: 'Material' },
+              { key: 'machine_rate_per_hr', label: 'Machine Rate/hr ($)' },
+              { key: 'filament_cost_per_g', label: 'Filament Cost/g ($)' },
+              { key: 'notes', label: 'Notes' },
+            ].map(f => (
+              <div key={f.key}>
+                <label className="text-xs text-slate-500 block mb-1">{f.label}</label>
+                <input value={(rateForm as Record<string,string>)[f.key]}
+                  onChange={e => setRateForm(p => ({ ...p, [f.key]: e.target.value }))}
+                  className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50" />
+              </div>
+            ))}
+            <div className="col-span-2 md:col-span-4">
+              <button onClick={saveRate} disabled={!rateForm.material}
+                className="px-4 py-1.5 bg-blue-600 disabled:opacity-40 text-white text-xs rounded-lg">
+                Add Rate
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-700/50">
+                {['Material', 'Machine Rate/hr', 'Filament/g', 'Notes', ''].map(h => (
+                  <th key={h} className="text-left py-2 px-2 text-slate-500 font-medium">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(rates || []).map(r => (
+                <tr key={r.id} className="border-b border-slate-700/30 hover:bg-white/[0.02]">
+                  <td className="py-2 px-2 text-white font-medium">{r.material}</td>
+                  <td className="py-2 px-2 text-slate-300">${Number(r.machine_rate_per_hr).toFixed(2)}</td>
+                  <td className="py-2 px-2 text-slate-300">${Number(r.filament_cost_per_g).toFixed(4)}</td>
+                  <td className="py-2 px-2 text-slate-500">{r.notes || '—'}</td>
+                  <td className="py-2 px-2 text-right">
+                    <button onClick={() => delRate(r.id)} className="text-slate-600 hover:text-red-400 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!(rates || []).length && (
+                <tr><td colSpan={5} className="py-4 text-center text-slate-600 text-xs italic">No material rates configured.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// UploadModal — universal CSV/XLSX importer
+// ---------------------------------------------------------------------------
+
+const IMPORT_TYPES = [
+  { id: 'revenue',    label: 'Revenue Entries',  desc: 'period, channel, revenue, notes' },
+  { id: 'costs',      label: 'Cost Entries',     desc: 'category, type, amount, period, notes' },
+  { id: 'work-units', label: 'Work Units',       desc: 'name, job_id, material, grams, hours, revenue, notes' },
+  { id: 'inventory',  label: 'Inventory',        desc: 'material, brand, color, stock_kg, price_per_kg, supplier' },
+] as const;
+
+function UploadModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [importType, setImportType] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<{ inserted: number; errors: unknown[] } | null>(null);
+
+  const doPreview = async (f: File) => {
+    setPreviewing(true);
+    const fd = new FormData();
+    fd.append('file', f);
+    try {
+      const res = await fetch('/api/print-finance/import/preview', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setPreview(data);
+      setImportType(data.detected_type !== 'unknown' ? data.detected_type : '');
+    } catch (e: unknown) {
+      alert((e as Error).message);
+    } finally { setPreviewing(false); }
+  };
+
+  const doImport = async () => {
+    if (!file || !importType) return;
+    setImporting(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('type', importType);
+    try {
+      const res = await fetch('/api/print-finance/import/confirm', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setResult(data);
+      onImported();
+    } catch (e: unknown) {
+      alert((e as Error).message);
+    } finally { setImporting(false); }
+  };
+
+  const handleFile = (f: File) => { setFile(f); setPreview(null); setResult(null); doPreview(f); };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="bg-slate-900 border border-slate-700/70 rounded-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/50">
+          <div className="flex items-center gap-2">
+            <Upload className="w-4 h-4 text-blue-400" />
+            <h2 className="text-sm font-semibold text-white">Import Data</h2>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* Step 1: File picker */}
+          <div>
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">1. Choose File</h3>
+            <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-6 cursor-pointer transition-colors ${file ? 'border-blue-500/40 bg-blue-500/5' : 'border-slate-600/50 hover:border-slate-500/70'}`}>
+              <Upload className="w-6 h-6 text-slate-500" />
+              <span className="text-xs text-slate-400 text-center">
+                {file ? file.name : 'Drop a CSV or XLSX file here, or click to browse'}
+              </span>
+              {file && <span className="text-xs text-slate-600">{(file.size / 1024).toFixed(1)} KB</span>}
+              <input type="file" accept=".csv,.xlsx,.xls" className="hidden"
+                onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); }} />
+            </label>
+            {previewing && (
+              <div className="flex items-center gap-2 mt-2 text-xs text-slate-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Parsing file…
+              </div>
+            )}
+          </div>
+
+          {/* Step 2: Detected type + override */}
+          {preview && !result && (
+            <>
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                  2. Data Type — {preview.row_count} rows detected
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {IMPORT_TYPES.map(t => (
+                    <button key={t.id} onClick={() => setImportType(t.id)}
+                      className={`text-left p-3 rounded-xl border transition-colors ${importType === t.id ? 'border-blue-500/50 bg-blue-500/10' : 'border-slate-700/40 hover:border-slate-600/60 bg-white/[0.02]'}`}>
+                      <div className={`text-xs font-medium mb-0.5 ${importType === t.id ? 'text-blue-300' : 'text-slate-300'}`}>{t.label}</div>
+                      <div className="text-xs text-slate-600 leading-tight">{t.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Column preview */}
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Detected Columns</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {preview.columns.map(c => (
+                    <span key={c} className="text-xs px-2 py-0.5 bg-slate-700/60 text-slate-300 rounded-full border border-slate-600/40">{c}</span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sample rows */}
+              {preview.sample_rows.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Preview (first {preview.sample_rows.length} rows)</h3>
+                  <div className="overflow-x-auto border border-slate-700/40 rounded-lg">
+                    <table className="text-xs w-full">
+                      <thead>
+                        <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+                          {preview.columns.map(c => <th key={c} className="px-3 py-2 text-left text-slate-500 font-medium whitespace-nowrap">{c}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview.sample_rows.map((row, i) => (
+                          <tr key={i} className="border-b border-slate-700/30 last:border-0">
+                            {preview.columns.map(c => (
+                              <td key={c} className="px-3 py-2 text-slate-300 whitespace-nowrap max-w-[120px] truncate">{String(row[c] ?? '')}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <button onClick={doImport} disabled={!importType || importing}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
+                {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                {importing ? 'Importing…' : `Import ${preview.row_count} rows as ${IMPORT_TYPES.find(t => t.id === importType)?.label || '…'}`}
+              </button>
+            </>
+          )}
+
+          {/* Result */}
+          {result && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                <div>
+                  <div className="text-sm font-semibold text-emerald-300">{(result as {inserted:number}).inserted} rows imported successfully</div>
+                  {(result as {errors: unknown[]}).errors?.length > 0 && (
+                    <div className="text-xs text-amber-400 mt-0.5">{(result as {errors:unknown[]}).errors.length} rows skipped — check format</div>
+                  )}
+                </div>
+              </div>
+              <button onClick={onClose} className="w-full py-2 bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-xl transition-colors">
+                Done
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-tab types + constants
+// ---------------------------------------------------------------------------
+
 const SUB_TABS: { id: SubTab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'work-units', label: 'Work Units', icon: Layers },
@@ -2366,21 +2712,30 @@ const SUB_TABS: { id: SubTab; label: string; icon: typeof LayoutDashboard }[] = 
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'estimator', label: 'Estimator', icon: Calculator },
   { id: 'invoices', label: 'Invoices', icon: Receipt },
+  { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
 
 export default function PrintFinance() {
   const [activeTab, setActiveTab] = useState<SubTab>('overview');
+  const [showUpload, setShowUpload] = useState(false);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-white">3D Print Finance</h2>
           <p className="text-sm text-slate-400 mt-0.5">Job costing · Revenue tracking · Inventory · Scenarios</p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-xs text-emerald-300 font-medium">Live data</span>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => setShowUpload(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs font-medium rounded-lg transition-colors">
+            <Upload className="w-3.5 h-3.5" />
+            Import Data
+          </button>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-xs text-emerald-300 font-medium">Live</span>
+          </div>
         </div>
       </div>
 
@@ -2406,6 +2761,14 @@ export default function PrintFinance() {
       {activeTab === 'reports'    && <Reports />}
       {activeTab === 'estimator'  && <Estimator />}
       {activeTab === 'invoices'   && <Invoices />}
+      {activeTab === 'settings'   && <Settings />}
+
+      {showUpload && (
+        <UploadModal
+          onClose={() => setShowUpload(false)}
+          onImported={() => { /* data will auto-reload via useApi on next render */ }}
+        />
+      )}
     </div>
   );
 }

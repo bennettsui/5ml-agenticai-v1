@@ -7897,6 +7897,211 @@ app.get('/api/print-finance/export/inventory', async (req, res) => {
 });
 
 // ============================================================
+// SETTINGS (pf_settings key-value store)
+// ============================================================
+pool.query(`CREATE TABLE IF NOT EXISTS pf_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  label TEXT,
+  category TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+)`).then(() => {
+  // Seed defaults if table is empty
+  const defaults = [
+    { key: 'operator_rate_hr', value: '15.00', label: 'Operator Hourly Rate', category: 'hr' },
+    { key: 'manager_rate_hr',  value: '25.00', label: 'Manager Hourly Rate',  category: 'hr' },
+    { key: 'overhead_pct',     value: '25.00', label: 'Overhead Allocation %', category: 'overhead' },
+    { key: 'default_margin',   value: '40.00', label: 'Default Target Margin %', category: 'pricing' },
+    { key: 'currency',         value: 'HKD',   label: 'Currency',             category: 'general' },
+    { key: 'company_name',     value: '3D Print Factory', label: 'Company Name', category: 'general' },
+    { key: 'payment_terms',    value: 'Net 30', label: 'Default Payment Terms', category: 'invoicing' },
+    { key: 'tax_rate',         value: '0',      label: 'Default Tax Rate %',    category: 'invoicing' },
+  ];
+  defaults.forEach(({ key, value, label, category }) => {
+    pool.query(
+      `INSERT INTO pf_settings (key, value, label, category) VALUES ($1,$2,$3,$4) ON CONFLICT (key) DO NOTHING`,
+      [key, value, label, category]
+    ).catch(() => {});
+  });
+}).catch(() => {});
+
+app.get('/api/print-finance/settings', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_settings ORDER BY category, key');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/settings', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const updates = req.body; // { key: value, ... }
+    for (const [key, value] of Object.entries(updates)) {
+      await pool.query(
+        `UPDATE pf_settings SET value=$1, updated_at=NOW() WHERE key=$2`,
+        [String(value), key]
+      );
+    }
+    const { rows } = await pool.query('SELECT * FROM pf_settings ORDER BY category, key');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ============================================================
+// GENERIC IMPORT
+// ============================================================
+function detectImportType(headers) {
+  const h = headers.map(x => String(x).toLowerCase().replace(/[\s_-]+/g, ''));
+  const has = (...keys) => keys.some(k => h.some(x => x.includes(k.replace(/[\s_-]+/g, ''))));
+  if (has('jobid', 'job_id') || (has('grams', 'hours') && has('material'))) return 'work-units';
+  if ((has('stockkg', 'priceperkg', 'stockg', 'quantity') && has('material')) || (has('spool', 'filament') && has('stock'))) return 'inventory';
+  if (has('channel', 'source') && has('revenue', 'amount')) return 'revenue';
+  if (has('category') && has('type') && has('amount')) return 'costs';
+  if (has('revenue') && !has('material') && !has('grams')) return 'revenue';
+  if (has('category') && has('amount')) return 'costs';
+  return 'unknown';
+}
+
+async function parseUploadedFile(file) {
+  const ext = require('path').extname(file.originalname).toLowerCase();
+  if (!['.csv', '.xlsx', '.xls'].includes(ext)) throw new Error('Only .csv, .xlsx, or .xls files are accepted');
+  let headers = [], rows = [];
+  if (ext === '.csv') {
+    const text = file.buffer.toString('utf8');
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (!lines.length) throw new Error('Empty file');
+    headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    for (let i = 1; i < lines.length; i++) {
+      const vals = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+      const row = {};
+      headers.forEach((h, idx) => { row[h] = vals[idx] ?? ''; });
+      rows.push(row);
+    }
+  } else {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(file.buffer);
+    const ws = wb.worksheets[0];
+    ws.getRow(1).eachCell(cell => headers.push(String(cell.value || '').trim()));
+    ws.eachRow((row, rowNum) => {
+      if (rowNum === 1) return;
+      const obj = {};
+      row.eachCell((cell, colNum) => {
+        obj[headers[colNum - 1]] = cell.value !== null && cell.value !== undefined ? String(cell.value) : '';
+      });
+      if (Object.values(obj).some(v => v !== '')) rows.push(obj);
+    });
+  }
+  return { headers, rows };
+}
+
+async function importRows(type, rows) {
+  const inserted = [], errors = [];
+  for (const r of rows) {
+    const get = (...keys) => {
+      for (const k of keys) {
+        for (const rk of Object.keys(r)) {
+          if (rk.toLowerCase().replace(/[\s_]/g, '') === k.toLowerCase().replace(/[\s_]/g, '')) return r[rk] || '';
+        }
+      }
+      return '';
+    };
+    try {
+      if (type === 'revenue') {
+        const period = get('period', 'date', 'month');
+        const channel = get('channel', 'source', 'type');
+        const revenue = parseFloat(get('revenue', 'amount')) || 0;
+        if (!period && !channel && revenue === 0) { errors.push({ row: r, reason: 'No usable data' }); continue; }
+        const { rows: ins } = await pool.query(
+          `INSERT INTO pf_revenue_entries (period, channel, revenue, job_count, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+          [period||null, channel||'Import', revenue, parseInt(get('jobs', 'job_count', 'count'))||0, get('notes')||null]
+        );
+        inserted.push(ins[0]);
+      } else if (type === 'costs') {
+        const category = get('category');
+        const costType = (get('type')||'').toLowerCase();
+        const amount = parseFloat(get('amount')) || 0;
+        if (!category) { errors.push({ row: r, reason: 'Missing category' }); continue; }
+        const validType = ['direct','overhead'].includes(costType) ? costType : 'direct';
+        const { rows: ins } = await pool.query(
+          `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+          [category, validType, amount, get('period','date')||null, get('notes')||null]
+        );
+        inserted.push(ins[0]);
+      } else if (type === 'work-units') {
+        const name = get('name', 'job_name');
+        if (!name) { errors.push({ row: r, reason: 'Missing name' }); continue; }
+        const { rows: ins } = await pool.query(
+          `INSERT INTO pf_work_units (job_id, name, material, grams, hours, revenue, direct_cost, status, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+          [
+            get('job_id','jobid')||null, name,
+            get('material')||null,
+            parseFloat(get('grams','weight_g','weight'))||0,
+            parseFloat(get('hours','print_hours'))||0,
+            parseFloat(get('revenue','price','amount'))||0,
+            parseFloat(get('direct_cost','cost','direct cost'))||0,
+            get('status')||'pending', get('notes')||null,
+          ]
+        );
+        inserted.push(ins[0]);
+      } else if (type === 'inventory') {
+        const material = get('material', 'filament', 'name');
+        if (!material) { errors.push({ row: r, reason: 'Missing material' }); continue; }
+        const { rows: ins } = await pool.query(
+          `INSERT INTO pf_inventory (material, brand, color, stock_kg, price_per_kg, supplier, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+          [
+            material, get('brand')||null, get('color')||null,
+            parseFloat(get('stock_kg','stock','quantity_kg','quantity'))||0,
+            parseFloat(get('price_per_kg','price','cost_per_kg'))||0,
+            get('supplier')||null, get('notes')||null,
+          ]
+        );
+        inserted.push(ins[0]);
+      } else {
+        errors.push({ row: r, reason: `Unknown type: ${type}` });
+      }
+    } catch (e) {
+      errors.push({ row: r, reason: e.message });
+    }
+  }
+  return { inserted: inserted.length, errors };
+}
+
+// POST /api/print-finance/import/preview — parse file, detect type, return preview
+app.post('/api/print-finance/import/preview', pfUpload.single('file'), async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const { headers, rows } = await parseUploadedFile(req.file);
+    const detected_type = detectImportType(headers);
+    res.json({
+      detected_type,
+      columns: headers,
+      sample_rows: rows.slice(0, 5),
+      row_count: rows.length,
+    });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/import/confirm — re-upload + type → actually import
+app.post('/api/print-finance/import/confirm', pfUpload.single('file'), async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const type = req.body.type;
+  if (!['revenue', 'costs', 'work-units', 'inventory'].includes(type)) {
+    return res.status(400).json({ error: `Invalid type: ${type}` });
+  }
+  try {
+    const { rows } = await parseUploadedFile(req.file);
+    const result = await importRows(type, rows);
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ============================================================
 // INVOICES
 // ============================================================
 pool.query(`CREATE TABLE IF NOT EXISTS pf_invoices (
