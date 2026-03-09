@@ -4857,6 +4857,91 @@ app.delete('/api/radiance/admin/media/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Delete failed' }); }
 });
 
+// GET /api/radiance/admin/image-slots — catalog of all image placeholders across the Radiance site
+app.get('/api/radiance/admin/image-slots', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const HOMEPAGE_HEROES = [
+      { key: 'hero-1', label: 'Hero Background 1', src: '/images/radiance/hero/Radiance-1.jpg' },
+      { key: 'hero-2', label: 'Hero Background 2', src: '/images/radiance/hero/Radiance-2.jpg' },
+      { key: 'hero-3', label: 'Hero Background 3', src: '/images/radiance/hero/Radiance-3.jpg' },
+    ];
+    const HOMEPAGE_LOGOS = [
+      { key: 'logo-1',  label: 'Client Logo 1',  src: 'http://5ml.mmdbfiles.com/assets/3808b2fb66ca40525e573461.jpg' },
+      { key: 'logo-2',  label: 'Client Logo 2',  src: 'http://5ml.mmdbfiles.com/assets/077707a701108f72623ec4bc.png' },
+      { key: 'logo-3',  label: 'Client Logo 3',  src: 'http://5ml.mmdbfiles.com/assets/5cd8f4f3226ac0e3c93e4393.png' },
+      { key: 'logo-4',  label: 'Client Logo 4',  src: 'http://5ml.mmdbfiles.com/assets/7c99bdf01d6cf2a586add91a.jpg' },
+      { key: 'logo-5',  label: 'Client Logo 5',  src: 'http://5ml.mmdbfiles.com/assets/b0f34a35f4e82d61546656d1.png' },
+      { key: 'logo-6',  label: 'Client Logo 6',  src: 'http://5ml.mmdbfiles.com/assets/de9d1b833bc5d93ff62e2e41.jpg' },
+      { key: 'logo-7',  label: 'Client Logo 7',  src: 'http://5ml.mmdbfiles.com/assets/8cb61dc159f35088617837b1.png' },
+      { key: 'logo-8',  label: 'Client Logo 8',  src: 'http://5ml.mmdbfiles.com/assets/489f18198b4127d98d307f43.jpg' },
+      { key: 'logo-9',  label: 'Client Logo 9',  src: 'http://5ml.mmdbfiles.com/assets/11b120b411e57a7fa62d3933.jpg' },
+      { key: 'logo-10', label: 'Client Logo 10', src: 'http://5ml.mmdbfiles.com/assets/4b87e1e47b865565936c7683.jpg' },
+    ];
+
+    const CASE_STUDY_SLUGS = [
+      'daikin', 'filorga', 'gp-batteries', 'her-own-words-sport',
+      'lung-fu-shan', 'richmond-fellowship', 'venice-biennale-hk', 'chinese-culture-exhibition',
+    ];
+    const BLOG_SLUGS = [
+      'earned-media-strategy', 'integrated-campaigns', 'product-launch-pr',
+      'event-media-strategy', 'thought-leadership', 'ngos-reputation',
+      'cultural-pr', 'social-media-strategy',
+    ];
+
+    const [csResult, blogResult] = await Promise.all([
+      pool.query('SELECT slug, title_en, featured_image FROM radiance_case_study_cms'),
+      pool.query('SELECT slug, title_en, hero_image FROM radiance_blog_cms'),
+    ]);
+
+    const csMap = {};
+    csResult.rows.forEach(r => { csMap[r.slug] = r; });
+    const blogMap = {};
+    blogResult.rows.forEach(r => { blogMap[r.slug] = r; });
+
+    const caseStudySlots = CASE_STUDY_SLUGS.map(slug => {
+      const row = csMap[slug];
+      return {
+        key: `case-study-${slug}`,
+        page: 'Case Studies',
+        label: row ? (row.title_en || slug) : slug,
+        src: row?.featured_image || null,
+        type: 'cms',
+        status: row?.featured_image ? 'filled' : 'missing',
+      };
+    });
+
+    const blogSlots = BLOG_SLUGS.map(slug => {
+      const row = blogMap[slug];
+      return {
+        key: `blog-${slug}`,
+        page: 'Blog',
+        label: row ? (row.title_en || slug) : slug,
+        src: row?.hero_image || null,
+        type: 'cms',
+        status: row?.hero_image ? 'filled' : 'missing',
+      };
+    });
+
+    const slots = [
+      ...HOMEPAGE_HEROES.map(s => ({ ...s, page: 'Homepage', type: 'local', status: 'filled' })),
+      ...HOMEPAGE_LOGOS.map(s => ({ ...s, page: 'Homepage', type: 'cdn', status: 'cdn' })),
+      ...caseStudySlots,
+      ...blogSlots,
+    ];
+
+    res.json({
+      success: true,
+      slots,
+      total: slots.length,
+      filled: slots.filter(s => s.status !== 'missing').length,
+    });
+  } catch (err) {
+    console.error('Image slots error:', err);
+    res.status(500).json({ error: 'Failed to fetch image slots' });
+  }
+});
+
 // GET /api/radiance/blog/:slug — returns CMS override or null
 app.get('/api/radiance/blog/:slug', async (req, res) => {
   try {
