@@ -802,6 +802,187 @@ function Costs() {
           );
         })}
       </div>
+
+      {/* Overhead Allocation Engine */}
+      <OverheadAllocator />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Overhead Allocation Engine (used inside Costs tab)
+// ---------------------------------------------------------------------------
+
+interface AllocPreview {
+  total_overhead: number;
+  total_hours: number;
+  rate_per_hour: number;
+  allocations: {
+    id: number;
+    job_id: string;
+    name: string;
+    hours: number;
+    current_alloc: number;
+    proposed_alloc: number;
+  }[];
+}
+
+function OverheadAllocator() {
+  const [preview, setPreview] = useState<AllocPreview | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [result, setResult] = useState<{ updated: number; rate_per_hour: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadPreview = async () => {
+    setLoadingPreview(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch('/api/print-finance/allocate-overhead/preview');
+      if (!res.ok) { const j = await res.json(); throw new Error(j.error); }
+      setPreview(await res.json());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load preview');
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const applyAllocation = async () => {
+    setApplying(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/print-finance/allocate-overhead', { method: 'POST' });
+      if (!res.ok) { const j = await res.json(); throw new Error(j.error); }
+      const json = await res.json();
+      setResult(json);
+      setPreview(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to apply allocation');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  return (
+    <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-white">Overhead Allocation Engine</h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Splits total overhead costs across work units proportionally by print hours.
+            <span className="text-slate-500 ml-1">Formula: overhead × (job hours / total hours)</span>
+          </p>
+        </div>
+        <button
+          onClick={loadPreview}
+          disabled={loadingPreview}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-300 text-xs rounded-lg transition-colors whitespace-nowrap disabled:opacity-50"
+        >
+          {loadingPreview ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+          Preview Allocation
+        </button>
+      </div>
+
+      {error && <ErrorBanner msg={error} onRetry={loadPreview} />}
+
+      {result && (
+        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-xs text-emerald-300 mb-4">
+          ✓ Overhead allocated to {result.updated} work unit{result.updated !== 1 ? 's' : ''} at{' '}
+          <span className="font-semibold">${Number(result.rate_per_hour).toFixed(3)}/hour</span>.
+          Refresh Work Units to see updated values.
+        </div>
+      )}
+
+      {preview && (
+        <div className="space-y-4">
+          {/* Summary */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Total Overhead Pool', value: money(preview.total_overhead), color: 'text-amber-400' },
+              { label: 'Total Print Hours', value: `${fmt(preview.total_hours, 1)}h`, color: 'text-blue-400' },
+              { label: 'Rate / Hour', value: `$${Number(preview.rate_per_hour).toFixed(3)}`, color: 'text-slate-200' },
+            ].map(k => (
+              <div key={k.label} className="bg-white/[0.03] rounded-lg p-3">
+                <div className="text-xs text-slate-500 mb-1">{k.label}</div>
+                <div className={`text-lg font-bold ${k.color}`}>{k.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Per-job preview table */}
+          <div className="overflow-x-auto rounded-lg border border-slate-700/40">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-700/50">
+                  {['Job', 'Hours', 'Hours %', 'Current Alloc', 'Proposed Alloc', 'Δ Change'].map(h => (
+                    <th key={h} className="text-left px-3 py-2 text-slate-400 font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {preview.allocations.map(a => {
+                  const pct = preview.total_hours > 0 ? (a.hours / preview.total_hours) * 100 : 0;
+                  const delta = a.proposed_alloc - a.current_alloc;
+                  return (
+                    <tr key={a.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
+                      <td className="px-3 py-2">
+                        <div className="text-slate-200 font-medium truncate max-w-[160px]">{a.name}</div>
+                        <div className="text-slate-500 font-mono">{a.job_id}</div>
+                      </td>
+                      <td className="px-3 py-2 text-slate-300">{a.hours}h</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-16 bg-slate-700/50 rounded-full overflow-hidden flex-shrink-0">
+                            <div className="h-full bg-amber-500 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-slate-400">{fmt(pct, 1)}%</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-slate-400">{money(a.current_alloc)}</td>
+                      <td className="px-3 py-2 text-amber-300 font-semibold">{money(a.proposed_alloc)}</td>
+                      <td className="px-3 py-2">
+                        <span className={`font-medium ${Math.abs(delta) < 0.01 ? 'text-slate-500' : delta > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {delta > 0.01 ? '+' : ''}{money(delta)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {preview.total_overhead === 0 && (
+            <div className="text-xs text-amber-400 flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5" />
+              No overhead costs found. Add overhead entries above first.
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={applyAllocation}
+              disabled={applying || preview.total_overhead === 0 || preview.total_hours === 0}
+              className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              {applying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              Apply to All Work Units
+            </button>
+            <button onClick={() => setPreview(null)} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+              Dismiss
+            </button>
+            <span className="text-xs text-slate-600">This will overwrite current overhead values.</span>
+          </div>
+        </div>
+      )}
+
+      {!preview && !result && !loadingPreview && (
+        <div className="text-xs text-slate-500 mt-1">
+          Click "Preview Allocation" to see how overhead would be distributed before applying.
+        </div>
+      )}
     </div>
   );
 }

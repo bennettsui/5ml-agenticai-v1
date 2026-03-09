@@ -7841,6 +7841,53 @@ app.get('/api/print-finance/export/inventory', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET /api/print-finance/allocate-overhead/preview
+// Returns proposed allocations without writing to DB
+app.get('/api/print-finance/allocate-overhead/preview', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const [costRes, wuRes] = await Promise.all([
+      pool.query(`SELECT COALESCE(SUM(amount), 0) AS total FROM pf_cost_entries WHERE type = 'overhead'`),
+      pool.query(`SELECT id, job_id, name, hours, overhead_alloc FROM pf_work_units ORDER BY hours DESC`),
+    ]);
+    const totalOverhead = Number(costRes.rows[0].total);
+    const totalHours = wuRes.rows.reduce((s, r) => s + Number(r.hours), 0);
+    const ratePerHour = totalHours > 0 ? totalOverhead / totalHours : 0;
+    const allocations = wuRes.rows.map(r => ({
+      id: r.id,
+      job_id: r.job_id,
+      name: r.name,
+      hours: Number(r.hours),
+      current_alloc: Number(r.overhead_alloc),
+      proposed_alloc: totalHours > 0 ? Number(r.hours) * ratePerHour : 0,
+    }));
+    res.json({ total_overhead: totalOverhead, total_hours: totalHours, rate_per_hour: ratePerHour, allocations });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/allocate-overhead
+// Applies overhead allocation to all work units by print-hours ratio
+app.post('/api/print-finance/allocate-overhead', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const [costRes, wuRes] = await Promise.all([
+      pool.query(`SELECT COALESCE(SUM(amount), 0) AS total FROM pf_cost_entries WHERE type = 'overhead'`),
+      pool.query(`SELECT id, name, hours FROM pf_work_units WHERE hours > 0`),
+    ]);
+    const totalOverhead = Number(costRes.rows[0].total);
+    const totalHours = wuRes.rows.reduce((s, r) => s + Number(r.hours), 0);
+    if (totalHours === 0) return res.status(400).json({ error: 'No work units with recorded hours to allocate to' });
+    const ratePerHour = totalOverhead / totalHours;
+    let updated = 0;
+    for (const wu of wuRes.rows) {
+      const alloc = Number(wu.hours) * ratePerHour;
+      await pool.query(`UPDATE pf_work_units SET overhead_alloc=$1, updated_at=NOW() WHERE id=$2`, [alloc.toFixed(4), wu.id]);
+      updated++;
+    }
+    res.json({ total_overhead: totalOverhead, total_hours: totalHours, rate_per_hour: ratePerHour, updated });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 const errorHandler = (err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   console.error('❌ Unhandled error:', err.message || err);
