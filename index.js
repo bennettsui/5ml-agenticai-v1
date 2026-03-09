@@ -7666,6 +7666,181 @@ app.delete('/api/print-finance/inventory/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// --- Excel Exports ---
+function xlsxHeaders(res, filename) {
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+}
+
+function styleHeaderRow(sheet, colCount) {
+  const row = sheet.getRow(1);
+  for (let i = 1; i <= colCount; i++) {
+    const cell = row.getCell(i);
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    cell.font = { bold: true, color: { argb: 'FFE2E8F0' } };
+    cell.border = { bottom: { style: 'thin', color: { argb: 'FF334155' } } };
+  }
+  row.commit();
+}
+
+// GET /api/print-finance/export/jobs
+app.get('/api/print-finance/export/jobs', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '3D Print Finance';
+    const ws = wb.addWorksheet('Work Units');
+    ws.columns = [
+      { header: 'Job ID',      key: 'job_id',        width: 18 },
+      { header: 'Name',        key: 'name',           width: 30 },
+      { header: 'Material',    key: 'material',       width: 18 },
+      { header: 'Weight (g)',  key: 'grams',          width: 12 },
+      { header: 'Hours',       key: 'hours',          width: 10 },
+      { header: 'Status',      key: 'status',         width: 14 },
+      { header: 'Revenue ($)', key: 'revenue',        width: 14 },
+      { header: 'Direct Cost ($)', key: 'direct_cost', width: 16 },
+      { header: 'Overhead ($)',key: 'overhead_alloc', width: 14 },
+      { header: 'Gross Profit ($)', key: 'profit',   width: 16 },
+      { header: 'Margin (%)',  key: 'margin',         width: 12 },
+      { header: 'Notes',       key: 'notes',          width: 30 },
+      { header: 'Created At',  key: 'created_at',     width: 20 },
+    ];
+    styleHeaderRow(ws, ws.columns.length);
+    const { rows } = await pool.query('SELECT * FROM pf_work_units ORDER BY created_at DESC');
+    rows.forEach(r => {
+      const profit = Number(r.revenue) - Number(r.direct_cost) - Number(r.overhead_alloc);
+      const margin = Number(r.revenue) > 0 ? ((profit / Number(r.revenue)) * 100).toFixed(1) : '';
+      ws.addRow({ ...r, profit: profit.toFixed(2), margin, created_at: new Date(r.created_at).toLocaleString() });
+    });
+    ws.eachRow((row, rowNum) => { if (rowNum > 1) row.getCell('profit').numFmt = '#,##0.00'; });
+    xlsxHeaders(res, 'print-finance-jobs.xlsx');
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/export/pl
+app.get('/api/print-finance/export/pl', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '3D Print Finance';
+    const [revResult, costResult] = await Promise.all([
+      pool.query('SELECT * FROM pf_revenue_entries ORDER BY period DESC, channel'),
+      pool.query('SELECT * FROM pf_cost_entries ORDER BY type, category'),
+    ]);
+
+    // Sheet 1: P&L Summary
+    const ws1 = wb.addWorksheet('P&L Summary');
+    ws1.columns = [
+      { header: 'Line Item', key: 'label', width: 32 },
+      { header: 'Amount ($)', key: 'amount', width: 16 },
+    ];
+    styleHeaderRow(ws1, 2);
+    const totalRev = revResult.rows.reduce((s, r) => s + Number(r.revenue), 0);
+    const totalCogs = revResult.rows.reduce((s, r) => s + Number(r.cogs), 0);
+    const grossProfit = totalRev - totalCogs;
+    const opex = costResult.rows.filter(c => c.type === 'overhead').reduce((s, c) => s + Number(c.amount), 0);
+    const directCosts = costResult.rows.filter(c => c.type === 'direct').reduce((s, c) => s + Number(c.amount), 0);
+    const ebitda = grossProfit - opex;
+    const depr = costResult.rows.find(c => c.category.toLowerCase().includes('depreciation'));
+    const ebit = ebitda - (depr ? Number(depr.amount) : 0);
+    const plLines = [
+      { label: 'Revenue', amount: totalRev },
+      { label: '  Cost of Goods Sold', amount: -totalCogs },
+      { label: 'Gross Profit', amount: grossProfit },
+      { label: '  Direct Costs (variable)', amount: -directCosts },
+      { label: '  Operating Expenses (overhead)', amount: -opex },
+      { label: 'EBITDA', amount: ebitda },
+      { label: '  Depreciation', amount: depr ? -Number(depr.amount) : 0 },
+      { label: 'EBIT', amount: ebit },
+    ];
+    plLines.forEach((l, i) => {
+      const row = ws1.addRow({ label: l.label, amount: l.amount.toFixed(2) });
+      const isBold = ['Gross Profit', 'EBITDA', 'EBIT'].includes(l.label);
+      if (isBold) {
+        row.getCell('label').font = { bold: true };
+        row.getCell('amount').font = { bold: true, color: { argb: l.amount >= 0 ? 'FF10B981' : 'FFEF4444' } };
+        row.getCell('amount').border = { top: { style: 'thin', color: { argb: 'FF334155' } } };
+      }
+    });
+
+    // Sheet 2: Revenue breakdown
+    const ws2 = wb.addWorksheet('Revenue');
+    ws2.columns = [
+      { header: 'Channel', key: 'channel', width: 20 },
+      { header: 'Period',  key: 'period',  width: 14 },
+      { header: 'Jobs',    key: 'jobs',    width: 8  },
+      { header: 'Grams',   key: 'units_grams', width: 12 },
+      { header: 'Revenue ($)', key: 'revenue', width: 14 },
+      { header: 'COGS ($)', key: 'cogs',  width: 14 },
+      { header: 'Gross Profit ($)', key: 'gp', width: 18 },
+      { header: 'Margin (%)', key: 'margin', width: 12 },
+    ];
+    styleHeaderRow(ws2, ws2.columns.length);
+    revResult.rows.forEach(r => {
+      const gp = Number(r.revenue) - Number(r.cogs);
+      const margin = Number(r.revenue) > 0 ? ((gp / Number(r.revenue)) * 100).toFixed(1) : '';
+      ws2.addRow({ ...r, gp: gp.toFixed(2), margin });
+    });
+
+    // Sheet 3: Costs breakdown
+    const ws3 = wb.addWorksheet('Costs');
+    ws3.columns = [
+      { header: 'Category', key: 'category', width: 28 },
+      { header: 'Type',     key: 'type',     width: 12 },
+      { header: 'Amount ($)', key: 'amount', width: 14 },
+      { header: 'Period',   key: 'period',   width: 14 },
+      { header: 'Notes',    key: 'notes',    width: 30 },
+    ];
+    styleHeaderRow(ws3, ws3.columns.length);
+    costResult.rows.forEach(r => ws3.addRow(r));
+
+    xlsxHeaders(res, 'print-finance-pl.xlsx');
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/export/inventory
+app.get('/api/print-finance/export/inventory', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '3D Print Finance';
+    const ws = wb.addWorksheet('Inventory');
+    ws.columns = [
+      { header: 'SKU',          key: 'sku',           width: 18 },
+      { header: 'Name',         key: 'name',          width: 30 },
+      { header: 'Type',         key: 'type',          width: 12 },
+      { header: 'Unit',         key: 'unit',          width: 8  },
+      { header: 'Stock Qty',    key: 'stock_qty',     width: 12 },
+      { header: 'Reorder @',    key: 'reorder_point', width: 12 },
+      { header: 'Unit Cost ($)',key: 'unit_cost',     width: 14 },
+      { header: 'Stock Value ($)', key: 'value',      width: 16 },
+      { header: 'Supplier',     key: 'supplier',      width: 20 },
+      { header: 'Low Stock?',   key: 'low_stock',     width: 12 },
+      { header: 'Notes',        key: 'notes',         width: 30 },
+    ];
+    styleHeaderRow(ws, ws.columns.length);
+    const { rows } = await pool.query('SELECT * FROM pf_inventory_items ORDER BY name');
+    rows.forEach(r => {
+      const value = (Number(r.stock_qty) * Number(r.unit_cost)).toFixed(2);
+      const low_stock = Number(r.stock_qty) <= Number(r.reorder_point) ? 'YES' : 'no';
+      const row = ws.addRow({ ...r, value, low_stock });
+      if (Number(r.stock_qty) <= Number(r.reorder_point)) {
+        row.getCell('low_stock').font = { color: { argb: 'FFF59E0B' }, bold: true };
+      }
+    });
+    xlsxHeaders(res, 'print-finance-inventory.xlsx');
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 const errorHandler = (err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   console.error('❌ Unhandled error:', err.message || err);

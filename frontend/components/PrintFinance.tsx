@@ -5,8 +5,12 @@ import {
   LayoutDashboard, Layers, DollarSign, Package, TrendingUp,
   FlaskConical, FileText, ArrowUpRight, ArrowDownRight,
   AlertCircle, CheckCircle2, Clock, Zap, Plus, Trash2,
-  Upload, Download, X, Loader2, RefreshCw,
+  Upload, Download, X, Loader2, RefreshCw, Pencil, Save,
 } from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend,
+} from 'recharts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -224,6 +228,58 @@ function Overview() {
           })}
         </div>
       </div>
+
+      {/* Charts row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Revenue vs Cost bar chart by channel */}
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-white mb-4">Revenue vs Cost by Job</h3>
+          {(jobs || []).length === 0 ? (
+            <div className="text-sm text-slate-500 py-8 text-center">No jobs yet.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={(jobs || []).slice(0, 7).map(w => ({
+                name: w.name.length > 12 ? w.name.slice(0, 12) + '…' : w.name,
+                Revenue: Number(w.revenue),
+                Cost: Number(w.direct_cost) + Number(w.overhead_alloc),
+              }))} margin={{ top: 0, right: 0, bottom: 0, left: -10 }}>
+                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+                <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }} labelStyle={{ color: '#e2e8f0' }} />
+                <Bar dataKey="Revenue" fill="#10b981" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="Cost" fill="#f43f5e" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Cost mix donut */}
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-white mb-4">Cost Mix</h3>
+          {(() => {
+            const directAmt = (jobs || []).reduce((s, w) => s + Number(w.direct_cost), 0);
+            const overheadAmt = (jobs || []).reduce((s, w) => s + Number(w.overhead_alloc), 0);
+            const pieData = [
+              { name: 'Direct', value: directAmt },
+              { name: 'Overhead', value: overheadAmt },
+            ].filter(d => d.value > 0);
+            const COLORS = ['#f43f5e', '#f59e0b'];
+            return pieData.length === 0 ? (
+              <div className="text-sm text-slate-500 py-8 text-center">No cost data yet.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value">
+                    {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => `$${v.toFixed(2)}`} />
+                  <Legend iconType="circle" iconSize={8} formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>} />
+                </PieChart>
+              </ResponsiveContainer>
+            );
+          })()}
+        </div>
+      </div>
     </div>
   );
 }
@@ -236,6 +292,8 @@ function WorkUnits() {
   const { data: jobs, loading, error, reload } = useApi<WorkUnit[]>('/api/print-finance/work-units');
   const [selected, setSelected] = useState<WorkUnit | null>(null);
   const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Partial<WorkUnit>>({});
   const [form, setForm] = useState({ name: '', material: '', grams: '', hours: '', status: 'queued', revenue: '', direct_cost: '', overhead_alloc: '', notes: '' });
   const [saving, setSaving] = useState(false);
 
@@ -253,9 +311,22 @@ function WorkUnits() {
     reload();
   };
 
+  const startEdit = (w: WorkUnit) => { setEditId(w.id); setEditForm({ ...w }); setSelected(null); };
+  const cancelEdit = () => { setEditId(null); setEditForm({}); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    setSaving(true);
+    await fetch(`/api/print-finance/work-units/${editId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    setSaving(false); cancelEdit(); reload();
+  };
+
   const del = async (id: number) => {
     await fetch(`/api/print-finance/work-units/${id}`, { method: 'DELETE' });
     if (selected?.id === id) setSelected(null);
+    if (editId === id) cancelEdit();
     reload();
   };
 
@@ -323,11 +394,36 @@ function WorkUnits() {
               {loading ? <LoadingRow cols={11} /> : (jobs || []).length === 0 ? (
                 <tr><td colSpan={11} className="px-4 py-8 text-center text-sm text-slate-500">No jobs yet. Click "New Job" to add one.</td></tr>
               ) : (jobs || []).map(w => {
+                const isEditing = editId === w.id;
                 const profit = Number(w.revenue) - Number(w.direct_cost) - Number(w.overhead_alloc);
                 const margin = Number(w.revenue) > 0 ? (profit / Number(w.revenue)) * 100 : 0;
+
+                if (isEditing) return (
+                  <tr key={w.id} className="border-b border-blue-500/20 bg-blue-500/5">
+                    <td className="px-4 py-2 text-slate-400 font-mono text-xs">{w.job_id}</td>
+                    <td className="px-4 py-2"><input className="w-full bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.name||'')} onChange={e => setEditForm(p => ({...p, name: e.target.value}))} /></td>
+                    <td className="px-4 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.material||'')} onChange={e => setEditForm(p => ({...p, material: e.target.value}))} /></td>
+                    <td className="px-4 py-2"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.grams||'')} onChange={e => setEditForm(p => ({...p, grams: Number(e.target.value)}))} /></td>
+                    <td className="px-4 py-2"><input type="number" className="w-14 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.hours||'')} onChange={e => setEditForm(p => ({...p, hours: Number(e.target.value)}))} /></td>
+                    <td className="px-4 py-2"><select className="bg-slate-700 border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.status||'queued')} onChange={e => setEditForm(p => ({...p, status: e.target.value as WorkUnit['status']}))}>
+                      {['queued','in-progress','complete','failed'].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select></td>
+                    <td className="px-4 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.revenue||'')} onChange={e => setEditForm(p => ({...p, revenue: Number(e.target.value)}))} /></td>
+                    <td className="px-4 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.direct_cost||'')} onChange={e => setEditForm(p => ({...p, direct_cost: Number(e.target.value)}))} /></td>
+                    <td className="px-4 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.overhead_alloc||'')} onChange={e => setEditForm(p => ({...p, overhead_alloc: Number(e.target.value)}))} /></td>
+                    <td className="px-4 py-2 text-slate-500">—</td>
+                    <td className="px-4 py-2">
+                      <div className="flex gap-1">
+                        <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300"><Save className="w-3.5 h-3.5" /></button>
+                        <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+
                 return (
                   <tr key={w.id} onClick={() => setSelected(selected?.id === w.id ? null : w)}
-                    className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] cursor-pointer transition-colors">
+                    className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] cursor-pointer transition-colors group">
                     <td className="px-4 py-3 text-slate-400 font-mono text-xs">{w.job_id}</td>
                     <td className="px-4 py-3 text-slate-200 font-medium max-w-[180px] truncate">{w.name}</td>
                     <td className="px-4 py-3 text-slate-400">{w.material}</td>
@@ -347,9 +443,10 @@ function WorkUnits() {
                       ) : <span className="text-slate-500">—</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <button onClick={e => { e.stopPropagation(); del(w.id); }} className="text-slate-600 hover:text-red-400 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={e => { e.stopPropagation(); startEdit(w); }} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                        <button onClick={e => { e.stopPropagation(); del(w.id); }} className="text-slate-500 hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -716,6 +813,8 @@ function Costs() {
 function Inventory() {
   const { data: items, loading, error, reload } = useApi<InventoryItem[]>('/api/print-finance/inventory');
   const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Partial<InventoryItem>>({});
   const [form, setForm] = useState({ name: '', type: 'filament', unit: 'kg', stock_qty: '', reorder_point: '', unit_cost: '', supplier: '', notes: '' });
   const [saving, setSaving] = useState(false);
 
@@ -731,7 +830,19 @@ function Inventory() {
     reload();
   };
 
-  const del = async (id: number) => { await fetch(`/api/print-finance/inventory/${id}`, { method: 'DELETE' }); reload(); };
+  const startEdit = (item: InventoryItem) => { setEditId(item.id); setEditForm({ ...item }); };
+  const cancelEdit = () => { setEditId(null); setEditForm({}); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    setSaving(true);
+    await fetch(`/api/print-finance/inventory/${editId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    setSaving(false); cancelEdit(); reload();
+  };
+
+  const del = async (id: number) => { await fetch(`/api/print-finance/inventory/${id}`, { method: 'DELETE' }); if (editId === id) cancelEdit(); reload(); };
 
   const totalValue = (items || []).reduce((s, i) => s + Number(i.stock_qty) * Number(i.unit_cost), 0);
   const lowStock = (items || []).filter(i => Number(i.stock_qty) <= Number(i.reorder_point));
@@ -820,10 +931,41 @@ function Inventory() {
               {loading ? <LoadingRow cols={10} /> : (items || []).length === 0 ? (
                 <tr><td colSpan={10} className="px-4 py-8 text-center text-sm text-slate-500">No inventory yet.</td></tr>
               ) : (items || []).map(item => {
+                const isEditing = editId === item.id;
                 const value = Number(item.stock_qty) * Number(item.unit_cost);
                 const isLow = Number(item.stock_qty) <= Number(item.reorder_point);
+
+                if (isEditing) return (
+                  <tr key={item.id} className="border-b border-blue-500/20 bg-blue-500/5">
+                    <td className="px-4 py-2 text-slate-400 font-mono text-xs">{item.sku}</td>
+                    <td className="px-4 py-2"><input className="w-full bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.name||'')} onChange={e => setEditForm(p => ({...p, name: e.target.value}))} /></td>
+                    <td className="px-4 py-2"><select className="bg-slate-700 border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.type||'filament')} onChange={e => setEditForm(p => ({...p, type: e.target.value as InventoryItem['type']}))}>
+                      {['filament','resin','powder'].map(t => <option key={t} value={t}>{t}</option>)}
+                    </select></td>
+                    <td className="px-4 py-2">
+                      <div className="flex gap-1">
+                        <input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.stock_qty||'')} onChange={e => setEditForm(p => ({...p, stock_qty: Number(e.target.value)}))} />
+                        <select className="bg-slate-700 border border-slate-600/40 rounded px-1 py-1 text-xs text-white" value={String(editForm.unit||'kg')} onChange={e => setEditForm(p => ({...p, unit: e.target.value}))}>
+                          {['kg','g','L','mL','pcs'].map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.reorder_point||'')} onChange={e => setEditForm(p => ({...p, reorder_point: Number(e.target.value)}))} /></td>
+                    <td className="px-4 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.unit_cost||'')} onChange={e => setEditForm(p => ({...p, unit_cost: Number(e.target.value)}))} /></td>
+                    <td className="px-4 py-2 text-slate-500 text-xs">{money(Number(editForm.stock_qty||0)*Number(editForm.unit_cost||0))}</td>
+                    <td className="px-4 py-2"><input className="w-28 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.supplier||'')} onChange={e => setEditForm(p => ({...p, supplier: e.target.value}))} /></td>
+                    <td className="px-4 py-2 text-slate-500">—</td>
+                    <td className="px-4 py-2">
+                      <div className="flex gap-1">
+                        <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300"><Save className="w-3.5 h-3.5" /></button>
+                        <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+
                 return (
-                  <tr key={item.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] transition-colors">
+                  <tr key={item.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] transition-colors group">
                     <td className="px-4 py-3 text-slate-400 font-mono text-xs">{item.sku}</td>
                     <td className="px-4 py-3 text-slate-200 font-medium">{item.name}</td>
                     <td className="px-4 py-3"><span className="px-1.5 py-0.5 rounded text-xs bg-slate-700/50 text-slate-300 capitalize">{item.type}</span></td>
@@ -839,7 +981,12 @@ function Inventory() {
                         <span className="inline-flex items-center gap-1 text-xs text-emerald-400"><CheckCircle2 className="w-3 h-3" /> OK</span>
                       )}
                     </td>
-                    <td className="px-4 py-3"><button onClick={() => del(item.id)} className="text-slate-600 hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button></td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => startEdit(item)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => del(item.id)} className="text-slate-500 hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -1058,12 +1205,37 @@ function Reports() {
         </div>
       </div>
 
-      <div className="flex gap-3">
-        {['Export P&L CSV', 'Export Job Detail CSV', 'Export Inventory CSV'].map(label => (
-          <button key={label} className="px-4 py-2 bg-slate-700/60 hover:bg-slate-700 border border-slate-600/50 text-slate-300 hover:text-white text-xs rounded-lg transition-colors flex items-center gap-1.5">
-            <FileText className="w-3.5 h-3.5" />
+      {/* Channel revenue chart */}
+      {channels.length > 0 && (
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-white mb-4">Revenue & Gross Profit by Channel</h3>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={channels.map(c => {
+              const entries = (revenue || []).filter(r => r.channel === c.name);
+              const cogs = entries.reduce((s, r) => s + Number(r.cogs), 0);
+              return { name: c.name, Revenue: c.revenue, 'Gross Profit': c.revenue - cogs };
+            })} margin={{ top: 0, right: 0, bottom: 0, left: -10 }}>
+              <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }} />
+              <Bar dataKey="Revenue" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Gross Profit" fill="#10b981" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-3">
+        {[
+          { label: 'Export P&L (.xlsx)',        url: '/api/print-finance/export/pl' },
+          { label: 'Export Job Detail (.xlsx)', url: '/api/print-finance/export/jobs' },
+          { label: 'Export Inventory (.xlsx)',  url: '/api/print-finance/export/inventory' },
+        ].map(({ label, url }) => (
+          <a key={label} href={url} download
+            className="px-4 py-2 bg-slate-700/60 hover:bg-slate-700 border border-slate-600/50 text-slate-300 hover:text-white text-xs rounded-lg transition-colors flex items-center gap-1.5">
+            <Download className="w-3.5 h-3.5" />
             {label}
-          </button>
+          </a>
         ))}
       </div>
     </div>
