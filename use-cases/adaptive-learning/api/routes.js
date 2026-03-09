@@ -636,7 +636,7 @@ async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
     if (await ocrService.isAvailable()) {
       rawBlocks = await ocrService.extractFromPdf(pdfBuffer);
     } else {
-      console.warn(`Paper ${paperId}: Google Document AI not configured, skipping OCR`);
+      console.warn(`Paper ${paperId}: GEMINI_API_KEY not set — skipping OCR`);
       await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
       return;
     }
