@@ -7920,6 +7920,63 @@ app.get('/api/print-finance/job-pnl', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// --- Material Rates ---
+pool.query(`CREATE TABLE IF NOT EXISTS pf_material_rates (
+  id SERIAL PRIMARY KEY,
+  material TEXT NOT NULL UNIQUE,
+  machine_rate_per_hr NUMERIC(10,4) NOT NULL DEFAULT 0,
+  filament_cost_per_g NUMERIC(10,4) NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)`).catch(() => {});
+
+app.get('/api/print-finance/material-rates', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_material_rates ORDER BY material');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/material-rates', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { material, machine_rate_per_hr, filament_cost_per_g, notes } = req.body;
+    if (!material) return res.status(400).json({ error: 'material is required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_material_rates (material, machine_rate_per_hr, filament_cost_per_g, notes)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (material) DO UPDATE
+         SET machine_rate_per_hr=$2, filament_cost_per_g=$3, notes=$4
+       RETURNING *`,
+      [material, machine_rate_per_hr||0, filament_cost_per_g||0, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/material-rates/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { material, machine_rate_per_hr, filament_cost_per_g, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_material_rates SET material=$1, machine_rate_per_hr=$2, filament_cost_per_g=$3, notes=$4
+       WHERE id=$5 RETURNING *`,
+      [material, machine_rate_per_hr||0, filament_cost_per_g||0, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/material-rates/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    await pool.query('DELETE FROM pf_material_rates WHERE id=$1', [req.params.id]);
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // --- Named Scenarios ---
 // Auto-create table if missing
 pool.query(`CREATE TABLE IF NOT EXISTS pf_scenarios (

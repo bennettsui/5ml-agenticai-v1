@@ -6,6 +6,7 @@ import {
   FlaskConical, FileText, ArrowUpRight, ArrowDownRight,
   AlertCircle, CheckCircle2, Clock, Zap, Plus, Trash2,
   Upload, Download, X, Loader2, RefreshCw, Pencil, Save,
+  Calculator, Filter,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -16,7 +17,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-type SubTab = 'overview' | 'work-units' | 'revenue' | 'costs' | 'inventory' | 'scenarios' | 'reports';
+type SubTab = 'overview' | 'work-units' | 'revenue' | 'costs' | 'inventory' | 'scenarios' | 'reports' | 'estimator';
 
 interface WorkUnit {
   id: number;
@@ -30,6 +31,7 @@ interface WorkUnit {
   direct_cost: number;
   overhead_alloc: number;
   notes?: string;
+  created_at?: string;
 }
 
 interface RevenueEntry {
@@ -59,6 +61,14 @@ interface SavedScenario {
   overhead_adj: number;
   notes?: string;
   created_at: string;
+}
+
+interface MaterialRate {
+  id: number;
+  material: string;
+  machine_rate_per_hr: number;
+  filament_cost_per_g: number;
+  notes?: string;
 }
 
 interface InventoryItem {
@@ -302,6 +312,7 @@ function WorkUnits() {
   const { data: jobs, loading, error, reload } = useApi<WorkUnit[]>('/api/print-finance/work-units');
   const [selected, setSelected] = useState<WorkUnit | null>(null);
   const [adding, setAdding] = useState(false);
+  const [filterPeriod, setFilterPeriod] = useState('');
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<WorkUnit>>({});
   const [form, setForm] = useState({ job_id: '', name: '', material: '', grams: '', hours: '', status: 'queued', revenue: '', direct_cost: '', overhead_alloc: '', notes: '' });
@@ -340,13 +351,37 @@ function WorkUnits() {
     reload();
   };
 
+  const months = Array.from(new Set((jobs || []).map(w => {
+    const d = new Date(w.created_at as unknown as string);
+    return isNaN(d.getTime()) ? '' : d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  }).filter(Boolean))).sort().reverse();
+
+  const visibleJobs = filterPeriod
+    ? (jobs || []).filter(w => {
+        const d = new Date(w.created_at as unknown as string);
+        return d.toLocaleString('en-US', { month: 'short', year: 'numeric' }) === filterPeriod;
+      })
+    : (jobs || []);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-white">All Work Units</h3>
-        <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
-          <Plus className="w-3.5 h-3.5" /> New Job
-        </button>
+        <div className="flex items-center gap-2 ml-auto">
+          {months.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-slate-500" />
+              <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
+                className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
+                <option value="">All periods</option>
+                {months.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+          )}
+          <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
+            <Plus className="w-3.5 h-3.5" /> New Job
+          </button>
+        </div>
       </div>
 
       {error && <ErrorBanner msg={error} onRetry={reload} />}
@@ -403,9 +438,9 @@ function WorkUnits() {
               </tr>
             </thead>
             <tbody>
-              {loading ? <LoadingRow cols={11} /> : (jobs || []).length === 0 ? (
-                <tr><td colSpan={11} className="px-4 py-8 text-center text-sm text-slate-500">No jobs yet. Click "New Job" to add one.</td></tr>
-              ) : (jobs || []).map(w => {
+              {loading ? <LoadingRow cols={11} /> : visibleJobs.length === 0 ? (
+                <tr><td colSpan={11} className="px-4 py-8 text-center text-sm text-slate-500">{filterPeriod ? `No jobs in ${filterPeriod}.` : 'No jobs yet. Click "New Job" to add one.'}</td></tr>
+              ) : visibleJobs.map(w => {
                 const isEditing = editId === w.id;
                 const profit = Number(w.revenue) - Number(w.direct_cost) - Number(w.overhead_alloc);
                 const margin = Number(w.revenue) > 0 ? (profit / Number(w.revenue)) * 100 : 0;
@@ -512,6 +547,10 @@ function Revenue() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<RevenueEntry>>({});
   const [saving, setSaving] = useState(false);
+  const [filterPeriod, setFilterPeriod] = useState('');
+
+  const periods = Array.from(new Set((entries || []).map(r => r.period).filter(Boolean))).sort().reverse();
+  const visible = filterPeriod ? (entries || []).filter(r => r.period === filterPeriod) : (entries || []);
 
   const save = async () => {
     if (!form.channel || !form.period) return;
@@ -539,7 +578,7 @@ function Revenue() {
 
   const del = async (id: number) => { await fetch(`/api/print-finance/revenue/${id}`, { method: 'DELETE' }); if (editId === id) cancelEdit(); reload(); };
 
-  const totals = (entries || []).reduce((acc, r) => ({ revenue: acc.revenue + Number(r.revenue), cogs: acc.cogs + Number(r.cogs) }), { revenue: 0, cogs: 0 });
+  const totals = (filterPeriod ? visible : (entries || [])).reduce((acc, r) => ({ revenue: acc.revenue + Number(r.revenue), cogs: acc.cogs + Number(r.cogs) }), { revenue: 0, cogs: 0 });
 
   return (
     <div className="space-y-4">
@@ -561,7 +600,17 @@ function Revenue() {
 
       {error && <ErrorBanner msg={error} onRetry={reload} />}
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3">
+        {periods.length > 0 ? (
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-slate-500" />
+            <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
+              className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
+              <option value="">All periods</option>
+              {periods.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+        ) : <div />}
         <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
           <Plus className="w-3.5 h-3.5" /> Add Entry
         </button>
@@ -603,9 +652,9 @@ function Revenue() {
             </tr>
           </thead>
           <tbody>
-            {loading ? <LoadingRow cols={9} /> : (entries || []).length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-500">No entries yet.</td></tr>
-            ) : (entries || []).map(r => {
+            {loading ? <LoadingRow cols={9} /> : visible.length === 0 ? (
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-500">{filterPeriod ? `No entries for ${filterPeriod}.` : 'No entries yet.'}</td></tr>
+            ) : visible.map(r => {
               const isEditing = editId === r.id;
               const gp = Number(r.revenue) - Number(r.cogs);
               const margin = Number(r.revenue) > 0 ? (gp / Number(r.revenue)) * 100 : 0;
@@ -681,9 +730,13 @@ function Costs() {
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   const [uploadResult, setUploadResult] = useState<{ inserted: number; errors: { row: Record<string, string>; reason: string }[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [filterPeriod, setFilterPeriod] = useState('');
+  const costPeriods = Array.from(new Set((entries || []).map(c => c.period).filter((p): p is string => !!p))).sort().reverse();
+  const visibleEntries = filterPeriod ? (entries || []).filter(c => c.period === filterPeriod) : (entries || []);
 
-  const direct = (entries || []).filter(c => c.type === 'direct').reduce((s, c) => s + Number(c.amount), 0);
-  const overhead = (entries || []).filter(c => c.type === 'overhead').reduce((s, c) => s + Number(c.amount), 0);
+  const direct = visibleEntries.filter(c => c.type === 'direct').reduce((s, c) => s + Number(c.amount), 0);
+  const overhead = visibleEntries.filter(c => c.type === 'overhead').reduce((s, c) => s + Number(c.amount), 0);
+  const fixed = visibleEntries.filter(c => c.type === 'fixed').reduce((s, c) => s + Number(c.amount), 0);
 
   const save = async () => {
     if (!form.category) return;
@@ -733,18 +786,30 @@ function Costs() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Direct Costs', value: money(direct), sub: 'Variable with output', color: 'text-rose-400' },
-          { label: 'Overhead', value: money(overhead), sub: 'Fixed & semi-fixed', color: 'text-amber-400' },
-          { label: 'Total Costs', value: money(direct + overhead), sub: 'MTD combined', color: 'text-slate-200' },
-        ].map(k => (
-          <div key={k.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-            <div className="text-xs text-slate-400 mb-2">{k.label}</div>
-            <div className={`text-2xl font-bold ${k.color}`}>{loading ? '—' : k.value}</div>
-            <div className="text-xs text-slate-500 mt-1">{k.sub}</div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="grid grid-cols-4 gap-3 flex-1">
+          {[
+            { label: 'Direct Costs', value: money(direct), color: 'text-rose-400' },
+            { label: 'Overhead', value: money(overhead), color: 'text-amber-400' },
+            { label: 'Fixed Costs', value: money(fixed), color: 'text-blue-400' },
+            { label: 'Total', value: money(direct + overhead + fixed), color: 'text-slate-200' },
+          ].map(k => (
+            <div key={k.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+              <div className="text-xs text-slate-400 mb-2">{k.label}</div>
+              <div className={`text-xl font-bold ${k.color}`}>{loading ? '—' : k.value}</div>
+            </div>
+          ))}
+        </div>
+        {costPeriods.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <Filter className="w-3.5 h-3.5 text-slate-500" />
+            <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
+              className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
+              <option value="">All periods</option>
+              {costPeriods.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
           </div>
-        ))}
+        )}
       </div>
 
       {error && <ErrorBanner msg={error} onRetry={reload} />}
@@ -835,7 +900,7 @@ function Costs() {
           { key: 'overhead', label: 'Overhead Costs', barColor: 'bg-amber-500', textColor: 'text-amber-400' },
           { key: 'fixed', label: 'Fixed Costs', barColor: 'bg-blue-500', textColor: 'text-blue-400' },
         ] as const).map(({ key: type, label, barColor, textColor }) => {
-          const typeEntries = (entries || []).filter(c => c.type === type);
+          const typeEntries = visibleEntries.filter(c => c.type === type);
           const typeTotal = typeEntries.reduce((s, c) => s + Number(c.amount), 0);
           if (!loading && typeEntries.length === 0) return null;
           return (
@@ -1767,6 +1832,234 @@ function JobPnlSummary() {
 // Main Component
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Sub-tab: Estimator (material rates + job cost calculator)
+// ---------------------------------------------------------------------------
+
+function Estimator() {
+  const { data: rates, reload } = useApi<MaterialRate[]>('/api/print-finance/material-rates');
+  const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Partial<MaterialRate>>({});
+  const [form, setForm] = useState({ material: '', machine_rate_per_hr: '', filament_cost_per_g: '', notes: '' });
+  const [saving, setSaving] = useState(false);
+
+  // Calculator state
+  const [calcMaterial, setCalcMaterial] = useState('');
+  const [calcGrams, setCalcGrams] = useState('');
+  const [calcHours, setCalcHours] = useState('');
+  const [calcMargin, setCalcMargin] = useState('40');
+
+  const saveRate = async () => {
+    if (!form.material) return;
+    setSaving(true);
+    await fetch('/api/print-finance/material-rates', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, machine_rate_per_hr: parseFloat(form.machine_rate_per_hr)||0, filament_cost_per_g: parseFloat(form.filament_cost_per_g)||0 }),
+    });
+    setSaving(false); setAdding(false);
+    setForm({ material: '', machine_rate_per_hr: '', filament_cost_per_g: '', notes: '' });
+    reload();
+  };
+
+  const startEdit = (r: MaterialRate) => { setEditId(r.id); setEditForm({ ...r }); };
+  const cancelEdit = () => { setEditId(null); setEditForm({}); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    setSaving(true);
+    await fetch(`/api/print-finance/material-rates/${editId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    setSaving(false); cancelEdit(); reload();
+  };
+  const del = async (id: number) => { await fetch(`/api/print-finance/material-rates/${id}`, { method: 'DELETE' }); reload(); };
+
+  // Calculator logic
+  const selectedRate = (rates || []).find(r => r.material === calcMaterial);
+  const grams = parseFloat(calcGrams) || 0;
+  const hours = parseFloat(calcHours) || 0;
+  const targetMargin = parseFloat(calcMargin) || 40;
+  const filamentCost = selectedRate ? grams * Number(selectedRate.filament_cost_per_g) : 0;
+  const machineCost = selectedRate ? hours * Number(selectedRate.machine_rate_per_hr) : 0;
+  const totalCost = filamentCost + machineCost;
+  const suggestedPrice = targetMargin < 100 ? totalCost / (1 - targetMargin / 100) : 0;
+  const hasCalc = selectedRate && (grams > 0 || hours > 0);
+
+  return (
+    <div className="space-y-6">
+      {/* Material Rates Config */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Material Rate Configuration</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Machine cost per hour and filament cost per gram by material</p>
+          </div>
+          <button onClick={() => setAdding(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add Material
+          </button>
+        </div>
+
+        {adding && (
+          <div className="mb-4 bg-white/[0.03] border border-slate-700/40 rounded-lg p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              {[
+                { key: 'material', label: 'Material Name', placeholder: 'PLA, PETG, Resin…' },
+                { key: 'machine_rate_per_hr', label: 'Machine $/hr', type: 'number', placeholder: '2.50' },
+                { key: 'filament_cost_per_g', label: 'Filament $/g', type: 'number', placeholder: '0.025' },
+                { key: 'notes', label: 'Notes' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="text-xs text-slate-400 block mb-1">{f.label}</label>
+                  <input type={f.type || 'text'} placeholder={f.placeholder}
+                    value={(form as Record<string, string>)[f.key]}
+                    onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50" />
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={saveRate} disabled={saving || !form.material}
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs rounded-lg transition-colors">{saving ? 'Saving…' : 'Save'}</button>
+              <button onClick={() => setAdding(false)} className="px-4 py-1.5 bg-slate-700 text-slate-300 text-xs rounded-lg hover:bg-slate-600 transition-colors">Cancel</button>
+            </div>
+          </div>
+        )}
+
+        <div className="overflow-x-auto rounded-lg border border-slate-700/40">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-700/50 bg-white/[0.02]">
+                {['Material', 'Machine $/hr', 'Filament $/g', 'Notes', ''].map(h => (
+                  <th key={h} className="text-left px-3 py-2 text-slate-400 font-medium">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(rates || []).length === 0 ? (
+                <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-500">No materials configured yet. Add one above.</td></tr>
+              ) : (rates || []).map(r => {
+                if (editId === r.id) return (
+                  <tr key={r.id} className="border-b border-blue-500/20 bg-blue-500/5">
+                    <td className="px-3 py-2"><input className="w-28 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.material||'')} onChange={e => setEditForm(p => ({...p, material: e.target.value}))} /></td>
+                    <td className="px-3 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.machine_rate_per_hr||'')} onChange={e => setEditForm(p => ({...p, machine_rate_per_hr: Number(e.target.value)}))} /></td>
+                    <td className="px-3 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.filament_cost_per_g||'')} onChange={e => setEditForm(p => ({...p, filament_cost_per_g: Number(e.target.value)}))} /></td>
+                    <td className="px-3 py-2"><input className="w-32 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-1">
+                        <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300"><Save className="w-3.5 h-3.5" /></button>
+                        <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+                return (
+                  <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] group">
+                    <td className="px-3 py-2 text-slate-200 font-medium">{r.material}</td>
+                    <td className="px-3 py-2 text-slate-300">${Number(r.machine_rate_per_hr).toFixed(3)}/hr</td>
+                    <td className="px-3 py-2 text-slate-300">${Number(r.filament_cost_per_g).toFixed(4)}/g</td>
+                    <td className="px-3 py-2 text-slate-500 truncate max-w-[160px]">{r.notes || '—'}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => startEdit(r)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => del(r.id)} className="text-slate-500 hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Job Cost Calculator */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-white mb-4">Job Cost Calculator</h3>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Inputs */}
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs text-slate-400 block mb-1.5">Material</label>
+              <select value={calcMaterial} onChange={e => setCalcMaterial(e.target.value)}
+                className="w-full bg-slate-700/80 border border-slate-600/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50">
+                <option value="">— select material —</option>
+                {(rates || []).map(r => <option key={r.material} value={r.material}>{r.material}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1.5">Weight (grams)</label>
+                <input type="number" value={calcGrams} onChange={e => setCalcGrams(e.target.value)} placeholder="0"
+                  className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1.5">Print Hours</label>
+                <input type="number" value={calcHours} onChange={e => setCalcHours(e.target.value)} placeholder="0"
+                  className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50" />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-xs mb-1.5">
+                <label className="text-slate-400">Target Margin</label>
+                <span className="text-blue-400 font-semibold">{calcMargin}%</span>
+              </div>
+              <input type="range" min={10} max={80} step={5} value={calcMargin} onChange={e => setCalcMargin(e.target.value)}
+                className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-blue-500" />
+              <div className="flex justify-between text-xs text-slate-600 mt-1"><span>10%</span><span>80%</span></div>
+            </div>
+            {selectedRate && (
+              <div className="text-xs text-slate-500 bg-white/[0.03] rounded-lg p-3 space-y-0.5">
+                <div>Machine rate: <span className="text-slate-300">${Number(selectedRate.machine_rate_per_hr).toFixed(3)}/hr</span></div>
+                <div>Filament rate: <span className="text-slate-300">${Number(selectedRate.filament_cost_per_g).toFixed(4)}/g</span></div>
+              </div>
+            )}
+          </div>
+
+          {/* Results */}
+          <div className="space-y-3">
+            {!hasCalc ? (
+              <div className="h-full flex items-center justify-center text-sm text-slate-500 text-center py-8">
+                Select a material and enter weight or hours to estimate cost
+              </div>
+            ) : (
+              <>
+                {[
+                  { label: 'Filament Cost', value: filamentCost, sub: `${fmt(grams, 1)}g × $${Number(selectedRate!.filament_cost_per_g).toFixed(4)}/g`, color: 'text-rose-400' },
+                  { label: 'Machine Time Cost', value: machineCost, sub: `${fmt(hours, 2)}h × $${Number(selectedRate!.machine_rate_per_hr).toFixed(3)}/hr`, color: 'text-amber-400' },
+                  { label: 'Total Cost', value: totalCost, sub: 'Before margin', color: 'text-slate-200', bold: true },
+                ].map(k => (
+                  <div key={k.label} className="bg-white/[0.03] border border-slate-700/40 rounded-lg p-3 flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-slate-400">{k.label}</div>
+                      <div className="text-xs text-slate-600 mt-0.5">{k.sub}</div>
+                    </div>
+                    <div className={`text-lg font-bold ${k.color}`}>{money(k.value)}</div>
+                  </div>
+                ))}
+                <div className={`rounded-xl p-4 border ${suggestedPrice > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-700/30 border-slate-700/50'}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-slate-400 mb-0.5">Suggested Selling Price</div>
+                      <div className="text-xs text-slate-500">At {calcMargin}% gross margin</div>
+                    </div>
+                    <div className="text-2xl font-bold text-emerald-400">{money(suggestedPrice)}</div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-emerald-500/20 grid grid-cols-2 gap-2 text-xs">
+                    <div className="text-slate-500">Gross Profit: <span className="text-emerald-300 font-medium">{money(suggestedPrice - totalCost)}</span></div>
+                    <div className="text-slate-500">Markup: <span className="text-emerald-300 font-medium">{totalCost > 0 ? fmt(((suggestedPrice - totalCost) / totalCost) * 100, 1) : '—'}%</span></div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const SUB_TABS: { id: SubTab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'work-units', label: 'Work Units', icon: Layers },
@@ -1775,6 +2068,7 @@ const SUB_TABS: { id: SubTab; label: string; icon: typeof LayoutDashboard }[] = 
   { id: 'inventory', label: 'Inventory', icon: Package },
   { id: 'scenarios', label: 'Scenarios', icon: FlaskConical },
   { id: 'reports', label: 'Reports', icon: FileText },
+  { id: 'estimator', label: 'Estimator', icon: Calculator },
 ];
 
 export default function PrintFinance() {
@@ -1813,6 +2107,7 @@ export default function PrintFinance() {
       {activeTab === 'inventory'  && <Inventory />}
       {activeTab === 'scenarios'  && <Scenarios />}
       {activeTab === 'reports'    && <Reports />}
+      {activeTab === 'estimator'  && <Estimator />}
     </div>
   );
 }
