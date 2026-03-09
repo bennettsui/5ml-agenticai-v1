@@ -8080,40 +8080,74 @@ async function parseUploadedFile(file) {
   return { headers: headers.filter(h => !h.startsWith('_')), rows, sheet_count: sheets.length, sheets };
 }
 
+// Chinese → English column name aliases for flexible matching
+const ZH_ALIASES = {
+  '合計': 'amount', '金額': 'amount', '費用': 'amount', '總計': 'amount', '總金額': 'amount', '小計': 'amount',
+  '單價': 'unit_price', '數量': 'quantity',
+  '日期': 'date', '月份': 'period', '年月': 'period',
+  '備註': 'notes', '備注': 'notes', '說明': 'notes', '描述': 'notes',
+  '名稱': 'name', '品名': 'name', '項目': 'name', '項目名稱': 'name', '工作名稱': 'name',
+  '類別': 'category', '類型': 'type',
+  '渠道': 'channel', '來源': 'source', '平台': 'channel',
+  '收入': 'revenue', '營業額': 'revenue',
+  '材料': 'material', '耗材': 'material', '品牌': 'brand', '顏色': 'color',
+  '庫存': 'stock_kg', '庫存量': 'stock_kg',
+};
+
 async function importRows(type, rows) {
   const results = []; // { sheet, row_num, status, label, reason? }
   for (const r of rows) {
     const sheet = r._sheet || '?';
     const row_num = r._row || '?';
+    // build a lookup map that includes both original keys and Chinese alias translations
+    const norm = s => s.toLowerCase().replace(/[\s_-]/g, '');
+    const lookup = {};
+    for (const rk of Object.keys(r)) {
+      if (rk.startsWith('_')) continue;
+      const v = r[rk];
+      lookup[norm(rk)] = v;                                      // original key
+      if (ZH_ALIASES[rk]) lookup[norm(ZH_ALIASES[rk])] = v;    // Chinese alias → English key
+    }
     const get = (...keys) => {
       for (const k of keys) {
-        for (const rk of Object.keys(r)) {
-          if (rk.startsWith('_')) continue;
-          if (rk.toLowerCase().replace(/[\s_]/g, '') === k.toLowerCase().replace(/[\s_]/g, '')) return r[rk] || '';
-        }
+        const v = lookup[norm(k)];
+        if (v !== undefined && v !== null && v !== '') return String(v);
       }
       return '';
     };
     try {
       if (type === 'revenue') {
         const period = get('period', 'date', 'month');
-        const channel = get('channel', 'source', 'type');
-        const revenue = parseFloat(get('revenue', 'amount')) || 0;
-        if (!period && !channel && revenue === 0) { results.push({ sheet, row_num, status: 'skipped', reason: 'No usable data (missing period, channel, and revenue)' }); continue; }
+        const channel = get('channel', 'source', 'platform');
+        let revenue = parseFloat(get('revenue', 'amount')) || 0;
+        if (!revenue) {
+          const qty = parseFloat(get('quantity')) || 1;
+          const unitPrice = parseFloat(get('unit_price')) || 0;
+          if (unitPrice) revenue = qty * unitPrice;
+        }
+        const name = get('name', 'description');
+        // skip only truly empty rows
+        if (!period && !channel && revenue === 0 && !name) { results.push({ sheet, row_num, status: 'skipped', reason: 'No usable data' }); continue; }
         await pool.query(
           `INSERT INTO pf_revenue_entries (period, channel, revenue, job_count, notes) VALUES ($1,$2,$3,$4,$5)`,
-          [period||null, channel||'Import', revenue, parseInt(get('jobs', 'job_count', 'count'))||0, get('notes')||null]
+          [period||null, channel||name||'Import', revenue, parseInt(get('jobs', 'job_count', 'count'))||0, get('notes','description')||null]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${channel||'Import'} · ${period||'—'} · $${revenue}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${channel||name||'Import'} · ${period||'—'} · $${revenue}` });
       } else if (type === 'costs') {
-        const category = get('category');
+        const category = get('category', 'name');
         const costType = (get('type')||'').toLowerCase();
-        const amount = parseFloat(get('amount')) || 0;
+        // amount: try direct total first, then qty×price fallback
+        let amount = parseFloat(get('amount')) || 0;
+        if (!amount) {
+          const qty = parseFloat(get('quantity')) || 1;
+          const unitPrice = parseFloat(get('unit_price')) || 0;
+          if (unitPrice) amount = qty * unitPrice;
+        }
         if (!category) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing category' }); continue; }
         const validType = ['direct','overhead','fixed'].includes(costType) ? costType : 'direct';
         await pool.query(
           `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5)`,
-          [category, validType, amount, get('period','date')||null, get('notes')||null]
+          [category, validType, amount, get('period','date')||null, get('notes','description')||null]
         );
         results.push({ sheet, row_num, status: 'accepted', label: `${category} · ${validType} · $${amount}` });
       } else if (type === 'work-units') {
@@ -8132,7 +8166,6 @@ async function importRows(type, rows) {
             get('status')||'pending', get('notes')||null,
           ]
         );
-        const name = get('name', 'job_name');
         results.push({ sheet, row_num, status: 'accepted', label: `${name} · ${get('material')||'?'}` });
       } else if (type === 'inventory') {
         const material = get('material', 'filament', 'name');
