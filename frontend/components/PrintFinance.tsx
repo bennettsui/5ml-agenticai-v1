@@ -45,10 +45,20 @@ interface RevenueEntry {
 interface CostEntry {
   id: number;
   category: string;
-  type: 'direct' | 'overhead';
+  type: 'direct' | 'overhead' | 'fixed';
   amount: number;
   period?: string;
   notes?: string;
+}
+
+interface SavedScenario {
+  id: number;
+  name: string;
+  volume_mult: number;
+  price_adj: number;
+  overhead_adj: number;
+  notes?: string;
+  created_at: string;
 }
 
 interface InventoryItem {
@@ -294,7 +304,7 @@ function WorkUnits() {
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<WorkUnit>>({});
-  const [form, setForm] = useState({ name: '', material: '', grams: '', hours: '', status: 'queued', revenue: '', direct_cost: '', overhead_alloc: '', notes: '' });
+  const [form, setForm] = useState({ job_id: '', name: '', material: '', grams: '', hours: '', status: 'queued', revenue: '', direct_cost: '', overhead_alloc: '', notes: '' });
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -307,7 +317,7 @@ function WorkUnits() {
     });
     setSaving(false);
     setAdding(false);
-    setForm({ name: '', material: '', grams: '', hours: '', status: 'queued', revenue: '', direct_cost: '', overhead_alloc: '', notes: '' });
+    setForm({ job_id: '', name: '', material: '', grams: '', hours: '', status: 'queued', revenue: '', direct_cost: '', overhead_alloc: '', notes: '' });
     reload();
   };
 
@@ -346,6 +356,7 @@ function WorkUnits() {
           <h4 className="text-sm font-semibold text-white mb-3">New Work Unit</h4>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
             {[
+              { key: 'job_id', label: 'Job ID', placeholder: 'e.g. JOB-001' },
               { key: 'name', label: 'Job Name', full: true },
               { key: 'material', label: 'Material' },
               { key: 'grams', label: 'Weight (g)', type: 'number' },
@@ -358,9 +369,10 @@ function WorkUnits() {
                 <label className="text-xs text-slate-400 block mb-1">{f.label}</label>
                 <input
                   type={f.type || 'text'}
+                  placeholder={'placeholder' in f ? f.placeholder : undefined}
                   value={(form as Record<string, string>)[f.key]}
                   onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                  className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500/50"
+                  className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
                 />
               </div>
             ))}
@@ -400,7 +412,7 @@ function WorkUnits() {
 
                 if (isEditing) return (
                   <tr key={w.id} className="border-b border-blue-500/20 bg-blue-500/5">
-                    <td className="px-4 py-2 text-slate-400 font-mono text-xs">{w.job_id}</td>
+                    <td className="px-4 py-2"><input className="w-20 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs font-mono text-white placeholder:text-slate-600" placeholder="JOB-001" value={String(editForm.job_id||'')} onChange={e => setEditForm(p => ({...p, job_id: e.target.value}))} /></td>
                     <td className="px-4 py-2"><input className="w-full bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.name||'')} onChange={e => setEditForm(p => ({...p, name: e.target.value}))} /></td>
                     <td className="px-4 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.material||'')} onChange={e => setEditForm(p => ({...p, material: e.target.value}))} /></td>
                     <td className="px-4 py-2"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.grams||'')} onChange={e => setEditForm(p => ({...p, grams: Number(e.target.value)}))} /></td>
@@ -497,6 +509,8 @@ function Revenue() {
   const { data: entries, loading, error, reload } = useApi<RevenueEntry[]>('/api/print-finance/revenue');
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ channel: '', period: '', jobs: '', units_grams: '', revenue: '', cogs: '' });
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Partial<RevenueEntry>>({});
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -511,7 +525,19 @@ function Revenue() {
     reload();
   };
 
-  const del = async (id: number) => { await fetch(`/api/print-finance/revenue/${id}`, { method: 'DELETE' }); reload(); };
+  const startEdit = (r: RevenueEntry) => { setEditId(r.id); setEditForm({ ...r }); };
+  const cancelEdit = () => { setEditId(null); setEditForm({}); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    setSaving(true);
+    await fetch(`/api/print-finance/revenue/${editId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    setSaving(false); cancelEdit(); reload();
+  };
+
+  const del = async (id: number) => { await fetch(`/api/print-finance/revenue/${id}`, { method: 'DELETE' }); if (editId === id) cancelEdit(); reload(); };
 
   const totals = (entries || []).reduce((acc, r) => ({ revenue: acc.revenue + Number(r.revenue), cogs: acc.cogs + Number(r.cogs) }), { revenue: 0, cogs: 0 });
 
@@ -580,10 +606,31 @@ function Revenue() {
             {loading ? <LoadingRow cols={9} /> : (entries || []).length === 0 ? (
               <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-500">No entries yet.</td></tr>
             ) : (entries || []).map(r => {
+              const isEditing = editId === r.id;
               const gp = Number(r.revenue) - Number(r.cogs);
               const margin = Number(r.revenue) > 0 ? (gp / Number(r.revenue)) * 100 : 0;
+
+              if (isEditing) return (
+                <tr key={r.id} className="border-b border-blue-500/20 bg-blue-500/5">
+                  <td className="px-3 py-2"><input className="w-28 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.channel||'')} onChange={e => setEditForm(p => ({...p, channel: e.target.value}))} /></td>
+                  <td className="px-3 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
+                  <td className="px-3 py-2"><input type="number" className="w-14 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.jobs||'')} onChange={e => setEditForm(p => ({...p, jobs: Number(e.target.value)}))} /></td>
+                  <td className="px-3 py-2"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.units_grams||'')} onChange={e => setEditForm(p => ({...p, units_grams: Number(e.target.value)}))} /></td>
+                  <td className="px-3 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.revenue||'')} onChange={e => setEditForm(p => ({...p, revenue: Number(e.target.value)}))} /></td>
+                  <td className="px-3 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.cogs||'')} onChange={e => setEditForm(p => ({...p, cogs: Number(e.target.value)}))} /></td>
+                  <td className="px-3 py-2 text-slate-500">—</td>
+                  <td className="px-3 py-2 text-slate-500">—</td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-1">
+                      <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300"><Save className="w-3.5 h-3.5" /></button>
+                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+
               return (
-                <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] transition-colors">
+                <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] transition-colors group">
                   <td className="px-4 py-3 text-slate-200 font-medium">{r.channel}</td>
                   <td className="px-4 py-3 text-slate-400">{r.period}</td>
                   <td className="px-4 py-3 text-slate-300">{r.jobs}</td>
@@ -592,7 +639,12 @@ function Revenue() {
                   <td className="px-4 py-3 text-rose-300">{money(Number(r.cogs))}</td>
                   <td className="px-4 py-3 text-emerald-300">{money(gp)}</td>
                   <td className="px-4 py-3"><span className={`font-medium ${margin > 70 ? 'text-emerald-400' : margin > 50 ? 'text-blue-400' : 'text-amber-400'}`}>{fmt(margin, 1)}%</span></td>
-                  <td className="px-4 py-3"><button onClick={() => del(r.id)} className="text-slate-600 hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button></td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => startEdit(r)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => del(r.id)} className="text-slate-500 hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </td>
                 </tr>
               );
             })}
@@ -622,7 +674,9 @@ function Revenue() {
 function Costs() {
   const { data: entries, loading, error, reload } = useApi<CostEntry[]>('/api/print-finance/costs');
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ category: '', type: 'direct' as 'direct' | 'overhead', amount: '', period: '', notes: '' });
+  const [form, setForm] = useState({ category: '', type: 'direct' as CostEntry['type'], amount: '', period: '', notes: '' });
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Partial<CostEntry>>({});
   const [saving, setSaving] = useState(false);
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   const [uploadResult, setUploadResult] = useState<{ inserted: number; errors: { row: Record<string, string>; reason: string }[] } | null>(null);
@@ -643,7 +697,19 @@ function Costs() {
     reload();
   };
 
-  const del = async (id: number) => { await fetch(`/api/print-finance/costs/${id}`, { method: 'DELETE' }); reload(); };
+  const startEdit = (c: CostEntry) => { setEditId(c.id); setEditForm({ ...c }); };
+  const cancelEdit = () => { setEditId(null); setEditForm({}); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    setSaving(true);
+    await fetch(`/api/print-finance/costs/${editId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    setSaving(false); cancelEdit(); reload();
+  };
+
+  const del = async (id: number) => { await fetch(`/api/print-finance/costs/${id}`, { method: 'DELETE' }); if (editId === id) cancelEdit(); reload(); };
 
   const handleUpload = async (file: File) => {
     setUploadState('uploading');
@@ -748,10 +814,11 @@ function Costs() {
             ))}
             <div>
               <label className="text-xs text-slate-400 block mb-1">Type</label>
-              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value as 'direct' | 'overhead' }))}
+              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value as CostEntry['type'] }))}
                 className="w-full bg-slate-700 border border-slate-600/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none">
                 <option value="direct">Direct</option>
                 <option value="overhead">Overhead</option>
+                <option value="fixed">Fixed</option>
               </select>
             </div>
           </div>
@@ -763,34 +830,67 @@ function Costs() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {(['direct', 'overhead'] as const).map(type => {
+        {([
+          { key: 'direct', label: 'Direct Costs', barColor: 'bg-rose-500', textColor: 'text-rose-400' },
+          { key: 'overhead', label: 'Overhead Costs', barColor: 'bg-amber-500', textColor: 'text-amber-400' },
+          { key: 'fixed', label: 'Fixed Costs', barColor: 'bg-blue-500', textColor: 'text-blue-400' },
+        ] as const).map(({ key: type, label, barColor, textColor }) => {
           const typeEntries = (entries || []).filter(c => c.type === type);
           const typeTotal = typeEntries.reduce((s, c) => s + Number(c.amount), 0);
+          if (!loading && typeEntries.length === 0) return null;
           return (
             <div key={type} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-semibold text-white capitalize">{type} Costs</h3>
-                <span className={`text-sm font-bold ${type === 'direct' ? 'text-rose-400' : 'text-amber-400'}`}>{money(typeTotal)}</span>
+                <h3 className="text-sm font-semibold text-white">{label}</h3>
+                <span className={`text-sm font-bold ${textColor}`}>{money(typeTotal)}</span>
               </div>
-              {loading ? <div className="text-xs text-slate-500 py-2">Loading…</div> : typeEntries.length === 0 ? (
-                <div className="text-xs text-slate-500 py-2">No {type} costs yet.</div>
-              ) : (
+              {loading ? <div className="text-xs text-slate-500 py-2">Loading…</div> : (
                 <div className="space-y-2">
                   {typeEntries.map(c => {
                     const pct = typeTotal > 0 ? (Number(c.amount) / typeTotal) * 100 : 0;
+                    const isEditing = editId === c.id;
+                    if (isEditing) return (
+                      <div key={c.id} className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-xs text-slate-500 block mb-1">Category</label>
+                            <input className="w-full bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.category||'')} onChange={e => setEditForm(p => ({...p, category: e.target.value}))} />
+                          </div>
+                          <div>
+                            <label className="text-xs text-slate-500 block mb-1">Amount ($)</label>
+                            <input type="number" className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.amount||'')} onChange={e => setEditForm(p => ({...p, amount: Number(e.target.value)}))} />
+                          </div>
+                          <div>
+                            <label className="text-xs text-slate-500 block mb-1">Type</label>
+                            <select className="w-full bg-slate-700 border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.type||type)} onChange={e => setEditForm(p => ({...p, type: e.target.value as CostEntry['type']}))}>
+                              <option value="direct">Direct</option>
+                              <option value="overhead">Overhead</option>
+                              <option value="fixed">Fixed</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-slate-500 block mb-1">Period</label>
+                            <input className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <button onClick={saveEdit} disabled={saving} className="flex items-center gap-1 px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs rounded transition-colors disabled:opacity-50"><Save className="w-3 h-3" /> Save</button>
+                          <button onClick={cancelEdit} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Cancel</button>
+                        </div>
+                      </div>
+                    );
                     return (
                       <div key={c.id} className="group">
                         <div className="flex justify-between text-xs mb-1">
                           <span className="text-slate-300 flex-1 truncate">{c.category}</span>
-                          <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                          <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
                             <span className="text-slate-200 font-medium">{money(Number(c.amount))}</span>
-                            <button onClick={() => del(c.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                            <button onClick={() => startEdit(c)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-blue-400 transition-all"><Pencil className="w-3 h-3" /></button>
+                            <button onClick={() => del(c.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"><Trash2 className="w-3 h-3" /></button>
                           </div>
                         </div>
                         <div className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${type === 'direct' ? 'bg-rose-500' : 'bg-amber-500'}`} style={{ width: `${pct}%` }} />
+                          <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                         </div>
                         {c.period && <div className="text-xs text-slate-600 mt-0.5">{c.period}</div>}
                       </div>
@@ -1186,10 +1286,13 @@ function Inventory() {
 function Scenarios() {
   const { data: costs } = useApi<CostEntry[]>('/api/print-finance/costs');
   const { data: revenue } = useApi<RevenueEntry[]>('/api/print-finance/revenue');
+  const { data: saved, reload: reloadSaved } = useApi<SavedScenario[]>('/api/print-finance/scenarios');
 
   const [volumeMult, setVolumeMult] = useState(1.0);
   const [priceAdj, setPriceAdj] = useState(0);
   const [overheadAdj, setOverheadAdj] = useState(0);
+  const [scenarioName, setScenarioName] = useState('');
+  const [savingScenario, setSavingScenario] = useState(false);
 
   const baseRevenue = (revenue || []).reduce((s, r) => s + Number(r.revenue), 0) || 3130;
   const baseCost = (costs || []).reduce((s, c) => s + Number(c.amount), 0) || 2252;
@@ -1207,6 +1310,29 @@ function Scenarios() {
     { label: 'Price Adjustment', min: -30, max: 50, step: 1, value: priceAdj, set: setPriceAdj, fmt: (v: number) => `${v > 0 ? '+' : ''}${v}%` },
     { label: 'Overhead Change', min: -20, max: 40, step: 1, value: overheadAdj, set: setOverheadAdj, fmt: (v: number) => `${v > 0 ? '+' : ''}${v}%` },
   ];
+
+  const saveScenario = async () => {
+    if (!scenarioName.trim()) return;
+    setSavingScenario(true);
+    await fetch('/api/print-finance/scenarios', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: scenarioName, volume_mult: volumeMult, price_adj: priceAdj, overhead_adj: overheadAdj }),
+    });
+    setSavingScenario(false);
+    setScenarioName('');
+    reloadSaved();
+  };
+
+  const loadScenario = (s: SavedScenario) => {
+    setVolumeMult(Number(s.volume_mult));
+    setPriceAdj(Number(s.price_adj));
+    setOverheadAdj(Number(s.overhead_adj));
+  };
+
+  const deleteScenario = async (id: number) => {
+    await fetch(`/api/print-finance/scenarios/${id}`, { method: 'DELETE' });
+    reloadSaved();
+  };
 
   return (
     <div className="space-y-4">
@@ -1229,9 +1355,24 @@ function Scenarios() {
               </div>
             ))}
           </div>
-          <button onClick={() => { setVolumeMult(1); setPriceAdj(0); setOverheadAdj(0); }} className="mt-4 text-xs text-slate-500 hover:text-slate-300 transition-colors">
-            Reset to baseline
-          </button>
+          <div className="mt-5 pt-4 border-t border-slate-700/50 space-y-2">
+            <div className="flex gap-2">
+              <input
+                value={scenarioName}
+                onChange={e => setScenarioName(e.target.value)}
+                placeholder="Name this scenario…"
+                className="flex-1 bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
+              />
+              <button onClick={saveScenario} disabled={savingScenario || !scenarioName.trim()}
+                className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 text-xs rounded-lg transition-colors disabled:opacity-50">
+                {savingScenario ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Save
+              </button>
+            </div>
+            <button onClick={() => { setVolumeMult(1); setPriceAdj(0); setOverheadAdj(0); }} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+              Reset to baseline
+            </button>
+          </div>
         </div>
 
         <div className="space-y-3">
@@ -1271,6 +1412,34 @@ function Scenarios() {
           </div>
         </div>
       </div>
+
+      {/* Saved Scenarios */}
+      {(saved || []).length > 0 && (
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-white mb-3">Saved Scenarios</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {(saved || []).map(s => (
+              <div key={s.id} className="flex items-center justify-between bg-white/[0.03] border border-slate-700/40 rounded-lg px-3 py-2 group">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-medium text-slate-200 truncate">{s.name}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    {Number(s.volume_mult).toFixed(2)}× vol · {Number(s.price_adj) >= 0 ? '+' : ''}{s.price_adj}% price · {Number(s.overhead_adj) >= 0 ? '+' : ''}{s.overhead_adj}% OH
+                  </div>
+                </div>
+                <div className="flex gap-1 ml-2 flex-shrink-0">
+                  <button onClick={() => loadScenario(s)} title="Load"
+                    className="text-slate-500 hover:text-blue-400 transition-colors text-xs px-1.5 py-1 rounded hover:bg-blue-500/10">
+                    Load
+                  </button>
+                  <button onClick={() => deleteScenario(s.id)} className="text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

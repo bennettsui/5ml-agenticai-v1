@@ -7435,12 +7435,12 @@ app.get('/api/print-finance/work-units', async (req, res) => {
 app.post('/api/print-finance/work-units', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
-    const { name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes } = req.body;
+    const { job_id, name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
     const { rows } = await pool.query(
-      `INSERT INTO pf_work_units (name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [name, material||null, grams||0, hours||0, status||'queued', revenue||0, direct_cost||0, overhead_alloc||0, notes||null]
+      `INSERT INTO pf_work_units (job_id, name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [job_id||null, name, material||null, grams||0, hours||0, status||'queued', revenue||0, direct_cost||0, overhead_alloc||0, notes||null]
     );
     res.status(201).json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -7449,12 +7449,12 @@ app.post('/api/print-finance/work-units', async (req, res) => {
 app.put('/api/print-finance/work-units/:id', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
-    const { name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes } = req.body;
+    const { job_id, name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes } = req.body;
     const { rows } = await pool.query(
-      `UPDATE pf_work_units SET name=$1, material=$2, grams=$3, hours=$4, status=$5,
-       revenue=$6, direct_cost=$7, overhead_alloc=$8, notes=$9, updated_at=NOW()
-       WHERE id=$10 RETURNING *`,
-      [name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes, req.params.id]
+      `UPDATE pf_work_units SET job_id=$1, name=$2, material=$3, grams=$4, hours=$5, status=$6,
+       revenue=$7, direct_cost=$8, overhead_alloc=$9, notes=$10, updated_at=NOW()
+       WHERE id=$11 RETURNING *`,
+      [job_id||null, name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
@@ -7490,6 +7490,20 @@ app.post('/api/print-finance/revenue', async (req, res) => {
       [channel, period, jobs||0, units_grams||0, revenue||0, cogs||0, notes||null]
     );
     res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/revenue/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { channel, period, jobs, units_grams, revenue, cogs, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_revenue_entries SET channel=$1, period=$2, jobs=$3, units_grams=$4, revenue=$5, cogs=$6, notes=$7, updated_at=NOW()
+       WHERE id=$8 RETURNING *`,
+      [channel, period, jobs||0, units_grams||0, revenue||0, cogs||0, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -7903,6 +7917,48 @@ app.get('/api/print-finance/job-pnl', async (req, res) => {
       gross_profit: acc.gross_profit + j.gross_profit,
     }), { revenue: 0, direct_cost: 0, overhead_alloc: 0, gross_profit: 0 });
     res.json({ jobs, totals, total_fixed_costs: totalFixed });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Named Scenarios ---
+// Auto-create table if missing
+pool.query(`CREATE TABLE IF NOT EXISTS pf_scenarios (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  volume_mult NUMERIC(6,3) NOT NULL DEFAULT 1,
+  price_adj NUMERIC(6,2) NOT NULL DEFAULT 0,
+  overhead_adj NUMERIC(6,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)`).catch(() => {});
+
+app.get('/api/print-finance/scenarios', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_scenarios ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/scenarios', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { name, volume_mult, price_adj, overhead_adj, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_scenarios (name, volume_mult, price_adj, overhead_adj, notes)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [name, volume_mult||1, price_adj||0, overhead_adj||0, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/scenarios/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    await pool.query('DELETE FROM pf_scenarios WHERE id=$1', [req.params.id]);
+    res.status(204).end();
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
