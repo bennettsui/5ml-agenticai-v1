@@ -623,7 +623,7 @@ export const USE_CASES: UseCaseConfig[] = [
     status: 'in_progress',
     progress: 0.70,
     priority: 'high',
-    path: '/dashboard?tab=print-finance',
+    path: '/use-cases/print-finance',
     agentCount: 0,
     features: [
       'Work Units (job costing per print)',
