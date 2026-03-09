@@ -7536,6 +7536,7 @@ function pfDbCheck(res) {
     `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(12,4)`,
     `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS vendor TEXT`,
     `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS job_ref TEXT`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
   ];
   for (const sql of alterCols) {
     await pool.query(sql).catch(() => {}); // silently skip if already exists
@@ -7561,6 +7562,27 @@ function pfDbCheck(res) {
       [c.name, c.parent, c.cost_type, c.desc]
     ).catch(() => {});
   }
+  // Job-level cost rollup view
+  await pool.query(`
+    CREATE OR REPLACE VIEW pf_job_cost_summary AS
+    SELECT
+      wu.job_id, wu.name, wu.status, wu.revenue,
+      COALESCE(m.material_total, 0)   AS material_cost,
+      COALESCE(mc.machine_total, 0)   AS machine_cost,
+      COALESCE(l.labour_total, 0)     AS labour_cost,
+      COALESCE(o.overhead_total, 0)   AS overhead_cost,
+      wu.revenue
+        - COALESCE(m.material_total, 0)
+        - COALESCE(mc.machine_total, 0)
+        - COALESCE(l.labour_total, 0)
+        - COALESCE(o.overhead_total, 0) AS gross_profit,
+      wu.created_at
+    FROM pf_work_units wu
+    LEFT JOIN (SELECT job_id, SUM(total_cost) AS material_total FROM pf_material_usage GROUP BY job_id) m ON m.job_id = wu.job_id
+    LEFT JOIN (SELECT job_id, SUM(electricity_cost + maintenance_cost + depreciation_cost) AS machine_total FROM pf_machine_log GROUP BY job_id) mc ON mc.job_id = wu.job_id
+    LEFT JOIN (SELECT job_id, SUM(total_cost) AS labour_total FROM pf_labour_log GROUP BY job_id) l ON l.job_id = wu.job_id
+    LEFT JOIN (SELECT job_ref, SUM(amount) AS overhead_total FROM pf_cost_entries WHERE job_ref IS NOT NULL GROUP BY job_ref) o ON o.job_ref = wu.job_id
+  `).catch(err => console.warn('[print-finance] view init:', err.message));
 })();
 
 // --- Work Units ---
@@ -8053,6 +8075,14 @@ app.put('/api/print-finance/settings', async (req, res) => {
 function detectImportType(headers) {
   const h = headers.map(x => String(x).toLowerCase().replace(/[\s_-]+/g, ''));
   const has = (...keys) => keys.some(k => h.some(x => x.includes(k.replace(/[\s_-]+/g, ''))));
+  // Specialized 3D printing tables — check before generic ones
+  if ((has('weightg','quantityg','costperg') && has('material','filament','resin')) ||
+      (has('克數','重量') && has('材料','耗材','樹脂'))) return 'material_usage';
+  if (has('printerid','printername','machineid') ||
+      (has('printhours','electricitycost','maintenancecost') && has('printer','machine','設備'))) return 'machine_log';
+  if ((has('hourlyrate','labourhours','workhours') && has('person','employee','operator','員工','操作員')) ||
+      has('時薪') && has('工時')) return 'labour_log';
+  // Generic tables
   if (has('jobid', 'job_id') || (has('grams', 'hours') && has('material'))) return 'work-units';
   if ((has('stockkg', 'priceperkg', 'stockg', 'quantity') && has('material')) || (has('spool', 'filament') && has('stock'))) return 'inventory';
   if (has('channel', 'source') && has('revenue', 'amount')) return 'revenue';
@@ -8118,16 +8148,36 @@ async function parseUploadedFile(file) {
 
 // Chinese → English column name aliases for flexible matching
 const ZH_ALIASES = {
+  // Amounts
   '合計': 'amount', '金額': 'amount', '費用': 'amount', '總計': 'amount', '總金額': 'amount', '小計': 'amount',
-  '單價': 'unit_price', '數量': 'quantity',
+  '租金': 'amount', '保險': 'amount', '行政費': 'amount', '軟件費': 'amount',
+  '單價': 'unit_cost', '數量': 'quantity',
+  // Time / period
   '日期': 'date', '月份': 'period', '年月': 'period',
+  // Notes
   '備註': 'notes', '備注': 'notes', '說明': 'notes', '描述': 'notes',
+  // Names / categories
   '名稱': 'name', '品名': 'name', '項目': 'name', '項目名稱': 'name', '工作名稱': 'name',
   '類別': 'category', '類型': 'type',
+  // Revenue / channel
   '渠道': 'channel', '來源': 'source', '平台': 'channel',
   '收入': 'revenue', '營業額': 'revenue',
-  '材料': 'material', '耗材': 'material', '品牌': 'brand', '顏色': 'color',
+  // Inventory / materials
+  '材料': 'material', '耗材': 'material', '打印材料': 'material', '樹脂': 'material', '絲料': 'material',
+  '品牌': 'brand', '顏色': 'color',
   '庫存': 'stock_kg', '庫存量': 'stock_kg',
+  // Material usage (3D printing)
+  '重量': 'weight_g', '克數': 'weight_g', '用料重量': 'weight_g',
+  '每克成本': 'cost_per_g', '成本每克': 'cost_per_g',
+  // Machine log
+  '打印機': 'printer', '機器': 'printer', '設備': 'printer', '打印機編號': 'printer',
+  '打印時數': 'hours', '機器時數': 'hours', '運行時數': 'hours',
+  '電費': 'electricity_cost', '維修費': 'maintenance_cost', '折舊': 'depreciation_cost',
+  // Labour log
+  '員工': 'person', '操作員': 'person', '人員': 'person', '姓名': 'person',
+  '工時': 'hours', '時薪': 'hourly_rate', '職位': 'role', '崗位': 'role',
+  // Job reference
+  '工單': 'job_ref', '訂單': 'job_ref', '工作編號': 'job_ref', '工作號': 'job_ref',
 };
 
 // importRows: type = target table, rows = parsed rows, aiMapping = optional AI field_mapping
@@ -8278,6 +8328,57 @@ app.get('/api/print-finance/cost-categories', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
     const { rows } = await pool.query('SELECT * FROM pf_cost_categories ORDER BY parent, name');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/cost-categories — create or return existing category
+app.post('/api/print-finance/cost-categories', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  const { name, parent, cost_type, description } = req.body;
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO pf_cost_categories (name, parent, cost_type, description)
+       VALUES ($1,$2,$3,$4) ON CONFLICT (name) DO UPDATE SET parent=EXCLUDED.parent, cost_type=EXCLUDED.cost_type RETURNING *`,
+      [name, parent||'overhead', cost_type||'overhead', description||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/job-cost-summary
+app.get('/api/print-finance/job-cost-summary', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_job_cost_summary ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/material-log
+app.get('/api/print-finance/material-log', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_material_usage ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/machine-log
+app.get('/api/print-finance/machine-log', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_machine_log ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/labour-log
+app.get('/api/print-finance/labour-log', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_labour_log ORDER BY created_at DESC');
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
