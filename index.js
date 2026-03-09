@@ -8051,7 +8051,16 @@ async function parseUploadedFile(file) {
       if (rowNum === 1) return;
       const obj = {};
       row.eachCell((cell, colNum) => {
-        obj[headers[colNum - 1]] = cell.value !== null && cell.value !== undefined ? String(cell.value) : '';
+        const h = headers[colNum - 1];
+        if (!h) return;
+        let v = cell.value;
+        // Formula cells: { formula, result }
+        if (v !== null && typeof v === 'object' && 'result' in v) v = v.result;
+        // Rich text cells: { richText: [{text:'...'}] }
+        if (v !== null && typeof v === 'object' && Array.isArray(v.richText)) v = v.richText.map(r => r.text || '').join('');
+        // Date cells
+        if (v instanceof Date) v = v.toISOString().slice(0, 10);
+        obj[h] = v !== null && v !== undefined ? String(v) : '';
       });
       if (Object.values(obj).some(v => v !== '')) rows.push(obj);
     });
