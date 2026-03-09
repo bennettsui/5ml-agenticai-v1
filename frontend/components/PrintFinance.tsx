@@ -1406,6 +1406,9 @@ function Reports() {
         </div>
       )}
 
+      {/* Job P&L Summary table */}
+      <JobPnlSummary />
+
       <div className="flex flex-wrap gap-3">
         {[
           { label: 'Export P&L (.xlsx)',        url: '/api/print-finance/export/pl' },
@@ -1419,6 +1422,174 @@ function Reports() {
           </a>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Job P&L Summary (used in Reports tab)
+// ---------------------------------------------------------------------------
+
+interface JobPnl {
+  job_id: string;
+  unit_count: number;
+  hours: number;
+  grams: number;
+  materials: string[];
+  revenue: number;
+  direct_cost: number;
+  overhead_alloc: number;
+  total_cost: number;
+  gross_profit: number;
+  gross_margin_pct: number | null;
+  fixed_alloc: number;
+  contrib_profit: number;
+  contrib_margin_pct: number | null;
+  is_profitable: boolean;
+}
+
+interface JobPnlData {
+  jobs: JobPnl[];
+  totals: { revenue: number; direct_cost: number; overhead_alloc: number; gross_profit: number };
+  total_fixed_costs: number;
+}
+
+function JobPnlSummary() {
+  const [data, setData] = useState<JobPnlData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/print-finance/job-pnl');
+      if (!res.ok) { const j = await res.json(); throw new Error(j.error); }
+      setData(await res.json());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load job P&L');
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-white">Job P&amp;L Summary</h3>
+          <p className="text-xs text-slate-500 mt-0.5">Per-job gross margin and contribution margin (after fixed cost allocation)</p>
+        </div>
+        <button onClick={load} disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors disabled:opacity-50">
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <TrendingUp className="w-3.5 h-3.5" />}
+          {data ? 'Refresh' : 'Load P&L'}
+        </button>
+      </div>
+
+      {error && <ErrorBanner msg={error} onRetry={load} />}
+
+      {!data && !loading && (
+        <div className="text-xs text-slate-500">Click "Load P&L" to generate the job-level profitability breakdown.</div>
+      )}
+
+      {data && data.jobs.length === 0 && (
+        <div className="text-xs text-slate-500 py-2">No work units have a Job ID assigned. Set job_id on work units to see this report.</div>
+      )}
+
+      {data && data.jobs.length > 0 && (
+        <div className="space-y-4">
+          {/* Totals */}
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { label: 'Total Revenue', value: money(data.totals.revenue), color: 'text-blue-400' },
+              { label: 'Direct Costs', value: money(data.totals.direct_cost), color: 'text-rose-400' },
+              { label: 'Overhead Alloc', value: money(data.totals.overhead_alloc), color: 'text-amber-400' },
+              { label: 'Gross Profit', value: money(data.totals.gross_profit), color: data.totals.gross_profit >= 0 ? 'text-emerald-400' : 'text-red-400' },
+            ].map(k => (
+              <div key={k.label} className="bg-white/[0.03] rounded-lg p-3">
+                <div className="text-xs text-slate-500 mb-1">{k.label}</div>
+                <div className={`text-base font-bold ${k.color}`}>{k.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Per-job table */}
+          <div className="overflow-x-auto rounded-lg border border-slate-700/40">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-700/50 bg-white/[0.02]">
+                  <th className="text-left px-3 py-2 text-slate-400 font-medium">Job ID</th>
+                  <th className="text-right px-3 py-2 text-slate-400 font-medium whitespace-nowrap">Units</th>
+                  <th className="text-right px-3 py-2 text-slate-400 font-medium">Hours</th>
+                  <th className="text-right px-3 py-2 text-slate-400 font-medium">Revenue</th>
+                  <th className="text-right px-3 py-2 text-slate-400 font-medium whitespace-nowrap">Direct Cost</th>
+                  <th className="text-right px-3 py-2 text-slate-400 font-medium whitespace-nowrap">Overhead</th>
+                  <th className="text-right px-3 py-2 text-slate-400 font-medium whitespace-nowrap">Gross Profit</th>
+                  <th className="text-right px-3 py-2 text-slate-400 font-medium whitespace-nowrap">Gross %</th>
+                  <th className="text-right px-3 py-2 text-slate-400 font-medium whitespace-nowrap">Contrib %</th>
+                  <th className="text-center px-3 py-2 text-slate-400 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.jobs.map(j => {
+                  const gm = j.gross_margin_pct;
+                  const cm = j.contrib_margin_pct;
+                  const gmColor = gm === null ? 'text-slate-500' : gm >= 50 ? 'text-emerald-400' : gm >= 20 ? 'text-amber-400' : 'text-rose-400';
+                  const cmColor = cm === null ? 'text-slate-500' : cm >= 30 ? 'text-emerald-400' : cm >= 0 ? 'text-amber-400' : 'text-rose-400';
+                  return (
+                    <tr key={j.job_id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
+                      <td className="px-3 py-2">
+                        <div className="font-mono text-slate-200 font-medium">{j.job_id}</div>
+                        {j.materials.length > 0 && <div className="text-slate-600">{j.materials.join(', ')}</div>}
+                      </td>
+                      <td className="px-3 py-2 text-right text-slate-400">{j.unit_count}</td>
+                      <td className="px-3 py-2 text-right text-slate-400">{fmt(j.hours, 1)}h</td>
+                      <td className="px-3 py-2 text-right text-blue-300">{money(j.revenue)}</td>
+                      <td className="px-3 py-2 text-right text-slate-300">{money(j.direct_cost)}</td>
+                      <td className="px-3 py-2 text-right text-amber-300/80">{money(j.overhead_alloc)}</td>
+                      <td className={`px-3 py-2 text-right font-semibold ${j.gross_profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {j.gross_profit >= 0 ? money(j.gross_profit) : `(${money(-j.gross_profit)})`}
+                      </td>
+                      <td className={`px-3 py-2 text-right font-medium ${gmColor}`}>
+                        {gm !== null ? `${fmt(gm, 1)}%` : '—'}
+                      </td>
+                      <td className={`px-3 py-2 text-right font-medium ${cmColor}`}>
+                        {cm !== null ? `${fmt(cm, 1)}%` : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${j.is_profitable ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                          {j.is_profitable ? '✓ Profit' : '✗ Loss'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-600/50 bg-white/[0.02] font-semibold">
+                  <td className="px-3 py-2 text-slate-300" colSpan={3}>Total ({data.jobs.length} jobs)</td>
+                  <td className="px-3 py-2 text-right text-blue-300">{money(data.totals.revenue)}</td>
+                  <td className="px-3 py-2 text-right text-slate-300">{money(data.totals.direct_cost)}</td>
+                  <td className="px-3 py-2 text-right text-amber-300/80">{money(data.totals.overhead_alloc)}</td>
+                  <td className={`px-3 py-2 text-right ${data.totals.gross_profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {data.totals.gross_profit >= 0 ? money(data.totals.gross_profit) : `(${money(-data.totals.gross_profit)})`}
+                  </td>
+                  <td className="px-3 py-2 text-right text-slate-400">
+                    {data.totals.revenue > 0 ? `${fmt((data.totals.gross_profit / data.totals.revenue) * 100, 1)}%` : '—'}
+                  </td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {data.total_fixed_costs > 0 && (
+            <div className="text-xs text-slate-500 flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+              Fixed costs of {money(data.total_fixed_costs)} are allocated by revenue share to compute contribution margin.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

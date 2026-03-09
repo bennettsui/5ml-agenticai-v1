@@ -7841,6 +7841,71 @@ app.get('/api/print-finance/export/inventory', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET /api/print-finance/job-pnl
+// Returns per-job P&L: revenue, direct cost, overhead_alloc, gross profit, margin %
+app.get('/api/print-finance/job-pnl', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const [wuRes, costRes, revRes] = await Promise.all([
+      pool.query(`
+        SELECT job_id,
+               SUM(revenue)        AS revenue,
+               SUM(direct_cost)    AS direct_cost,
+               SUM(overhead_alloc) AS overhead_alloc,
+               SUM(hours)          AS hours,
+               SUM(grams)          AS grams,
+               COUNT(*)            AS unit_count,
+               array_agg(DISTINCT material) FILTER (WHERE material IS NOT NULL AND material <> '') AS materials,
+               array_agg(DISTINCT status)   AS statuses
+        FROM pf_work_units
+        WHERE job_id IS NOT NULL AND job_id <> ''
+        GROUP BY job_id
+        ORDER BY job_id
+      `),
+      pool.query(`SELECT COALESCE(SUM(amount),0) AS total_fixed FROM pf_cost_entries WHERE type='fixed'`),
+      pool.query(`SELECT COALESCE(SUM(revenue),0) AS total_rev FROM pf_revenue_entries`),
+    ]);
+    const totalFixed = Number(costRes.rows[0].total_fixed);
+    const totalRev = Number(revRes.rows[0].total_rev);
+    const jobs = wuRes.rows.map(r => {
+      const rev = Number(r.revenue);
+      const direct = Number(r.direct_cost);
+      const overhead = Number(r.overhead_alloc);
+      const totalCost = direct + overhead;
+      const grossProfit = rev - totalCost;
+      const grossMargin = rev > 0 ? (grossProfit / rev) * 100 : null;
+      const fixedAlloc = totalRev > 0 && rev > 0 ? (rev / totalRev) * totalFixed : 0;
+      const contribProfit = grossProfit - fixedAlloc;
+      const contribMargin = rev > 0 ? (contribProfit / rev) * 100 : null;
+      return {
+        job_id: r.job_id,
+        unit_count: Number(r.unit_count),
+        hours: Number(r.hours),
+        grams: Number(r.grams),
+        materials: r.materials || [],
+        statuses: r.statuses || [],
+        revenue: rev,
+        direct_cost: direct,
+        overhead_alloc: overhead,
+        total_cost: totalCost,
+        gross_profit: grossProfit,
+        gross_margin_pct: grossMargin,
+        fixed_alloc: fixedAlloc,
+        contrib_profit: contribProfit,
+        contrib_margin_pct: contribMargin,
+        is_profitable: grossProfit > 0,
+      };
+    });
+    const totals = jobs.reduce((acc, j) => ({
+      revenue: acc.revenue + j.revenue,
+      direct_cost: acc.direct_cost + j.direct_cost,
+      overhead_alloc: acc.overhead_alloc + j.overhead_alloc,
+      gross_profit: acc.gross_profit + j.gross_profit,
+    }), { revenue: 0, direct_cost: 0, overhead_alloc: 0, gross_profit: 0 });
+    res.json({ jobs, totals, total_fixed_costs: totalFixed });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET /api/print-finance/allocate-overhead/preview
 // Returns proposed allocations without writing to DB
 app.get('/api/print-finance/allocate-overhead/preview', async (req, res) => {
