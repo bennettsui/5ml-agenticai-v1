@@ -13,11 +13,12 @@ import CostAnalysis from '@/components/CostAnalysis';
 import SecurityKB from '@/components/SecurityKB';
 import ZiweiChat from '@/components/ZiweiChat';
 import AdaptiveLearningStats from '@/components/AdaptiveLearningStats';
+import PrintFinance from '@/components/PrintFinance';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
   ChevronRight, Map, Zap, Send, Loader2, Sparkles, History,
-  Plus, Trash2, Clock, Monitor, TrendingUp, Shield,
+  Plus, Trash2, Clock, Monitor, TrendingUp, Shield, Printer,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -30,7 +31,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security' | 'adaptive';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security' | 'adaptive' | 'print-finance';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -375,7 +376,7 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security','adaptive'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security','adaptive','print-finance'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
@@ -392,6 +393,7 @@ export default function Dashboard() {
     { id: 'analytics', label: 'Analytics & API', icon: Wifi },
     { id: 'adaptive', label: 'Adaptive Learning', icon: Brain },
     { id: 'architecture', label: 'Architecture', icon: Layers },
+    { id: 'print-finance', label: '3D Print Finance', icon: Printer },
   ];
 
   // Derived stats
@@ -659,6 +661,7 @@ export default function Dashboard() {
             <AgenticWorkflows />
           </div>
         )}
+        {activeTab === 'print-finance' && <PrintFinance />}
 
       </main>
     </div>
