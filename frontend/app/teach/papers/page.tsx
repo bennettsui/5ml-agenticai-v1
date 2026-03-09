@@ -156,6 +156,7 @@ function ProcessingPanel({
           setTimeout(() => onDone(paperId), 1200);
         } else if (d.status === 'NEEDS_REVIEW') {
           clearInterval(poll);
+          setTimeout(() => onDone(paperId), 3000); // show failure state briefly then go to list
         }
       } catch {}
     }, 5000);
@@ -175,7 +176,9 @@ function ProcessingPanel({
           </div>
           <div>
             <p className="text-white font-medium text-sm">{fileName}</p>
-            <p className="text-slate-500 text-xs mt-0.5">Processing — usually takes 15–60 s</p>
+            <p className="text-slate-500 text-xs mt-0.5">
+              {isFail ? 'OCR failed — returning to list…' : 'Processing — usually takes 15–60 s'}
+            </p>
           </div>
         </div>
         {!isDone && !isFail && (
