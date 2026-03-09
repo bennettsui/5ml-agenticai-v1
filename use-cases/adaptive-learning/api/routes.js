@@ -1128,6 +1128,66 @@ router.get('/student/sessions', async (req, res) => {
   }
 });
 
+// ─── Teacher: serve paper PDF ──────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/teachers/papers/:id/file
+ * Streams the local PDF or 302-redirects to CDN if the local file is gone.
+ */
+router.get('/teachers/papers/:id/file', async (req, res) => {
+  try {
+    const paper = await db.getPaper(req.params.id);
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
+
+    const fs   = require('fs');
+    const path = require('path');
+    // file_url is stored as a path like /uploads/papers/xxx.pdf
+    const localPath = paper.file_url ? path.join('/app', paper.file_url) : null;
+
+    if (localPath && fs.existsSync(localPath)) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(paper.exam_name)}.pdf"`);
+      return fs.createReadStream(localPath).pipe(res);
+    }
+    if (paper.cdn_url) return res.redirect(302, paper.cdn_url);
+    res.status(404).json({ success: false, error: 'PDF not available locally or on CDN. Re-upload to restore.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: storage overview ─────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/teachers/papers/storage
+ * Returns all papers with local file existence flag and CDN status.
+ * NOTE: must be defined before /teachers/papers/:id routes to avoid param collision.
+ */
+router.get('/teachers/papers/storage', async (req, res) => {
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const { pool } = require('../../../db');
+    const { rows } = await pool.query(
+      `SELECT id, exam_name, grade_band, year, status,
+              file_url, cdn_url, file_size_bytes, created_at
+       FROM papers
+       ORDER BY created_at DESC`
+    );
+    const papers = rows.map(p => {
+      const localPath        = p.file_url ? path.join('/app', p.file_url) : null;
+      const fileExistsLocally = localPath ? fs.existsSync(localPath) : false;
+      const serveUrl         = fileExistsLocally
+        ? `/api/adaptive-learning/teachers/papers/${p.id}/file`
+        : (p.cdn_url || null);
+      return { ...p, file_exists_locally: fileExistsLocally, serve_url: serveUrl };
+    });
+    res.json({ success: true, papers });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── Teacher: list papers ──────────────────────────────────────────────────────
 
 /**
