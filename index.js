@@ -151,6 +151,7 @@ function rewriteTedxHtml(html, cdnMap = {}) {
 *{animation:none!important;transition:none!important}
 [style*="opacity:0"],[style*="opacity: 0"]{opacity:1!important}
 [style*="transform:translateY"],[style*="transform: translateY"]{transform:none!important}
+.opacity-0{opacity:1!important}
 </style>`;
 
   let out = html
@@ -166,7 +167,11 @@ function rewriteTedxHtml(html, cdnMap = {}) {
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
 
   // Rewrite local image paths to CDN URLs (src= and href= for preload links)
-  const rewriteKey = (key) => cdnMap[key] || null;
+  // Always use https:// to avoid mixed-content blocking on HTTPS deployments
+  const rewriteKey = (key) => {
+    const url = cdnMap[key];
+    return url ? url.replace(/^http:\/\//i, 'https://') : null;
+  };
   out = out.replace(/src="\/tedx-xinyi\/([^"]+)"/g, (match, key) => {
     const cdnUrl = rewriteKey(key);
     return cdnUrl ? `src="${cdnUrl}"` : match;
