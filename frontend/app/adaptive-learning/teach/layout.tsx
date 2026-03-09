@@ -21,7 +21,7 @@ export default function TeachLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
       <header className="border-b border-slate-800/60 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+        <div className="w-full px-8 h-14 flex items-center justify-between">
           <Link href="/adaptive-learning/teach" className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-purple-600 flex items-center justify-center">
               <GraduationCap className="w-4 h-4 text-white" />
@@ -55,7 +55,7 @@ export default function TeachLayout({ children }: { children: React.ReactNode })
         </div>
       </header>
 
-      <main className="flex-1 max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 pb-20 md:pb-8">
+      <main className="flex-1 w-full px-8 py-8 pb-20 md:pb-8">
         {children}
       </main>
 
