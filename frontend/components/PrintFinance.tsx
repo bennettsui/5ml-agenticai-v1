@@ -116,6 +116,22 @@ interface ImportPreview {
   columns: string[];
   sample_rows: Record<string, string>[];
   row_count: number;
+  sheet_count: number;
+  sheets: string[];
+}
+
+interface ImportRowResult {
+  sheet: string;
+  row_num: number | string;
+  status: 'accepted' | 'skipped';
+  label?: string;
+  reason?: string;
+}
+
+interface ImportResult {
+  inserted: number;
+  skipped: number;
+  results: ImportRowResult[];
 }
 
 // ---------------------------------------------------------------------------
@@ -2545,7 +2561,7 @@ function UploadTab() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [importType, setImportType] = useState('');
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ inserted: number; errors: unknown[] } | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
   const [dragging, setDragging] = useState(false);
 
   const doPreview = async (f: File) => {
@@ -2660,7 +2676,10 @@ function UploadTab() {
                   : <>Could not auto-detect data type — please select below</>}
               </div>
               <div className="text-xs text-slate-400 mt-0.5">
-                Columns found: {preview.columns.join(' · ')}
+                {preview.sheet_count > 1
+                  ? <><span className="text-slate-300">{preview.sheet_count} sheets:</span> {preview.sheets.join(' · ')} · </>
+                  : null}
+                Columns: {preview.columns.join(' · ')}
               </div>
             </div>
           </div>
@@ -2733,22 +2752,48 @@ function UploadTab() {
       {/* Result */}
       {result && (
         <div className="space-y-4">
-          <div className="flex items-start gap-4 p-5 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl">
-            <CheckCircle2 className="w-6 h-6 text-emerald-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <div className="text-base font-semibold text-emerald-300">
-                {(result as {inserted:number}).inserted} rows imported successfully
+          {/* Summary bar */}
+          <div className="flex items-center gap-4 p-4 bg-slate-800/60 border border-slate-700/50 rounded-xl">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span className="text-sm font-semibold text-emerald-300">{result.inserted} accepted</span>
+            </div>
+            {result.skipped > 0 && (
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-400" />
+                <span className="text-sm font-semibold text-amber-300">{result.skipped} skipped</span>
               </div>
-              <div className="text-sm text-slate-400 mt-0.5">
-                Data added to <span className="text-white">{detectedLabel}</span>. Switch to that tab to review.
-              </div>
-              {(result as {errors:unknown[]}).errors?.length > 0 && (
-                <div className="text-xs text-amber-400 mt-2">
-                  {(result as {errors:unknown[]}).errors.length} rows were skipped — check column names match the expected format.
+            )}
+            <span className="text-xs text-slate-500 ml-auto">
+              into <span className="text-slate-300">{detectedLabel}</span>
+            </span>
+          </div>
+
+          {/* Row-by-row log */}
+          <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+            <div className="bg-white/[0.03] border-b border-slate-700/50 px-3 py-2 flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Import Log</span>
+              <span className="text-xs text-slate-600">{result.results.length} rows processed</span>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {result.results.map((r, i) => (
+                <div key={i} className={`flex items-start gap-3 px-3 py-2 border-b border-slate-700/30 last:border-0 text-xs ${r.status === 'accepted' ? 'hover:bg-emerald-500/5' : 'hover:bg-amber-500/5'}`}>
+                  {r.status === 'accepted'
+                    ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    : <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />}
+                  <div className="flex-1 min-w-0">
+                    <span className={r.status === 'accepted' ? 'text-slate-300' : 'text-slate-400'}>
+                      {r.status === 'accepted' ? r.label : <span className="text-amber-300/80">Skipped: {r.reason}</span>}
+                    </span>
+                  </div>
+                  <div className="flex-shrink-0 text-slate-600 tabular-nums">
+                    {r.sheet} · row {r.row_num}
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           </div>
+
           <button onClick={reset}
             className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors">
             <Upload className="w-3.5 h-3.5" /> Import another file

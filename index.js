@@ -7990,7 +7990,7 @@ async function parseUploadedFile(file) {
     headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
     for (let i = 1; i < lines.length; i++) {
       const vals = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-      const row = {};
+      const row = { _sheet: 'Sheet1', _row: i + 1 };
       headers.forEach((h, idx) => { row[h] = vals[idx] ?? ''; });
       rows.push(row);
     }
@@ -7998,35 +7998,50 @@ async function parseUploadedFile(file) {
     const ExcelJS = require('exceljs');
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(file.buffer);
-    const ws = wb.worksheets[0];
-    ws.getRow(1).eachCell(cell => headers.push(String(cell.value || '').trim()));
-    ws.eachRow((row, rowNum) => {
-      if (rowNum === 1) return;
-      const obj = {};
-      row.eachCell((cell, colNum) => {
-        const h = headers[colNum - 1];
-        if (!h) return;
-        let v = cell.value;
-        // Formula cells: { formula, result }
-        if (v !== null && typeof v === 'object' && 'result' in v) v = v.result;
-        // Rich text cells: { richText: [{text:'...'}] }
-        if (v !== null && typeof v === 'object' && Array.isArray(v.richText)) v = v.richText.map(r => r.text || '').join('');
-        // Date cells
-        if (v instanceof Date) v = v.toISOString().slice(0, 10);
-        obj[h] = v !== null && v !== undefined ? String(v) : '';
+    const sheets = [];
+    // collect all worksheets
+    wb.eachSheet(ws => sheets.push(ws));
+    if (!sheets.length) throw new Error('No worksheets found');
+    // use first sheet headers as canonical, but read all sheets
+    const firstHeaders = [];
+    sheets[0].getRow(1).eachCell(cell => firstHeaders.push(String(cell.value || '').trim()));
+    headers = firstHeaders;
+    for (const ws of sheets) {
+      const sheetHeaders = [];
+      ws.getRow(1).eachCell(cell => sheetHeaders.push(String(cell.value || '').trim()));
+      ws.eachRow((row, rowNum) => {
+        if (rowNum === 1) return;
+        const obj = { _sheet: ws.name, _row: rowNum };
+        row.eachCell((cell, colNum) => {
+          const h = sheetHeaders[colNum - 1];
+          if (!h) return;
+          let v = cell.value;
+          if (v !== null && typeof v === 'object' && 'result' in v) v = v.result;
+          if (v !== null && typeof v === 'object' && Array.isArray(v.richText)) v = v.richText.map(r => r.text || '').join('');
+          if (v instanceof Date) v = v.toISOString().slice(0, 10);
+          obj[h] = v !== null && v !== undefined ? String(v) : '';
+        });
+        if (Object.keys(obj).filter(k => !k.startsWith('_')).some(k => obj[k] !== '')) rows.push(obj);
       });
-      if (Object.values(obj).some(v => v !== '')) rows.push(obj);
-    });
+    }
+    // ensure headers union covers all sheets
+    const allKeys = new Set(headers);
+    rows.forEach(r => Object.keys(r).filter(k => !k.startsWith('_')).forEach(k => allKeys.add(k)));
+    headers = [...allKeys];
   }
-  return { headers, rows };
+  const sheets = [...new Set(rows.map(r => r._sheet).filter(Boolean))];
+  return { headers: headers.filter(h => !h.startsWith('_')), rows, sheet_count: sheets.length, sheets };
 }
 
 async function importRows(type, rows) {
-  const inserted = [], errors = [];
+  const results = []; // { sheet, row_num, status, label, reason? }
   for (const r of rows) {
+    const sheet = r._sheet || '?';
+    const row_num = r._row || '?';
     const get = (...keys) => {
       for (const k of keys) {
         for (const rk of Object.keys(r)) {
+          if (rk.startsWith('_')) continue;
           if (rk.toLowerCase().replace(/[\s_]/g, '') === k.toLowerCase().replace(/[\s_]/g, '')) return r[rk] || '';
         }
       }
@@ -8037,29 +8052,29 @@ async function importRows(type, rows) {
         const period = get('period', 'date', 'month');
         const channel = get('channel', 'source', 'type');
         const revenue = parseFloat(get('revenue', 'amount')) || 0;
-        if (!period && !channel && revenue === 0) { errors.push({ row: r, reason: 'No usable data' }); continue; }
-        const { rows: ins } = await pool.query(
-          `INSERT INTO pf_revenue_entries (period, channel, revenue, job_count, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+        if (!period && !channel && revenue === 0) { results.push({ sheet, row_num, status: 'skipped', reason: 'No usable data (missing period, channel, and revenue)' }); continue; }
+        await pool.query(
+          `INSERT INTO pf_revenue_entries (period, channel, revenue, job_count, notes) VALUES ($1,$2,$3,$4,$5)`,
           [period||null, channel||'Import', revenue, parseInt(get('jobs', 'job_count', 'count'))||0, get('notes')||null]
         );
-        inserted.push(ins[0]);
+        results.push({ sheet, row_num, status: 'accepted', label: `${channel||'Import'} · ${period||'—'} · $${revenue}` });
       } else if (type === 'costs') {
         const category = get('category');
         const costType = (get('type')||'').toLowerCase();
         const amount = parseFloat(get('amount')) || 0;
-        if (!category) { errors.push({ row: r, reason: 'Missing category' }); continue; }
-        const validType = ['direct','overhead'].includes(costType) ? costType : 'direct';
-        const { rows: ins } = await pool.query(
-          `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+        if (!category) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing category' }); continue; }
+        const validType = ['direct','overhead','fixed'].includes(costType) ? costType : 'direct';
+        await pool.query(
+          `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5)`,
           [category, validType, amount, get('period','date')||null, get('notes')||null]
         );
-        inserted.push(ins[0]);
+        results.push({ sheet, row_num, status: 'accepted', label: `${category} · ${validType} · $${amount}` });
       } else if (type === 'work-units') {
         const name = get('name', 'job_name');
-        if (!name) { errors.push({ row: r, reason: 'Missing name' }); continue; }
-        const { rows: ins } = await pool.query(
+        if (!name) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing name' }); continue; }
+        await pool.query(
           `INSERT INTO pf_work_units (job_id, name, material, grams, hours, revenue, direct_cost, status, notes)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [
             get('job_id','jobid')||null, name,
             get('material')||null,
@@ -8070,29 +8085,30 @@ async function importRows(type, rows) {
             get('status')||'pending', get('notes')||null,
           ]
         );
-        inserted.push(ins[0]);
+        const name = get('name', 'job_name');
+        results.push({ sheet, row_num, status: 'accepted', label: `${name} · ${get('material')||'?'}` });
       } else if (type === 'inventory') {
         const material = get('material', 'filament', 'name');
-        if (!material) { errors.push({ row: r, reason: 'Missing material' }); continue; }
-        const { rows: ins } = await pool.query(
+        if (!material) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing material' }); continue; }
+        const stock = parseFloat(get('stock_kg','stock','quantity_kg','quantity'))||0;
+        const price = parseFloat(get('price_per_kg','price','cost_per_kg'))||0;
+        await pool.query(
           `INSERT INTO pf_inventory (material, brand, color, stock_kg, price_per_kg, supplier, notes)
-           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
           [
-            material, get('brand')||null, get('color')||null,
-            parseFloat(get('stock_kg','stock','quantity_kg','quantity'))||0,
-            parseFloat(get('price_per_kg','price','cost_per_kg'))||0,
+            material, get('brand')||null, get('color')||null, stock, price,
             get('supplier')||null, get('notes')||null,
           ]
         );
-        inserted.push(ins[0]);
+        results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${stock}kg · $${price}/kg` });
       } else {
-        errors.push({ row: r, reason: `Unknown type: ${type}` });
+        results.push({ sheet, row_num, status: 'skipped', reason: `Unknown type: ${type}` });
       }
     } catch (e) {
-      errors.push({ row: r, reason: e.message });
+      results.push({ sheet, row_num, status: 'skipped', reason: e.message });
     }
   }
-  return { inserted: inserted.length, errors };
+  return { inserted: results.filter(r => r.status === 'accepted').length, skipped: results.filter(r => r.status === 'skipped').length, results };
 }
 
 // POST /api/print-finance/import/preview — parse file, detect type, return preview
@@ -8100,13 +8116,16 @@ app.post('/api/print-finance/import/preview', pfUpload.single('file'), async (re
   if (!pfDbCheck(res)) return;
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
-    const { headers, rows } = await parseUploadedFile(req.file);
+    const { headers, rows, sheet_count, sheets } = await parseUploadedFile(req.file);
     const detected_type = detectImportType(headers);
+    const cleanRows = rows.map(r => { const o = {...r}; delete o._sheet; delete o._row; return o; });
     res.json({
       detected_type,
       columns: headers,
-      sample_rows: rows.slice(0, 5),
+      sample_rows: cleanRows.slice(0, 5),
       row_count: rows.length,
+      sheet_count,
+      sheets,
     });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
