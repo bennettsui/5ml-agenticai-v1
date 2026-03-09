@@ -2650,16 +2650,35 @@ async function generateVisual(client, prompt) {
 // ==================== PUBLISH HTML PACK ====================
 
 // Rewrite Next.js baked-in paths so the site works at root (https://tedxxinyi.brandpromo.today/)
-function rewriteTedxHtml(html) {
-  return html
-    // Canonical/OG absolute URLs
+function rewriteTedxContent(content) {
+  return content
     .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi\//g, 'https://tedxxinyi.brandpromo.today/')
     .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi/g,  'https://tedxxinyi.brandpromo.today')
-    // Internal nav links: /vibe-demo/tedx-xinyi/about → /about
     .replace(/\/vibe-demo\/tedx-xinyi\//g, '/')
-    // Home link: /vibe-demo/tedx-xinyi" or /vibe-demo/tedx-xinyi'
     .replace(/\/vibe-demo\/tedx-xinyi"/g, '/"')
-    .replace(/\/vibe-demo\/tedx-xinyi'/g, "/'");
+    .replace(/\/vibe-demo\/tedx-xinyi'/g, "/'")
+    // JS-escaped variants inside JS/JSON string literals
+    .replace(/\\\/vibe-demo\\\/tedx-xinyi\\\//g, '\\/')
+    .replace(/\\\/vibe-demo\\\/tedx-xinyi/g, '');
+}
+
+// Recursively copy a directory, rewriting tedx paths in all text files
+function copyAndRewriteDir(srcDir, destDir) {
+  fs.mkdirSync(destDir, { recursive: true });
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    const srcPath  = path.join(srcDir, entry.name);
+    const destPath = path.join(destDir, entry.name);
+    if (entry.isDirectory()) {
+      copyAndRewriteDir(srcPath, destPath);
+    } else {
+      const ext = path.extname(entry.name).toLowerCase();
+      if (['.js', '.html', '.json', '.css'].includes(ext)) {
+        fs.writeFileSync(destPath, rewriteTedxContent(fs.readFileSync(srcPath, 'utf8')));
+      } else {
+        fs.copyFileSync(srcPath, destPath);
+      }
+    }
+  }
 }
 
 router.post('/publish-html-pack', async (req, res) => {
@@ -2689,16 +2708,17 @@ router.post('/publish-html-pack', async (req, res) => {
       .filter(f => f.endsWith('.html') && !EXCLUDE.has(f.replace('.html', '')));
     const pageNames = htmlFiles.map(f => f.replace('.html', ''));
 
-    // 3. Write rewritten HTML files into tmpDir (root-level, not under vibe-demo/tedx-xinyi/)
+    // 3. Write rewritten HTML files into tmpDir (root-level)
     if (fs.existsSync(TEDX_HOME)) {
-      fs.writeFileSync(path.join(tmpDir, 'index.html'), rewriteTedxHtml(fs.readFileSync(TEDX_HOME, 'utf8')));
+      fs.writeFileSync(path.join(tmpDir, 'index.html'), rewriteTedxContent(fs.readFileSync(TEDX_HOME, 'utf8')));
     }
     for (const f of htmlFiles) {
-      fs.writeFileSync(path.join(tmpDir, f), rewriteTedxHtml(fs.readFileSync(path.join(TEDX_OUT, f), 'utf8')));
+      fs.writeFileSync(path.join(tmpDir, f), rewriteTedxContent(fs.readFileSync(path.join(TEDX_OUT, f), 'utf8')));
     }
 
-    // 4. Copy _next/ and tedx-xinyi/ images
-    if (fs.existsSync(NEXT_DIR))    execSync(`cp -r "${NEXT_DIR}" "${tmpDir}/_next"`);
+    // 4. Copy _next/ with path rewrites in all JS/JSON/CSS files (fixes React hydration)
+    if (fs.existsSync(NEXT_DIR))    copyAndRewriteDir(NEXT_DIR, path.join(tmpDir, '_next'));
+    // Copy images (binary, no rewrite needed)
     if (fs.existsSync(PUBLIC_IMGS)) execSync(`cp -r "${PUBLIC_IMGS}" "${tmpDir}/tedx-xinyi"`);
 
     // 5. PHP router (root-level clean URLs)
