@@ -102,12 +102,12 @@ function buildSteps(
     {
       label:  'CDN backup',
       detail: cdnDone ? 'Backed up' : 'Uploading in background…',
-      state:  cdnDone ? 'done' : (ocrDone ? 'done' : 'active'),
+      state:  cdnDone ? 'done' : (ocrDone || failed ? 'done' : 'active'),
     },
     {
-      label:  'Gemini reading pages',
-      detail: ocrDone ? 'Pages analysed' : ocrRunning ? 'Analysing…' : undefined,
-      state:  ocrDone ? 'done' : ocrRunning ? 'active' : 'active',
+      label:  failed ? 'Gemini failed' : 'Gemini reading pages',
+      detail: ocrDone ? 'Pages analysed' : ocrRunning ? 'Analysing…' : failed ? 'No blocks returned' : undefined,
+      state:  failed ? 'error' : ocrDone ? 'done' : ocrRunning ? 'active' : 'active',
     },
     {
       label:  failed ? 'Extraction failed' : 'Questions extracted',
