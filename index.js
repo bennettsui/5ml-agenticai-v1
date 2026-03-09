@@ -8085,7 +8085,6 @@ async function importRows(type, rows) {
             get('status')||'pending', get('notes')||null,
           ]
         );
-        const name = get('name', 'job_name');
         results.push({ sheet, row_num, status: 'accepted', label: `${name} · ${get('material')||'?'}` });
       } else if (type === 'inventory') {
         const material = get('material', 'filament', 'name');
