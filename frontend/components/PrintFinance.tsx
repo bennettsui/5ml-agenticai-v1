@@ -17,7 +17,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-type SubTab = 'overview' | 'work-units' | 'revenue' | 'costs' | 'inventory' | 'scenarios' | 'reports' | 'estimator' | 'invoices' | 'settings';
+type SubTab = 'overview' | 'work-units' | 'revenue' | 'costs' | 'inventory' | 'scenarios' | 'reports' | 'estimator' | 'invoices' | 'settings' | 'upload';
 
 interface WorkUnit {
   id: number;
@@ -2539,16 +2539,19 @@ const IMPORT_TYPES = [
   { id: 'inventory',  label: 'Inventory',        desc: 'material, brand, color, stock_kg, price_per_kg, supplier' },
 ] as const;
 
-function UploadModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+function UploadTab() {
   const [file, setFile] = useState<File | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [importType, setImportType] = useState('');
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ inserted: number; errors: unknown[] } | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   const doPreview = async (f: File) => {
     setPreviewing(true);
+    setPreview(null);
+    setResult(null);
     const fd = new FormData();
     fd.append('file', f);
     try {
@@ -2573,127 +2576,203 @@ function UploadModal({ onClose, onImported }: { onClose: () => void; onImported:
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setResult(data);
-      onImported();
     } catch (e: unknown) {
       alert((e as Error).message);
     } finally { setImporting(false); }
   };
 
-  const handleFile = (f: File) => { setFile(f); setPreview(null); setResult(null); doPreview(f); };
+  const reset = () => { setFile(null); setPreview(null); setResult(null); setImportType(''); };
+
+  const handleFile = (f: File) => { setFile(f); doPreview(f); };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) handleFile(f);
+  };
+
+  const detectedLabel = IMPORT_TYPES.find(t => t.id === importType)?.label;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700/70 rounded-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/50">
-          <div className="flex items-center gap-2">
-            <Upload className="w-4 h-4 text-blue-400" />
-            <h2 className="text-sm font-semibold text-white">Import Data</h2>
+    <div className="space-y-6 max-w-3xl">
+      {/* Header */}
+      <div>
+        <h3 className="text-base font-semibold text-white">Import Data</h3>
+        <p className="text-sm text-slate-400 mt-1">
+          Drop any CSV or Excel file — the system will analyse the columns and suggest where the data belongs.
+          You can confirm or override before anything is saved.
+        </p>
+      </div>
+
+      {/* Drop zone */}
+      {!result && (
+        <label
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl p-10 cursor-pointer transition-all ${
+            dragging ? 'border-blue-400/70 bg-blue-500/10 scale-[1.01]' :
+            file    ? 'border-blue-500/40 bg-blue-500/5' :
+                      'border-slate-600/50 hover:border-slate-500/70 hover:bg-white/[0.02]'
+          }`}>
+          <div className={`p-3 rounded-xl transition-colors ${file ? 'bg-blue-500/15' : 'bg-slate-700/60'}`}>
+            <Upload className={`w-6 h-6 ${file ? 'text-blue-400' : 'text-slate-400'}`} />
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-5">
-          {/* Step 1: File picker */}
-          <div>
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">1. Choose File</h3>
-            <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-6 cursor-pointer transition-colors ${file ? 'border-blue-500/40 bg-blue-500/5' : 'border-slate-600/50 hover:border-slate-500/70'}`}>
-              <Upload className="w-6 h-6 text-slate-500" />
-              <span className="text-xs text-slate-400 text-center">
-                {file ? file.name : 'Drop a CSV or XLSX file here, or click to browse'}
-              </span>
-              {file && <span className="text-xs text-slate-600">{(file.size / 1024).toFixed(1)} KB</span>}
-              <input type="file" accept=".csv,.xlsx,.xls" className="hidden"
-                onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); }} />
-            </label>
-            {previewing && (
-              <div className="flex items-center gap-2 mt-2 text-xs text-slate-400">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Parsing file…
-              </div>
-            )}
-          </div>
-
-          {/* Step 2: Detected type + override */}
-          {preview && !result && (
-            <>
-              <div>
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                  2. Data Type — {preview.row_count} rows detected
-                </h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {IMPORT_TYPES.map(t => (
-                    <button key={t.id} onClick={() => setImportType(t.id)}
-                      className={`text-left p-3 rounded-xl border transition-colors ${importType === t.id ? 'border-blue-500/50 bg-blue-500/10' : 'border-slate-700/40 hover:border-slate-600/60 bg-white/[0.02]'}`}>
-                      <div className={`text-xs font-medium mb-0.5 ${importType === t.id ? 'text-blue-300' : 'text-slate-300'}`}>{t.label}</div>
-                      <div className="text-xs text-slate-600 leading-tight">{t.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Column preview */}
-              <div>
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Detected Columns</h3>
-                <div className="flex flex-wrap gap-1.5">
-                  {preview.columns.map(c => (
-                    <span key={c} className="text-xs px-2 py-0.5 bg-slate-700/60 text-slate-300 rounded-full border border-slate-600/40">{c}</span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Sample rows */}
-              {preview.sample_rows.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Preview (first {preview.sample_rows.length} rows)</h3>
-                  <div className="overflow-x-auto border border-slate-700/40 rounded-lg">
-                    <table className="text-xs w-full">
-                      <thead>
-                        <tr className="border-b border-slate-700/50 bg-white/[0.03]">
-                          {preview.columns.map(c => <th key={c} className="px-3 py-2 text-left text-slate-500 font-medium whitespace-nowrap">{c}</th>)}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {preview.sample_rows.map((row, i) => (
-                          <tr key={i} className="border-b border-slate-700/30 last:border-0">
-                            {preview.columns.map(c => (
-                              <td key={c} className="px-3 py-2 text-slate-300 whitespace-nowrap max-w-[120px] truncate">{String(row[c] ?? '')}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              <button onClick={doImport} disabled={!importType || importing}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
-                {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                {importing ? 'Importing…' : `Import ${preview.row_count} rows as ${IMPORT_TYPES.find(t => t.id === importType)?.label || '…'}`}
-              </button>
-            </>
-          )}
-
-          {/* Result */}
-          {result && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                <div>
-                  <div className="text-sm font-semibold text-emerald-300">{(result as {inserted:number}).inserted} rows imported successfully</div>
-                  {(result as {errors: unknown[]}).errors?.length > 0 && (
-                    <div className="text-xs text-amber-400 mt-0.5">{(result as {errors:unknown[]}).errors.length} rows skipped — check format</div>
-                  )}
-                </div>
-              </div>
-              <button onClick={onClose} className="w-full py-2 bg-slate-700/60 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-xl transition-colors">
-                Done
-              </button>
+          {file ? (
+            <div className="text-center">
+              <div className="text-sm font-medium text-white">{file.name}</div>
+              <div className="text-xs text-slate-500 mt-0.5">{(file.size / 1024).toFixed(1)} KB</div>
+            </div>
+          ) : (
+            <div className="text-center">
+              <div className="text-sm text-slate-300">Drop a CSV or Excel file here</div>
+              <div className="text-xs text-slate-500 mt-0.5">or click to browse · .csv · .xlsx · .xls</div>
             </div>
           )}
+          <input type="file" accept=".csv,.xlsx,.xls" className="hidden"
+            onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); }} />
+        </label>
+      )}
+
+      {previewing && (
+        <div className="flex items-center gap-2 text-sm text-slate-400">
+          <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+          Analysing file…
         </div>
-      </div>
+      )}
+
+      {/* Preview + type selection */}
+      {preview && !result && (
+        <div className="space-y-5">
+
+          {/* Detected type banner */}
+          <div className={`flex items-start gap-3 p-4 rounded-xl border ${importType ? 'bg-blue-500/8 border-blue-500/25' : 'bg-amber-500/8 border-amber-500/25'}`}>
+            <div className={`p-1.5 rounded-lg mt-0.5 ${importType ? 'bg-blue-500/15' : 'bg-amber-500/15'}`}>
+              {importType
+                ? <CheckCircle2 className="w-4 h-4 text-blue-400" />
+                : <AlertCircle className="w-4 h-4 text-amber-400" />}
+            </div>
+            <div>
+              <div className="text-sm font-medium text-white">
+                {importType
+                  ? <>Detected: <span className="text-blue-300">{detectedLabel}</span> — {preview.row_count} rows</>
+                  : <>Could not auto-detect data type — please select below</>}
+              </div>
+              <div className="text-xs text-slate-400 mt-0.5">
+                Columns found: {preview.columns.join(' · ')}
+              </div>
+            </div>
+          </div>
+
+          {/* Type selector */}
+          <div>
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+              Where should this data go?
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {IMPORT_TYPES.map(t => (
+                <button key={t.id} onClick={() => setImportType(t.id)}
+                  className={`text-left p-3.5 rounded-xl border transition-colors ${
+                    importType === t.id
+                      ? 'border-blue-500/60 bg-blue-500/12 ring-1 ring-blue-500/20'
+                      : 'border-slate-700/40 hover:border-slate-600/60 bg-white/[0.02]'
+                  }`}>
+                  <div className={`text-xs font-semibold mb-1 ${importType === t.id ? 'text-blue-300' : 'text-slate-200'}`}>
+                    {t.label}
+                  </div>
+                  <div className="text-xs text-slate-500 leading-relaxed font-mono">{t.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Data preview table */}
+          {preview.sample_rows.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Preview — first {preview.sample_rows.length} of {preview.row_count} rows
+              </div>
+              <div className="overflow-x-auto border border-slate-700/40 rounded-xl">
+                <table className="text-xs w-full">
+                  <thead>
+                    <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+                      {preview.columns.map(c => (
+                        <th key={c} className="px-3 py-2.5 text-left text-slate-400 font-medium whitespace-nowrap">{c}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.sample_rows.map((row, i) => (
+                      <tr key={i} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
+                        {preview.columns.map(c => (
+                          <td key={c} className="px-3 py-2 text-slate-300 whitespace-nowrap max-w-[140px] truncate">{String(row[c] ?? '')}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Import CTA */}
+          <div className="flex items-center gap-3">
+            <button onClick={doImport} disabled={!importType || importing}
+              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-colors">
+              {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {importing ? 'Importing…' : `Import ${preview.row_count} rows into ${detectedLabel || '…'}`}
+            </button>
+            <button onClick={reset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+              Upload different file
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Result */}
+      {result && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-4 p-5 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl">
+            <CheckCircle2 className="w-6 h-6 text-emerald-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="text-base font-semibold text-emerald-300">
+                {(result as {inserted:number}).inserted} rows imported successfully
+              </div>
+              <div className="text-sm text-slate-400 mt-0.5">
+                Data added to <span className="text-white">{detectedLabel}</span>. Switch to that tab to review.
+              </div>
+              {(result as {errors:unknown[]}).errors?.length > 0 && (
+                <div className="text-xs text-amber-400 mt-2">
+                  {(result as {errors:unknown[]}).errors.length} rows were skipped — check column names match the expected format.
+                </div>
+              )}
+            </div>
+          </div>
+          <button onClick={reset}
+            className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors">
+            <Upload className="w-3.5 h-3.5" /> Import another file
+          </button>
+        </div>
+      )}
+
+      {/* Format guide */}
+      {!file && (
+        <div className="border border-slate-700/40 rounded-xl p-4 space-y-3">
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Supported formats</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {IMPORT_TYPES.map(t => (
+              <div key={t.id} className="text-xs">
+                <span className="text-slate-300 font-medium">{t.label}:</span>{' '}
+                <span className="text-slate-600 font-mono">{t.desc}</span>
+              </div>
+            ))}
+          </div>
+          <div className="text-xs text-slate-600">
+            Column names are matched flexibly — spaces, underscores, and casing are ignored.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2712,12 +2791,12 @@ const SUB_TABS: { id: SubTab; label: string; icon: typeof LayoutDashboard }[] = 
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'estimator', label: 'Estimator', icon: Calculator },
   { id: 'invoices', label: 'Invoices', icon: Receipt },
+  { id: 'upload',   label: 'Upload',   icon: Upload },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
 
 export default function PrintFinance() {
   const [activeTab, setActiveTab] = useState<SubTab>('overview');
-  const [showUpload, setShowUpload] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -2726,16 +2805,9 @@ export default function PrintFinance() {
           <h2 className="text-xl font-bold text-white">3D Print Finance</h2>
           <p className="text-sm text-slate-400 mt-0.5">Job costing · Revenue tracking · Inventory · Scenarios</p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button onClick={() => setShowUpload(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs font-medium rounded-lg transition-colors">
-            <Upload className="w-3.5 h-3.5" />
-            Import Data
-          </button>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-xs text-emerald-300 font-medium">Live</span>
-          </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex-shrink-0">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="text-xs text-emerald-300 font-medium">Live</span>
         </div>
       </div>
 
@@ -2761,14 +2833,8 @@ export default function PrintFinance() {
       {activeTab === 'reports'    && <Reports />}
       {activeTab === 'estimator'  && <Estimator />}
       {activeTab === 'invoices'   && <Invoices />}
+      {activeTab === 'upload'     && <UploadTab />}
       {activeTab === 'settings'   && <Settings />}
-
-      {showUpload && (
-        <UploadModal
-          onClose={() => setShowUpload(false)}
-          onImported={() => { /* data will auto-reload via useApi on next render */ }}
-        />
-      )}
     </div>
   );
 }
