@@ -61,7 +61,7 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-3xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Generate Report</h1>
         <p className="text-slate-400 text-sm mt-0.5">AI-generated summaries for admin, parents, or planning.</p>

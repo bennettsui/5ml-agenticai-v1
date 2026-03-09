@@ -136,7 +136,7 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6">
       {/* Full-page drop overlay — appears when a file enters the browser window */}
       {pageHasDrag && (status === 'IDLE' || status === 'ERROR') && (
         <div
