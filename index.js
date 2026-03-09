@@ -7423,6 +7423,63 @@ function pfDbCheck(res) {
   return true;
 }
 
+// Auto-create all pf_ tables on startup
+(async () => {
+  if (!process.env.DATABASE_URL) return;
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS pf_work_units (
+      id SERIAL PRIMARY KEY,
+      job_id TEXT,
+      name TEXT NOT NULL,
+      material TEXT,
+      grams NUMERIC(10,2) DEFAULT 0,
+      hours NUMERIC(10,2) DEFAULT 0,
+      status TEXT DEFAULT 'queued',
+      revenue NUMERIC(12,2) DEFAULT 0,
+      direct_cost NUMERIC(12,2) DEFAULT 0,
+      overhead_alloc NUMERIC(12,2) DEFAULT 0,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pf_revenue_entries (
+      id SERIAL PRIMARY KEY,
+      period TEXT,
+      channel TEXT NOT NULL DEFAULT 'Direct',
+      revenue NUMERIC(12,2) DEFAULT 0,
+      cogs NUMERIC(12,2) DEFAULT 0,
+      job_count INTEGER DEFAULT 0,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pf_cost_entries (
+      id SERIAL PRIMARY KEY,
+      category TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'direct',
+      amount NUMERIC(12,2) DEFAULT 0,
+      period TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pf_inventory (
+      id SERIAL PRIMARY KEY,
+      material TEXT NOT NULL,
+      brand TEXT,
+      color TEXT,
+      stock_kg NUMERIC(10,3) DEFAULT 0,
+      price_per_kg NUMERIC(10,2) DEFAULT 0,
+      reorder_kg NUMERIC(10,3) DEFAULT 1,
+      supplier TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+  ];
+  for (const sql of tables) {
+    await pool.query(sql).catch(err => console.warn('[print-finance] table init:', err.message));
+  }
+})();
+
 // --- Work Units ---
 app.get('/api/print-finance/work-units', async (req, res) => {
   if (!pfDbCheck(res)) return;
