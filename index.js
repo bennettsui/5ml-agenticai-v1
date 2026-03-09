@@ -7412,6 +7412,260 @@ const server = http.createServer(app);
 wsServer.initialize(server);
 
 // Global error handler middleware (must be last)
+// =============================================================================
+// 3D PRINT FINANCE API
+// =============================================================================
+
+const pfUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+function pfDbCheck(res) {
+  if (!process.env.DATABASE_URL) { res.status(503).json({ error: 'Database not configured' }); return false; }
+  return true;
+}
+
+// --- Work Units ---
+app.get('/api/print-finance/work-units', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_work_units ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/work-units', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_work_units (name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [name, material||null, grams||0, hours||0, status||'queued', revenue||0, direct_cost||0, overhead_alloc||0, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/work-units/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_work_units SET name=$1, material=$2, grams=$3, hours=$4, status=$5,
+       revenue=$6, direct_cost=$7, overhead_alloc=$8, notes=$9, updated_at=NOW()
+       WHERE id=$10 RETURNING *`,
+      [name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/work-units/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_work_units WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Revenue Entries ---
+app.get('/api/print-finance/revenue', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_revenue_entries ORDER BY period DESC, channel');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/revenue', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { channel, period, jobs, units_grams, revenue, cogs, notes } = req.body;
+    if (!channel || !period) return res.status(400).json({ error: 'channel and period are required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_revenue_entries (channel, period, jobs, units_grams, revenue, cogs, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [channel, period, jobs||0, units_grams||0, revenue||0, cogs||0, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/revenue/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_revenue_entries WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Cost Entries ---
+app.get('/api/print-finance/costs', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_cost_entries ORDER BY type, category');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/costs', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { category, type, amount, period, notes } = req.body;
+    if (!category || !type) return res.status(400).json({ error: 'category and type are required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [category, type, amount||0, period||null, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/costs/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { category, type, amount, period, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_cost_entries SET category=$1, type=$2, amount=$3, period=$4, notes=$5, updated_at=NOW()
+       WHERE id=$6 RETURNING *`,
+      [category, type, amount, period, notes, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/costs/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_cost_entries WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/costs/upload — CSV or XLSX bulk import
+// Expected columns: category, type (direct|overhead), amount, period (optional), notes (optional)
+app.post('/api/print-finance/costs/upload', pfUpload.single('file'), async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  if (!['.csv', '.xlsx', '.xls'].includes(ext)) {
+    return res.status(400).json({ error: 'Only .csv, .xlsx, or .xls files are accepted' });
+  }
+  try {
+    let rows = [];
+    if (ext === '.csv') {
+      const text = req.file.buffer.toString('utf8');
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+      for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const row = {};
+        header.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+        rows.push(row);
+      }
+    } else {
+      const ExcelJS = require('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(req.file.buffer);
+      const sheet = workbook.worksheets[0];
+      const header = [];
+      sheet.getRow(1).eachCell(cell => header.push(String(cell.value || '').trim().toLowerCase().replace(/\s+/g, '_')));
+      sheet.eachRow((row, rowNum) => {
+        if (rowNum === 1) return;
+        const obj = {};
+        row.eachCell((cell, colNum) => { obj[header[colNum - 1]] = cell.value !== null && cell.value !== undefined ? String(cell.value) : ''; });
+        rows.push(obj);
+      });
+    }
+    const validTypes = ['direct', 'overhead'];
+    const inserted = [];
+    const errors = [];
+    for (const r of rows) {
+      const category = r.category || r.Category;
+      const type = (r.type || r.Type || '').toLowerCase();
+      const amount = parseFloat(r.amount || r.Amount || '0');
+      if (!category || !validTypes.includes(type)) {
+        errors.push({ row: r, reason: 'Missing category or invalid type (must be direct|overhead)' });
+        continue;
+      }
+      const { rows: ins } = await pool.query(
+        `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+        [category, type, isNaN(amount) ? 0 : amount, r.period || r.Period || null, r.notes || r.Notes || null]
+      );
+      inserted.push(ins[0]);
+    }
+    res.json({ inserted: inserted.length, errors });
+  } catch (err) {
+    console.error('Print finance cost upload error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/print-finance/costs/template — download CSV template
+app.get('/api/print-finance/costs/template', (req, res) => {
+  const csv = [
+    'category,type,amount,period,notes',
+    'Filament & Resin,direct,842,Mar 2026,Main material cost',
+    'Post-processing labor,direct,320,Mar 2026,',
+    'Machine depreciation,overhead,410,Mar 2026,Annualized over 5 years',
+    'Electricity,overhead,180,Mar 2026,',
+  ].join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="print-finance-costs-template.csv"');
+  res.send(csv);
+});
+
+// --- Inventory ---
+app.get('/api/print-finance/inventory', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_inventory_items ORDER BY name');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/inventory', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { name, type, unit, stock_qty, reorder_point, unit_cost, supplier, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_inventory_items (name, type, unit, stock_qty, reorder_point, unit_cost, supplier, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [name, type||'filament', unit||'kg', stock_qty||0, reorder_point||0, unit_cost||0, supplier||null, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/inventory/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { name, type, unit, stock_qty, reorder_point, unit_cost, supplier, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_inventory_items SET name=$1, type=$2, unit=$3, stock_qty=$4, reorder_point=$5,
+       unit_cost=$6, supplier=$7, notes=$8, updated_at=NOW() WHERE id=$9 RETURNING *`,
+      [name, type, unit, stock_qty, reorder_point, unit_cost, supplier, notes, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/inventory/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_inventory_items WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 const errorHandler = (err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   console.error('❌ Unhandled error:', err.message || err);
