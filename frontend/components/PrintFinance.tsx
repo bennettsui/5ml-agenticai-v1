@@ -929,78 +929,78 @@ function Costs() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {([
-          { key: 'direct', label: 'Direct Costs', barColor: 'bg-rose-500', textColor: 'text-rose-400' },
-          { key: 'overhead', label: 'Overhead Costs', barColor: 'bg-amber-500', textColor: 'text-amber-400' },
-          { key: 'fixed', label: 'Fixed Costs', barColor: 'bg-blue-500', textColor: 'text-blue-400' },
-        ] as const).map(({ key: type, label, barColor, textColor }) => {
-          const typeEntries = visibleEntries.filter(c => c.type === type);
-          const typeTotal = typeEntries.reduce((s, c) => s + Number(c.amount), 0);
-          if (!loading && typeEntries.length === 0) return null;
-          return (
-            <div key={type} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-semibold text-white">{label}</h3>
-                <span className={`text-sm font-bold ${textColor}`}>{money(typeTotal)}</span>
-              </div>
-              {loading ? <div className="text-xs text-slate-500 py-2">Loading…</div> : (
-                <div className="space-y-2">
-                  {typeEntries.map(c => {
-                    const pct = typeTotal > 0 ? (Number(c.amount) / typeTotal) * 100 : 0;
-                    const isEditing = editId === c.id;
-                    if (isEditing) return (
-                      <div key={c.id} className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-xs text-slate-500 block mb-1">Category</label>
-                            <input className="w-full bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.category||'')} onChange={e => setEditForm(p => ({...p, category: e.target.value}))} />
-                          </div>
-                          <div>
-                            <label className="text-xs text-slate-500 block mb-1">Amount ($)</label>
-                            <input type="number" className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.amount||'')} onChange={e => setEditForm(p => ({...p, amount: Number(e.target.value)}))} />
-                          </div>
-                          <div>
-                            <label className="text-xs text-slate-500 block mb-1">Type</label>
-                            <select className="w-full bg-slate-700 border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.type||type)} onChange={e => setEditForm(p => ({...p, type: e.target.value as CostEntry['type']}))}>
-                              <option value="direct">Direct</option>
-                              <option value="overhead">Overhead</option>
-                              <option value="fixed">Fixed</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-xs text-slate-500 block mb-1">Period</label>
-                            <input className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} />
-                          </div>
-                        </div>
-                        <div className="flex gap-2 pt-1">
-                          <button onClick={saveEdit} disabled={saving} className="flex items-center gap-1 px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs rounded transition-colors disabled:opacity-50"><Save className="w-3 h-3" /> Save</button>
-                          <button onClick={cancelEdit} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Cancel</button>
-                        </div>
-                      </div>
-                    );
-                    return (
-                      <div key={c.id} className="group">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-slate-300 flex-1 truncate">{c.category}</span>
-                          <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
-                            <span className="text-slate-200 font-medium">{money(Number(c.amount))}</span>
-                            <button onClick={() => startEdit(c)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-blue-400 transition-all"><Pencil className="w-3 h-3" /></button>
-                            <button onClick={() => del(c.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"><Trash2 className="w-3 h-3" /></button>
-                          </div>
-                        </div>
-                        <div className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
-                        </div>
-                        {c.period && <div className="text-xs text-slate-600 mt-0.5">{c.period}</div>}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Category</th>
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Type</th>
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Period</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Amount</th>
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Notes</th>
+              <th className="px-3 py-2.5 w-16" />
+            </tr>
+          </thead>
+          <tbody>
+            {loading && (
+              <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>
+            )}
+            {!loading && visibleEntries.length === 0 && (
+              <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">No cost entries yet.</td></tr>
+            )}
+            {visibleEntries.map(c => {
+              const typeColor = c.type === 'direct' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20'
+                : c.type === 'overhead' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+              if (editId === c.id) return (
+                <tr key={c.id} className="border-b border-slate-700/30 bg-blue-500/5">
+                  <td className="px-3 py-2">
+                    <input className="w-full bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.category||'')} onChange={e => setEditForm(p => ({...p, category: e.target.value}))} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <select className="bg-slate-700 border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.type||c.type)} onChange={e => setEditForm(p => ({...p, type: e.target.value as CostEntry['type']}))}>
+                      <option value="direct">Direct</option>
+                      <option value="overhead">Overhead</option>
+                      <option value="fixed">Fixed</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <input className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input type="number" className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.amount||'')} onChange={e => setEditForm(p => ({...p, amount: Number(e.target.value)}))} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={saveEdit} disabled={saving} className="flex items-center gap-0.5 px-1.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded transition-colors disabled:opacity-50"><Save className="w-3 h-3" /></button>
+                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300 transition-colors px-1"><X className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+              return (
+                <tr key={c.id} className="border-b border-slate-700/30 last:border-0 group hover:bg-white/[0.02]">
+                  <td className="px-3 py-2.5 text-slate-200 font-medium">{c.category}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`px-1.5 py-0.5 rounded border text-xs font-medium ${typeColor}`}>{c.type}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-slate-400">{c.period || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(c.amount))}</td>
+                  <td className="px-3 py-2.5 text-slate-400 max-w-[200px] truncate">{c.notes || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => startEdit(c)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3 h-3" /></button>
+                      <button onClick={() => del(c.id)} className="text-slate-500 hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {/* Overhead Allocation Engine */}
