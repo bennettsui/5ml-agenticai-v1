@@ -7855,6 +7855,278 @@ app.get('/api/print-finance/export/inventory', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ============================================================
+// INVOICES
+// ============================================================
+pool.query(`CREATE TABLE IF NOT EXISTS pf_invoices (
+  id SERIAL PRIMARY KEY,
+  invoice_no TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL DEFAULT 'invoice',
+  client_name TEXT,
+  client_company TEXT,
+  client_email TEXT,
+  client_address TEXT,
+  issue_date DATE DEFAULT CURRENT_DATE,
+  due_date DATE,
+  payment_terms TEXT,
+  notes TEXT,
+  subtotal NUMERIC(12,2) DEFAULT 0,
+  tax_rate NUMERIC(5,2) DEFAULT 0,
+  tax_amount NUMERIC(12,2) DEFAULT 0,
+  total NUMERIC(12,2) DEFAULT 0,
+  status TEXT DEFAULT 'draft',
+  work_unit_ids INTEGER[],
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)`).catch(() => {});
+
+app.get('/api/print-finance/invoices', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_invoices ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/invoices', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const {
+      type, client_name, client_company, client_email, client_address,
+      issue_date, due_date, payment_terms, notes,
+      subtotal, tax_rate, tax_amount, total, work_unit_ids,
+    } = req.body;
+    // Auto-generate invoice number
+    const countRes = await pool.query('SELECT COUNT(*) FROM pf_invoices');
+    const seq = String(Number(countRes.rows[0].count) + 1).padStart(4, '0');
+    const prefix = (type === 'quote') ? 'QTE' : 'INV';
+    const invoice_no = `${prefix}-${new Date().getFullYear()}-${seq}`;
+    const { rows } = await pool.query(
+      `INSERT INTO pf_invoices
+       (invoice_no, type, client_name, client_company, client_email, client_address,
+        issue_date, due_date, payment_terms, notes, subtotal, tax_rate, tax_amount, total, work_unit_ids)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+      [invoice_no, type||'invoice', client_name||null, client_company||null, client_email||null,
+       client_address||null, issue_date||null, due_date||null, payment_terms||null, notes||null,
+       subtotal||0, tax_rate||0, tax_amount||0, total||0, work_unit_ids||[]]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/print-finance/invoices/:id/status', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { status } = req.body;
+    const { rows } = await pool.query(
+      'UPDATE pf_invoices SET status=$1 WHERE id=$2 RETURNING *',
+      [status, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/invoices/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    await pool.query('DELETE FROM pf_invoices WHERE id=$1', [req.params.id]);
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/invoices/:id/download — generates XLSX invoice
+app.get('/api/print-finance/invoices/:id/download', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows: invRows } = await pool.query('SELECT * FROM pf_invoices WHERE id=$1', [req.params.id]);
+    if (!invRows.length) return res.status(404).json({ error: 'Invoice not found' });
+    const inv = invRows[0];
+
+    // Fetch work units for this invoice
+    let lineItems = [];
+    if (inv.work_unit_ids && inv.work_unit_ids.length) {
+      const { rows: wuRows } = await pool.query(
+        'SELECT * FROM pf_work_units WHERE id = ANY($1) ORDER BY created_at',
+        [inv.work_unit_ids]
+      );
+      lineItems = wuRows;
+    }
+
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '3D Print Finance';
+    const ws = wb.addWorksheet(inv.type === 'quote' ? 'Quote' : 'Invoice');
+    ws.pageSetup = { paperSize: 9, orientation: 'portrait', margins: { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 } };
+
+    const DARK = 'FF1E293B';
+    const ACCENT = 'FF3B82F6';
+    const MID = 'FF334155';
+    const LIGHT = 'FFF1F5F9';
+    const WHITE = 'FFFFFFFF';
+    const RED = 'FFEF4444';
+
+    const setCell = (row, col, value, opts = {}) => {
+      const cell = ws.getCell(row, col);
+      cell.value = value;
+      if (opts.bold) cell.font = { ...(cell.font||{}), bold: true, ...opts.font };
+      else if (opts.font) cell.font = opts.font;
+      if (opts.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.fill } };
+      if (opts.align) cell.alignment = { horizontal: opts.align, vertical: 'middle', wrapText: true };
+      if (opts.numFmt) cell.numFmt = opts.numFmt;
+      if (opts.border) cell.border = opts.border;
+      return cell;
+    };
+
+    ws.columns = [
+      { key: 'A', width: 6 },
+      { key: 'B', width: 22 },
+      { key: 'C', width: 16 },
+      { key: 'D', width: 10 },
+      { key: 'E', width: 10 },
+      { key: 'F', width: 14 },
+      { key: 'G', width: 14 },
+    ];
+
+    // ── Row 1-2: Company header ──────────────────────────────
+    ws.mergeCells('A1:D2');
+    const hdr = ws.getCell('A1');
+    hdr.value = '3D PRINT FACTORY';
+    hdr.font = { bold: true, size: 16, color: { argb: WHITE } };
+    hdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } };
+    hdr.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(1).height = 22;
+    ws.getRow(2).height = 22;
+
+    ws.mergeCells('E1:G2');
+    const docType = ws.getCell('E1');
+    docType.value = inv.type === 'quote' ? 'QUOTATION' : 'INVOICE';
+    docType.font = { bold: true, size: 18, color: { argb: WHITE } };
+    docType.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } };
+    docType.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    // ── Row 3: spacer ──
+    ws.getRow(3).height = 6;
+
+    // ── Row 4-7: Invoice meta ──
+    const issueDateStr = inv.issue_date ? new Date(inv.issue_date).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : '—';
+    const dueDateStr = inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : '—';
+    [
+      ['Invoice #', inv.invoice_no],
+      ['Issue Date', issueDateStr],
+      ['Due Date', dueDateStr],
+      ['Status', (inv.status || 'draft').toUpperCase()],
+    ].forEach(([label, val], i) => {
+      const r = 4 + i;
+      ws.mergeCells(`A${r}:B${r}`);
+      setCell(r, 1, label, { font: { color: { argb: 'FF64748B' }, size: 9 }, align: 'left' });
+      ws.mergeCells(`C${r}:G${r}`);
+      setCell(r, 3, val, { bold: true, align: 'right', font: { bold: true, size: 10, color: { argb: i === 3 ? ACCENT : 'FF1E293B' } } });
+    });
+
+    // ── Row 9: BILL TO header ──
+    ws.getRow(9).height = 8;
+    ws.mergeCells('A10:G10');
+    const billHdr = ws.getCell('A10');
+    billHdr.value = 'BILL TO';
+    billHdr.font = { bold: true, size: 8, color: { argb: WHITE } };
+    billHdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: MID } };
+    billHdr.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(10).height = 16;
+
+    const clientLines = [
+      inv.client_name || '—',
+      inv.client_company || '',
+      inv.client_email || '',
+      inv.client_address || '',
+    ].filter(Boolean);
+    clientLines.forEach((line, i) => {
+      const r = 11 + i;
+      ws.mergeCells(`A${r}:G${r}`);
+      setCell(r, 1, line, { font: { bold: i === 0, size: 10, color: { argb: DARK } } });
+    });
+
+    // ── Line items header ──
+    const itemStart = 11 + clientLines.length + 2;
+    ws.getRow(itemStart - 1).height = 6;
+    const colHeaders = ['#', 'Description', 'Material', 'Grams', 'Hours', 'Unit Price', 'Amount'];
+    colHeaders.forEach((h, ci) => {
+      const cell = ws.getCell(itemStart, ci + 1);
+      cell.value = h;
+      cell.font = { bold: true, size: 9, color: { argb: WHITE } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } };
+      cell.alignment = { horizontal: ci === 1 ? 'left' : 'right', vertical: 'middle' };
+      cell.border = { bottom: { style: 'thin', color: { argb: ACCENT } } };
+    });
+    ws.getRow(itemStart).height = 18;
+
+    // ── Line items ──
+    let rowIdx = itemStart + 1;
+    lineItems.forEach((w, i) => {
+      const isEven = i % 2 === 0;
+      const fillColor = isEven ? LIGHT : WHITE;
+      const amount = Number(w.revenue);
+      [w.id ? String(i + 1) : '', w.name, w.material || '', w.grams, w.hours, amount, amount].forEach((val, ci) => {
+        const cell = ws.getCell(rowIdx, ci + 1);
+        cell.value = val;
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
+        cell.font = { size: 9, color: { argb: DARK } };
+        cell.alignment = { horizontal: ci <= 1 ? 'left' : 'right', vertical: 'middle' };
+        if (ci >= 5) cell.numFmt = '"$"#,##0.00';
+      });
+      ws.getRow(rowIdx).height = 16;
+      rowIdx++;
+    });
+
+    if (lineItems.length === 0) {
+      ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
+      setCell(rowIdx, 1, 'No line items selected', { font: { italic: true, color: { argb: 'FF94A3B8' } }, align: 'center' });
+      rowIdx++;
+    }
+
+    // ── Totals ──
+    rowIdx++;
+    const totalsData = [
+      ['Subtotal', Number(inv.subtotal)],
+      [`Tax (${Number(inv.tax_rate).toFixed(1)}%)`, Number(inv.tax_amount)],
+      ['TOTAL DUE', Number(inv.total)],
+    ];
+    totalsData.forEach(([label, val], i) => {
+      const isTotal = i === 2;
+      ws.mergeCells(`A${rowIdx}:E${rowIdx}`);
+      ws.mergeCells(`F${rowIdx}:G${rowIdx}`);
+      const lc = ws.getCell(rowIdx, 1);
+      lc.value = label;
+      lc.font = { bold: isTotal, size: isTotal ? 11 : 9, color: { argb: isTotal ? WHITE : DARK } };
+      lc.alignment = { horizontal: 'right', vertical: 'middle' };
+      if (isTotal) lc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } };
+      const vc = ws.getCell(rowIdx, 6);
+      vc.value = val;
+      vc.numFmt = '"$"#,##0.00';
+      vc.font = { bold: isTotal, size: isTotal ? 12 : 10, color: { argb: isTotal ? WHITE : DARK } };
+      vc.alignment = { horizontal: 'right', vertical: 'middle' };
+      if (isTotal) vc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } };
+      ws.getRow(rowIdx).height = isTotal ? 22 : 16;
+      rowIdx++;
+    });
+
+    // ── Footer ──
+    rowIdx += 2;
+    if (inv.payment_terms) {
+      ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
+      setCell(rowIdx, 1, `Payment Terms: ${inv.payment_terms}`, { font: { italic: true, size: 9, color: { argb: '64748b'.toUpperCase() } } });
+      rowIdx++;
+    }
+    if (inv.notes) {
+      ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
+      setCell(rowIdx, 1, `Notes: ${inv.notes}`, { font: { italic: true, size: 9, color: { argb: '64748b'.toUpperCase() } } });
+    }
+
+    xlsxHeaders(res, `${inv.invoice_no}.xlsx`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET /api/print-finance/job-pnl
 // Returns per-job P&L: revenue, direct cost, overhead_alloc, gross profit, margin %
 app.get('/api/print-finance/job-pnl', async (req, res) => {

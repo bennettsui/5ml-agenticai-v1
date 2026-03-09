@@ -6,7 +6,7 @@ import {
   FlaskConical, FileText, ArrowUpRight, ArrowDownRight,
   AlertCircle, CheckCircle2, Clock, Zap, Plus, Trash2,
   Upload, Download, X, Loader2, RefreshCw, Pencil, Save,
-  Calculator, Filter,
+  Calculator, Filter, Receipt, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -17,7 +17,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-type SubTab = 'overview' | 'work-units' | 'revenue' | 'costs' | 'inventory' | 'scenarios' | 'reports' | 'estimator';
+type SubTab = 'overview' | 'work-units' | 'revenue' | 'costs' | 'inventory' | 'scenarios' | 'reports' | 'estimator' | 'invoices';
 
 interface WorkUnit {
   id: number;
@@ -69,6 +69,27 @@ interface MaterialRate {
   machine_rate_per_hr: number;
   filament_cost_per_g: number;
   notes?: string;
+}
+
+interface Invoice {
+  id: number;
+  invoice_no: string;
+  type: 'invoice' | 'quote';
+  client_name?: string;
+  client_company?: string;
+  client_email?: string;
+  client_address?: string;
+  issue_date?: string;
+  due_date?: string;
+  payment_terms?: string;
+  notes?: string;
+  subtotal: number;
+  tax_rate: number;
+  tax_amount: number;
+  total: number;
+  status: 'draft' | 'sent' | 'paid' | 'cancelled';
+  work_unit_ids: number[];
+  created_at: string;
 }
 
 interface InventoryItem {
@@ -2060,6 +2081,281 @@ function Estimator() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Sub-tab: Invoices
+// ---------------------------------------------------------------------------
+
+const INV_STATUS: Record<string, { label: string; color: string; bg: string }> = {
+  draft:     { label: 'Draft',     color: 'text-slate-400',  bg: 'bg-slate-500/10 border-slate-500/20' },
+  sent:      { label: 'Sent',      color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20' },
+  paid:      { label: 'Paid',      color: 'text-emerald-400',bg: 'bg-emerald-500/10 border-emerald-500/20' },
+  cancelled: { label: 'Cancelled', color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/20' },
+};
+
+const EMPTY_FORM = {
+  type: 'invoice' as 'invoice' | 'quote',
+  client_name: '', client_company: '', client_email: '', client_address: '',
+  issue_date: new Date().toISOString().split('T')[0],
+  due_date: '', payment_terms: 'Net 30', notes: '',
+  tax_rate: '0',
+};
+
+function Invoices() {
+  const { data: invoices, reload } = useApi<Invoice[]>('/api/print-finance/invoices');
+  const { data: workUnits } = useApi<WorkUnit[]>('/api/print-finance/work-units');
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [selectedWUs, setSelectedWUs] = useState<number[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  const toggleWU = (id: number) =>
+    setSelectedWUs(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const chosenUnits = (workUnits || []).filter(w => selectedWUs.includes(w.id));
+  const subtotal = chosenUnits.reduce((s, w) => s + Number(w.revenue), 0);
+  const taxRate = parseFloat(form.tax_rate) || 0;
+  const taxAmount = subtotal * taxRate / 100;
+  const total = subtotal + taxAmount;
+
+  const create = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/print-finance/invoices', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form, tax_rate: taxRate, subtotal, tax_amount: taxAmount, total,
+          work_unit_ids: selectedWUs,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      const inv: Invoice = await res.json();
+      // Auto-download
+      window.open(`/api/print-finance/invoices/${inv.id}/download`, '_blank');
+      setCreating(false);
+      setForm({ ...EMPTY_FORM });
+      setSelectedWUs([]);
+      reload();
+    } finally { setSaving(false); }
+  };
+
+  const updateStatus = async (id: number, status: string) => {
+    await fetch(`/api/print-finance/invoices/${id}/status`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    reload();
+  };
+
+  const del = async (id: number) => {
+    await fetch(`/api/print-finance/invoices/${id}`, { method: 'DELETE' });
+    reload();
+  };
+
+  const statusCounts = (invoices || []).reduce((acc, inv) => {
+    acc[inv.status] = (acc[inv.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const totalPaid = (invoices || []).filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.total), 0);
+  const totalOutstanding = (invoices || []).filter(i => i.status === 'sent').reduce((s, i) => s + Number(i.total), 0);
+
+  return (
+    <div className="space-y-5">
+      {/* Summary bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Invoices', value: String((invoices || []).length), color: 'text-slate-200' },
+          { label: 'Paid', value: money(totalPaid), color: 'text-emerald-400' },
+          { label: 'Outstanding', value: money(totalOutstanding), color: 'text-amber-400' },
+          { label: 'Draft', value: String(statusCounts['draft'] || 0), color: 'text-slate-400' },
+        ].map(k => (
+          <div key={k.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3">
+            <div className="text-xs text-slate-500 mb-1">{k.label}</div>
+            <div className={`text-xl font-bold ${k.color}`}>{k.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* New Invoice button */}
+      <div className="flex justify-end">
+        <button onClick={() => setCreating(v => !v)}
+          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs font-medium rounded-lg transition-colors">
+          <Plus className="w-3.5 h-3.5" />
+          {creating ? 'Cancel' : 'New Invoice / Quote'}
+        </button>
+      </div>
+
+      {/* Creation form */}
+      {creating && (
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 space-y-5">
+          <h3 className="text-sm font-semibold text-white">New {form.type === 'quote' ? 'Quotation' : 'Invoice'}</h3>
+
+          {/* Type toggle */}
+          <div className="flex gap-2">
+            {(['invoice', 'quote'] as const).map(t => (
+              <button key={t} onClick={() => setForm(p => ({ ...p, type: t }))}
+                className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${form.type === t ? 'bg-blue-600 text-white' : 'bg-slate-700/60 text-slate-400 hover:text-white'}`}>
+                {t === 'invoice' ? 'Invoice' : 'Quotation'}
+              </button>
+            ))}
+          </div>
+
+          {/* Client details */}
+          <div>
+            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Client Details</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { key: 'client_name', label: 'Client Name', full: false },
+                { key: 'client_company', label: 'Company', full: false },
+                { key: 'client_email', label: 'Email', full: false },
+                { key: 'client_address', label: 'Address', full: false },
+                { key: 'issue_date', label: 'Issue Date', type: 'date', full: false },
+                { key: 'due_date', label: 'Due Date', type: 'date', full: false },
+                { key: 'payment_terms', label: 'Payment Terms', full: false },
+                { key: 'tax_rate', label: 'Tax Rate (%)', type: 'number', full: false },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="text-xs text-slate-500 block mb-1">{f.label}</label>
+                  <input type={f.type || 'text'}
+                    value={(form as Record<string, string>)[f.key]}
+                    onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50" />
+                </div>
+              ))}
+            </div>
+            <div className="mt-3">
+              <label className="text-xs text-slate-500 block mb-1">Notes</label>
+              <input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50" />
+            </div>
+          </div>
+
+          {/* Work unit selector */}
+          <div>
+            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+              Line Items — Select Work Units ({selectedWUs.length} selected)
+            </h4>
+            <div className="border border-slate-700/40 rounded-lg overflow-hidden max-h-56 overflow-y-auto">
+              {(workUnits || []).length === 0 ? (
+                <div className="text-xs text-slate-500 p-4 text-center">No work units found.</div>
+              ) : (workUnits || []).map(w => {
+                const checked = selectedWUs.includes(w.id);
+                return (
+                  <label key={w.id} className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors border-b border-slate-700/30 last:border-0 ${checked ? 'bg-blue-500/10' : 'hover:bg-white/[0.02]'}`}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleWU(w.id)}
+                      className="rounded border-slate-600 text-blue-500 focus:ring-0 bg-slate-700" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-slate-200 font-medium truncate">{w.name}</div>
+                      <div className="text-xs text-slate-500">{w.job_id && `${w.job_id} · `}{w.material} · {w.grams}g · {w.hours}h</div>
+                    </div>
+                    <div className="text-xs font-semibold text-white flex-shrink-0">{money(Number(w.revenue))}</div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Totals preview */}
+          <div className="bg-white/[0.03] border border-slate-700/40 rounded-lg p-4 space-y-2">
+            {[
+              { label: 'Subtotal', value: subtotal },
+              { label: `Tax (${taxRate}%)`, value: taxAmount },
+            ].map(r => (
+              <div key={r.label} className="flex justify-between text-xs text-slate-400">
+                <span>{r.label}</span><span>{money(r.value)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between text-sm font-bold text-white pt-2 border-t border-slate-600/50">
+              <span>Total</span><span className="text-emerald-400">{money(total)}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button onClick={create} disabled={saving}
+              className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              {saving ? 'Creating…' : `Create & Download ${form.type === 'quote' ? 'Quote' : 'Invoice'}`}
+            </button>
+            <span className="text-xs text-slate-500">Saves to list and downloads XLSX immediately</span>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice list */}
+      <div className="space-y-2">
+        {(invoices || []).length === 0 && !creating && (
+          <div className="text-sm text-slate-500 text-center py-10">No invoices yet. Click "New Invoice / Quote" to create one.</div>
+        )}
+        {(invoices || []).map(inv => {
+          const st = INV_STATUS[inv.status] || INV_STATUS.draft;
+          const isExpanded = expandedId === inv.id;
+          return (
+            <div key={inv.id} className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-3">
+                <Receipt className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-white font-mono">{inv.invoice_no}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${st.color} ${st.bg}`}>{st.label}</span>
+                    <span className="text-xs text-slate-500 capitalize">{inv.type}</span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    {inv.client_name || 'No client'}{inv.client_company ? ` · ${inv.client_company}` : ''}
+                    {inv.issue_date ? ` · ${new Date(inv.issue_date).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}` : ''}
+                  </div>
+                </div>
+                <div className="text-base font-bold text-emerald-400 flex-shrink-0">{money(Number(inv.total))}</div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <a href={`/api/print-finance/invoices/${inv.id}/download`} target="_blank" rel="noreferrer"
+                    className="p-1.5 text-slate-500 hover:text-blue-400 transition-colors" title="Download XLSX">
+                    <Download className="w-3.5 h-3.5" />
+                  </a>
+                  <button onClick={() => setExpandedId(isExpanded ? null : inv.id)}
+                    className="p-1.5 text-slate-500 hover:text-slate-200 transition-colors">
+                    {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {isExpanded && (
+                <div className="border-t border-slate-700/50 px-4 py-3 space-y-3 bg-white/[0.02]">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    {[
+                      { label: 'Subtotal', value: money(Number(inv.subtotal)) },
+                      { label: `Tax ${Number(inv.tax_rate).toFixed(1)}%`, value: money(Number(inv.tax_amount)) },
+                      { label: 'Due Date', value: inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—' },
+                      { label: 'Payment Terms', value: inv.payment_terms || '—' },
+                    ].map(f => (
+                      <div key={f.label}>
+                        <div className="text-slate-500 mb-0.5">{f.label}</div>
+                        <div className="text-slate-200">{f.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {inv.notes && <div className="text-xs text-slate-500">Notes: {inv.notes}</div>}
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-xs text-slate-500">Status:</span>
+                    {(['draft', 'sent', 'paid', 'cancelled'] as const).map(s => (
+                      <button key={s} onClick={() => updateStatus(inv.id, s)}
+                        className={`text-xs px-2 py-0.5 rounded border transition-colors capitalize ${inv.status === s ? `${INV_STATUS[s].color} ${INV_STATUS[s].bg}` : 'text-slate-500 border-slate-700/40 hover:border-slate-600/60 hover:text-slate-300'}`}>
+                        {INV_STATUS[s].label}
+                      </button>
+                    ))}
+                    <button onClick={() => del(inv.id)} className="ml-auto text-slate-600 hover:text-red-400 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const SUB_TABS: { id: SubTab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'work-units', label: 'Work Units', icon: Layers },
@@ -2069,6 +2365,7 @@ const SUB_TABS: { id: SubTab; label: string; icon: typeof LayoutDashboard }[] = 
   { id: 'scenarios', label: 'Scenarios', icon: FlaskConical },
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'estimator', label: 'Estimator', icon: Calculator },
+  { id: 'invoices', label: 'Invoices', icon: Receipt },
 ];
 
 export default function PrintFinance() {
@@ -2108,6 +2405,7 @@ export default function PrintFinance() {
       {activeTab === 'scenarios'  && <Scenarios />}
       {activeTab === 'reports'    && <Reports />}
       {activeTab === 'estimator'  && <Estimator />}
+      {activeTab === 'invoices'   && <Invoices />}
     </div>
   );
 }
