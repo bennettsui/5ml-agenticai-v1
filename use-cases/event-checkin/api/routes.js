@@ -1,0 +1,708 @@
+'use strict';
+
+/**
+ * routes.js — Event Check-in API
+ *
+ * Mounted at: /api/event-checkin   (in the main index.js)
+ *
+ * Endpoints:
+ *   GET  /events                      — SSE stream (real-time updates)
+ *   GET  /participants/search?query=  — search participants
+ *   POST /participants/:id/checkin    — check in
+ *   POST /participants/:id/remarks    — update remarks
+ *   POST /participants                — create (from check-in page)
+ *   GET  /admin/participants          — paginated list
+ *   POST /admin/participants          — create (from admin)
+ *   PUT  /admin/participants/:id      — update
+ *   DELETE /admin/participants/:id    — delete
+ *   POST /admin/participants/bulk-delete
+ *   POST /admin/participants/bulk-status
+ *   POST /admin/import                — Excel/CSV upload
+ *   GET  /admin/export-checkedin.csv
+ *   GET  /admin/export-checkedin.xlsx
+ */
+
+const express = require('express');
+const multer  = require('multer');
+const ExcelJS = require('exceljs');
+const path    = require('path');
+const router  = express.Router();
+
+const db  = require('./db');
+const sse = require('./sse');
+const { searchParticipants } = require('./search');
+
+// Initialise the PostgreSQL table when this module is first loaded
+db.init().catch(err => console.error('[event-checkin] DB init error:', err));
+
+// Multer: store uploaded files in memory
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+const VALID_COLORS = [
+  'Red', 'Purple', 'Blue', 'Green',
+  '策略影響夥伴', 'AI 戰略合作夥伴 iKala', '實物與社群夥伴',
+];
+
+// ─── SSE stream ───────────────────────────────────────────────────────────────
+// Clients connect here once and receive all real-time events.
+router.get('/events', sse.handler);
+
+// ═══════════════════════════════════════════════════════════════
+//  PUBLIC — CHECK-IN PAGE
+// ═══════════════════════════════════════════════════════════════
+
+// GET /participants/search?query=...
+// Uses in-process fuzzy BoW engine (no external deps).
+// Returns results sorted by relevance; name_search field is stripped before
+// sending to the client so only name_original (full_name) is ever displayed.
+router.get('/participants/search', async (req, res) => {
+  const query = (req.query.query || '').trim();
+  if (!query) return res.json([]);
+  try {
+    const all     = await db.listAll();
+    const results = searchParticipants(query, all);
+    // Strip internal name_search and _score fields before sending to client
+    res.json(results.map(({ name_search: _ns, _score: _s, ...p }) => p));
+  } catch (err) {
+    console.error('[event-checkin search]', err);
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// POST /participants/:id/checkin
+router.post('/participants/:id/checkin', async (req, res) => {
+  const id      = Number(req.params.id);
+  const remarks = req.body.remarks !== undefined ? String(req.body.remarks) : undefined;
+  try {
+    const existing = await db.findById(id);
+    if (!existing) return res.status(404).json({ error: 'Participant not found' });
+
+    const updates = { status: 'checked_in' };
+    if (remarks !== undefined) updates.remarks = remarks;
+
+    const updated = await db.update(id, updates);
+    sse.broadcast('participant_updated', { type: 'participant_updated', payload: updated });
+    res.json(updated);
+  } catch (err) {
+    console.error('[event-checkin checkin]', err);
+    res.status(500).json({ error: 'Check-in failed' });
+  }
+});
+
+// POST /participants/:id/remarks
+router.post('/participants/:id/remarks', async (req, res) => {
+  const id      = Number(req.params.id);
+  const remarks = req.body.remarks !== undefined ? String(req.body.remarks) : '';
+  try {
+    const existing = await db.findById(id);
+    if (!existing) return res.status(404).json({ error: 'Participant not found' });
+
+    const updated = await db.update(id, { remarks });
+    sse.broadcast('participant_updated', { type: 'participant_updated', payload: updated });
+    res.json(updated);
+  } catch (err) {
+    console.error('[event-checkin remarks]', err);
+    res.status(500).json({ error: 'Remarks update failed' });
+  }
+});
+
+// POST /participants  — create from check-in "add new" form
+router.post('/participants', async (req, res) => {
+  const { id, color, no, title, first_name, last_name, organization, phone, email, remarks } = req.body;
+  if (!color || (!first_name && !last_name)) return res.status(400).json({ error: 'color and at least one of first_name/last_name are required' });
+  if (!VALID_COLORS.includes(color))         return res.status(400).json({ error: 'Invalid color' });
+  try {
+    const p = await db.insert({ id, color, no, title, first_name, last_name, organization, phone, email, remarks });
+    sse.broadcast('participant_created', { type: 'participant_created', payload: p });
+    res.status(201).json(p);
+  } catch (err) {
+    console.error('[event-checkin create]', err);
+    res.status(500).json({ error: 'Failed to create participant' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  ADMIN — MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+
+// GET /admin/participants  — paginated list with filters
+router.get('/admin/participants', async (req, res) => {
+  const page     = Math.max(1, parseInt(req.query.page, 10)      || 1);
+  const pageSize = Math.min(5000, parseInt(req.query.pageSize, 10) || 50);
+  const color    = VALID_COLORS.includes(req.query.color)  ? req.query.color  : undefined;
+  const status   = ['checked_in','not_checked_in'].includes(req.query.status) ? req.query.status : undefined;
+  const query    = (req.query.query || '').trim() || undefined;
+  const sortBy   = req.query.sortBy  || 'id';
+  const sortDir  = req.query.sortDir || 'desc';
+  try {
+    res.json({ ...(await db.list({ page, pageSize, color, status, query, sortBy, sortDir })), page, pageSize });
+  } catch (err) {
+    console.error('[event-checkin admin list]', err);
+    res.status(500).json({ error: 'Failed to list participants' });
+  }
+});
+
+// POST /admin/participants — create from admin
+router.post('/admin/participants', async (req, res) => {
+  const { id, color, no, title, first_name, last_name, organization, phone, email, status, remarks } = req.body;
+  if (!color || (!first_name && !last_name)) return res.status(400).json({ error: 'color and at least one of first_name/last_name are required' });
+  if (!VALID_COLORS.includes(color))         return res.status(400).json({ error: 'Invalid color' });
+  try {
+    const p = await db.insert({ id, color, no, title, first_name, last_name, organization, phone, email, status, remarks });
+    sse.broadcast('participant_created', { type: 'participant_created', payload: p });
+    res.status(201).json(p);
+  } catch (err) {
+    console.error('[event-checkin admin create]', err);
+    res.status(500).json({ error: 'Failed to create participant' });
+  }
+});
+
+// PUT /admin/participants/:id — update
+router.put('/admin/participants/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  const { color, no, title, first_name, last_name, organization, status, remarks } = req.body;
+  if (color && !VALID_COLORS.includes(color)) return res.status(400).json({ error: 'Invalid color' });
+  try {
+    if (!(await db.findById(id))) return res.status(404).json({ error: 'Not found' });
+    const fields = {};
+    if (color        !== undefined) fields.color        = color;
+    if (no           !== undefined) fields.no           = no;
+    if (title        !== undefined) fields.title        = title;
+    if (first_name   !== undefined) fields.first_name   = first_name;
+    if (last_name    !== undefined) fields.last_name    = last_name;
+    if (organization !== undefined) fields.organization = organization;
+    if (status       !== undefined) fields.status       = status;
+    if (remarks      !== undefined) fields.remarks      = remarks;
+    const updated = await db.update(id, fields);
+    sse.broadcast('participant_updated', { type: 'participant_updated', payload: updated });
+    res.json(updated);
+  } catch (err) {
+    console.error('[event-checkin admin update]', err);
+    res.status(500).json({ error: 'Failed to update' });
+  }
+});
+
+// DELETE /admin/participants/all  — must come BEFORE /:id to avoid Express capturing "all" as an id
+router.delete('/admin/participants/all', async (req, res) => {
+  try {
+    const count = await db.deleteAll();
+    sse.broadcast('bulk_deleted', { type: 'bulk_deleted', payload: { all: true } });
+    res.json({ deleted: count });
+  } catch (err) {
+    console.error('[event-checkin delete-all]', err);
+    res.status(500).json({ error: 'Delete all failed' });
+  }
+});
+
+// DELETE /admin/participants/:id
+router.delete('/admin/participants/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    if (!(await db.findById(id))) return res.status(404).json({ error: 'Not found' });
+    await db.remove(id);
+    sse.broadcast('participant_deleted', { type: 'participant_deleted', payload: { id } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[event-checkin admin delete]', err);
+    res.status(500).json({ error: 'Failed to delete' });
+  }
+});
+
+// POST /admin/participants/bulk-delete
+router.post('/admin/participants/bulk-delete', async (req, res) => {
+  const ids = Array.isArray(req.body.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+  if (!ids.length) return res.status(400).json({ error: 'ids required' });
+  try {
+    const count = await db.bulkDelete(ids);
+    sse.broadcast('bulk_deleted', { type: 'bulk_deleted', payload: { ids } });
+    res.json({ deleted: count });
+  } catch (err) {
+    console.error('[event-checkin bulk delete]', err);
+    res.status(500).json({ error: 'Bulk delete failed' });
+  }
+});
+
+// POST /admin/participants/bulk-status
+router.post('/admin/participants/bulk-status', async (req, res) => {
+  const ids    = Array.isArray(req.body.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+  const status = req.body.status;
+  if (!ids.length)                                          return res.status(400).json({ error: 'ids required' });
+  if (!['checked_in','not_checked_in'].includes(status))   return res.status(400).json({ error: 'Invalid status' });
+  try {
+    const count       = await db.bulkStatus(ids, status);
+    const updatedRows = (await Promise.all(ids.map(id => db.findById(id)))).filter(Boolean);
+    sse.broadcast('bulk_status_updated', { type: 'bulk_status_updated', payload: { ids, status, rows: updatedRows } });
+    res.json({ updated: count });
+  } catch (err) {
+    console.error('[event-checkin bulk status]', err);
+    res.status(500).json({ error: 'Bulk status update failed' });
+  }
+});
+
+// ─── Import ───────────────────────────────────────────────────────────────────
+//
+// Import policy (non-negotiable):
+//   • NEVER modify existing records — only INSERT new ones.
+//   • NEVER set or change the `id` (SERIAL) column from the file.
+//   • Deduplication: skip if (first_name, last_name, organization, color) already exists.
+
+router.post('/admin/import', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const ext  = req.file.originalname.split('.').pop().toLowerCase();
+  const rows = [];
+
+  try {
+    if (ext === 'csv') {
+      const text    = req.file.buffer.toString('utf8');
+      const lines   = text.split(/\r?\n/);
+      if (lines.length < 2) return res.status(400).json({ error: 'CSV missing header' });
+
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\s-]/g, '_'));
+      const colMap  = {
+        no:           findCol(headers, ['no','number','#','序號','編號']),
+        color:        findCol(headers, ['color','colour']),
+        title:        findCol(headers, ['title']),
+        first_name:   findCol(headers, ['first_name','firstname','first name']),
+        last_name:    findCol(headers, ['last_name','lastname','last name']),
+        organization: findCol(headers, ['organization','org','company','機構名']),
+        phone:        findCol(headers, ['phone','tel','telephone','電話']),
+        email:        findCol(headers, ['email','e-mail','電郵']),
+      };
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const cells = parseCsvLine(line);
+        rows.push({
+          _sheet:       'CSV',
+          _row:         i + 1,
+          no:           cells[colMap.no]           || null,
+          color:        cells[colMap.color]        || null,
+          title:        cells[colMap.title]        || null,
+          first_name:   cells[colMap.first_name]   || null,
+          last_name:    cells[colMap.last_name]     || null,
+          organization: cells[colMap.organization] || null,
+          phone:        cells[colMap.phone]        || null,
+          email:        cells[colMap.email]        || null,
+        });
+      }
+
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(req.file.buffer);
+
+      const normalizeColor = (c) =>
+        VALID_COLORS.find(v => v.toLowerCase() === (c ?? '').toLowerCase()) ?? null;
+
+      const cellText = (val) => {
+        if (val == null) return null;
+        if (typeof val === 'object' && Array.isArray(val.richText))
+          return val.richText.map(r => r.text ?? '').join('').trim() || null;
+        // ExcelJS formula cell: { formula: '=...', result: <value> }
+        if (typeof val === 'object' && !(val instanceof Date) && 'result' in val)
+          val = val.result;
+        if (val == null) return null;
+        if (val instanceof Date) return null;
+        const s = String(val).trim();
+        return s || null;
+      };
+
+      for (const ws of workbook.worksheets) {
+        const sheetName  = ws.name.trim();
+        const sheetColor = normalizeColor(sheetName);
+
+        // Heuristic: col A purely numeric → no header row (e.g. "1", "001")
+        const firstRow   = ws.getRow(1);
+        const firstCellA = cellText(firstRow.getCell(1).value) ?? '';
+        const hasHeaders = !/^\d+$/.test(firstCellA);
+        const dataStart  = hasHeaders ? 2 : 1;
+
+        const colIndex = {};
+        if (hasHeaders) {
+          firstRow.eachCell((cell, colNum) => {
+            const h = cellText(cell.value);
+            // Store with lowercased key for case-insensitive lookup
+            if (h) colIndex[h.toLowerCase().replace(/[.\s]+$/g, '')] = colNum;
+          });
+        }
+        console.log('[import] sheet=%s hasHeaders=%s firstCellA=%j colIndex=%j', sheetName, hasHeaders, firstCellA, colIndex);
+        // Log raw cell values for first data row
+        const debugRow = ws.getRow(dataStart);
+        const debugCells = {};
+        debugRow.eachCell((cell, colNum) => { debugCells[colNum] = { type: typeof cell.value, val: cell.value }; });
+        console.log('[import] row%d cells=%j', dataStart, debugCells);
+
+        const getByName = (row, ...names) => {
+          for (const name of names) {
+            const idx = colIndex[name.toLowerCase().replace(/[.\s]+$/g, '')];
+            if (idx) { const v = cellText(row.getCell(idx).value); if (v) return v; }
+          }
+          return null;
+        };
+
+        ws.eachRow((row, rowNum) => {
+          if (rowNum < dataStart) return;
+
+          let no, color, title, first_name, last_name, organization, phone, email;
+
+          if (hasHeaders) {
+            no           = getByName(row, 'No', 'no', 'NO', 'Number', '#', '序號', '編號');
+            color        = sheetColor ?? normalizeColor(getByName(row,
+              'Color', 'color', 'Colour', 'colour', 'Group', 'group', 'Table', 'table', 'Table Color', 'Badge Color'));
+            title        = getByName(row, 'Title', 'title', 'Ttle', 'Salutation', 'salutation', 'Title/Salutation', '稱謂', '職稱');
+            first_name   = getByName(row, 'FirstName', 'first_name', 'First Name', 'Given Name', '名');
+            last_name    = getByName(row, 'LastName',  'last_name',  'Last Name',  'Surname', '姓');
+            organization = getByName(row, 'Organization', 'organization', 'Organisation', 'Org', 'Company', 'Affiliation', '機構名', '公司', '機構', '單位');
+            phone        = getByName(row, 'Phone', 'phone', 'Tel', 'Telephone', '電話', '手機');
+            email        = getByName(row, 'Email', 'email', 'E-mail', '電郵', '電子郵件');
+          } else {
+            // Positional: A=No  B=Color  C=Title  D=First  E=Last  F=Org
+            no           = cellText(row.getCell(1).value);
+            color        = sheetColor ?? normalizeColor(cellText(row.getCell(2).value));
+            title        = cellText(row.getCell(3).value);
+            first_name   = cellText(row.getCell(4).value);
+            last_name    = cellText(row.getCell(5).value);
+            organization = cellText(row.getCell(6).value);
+          }
+
+          rows.push({ _sheet: sheetName, _row: rowNum, no, color, title, first_name, last_name, organization, phone, email });
+        });
+      }
+    } else {
+      return res.status(400).json({ error: 'Unsupported file type. Use .xlsx or .csv' });
+    }
+
+    // ── Insert new rows only — NEVER modify existing records ───────────────────
+    let inserted = 0, skipped = 0, skipped_no_color = 0, skipped_no_name = 0;
+    const newRows = [];
+    const detail  = [];
+
+    for (const row of rows) {
+      const composedName = [row.first_name, row.last_name].filter(Boolean).join(' ') || null;
+      const entry = {
+        n:     row._row   || null,
+        sheet: row._sheet || null,
+        no:    row.no     || null,
+        name:  composedName,
+        color: row.color  || null,
+        title: row.title  || null,
+        org:   row.organization || null,
+        phone: row.phone  || null,
+      };
+
+      if (row.color) row.color = VALID_COLORS.find(v => v.toLowerCase() === row.color.toLowerCase()) ?? row.color;
+
+      if (!row.first_name && !row.last_name) {
+        skipped++; skipped_no_name++;
+        detail.push({ ...entry, status: 'skipped', reason: `No name — First Name and Last Name both empty` });
+        continue;
+      }
+      if (!VALID_COLORS.includes(row.color)) {
+        skipped++; skipped_no_color++;
+        detail.push({ ...entry, status: 'skipped', reason: `Invalid/missing color: "${row.color ?? '(none)'}"` });
+        continue;
+      }
+
+      // Dedup: skip if (first_name, last_name, organization, color) already exists
+      const existing = await db.findDuplicate(row.first_name, row.last_name, row.organization, row.color);
+      if (existing) {
+        // Back-fill `no` if the existing record is missing it and we have a value now
+        if (!existing.no && row.no) {
+          await db.update(existing.id, { no: row.no });
+          skipped++;
+          detail.push({ ...entry, status: 'skipped', reason: `Duplicate — patched missing No: ${row.no}` });
+        } else {
+          skipped++;
+          detail.push({ ...entry, status: 'skipped', reason: `Duplicate: same name + org + color already in database` });
+        }
+        continue;
+      }
+
+      // Store fields exactly as read from file — no transformation except color case-normalization
+      const { _sheet: _s, _row: _r, ...cleanRow } = row;
+      const p = await db.insert({ ...cleanRow, status: 'not_checked_in' });
+      newRows.push(p);
+      inserted++;
+      detail.push({ ...entry, status: 'inserted' });
+    }
+
+    if (newRows.length) sse.broadcast('bulk_imported', { type: 'bulk_imported', payload: newRows });
+    const sheets = ext === 'csv' ? ['CSV'] : [...new Set(rows.map(r => r._sheet).filter(Boolean))];
+    res.json({ processed: rows.length, inserted, skipped, skipped_no_color, skipped_no_name, sheets, detail });
+
+  } catch (err) {
+    console.error('[event-checkin import]', err);
+    res.status(500).json({ error: 'Import failed: ' + err.message });
+  }
+});
+
+// ─── Export CSV ───────────────────────────────────────────────────────────────
+router.get('/admin/export-checkedin.csv', async (req, res) => {
+  try {
+    const rows    = await db.getCheckedIn();
+    const headers = ['id','no','color','title','first_name','last_name','organization','phone','email','status','remarks','created_at','updated_at'];
+    const lines   = [
+      headers.join(','),
+      ...rows.map(r => headers.map(h => {
+        const v = r[h] == null ? '' : String(r[h]);
+        return /[,"\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v;
+      }).join(',')),
+    ];
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="checked-in-participants.csv"');
+    res.send(lines.join('\r\n'));
+  } catch (err) {
+    console.error('[event-checkin export csv]', err);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// ─── Export XLSX ──────────────────────────────────────────────────────────────
+router.get('/admin/export-checkedin.xlsx', async (req, res) => {
+  try {
+    const rows    = await db.getCheckedIn();
+    const headers = ['id','no','color','title','first_name','last_name','organization','phone','email','status','remarks','created_at','updated_at'];
+    const wb      = new ExcelJS.Workbook();
+    const ws      = wb.addWorksheet('Checked-in Participants');
+    ws.addRow(headers);
+    ws.getRow(1).font = { bold: true };
+    ws.columns.forEach(c => { c.width = 18; });
+    for (const row of rows) ws.addRow(headers.map(h => row[h] ?? ''));
+    const buf = await wb.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="checked-in-participants.xlsx"');
+    res.send(buf);
+  } catch (err) {
+    console.error('[event-checkin export xlsx]', err);
+    res.status(500).json({ error: 'Excel export failed' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  AI ENDPOINTS  (deepseek-reasoner)
+// ═══════════════════════════════════════════════════════════════
+
+const deepseek = (() => {
+  try { return require('../../../services/deepseekService'); } catch { return null; }
+})();
+
+function requireAI(res) {
+  if (!deepseek || !deepseek.isAvailable()) {
+    res.status(503).json({ error: 'AI unavailable — DEEPSEEK_API_KEY not set' });
+    return false;
+  }
+  return true;
+}
+
+// Strip <think>…</think> blocks and extract first JSON object/array from AI output
+function extractJson(text) {
+  const clean = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  const m = clean.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  if (!m) throw new Error('No JSON in AI response');
+  return JSON.parse(m[1]);
+}
+
+async function getStats() {
+  const { rows } = await db.list({ pageSize: 5000 });
+  const byColor = {};
+  for (const c of VALID_COLORS) {
+    byColor[c] = {
+      total:      rows.filter(p => p.color === c).length,
+      checked_in: rows.filter(p => p.color === c && p.status === 'checked_in').length,
+    };
+  }
+  return {
+    total:       rows.length,
+    checked_in:  rows.filter(p => p.status === 'checked_in').length,
+    by_color:    byColor,
+    orgs:        [...new Set(rows.map(p => p.organization).filter(Boolean))].length,
+  };
+}
+
+// GET /stats — live check-in statistics (used by client dashboard)
+router.get('/stats', async (req, res) => {
+  try {
+    res.json(await getStats());
+  } catch (err) {
+    console.error('[event-checkin stats]', err);
+    res.status(500).json({ error: 'Stats failed' });
+  }
+});
+
+// POST /ai/search-assist — fuzzy match when SQL returns 0 results
+router.post('/ai/search-assist', async (req, res) => {
+  if (!requireAI(res)) return;
+  const { query } = req.body;
+  if (!query) return res.status(400).json({ error: 'query required' });
+
+  const { rows } = await db.list({ pageSize: 2000 });
+  const list = rows.map(p => `${p.id}|${[p.first_name,p.last_name].filter(Boolean).join(' ')}|${p.organization || ''}|${p.color}`).join('\n');
+
+  try {
+    const result = await deepseek.analyze(
+      `You are a guest list assistant for the RD Symposium check-in desk.
+Find participants whose names or organisations fuzzy-match the search query.
+Consider typos, partial names, abbreviations, name-order swaps, and romanisation variants.
+Return ONLY valid JSON: {"ids":[id1,id2,...]} — up to 5 IDs, best match first. No explanation.`,
+      `Query: "${query}"\n\nParticipants (id|full_name|organization|color):\n${list}`,
+      { model: 'deepseek-chat', maxTokens: 256, temperature: 0 }
+    );
+    const { ids = [] } = extractJson(result.content);
+    const fetched = await Promise.all(ids.slice(0, 5).map(id => db.findById(Number(id))));
+    const participants = fetched.filter(Boolean);
+    res.json({ participants });
+  } catch (err) {
+    console.error('[checkin ai search]', err);
+    res.status(500).json({ error: 'AI search failed: ' + err.message });
+  }
+});
+
+// POST /ai/enrich/:id — suggest cleaned/missing field values for a participant
+router.post('/ai/enrich/:id', async (req, res) => {
+  if (!requireAI(res)) return;
+  const p = await db.findById(Number(req.params.id));
+  if (!p) return res.status(404).json({ error: 'Not found' });
+
+  try {
+    const result = await deepseek.analyze(
+      `You are a data-quality assistant for an event guest list.
+Given a participant record, suggest corrections or fill-ins for empty fields.
+Rules: extract title (Dr./Mr./Ms./Prof./Hon.) and first/last name from full_name when those fields are blank.
+Do NOT change full_name. Return ONLY valid JSON with keys: title, first_name, last_name, organization.
+Only include a key if you have a confident suggestion that differs from the current value. No explanation.`,
+      `Record:\n${JSON.stringify(p, null, 2)}`,
+      { maxTokens: 256, temperature: 0 }
+    );
+    const raw = extractJson(result.content);
+    const suggestions = {};
+    for (const k of ['title', 'first_name', 'last_name', 'organization']) {
+      if (raw[k] && String(raw[k]).trim() && raw[k] !== p[k]) suggestions[k] = String(raw[k]).trim();
+    }
+    res.json({ id: p.id, suggestions, current: p });
+  } catch (err) {
+    console.error('[checkin ai enrich]', err);
+    res.status(500).json({ error: 'AI enrich failed: ' + err.message });
+  }
+});
+
+// POST /ai/enrich/:id/apply — write AI suggestions back to the DB
+router.post('/ai/enrich/:id/apply', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!(await db.findById(id))) return res.status(404).json({ error: 'Not found' });
+  const safe = {};
+  for (const k of ['title', 'first_name', 'last_name', 'organization']) {
+    if (req.body[k] !== undefined) safe[k] = req.body[k];
+  }
+  if (!Object.keys(safe).length) return res.status(400).json({ error: 'No valid fields' });
+  try {
+    const updated = await db.update(id, safe);
+    sse.broadcast('participant_updated', { type: 'participant_updated', payload: updated });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Apply failed: ' + err.message });
+  }
+});
+
+// POST /ai/report — generate a post-event attendance report (markdown)
+router.post('/ai/report', async (req, res) => {
+  if (!requireAI(res)) return;
+  const stats = await getStats();
+  const { rows } = await db.list({ pageSize: 5000 });
+  const noShows = rows.filter(p => p.status === 'not_checked_in').map(p => `${[p.first_name,p.last_name].filter(Boolean).join(' ')} (${p.color})`).slice(0, 30);
+
+  try {
+    const result = await deepseek.analyze(
+      `You are an event coordinator writing a post-event attendance report for the RD Symposium.
+Write a concise, professional report in markdown. Include: executive summary, attendance rate,
+breakdown by group colour, notable observations, and a no-show list if applicable.`,
+      `Event: RD Symposium\nDate: ${new Date().toDateString()}\n\nStats:\n${JSON.stringify(stats, null, 2)}\n\nNo-shows (sample):\n${noShows.join('\n')}`,
+      { maxTokens: 1500, temperature: 0.3 }
+    );
+    res.json({ report: result.content, stats });
+  } catch (err) {
+    console.error('[checkin ai report]', err);
+    res.status(500).json({ error: 'Report failed: ' + err.message });
+  }
+});
+
+// POST /ai/explain — plain-language explanation of current dashboard stats
+router.post('/ai/explain', async (req, res) => {
+  if (!requireAI(res)) return;
+  const stats = await getStats();
+
+  try {
+    const result = await deepseek.analyze(
+      `You are a friendly event assistant. Explain the current check-in stats in 2–3 short paragraphs.
+Highlight anything notable (low attendance in a group, overall progress, etc.).
+Use plain language for an event organiser who needs a quick overview. No markdown headers.`,
+      `RD Symposium live stats:\n${JSON.stringify(stats, null, 2)}`,
+      { maxTokens: 400, temperature: 0.4 }
+    );
+    res.json({ explanation: result.content, stats });
+  } catch (err) {
+    console.error('[checkin ai explain]', err);
+    res.status(500).json({ error: 'Explain failed: ' + err.message });
+  }
+});
+
+// POST /ai/concierge — Q&A assistant about the participant list
+router.post('/ai/concierge', async (req, res) => {
+  if (!requireAI(res)) return;
+  const { question } = req.body;
+  if (!question) return res.status(400).json({ error: 'question required' });
+
+  const { rows } = await db.list({ pageSize: 5000 });
+  const compact = rows.map(p =>
+    `${[p.first_name,p.last_name].filter(Boolean).join(' ')}|${p.color}|${p.organization || ''}|${p.status === 'checked_in' ? '✓' : '○'}`
+  ).join('\n');
+
+  try {
+    const result = await deepseek.analyze(
+      `You are an intelligent concierge for the RD Symposium check-in desk.
+You have the full guest list with live check-in status (✓=checked in, ○=not yet).
+Answer the coordinator's question accurately and concisely.`,
+      `Question: ${question}\n\nGuest list (name|color|org|status):\n${compact}`,
+      { maxTokens: 800, temperature: 0.3 }
+    );
+    // Persist conversation to DB (fire-and-forget; don't block the response)
+    db.saveChat(question, result.content).catch(e => console.error('[checkin chat save]', e));
+    res.json({ answer: result.content });
+  } catch (err) {
+    console.error('[checkin ai concierge]', err);
+    res.status(500).json({ error: 'Concierge failed: ' + err.message });
+  }
+});
+
+// GET /admin/chat-history — all Dashboard AI chat conversations
+router.get('/admin/chat-history', async (req, res) => {
+  try {
+    const limit = Math.min(500, parseInt(req.query.limit, 10) || 200);
+    const chats = await db.getChats({ limit });
+    res.json(chats);
+  } catch (err) {
+    console.error('[checkin chat history]', err);
+    res.status(500).json({ error: 'Failed to load chat history' });
+  }
+});
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function findCol(headers, candidates) {
+  for (const c of candidates) { const i = headers.indexOf(c); if (i !== -1) return i; }
+  return -1;
+}
+
+function parseCsvLine(line) {
+  const result = []; let current = ''; let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { if (inQuote && line[i+1] === '"') { current += '"'; i++; } else inQuote = !inQuote; }
+    else if (ch === ',' && !inQuote) { result.push(current.trim()); current = ''; }
+    else current += ch;
+  }
+  result.push(current.trim());
+  return result;
+}
+
+module.exports = router;

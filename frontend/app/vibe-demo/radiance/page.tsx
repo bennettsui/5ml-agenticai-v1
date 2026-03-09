@@ -293,6 +293,55 @@ export default function RadiancePage() {
       {/* ── Services Showcase ── */}
       <ServicesShowcase />
 
+      {/* ── Client Logos ── */}
+      <section className="py-14 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800/50 overflow-hidden">
+        <p className="text-center text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-10">
+          Trusted by leading brands
+        </p>
+        <div className="relative">
+          {/* fade edges */}
+          <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-white dark:from-slate-950 to-transparent z-10 pointer-events-none" />
+          <div className="absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-white dark:from-slate-950 to-transparent z-10 pointer-events-none" />
+          <div className="flex animate-marquee gap-5 w-max">
+            {[
+              'http://5ml.mmdbfiles.com/assets/3808b2fb66ca40525e573461.jpg',
+              'http://5ml.mmdbfiles.com/assets/077707a701108f72623ec4bc.png',
+              'http://5ml.mmdbfiles.com/assets/5cd8f4f3226ac0e3c93e4393.png',
+              'http://5ml.mmdbfiles.com/assets/7c99bdf01d6cf2a586add91a.jpg',
+              'http://5ml.mmdbfiles.com/assets/b0f34a35f4e82d61546656d1.png',
+              'http://5ml.mmdbfiles.com/assets/de9d1b833bc5d93ff62e2e41.jpg',
+              'http://5ml.mmdbfiles.com/assets/8cb61dc159f35088617837b1.png',
+              'http://5ml.mmdbfiles.com/assets/489f18198b4127d98d307f43.jpg',
+              'http://5ml.mmdbfiles.com/assets/11b120b411e57a7fa62d3933.jpg',
+              'http://5ml.mmdbfiles.com/assets/4b87e1e47b865565936c7683.jpg',
+              /* duplicate for seamless loop */
+              'http://5ml.mmdbfiles.com/assets/3808b2fb66ca40525e573461.jpg',
+              'http://5ml.mmdbfiles.com/assets/077707a701108f72623ec4bc.png',
+              'http://5ml.mmdbfiles.com/assets/5cd8f4f3226ac0e3c93e4393.png',
+              'http://5ml.mmdbfiles.com/assets/7c99bdf01d6cf2a586add91a.jpg',
+              'http://5ml.mmdbfiles.com/assets/b0f34a35f4e82d61546656d1.png',
+              'http://5ml.mmdbfiles.com/assets/de9d1b833bc5d93ff62e2e41.jpg',
+              'http://5ml.mmdbfiles.com/assets/8cb61dc159f35088617837b1.png',
+              'http://5ml.mmdbfiles.com/assets/489f18198b4127d98d307f43.jpg',
+              'http://5ml.mmdbfiles.com/assets/11b120b411e57a7fa62d3933.jpg',
+              'http://5ml.mmdbfiles.com/assets/4b87e1e47b865565936c7683.jpg',
+            ].map((src, i) => (
+              <div
+                key={i}
+                className="flex-shrink-0 flex items-center justify-center w-40 h-20 px-5 rounded-2xl bg-slate-100/80 dark:bg-white/[0.05] border border-slate-200/60 dark:border-white/[0.06]"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt=""
+                  className="max-h-10 max-w-[110px] w-auto object-contain opacity-80 hover:opacity-100 transition-opacity duration-300"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Why Radiance — stat grid ── */}
       <section className="py-24 px-6 bg-white dark:bg-slate-950">
         <div className="max-w-6xl mx-auto">

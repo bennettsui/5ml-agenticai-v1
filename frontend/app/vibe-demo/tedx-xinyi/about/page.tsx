@@ -109,10 +109,21 @@ export default function AboutPage() {
             </FadeIn>
           </div>
           <FadeIn delay={200}>
-            <div className="flex items-center justify-center">
-              <div className="text-[120px] md:text-[160px] font-black leading-none select-none" style={{ color: `${TED_RED}15` }}>
-                x
-              </div>
+            <div className="aspect-[4/3] rounded-xl overflow-hidden bg-neutral-100">
+              <img
+                src="/tedx-xinyi/about-xinyi.webp"
+                alt="TEDxXinyi event atmosphere"
+                loading="lazy"
+                className="w-full h-full object-cover opacity-0 transition-opacity duration-700"
+                onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                onError={(e) => {
+                  const el = e.target as HTMLImageElement;
+                  el.style.display = 'none';
+                  if (el.parentElement) {
+                    el.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%"><span style="color:rgba(230,43,30,0.15);font-size:10rem;font-weight:900">x</span></div>';
+                  }
+                }}
+              />
             </div>
           </FadeIn>
         </div>
@@ -212,31 +223,7 @@ export default function AboutPage() {
         </div>
       </Section>
 
-      {/* ==================== TEAM ==================== */}
-      <Section bg="white">
-        <FadeIn>
-          <SectionLabel>TEAM</SectionLabel>
-          <h2 className="text-3xl md:text-4xl font-black mb-3" lang="zh-TW">策展與設計團隊</h2>
-          <p className="text-neutral-500 text-base leading-relaxed mb-10" lang="zh-TW">
-            一群來自不同領域的人，在信義共同策畫這場長期的實驗。
-          </p>
-        </FadeIn>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
-          {TEAM_ROLES.map((member, i) => (
-            <FadeIn key={i} delay={i * 60}>
-              <div className="rounded-xl p-5 text-center border border-neutral-100 hover:border-neutral-200 hover:shadow-sm transition-all" style={{ backgroundColor: WARM_GRAY }}>
-                <div className="w-14 h-14 rounded-full bg-neutral-200 mx-auto mb-3 flex items-center justify-center">
-                  <span className="text-neutral-400 text-xs font-bold">{member.name === 'Dawn Chang' ? 'DC' : 'Photo'}</span>
-                </div>
-                <p className="font-bold text-sm mb-0.5" lang="zh-TW">{member.name}</p>
-                <p className="text-neutral-400 text-xs" lang="zh-TW">{member.role}</p>
-              </div>
-            </FadeIn>
-          ))}
-        </div>
-      </Section>
-
+      {/* Team section hidden until member info is finalized */}
       <SiteFooter />
     </div>
   );

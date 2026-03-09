@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RD Symposium — Admin</title>
+  <link rel="stylesheet" href="/event-checkin/static/css/style.css" />
+</head>
+<body>
+
+<!-- ─── Header ──────────────────────────────────────────────────────────── -->
+<header class="page-header">
+  <div class="header-brand">
+    <h1>🎟️ RD Symposium</h1>
+    <span class="header-subtitle">Admin Panel</span>
+  </div>
+  <nav>
+    <a href="/event-checkin"        data-panel="reception">Reception</a>
+    <a href="/event-checkin/dashboard" data-panel="dashboard">Dashboard</a>
+  </nav>
+  <span class="conn-status">
+    <span class="conn-dot" id="connDot"></span>
+    <span id="connLabel">Connecting…</span>
+  </span>
+</header>
+
+<div class="container-wide">
+
+  <!-- ─── Import / Export panels ────────────────────────────────────────── -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+
+    <!-- Import -->
+    <div class="panel">
+      <div class="panel-title">📥 Import Participants (Excel / CSV)</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+        Excel: auto-detects Color, Title, First Name, Last Name, 電話, 電郵, 機構名 columns.
+        Sheets named Red/Purple/Blue/Green/策略影響夥伴/AI 戰略合作夥伴 iKala/實物與社群夥伴 set the type automatically.
+        CSV: requires <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:4px;font-family:monospace;">color</code>, <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:4px;font-family:monospace;">first_name</code> or <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:4px;font-family:monospace;">last_name</code> columns.
+      </p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="font-size:13px;flex:1;" />
+        <button class="btn btn-primary btn-sm" id="importBtn">Upload</button>
+      </div>
+      <div id="importSummary" class="import-summary hidden"></div>
+    </div>
+
+    <!-- Export -->
+    <div class="panel">
+      <div class="panel-title">📤 Export Checked-in Participants</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+        Downloads only participants with status "Checked-in".
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a class="btn btn-outline btn-sm" href="/api/event-checkin/admin/export-checkedin.csv" download>
+          ↓ CSV
+        </a>
+        <a class="btn btn-outline btn-sm" href="/api/event-checkin/admin/export-checkedin.xlsx" download>
+          ↓ Excel (.xlsx)
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ─── Import Log panel ─────────────────────────────────────────────── -->
+  <div id="importLogPanel" class="panel hidden" style="margin-bottom:20px;padding:0;overflow:hidden;">
+    <div style="padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:13px;font-weight:700;" id="importLogTitle">📋 Import Log</span>
+      <button class="btn btn-outline btn-sm" id="importLogClose" style="font-size:11px;">✕ Close</button>
+    </div>
+    <div id="importLog" style="max-height:380px;overflow-y:auto;padding:14px 18px;font-size:13px;"></div>
+  </div>
+
+  <!-- ─── Chat History panel ────────────────────────────────────────────── -->
+  <div class="panel" style="margin-bottom:20px;padding:0;overflow:hidden;">
+    <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:13px;font-weight:700;">💬 Dashboard AI Chat History</span>
+      <button class="btn btn-outline btn-sm" id="refreshChatBtn">↻ Refresh</button>
+    </div>
+    <div id="chatHistoryWrap" style="max-height:420px;overflow-y:auto;padding:16px 20px;">
+      <p style="color:var(--text-muted);font-size:13px;">Loading…</p>
+    </div>
+  </div>
+
+  <!-- ─── AI Tools panel ────────────────────────────────────────────────── -->
+  <div class="panel" style="margin-bottom:20px;">
+    <div class="panel-title">✨ AI Tools</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+      <!-- Explain + Report -->
+      <div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+          Get a plain-English summary of live stats, or generate a full post-event report.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" id="explainBtn">💬 Explain Stats</button>
+          <button class="btn btn-outline btn-sm" id="reportBtn">📊 Generate Report</button>
+        </div>
+        <div id="explainOutput" class="ai-output hidden"></div>
+      </div>
+
+      <!-- Concierge -->
+      <div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+          Ask anything about the guest list — who's not checked in, org breakdowns, etc.
+        </p>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="conciergeInput" placeholder="e.g. Who from Red hasn't arrived?" style="flex:1;font-size:13px;" />
+          <button class="btn btn-primary btn-sm" id="conciergeBtn">Ask</button>
+        </div>
+        <div id="conciergeOutput" class="ai-output hidden"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─── Participants table ─────────────────────────────────────────────── -->
+  <div class="panel" style="padding:0;overflow:hidden;">
+
+    <!-- Toolbar -->
+    <div class="admin-toolbar" style="padding:16px 20px;border-bottom:1px solid var(--border);">
+      <button class="btn btn-primary btn-sm" id="addParticipantBtn">+ Add Participant</button>
+      <span id="entryCountBadge" style="font-size:13px;font-weight:600;color:var(--text-muted);margin-left:4px;"></span>
+      <button class="btn btn-danger btn-sm" id="deleteAllBtn" style="margin-left:auto;">🗑 Delete All</button>
+
+      <div class="filters">
+        <select id="filterColor" aria-label="Filter by color">
+          <option value="">All</option>
+          <option value="Red">Red</option>
+          <option value="Purple">Purple</option>
+          <option value="Blue">Blue</option>
+          <option value="Green">Green</option>
+          <option value="策略影響夥伴">策略影響夥伴</option>
+          <option value="AI 戰略合作夥伴 iKala">AI 戰略合作夥伴 iKala</option>
+          <option value="實物與社群夥伴">實物與社群夥伴</option>
+        </select>
+        <select id="filterStatus" aria-label="Filter by status">
+          <option value="">All Status</option>
+          <option value="checked_in">Checked-in</option>
+          <option value="not_checked_in">Not checked-in</option>
+        </select>
+        <input type="search" id="filterQuery" placeholder="Search name / org…" aria-label="Search" />
+      </div>
+    </div>
+
+    <!-- Bulk action bar (shown when rows selected) -->
+    <div id="bulkBar" class="bulk-bar hidden" style="margin:0;border-radius:0;border-left:none;border-right:none;">
+      <span id="bulkCount">0 selected</span>
+      <button class="btn btn-sm btn-success" id="bulkCheckin">Mark Checked-in</button>
+      <button class="btn btn-sm btn-outline" id="bulkUncheck">Mark Not checked-in</button>
+      <button class="btn btn-sm btn-danger" id="bulkDelete">Delete Selected</button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap" style="border:none;border-radius:0;">
+      <table id="adminTable">
+        <thead>
+          <tr>
+            <th style="width:36px;"><input type="checkbox" id="selectAll" title="Select all on page" /></th>
+            <th class="sortable" data-col="no" style="width:48px;">No <span class="sort-icon" id="asort-no">↕</span></th>
+            <th class="sortable" data-col="color">Color <span class="sort-icon" id="asort-color">↕</span></th>
+            <th>Title</th>
+            <th class="sortable" data-col="first_name">First <span class="sort-icon" id="asort-first_name">↕</span></th>
+            <th class="sortable" data-col="last_name">Last <span class="sort-icon" id="asort-last_name">↕</span></th>
+            <th class="sortable" data-col="organization">Organization <span class="sort-icon" id="asort-organization">↕</span></th>
+            <th>電話</th>
+            <th>電郵</th>
+            <th class="sortable" data-col="status">Status <span class="sort-icon" id="asort-status">↕</span></th>
+            <th>Remarks</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="adminTableBody">
+          <tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" style="padding:16px;">
+      <button class="btn btn-outline btn-sm" id="prevPage">← Prev</button>
+      <span id="pageInfo">Page 1</span>
+      <button class="btn btn-outline btn-sm" id="nextPage">Next →</button>
+      <span id="totalInfo" style="margin-left:8px;font-size:12px;color:var(--text-muted);"></span>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ─── AI Enrich Modal ───────────────────────────────────────────────────── -->
+<div id="enrichModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <span class="modal-title">✨ AI Enrich Participant</span>
+      <button class="modal-close" id="enrichModalClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body" id="enrichModalBody">
+      <div class="ai-thinking">Analysing record…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="enrichModalCancel">Cancel</button>
+      <button class="btn btn-primary hidden" id="enrichModalApply">Apply Suggestions</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── AI Report Modal ────────────────────────────────────────────────────── -->
+<div id="reportModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title">📊 Post-Event Report — RD Symposium</span>
+      <button class="modal-close" id="reportModalClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="reportContent" class="report-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Add/Edit Modal ────────────────────────────────────────────────────── -->
+<div id="editModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="editModalTitle">Add Participant</span>
+      <button class="modal-close" id="editModalClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editForm" autocomplete="off">
+        <input type="hidden" id="ef-id" name="id" />
+        <div id="ef-new-id-row" style="margin-bottom:12px;">
+          <label for="ef-new-id">System # <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(optional — leave blank to auto-assign)</span></label>
+          <input type="number" id="ef-new-id" min="1" placeholder="e.g. 42" style="width:140px;" />
+        </div>
+        <div style="margin-bottom:12px;">
+          <label for="ef-no">No <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(from Excel)</span></label>
+          <input type="text" id="ef-no" name="no" placeholder="e.g. 1" style="width:140px;" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div>
+            <label for="ef-color">Color / Type <span style="color:red">*</span></label>
+            <select id="ef-color" name="color" required>
+              <option value="">— select —</option>
+              <option value="Red">Red</option>
+              <option value="Purple">Purple</option>
+              <option value="Blue">Blue</option>
+              <option value="Green">Green</option>
+              <option value="策略影響夥伴">策略影響夥伴</option>
+              <option value="AI 戰略合作夥伴 iKala">AI 戰略合作夥伴 iKala</option>
+              <option value="實物與社群夥伴">實物與社群夥伴</option>
+            </select>
+          </div>
+          <div>
+            <label for="ef-title">Title</label>
+            <input type="text" id="ef-title" name="title" placeholder="Dr, Mr, Ms…" />
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div>
+            <label for="ef-first">First Name</label>
+            <input type="text" id="ef-first" name="first_name" />
+          </div>
+          <div>
+            <label for="ef-last">Last Name</label>
+            <input type="text" id="ef-last" name="last_name" />
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label for="ef-org">Organization</label>
+          <input type="text" id="ef-org" name="organization" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div>
+            <label for="ef-phone">電話 (Phone)</label>
+            <input type="tel" id="ef-phone" name="phone" placeholder="e.g. 91234567" />
+          </div>
+          <div>
+            <label for="ef-email">電郵 (Email)</label>
+            <input type="email" id="ef-email" name="email" placeholder="e.g. name@example.com" />
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label for="ef-status">Status</label>
+          <select id="ef-status" name="status">
+            <option value="not_checked_in">Not checked-in</option>
+            <option value="checked_in">Checked-in</option>
+          </select>
+        </div>
+        <div>
+          <label for="ef-remarks">Remarks</label>
+          <textarea id="ef-remarks" name="remarks" rows="2"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="editModalCancel">Cancel</button>
+      <button class="btn btn-primary" id="editModalSubmit">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Toast container ───────────────────────────────────────────────────── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ─── Scripts ───────────────────────────────────────────────────────────── -->
+<script>
+  window.API_BASE = '/api/event-checkin';
+</script>
+<script src="/event-checkin/static/js/auth.js"></script>
+<script>requireAuth('admin');</script>
+<script src="/event-checkin/static/js/admin.js"></script>
+</body>
+</html>

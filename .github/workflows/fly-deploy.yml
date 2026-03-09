@@ -50,12 +50,9 @@ jobs:
           IMAGE="${{ steps.build.outputs.image }}"
 
           for i in 1 2 3; do
-            echo "Deployment attempt $i (image: $IMAGE)..."
-            if flyctl deploy --image "$IMAGE" \
-                --lease-timeout=5m \
-                --wait-timeout=8m \
-                --strategy rolling; then
-              echo "Deployment successful on attempt $i"
+            echo "Deployment attempt $i..."
+            if flyctl deploy --remote-only --strategy rolling --lease-timeout=5m --wait-timeout=10m; then
+              echo "Deployment successful!"
               exit 0
             fi
 

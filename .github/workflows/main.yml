@@ -4,7 +4,7 @@ on:
   workflow_dispatch:        # 手動觸發
   push:
     branches:
-      - main                # 或者改你用做 deploy 個 branch
+      - master                # 或者改你用做 deploy 個 branch
 
 jobs:
   deploy:

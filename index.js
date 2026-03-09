@@ -93,18 +93,177 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
   customSiteTitle: '5ML Agentic AI API Documentation',
 }));
 
-// Serve TEDx generated visuals (runtime-generated via nanobanana API)
-// Cache for 1 day — images are regenerated only when prompts change
+// Serve TEDx generated visuals
 const tedxStaticOpts = { maxAge: '7d', immutable: false };
 app.use('/tedx', express.static(path.join(__dirname, 'frontend', 'public', 'tedx'), tedxStaticOpts));
+
+// CDN-first redirect: mmdbfiles CDN has higher priority than local files.
+// If a CDN URL exists in metadata or DB, redirect to it immediately.
+// Only falls through to local static files when no CDN URL is found.
+app.use('/tedx-xinyi', async (req, res, next) => {
+  if (!/\.(jpg|jpeg|png|webp|gif)$/i.test(req.path)) return next();
+  const key = req.path.replace(/^\//, '');
+  // Check metadata file, then seed file
+  const metaPath = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi', '.media-metadata.json');
+  const seedPath = path.join(__dirname, 'use-cases', 'tedx-xinyi', 'api', '.media-metadata-seed.json');
+  for (const p of [metaPath, seedPath]) {
+    try {
+      if (!fs.existsSync(p)) continue;
+      const meta = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (meta[key] && meta[key].publicUrl) {
+        return res.redirect(302, meta[key].publicUrl);
+      }
+    } catch { /* ignore */ }
+  }
+  // Check PostgreSQL DB (survives Fly.dev restarts)
+  try {
+    const db = require('./db');
+    if (db && db.pool) {
+      const { rows } = await db.pool.query(
+        'SELECT public_url FROM tedx_media_assets WHERE key = $1 AND public_url IS NOT NULL LIMIT 1',
+        [key]
+      );
+      if (rows.length > 0 && rows[0].public_url) {
+        return res.redirect(302, rows[0].public_url);
+      }
+    }
+  } catch { /* DB not available */ }
+  next();
+});
+// Local static files — only reached when no CDN URL was found above
 app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public', 'tedx-xinyi'), tedxStaticOpts));
 
 // Serve Radiance uploaded media
 app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
 
+// Serve CRM project attachments
+app.use('/uploads/crm', express.static(path.join(__dirname, 'uploads', 'crm')));
+
 // Serve compressed image/PDF outputs
 app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
 app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
+
+// Rewrite Next.js baked-in paths, inject visibility fix, rewrite image CDN URLs
+function rewriteTedxHtml(html, cdnMap = {}) {
+  // Inject CSS before </head> to fix opacity:0 elements hidden by JS animations
+  const visibilityCss = `<style>
+/* Static deployment fix: reveal elements hidden by JS-driven animations */
+*{animation:none!important;transition:none!important}
+[style*="opacity:0"],[style*="opacity: 0"]{opacity:1!important}
+[style*="transform:translateY"],[style*="transform: translateY"]{transform:none!important}
+</style>`;
+
+  let out = html
+    .replace('</head>', visibilityCss + '</head>')
+    // Rewrite absolute canonical/OG URLs
+    .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi\//g, 'https://tedxxinyi.brandpromo.today/')
+    .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi/g,  'https://tedxxinyi.brandpromo.today')
+    // Rewrite internal nav paths
+    .replace(/\/vibe-demo\/tedx-xinyi\//g, '/')
+    .replace(/\/vibe-demo\/tedx-xinyi"/g, '/"')
+    .replace(/\/vibe-demo\/tedx-xinyi'/g, "/'")
+    // Strip ALL <script> tags (Next.js hydration crashes on non-Next hosts)
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+  // Rewrite local image paths to CDN URLs (src= and href= for preload links)
+  const rewriteKey = (key) => cdnMap[key] || null;
+  out = out.replace(/src="\/tedx-xinyi\/([^"]+)"/g, (match, key) => {
+    const cdnUrl = rewriteKey(key);
+    return cdnUrl ? `src="${cdnUrl}"` : match;
+  });
+  out = out.replace(/href="\/tedx-xinyi\/([^"]+)"/g, (match, key) => {
+    const cdnUrl = rewriteKey(key);
+    return cdnUrl ? `href="${cdnUrl}"` : match;
+  });
+
+  return out;
+}
+
+// Serve TEDx Xinyi static site pack for deployment (pure HTML+CSS, CDN images)
+app.get('/tedx-xinyi-site.tar.gz', async (req, res) => {
+  const { spawn, execSync } = require('child_process');
+  const os = require('os');
+  const outDir  = path.join(__dirname, 'frontend', 'out');
+  const tedxOut = path.join(outDir, 'vibe-demo', 'tedx-xinyi');
+  const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'tedx-site-'));
+
+  try {
+    // Fetch CDN URL map from DB
+    const cdnMap = {};
+    try {
+      const { rows } = await pool.query('SELECT key, public_url FROM tedx_media_assets WHERE public_url IS NOT NULL');
+      for (const r of rows) cdnMap[r.key] = r.public_url;
+      console.log(`[tedx-site] cdnMap loaded: ${Object.keys(cdnMap).length} entries`);
+    } catch (e) { console.error('[tedx-site] cdnMap load failed:', e.message); }
+
+    // Rewrite and write home page
+    const homeSrc = path.join(outDir, 'vibe-demo', 'tedx-xinyi.html');
+    if (fs.existsSync(homeSrc)) {
+      fs.writeFileSync(path.join(tmpDir, 'index.html'), rewriteTedxHtml(fs.readFileSync(homeSrc, 'utf8'), cdnMap));
+    }
+
+    // Rewrite and write sub-pages (exclude admin)
+    const EXCLUDE = new Set(['admin']);
+    if (fs.existsSync(tedxOut)) {
+      for (const f of fs.readdirSync(tedxOut).filter(f => f.endsWith('.html') && !EXCLUDE.has(f.replace('.html', '')))) {
+        fs.writeFileSync(path.join(tmpDir, f), rewriteTedxHtml(fs.readFileSync(path.join(tedxOut, f), 'utf8'), cdnMap));
+      }
+    }
+
+    // Only copy CSS (JS chunks stripped)
+    const cssDir = path.join(outDir, '_next', 'static', 'css');
+    if (fs.existsSync(cssDir)) {
+      fs.mkdirSync(path.join(tmpDir, '_next', 'static', 'css'), { recursive: true });
+      for (const f of fs.readdirSync(cssDir)) {
+        fs.copyFileSync(path.join(cssDir, f), path.join(tmpDir, '_next', 'static', 'css', f));
+      }
+    }
+    // Copy any local tedx-xinyi/ images (fallback for images not on CDN)
+    const pubImgs = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi');
+    if (fs.existsSync(pubImgs)) execSync(`cp -r "${pubImgs}" "${tmpDir}/tedx-xinyi"`);
+
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', 'attachment; filename="tedx-xinyi-site.tar.gz"');
+
+    const tar = spawn('tar', ['-czf', '-', '-C', tmpDir, '.']);
+    tar.stdout.pipe(res);
+    tar.stderr.on('data', (d) => console.error('[tedx-site tar]', d.toString()));
+    tar.on('close', () => { try { execSync(`rm -rf "${tmpDir}"`); } catch (_) {} });
+    tar.on('error', (err) => {
+      console.error('[tedx-site] spawn error:', err);
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    });
+  } catch (err) {
+    try { require('child_process').execSync(`rm -rf "${tmpDir}"`); } catch (_) {}
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Serve TEDx Xinyi pack as tar.gz — uses built-in tar (no extra npm packages)
+app.get('/tedx-xinyi-pack.tar.gz', (req, res) => {
+  const { spawn } = require('child_process');
+  const sourceDir = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi');
+
+  if (!fs.existsSync(sourceDir)) {
+    return res.status(404).json({ error: 'TEDx Xinyi media directory not found' });
+  }
+
+  res.setHeader('Content-Type', 'application/gzip');
+  res.setHeader('Content-Disposition', 'attachment; filename="tedx-xinyi-pack.tar.gz"');
+
+  const tar = spawn('tar', ['-czf', '-', '-C', sourceDir, '.']);
+  tar.stdout.pipe(res);
+  tar.stderr.on('data', (d) => console.error('[tedx-pack tar]', d.toString()));
+  tar.on('error', (err) => {
+    console.error('[tedx-pack] spawn error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  });
+});
+
+// Backward-compat redirect
+app.get('/tedx-xinyi-pack.zip', (req, res) => {
+  res.redirect('/tedx-xinyi-pack.tar.gz');
+});
 
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
@@ -127,8 +286,12 @@ const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAl
 if (process.env.DATABASE_URL) {
   // Core schema first, then tender intelligence schema (auto-seeds sources if registry is empty)
   const { initTenderSchema } = require('./services/tender-intel-service');
+  const { initAdaptiveLearningDb } = require('./use-cases/adaptive-learning/db');
+  const { startEvolutionCron } = require('./use-cases/adaptive-learning/services/kb-evolution');
   initDatabase()
     .then(() => initTenderSchema(pool))
+    .then(() => initAdaptiveLearningDb())
+    .then(() => startEvolutionCron())
     .catch(err => {
       console.error('⚠️ Database initialization failed:', err.message);
       console.log('⚠️ App will continue running without database');
@@ -2306,6 +2469,39 @@ app.get('/stats', async (req, res) => {
           ],
         },
         {
+          id: 'adaptive-learning',
+          name: 'Adaptive Learning for Schools',
+          description: 'S1-S2 adaptive mathematics platform for HK schools — concept-centric, interest-aware learning with bilingual AI explanations',
+          agentCount: 1,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 student explanation (STUDENT_EXPLANATION mode)',
+              modelCalls: [
+                { model: 'Claude Haiku', calls: 1, avgTokensIn: 1800, avgTokensOut: 600, costPerMillion: { input: 0.25, output: 1.25 } },
+              ],
+              totalTokens: { input: 1800, output: 600 },
+              estimatedCost: 0.001,
+              notes: 'Session summaries and class summaries ~$0.002-0.003 each. Question authoring ~$0.001. All modes via Claude Haiku.',
+            },
+            daily: { runsPerDay: 100, estimatedCost: 0.10, notes: 'Estimate for 5 classes × 20 students × 1 session/day' },
+            monthly: { runsPerMonth: 2000, estimatedCost: 2.00, notes: 'Scales with number of active students and sessions' },
+          },
+          agents: [
+            { id: 'adaptive-agent', name: 'Adaptive Math Agent', role: 'Handles all 6 modes: explanation, session summary, class summary, question authoring, gamification, admin summary', model: 'Claude Haiku' },
+          ],
+          endpoints: [
+            'POST /api/adaptive-learning/explain          — STUDENT_EXPLANATION: explain question answer',
+            'POST /api/adaptive-learning/session-summary  — STUDENT_SESSION_SUMMARY: 20-min session recap',
+            'POST /api/adaptive-learning/class-summary    — TEACHER_CLASS_SUMMARY: class heatmap + recommendations',
+            'POST /api/adaptive-learning/author-question  — QUESTION_AUTHORING: clean OCR text, tag objectives',
+            'POST /api/adaptive-learning/gamification     — GAMIFICATION_MESSAGE: missions + badge messages',
+            'POST /api/adaptive-learning/demo             — Generic endpoint for any mode',
+            'GET  /api/adaptive-learning/curriculum       — HK S1-S2 math curriculum map',
+            'GET  /api/adaptive-learning/health           — Health check',
+          ],
+        },
+        {
           id: 'pdf-compression',
           name: 'PDF Compression Service',
           description: 'Self-hosted PDF compression pipeline — lossless, balanced, web & small profiles using pdfsizeopt, Ghostscript, pdfEasyCompress, and Paperweight',
@@ -2453,7 +2649,15 @@ console.log('✅ Debug routes loaded: /api/debug/sessions, /api/debug/modules, /
 const llm = require('./lib/llm');
 
 // Helper: read use case source code for chatbot context
+const _useCaseCodeCache = new Map();
 function readUseCaseCode(useCaseId, maxChars = 8000) {
+  const key = `${useCaseId}:${maxChars}`;
+  if (_useCaseCodeCache.has(key)) return _useCaseCodeCache.get(key);
+  const result = _readUseCaseCode(useCaseId, maxChars);
+  _useCaseCodeCache.set(key, result);
+  return result;
+}
+function _readUseCaseCode(useCaseId, maxChars = 8000) {
   const baseDir = path.join(__dirname, 'frontend', 'app', 'use-cases', useCaseId);
   if (!fs.existsSync(baseDir)) return '';
   const files = [];
@@ -2503,10 +2707,16 @@ app.post('/api/crm/chat', async (req, res) => {
       return res.status(400).json({ error: 'messages array is required' });
     }
 
-    // RAG: retrieve relevant CRM + company context
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-    const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'crm', 3) : '';
-    const companyContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
+    // RAG: retrieve relevant CRM + company context.
+    // content may be a string or a multimodal array — extract text blocks for the RAG query.
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
+    const ragQuery = lastUserMsg
+      ? (Array.isArray(lastUserMsg.content)
+          ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text || '').join('\n')
+          : lastUserMsg.content || '')
+      : '';
+    const ragContext = ragQuery ? ragService.getContext(ragQuery, 'crm', 3) : '';
+    const companyContext = ragQuery ? ragService.getContext(ragQuery, 'company', 2) : '';
 
     // Include use case source code for code-aware assistance
     const codeContext = readUseCaseCode(use_case_id || 'crm', 6000);
@@ -2548,6 +2758,20 @@ Create a project directly:
 {"type": "create_project", "data": {"name": "Website Redesign", "type": "website", "client_id": "uuid-here"}, "label": "Create Project"}
 \`\`\`
 
+Manage deliverables on the current project page (only when page_context.pageType === "project-detail"):
+\`\`\`action
+{"type": "update_form", "data": {"_deliverableAdd": {"title": "Design mockups", "deadline": "2026-03-20", "priority": "high", "use_case": "ai-media-generation"}}, "label": "Add deliverable"}
+\`\`\`
+\`\`\`action
+{"type": "update_form", "data": {"_deliverableUpdate": {"id": "DELIVERABLE_ID", "status": "done", "priority": "critical"}}, "label": "Update deliverable"}
+\`\`\`
+\`\`\`action
+{"type": "update_form", "data": {"_deliverableDelete": {"id": "DELIVERABLE_ID"}}, "label": "Delete deliverable"}
+\`\`\`
+Deliverable fields: title, deadline (YYYY-MM-DD|null), status ("pending"|"in_progress"|"done"), priority ("critical"|"high"|"medium"|"low"|null), notes (string|null), use_case (slug|null).
+Valid use_case slugs: "social-content-ops", "growth-architect", "growth-hacking-studio", "ai-media-generation", "sme-growth", "government-tenders", "hk-sg-tender-intel", "mans-accounting".
+Current deliverables are in page_context.formData.deliverables (each has id, title, status, priority, deadline, use_case).
+
 Available pages: /use-cases/crm (Dashboard), /use-cases/crm/brands (Brands list), /use-cases/crm/brands/new (New Brand form), /use-cases/crm/brands/detail?id=BRAND_ID (Brand detail with projects and feedback), /use-cases/crm/projects (Projects list), /use-cases/crm/projects/new (New Project form), /use-cases/crm/projects/detail?id=PROJECT_ID (Project detail), /use-cases/crm/feedback (Feedback), /use-cases/crm/integrations (Integrations)
 
 When the user asks you to do something actionable (create, navigate, fill in, etc.), include the appropriate action block so it can be executed in the UI.
@@ -2556,7 +2780,16 @@ ${page_context ? `Current page context: ${JSON.stringify(page_context)}` : ''}
 
 Respond concisely. Use English or the language the user writes in.`;
 
-    const result = await llm.chat(modelKey || 'sonnet', messages, {
+    // Model routing per CLAUDE.md:
+    //   DeepSeek  → default for text-only CRM chat (cheap, no Anthropic quota)
+    //   Haiku     → multimodal messages (images / PDF document blocks require Claude)
+    const hasMultimodal = messages.some(m =>
+      Array.isArray(m.content) &&
+      m.content.some(b => b.type === 'image' || b.type === 'document')
+    );
+    const defaultModel = hasMultimodal ? 'haiku' : 'deepseek';
+
+    const result = await llm.chat(modelKey || defaultModel, messages, {
       system,
       maxTokens: 4096,
     });
@@ -2645,7 +2878,7 @@ app.post('/api/social/chat', async (req, res) => {
     // Triggered when the caller provides a task_id (new Sarah chat panel).
     // Module-specific pages that don't send task_id fall through to legacy path.
     if (task_id) {
-      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+      const lastUserMsg = messages.findLast(m => m.role === 'user');
       const userInput = lastUserMsg?.content || '';
 
       // Detect research-related requests (bypass orchestrator for simpler handling)
@@ -2796,7 +3029,7 @@ ${ragContext ? `\n${ragContext}` : ''}`;
     }
     // ── Legacy path (module pages: strategy, content-dev, calendar, etc.) ────
 
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 3) : '';
     const codeContext = readUseCaseCode(use_case_id || 'social-content-ops', 6000);
 
@@ -3821,9 +4054,7 @@ try {
     if (token === ADMIN_PASS) return next();
     return res.status(401).json({ error: 'Unauthorized' });
   });
-  // Admin UI serves at /vibe-demo/tedx-xinyi/admin
-  app.get('/vibe-demo/tedx-xinyi/admin', (req, res) => res.redirect('/api/tedx-xinyi/upload'));
-  // Legacy redirect
+  // Legacy admin shortcut redirects to Next.js admin page
   app.get('/tedxxinyi/admin', (req, res) => res.redirect('/vibe-demo/tedx-xinyi/admin'));
   console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /vibe-demo/tedx-xinyi/admin');
 } catch (error) {
@@ -3864,6 +4095,38 @@ try {
   console.log('✅ Image Compression routes loaded: /api/compress');
 } catch (error) {
   console.warn('⚠️ Image Compression routes not loaded:', error.message);
+}
+
+// Event Check-in System
+try {
+  const eventCheckinRoutes = require('./use-cases/event-checkin/api/routes');
+  app.use('/api/event-checkin', eventCheckinRoutes);
+  // Serve vanilla HTML pages (not part of the Next.js build)
+  app.get('/event-checkin', (req, res) =>
+    res.sendFile(path.join(__dirname, 'use-cases', 'event-checkin', 'public', 'index.html'))
+  );
+  app.get('/event-checkin/admin', (req, res) =>
+    res.sendFile(path.join(__dirname, 'use-cases', 'event-checkin', 'public', 'admin.html'))
+  );
+  app.get('/event-checkin/dashboard', (req, res) =>
+    res.sendFile(path.join(__dirname, 'use-cases', 'event-checkin', 'public', 'dashboard.html'))
+  );
+  // Legacy redirect: /event-checkin/client → /event-checkin/dashboard
+  app.get('/event-checkin/client', (req, res) => res.redirect(301, '/event-checkin/dashboard'));
+  // Serve static assets (CSS, JS) under /event-checkin/static/
+  app.use('/event-checkin/static', express.static(path.join(__dirname, 'use-cases', 'event-checkin', 'public')));
+  console.log('✅ Event Check-in routes loaded: /event-checkin, /event-checkin/dashboard, /event-checkin/admin, /api/event-checkin');
+} catch (error) {
+  console.warn('⚠️ Event Check-in routes not loaded:', error.message);
+}
+
+// Adaptive Learning for Schools
+try {
+  const adaptiveLearningRoutes = require('./use-cases/adaptive-learning/api/routes');
+  app.use('/api/adaptive-learning', adaptiveLearningRoutes);
+  console.log('✅ Adaptive Learning routes loaded: /api/adaptive-learning');
+} catch (error) {
+  console.warn('⚠️ Adaptive Learning routes not loaded:', error.message);
 }
 
 // Scheduler Service
@@ -4112,7 +4375,7 @@ app.post('/api/workflow-chat', async (req, res) => {
     }, null, 2);
 
     // RAG: retrieve relevant context for the latest user message
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'workflows', 3) : '';
     const companyRag = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
 
@@ -4167,7 +4430,7 @@ app.post('/api/agent-chat', async (req, res) => {
     }
 
     // RAG: retrieve relevant context for the latest user message
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, null, 3) : '';
 
     const systemPrompt = `You are the 5ML Platform Agent Assistant — an expert on the 5ML Agentic AI Platform.
@@ -4337,17 +4600,13 @@ app.get('*', (req, res, next) => {
     ? req.path.slice(0, -1)
     : req.path;
 
-  const htmlPath = path.join(nextJsPath, cleanPath, 'index.html');
   const directHtmlPath = path.join(nextJsPath, cleanPath + '.html');
+  const htmlPath = path.join(nextJsPath, cleanPath, 'index.html');
 
-  // Check if path/index.html exists
-  if (fs.existsSync(htmlPath)) {
-    return res.sendFile(htmlPath);
-  }
-  // Check if path.html exists
-  if (fs.existsSync(directHtmlPath)) {
-    return res.sendFile(directHtmlPath);
-  }
+  // Check .html first (Next.js static export default), then index.html
+  // Wrap in try/catch to handle EIO errors on ephemeral filesystems (Fly.dev)
+  try { if (fs.existsSync(directHtmlPath)) return res.sendFile(directHtmlPath); } catch {}
+  try { if (fs.existsSync(htmlPath)) return res.sendFile(htmlPath); } catch {}
 
   // Dynamic route fallback — serve the [param] placeholder page
   // e.g. /healthcheck/abc123 → frontend/out/healthcheck/placeholder.html
@@ -4385,7 +4644,7 @@ const wsServer = require('./services/websocket-server');
 // Radiance PR Contact Form API
 // ==========================================
 
-// Multer config for Radiance media uploads
+// Multer config for Radiance media uploads (disk storage + proxied to external CDN)
 const multer = require('multer');
 const radianceMediaStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -4566,20 +4825,51 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
   }
 });
 
-// POST /api/radiance/admin/media/upload
+// POST /api/radiance/admin/media/upload — proxy upload to external CDN
 app.post('/api/radiance/admin/media/upload', radianceUpload.single('file'), async (req, res) => {
   try {
     if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const url = `/uploads/radiance/${req.file.filename}`;
+
+    // Read file from disk (diskStorage saves to req.file.path) and convert to base64 for CDN
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const base64 = `data:${req.file.mimetype};base64,${fileBuffer.toString('base64')}`;
+    const cdnRes = await fetch('http://5ml.mmdbfiles.com/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_data: base64 }),
+    });
+    const cdnData = await cdnRes.json();
+    if (!cdnData.success) return res.status(502).json({ error: cdnData.error || 'CDN upload failed' });
+
+    const { public_url, filename, mime, size } = cdnData;
     await pool.query(
       `INSERT INTO radiance_media (filename, original_name, url, mime_type, size) VALUES ($1,$2,$3,$4,$5)`,
-      [req.file.filename, req.file.originalname, url, req.file.mimetype, req.file.size]
+      [filename, req.file.originalname, public_url, mime || req.file.mimetype, size || req.file.size]
     );
-    res.json({ success: true, url, filename: req.file.filename, originalName: req.file.originalname });
+    console.log(`[Radiance] Uploaded: ${req.file.originalname} → ${public_url} (${((size || req.file.size) / 1024).toFixed(0)} KB)`);
+    res.json({ success: true, url: public_url, filename, originalName: req.file.originalname });
   } catch (err) {
-    console.error('Radiance media upload error:', err);
+    console.error('[Radiance] Media upload error:', err);
     res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// POST /api/radiance/admin/media/register — save externally-uploaded file record to DB
+app.post('/api/radiance/admin/media/register', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { filename, original_name, url, mime_type, size } = req.body;
+    if (!filename || !url) return res.status(400).json({ error: 'filename and url are required' });
+    await pool.query(
+      `INSERT INTO radiance_media (filename, original_name, url, mime_type, size) VALUES ($1,$2,$3,$4,$5)`,
+      [filename, original_name || filename, url, mime_type || 'image/jpeg', size || 0]
+    );
+    console.log(`[Radiance] Uploaded: ${original_name || filename} → ${url} (${((size || 0) / 1024).toFixed(0)} KB)`);
+    res.json({ success: true, url });
+  } catch (err) {
+    console.error('[Radiance] Media register error:', err);
+    res.status(500).json({ error: 'Failed to register media' });
   }
 });
 
@@ -4596,13 +4886,101 @@ app.get('/api/radiance/admin/media', async (req, res) => {
 app.delete('/api/radiance/admin/media/:id', async (req, res) => {
   if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
   try {
-    const result = await pool.query('SELECT filename FROM radiance_media WHERE id=$1', [req.params.id]);
+    const result = await pool.query('SELECT filename, url FROM radiance_media WHERE id=$1', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
-    const filePath = path.join(__dirname, 'uploads', 'radiance', result.rows[0].filename);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // Only delete local file if it's not an external URL
+    if (!result.rows[0].url.startsWith('http')) {
+      const filePath = path.join(__dirname, 'uploads', 'radiance', result.rows[0].filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
     await pool.query('DELETE FROM radiance_media WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: 'Delete failed' }); }
+});
+
+// GET /api/radiance/admin/image-slots — catalog of all image placeholders across the Radiance site
+app.get('/api/radiance/admin/image-slots', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const HOMEPAGE_HEROES = [
+      { key: 'hero-1', label: 'Hero Background 1', src: '/images/radiance/hero/Radiance-1.jpg' },
+      { key: 'hero-2', label: 'Hero Background 2', src: '/images/radiance/hero/Radiance-2.jpg' },
+      { key: 'hero-3', label: 'Hero Background 3', src: '/images/radiance/hero/Radiance-3.jpg' },
+    ];
+    const HOMEPAGE_LOGOS = [
+      { key: 'logo-1',  label: 'Client Logo 1',  src: 'http://5ml.mmdbfiles.com/assets/3808b2fb66ca40525e573461.jpg' },
+      { key: 'logo-2',  label: 'Client Logo 2',  src: 'http://5ml.mmdbfiles.com/assets/077707a701108f72623ec4bc.png' },
+      { key: 'logo-3',  label: 'Client Logo 3',  src: 'http://5ml.mmdbfiles.com/assets/5cd8f4f3226ac0e3c93e4393.png' },
+      { key: 'logo-4',  label: 'Client Logo 4',  src: 'http://5ml.mmdbfiles.com/assets/7c99bdf01d6cf2a586add91a.jpg' },
+      { key: 'logo-5',  label: 'Client Logo 5',  src: 'http://5ml.mmdbfiles.com/assets/b0f34a35f4e82d61546656d1.png' },
+      { key: 'logo-6',  label: 'Client Logo 6',  src: 'http://5ml.mmdbfiles.com/assets/de9d1b833bc5d93ff62e2e41.jpg' },
+      { key: 'logo-7',  label: 'Client Logo 7',  src: 'http://5ml.mmdbfiles.com/assets/8cb61dc159f35088617837b1.png' },
+      { key: 'logo-8',  label: 'Client Logo 8',  src: 'http://5ml.mmdbfiles.com/assets/489f18198b4127d98d307f43.jpg' },
+      { key: 'logo-9',  label: 'Client Logo 9',  src: 'http://5ml.mmdbfiles.com/assets/11b120b411e57a7fa62d3933.jpg' },
+      { key: 'logo-10', label: 'Client Logo 10', src: 'http://5ml.mmdbfiles.com/assets/4b87e1e47b865565936c7683.jpg' },
+    ];
+
+    const CASE_STUDY_SLUGS = [
+      'daikin', 'filorga', 'gp-batteries', 'her-own-words-sport',
+      'lung-fu-shan', 'richmond-fellowship', 'venice-biennale-hk', 'chinese-culture-exhibition',
+    ];
+    const BLOG_SLUGS = [
+      'earned-media-strategy', 'integrated-campaigns', 'product-launch-pr',
+      'event-media-strategy', 'thought-leadership', 'ngos-reputation',
+      'cultural-pr', 'social-media-strategy',
+    ];
+
+    const [csResult, blogResult] = await Promise.all([
+      pool.query('SELECT slug, title_en, featured_image FROM radiance_case_study_cms'),
+      pool.query('SELECT slug, title_en, hero_image FROM radiance_blog_cms'),
+    ]);
+
+    const csMap = {};
+    csResult.rows.forEach(r => { csMap[r.slug] = r; });
+    const blogMap = {};
+    blogResult.rows.forEach(r => { blogMap[r.slug] = r; });
+
+    const caseStudySlots = CASE_STUDY_SLUGS.map(slug => {
+      const row = csMap[slug];
+      return {
+        key: `case-study-${slug}`,
+        page: 'Case Studies',
+        label: row ? (row.title_en || slug) : slug,
+        src: row?.featured_image || null,
+        type: 'cms',
+        status: row?.featured_image ? 'filled' : 'missing',
+      };
+    });
+
+    const blogSlots = BLOG_SLUGS.map(slug => {
+      const row = blogMap[slug];
+      return {
+        key: `blog-${slug}`,
+        page: 'Blog',
+        label: row ? (row.title_en || slug) : slug,
+        src: row?.hero_image || null,
+        type: 'cms',
+        status: row?.hero_image ? 'filled' : 'missing',
+      };
+    });
+
+    const slots = [
+      ...HOMEPAGE_HEROES.map(s => ({ ...s, page: 'Homepage', type: 'local', status: 'filled' })),
+      ...HOMEPAGE_LOGOS.map(s => ({ ...s, page: 'Homepage', type: 'cdn', status: 'cdn' })),
+      ...caseStudySlots,
+      ...blogSlots,
+    ];
+
+    res.json({
+      success: true,
+      slots,
+      total: slots.length,
+      filled: slots.filter(s => s.status !== 'missing').length,
+    });
+  } catch (err) {
+    console.error('Image slots error:', err);
+    res.status(500).json({ error: 'Failed to fetch image slots' });
+  }
 });
 
 // GET /api/radiance/blog/:slug — returns CMS override or null
@@ -4712,6 +5090,60 @@ app.put('/api/radiance/admin/case-studies/:slug', async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: 'Save failed' }); }
+});
+
+// GET /api/radiance/admin/site-pack — stream a ZIP of all Radiance site assets
+app.get('/api/radiance/admin/site-pack', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  const archiver = require('archiver');
+  const fs = require('fs');
+  const pathLib = require('path');
+
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="radiance-site-pack-${date}.zip"`);
+
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', err => { console.error('Radiance site-pack error:', err); res.end(); });
+  archive.pipe(res);
+
+  // HTML pages (static export)
+  const htmlDir = pathLib.join(__dirname, 'frontend/out/vibe-demo/radiance');
+  if (fs.existsSync(htmlDir)) {
+    archive.glob('**/*.html', { cwd: htmlDir }, { prefix: 'html' });
+  }
+
+  // Public images
+  const imagesDir = pathLib.join(__dirname, 'frontend/public/images/radiance');
+  if (fs.existsSync(imagesDir)) {
+    archive.directory(imagesDir, 'images');
+  }
+
+  // Uploaded media
+  const uploadsDir = pathLib.join(__dirname, 'uploads/radiance');
+  if (fs.existsSync(uploadsDir)) {
+    archive.directory(uploadsDir, 'uploads');
+  }
+
+  // README
+  const readme = [
+    `Radiance Site Pack — ${date}`,
+    '='.repeat(40),
+    '',
+    'Contents:',
+    '  html/     Static HTML exports for all Radiance pages',
+    '  images/   Public images (case-studies, hero, logos)',
+    '  uploads/  Admin-uploaded media files',
+    '',
+    'Deployment:',
+    '  Serve html/ files from your web root.',
+    '  Place images/ under /images/radiance/ and uploads/ under /uploads/radiance/.',
+    '',
+    'Generated by 5ML Agentic AI Platform.',
+  ].join('\n');
+  archive.append(readme, { name: 'README.txt' });
+
+  await archive.finalize();
 });
 
 // ==========================================
@@ -4834,16 +5266,28 @@ app.post('/api/recruitai/chat', async (req, res) => {
 - 用「你」稱呼對方，語氣溫暖
 - 主動提問了解需求，每次最多問一個問題
 - 適時用 emoji 增加親切感 😊
-- 第 ${turnCount + 1} 輪對話${turnCount >= 8 ? '（已聊了一段時間，可以自然地邀請對方安排免費諮詢）' : '（先了解需求，建立信任）'}
+- 第 ${turnCount + 1} 輪對話${turnCount >= 8 ? '（已聊了一段時間，請積極邀請對方留下聯絡方式安排免費諮詢）' : '（先了解需求，建立信任）'}
 
-聯絡資料收集（重要）：
-- 當對方表示感興趣或詢問價格/方案時，自然地邀請留下聯絡方式
-- 說話示範：「咁你係咪方便留個 WhatsApp / 電郵俾我？我哋可以安排個免費 30 分鐘 AI 評估 😊」
-- 一旦對話中出現任何聯絡資料（WhatsApp、手機、電郵），必須在回覆末尾加上以下標記（此行對用戶不可見，不要解釋它）：
-[CONTACT_CAPTURED: name=姓名, email=電郵地址, phone=電話號碼]
-例子：[CONTACT_CAPTURED: name=陳先生, email=chan@example.com, phone=+852 9123 4567]
-例子（只有電話）：[CONTACT_CAPTURED: phone=+852 9123 4567]
-只填已知的欄位，未知欄位省略。標記必須在回覆最後一行。`;
+【資料收集任務 — 非常重要】
+整個對話中，自然地逐步收集以下 7 項資料。每次只問一個問題，不要像填表格，要融入對話中：
+1. 姓名（稱呼）— 對話開始時問：「請問點稱呼你呀？」
+2. 公司名稱 — 了解對方業務時問
+3. 行業 — 根據公司討論引出
+4. 員工／團隊人數 — 評估規模、定制方案時問
+5. 主要痛點或希望自動化的業務範疇 — 核心需求，必問
+6. 電郵地址 — **必問，不可跳過**。話術：「方便留個電郵俾我嗎？我可以幫你發送詳細方案 📧」
+7. WhatsApp／電話 — 邀請預約時問
+
+注意：
+- 已知的資料不要重複問
+- **電郵地址係必須收集的**，不論任何情況都要問到
+- 收集到姓名 + 電郵後，邀請安排免費 30 分鐘 AI 評估
+
+【聯絡標記 — 系統指令，用戶不可見】
+每當對話中出現任何新資料（包括姓名、公司、行業、人數、電話、電郵），必須在該次回覆末尾附上完整已知資料的標記。格式如下，只填已知欄位，未知省略：
+[CONTACT_CAPTURED: name=姓名, email=電郵, phone=電話, company=公司, industry=行業, headcount=人數, message=痛點摘要]
+例子：[CONTACT_CAPTURED: name=陳先生, email=chan@abc.com, phone=+852 9123 4567, company=ABC貿易, industry=零售, headcount=20-50人, message=希望自動化客服同WhatsApp回覆]
+每次有新資料就重新附上**完整**已知欄位的標記（累積更新，不是只記新資料）。標記必須在回覆最後一行。`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -4891,36 +5335,57 @@ app.post('/api/recruitai/chat', async (req, res) => {
     const updateFields = ['turn_count = turn_count + 1', 'updated_at = NOW()'];
     const updateParams = [currentSessionId];
     if (contactCaptured) {
-      updateFields.push(`contact_captured = TRUE`);
+      if (capturedData.email) updateFields.push(`contact_captured = TRUE`);
       // Encrypt PII captured by chatbot before persisting to DB
-      if (capturedData.name)  { updateFields.push(`captured_name  = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.name)); }
-      if (capturedData.email) { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.email)); }
-      if (capturedData.phone) { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.phone)); }
+      if (capturedData.name)     { updateFields.push(`captured_name  = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.name)); }
+      if (capturedData.email)    { updateFields.push(`captured_email = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.email)); }
+      if (capturedData.phone)    { updateFields.push(`captured_phone = $${updateParams.length + 1}`); updateParams.push(encrypt(capturedData.phone)); }
+      if (capturedData.industry) { updateFields.push(`industry = $${updateParams.length + 1}`);       updateParams.push(capturedData.industry); }
     }
     await pool.query(
       `UPDATE recruitai_chat_sessions SET ${updateFields.join(', ')} WHERE session_id = $1`,
       updateParams
     );
 
-    // If contact captured, save as lead (chatbot-sourced), encrypt PII at rest
-    // Dedup by session_id (not email — emails are encrypted so plaintext comparison fails)
+    // If contact captured, upsert as lead (chatbot-sourced), encrypt PII at rest
     if (contactCaptured && capturedData.email) {
       try {
-        await pool.query(
-          `INSERT INTO recruitai_leads (name, email, phone, source_page, industry, message)
-           SELECT $1,$2,$3,$4,$5,$6
-           WHERE NOT EXISTS (
-             SELECT 1 FROM recruitai_leads WHERE source_page = $4
-           )`,
-          [
-            capturedData.name  ? encrypt(capturedData.name)  : null,
-            encrypt(capturedData.email),
-            capturedData.phone ? encrypt(capturedData.phone) : null,
-            'chatbot:' + currentSessionId,
-            industry || null,
-            encrypt(`Chat session ${currentSessionId}`),
-          ]
+        const chatSourcePage = 'chatbot:' + currentSessionId;
+        const messageText = capturedData.message || null;
+        // Try insert first; if already exists (same source_page), update with any newly collected fields
+        const existingLead = await pool.query(
+          'SELECT id FROM recruitai_leads WHERE source_page = $1', [chatSourcePage]
         );
+        if (existingLead.rows.length === 0) {
+          await pool.query(
+            `INSERT INTO recruitai_leads (name, email, phone, company, industry, headcount, message, source_page)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [
+              capturedData.name     ? encrypt(capturedData.name)     : null,
+              encrypt(capturedData.email),
+              capturedData.phone    ? encrypt(capturedData.phone)    : null,
+              capturedData.company  ? encrypt(capturedData.company)  : null,
+              capturedData.industry || industry || null,
+              capturedData.headcount || null,
+              messageText           ? encrypt(messageText)           : null,
+              chatSourcePage,
+            ]
+          );
+        } else {
+          // Update with any newly captured fields
+          const leadId = existingLead.rows[0].id;
+          const sets = [], vals = [];
+          if (capturedData.name)      { sets.push(`name=$${vals.length+1}`);      vals.push(encrypt(capturedData.name)); }
+          if (capturedData.phone)     { sets.push(`phone=$${vals.length+1}`);     vals.push(encrypt(capturedData.phone)); }
+          if (capturedData.company)   { sets.push(`company=$${vals.length+1}`);   vals.push(encrypt(capturedData.company)); }
+          if (capturedData.industry)  { sets.push(`industry=$${vals.length+1}`);  vals.push(capturedData.industry); }
+          if (capturedData.headcount) { sets.push(`headcount=$${vals.length+1}`); vals.push(capturedData.headcount); }
+          if (messageText)            { sets.push(`message=$${vals.length+1}`);   vals.push(encrypt(messageText)); }
+          if (sets.length > 0) {
+            vals.push(leadId);
+            await pool.query(`UPDATE recruitai_leads SET ${sets.join(',')} WHERE id=$${vals.length}`, vals);
+          }
+        }
       } catch (e) {
         console.error('⚠️ RecruitAI chatbot lead save failed:', e.message);
       }
@@ -4997,6 +5462,198 @@ app.delete('/api/recruitai/admin/leads/:id', async (req, res) => {
   } catch (err) {
     console.error('❌ Admin lead delete error:', err);
     res.status(500).json({ error: 'Failed to delete lead' });
+  }
+});
+
+// POST /api/recruitai/admin/leads/:id/analyze — AI analysis of a lead
+app.post('/api/recruitai/admin/leads/:id/analyze', async (req, res) => {
+  const { password } = req.body;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  const { id } = req.params;
+  if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    const result = await pool.query('SELECT * FROM recruitai_leads WHERE id = $1', [Number(id)]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Lead not found' });
+    const lead = decryptRow(result.rows[0], PII_FIELDS.recruitai_leads);
+
+    const llm = require('./lib/llm');
+    const prompt = `You are a sales analyst for RecruitAI Studio, a Hong Kong AI automation agency serving SMEs.
+
+Analyze this inbound lead and respond with ONLY valid JSON (no markdown, no extra text):
+
+Lead data:
+- Company: ${lead.company || 'Not provided'}
+- Industry: ${lead.industry || 'Not provided'}
+- Headcount: ${lead.headcount || 'Not provided'}
+- Source form: ${lead.source_page || 'Unknown'}
+- Message / pain points: ${lead.message || 'No message provided'}
+
+Return this exact JSON structure:
+{
+  "category": "one of: 招聘自動化 | 客服AI | 行銷自動化 | 後台流程 | 資料分析 | 人力資源 | 一般查詢",
+  "summary": "2-3 sentence summary in Traditional Chinese of what this company needs and their situation",
+  "evaluation": "2-3 sentence evaluation in Traditional Chinese assessing lead quality, urgency, and fit for AI automation",
+  "stars": <integer 1-5, where 1=cold/unclear, 3=warm/interested, 5=hot/high-intent with clear pain point>,
+  "star_reason": "one concise sentence in Traditional Chinese explaining the star rating"
+}`;
+
+    const aiResult = await llm.chat('haiku', [{ role: 'user', content: prompt }], { maxTokens: 600 });
+    let analysis;
+    try {
+      const text = aiResult.text.trim();
+      const jsonStr = text.startsWith('{') ? text : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+      analysis = JSON.parse(jsonStr);
+    } catch {
+      return res.status(500).json({ error: 'Failed to parse AI response' });
+    }
+    res.json({ success: true, analysis });
+  } catch (err) {
+    console.error('❌ Lead analysis error:', err);
+    res.status(500).json({ error: 'Failed to analyze lead' });
+  }
+});
+
+// ─── Admin: Media Library ──────────────────────────────────────────────────────
+
+// GET /api/admin/media-library — aggregate all managed images across all sites
+app.get('/api/admin/media-library', (req, res) => {
+  const { password } = req.query;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+
+  const fs = require('fs');
+  const path = require('path');
+  const PUBLIC_DIR = path.join(__dirname, 'frontend', 'public');
+
+  // ── TEDx Boundary Street ───────────────────────────────────────────────────
+  let tedxBoundary = [];
+  try {
+    const { VISUALS } = require('./use-cases/tedx-boundary-street/api/routes');
+    const dir = path.join(PUBLIC_DIR, 'tedx');
+    tedxBoundary = (VISUALS || []).map(v => {
+      const filePath = path.join(dir, v.filename);
+      const exists = fs.existsSync(filePath);
+      return {
+        id: v.id,
+        filename: v.filename,
+        description: v.description,
+        prompt: v.prompt,
+        url: `/tedx/${v.filename}`,
+        exists,
+        size: exists ? fs.statSync(filePath).size : null,
+        modified: exists ? fs.statSync(filePath).mtime.toISOString() : null,
+        canGenerate: true,
+        site: 'tedx-boundary',
+      };
+    });
+  } catch (e) { console.warn('Media library: tedx-boundary load failed:', e.message); }
+
+  // ── TEDx Xinyi ─────────────────────────────────────────────────────────────
+  let tedxXinyi = [];
+  try {
+    const { VISUALS } = require('./use-cases/tedx-xinyi/api/routes');
+    const dir = path.join(PUBLIC_DIR, 'tedx-xinyi');
+    tedxXinyi = (VISUALS || []).map(v => {
+      const filePath = path.join(dir, v.filename);
+      const exists = fs.existsSync(filePath);
+      return {
+        id: v.id,
+        filename: v.filename,
+        description: v.description || v.id,
+        prompt: v.prompt,
+        url: `/tedx-xinyi/${v.filename}`,
+        exists,
+        size: exists ? fs.statSync(filePath).size : null,
+        modified: exists ? fs.statSync(filePath).mtime.toISOString() : null,
+        canGenerate: true,
+        site: 'tedx-xinyi',
+      };
+    });
+  } catch (e) { console.warn('Media library: tedx-xinyi load failed:', e.message); }
+
+  // ── Radiance static images ─────────────────────────────────────────────────
+  let radianceImages = [];
+  try {
+    const radianceDir = path.join(PUBLIC_DIR, 'images', 'radiance');
+    function scanDir(dir, baseUrl) {
+      const items = [];
+      if (!fs.existsSync(dir)) return items;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          items.push(...scanDir(fullPath, `${baseUrl}/${entry.name}`));
+        } else if (/\.(png|jpg|jpeg|webp|gif)$/i.test(entry.name)) {
+          const stat = fs.statSync(fullPath);
+          items.push({
+            id: `${baseUrl}/${entry.name}`.replace('/images/radiance/', '').replace(/\//g, '-').replace(/\.\w+$/, ''),
+            filename: entry.name,
+            description: entry.name.replace(/[-_]/g, ' ').replace(/\.\w+$/, ''),
+            url: `${baseUrl}/${entry.name}`,
+            exists: true,
+            size: stat.size,
+            modified: stat.mtime.toISOString(),
+            canGenerate: false,
+            site: 'radiance',
+          });
+        }
+      }
+      return items;
+    }
+    radianceImages = scanDir(radianceDir, '/images/radiance');
+  } catch (e) { console.warn('Media library: radiance scan failed:', e.message); }
+
+  const geminiAvailable = !!process.env.GEMINI_API_KEY;
+  res.json({
+    success: true,
+    geminiAvailable,
+    groups: [
+      { id: 'tedx-boundary', label: 'TEDx Boundary Street', images: tedxBoundary },
+      { id: 'tedx-xinyi',    label: 'TEDxXinyi',            images: tedxXinyi },
+      { id: 'radiance',      label: 'Radiance',              images: radianceImages },
+    ],
+  });
+});
+
+// POST /api/admin/media-library/generate — trigger Gemini generation for one image
+app.post('/api/admin/media-library/generate', async (req, res) => {
+  const { password, site, id } = req.body;
+  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (!site || !id) return res.status(400).json({ error: 'site and id required' });
+
+  const endpointMap = {
+    'tedx-boundary': '/api/tedx/generate',
+    'tedx-xinyi':    '/api/tedx-xinyi/generate',
+  };
+  const endpoint = endpointMap[site];
+  if (!endpoint) return res.status(400).json({ error: `Unknown site: ${site}` });
+
+  try {
+    const http = require('http');
+    const postData = JSON.stringify({ id });
+    const result = await new Promise((resolve, reject) => {
+      const reqOpts = {
+        hostname: '127.0.0.1',
+        port: process.env.PORT || 8080,
+        path: endpoint,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+        timeout: 120000,
+      };
+      const innerReq = http.request(reqOpts, innerRes => {
+        let body = '';
+        innerRes.on('data', c => { body += c; });
+        innerRes.on('end', () => {
+          try { resolve({ status: innerRes.statusCode, data: JSON.parse(body) }); }
+          catch { resolve({ status: innerRes.statusCode, data: body }); }
+        });
+      });
+      innerReq.on('error', reject);
+      innerReq.write(postData);
+      innerReq.end();
+    });
+    res.status(result.status).json(result.data);
+  } catch (err) {
+    console.error('Media library generate error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -6555,6 +7212,72 @@ app.post('/api/sme/campaign-review', async (req, res) => {
     }
   });
 
+  // POST /api/tender-intel/sources/:sourceId/validate — test-fetch a source and update its status
+  app.post('/api/tender-intel/sources/:sourceId/validate', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    const { sourceId } = req.params;
+    try {
+      const { rows } = await pool.query(
+        `SELECT source_id, source_type, feed_url, discovery_hub_url FROM tender_source_registry WHERE source_id = $1`,
+        [sourceId]
+      );
+      if (!rows.length) return res.status(404).json({ error: 'Source not found' });
+      const src = rows[0];
+      const testUrl = src.feed_url || src.discovery_hub_url;
+      if (!testUrl) {
+        await pool.query(
+          `UPDATE tender_source_registry SET status='pending_validation', last_status='no_url', last_checked_at=NOW() WHERE source_id=$1`,
+          [sourceId]
+        );
+        return res.json({ ok: false, status: 'pending_validation', message: 'No URL configured — cannot test' });
+      }
+      let httpCode = null;
+      let newStatus = 'broken';
+      let message = '';
+      try {
+        const response = await axios.head(testUrl, { timeout: 10000, validateStatus: () => true });
+        httpCode = response.status;
+        if (httpCode >= 200 && httpCode < 400) {
+          newStatus = 'active';
+          message = `HTTP ${httpCode} — feed is reachable`;
+        } else {
+          message = `HTTP ${httpCode} — feed returned error`;
+        }
+      } catch (fetchErr) {
+        message = `Unreachable: ${fetchErr.message?.slice(0, 80)}`;
+      }
+      await pool.query(
+        `UPDATE tender_source_registry SET status=$1, last_status=$2, last_checked_at=NOW(), last_status_detail=$3 WHERE source_id=$4`,
+        [newStatus, newStatus === 'active' ? 'ok' : 'error', message, sourceId]
+      );
+      res.json({ ok: newStatus === 'active', status: newStatus, httpCode, message });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // PUT /api/tender-intel/sources/:sourceId — update source fields
+  app.put('/api/tender-intel/sources/:sourceId', async (req, res) => {
+    if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'DATABASE_URL not set' });
+    const { sourceId } = req.params;
+    const { name, notes, status, feed_url, priority } = req.body;
+    const allowed = ['active', 'broken', 'pending_validation', 'deferred'];
+    if (status && !allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    try {
+      await pool.query(
+        `UPDATE tender_source_registry
+         SET name=COALESCE($1,name), notes=COALESCE($2,notes), status=COALESCE($3,status),
+             feed_url=COALESCE($4,feed_url), priority=COALESCE($5,priority), updated_at=NOW()
+         WHERE source_id=$6`,
+        [name || null, notes || null, status || null, feed_url !== undefined ? (feed_url || null) : null, priority || null, sourceId]
+      );
+      const { rows } = await pool.query(`SELECT * FROM tender_source_registry WHERE source_id=$1`, [sourceId]);
+      res.json(rows[0] || {});
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // GET /api/tender-intel/logs
   app.get('/api/tender-intel/logs', async (req, res) => {
     if (!process.env.DATABASE_URL) return res.json([]);
@@ -6730,6 +7453,932 @@ const server = http.createServer(app);
 wsServer.initialize(server);
 
 // Global error handler middleware (must be last)
+// =============================================================================
+// 3D PRINT FINANCE API
+// =============================================================================
+
+const pfUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+function pfDbCheck(res) {
+  if (!process.env.DATABASE_URL) { res.status(503).json({ error: 'Database not configured' }); return false; }
+  return true;
+}
+
+// --- Work Units ---
+app.get('/api/print-finance/work-units', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_work_units ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/work-units', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { job_id, name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_work_units (job_id, name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [job_id||null, name, material||null, grams||0, hours||0, status||'queued', revenue||0, direct_cost||0, overhead_alloc||0, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/work-units/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { job_id, name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_work_units SET job_id=$1, name=$2, material=$3, grams=$4, hours=$5, status=$6,
+       revenue=$7, direct_cost=$8, overhead_alloc=$9, notes=$10, updated_at=NOW()
+       WHERE id=$11 RETURNING *`,
+      [job_id||null, name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/work-units/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_work_units WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Revenue Entries ---
+app.get('/api/print-finance/revenue', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_revenue_entries ORDER BY period DESC, channel');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/revenue', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { channel, period, jobs, units_grams, revenue, cogs, notes } = req.body;
+    if (!channel || !period) return res.status(400).json({ error: 'channel and period are required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_revenue_entries (channel, period, jobs, units_grams, revenue, cogs, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [channel, period, jobs||0, units_grams||0, revenue||0, cogs||0, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/revenue/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { channel, period, jobs, units_grams, revenue, cogs, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_revenue_entries SET channel=$1, period=$2, jobs=$3, units_grams=$4, revenue=$5, cogs=$6, notes=$7, updated_at=NOW()
+       WHERE id=$8 RETURNING *`,
+      [channel, period, jobs||0, units_grams||0, revenue||0, cogs||0, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/revenue/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_revenue_entries WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Cost Entries ---
+app.get('/api/print-finance/costs', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_cost_entries ORDER BY type, category');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/costs', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { category, type, amount, period, notes } = req.body;
+    if (!category || !type) return res.status(400).json({ error: 'category and type are required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [category, type, amount||0, period||null, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/costs/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { category, type, amount, period, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_cost_entries SET category=$1, type=$2, amount=$3, period=$4, notes=$5, updated_at=NOW()
+       WHERE id=$6 RETURNING *`,
+      [category, type, amount, period, notes, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/costs/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_cost_entries WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/costs/upload — CSV or XLSX bulk import
+// Expected columns: category, type (direct|overhead), amount, period (optional), notes (optional)
+app.post('/api/print-finance/costs/upload', pfUpload.single('file'), async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  if (!['.csv', '.xlsx', '.xls'].includes(ext)) {
+    return res.status(400).json({ error: 'Only .csv, .xlsx, or .xls files are accepted' });
+  }
+  try {
+    let rows = [];
+    if (ext === '.csv') {
+      const text = req.file.buffer.toString('utf8');
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+      for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const row = {};
+        header.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+        rows.push(row);
+      }
+    } else {
+      const ExcelJS = require('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(req.file.buffer);
+      const sheet = workbook.worksheets[0];
+      const header = [];
+      sheet.getRow(1).eachCell(cell => header.push(String(cell.value || '').trim().toLowerCase().replace(/\s+/g, '_')));
+      sheet.eachRow((row, rowNum) => {
+        if (rowNum === 1) return;
+        const obj = {};
+        row.eachCell((cell, colNum) => { obj[header[colNum - 1]] = cell.value !== null && cell.value !== undefined ? String(cell.value) : ''; });
+        rows.push(obj);
+      });
+    }
+    const validTypes = ['direct', 'overhead'];
+    const inserted = [];
+    const errors = [];
+    for (const r of rows) {
+      const category = r.category || r.Category;
+      const type = (r.type || r.Type || '').toLowerCase();
+      const amount = parseFloat(r.amount || r.Amount || '0');
+      if (!category || !validTypes.includes(type)) {
+        errors.push({ row: r, reason: 'Missing category or invalid type (must be direct|overhead)' });
+        continue;
+      }
+      const { rows: ins } = await pool.query(
+        `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+        [category, type, isNaN(amount) ? 0 : amount, r.period || r.Period || null, r.notes || r.Notes || null]
+      );
+      inserted.push(ins[0]);
+    }
+    res.json({ inserted: inserted.length, errors });
+  } catch (err) {
+    console.error('Print finance cost upload error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/print-finance/costs/template — download CSV template
+app.get('/api/print-finance/costs/template', (req, res) => {
+  const csv = [
+    'category,type,amount,period,notes',
+    'Filament & Resin,direct,842,Mar 2026,Main material cost',
+    'Post-processing labor,direct,320,Mar 2026,',
+    'Machine depreciation,overhead,410,Mar 2026,Annualized over 5 years',
+    'Electricity,overhead,180,Mar 2026,',
+  ].join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="print-finance-costs-template.csv"');
+  res.send(csv);
+});
+
+// --- Inventory ---
+app.get('/api/print-finance/inventory', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_inventory_items ORDER BY name');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/inventory', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { name, type, unit, stock_qty, reorder_point, unit_cost, supplier, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_inventory_items (name, type, unit, stock_qty, reorder_point, unit_cost, supplier, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [name, type||'filament', unit||'kg', stock_qty||0, reorder_point||0, unit_cost||0, supplier||null, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/inventory/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { name, type, unit, stock_qty, reorder_point, unit_cost, supplier, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_inventory_items SET name=$1, type=$2, unit=$3, stock_qty=$4, reorder_point=$5,
+       unit_cost=$6, supplier=$7, notes=$8, updated_at=NOW() WHERE id=$9 RETURNING *`,
+      [name, type, unit, stock_qty, reorder_point, unit_cost, supplier, notes, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/inventory/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_inventory_items WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Excel Exports ---
+function xlsxHeaders(res, filename) {
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+}
+
+function styleHeaderRow(sheet, colCount) {
+  const row = sheet.getRow(1);
+  for (let i = 1; i <= colCount; i++) {
+    const cell = row.getCell(i);
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    cell.font = { bold: true, color: { argb: 'FFE2E8F0' } };
+    cell.border = { bottom: { style: 'thin', color: { argb: 'FF334155' } } };
+  }
+  row.commit();
+}
+
+// GET /api/print-finance/export/jobs
+app.get('/api/print-finance/export/jobs', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '3D Print Finance';
+    const ws = wb.addWorksheet('Work Units');
+    ws.columns = [
+      { header: 'Job ID',      key: 'job_id',        width: 18 },
+      { header: 'Name',        key: 'name',           width: 30 },
+      { header: 'Material',    key: 'material',       width: 18 },
+      { header: 'Weight (g)',  key: 'grams',          width: 12 },
+      { header: 'Hours',       key: 'hours',          width: 10 },
+      { header: 'Status',      key: 'status',         width: 14 },
+      { header: 'Revenue ($)', key: 'revenue',        width: 14 },
+      { header: 'Direct Cost ($)', key: 'direct_cost', width: 16 },
+      { header: 'Overhead ($)',key: 'overhead_alloc', width: 14 },
+      { header: 'Gross Profit ($)', key: 'profit',   width: 16 },
+      { header: 'Margin (%)',  key: 'margin',         width: 12 },
+      { header: 'Notes',       key: 'notes',          width: 30 },
+      { header: 'Created At',  key: 'created_at',     width: 20 },
+    ];
+    styleHeaderRow(ws, ws.columns.length);
+    const { rows } = await pool.query('SELECT * FROM pf_work_units ORDER BY created_at DESC');
+    rows.forEach(r => {
+      const profit = Number(r.revenue) - Number(r.direct_cost) - Number(r.overhead_alloc);
+      const margin = Number(r.revenue) > 0 ? ((profit / Number(r.revenue)) * 100).toFixed(1) : '';
+      ws.addRow({ ...r, profit: profit.toFixed(2), margin, created_at: new Date(r.created_at).toLocaleString() });
+    });
+    ws.eachRow((row, rowNum) => { if (rowNum > 1) row.getCell('profit').numFmt = '#,##0.00'; });
+    xlsxHeaders(res, 'print-finance-jobs.xlsx');
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/export/pl
+app.get('/api/print-finance/export/pl', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '3D Print Finance';
+    const [revResult, costResult] = await Promise.all([
+      pool.query('SELECT * FROM pf_revenue_entries ORDER BY period DESC, channel'),
+      pool.query('SELECT * FROM pf_cost_entries ORDER BY type, category'),
+    ]);
+
+    // Sheet 1: P&L Summary
+    const ws1 = wb.addWorksheet('P&L Summary');
+    ws1.columns = [
+      { header: 'Line Item', key: 'label', width: 32 },
+      { header: 'Amount ($)', key: 'amount', width: 16 },
+    ];
+    styleHeaderRow(ws1, 2);
+    const totalRev = revResult.rows.reduce((s, r) => s + Number(r.revenue), 0);
+    const totalCogs = revResult.rows.reduce((s, r) => s + Number(r.cogs), 0);
+    const grossProfit = totalRev - totalCogs;
+    const opex = costResult.rows.filter(c => c.type === 'overhead').reduce((s, c) => s + Number(c.amount), 0);
+    const directCosts = costResult.rows.filter(c => c.type === 'direct').reduce((s, c) => s + Number(c.amount), 0);
+    const ebitda = grossProfit - opex;
+    const depr = costResult.rows.find(c => c.category.toLowerCase().includes('depreciation'));
+    const ebit = ebitda - (depr ? Number(depr.amount) : 0);
+    const plLines = [
+      { label: 'Revenue', amount: totalRev },
+      { label: '  Cost of Goods Sold', amount: -totalCogs },
+      { label: 'Gross Profit', amount: grossProfit },
+      { label: '  Direct Costs (variable)', amount: -directCosts },
+      { label: '  Operating Expenses (overhead)', amount: -opex },
+      { label: 'EBITDA', amount: ebitda },
+      { label: '  Depreciation', amount: depr ? -Number(depr.amount) : 0 },
+      { label: 'EBIT', amount: ebit },
+    ];
+    plLines.forEach((l, i) => {
+      const row = ws1.addRow({ label: l.label, amount: l.amount.toFixed(2) });
+      const isBold = ['Gross Profit', 'EBITDA', 'EBIT'].includes(l.label);
+      if (isBold) {
+        row.getCell('label').font = { bold: true };
+        row.getCell('amount').font = { bold: true, color: { argb: l.amount >= 0 ? 'FF10B981' : 'FFEF4444' } };
+        row.getCell('amount').border = { top: { style: 'thin', color: { argb: 'FF334155' } } };
+      }
+    });
+
+    // Sheet 2: Revenue breakdown
+    const ws2 = wb.addWorksheet('Revenue');
+    ws2.columns = [
+      { header: 'Channel', key: 'channel', width: 20 },
+      { header: 'Period',  key: 'period',  width: 14 },
+      { header: 'Jobs',    key: 'jobs',    width: 8  },
+      { header: 'Grams',   key: 'units_grams', width: 12 },
+      { header: 'Revenue ($)', key: 'revenue', width: 14 },
+      { header: 'COGS ($)', key: 'cogs',  width: 14 },
+      { header: 'Gross Profit ($)', key: 'gp', width: 18 },
+      { header: 'Margin (%)', key: 'margin', width: 12 },
+    ];
+    styleHeaderRow(ws2, ws2.columns.length);
+    revResult.rows.forEach(r => {
+      const gp = Number(r.revenue) - Number(r.cogs);
+      const margin = Number(r.revenue) > 0 ? ((gp / Number(r.revenue)) * 100).toFixed(1) : '';
+      ws2.addRow({ ...r, gp: gp.toFixed(2), margin });
+    });
+
+    // Sheet 3: Costs breakdown
+    const ws3 = wb.addWorksheet('Costs');
+    ws3.columns = [
+      { header: 'Category', key: 'category', width: 28 },
+      { header: 'Type',     key: 'type',     width: 12 },
+      { header: 'Amount ($)', key: 'amount', width: 14 },
+      { header: 'Period',   key: 'period',   width: 14 },
+      { header: 'Notes',    key: 'notes',    width: 30 },
+    ];
+    styleHeaderRow(ws3, ws3.columns.length);
+    costResult.rows.forEach(r => ws3.addRow(r));
+
+    xlsxHeaders(res, 'print-finance-pl.xlsx');
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/export/inventory
+app.get('/api/print-finance/export/inventory', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '3D Print Finance';
+    const ws = wb.addWorksheet('Inventory');
+    ws.columns = [
+      { header: 'SKU',          key: 'sku',           width: 18 },
+      { header: 'Name',         key: 'name',          width: 30 },
+      { header: 'Type',         key: 'type',          width: 12 },
+      { header: 'Unit',         key: 'unit',          width: 8  },
+      { header: 'Stock Qty',    key: 'stock_qty',     width: 12 },
+      { header: 'Reorder @',    key: 'reorder_point', width: 12 },
+      { header: 'Unit Cost ($)',key: 'unit_cost',     width: 14 },
+      { header: 'Stock Value ($)', key: 'value',      width: 16 },
+      { header: 'Supplier',     key: 'supplier',      width: 20 },
+      { header: 'Low Stock?',   key: 'low_stock',     width: 12 },
+      { header: 'Notes',        key: 'notes',         width: 30 },
+    ];
+    styleHeaderRow(ws, ws.columns.length);
+    const { rows } = await pool.query('SELECT * FROM pf_inventory_items ORDER BY name');
+    rows.forEach(r => {
+      const value = (Number(r.stock_qty) * Number(r.unit_cost)).toFixed(2);
+      const low_stock = Number(r.stock_qty) <= Number(r.reorder_point) ? 'YES' : 'no';
+      const row = ws.addRow({ ...r, value, low_stock });
+      if (Number(r.stock_qty) <= Number(r.reorder_point)) {
+        row.getCell('low_stock').font = { color: { argb: 'FFF59E0B' }, bold: true };
+      }
+    });
+    xlsxHeaders(res, 'print-finance-inventory.xlsx');
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ============================================================
+// INVOICES
+// ============================================================
+pool.query(`CREATE TABLE IF NOT EXISTS pf_invoices (
+  id SERIAL PRIMARY KEY,
+  invoice_no TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL DEFAULT 'invoice',
+  client_name TEXT,
+  client_company TEXT,
+  client_email TEXT,
+  client_address TEXT,
+  issue_date DATE DEFAULT CURRENT_DATE,
+  due_date DATE,
+  payment_terms TEXT,
+  notes TEXT,
+  subtotal NUMERIC(12,2) DEFAULT 0,
+  tax_rate NUMERIC(5,2) DEFAULT 0,
+  tax_amount NUMERIC(12,2) DEFAULT 0,
+  total NUMERIC(12,2) DEFAULT 0,
+  status TEXT DEFAULT 'draft',
+  work_unit_ids INTEGER[],
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)`).catch(() => {});
+
+app.get('/api/print-finance/invoices', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_invoices ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/invoices', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const {
+      type, client_name, client_company, client_email, client_address,
+      issue_date, due_date, payment_terms, notes,
+      subtotal, tax_rate, tax_amount, total, work_unit_ids,
+    } = req.body;
+    // Auto-generate invoice number
+    const countRes = await pool.query('SELECT COUNT(*) FROM pf_invoices');
+    const seq = String(Number(countRes.rows[0].count) + 1).padStart(4, '0');
+    const prefix = (type === 'quote') ? 'QTE' : 'INV';
+    const invoice_no = `${prefix}-${new Date().getFullYear()}-${seq}`;
+    const { rows } = await pool.query(
+      `INSERT INTO pf_invoices
+       (invoice_no, type, client_name, client_company, client_email, client_address,
+        issue_date, due_date, payment_terms, notes, subtotal, tax_rate, tax_amount, total, work_unit_ids)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+      [invoice_no, type||'invoice', client_name||null, client_company||null, client_email||null,
+       client_address||null, issue_date||null, due_date||null, payment_terms||null, notes||null,
+       subtotal||0, tax_rate||0, tax_amount||0, total||0, work_unit_ids||[]]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/print-finance/invoices/:id/status', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { status } = req.body;
+    const { rows } = await pool.query(
+      'UPDATE pf_invoices SET status=$1 WHERE id=$2 RETURNING *',
+      [status, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/invoices/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    await pool.query('DELETE FROM pf_invoices WHERE id=$1', [req.params.id]);
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/invoices/:id/download — generates XLSX invoice
+app.get('/api/print-finance/invoices/:id/download', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows: invRows } = await pool.query('SELECT * FROM pf_invoices WHERE id=$1', [req.params.id]);
+    if (!invRows.length) return res.status(404).json({ error: 'Invoice not found' });
+    const inv = invRows[0];
+
+    // Fetch work units for this invoice
+    let lineItems = [];
+    if (inv.work_unit_ids && inv.work_unit_ids.length) {
+      const { rows: wuRows } = await pool.query(
+        'SELECT * FROM pf_work_units WHERE id = ANY($1) ORDER BY created_at',
+        [inv.work_unit_ids]
+      );
+      lineItems = wuRows;
+    }
+
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '3D Print Finance';
+    const ws = wb.addWorksheet(inv.type === 'quote' ? 'Quote' : 'Invoice');
+    ws.pageSetup = { paperSize: 9, orientation: 'portrait', margins: { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 } };
+
+    const DARK = 'FF1E293B';
+    const ACCENT = 'FF3B82F6';
+    const MID = 'FF334155';
+    const LIGHT = 'FFF1F5F9';
+    const WHITE = 'FFFFFFFF';
+    const RED = 'FFEF4444';
+
+    const setCell = (row, col, value, opts = {}) => {
+      const cell = ws.getCell(row, col);
+      cell.value = value;
+      if (opts.bold) cell.font = { ...(cell.font||{}), bold: true, ...opts.font };
+      else if (opts.font) cell.font = opts.font;
+      if (opts.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.fill } };
+      if (opts.align) cell.alignment = { horizontal: opts.align, vertical: 'middle', wrapText: true };
+      if (opts.numFmt) cell.numFmt = opts.numFmt;
+      if (opts.border) cell.border = opts.border;
+      return cell;
+    };
+
+    ws.columns = [
+      { key: 'A', width: 6 },
+      { key: 'B', width: 22 },
+      { key: 'C', width: 16 },
+      { key: 'D', width: 10 },
+      { key: 'E', width: 10 },
+      { key: 'F', width: 14 },
+      { key: 'G', width: 14 },
+    ];
+
+    // ── Row 1-2: Company header ──────────────────────────────
+    ws.mergeCells('A1:D2');
+    const hdr = ws.getCell('A1');
+    hdr.value = '3D PRINT FACTORY';
+    hdr.font = { bold: true, size: 16, color: { argb: WHITE } };
+    hdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } };
+    hdr.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(1).height = 22;
+    ws.getRow(2).height = 22;
+
+    ws.mergeCells('E1:G2');
+    const docType = ws.getCell('E1');
+    docType.value = inv.type === 'quote' ? 'QUOTATION' : 'INVOICE';
+    docType.font = { bold: true, size: 18, color: { argb: WHITE } };
+    docType.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } };
+    docType.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    // ── Row 3: spacer ──
+    ws.getRow(3).height = 6;
+
+    // ── Row 4-7: Invoice meta ──
+    const issueDateStr = inv.issue_date ? new Date(inv.issue_date).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : '—';
+    const dueDateStr = inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : '—';
+    [
+      ['Invoice #', inv.invoice_no],
+      ['Issue Date', issueDateStr],
+      ['Due Date', dueDateStr],
+      ['Status', (inv.status || 'draft').toUpperCase()],
+    ].forEach(([label, val], i) => {
+      const r = 4 + i;
+      ws.mergeCells(`A${r}:B${r}`);
+      setCell(r, 1, label, { font: { color: { argb: 'FF64748B' }, size: 9 }, align: 'left' });
+      ws.mergeCells(`C${r}:G${r}`);
+      setCell(r, 3, val, { bold: true, align: 'right', font: { bold: true, size: 10, color: { argb: i === 3 ? ACCENT : 'FF1E293B' } } });
+    });
+
+    // ── Row 9: BILL TO header ──
+    ws.getRow(9).height = 8;
+    ws.mergeCells('A10:G10');
+    const billHdr = ws.getCell('A10');
+    billHdr.value = 'BILL TO';
+    billHdr.font = { bold: true, size: 8, color: { argb: WHITE } };
+    billHdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: MID } };
+    billHdr.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(10).height = 16;
+
+    const clientLines = [
+      inv.client_name || '—',
+      inv.client_company || '',
+      inv.client_email || '',
+      inv.client_address || '',
+    ].filter(Boolean);
+    clientLines.forEach((line, i) => {
+      const r = 11 + i;
+      ws.mergeCells(`A${r}:G${r}`);
+      setCell(r, 1, line, { font: { bold: i === 0, size: 10, color: { argb: DARK } } });
+    });
+
+    // ── Line items header ──
+    const itemStart = 11 + clientLines.length + 2;
+    ws.getRow(itemStart - 1).height = 6;
+    const colHeaders = ['#', 'Description', 'Material', 'Grams', 'Hours', 'Unit Price', 'Amount'];
+    colHeaders.forEach((h, ci) => {
+      const cell = ws.getCell(itemStart, ci + 1);
+      cell.value = h;
+      cell.font = { bold: true, size: 9, color: { argb: WHITE } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } };
+      cell.alignment = { horizontal: ci === 1 ? 'left' : 'right', vertical: 'middle' };
+      cell.border = { bottom: { style: 'thin', color: { argb: ACCENT } } };
+    });
+    ws.getRow(itemStart).height = 18;
+
+    // ── Line items ──
+    let rowIdx = itemStart + 1;
+    lineItems.forEach((w, i) => {
+      const isEven = i % 2 === 0;
+      const fillColor = isEven ? LIGHT : WHITE;
+      const amount = Number(w.revenue);
+      [w.id ? String(i + 1) : '', w.name, w.material || '', w.grams, w.hours, amount, amount].forEach((val, ci) => {
+        const cell = ws.getCell(rowIdx, ci + 1);
+        cell.value = val;
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
+        cell.font = { size: 9, color: { argb: DARK } };
+        cell.alignment = { horizontal: ci <= 1 ? 'left' : 'right', vertical: 'middle' };
+        if (ci >= 5) cell.numFmt = '"$"#,##0.00';
+      });
+      ws.getRow(rowIdx).height = 16;
+      rowIdx++;
+    });
+
+    if (lineItems.length === 0) {
+      ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
+      setCell(rowIdx, 1, 'No line items selected', { font: { italic: true, color: { argb: 'FF94A3B8' } }, align: 'center' });
+      rowIdx++;
+    }
+
+    // ── Totals ──
+    rowIdx++;
+    const totalsData = [
+      ['Subtotal', Number(inv.subtotal)],
+      [`Tax (${Number(inv.tax_rate).toFixed(1)}%)`, Number(inv.tax_amount)],
+      ['TOTAL DUE', Number(inv.total)],
+    ];
+    totalsData.forEach(([label, val], i) => {
+      const isTotal = i === 2;
+      ws.mergeCells(`A${rowIdx}:E${rowIdx}`);
+      ws.mergeCells(`F${rowIdx}:G${rowIdx}`);
+      const lc = ws.getCell(rowIdx, 1);
+      lc.value = label;
+      lc.font = { bold: isTotal, size: isTotal ? 11 : 9, color: { argb: isTotal ? WHITE : DARK } };
+      lc.alignment = { horizontal: 'right', vertical: 'middle' };
+      if (isTotal) lc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } };
+      const vc = ws.getCell(rowIdx, 6);
+      vc.value = val;
+      vc.numFmt = '"$"#,##0.00';
+      vc.font = { bold: isTotal, size: isTotal ? 12 : 10, color: { argb: isTotal ? WHITE : DARK } };
+      vc.alignment = { horizontal: 'right', vertical: 'middle' };
+      if (isTotal) vc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } };
+      ws.getRow(rowIdx).height = isTotal ? 22 : 16;
+      rowIdx++;
+    });
+
+    // ── Footer ──
+    rowIdx += 2;
+    if (inv.payment_terms) {
+      ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
+      setCell(rowIdx, 1, `Payment Terms: ${inv.payment_terms}`, { font: { italic: true, size: 9, color: { argb: '64748b'.toUpperCase() } } });
+      rowIdx++;
+    }
+    if (inv.notes) {
+      ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
+      setCell(rowIdx, 1, `Notes: ${inv.notes}`, { font: { italic: true, size: 9, color: { argb: '64748b'.toUpperCase() } } });
+    }
+
+    xlsxHeaders(res, `${inv.invoice_no}.xlsx`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/job-pnl
+// Returns per-job P&L: revenue, direct cost, overhead_alloc, gross profit, margin %
+app.get('/api/print-finance/job-pnl', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const [wuRes, costRes, revRes] = await Promise.all([
+      pool.query(`
+        SELECT job_id,
+               SUM(revenue)        AS revenue,
+               SUM(direct_cost)    AS direct_cost,
+               SUM(overhead_alloc) AS overhead_alloc,
+               SUM(hours)          AS hours,
+               SUM(grams)          AS grams,
+               COUNT(*)            AS unit_count,
+               array_agg(DISTINCT material) FILTER (WHERE material IS NOT NULL AND material <> '') AS materials,
+               array_agg(DISTINCT status)   AS statuses
+        FROM pf_work_units
+        WHERE job_id IS NOT NULL AND job_id <> ''
+        GROUP BY job_id
+        ORDER BY job_id
+      `),
+      pool.query(`SELECT COALESCE(SUM(amount),0) AS total_fixed FROM pf_cost_entries WHERE type='fixed'`),
+      pool.query(`SELECT COALESCE(SUM(revenue),0) AS total_rev FROM pf_revenue_entries`),
+    ]);
+    const totalFixed = Number(costRes.rows[0].total_fixed);
+    const totalRev = Number(revRes.rows[0].total_rev);
+    const jobs = wuRes.rows.map(r => {
+      const rev = Number(r.revenue);
+      const direct = Number(r.direct_cost);
+      const overhead = Number(r.overhead_alloc);
+      const totalCost = direct + overhead;
+      const grossProfit = rev - totalCost;
+      const grossMargin = rev > 0 ? (grossProfit / rev) * 100 : null;
+      const fixedAlloc = totalRev > 0 && rev > 0 ? (rev / totalRev) * totalFixed : 0;
+      const contribProfit = grossProfit - fixedAlloc;
+      const contribMargin = rev > 0 ? (contribProfit / rev) * 100 : null;
+      return {
+        job_id: r.job_id,
+        unit_count: Number(r.unit_count),
+        hours: Number(r.hours),
+        grams: Number(r.grams),
+        materials: r.materials || [],
+        statuses: r.statuses || [],
+        revenue: rev,
+        direct_cost: direct,
+        overhead_alloc: overhead,
+        total_cost: totalCost,
+        gross_profit: grossProfit,
+        gross_margin_pct: grossMargin,
+        fixed_alloc: fixedAlloc,
+        contrib_profit: contribProfit,
+        contrib_margin_pct: contribMargin,
+        is_profitable: grossProfit > 0,
+      };
+    });
+    const totals = jobs.reduce((acc, j) => ({
+      revenue: acc.revenue + j.revenue,
+      direct_cost: acc.direct_cost + j.direct_cost,
+      overhead_alloc: acc.overhead_alloc + j.overhead_alloc,
+      gross_profit: acc.gross_profit + j.gross_profit,
+    }), { revenue: 0, direct_cost: 0, overhead_alloc: 0, gross_profit: 0 });
+    res.json({ jobs, totals, total_fixed_costs: totalFixed });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Material Rates ---
+pool.query(`CREATE TABLE IF NOT EXISTS pf_material_rates (
+  id SERIAL PRIMARY KEY,
+  material TEXT NOT NULL UNIQUE,
+  machine_rate_per_hr NUMERIC(10,4) NOT NULL DEFAULT 0,
+  filament_cost_per_g NUMERIC(10,4) NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)`).catch(() => {});
+
+app.get('/api/print-finance/material-rates', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_material_rates ORDER BY material');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/material-rates', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { material, machine_rate_per_hr, filament_cost_per_g, notes } = req.body;
+    if (!material) return res.status(400).json({ error: 'material is required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_material_rates (material, machine_rate_per_hr, filament_cost_per_g, notes)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (material) DO UPDATE
+         SET machine_rate_per_hr=$2, filament_cost_per_g=$3, notes=$4
+       RETURNING *`,
+      [material, machine_rate_per_hr||0, filament_cost_per_g||0, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/material-rates/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { material, machine_rate_per_hr, filament_cost_per_g, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_material_rates SET material=$1, machine_rate_per_hr=$2, filament_cost_per_g=$3, notes=$4
+       WHERE id=$5 RETURNING *`,
+      [material, machine_rate_per_hr||0, filament_cost_per_g||0, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/material-rates/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    await pool.query('DELETE FROM pf_material_rates WHERE id=$1', [req.params.id]);
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Named Scenarios ---
+// Auto-create table if missing
+pool.query(`CREATE TABLE IF NOT EXISTS pf_scenarios (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  volume_mult NUMERIC(6,3) NOT NULL DEFAULT 1,
+  price_adj NUMERIC(6,2) NOT NULL DEFAULT 0,
+  overhead_adj NUMERIC(6,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)`).catch(() => {});
+
+app.get('/api/print-finance/scenarios', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_scenarios ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/scenarios', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { name, volume_mult, price_adj, overhead_adj, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_scenarios (name, volume_mult, price_adj, overhead_adj, notes)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [name, volume_mult||1, price_adj||0, overhead_adj||0, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/scenarios/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    await pool.query('DELETE FROM pf_scenarios WHERE id=$1', [req.params.id]);
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/allocate-overhead/preview
+// Returns proposed allocations without writing to DB
+app.get('/api/print-finance/allocate-overhead/preview', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const [costRes, wuRes] = await Promise.all([
+      pool.query(`SELECT COALESCE(SUM(amount), 0) AS total FROM pf_cost_entries WHERE type = 'overhead'`),
+      pool.query(`SELECT id, job_id, name, hours, overhead_alloc FROM pf_work_units ORDER BY hours DESC`),
+    ]);
+    const totalOverhead = Number(costRes.rows[0].total);
+    const totalHours = wuRes.rows.reduce((s, r) => s + Number(r.hours), 0);
+    const ratePerHour = totalHours > 0 ? totalOverhead / totalHours : 0;
+    const allocations = wuRes.rows.map(r => ({
+      id: r.id,
+      job_id: r.job_id,
+      name: r.name,
+      hours: Number(r.hours),
+      current_alloc: Number(r.overhead_alloc),
+      proposed_alloc: totalHours > 0 ? Number(r.hours) * ratePerHour : 0,
+    }));
+    res.json({ total_overhead: totalOverhead, total_hours: totalHours, rate_per_hour: ratePerHour, allocations });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/allocate-overhead
+// Applies overhead allocation to all work units by print-hours ratio
+app.post('/api/print-finance/allocate-overhead', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const [costRes, wuRes] = await Promise.all([
+      pool.query(`SELECT COALESCE(SUM(amount), 0) AS total FROM pf_cost_entries WHERE type = 'overhead'`),
+      pool.query(`SELECT id, name, hours FROM pf_work_units WHERE hours > 0`),
+    ]);
+    const totalOverhead = Number(costRes.rows[0].total);
+    const totalHours = wuRes.rows.reduce((s, r) => s + Number(r.hours), 0);
+    if (totalHours === 0) return res.status(400).json({ error: 'No work units with recorded hours to allocate to' });
+    const ratePerHour = totalOverhead / totalHours;
+    let updated = 0;
+    for (const wu of wuRes.rows) {
+      const alloc = Number(wu.hours) * ratePerHour;
+      await pool.query(`UPDATE pf_work_units SET overhead_alloc=$1, updated_at=NOW() WHERE id=$2`, [alloc.toFixed(4), wu.id]);
+      updated++;
+    }
+    res.json({ total_overhead: totalOverhead, total_hours: totalHours, rate_per_hour: ratePerHour, updated });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 const errorHandler = (err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   console.error('❌ Unhandled error:', err.message || err);
@@ -6755,202 +8404,26 @@ server.listen(port, '0.0.0.0', async () => {
 ╚════════════════════════════════════════╝
   `);
 
-  // Manifest-based TEDx nanobanana visual generation
-  // Only triggers when VISUALS definitions change (new entries or updated prompts),
-  // not on every deploy or when files happen to be missing.
-  if (process.env.GEMINI_API_KEY) {
-    const tedxFs = require('fs');
-    const tedxPath = require('path');
-    const crypto = require('crypto');
-    try {
-      const tedxOutputDir = tedxPath.join(__dirname, 'frontend', 'public', 'tedx');
-      const manifestPath = tedxPath.join(tedxOutputDir, '.manifest.json');
-      const tedxModule = require('./use-cases/tedx-boundary-street/api/routes');
-      const VISUALS = tedxModule.VISUALS || [];
+  // TEDx visual generation is now triggered manually from the admin panel.
+  // Use GET /api/tedx/visuals + POST /api/tedx/generate to list and generate images.
+  console.log('🎨 TEDx visuals: auto-generation disabled — use admin panel to generate images');
 
-      // Ensure output dir exists
-      if (!tedxFs.existsSync(tedxOutputDir)) {
-        tedxFs.mkdirSync(tedxOutputDir, { recursive: true });
-      }
-
-      // Build current definition fingerprint: hash each visual's id + prompt
-      const currentDefs = {};
-      for (const v of VISUALS) {
-        currentDefs[v.id] = crypto.createHash('md5').update(v.prompt).digest('hex');
-      }
-
-      // Load previous manifest (if any)
-      let previousDefs = {};
-      try {
-        if (tedxFs.existsSync(manifestPath)) {
-          previousDefs = JSON.parse(tedxFs.readFileSync(manifestPath, 'utf8'));
-        }
-      } catch { /* no manifest yet */ }
-
-      // Find visuals with new or changed definitions, or missing files
-      const changed = VISUALS.filter(v =>
-        currentDefs[v.id] !== previousDefs[v.id] ||
-        !tedxFs.existsSync(tedxPath.join(tedxOutputDir, v.filename))
-      );
-
-      if (changed.length > 0) {
-        const newIds = changed.filter(v => !previousDefs[v.id]).map(v => v.id);
-        const updatedIds = changed.filter(v => previousDefs[v.id] && currentDefs[v.id] !== previousDefs[v.id]).map(v => v.id);
-        const missingIds = changed.filter(v => previousDefs[v.id] && currentDefs[v.id] === previousDefs[v.id]).map(v => v.id);
-        console.log(`🎨 TEDx: Generating ${changed.length} visuals — ${newIds.length} new, ${updatedIds.length} updated, ${missingIds.length} missing files`);
-        if (newIds.length > 0) console.log(`   New: ${newIds.join(', ')}`);
-        if (updatedIds.length > 0) console.log(`   Updated: ${updatedIds.join(', ')}`);
-        if (missingIds.length > 0) console.log(`   Missing: ${missingIds.join(', ')}`);
-
-        // Fire-and-forget: generate only changed visuals after a short delay
-        setTimeout(async () => {
-          try {
-            const http = require('http');
-            let generated = 0;
-            let failed = 0;
-
-            for (const visual of changed) {
-              try {
-                const postData = JSON.stringify({ id: visual.id });
-                await new Promise((resolve, reject) => {
-                  const req = http.request({
-                    hostname: '127.0.0.1',
-                    port: port,
-                    path: '/api/tedx/generate',
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
-                    timeout: 60000,
-                  }, (res) => {
-                    let body = '';
-                    res.on('data', (chunk) => { body += chunk; });
-                    res.on('end', () => {
-                      if (res.statusCode === 200) {
-                        generated++;
-                        // Update manifest entry on success
-                        previousDefs[visual.id] = currentDefs[visual.id];
-                        tedxFs.writeFileSync(manifestPath, JSON.stringify(previousDefs, null, 2));
-                      } else {
-                        failed++;
-                        console.error(`🎨 TEDx: Failed ${visual.id}: ${body.slice(0, 100)}`);
-                      }
-                      resolve();
-                    });
-                  });
-                  req.on('error', (err) => { failed++; console.error(`🎨 TEDx: ${visual.id} error: ${err.message}`); resolve(); });
-                  req.write(postData);
-                  req.end();
-                });
-                // Rate limit between generations
-                await new Promise(r => setTimeout(r, 2000));
-              } catch (err) {
-                failed++;
-                console.error(`🎨 TEDx: ${visual.id} error: ${err.message}`);
-              }
-            }
-
-            console.log(`🎨 TEDx auto-generation done: ${generated} generated, ${failed} failed`);
-          } catch (err) {
-            console.error('🎨 TEDx auto-generation error:', err.message);
-          }
-        }, 3000);
-      } else {
-        console.log(`🎨 TEDx: All ${VISUALS.length} visuals up to date — skipping generation`);
-      }
-    } catch (err) {
-      console.warn('⚠️ TEDx auto-generation check failed:', err.message);
-    }
-
-    // TEDxXinyi visual generation (same manifest pattern)
-    try {
-      const xinyiOutputDir = tedxPath.join(__dirname, 'frontend', 'public', 'tedx-xinyi');
-      const xinyiManifestPath = tedxPath.join(xinyiOutputDir, '.manifest.json');
-      const xinyiModule = require('./use-cases/tedx-xinyi/api/routes');
-      const XINYI_VISUALS = xinyiModule.VISUALS || [];
-
-      if (!tedxFs.existsSync(xinyiOutputDir)) {
-        tedxFs.mkdirSync(xinyiOutputDir, { recursive: true });
-      }
-
-      const xinyiDefs = {};
-      for (const v of XINYI_VISUALS) {
-        xinyiDefs[v.id] = crypto.createHash('md5').update(v.prompt).digest('hex');
-      }
-
-      let xinyiPrevDefs = {};
-      try {
-        if (tedxFs.existsSync(xinyiManifestPath)) {
-          xinyiPrevDefs = JSON.parse(tedxFs.readFileSync(xinyiManifestPath, 'utf8'));
-        }
-      } catch { /* no manifest yet */ }
-
-      const xinyiChanged = XINYI_VISUALS.filter(v =>
-        xinyiDefs[v.id] !== xinyiPrevDefs[v.id] ||
-        !tedxFs.existsSync(tedxPath.join(xinyiOutputDir, v.filename))
-      );
-
-      if (xinyiChanged.length > 0) {
-        const xinyiNewIds = xinyiChanged.filter(v => !xinyiPrevDefs[v.id]).map(v => v.id);
-        const xinyiUpdatedIds = xinyiChanged.filter(v => xinyiPrevDefs[v.id] && xinyiDefs[v.id] !== xinyiPrevDefs[v.id]).map(v => v.id);
-        const xinyiMissingIds = xinyiChanged.filter(v => xinyiPrevDefs[v.id] && xinyiDefs[v.id] === xinyiPrevDefs[v.id]).map(v => v.id);
-        console.log(`🎨 TEDxXinyi: Generating ${xinyiChanged.length} visuals — ${xinyiNewIds.length} new, ${xinyiUpdatedIds.length} updated, ${xinyiMissingIds.length} missing files`);
-        if (xinyiMissingIds.length > 0) console.log(`   Missing: ${xinyiMissingIds.join(', ')}`);
-
-        setTimeout(async () => {
-          try {
-            const http = require('http');
-            let generated = 0;
-            let failed = 0;
-
-            for (const visual of xinyiChanged) {
-              try {
-                const postData = JSON.stringify({ id: visual.id });
-                await new Promise((resolve, reject) => {
-                  const req = http.request({
-                    hostname: '127.0.0.1',
-                    port: port,
-                    path: '/api/tedx-xinyi/generate',
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
-                    timeout: 60000,
-                  }, (res) => {
-                    let body = '';
-                    res.on('data', (chunk) => { body += chunk; });
-                    res.on('end', () => {
-                      if (res.statusCode === 200) {
-                        generated++;
-                        xinyiPrevDefs[visual.id] = xinyiDefs[visual.id];
-                        tedxFs.writeFileSync(xinyiManifestPath, JSON.stringify(xinyiPrevDefs, null, 2));
-                      } else {
-                        failed++;
-                        console.error(`🎨 TEDxXinyi: Failed ${visual.id}: ${body.slice(0, 100)}`);
-                      }
-                      resolve();
-                    });
-                  });
-                  req.on('error', (err) => { failed++; console.error(`🎨 TEDxXinyi: ${visual.id} error: ${err.message}`); resolve(); });
-                  req.write(postData);
-                  req.end();
-                });
-                await new Promise(r => setTimeout(r, 2000));
-              } catch (err) {
-                failed++;
-                console.error(`🎨 TEDxXinyi: ${visual.id} error: ${err.message}`);
-              }
-            }
-
-            console.log(`🎨 TEDxXinyi auto-generation done: ${generated} generated, ${failed} failed`);
-          } catch (err) {
-            console.error('🎨 TEDxXinyi auto-generation error:', err.message);
-          }
-        }, 15000); // Delay after Boundary Street generation
-      } else {
-        console.log(`🎨 TEDxXinyi: All ${XINYI_VISUALS.length} visuals up to date — skipping generation`);
-      }
-    } catch (err) {
-      console.warn('⚠️ TEDxXinyi auto-generation check failed:', err.message);
-    }
-  } else {
-    console.log('⚠️ TEDx visuals: GEMINI_API_KEY not set — skipping auto-generation');
+  // Ensure radiance_media table exists
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS radiance_media (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        uploaded_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log('✅ radiance_media table ready');
+  } catch (err) {
+    console.error('⚠️  radiance_media table init failed:', err.message);
   }
 
   // Initialize scheduler for Topic Intelligence

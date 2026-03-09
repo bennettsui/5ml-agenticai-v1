@@ -14,10 +14,10 @@ export const NAV_ITEMS = [
   { label: '首頁', href: '/vibe-demo/tedx-xinyi' },
   { label: '關於我們', href: '/vibe-demo/tedx-xinyi/about' },
   { label: '沙龍活動', href: '/vibe-demo/tedx-xinyi/salon' },
-  { label: '講者與演講', href: '/vibe-demo/tedx-xinyi/speakers' },
+  { label: '趨勢報告', href: '/vibe-demo/tedx-xinyi/report' },
   { label: '永續設計', href: '/vibe-demo/tedx-xinyi/sustainability' },
   { label: '社群', href: '/vibe-demo/tedx-xinyi/community' },
-  { label: '文章', href: '/vibe-demo/tedx-xinyi/blog' },
+  { label: '合作夥伴', href: '/vibe-demo/tedx-xinyi/sponsors' },
 ];
 
 export const FOOTER_LINKS = [
@@ -28,9 +28,9 @@ export const FOOTER_LINKS = [
 ];
 
 export const SOCIAL_LINKS = [
-  { label: 'YouTube', href: 'https://www.youtube.com/channel/UCCa-iL8BoZvPOXazJyUqF7A' },
   { label: 'Facebook', href: 'https://www.facebook.com/TEDxXinyi-107091491148122' },
   { label: 'Instagram', href: 'https://www.instagram.com/tedxxinyi/' },
+  { label: 'YouTube', href: 'https://www.youtube.com/channel/UCCa-iL8BoZvPOXazJyUqF7A' },
 ];
 
 // ==================== GLOBAL STYLES ====================

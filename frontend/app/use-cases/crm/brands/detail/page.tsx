@@ -17,6 +17,7 @@ import {
   TrendingUp,
   RefreshCw,
   ExternalLink,
+  ChevronRight,
 } from 'lucide-react';
 import {
   crmApi,
@@ -540,19 +541,23 @@ function BrandDetailInner() {
                 {projects.map((project) => (
                   <div
                     key={project.id}
-                    className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 hover:border-slate-600 transition-colors"
+                    onClick={() => router.push(`/use-cases/crm/projects/detail?id=${project.id}`)}
+                    className="group bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 hover:border-slate-600 hover:bg-slate-800/70 cursor-pointer transition-all"
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h3 className="text-sm font-semibold text-white">{project.name}</h3>
-                        <span className="text-xs text-slate-400 capitalize">{project.type.replace('_', ' ')}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-semibold text-white truncate">{project.name}</h3>
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 transition-colors flex-shrink-0" />
+                        </div>
+                        <span className="text-xs text-slate-400 capitalize">{project.type.replace(/_/g, ' ')}</span>
                       </div>
                       <span
-                        className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                        className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium border flex-shrink-0 ml-2 ${
                           PROJECT_STATUS_COLORS[project.status] ?? 'bg-slate-700 text-slate-300 border-slate-600'
                         }`}
                       >
-                        {project.status.replace('_', ' ')}
+                        {project.status.replace(/_/g, ' ')}
                       </span>
                     </div>
                     {project.brief && (

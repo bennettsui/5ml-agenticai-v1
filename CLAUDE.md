@@ -47,9 +47,38 @@ npm start
 - **Research**: Perplexity Sonar ($3.00/$15.00 per 1M) — web search tasks
 - **Vision/complex only**: Claude Sonnet ($3.00/$15.00 per 1M)
 
+## TEDxXinyi Admin / Media Library
+
+### Fly.dev Ephemeral Filesystem — Critical
+Fly.dev machines have **ephemeral filesystems**. All files written at runtime (generated images, `.media-metadata.json`) are **wiped on every machine restart, deploy, or sleep/wake cycle**. `fly.toml` has NO volume mounts.
+
+**How it manifests**: Images appear in the admin media library after generation, but disappear "after a while" when the Fly machine restarts.
+
+**Current mitigations**:
+1. **CDN fallback** (`index.js`): If a `/tedx-xinyi/*` image file is missing locally, middleware checks `.media-metadata.json` for a `publicUrl` and 302-redirects to mmdbfiles CDN
+2. **Seed file** (`use-cases/tedx-xinyi/api/.media-metadata-seed.json`): Committed to git. On startup, if `.media-metadata.json` is missing, metadata is restored from this seed
+3. **mmdbfiles backup**: After every metadata save, the JSON is backed up to mmdbfiles (debounced 5s)
+4. **Admin not-missing logic**: Images with a CDN URL in metadata are shown as available even if the local file is gone
+
+**After generating images**: Always commit the updated `.media-metadata-seed.json` to git so CDN URLs survive deploys.
+
+**Recovery endpoints**:
+- `GET /api/tedx-xinyi/metadata-export` — download current metadata JSON
+- `POST /api/tedx-xinyi/metadata-import` — restore metadata from JSON (merges with existing)
+
+**Permanent fix**: Add a Fly persistent volume (`[[mounts]]` in `fly.toml`) to persist `/app/frontend/public/tedx-xinyi/`.
+
+### Media Library Key Files
+- Routes: `use-cases/tedx-xinyi/api/routes.js`
+- Metadata: `frontend/public/tedx-xinyi/.media-metadata.json` (runtime, ephemeral)
+- Seed: `use-cases/tedx-xinyi/api/.media-metadata-seed.json` (git, persistent)
+- CDN fallback: `index.js` (after `/tedx-xinyi` static middleware)
+
 ## Known Mistakes to Avoid
 - Marketing strategy was set to 5 runs/day — should be 1 run/day ($3.60/mo not $18/mo)
 - API health tab auto-fetched on every tab switch — expensive and unnecessary
 - Cost analysis was a separate page — should be a dashboard tab
 - Dark hover backgrounds used `dark:bg-slate-750` — too harsh, use subtle opacity values
 - `overflow-auto` on workflow canvas prevented proper pan/zoom — use transform-based approach
+- **TEDx media metadata on ephemeral Fly filesystem** — stored in `.media-metadata.json` which is wiped on restart. Always commit seed file and use CDN URLs as source of truth
+- **Modifying TSX source files at runtime** has no effect — Next.js is pre-built at deploy time. Use CDN redirect fallback in Express middleware instead
