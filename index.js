@@ -144,13 +144,35 @@ app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'c
 app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
 
 // Rewrite Next.js baked-in paths so the site works at root (https://tedxxinyi.brandpromo.today/)
-function rewriteTedxHtml(html) {
-  return html
+function rewriteTedxContent(content) {
+  return content
     .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi\//g, 'https://tedxxinyi.brandpromo.today/')
     .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi/g,  'https://tedxxinyi.brandpromo.today')
     .replace(/\/vibe-demo\/tedx-xinyi\//g, '/')
     .replace(/\/vibe-demo\/tedx-xinyi"/g, '/"')
-    .replace(/\/vibe-demo\/tedx-xinyi'/g, "/'");
+    .replace(/\/vibe-demo\/tedx-xinyi'/g, "/'")
+    // JS-escaped variants (e.g. inside JSON/JS string literals)
+    .replace(/\\\/vibe-demo\\\/tedx-xinyi\\\//g, '\\/')
+    .replace(/\\\/vibe-demo\\\/tedx-xinyi/g, '');
+}
+
+// Recursively copy a directory, rewriting tedx paths in all text files
+function copyAndRewriteDir(srcDir, destDir) {
+  fs.mkdirSync(destDir, { recursive: true });
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    const srcPath  = path.join(srcDir, entry.name);
+    const destPath = path.join(destDir, entry.name);
+    if (entry.isDirectory()) {
+      copyAndRewriteDir(srcPath, destPath);
+    } else {
+      const ext = path.extname(entry.name).toLowerCase();
+      if (['.js', '.html', '.json', '.css'].includes(ext)) {
+        fs.writeFileSync(destPath, rewriteTedxContent(fs.readFileSync(srcPath, 'utf8')));
+      } else {
+        fs.copyFileSync(srcPath, destPath);
+      }
+    }
+  }
 }
 
 // Serve TEDx Xinyi static site pack for deployment (HTML + _next assets, URLs rewritten for root)
@@ -165,19 +187,22 @@ app.get('/tedx-xinyi-site.tar.gz', (req, res) => {
     // Rewrite and write home page
     const homeSrc = path.join(outDir, 'vibe-demo', 'tedx-xinyi.html');
     if (fs.existsSync(homeSrc)) {
-      fs.writeFileSync(path.join(tmpDir, 'index.html'), rewriteTedxHtml(fs.readFileSync(homeSrc, 'utf8')));
+      fs.writeFileSync(path.join(tmpDir, 'index.html'), rewriteTedxContent(fs.readFileSync(homeSrc, 'utf8')));
     }
 
     // Rewrite and write sub-pages (exclude admin)
     const EXCLUDE = new Set(['admin']);
     if (fs.existsSync(tedxOut)) {
       for (const f of fs.readdirSync(tedxOut).filter(f => f.endsWith('.html') && !EXCLUDE.has(f.replace('.html', '')))) {
-        fs.writeFileSync(path.join(tmpDir, f), rewriteTedxHtml(fs.readFileSync(path.join(tedxOut, f), 'utf8')));
+        fs.writeFileSync(path.join(tmpDir, f), rewriteTedxContent(fs.readFileSync(path.join(tedxOut, f), 'utf8')));
       }
     }
 
-    // Copy _next/ assets and tedx-xinyi/ images
-    if (fs.existsSync(path.join(outDir, '_next'))) execSync(`cp -r "${path.join(outDir, '_next')}" "${tmpDir}/_next"`);
+    // Copy _next/ with path rewrites applied to all JS/JSON/CSS files
+    if (fs.existsSync(path.join(outDir, '_next'))) {
+      copyAndRewriteDir(path.join(outDir, '_next'), path.join(tmpDir, '_next'));
+    }
+    // Copy tedx-xinyi/ images (binary, no rewrite needed)
     const pubImgs = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi');
     if (fs.existsSync(pubImgs)) execSync(`cp -r "${pubImgs}" "${tmpDir}/tedx-xinyi"`);
 
