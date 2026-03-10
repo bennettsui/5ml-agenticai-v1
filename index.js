@@ -7571,6 +7571,16 @@ function pfDbCheck(res) {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
     // Extend pf_cost_entries with richer fields (ADD COLUMN IF NOT EXISTS via separate queries)
+    `CREATE TABLE IF NOT EXISTS pf_uploaded_files (
+      id SERIAL PRIMARY KEY,
+      filename TEXT NOT NULL,
+      mimetype TEXT NOT NULL DEFAULT 'application/octet-stream',
+      size_bytes INTEGER NOT NULL DEFAULT 0,
+      imported_as TEXT,
+      rows_inserted INTEGER DEFAULT 0,
+      data BYTEA NOT NULL,
+      uploaded_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
   ];
   for (const sql of tables) {
     await pool.query(sql).catch(err => console.warn('[print-finance] table init:', err.message));
@@ -7584,6 +7594,9 @@ function pfDbCheck(res) {
     `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS vendor TEXT`,
     `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS job_ref TEXT`,
     `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
+    `ALTER TABLE pf_revenue_entries ADD COLUMN IF NOT EXISTS date TEXT`,
+    `ALTER TABLE pf_revenue_entries ADD COLUMN IF NOT EXISTS source TEXT`,
+    `ALTER TABLE pf_revenue_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
   ];
   for (const sql of alterCols) {
     await pool.query(sql).catch(() => {}); // silently skip if already exists
@@ -7691,12 +7704,12 @@ app.get('/api/print-finance/revenue', async (req, res) => {
 app.post('/api/print-finance/revenue', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
-    const { channel, period, jobs, units_grams, revenue, cogs, notes } = req.body;
+    const { channel, period, date, source, job_count, units_grams, revenue, cogs, notes } = req.body;
     if (!channel || !period) return res.status(400).json({ error: 'channel and period are required' });
     const { rows } = await pool.query(
-      `INSERT INTO pf_revenue_entries (channel, period, jobs, units_grams, revenue, cogs, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [channel, period, jobs||0, units_grams||0, revenue||0, cogs||0, notes||null]
+      `INSERT INTO pf_revenue_entries (channel, period, date, source, job_count, units_grams, revenue, cogs, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [channel, period, date||null, source||null, job_count||0, units_grams||0, revenue||0, cogs||0, notes||null]
     );
     res.status(201).json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -7705,11 +7718,11 @@ app.post('/api/print-finance/revenue', async (req, res) => {
 app.put('/api/print-finance/revenue/:id', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
-    const { channel, period, jobs, units_grams, revenue, cogs, notes } = req.body;
+    const { channel, period, date, source, job_count, units_grams, revenue, cogs, notes } = req.body;
     const { rows } = await pool.query(
-      `UPDATE pf_revenue_entries SET channel=$1, period=$2, jobs=$3, units_grams=$4, revenue=$5, cogs=$6, notes=$7, updated_at=NOW()
-       WHERE id=$8 RETURNING *`,
-      [channel, period, jobs||0, units_grams||0, revenue||0, cogs||0, notes||null, req.params.id]
+      `UPDATE pf_revenue_entries SET channel=$1, period=$2, date=$3, source=$4, job_count=$5, units_grams=$6, revenue=$7, cogs=$8, notes=$9, updated_at=NOW()
+       WHERE id=$10 RETURNING *`,
+      [channel, period, date||null, source||null, job_count||0, units_grams||0, revenue||0, cogs||0, notes||null, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
@@ -7737,11 +7750,11 @@ app.get('/api/print-finance/costs', async (req, res) => {
 app.post('/api/print-finance/costs', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
-    const { category, type, amount, period, notes } = req.body;
+    const { category, type, sub_category, amount, quantity, unit, unit_cost, vendor, job_ref, period, notes } = req.body;
     if (!category || !type) return res.status(400).json({ error: 'category and type are required' });
     const { rows } = await pool.query(
-      `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [category, type, amount||0, period||null, notes||null]
+      `INSERT INTO pf_cost_entries (category, type, sub_category, amount, quantity, unit, unit_cost, vendor, job_ref, period, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [category, type, sub_category||null, amount||0, quantity||null, unit||null, unit_cost||null, vendor||null, job_ref||null, period||null, notes||null]
     );
     res.status(201).json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -7750,11 +7763,11 @@ app.post('/api/print-finance/costs', async (req, res) => {
 app.put('/api/print-finance/costs/:id', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
-    const { category, type, amount, period, notes } = req.body;
+    const { category, type, sub_category, amount, quantity, unit, unit_cost, vendor, job_ref, period, notes } = req.body;
     const { rows } = await pool.query(
-      `UPDATE pf_cost_entries SET category=$1, type=$2, amount=$3, period=$4, notes=$5, updated_at=NOW()
-       WHERE id=$6 RETURNING *`,
-      [category, type, amount, period, notes, req.params.id]
+      `UPDATE pf_cost_entries SET category=$1, type=$2, sub_category=$3, amount=$4, quantity=$5, unit=$6, unit_cost=$7, vendor=$8, job_ref=$9, period=$10, notes=$11, updated_at=NOW()
+       WHERE id=$12 RETURNING *`,
+      [category, type, sub_category||null, amount, quantity||null, unit||null, unit_cost||null, vendor||null, job_ref||null, period, notes, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
@@ -8274,7 +8287,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
           `INSERT INTO pf_revenue_entries (period, channel, revenue, job_count, notes) VALUES ($1,$2,$3,$4,$5)`,
           [period||null, channel||name||'Import', revenue, parseInt(get('jobs', 'job_count', 'count'))||0, get('notes','description')||null]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${channel||name||'Import'} · ${period||'—'} · $${revenue}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${channel||name||'Import'} · ${period||'—'} · $${revenue}`,
+          data: { channel: channel||name||'Import', period: period||'—', revenue, notes: get('notes')||'' } });
       } else if (type === 'costs') {
         const category = get('category', 'name');
         const costType = (get('type')||'').toLowerCase();
@@ -8291,7 +8305,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
           `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5)`,
           [category, validType, amount, get('period','date')||null, get('notes','description')||null]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${category} · ${validType} · $${amount}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${category} · ${validType} · $${amount}`,
+          data: { category, type: validType, amount, period: get('period','date')||'—', notes: get('notes')||'' } });
       } else if (type === 'work-units') {
         const name = get('name', 'job_name');
         if (!name) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing name' }); continue; }
@@ -8308,7 +8323,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
             get('status')||'pending', get('notes')||null,
           ]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${name} · ${get('material')||'?'}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${name} · ${get('material')||'?'}`,
+          data: { name, job_id: get('job_id','jobid')||'', material: get('material')||'', grams: parseFloat(get('grams','weight_g','weight'))||0, hours: parseFloat(get('hours','print_hours'))||0, revenue: parseFloat(get('revenue','price','amount'))||0 } });
       } else if (type === 'inventory') {
         const material = get('material', 'filament', 'name');
         if (!material) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing material' }); continue; }
@@ -8322,7 +8338,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
             get('supplier')||null, get('notes')||null,
           ]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${stock}kg · $${price}/kg` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${stock}kg · $${price}/kg`,
+          data: { material, brand: get('brand')||'', color: get('color')||'', stock_kg: stock, price_per_kg: price, supplier: get('supplier')||'', notes: get('notes')||'' } });
       } else if (type === 'material_usage') {
         const material = get('material', 'filament', 'name', 'resin');
         if (!material) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing material name' }); continue; }
@@ -8334,7 +8351,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
           [get('job_ref','job_id','job')||null, material, get('brand')||null, get('color')||null,
            qty_g, cost_per_g, get('vendor','supplier')||null, get('period','date')||null, get('notes')||null]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${qty_g}g · $${(qty_g*cost_per_g).toFixed(2)}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${qty_g}g · $${(qty_g*cost_per_g).toFixed(2)}`,
+          data: { material, quantity_g: qty_g, cost_per_g, total_cost: +(qty_g*cost_per_g).toFixed(2), brand: get('brand')||'', color: get('color')||'', job_id: get('job_ref','job_id')||'', supplier: get('vendor','supplier')||'', period: get('period','date')||'', notes: get('notes')||'' } });
       } else if (type === 'machine_log') {
         const printer = get('printer', 'machine', 'printer_id', 'printer_name');
         const hours = parseFloat(get('hours', 'print_hours', 'runtime')) || 0;
@@ -8347,7 +8365,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [printer||null, printer||null, get('job_ref','job_id')||null, hours, elec, maint, dep, get('period','date')||null, get('notes')||null]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${printer||'Machine'} · ${hours}h · $${(elec+maint+dep).toFixed(2)}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${printer||'Machine'} · ${hours}h · $${(elec+maint+dep).toFixed(2)}`,
+          data: { printer: printer||'', print_hours: hours, electricity_cost: elec, maintenance_cost: maint, depreciation_cost: dep, total: +(elec+maint+dep).toFixed(2), job_id: get('job_ref','job_id')||'', period: get('period','date')||'', notes: get('notes')||'' } });
       } else if (type === 'labour_log') {
         const person = get('person', 'employee', 'name', 'operator');
         const hours = parseFloat(get('hours', 'labour_hours', 'work_hours')) || 0;
@@ -8359,7 +8378,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
           [get('job_ref','job_id')||null, person||null, get('role','position','title')||aiCategory||null,
            hours, rate, get('period','date')||null, get('notes')||null]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${person||'Staff'} · ${hours}h · $${(hours*rate).toFixed(2)}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${person||'Staff'} · ${hours}h · $${(hours*rate).toFixed(2)}`,
+          data: { person: person||'', role: get('role','position','title')||'', hours, hourly_rate: rate, total_cost: +(hours*rate).toFixed(2), job_id: get('job_ref','job_id')||'', period: get('period','date')||'', notes: get('notes')||'' } });
       } else {
         results.push({ sheet, row_num, status: 'skipped', reason: `Unknown type: ${type}` });
       }
@@ -8412,6 +8432,29 @@ app.get('/api/print-finance/material-log', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.delete('/api/print-finance/material-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_material_usage WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/material-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { material, brand, color, quantity_g, cost_per_g, job_id, supplier, period, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_material_usage SET material=$1, brand=$2, color=$3, quantity_g=$4, cost_per_g=$5, job_id=$6, supplier=$7, period=$8, notes=$9
+       WHERE id=$10 RETURNING *`,
+      [material, brand||null, color||null, quantity_g||0, cost_per_g||0, job_id||null, supplier||null, period||null, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET /api/print-finance/machine-log
 app.get('/api/print-finance/machine-log', async (req, res) => {
   if (!pfDbCheck(res)) return;
@@ -8421,12 +8464,58 @@ app.get('/api/print-finance/machine-log', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.delete('/api/print-finance/machine-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_machine_log WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/machine-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { printer_id, printer_name, job_id, print_hours, electricity_cost, maintenance_cost, depreciation_cost, period, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_machine_log SET printer_id=$1, printer_name=$2, job_id=$3, print_hours=$4, electricity_cost=$5, maintenance_cost=$6, depreciation_cost=$7, period=$8, notes=$9
+       WHERE id=$10 RETURNING *`,
+      [printer_id||null, printer_name||null, job_id||null, print_hours||0, electricity_cost||0, maintenance_cost||0, depreciation_cost||0, period||null, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET /api/print-finance/labour-log
 app.get('/api/print-finance/labour-log', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
     const { rows } = await pool.query('SELECT * FROM pf_labour_log ORDER BY created_at DESC');
     res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/labour-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_labour_log WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/labour-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { job_id, person, role, hours, hourly_rate, period, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_labour_log SET job_id=$1, person=$2, role=$3, hours=$4, hourly_rate=$5, period=$6, notes=$7
+       WHERE id=$8 RETURNING *`,
+      [job_id||null, person||null, role||null, hours||0, hourly_rate||0, period||null, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -8564,7 +8653,65 @@ app.post('/api/print-finance/import/confirm', pfUpload.single('file'), async (re
   try {
     const { rows } = await parseUploadedFile(req.file);
     const result = await importRows(type, rows, aiMapping, aiCategory, aiCostType);
+    // Save file to DB for later download/reference
+    await pool.query(
+      `INSERT INTO pf_uploaded_files (filename, mimetype, size_bytes, imported_as, rows_inserted, data)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [req.file.originalname, req.file.mimetype, req.file.size, type, result.inserted, req.file.buffer]
+    ).catch(err => console.warn('[print-finance] file save:', err.message));
     res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/uploads — list saved files (no binary data)
+app.get('/api/print-finance/uploads', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, filename, mimetype, size_bytes, imported_as, rows_inserted, uploaded_at FROM pf_uploaded_files ORDER BY uploaded_at DESC'
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/uploads/:id/download — download a saved file
+app.get('/api/print-finance/uploads/:id/download', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT filename, mimetype, data FROM pf_uploaded_files WHERE id=$1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'File not found' });
+    const file = rows[0];
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('Content-Type', file.mimetype);
+    res.send(file.data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/print-finance/uploads/:id — delete a saved file
+app.delete('/api/print-finance/uploads/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM pf_uploaded_files WHERE id=$1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'File not found' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/uploads/:id/preview — re-parse stored file, return rows + headers
+app.get('/api/print-finance/uploads/:id/preview', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT filename, mimetype, data FROM pf_uploaded_files WHERE id=$1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'File not found' });
+    const file = rows[0];
+    const fakeFile = { originalname: file.filename, mimetype: file.mimetype, buffer: file.data };
+    const { headers, rows, sheet_count, sheets } = await parseUploadedFile(fakeFile);
+    const cleanRows = rows.map(r => {
+      const out = { _sheet: r._sheet, _row: r._row };
+      for (const [k, v] of Object.entries(r)) { if (!k.startsWith('_')) out[k] = v; }
+      return out;
+    });
+    res.json({ filename: file.filename, headers, rows: cleanRows, sheet_count, sheets });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

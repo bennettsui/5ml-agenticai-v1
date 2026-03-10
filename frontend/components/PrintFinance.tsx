@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   LayoutDashboard, Layers, DollarSign, Package, TrendingUp,
   FlaskConical, FileText, ArrowUpRight, ArrowDownRight,
   AlertCircle, CheckCircle2, Clock, Zap, Plus, Trash2,
   Upload, Download, X, Loader2, RefreshCw, Pencil, Save,
   Calculator, Filter, Receipt, ChevronDown, ChevronUp, Settings as SettingsIcon,
+  Eye, FolderOpen,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -38,19 +39,30 @@ interface RevenueEntry {
   id: number;
   channel: string;
   period: string;
-  jobs: number;
+  date?: string;
+  source?: string;
+  job_count: number;
   units_grams: number;
   revenue: number;
   cogs: number;
+  notes?: string;
+  created_at: string;
 }
 
 interface CostEntry {
   id: number;
   category: string;
   type: 'direct' | 'overhead' | 'fixed';
+  sub_category?: string;
   amount: number;
+  quantity?: number;
+  unit?: string;
+  unit_cost?: number;
+  vendor?: string;
+  job_ref?: string;
   period?: string;
   notes?: string;
+  created_at: string;
 }
 
 interface SavedScenario {
@@ -150,6 +162,25 @@ interface ImportRowResult {
   status: 'accepted' | 'skipped';
   label?: string;
   reason?: string;
+  data?: Record<string, string | number>;
+}
+
+interface MaterialUsageEntry {
+  id: number; job_id: string | null; material: string; brand: string | null; color: string | null;
+  quantity_g: number; cost_per_g: number; total_cost: number;
+  supplier: string | null; period: string | null; notes: string | null; created_at: string;
+}
+
+interface MachineLogEntry {
+  id: number; printer_id: string | null; printer_name: string | null; job_id: string | null;
+  print_hours: number; electricity_cost: number; maintenance_cost: number; depreciation_cost: number;
+  period: string | null; notes: string | null; created_at: string;
+}
+
+interface LabourLogEntry {
+  id: number; job_id: string | null; person: string | null; role: string | null;
+  hours: number; hourly_rate: number; total_cost: number;
+  period: string | null; notes: string | null; created_at: string;
 }
 
 interface ImportResult {
@@ -618,24 +649,36 @@ function WorkUnits() {
 function Revenue() {
   const { data: entries, loading, error, reload } = useApi<RevenueEntry[]>('/api/print-finance/revenue');
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ channel: '', period: '', jobs: '', units_grams: '', revenue: '', cogs: '' });
+  const [form, setForm] = useState({ channel: '', period: '', date: '', source: '', job_count: '', units_grams: '', revenue: '', cogs: '', notes: '' });
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<RevenueEntry>>({});
   const [saving, setSaving] = useState(false);
   const [filterPeriod, setFilterPeriod] = useState('');
+  const [filterChannel, setFilterChannel] = useState('');
+  const [showSummary, setShowSummary] = useState(false);
 
   const periods = Array.from(new Set((entries || []).map(r => r.period).filter(Boolean))).sort().reverse();
-  const visible = filterPeriod ? (entries || []).filter(r => r.period === filterPeriod) : (entries || []);
+  const channels = Array.from(new Set((entries || []).map(r => r.channel).filter(Boolean))).sort();
+  const visible = (entries || []).filter(r =>
+    (!filterPeriod || r.period === filterPeriod) &&
+    (!filterChannel || r.channel === filterChannel)
+  );
 
   const save = async () => {
     if (!form.channel || !form.period) return;
     setSaving(true);
     await fetch('/api/print-finance/revenue', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, jobs: parseInt(form.jobs)||0, units_grams: parseFloat(form.units_grams)||0, revenue: parseFloat(form.revenue)||0, cogs: parseFloat(form.cogs)||0 }),
+      body: JSON.stringify({
+        channel: form.channel, period: form.period, date: form.date || null,
+        source: form.source || null, job_count: parseInt(form.job_count) || 0,
+        units_grams: parseFloat(form.units_grams) || 0,
+        revenue: parseFloat(form.revenue) || 0, cogs: parseFloat(form.cogs) || 0,
+        notes: form.notes || null,
+      }),
     });
     setSaving(false); setAdding(false);
-    setForm({ channel: '', period: '', jobs: '', units_grams: '', revenue: '', cogs: '' });
+    setForm({ channel: '', period: '', date: '', source: '', job_count: '', units_grams: '', revenue: '', cogs: '', notes: '' });
     reload();
   };
 
@@ -653,7 +696,7 @@ function Revenue() {
 
   const del = async (id: number) => { await fetch(`/api/print-finance/revenue/${id}`, { method: 'DELETE' }); if (editId === id) cancelEdit(); reload(); };
 
-  const totals = (filterPeriod ? visible : (entries || [])).reduce((acc, r) => ({ revenue: acc.revenue + Number(r.revenue), cogs: acc.cogs + Number(r.cogs) }), { revenue: 0, cogs: 0 });
+  const totals = visible.reduce((acc, r) => ({ revenue: acc.revenue + Number(r.revenue), cogs: acc.cogs + Number(r.cogs) }), { revenue: 0, cogs: 0 });
 
   return (
     <div className="space-y-4">
@@ -675,21 +718,38 @@ function Revenue() {
 
       {error && <ErrorBanner msg={error} onRetry={reload} />}
 
-      <div className="flex items-center justify-between gap-3">
-        {periods.length > 0 ? (
-          <div className="flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-slate-500" />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter className="w-3.5 h-3.5 text-slate-500" />
+          {periods.length > 0 && (
             <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
               className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
               <option value="">All periods</option>
               {periods.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
-          </div>
-        ) : <div />}
-        <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
-          <Plus className="w-3.5 h-3.5" /> Add Entry
-        </button>
+          )}
+          {channels.length > 0 && (
+            <select value={filterChannel} onChange={e => setFilterChannel(e.target.value)}
+              className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
+              <option value="">All channels</option>
+              {channels.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowSummary(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs rounded-lg transition-colors ${showSummary ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' : 'border-slate-700/50 text-slate-400 hover:text-slate-200'}`}>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showSummary ? 'rotate-180' : ''}`} /> Summary
+          </button>
+          <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add Entry
+          </button>
+        </div>
       </div>
+
+      {showSummary && !loading && entries && entries.length > 0 && (
+        <RevenueSummary entries={entries} />
+      )}
 
       {adding && (
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
@@ -697,10 +757,13 @@ function Revenue() {
             {[
               { key: 'channel', label: 'Channel' },
               { key: 'period', label: 'Period (e.g. Mar 2026)' },
-              { key: 'jobs', label: 'Jobs', type: 'number' },
+              { key: 'date', label: 'Date' },
+              { key: 'source', label: 'Source' },
+              { key: 'job_count', label: 'Jobs', type: 'number' },
               { key: 'units_grams', label: 'Units (g)', type: 'number' },
               { key: 'revenue', label: 'Revenue ($)', type: 'number' },
               { key: 'cogs', label: 'COGS ($)', type: 'number' },
+              { key: 'notes', label: 'Notes' },
             ].map(f => (
               <div key={f.key}>
                 <label className="text-xs text-slate-400 block mb-1">{f.label}</label>
@@ -717,18 +780,18 @@ function Revenue() {
         </div>
       )}
 
-      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-700/50">
-              {['Channel', 'Period', 'Jobs', 'Grams', 'Revenue', 'COGS', 'Gross Profit', 'Margin', ''].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-medium text-slate-400">{h}</th>
+              {['Channel', 'Source', 'Period', 'Date', 'Jobs', 'Grams', 'Revenue', 'COGS', 'Gross Profit', 'Margin', 'Notes', ''].map(h => (
+                <th key={h} className="text-left px-4 py-3 text-xs font-medium text-slate-400 whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {loading ? <LoadingRow cols={9} /> : visible.length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-500">{filterPeriod ? `No entries for ${filterPeriod}.` : 'No entries yet.'}</td></tr>
+            {loading ? <LoadingRow cols={12} /> : visible.length === 0 ? (
+              <tr><td colSpan={12} className="px-4 py-8 text-center text-sm text-slate-500">{filterPeriod || filterChannel ? 'No entries match filters.' : 'No entries yet.'}</td></tr>
             ) : visible.map(r => {
               const isEditing = editId === r.id;
               const gp = Number(r.revenue) - Number(r.cogs);
@@ -737,13 +800,16 @@ function Revenue() {
               if (isEditing) return (
                 <tr key={r.id} className="border-b border-blue-500/20 bg-blue-500/5">
                   <td className="px-3 py-2"><input className="w-28 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.channel||'')} onChange={e => setEditForm(p => ({...p, channel: e.target.value}))} /></td>
+                  <td className="px-3 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.source||'')} onChange={e => setEditForm(p => ({...p, source: e.target.value}))} /></td>
                   <td className="px-3 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
-                  <td className="px-3 py-2"><input type="number" className="w-14 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.jobs||'')} onChange={e => setEditForm(p => ({...p, jobs: Number(e.target.value)}))} /></td>
+                  <td className="px-3 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.date||'')} onChange={e => setEditForm(p => ({...p, date: e.target.value}))} /></td>
+                  <td className="px-3 py-2"><input type="number" className="w-14 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.job_count||'')} onChange={e => setEditForm(p => ({...p, job_count: Number(e.target.value)}))} /></td>
                   <td className="px-3 py-2"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.units_grams||'')} onChange={e => setEditForm(p => ({...p, units_grams: Number(e.target.value)}))} /></td>
                   <td className="px-3 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.revenue||'')} onChange={e => setEditForm(p => ({...p, revenue: Number(e.target.value)}))} /></td>
                   <td className="px-3 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.cogs||'')} onChange={e => setEditForm(p => ({...p, cogs: Number(e.target.value)}))} /></td>
                   <td className="px-3 py-2 text-slate-500">—</td>
                   <td className="px-3 py-2 text-slate-500">—</td>
+                  <td className="px-3 py-2"><input className="w-32 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
                   <td className="px-3 py-2">
                     <div className="flex gap-1">
                       <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300"><Save className="w-3.5 h-3.5" /></button>
@@ -755,14 +821,17 @@ function Revenue() {
 
               return (
                 <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] transition-colors group">
-                  <td className="px-4 py-3 text-slate-200 font-medium">{r.channel}</td>
-                  <td className="px-4 py-3 text-slate-400">{r.period}</td>
-                  <td className="px-4 py-3 text-slate-300">{r.jobs}</td>
+                  <td className="px-4 py-3 text-slate-200 font-medium whitespace-nowrap">{r.channel}</td>
+                  <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{r.source || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{r.period}</td>
+                  <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{r.date || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-4 py-3 text-slate-300">{r.job_count}</td>
                   <td className="px-4 py-3 text-slate-300">{fmt(Number(r.units_grams))}</td>
                   <td className="px-4 py-3 text-white font-medium">{money(Number(r.revenue))}</td>
                   <td className="px-4 py-3 text-rose-300">{money(Number(r.cogs))}</td>
                   <td className="px-4 py-3 text-emerald-300">{money(gp)}</td>
                   <td className="px-4 py-3"><span className={`font-medium ${margin > 70 ? 'text-emerald-400' : margin > 50 ? 'text-blue-400' : 'text-amber-400'}`}>{fmt(margin, 1)}%</span></td>
+                  <td className="px-4 py-3 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => startEdit(r)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
@@ -776,15 +845,100 @@ function Revenue() {
           {(entries || []).length > 0 && (
             <tfoot>
               <tr className="border-t border-slate-600/50 bg-white/[0.02]">
-                <td colSpan={4} className="px-4 py-3 text-xs font-semibold text-slate-300">TOTAL</td>
+                <td colSpan={6} className="px-4 py-3 text-xs font-semibold text-slate-300">TOTAL</td>
                 <td className="px-4 py-3 text-white font-bold">{money(totals.revenue)}</td>
                 <td className="px-4 py-3 text-rose-300 font-bold">{money(totals.cogs)}</td>
                 <td className="px-4 py-3 text-emerald-300 font-bold">{money(totals.revenue - totals.cogs)}</td>
                 <td className="px-4 py-3 text-blue-400 font-bold">{totals.revenue > 0 ? fmt(((totals.revenue - totals.cogs) / totals.revenue) * 100, 1) : '—'}%</td>
-                <td />
+                <td colSpan={2} />
               </tr>
             </tfoot>
           )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Revenue summary helper — used inside Revenue()
+// ---------------------------------------------------------------------------
+
+function RevenueSummary({ entries }: { entries: RevenueEntry[] }) {
+  const [groupBy, setGroupBy] = useState<'period' | 'channel' | 'both'>('period');
+
+  type SumRow = { key: string; revenue: number; cogs: number; gp: number; jobs: number };
+
+  const rows: SumRow[] = useMemo(() => {
+    const map = new Map<string, SumRow>();
+    for (const e of entries) {
+      const key = groupBy === 'period' ? (e.period || '—')
+        : groupBy === 'channel' ? (e.channel || '—')
+        : `${e.period || '—'} / ${e.channel || '—'}`;
+      const existing = map.get(key) || { key, revenue: 0, cogs: 0, gp: 0, jobs: 0 };
+      existing.revenue += Number(e.revenue);
+      existing.cogs += Number(e.cogs);
+      existing.gp += Number(e.revenue) - Number(e.cogs);
+      existing.jobs += Number(e.job_count || 0);
+      map.set(key, existing);
+    }
+    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+  }, [entries, groupBy]);
+
+  const total = rows.reduce((s, r) => ({ revenue: s.revenue + r.revenue, cogs: s.cogs + r.cogs, gp: s.gp + r.gp, jobs: s.jobs + r.jobs }), { revenue: 0, cogs: 0, gp: 0, jobs: 0 });
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-500">Group by</span>
+        {(['period', 'channel', 'both'] as const).map(g => (
+          <button key={g} onClick={() => setGroupBy(g)}
+            className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${groupBy === g ? 'bg-blue-500/20 border-blue-500/40 text-blue-300' : 'border-slate-700/50 text-slate-500 hover:text-slate-300'}`}>
+            {g === 'both' ? 'Period + Channel' : g.charAt(0).toUpperCase() + g.slice(1)}
+          </button>
+        ))}
+      </div>
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-white/[0.03] border-b border-slate-700/50">
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">{groupBy === 'period' ? 'Period' : groupBy === 'channel' ? 'Channel' : 'Period / Channel'}</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Revenue</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">COGS</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Gross Profit</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Margin</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Jobs</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const margin = r.revenue > 0 ? (r.gp / r.revenue) * 100 : 0;
+              return (
+                <tr key={r.key} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
+                  <td className="px-3 py-2.5 text-slate-200 font-medium">{r.key}</td>
+                  <td className="px-3 py-2.5 text-right text-white tabular-nums">{money(r.revenue)}</td>
+                  <td className="px-3 py-2.5 text-right text-rose-300 tabular-nums">{money(r.cogs)}</td>
+                  <td className="px-3 py-2.5 text-right text-emerald-300 tabular-nums">{money(r.gp)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <span className={margin > 70 ? 'text-emerald-400' : margin > 50 ? 'text-blue-400' : 'text-amber-400'}>{fmt(margin, 1)}%</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{r.jobs}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-slate-700/50 bg-white/[0.03]">
+              <td className="px-3 py-2.5 text-slate-400 font-semibold">Total</td>
+              <td className="px-3 py-2.5 text-right text-white font-semibold tabular-nums">{money(total.revenue)}</td>
+              <td className="px-3 py-2.5 text-right text-rose-300 font-semibold tabular-nums">{money(total.cogs)}</td>
+              <td className="px-3 py-2.5 text-right text-emerald-300 font-semibold tabular-nums">{money(total.gp)}</td>
+              <td className="px-3 py-2.5 text-right tabular-nums">
+                <span className={total.revenue > 0 && (total.gp / total.revenue * 100) > 50 ? 'text-emerald-400' : 'text-amber-400'}>{total.revenue > 0 ? fmt(total.gp / total.revenue * 100, 1) : '0.0'}%</span>
+              </td>
+              <td className="px-3 py-2.5 text-right text-slate-400 font-semibold tabular-nums">{total.jobs}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
@@ -798,7 +952,7 @@ function Revenue() {
 function Costs() {
   const { data: entries, loading, error, reload } = useApi<CostEntry[]>('/api/print-finance/costs');
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ category: '', type: 'direct' as CostEntry['type'], amount: '', period: '', notes: '' });
+  const [form, setForm] = useState({ category: '', type: 'direct' as CostEntry['type'], sub_category: '', amount: '', quantity: '', unit: '', unit_cost: '', vendor: '', job_ref: '', period: '', notes: '' });
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<CostEntry>>({});
   const [saving, setSaving] = useState(false);
@@ -806,8 +960,15 @@ function Costs() {
   const [uploadResult, setUploadResult] = useState<{ inserted: number; errors: { row: Record<string, string>; reason: string }[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [filterPeriod, setFilterPeriod] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [showCostSummary, setShowCostSummary] = useState(false);
   const costPeriods = Array.from(new Set((entries || []).map(c => c.period).filter((p): p is string => !!p))).sort().reverse();
-  const visibleEntries = filterPeriod ? (entries || []).filter(c => c.period === filterPeriod) : (entries || []);
+  const visibleEntries = (entries || []).filter(c =>
+    (!filterPeriod || c.period === filterPeriod) &&
+    (!filterType || c.type === filterType) &&
+    (!filterCategory || c.category.toLowerCase().includes(filterCategory.toLowerCase()))
+  );
 
   const direct = visibleEntries.filter(c => c.type === 'direct').reduce((s, c) => s + Number(c.amount), 0);
   const overhead = visibleEntries.filter(c => c.type === 'overhead').reduce((s, c) => s + Number(c.amount), 0);
@@ -818,10 +979,16 @@ function Costs() {
     setSaving(true);
     await fetch('/api/print-finance/costs', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, amount: parseFloat(form.amount) || 0 }),
+      body: JSON.stringify({
+        category: form.category, type: form.type, sub_category: form.sub_category || null,
+        amount: parseFloat(form.amount) || 0, quantity: parseFloat(form.quantity) || null,
+        unit: form.unit || null, unit_cost: parseFloat(form.unit_cost) || null,
+        vendor: form.vendor || null, job_ref: form.job_ref || null,
+        period: form.period || null, notes: form.notes || null,
+      }),
     });
     setSaving(false); setAdding(false);
-    setForm({ category: '', type: 'direct', amount: '', period: '', notes: '' });
+    setForm({ category: '', type: 'direct', sub_category: '', amount: '', quantity: '', unit: '', unit_cost: '', vendor: '', job_ref: '', period: '', notes: '' });
     reload();
   };
 
@@ -861,8 +1028,8 @@ function Costs() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="grid grid-cols-4 gap-3 flex-1">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="grid grid-cols-4 gap-3 flex-1 min-w-0">
           {[
             { label: 'Direct Costs', value: money(direct), color: 'text-rose-400' },
             { label: 'Overhead', value: money(overhead), color: 'text-amber-400' },
@@ -875,16 +1042,30 @@ function Costs() {
             </div>
           ))}
         </div>
-        {costPeriods.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <Filter className="w-3.5 h-3.5 text-slate-500" />
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          <Filter className="w-3.5 h-3.5 text-slate-500" />
+          {costPeriods.length > 0 && (
             <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
               className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
               <option value="">All periods</option>
               {costPeriods.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
-          </div>
-        )}
+          )}
+          <select value={filterType} onChange={e => setFilterType(e.target.value)}
+            className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
+            <option value="">All types</option>
+            <option value="direct">Direct</option>
+            <option value="overhead">Overhead</option>
+            <option value="fixed">Fixed</option>
+          </select>
+          <input
+            type="text"
+            placeholder="Search category…"
+            value={filterCategory}
+            onChange={e => setFilterCategory(e.target.value)}
+            className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 w-36"
+          />
+        </div>
       </div>
 
       {error && <ErrorBanner msg={error} onRetry={reload} />}
@@ -931,17 +1112,33 @@ function Costs() {
       {/* Manual Add + Table */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-white">Cost Entries</h3>
-        <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
-          <Plus className="w-3.5 h-3.5" /> Add Entry
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowCostSummary(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs rounded-lg transition-colors ${showCostSummary ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' : 'border-slate-700/50 text-slate-400 hover:text-slate-200'}`}>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCostSummary ? 'rotate-180' : ''}`} /> Summary
+          </button>
+          <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add Entry
+          </button>
+        </div>
       </div>
+
+      {showCostSummary && !loading && entries && entries.length > 0 && (
+        <CostSummary entries={entries} />
+      )}
 
       {adding && (
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
             {[
               { key: 'category', label: 'Category' },
+              { key: 'sub_category', label: 'Sub-category' },
               { key: 'amount', label: 'Amount ($)', type: 'number' },
+              { key: 'quantity', label: 'Quantity', type: 'number' },
+              { key: 'unit', label: 'Unit' },
+              { key: 'unit_cost', label: 'Unit Cost ($)', type: 'number' },
+              { key: 'vendor', label: 'Vendor' },
+              { key: 'job_ref', label: 'Job Ref' },
               { key: 'period', label: 'Period' },
               { key: 'notes', label: 'Notes' },
             ].map(f => (
@@ -969,24 +1166,21 @@ function Costs() {
         </div>
       )}
 
-      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-slate-700/50 bg-white/[0.03]">
-              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Category</th>
-              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Type</th>
-              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Period</th>
-              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Amount</th>
-              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Notes</th>
-              <th className="px-3 py-2.5 w-16" />
+              {['Category','Sub-cat','Type','Qty','Unit','Unit Cost','Amount','Vendor','Job Ref','Period','Notes',''].map(h => (
+                <th key={h} className={`px-3 py-2.5 text-slate-400 font-medium whitespace-nowrap ${['Qty','Unit Cost','Amount'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>
+              <tr><td colSpan={12} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>
             )}
             {!loading && visibleEntries.length === 0 && (
-              <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">No cost entries yet.</td></tr>
+              <tr><td colSpan={12} className="px-3 py-6 text-center text-slate-500">No cost entries yet.</td></tr>
             )}
             {visibleEntries.map(c => {
               const typeColor = c.type === 'direct' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20'
@@ -994,42 +1188,46 @@ function Costs() {
                 : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
               if (editId === c.id) return (
                 <tr key={c.id} className="border-b border-slate-700/30 bg-blue-500/5">
-                  <td className="px-3 py-2">
-                    <input className="w-full bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.category||'')} onChange={e => setEditForm(p => ({...p, category: e.target.value}))} />
-                  </td>
-                  <td className="px-3 py-2">
+                  <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.category||'')} onChange={e => setEditForm(p => ({...p, category: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.sub_category||'')} onChange={e => setEditForm(p => ({...p, sub_category: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5">
                     <select className="bg-slate-700 border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.type||c.type)} onChange={e => setEditForm(p => ({...p, type: e.target.value as CostEntry['type']}))}>
                       <option value="direct">Direct</option>
                       <option value="overhead">Overhead</option>
                       <option value="fixed">Fixed</option>
                     </select>
                   </td>
-                  <td className="px-3 py-2">
-                    <input className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input type="number" className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.amount||'')} onChange={e => setEditForm(p => ({...p, amount: Number(e.target.value)}))} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={saveEdit} disabled={saving} className="flex items-center gap-0.5 px-1.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded transition-colors disabled:opacity-50"><Save className="w-3 h-3" /></button>
-                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300 transition-colors px-1"><X className="w-3 h-3" /></button>
+                  <td className="px-2 py-1.5"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.quantity||'')} onChange={e => setEditForm(p => ({...p, quantity: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.unit||'')} onChange={e => setEditForm(p => ({...p, unit: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.unit_cost||'')} onChange={e => setEditForm(p => ({...p, unit_cost: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.amount||'')} onChange={e => setEditForm(p => ({...p, amount: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.vendor||'')} onChange={e => setEditForm(p => ({...p, vendor: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.job_ref||'')} onChange={e => setEditForm(p => ({...p, job_ref: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex items-center gap-1">
+                      <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"><Save className="w-3 h-3" /></button>
+                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3 h-3" /></button>
                     </div>
                   </td>
                 </tr>
               );
               return (
                 <tr key={c.id} className="border-b border-slate-700/30 last:border-0 group hover:bg-white/[0.02]">
-                  <td className="px-3 py-2.5 text-slate-200 font-medium">{c.category}</td>
+                  <td className="px-3 py-2.5 text-slate-200 font-medium whitespace-nowrap">{c.category}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{c.sub_category || <span className="text-slate-600">—</span>}</td>
                   <td className="px-3 py-2.5">
                     <span className={`px-1.5 py-0.5 rounded border text-xs font-medium ${typeColor}`}>{c.type}</span>
                   </td>
-                  <td className="px-3 py-2.5 text-slate-400">{c.period || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{c.quantity != null ? fmt(Number(c.quantity), 2) : <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{c.unit || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{c.unit_cost != null ? money(Number(c.unit_cost)) : <span className="text-slate-600">—</span>}</td>
                   <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(c.amount))}</td>
-                  <td className="px-3 py-2.5 text-slate-400 max-w-[200px] truncate">{c.notes || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{c.vendor || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 font-mono">{c.job_ref || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{c.period || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{c.notes || <span className="text-slate-600">—</span>}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => startEdit(c)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3 h-3" /></button>
@@ -1045,6 +1243,381 @@ function Costs() {
 
       {/* Overhead Allocation Engine */}
       <OverheadAllocator />
+
+      {/* Specialised cost layer tables */}
+      <MaterialUsageTable />
+      <MachineLogTable />
+      <LabourLogTable />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Specialised cost layer tables
+// ---------------------------------------------------------------------------
+
+function MaterialUsageTable() {
+  const { data, loading, reload } = useApi<MaterialUsageEntry[]>('/api/print-finance/material-log');
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Partial<MaterialUsageEntry>>({});
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const total = (data || []).reduce((s, r) => s + Number(r.total_cost), 0);
+
+  const startEdit = (r: MaterialUsageEntry) => { setEditId(r.id); setEditForm({ ...r }); };
+  const cancelEdit = () => { setEditId(null); setEditForm({}); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    setSaving(true);
+    await fetch(`/api/print-finance/material-log/${editId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    setSaving(false); cancelEdit(); reload();
+  };
+  const del = async (id: number) => {
+    setDeletingId(id);
+    await fetch(`/api/print-finance/material-log/${id}`, { method: 'DELETE' });
+    setDeletingId(null);
+    if (editId === id) cancelEdit();
+    reload();
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-white">Material Usage</h3>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-400">Total <span className="text-white font-medium tabular-nums">{money(total)}</span></span>
+          <button onClick={reload} className="text-slate-500 hover:text-slate-300 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
+        </div>
+      </div>
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+              {['Material','Brand','Color','Job','Qty (g)','$/g','Total','Supplier','Period','Notes',''].map(h => (
+                <th key={h} className={`px-3 py-2.5 text-slate-400 font-medium ${['Qty (g)','$/g','Total'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={11} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>}
+            {!loading && (data||[]).length === 0 && <tr><td colSpan={11} className="px-3 py-6 text-center text-slate-500">No material usage records.</td></tr>}
+            {(data||[]).map(r => {
+              if (editId === r.id) return (
+                <tr key={r.id} className="border-b border-slate-700/30 bg-blue-500/5">
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.material||'')} onChange={e => setEditForm(p => ({...p, material: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.brand||'')} onChange={e => setEditForm(p => ({...p, brand: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.color||'')} onChange={e => setEditForm(p => ({...p, color: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white font-mono" value={String(editForm.job_id||'')} onChange={e => setEditForm(p => ({...p, job_id: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.quantity_g||'')} onChange={e => setEditForm(p => ({...p, quantity_g: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" step="0.0001" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.cost_per_g||'')} onChange={e => setEditForm(p => ({...p, cost_per_g: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5 text-right text-slate-400 tabular-nums">{money(Number(editForm.quantity_g||0) * Number(editForm.cost_per_g||0))}</td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.supplier||'')} onChange={e => setEditForm(p => ({...p, supplier: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex gap-1">
+                      <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"><Save className="w-3 h-3" /></button>
+                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+              return (
+                <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] group">
+                  <td className="px-3 py-2.5 text-slate-200 font-medium">{r.material}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.brand || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.color || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{r.job_id || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.quantity_g), 1)}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{Number(r.cost_per_g).toFixed(4)}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(r.total_cost))}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.supplier || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.period || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => startEdit(r)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3 h-3" /></button>
+                      <button onClick={() => del(r.id)} disabled={deletingId === r.id} className="text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MachineLogTable() {
+  const { data, loading, reload } = useApi<MachineLogEntry[]>('/api/print-finance/machine-log');
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Partial<MachineLogEntry>>({});
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const totalCost = (data || []).reduce((s, r) => s + Number(r.electricity_cost) + Number(r.maintenance_cost) + Number(r.depreciation_cost), 0);
+
+  const startEdit = (r: MachineLogEntry) => { setEditId(r.id); setEditForm({ ...r }); };
+  const cancelEdit = () => { setEditId(null); setEditForm({}); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    setSaving(true);
+    await fetch(`/api/print-finance/machine-log/${editId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    setSaving(false); cancelEdit(); reload();
+  };
+  const del = async (id: number) => {
+    setDeletingId(id);
+    await fetch(`/api/print-finance/machine-log/${id}`, { method: 'DELETE' });
+    setDeletingId(null);
+    if (editId === id) cancelEdit();
+    reload();
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-white">Machine Log</h3>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-400">Total <span className="text-white font-medium tabular-nums">{money(totalCost)}</span></span>
+          <button onClick={reload} className="text-slate-500 hover:text-slate-300 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
+        </div>
+      </div>
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+              {['Printer','Job','Hours','Electricity','Maintenance','Depreciation','Period','Notes',''].map(h => (
+                <th key={h} className={`px-3 py-2.5 text-slate-400 font-medium ${['Hours','Electricity','Maintenance','Depreciation'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>}
+            {!loading && (data||[]).length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">No machine log entries.</td></tr>}
+            {(data||[]).map(r => {
+              if (editId === r.id) return (
+                <tr key={r.id} className="border-b border-slate-700/30 bg-blue-500/5">
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.printer_name||editForm.printer_id||'')} onChange={e => setEditForm(p => ({...p, printer_name: e.target.value, printer_id: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white font-mono" value={String(editForm.job_id||'')} onChange={e => setEditForm(p => ({...p, job_id: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.print_hours||'')} onChange={e => setEditForm(p => ({...p, print_hours: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.electricity_cost||'')} onChange={e => setEditForm(p => ({...p, electricity_cost: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.maintenance_cost||'')} onChange={e => setEditForm(p => ({...p, maintenance_cost: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.depreciation_cost||'')} onChange={e => setEditForm(p => ({...p, depreciation_cost: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex gap-1">
+                      <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"><Save className="w-3 h-3" /></button>
+                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+              return (
+                <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] group">
+                  <td className="px-3 py-2.5 text-slate-200 font-medium">{r.printer_name || r.printer_id || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{r.job_id || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.print_hours), 1)}h</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{money(Number(r.electricity_cost))}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{money(Number(r.maintenance_cost))}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{money(Number(r.depreciation_cost))}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.period || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => startEdit(r)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3 h-3" /></button>
+                      <button onClick={() => del(r.id)} disabled={deletingId === r.id} className="text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function LabourLogTable() {
+  const { data, loading, reload } = useApi<LabourLogEntry[]>('/api/print-finance/labour-log');
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Partial<LabourLogEntry>>({});
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const total = (data || []).reduce((s, r) => s + Number(r.total_cost), 0);
+
+  const startEdit = (r: LabourLogEntry) => { setEditId(r.id); setEditForm({ ...r }); };
+  const cancelEdit = () => { setEditId(null); setEditForm({}); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    setSaving(true);
+    await fetch(`/api/print-finance/labour-log/${editId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    setSaving(false); cancelEdit(); reload();
+  };
+  const del = async (id: number) => {
+    setDeletingId(id);
+    await fetch(`/api/print-finance/labour-log/${id}`, { method: 'DELETE' });
+    setDeletingId(null);
+    if (editId === id) cancelEdit();
+    reload();
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-white">Labour / HR</h3>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-400">Total <span className="text-white font-medium tabular-nums">{money(total)}</span></span>
+          <button onClick={reload} className="text-slate-500 hover:text-slate-300 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
+        </div>
+      </div>
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+              {['Person','Role','Job','Hours','Hourly Rate','Total','Period','Notes',''].map(h => (
+                <th key={h} className={`px-3 py-2.5 text-slate-400 font-medium ${['Hours','Hourly Rate','Total'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>}
+            {!loading && (data||[]).length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">No labour log entries.</td></tr>}
+            {(data||[]).map(r => {
+              if (editId === r.id) return (
+                <tr key={r.id} className="border-b border-slate-700/30 bg-blue-500/5">
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.person||'')} onChange={e => setEditForm(p => ({...p, person: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.role||'')} onChange={e => setEditForm(p => ({...p, role: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white font-mono" value={String(editForm.job_id||'')} onChange={e => setEditForm(p => ({...p, job_id: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.hours||'')} onChange={e => setEditForm(p => ({...p, hours: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.hourly_rate||'')} onChange={e => setEditForm(p => ({...p, hourly_rate: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5 text-right text-slate-400 tabular-nums">{money(Number(editForm.hours||0) * Number(editForm.hourly_rate||0))}</td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex gap-1">
+                      <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"><Save className="w-3 h-3" /></button>
+                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+              return (
+                <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] group">
+                  <td className="px-3 py-2.5 text-slate-200 font-medium">{r.person || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.role || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{r.job_id || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.hours), 1)}h</td>
+                  <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{money(Number(r.hourly_rate))}/h</td>
+                  <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(r.total_cost))}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.period || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => startEdit(r)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3 h-3" /></button>
+                      <button onClick={() => del(r.id)} disabled={deletingId === r.id} className="text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cost summary — pivot by category or period or type
+// ---------------------------------------------------------------------------
+
+function CostSummary({ entries }: { entries: CostEntry[] }) {
+  const [groupBy, setGroupBy] = useState<'category' | 'period' | 'type'>('category');
+
+  type SumRow = { key: string; amount: number; count: number };
+
+  const rows: SumRow[] = useMemo(() => {
+    const map = new Map<string, SumRow>();
+    for (const e of entries) {
+      const key = groupBy === 'category' ? (e.category || '—')
+        : groupBy === 'period' ? (e.period || '—')
+        : (e.type || '—');
+      const existing = map.get(key) || { key, amount: 0, count: 0 };
+      existing.amount += Number(e.amount);
+      existing.count += 1;
+      map.set(key, existing);
+    }
+    return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+  }, [entries, groupBy]);
+
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+
+  const typeColor = (key: string) =>
+    key === 'direct' ? 'text-rose-400' : key === 'overhead' ? 'text-amber-400' : key === 'fixed' ? 'text-blue-400' : 'text-slate-300';
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-500">Group by</span>
+        {(['category', 'period', 'type'] as const).map(g => (
+          <button key={g} onClick={() => setGroupBy(g)}
+            className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${groupBy === g ? 'bg-blue-500/20 border-blue-500/40 text-blue-300' : 'border-slate-700/50 text-slate-500 hover:text-slate-300'}`}>
+            {g.charAt(0).toUpperCase() + g.slice(1)}
+          </button>
+        ))}
+      </div>
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-white/[0.03] border-b border-slate-700/50">
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">{groupBy.charAt(0).toUpperCase() + groupBy.slice(1)}</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Amount</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">% of Total</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Entries</th>
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium pl-4">Share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const pct = total > 0 ? (r.amount / total) * 100 : 0;
+              return (
+                <tr key={r.key} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
+                  <td className={`px-3 py-2.5 font-medium ${groupBy === 'type' ? typeColor(r.key) : 'text-slate-200'}`}>{r.key}</td>
+                  <td className="px-3 py-2.5 text-right text-white tabular-nums">{money(r.amount)}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{fmt(pct, 1)}%</td>
+                  <td className="px-3 py-2.5 text-right text-slate-500 tabular-nums">{r.count}</td>
+                  <td className="px-3 py-2.5 pl-4">
+                    <div className="h-1.5 rounded-full bg-slate-700/50 w-32">
+                      <div className="h-full rounded-full bg-blue-500/60" style={{ width: `${pct}%` }} />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-slate-700/50 bg-white/[0.03]">
+              <td className="px-3 py-2.5 text-slate-400 font-semibold">Total</td>
+              <td className="px-3 py-2.5 text-right text-white font-semibold tabular-nums">{money(total)}</td>
+              <td className="px-3 py-2.5 text-right text-slate-500">100%</td>
+              <td className="px-3 py-2.5 text-right text-slate-500 tabular-nums">{rows.reduce((s, r) => s + r.count, 0)}</td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   );
 }
@@ -2613,6 +3186,22 @@ function FieldMappingRow({ field, column, allColumns, sampleRow, onChange }: {
   );
 }
 
+interface SavedFile {
+  id: number;
+  filename: string;
+  mimetype: string;
+  size_bytes: number;
+  imported_as: string | null;
+  rows_inserted: number;
+  uploaded_at: string;
+}
+
+function fmtBytes(b: number) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function UploadTab() {
   const [file, setFile] = useState<File | null>(null);
   const [analysing, setAnalysing] = useState(false);
@@ -2623,6 +3212,51 @@ function UploadTab() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [dragging, setDragging] = useState(false);
   const [showMapping, setShowMapping] = useState(false);
+  const [savedFiles, setSavedFiles] = useState<SavedFile[]>([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [viewingFile, setViewingFile] = useState<SavedFile | null>(null);
+  const [preview, setPreview] = useState<{ headers: string[]; rows: Record<string, string>[]; sheet_count: number } | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [activeSection, setActiveSection] = useState<'library' | 'import'>('library');
+
+  const loadSavedFiles = async () => {
+    setLoadingFiles(true);
+    try {
+      const res = await fetch('/api/print-finance/uploads');
+      if (res.ok) setSavedFiles(await res.json());
+    } finally { setLoadingFiles(false); }
+  };
+
+  useEffect(() => { loadSavedFiles(); }, []);
+
+  const downloadFile = (id: number, filename: string) => {
+    const a = document.createElement('a');
+    a.href = `/api/print-finance/uploads/${id}/download`;
+    a.download = filename;
+    a.click();
+  };
+
+  const deleteFile = async (id: number) => {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/print-finance/uploads/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setSavedFiles(prev => prev.filter(f => f.id !== id));
+        if (viewingFile?.id === id) setViewingFile(null);
+      }
+    } finally { setDeletingId(null); }
+  };
+
+  const openPreview = async (f: SavedFile) => {
+    setViewingFile(f);
+    setPreview(null);
+    setLoadingPreview(true);
+    try {
+      const res = await fetch(`/api/print-finance/uploads/${f.id}/preview`);
+      if (res.ok) setPreview(await res.json());
+    } finally { setLoadingPreview(false); }
+  };
 
   const doAnalyse = async (f: File) => {
     setAnalysing(true);
@@ -2658,6 +3292,7 @@ function UploadTab() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setResult(data);
+      loadSavedFiles();
     } catch (e: unknown) {
       alert((e as Error).message);
     } finally { setImporting(false); }
@@ -2675,14 +3310,173 @@ function UploadTab() {
   const confidence = ai ? Math.round(ai.confidence * 100) : null;
 
   return (
-    <div className="space-y-5 max-w-3xl">
-      <div>
-        <h3 className="text-base font-semibold text-white">Smart Import</h3>
-        <p className="text-sm text-slate-400 mt-1">
-          Drop any CSV or Excel file. An AI agent analyses the columns and sample data to determine
-          the cost layer, field mappings, and whether a new category is needed — before anything is saved.
-        </p>
+    <div className="space-y-5">
+
+      {/* File preview modal */}
+      {viewingFile && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 bg-black/60 backdrop-blur-sm"
+          onClick={e => { if (e.target === e.currentTarget) setViewingFile(null); }}>
+          <div className="bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[80vh] flex flex-col">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/50 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <FileText className="w-4 h-4 text-blue-400" />
+                <div>
+                  <div className="text-sm font-semibold text-white">{viewingFile.filename}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    {fmtBytes(viewingFile.size_bytes)} · {viewingFile.rows_inserted} rows imported
+                    {viewingFile.imported_as && <> · <span className="text-blue-300 font-mono">{viewingFile.imported_as}</span></>}
+                    · {new Date(viewingFile.uploaded_at).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => downloadFile(viewingFile.id, viewingFile.filename)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 rounded-lg transition-colors">
+                  <Download className="w-3.5 h-3.5" /> Download
+                </button>
+                <button onClick={() => setViewingFile(null)} className="p-1.5 text-slate-500 hover:text-white transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            {/* Modal body */}
+            <div className="flex-1 overflow-auto">
+              {loadingPreview && (
+                <div className="flex items-center justify-center gap-2 py-16 text-slate-500 text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Parsing file…
+                </div>
+              )}
+              {preview && !loadingPreview && (
+                <table className="w-full text-xs border-collapse">
+                  <thead className="sticky top-0 z-10 bg-slate-900">
+                    <tr className="border-b border-slate-700/50">
+                      <th className="px-3 py-2.5 text-left text-slate-500 font-medium whitespace-nowrap w-20">Sheet</th>
+                      <th className="px-3 py-2.5 text-left text-slate-500 font-medium whitespace-nowrap w-12">Row</th>
+                      {preview.headers.map(h => (
+                        <th key={h} className="px-3 py-2.5 text-left text-slate-400 font-medium whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.rows.map((row, i) => (
+                      <tr key={i} className="border-b border-slate-700/20 hover:bg-white/[0.02]">
+                        <td className="px-3 py-2 text-slate-600 font-mono truncate max-w-[80px]">{row._sheet}</td>
+                        <td className="px-3 py-2 text-slate-600 tabular-nums">{row._row}</td>
+                        {preview.headers.map(h => (
+                          <td key={h} className="px-3 py-2 text-slate-300 max-w-[200px] truncate" title={String(row[h] ?? '')}>
+                            {row[h] !== undefined && row[h] !== '' ? String(row[h]) : <span className="text-slate-700">—</span>}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-slate-700/50 flex-shrink-0 text-xs text-slate-600">
+              {preview ? `${preview.rows.length} rows · ${preview.headers.length} columns · ${preview.sheet_count} sheet${preview.sheet_count !== 1 ? 's' : ''}` : ''}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Section toggle */}
+      <div className="flex items-center gap-1 p-1 bg-slate-800/60 border border-slate-700/50 rounded-xl w-fit">
+        <button onClick={() => setActiveSection('library')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${activeSection === 'library' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          <FolderOpen className="w-3.5 h-3.5" /> File Library
+          {savedFiles.length > 0 && <span className={`ml-0.5 px-1.5 rounded-full text-xs ${activeSection === 'library' ? 'bg-blue-500' : 'bg-slate-700 text-slate-400'}`}>{savedFiles.length}</span>}
+        </button>
+        <button onClick={() => setActiveSection('import')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${activeSection === 'import' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          <Upload className="w-3.5 h-3.5" /> Import File
+        </button>
       </div>
+
+      {/* ── FILE LIBRARY ── */}
+      {activeSection === 'library' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-400">All files that have been uploaded and processed. Click <Eye className="inline w-3.5 h-3.5 mx-0.5 text-slate-300" /> to view the raw rows.</p>
+            <button onClick={loadSavedFiles} disabled={loadingFiles}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors">
+              <RefreshCw className={`w-3 h-3 ${loadingFiles ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+          </div>
+
+          {savedFiles.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 border-2 border-dashed border-slate-700/40 rounded-2xl">
+              <FolderOpen className="w-8 h-8 text-slate-700" />
+              <div className="text-center">
+                <div className="text-sm text-slate-500">{loadingFiles ? 'Loading…' : 'No files yet'}</div>
+                <div className="text-xs text-slate-600 mt-0.5">Switch to <span className="text-slate-400">Import File</span> to upload your first file</div>
+              </div>
+            </div>
+          ) : (
+            <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-white/[0.03] border-b border-slate-700/50">
+                    <th className="text-left px-3 py-2.5 text-slate-500 font-medium">File</th>
+                    <th className="text-left px-3 py-2.5 text-slate-500 font-medium">Imported as</th>
+                    <th className="text-right px-3 py-2.5 text-slate-500 font-medium">Rows</th>
+                    <th className="text-right px-3 py-2.5 text-slate-500 font-medium">Size</th>
+                    <th className="text-right px-3 py-2.5 text-slate-500 font-medium">Uploaded</th>
+                    <th className="px-3 py-2.5 text-slate-500 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {savedFiles.map(f => (
+                    <tr key={f.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] group">
+                      <td className="px-3 py-3">
+                        <button onClick={() => openPreview(f)} className="flex items-center gap-2 text-left hover:text-blue-300 transition-colors">
+                          <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0 group-hover:text-blue-400 transition-colors" />
+                          <span className="text-slate-300 truncate max-w-[220px] group-hover:text-blue-300" title={f.filename}>{f.filename}</span>
+                        </button>
+                      </td>
+                      <td className="px-3 py-3">
+                        {f.imported_as
+                          ? <span className="px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-300 font-mono">{f.imported_as}</span>
+                          : <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="px-3 py-3 text-right text-slate-400 tabular-nums">{f.rows_inserted}</td>
+                      <td className="px-3 py-3 text-right text-slate-500 tabular-nums">{fmtBytes(f.size_bytes)}</td>
+                      <td className="px-3 py-3 text-right text-slate-600 whitespace-nowrap">
+                        {new Date(f.uploaded_at).toLocaleDateString()} {new Date(f.uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-1 justify-end">
+                          <button onClick={() => openPreview(f)}
+                            className="p-1.5 text-slate-500 hover:text-blue-400 transition-colors rounded-lg hover:bg-blue-500/10" title="View rows">
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => downloadFile(f.id, f.filename)}
+                            className="p-1.5 text-slate-500 hover:text-emerald-400 transition-colors rounded-lg hover:bg-emerald-500/10" title="Download">
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => deleteFile(f.id)} disabled={deletingId === f.id}
+                            className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors rounded-lg hover:bg-rose-500/10" title="Delete">
+                            {deletingId === f.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── IMPORT SECTION ── */}
+      {activeSection === 'import' && (
+        <div className="space-y-5 max-w-3xl">
+          <p className="text-sm text-slate-400">
+            Drop any CSV or Excel file. An AI agent analyses the columns and sample data to determine
+            the cost layer, field mappings, and whether a new category is needed — before anything is saved.
+          </p>
 
       {/* Drop zone */}
       {!result && (
@@ -2892,24 +3686,39 @@ function UploadTab() {
             </div>
             <div className="max-h-80 overflow-y-auto">
               {result.results.map((r, i) => (
-                <div key={i} className={`flex items-start gap-3 px-3 py-2 border-b border-slate-700/30 last:border-0 text-xs ${r.status === 'accepted' ? 'hover:bg-emerald-500/5' : 'hover:bg-amber-500/5'}`}>
-                  {r.status === 'accepted'
-                    ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    : <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />}
-                  <div className="flex-1 min-w-0">
+                <div key={i} className={`px-3 py-2 border-b border-slate-700/30 last:border-0 text-xs ${r.status === 'accepted' ? 'hover:bg-emerald-500/5' : 'hover:bg-amber-500/5'}`}>
+                  <div className="flex items-start gap-3">
                     {r.status === 'accepted'
-                      ? <span className="text-slate-300">{r.label}</span>
-                      : <span className="text-amber-300/80">Skipped: {r.reason}</span>}
+                      ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      : <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />}
+                    <div className="flex-1 min-w-0">
+                      {r.status === 'accepted'
+                        ? <span className="text-slate-300 font-medium">{r.label}</span>
+                        : <span className="text-amber-300/80">Skipped: {r.reason}</span>}
+                      {r.data && r.status === 'accepted' && (
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {Object.entries(r.data).filter(([, v]) => v !== '' && v !== 0 && v !== null).map(([k, v]) => (
+                            <span key={k} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/[0.04] border border-slate-700/40 text-slate-500">
+                              <span className="text-slate-600">{k}</span>
+                              <span className="text-slate-300">{typeof v === 'number' ? (String(v).includes('.') ? Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : v) : v}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-shrink-0 text-slate-600 tabular-nums">{r.sheet} · row {r.row_num}</div>
                   </div>
-                  <div className="flex-shrink-0 text-slate-600 tabular-nums">{r.sheet} · row {r.row_num}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          <button onClick={reset} className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors">
-            <Upload className="w-3.5 h-3.5" /> Import another file
+          <button onClick={() => { reset(); loadSavedFiles(); setActiveSection('library'); }}
+            className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors">
+            <FolderOpen className="w-3.5 h-3.5" /> Back to File Library
           </button>
+        </div>
+      )}
         </div>
       )}
     </div>
