@@ -3,13 +3,16 @@
 // Base path: /api/cantonese-transcription
 // ─────────────────────────────────────────────────────────────────────────────
 
-const express = require('express');
-const Anthropic = require('@anthropic-ai/sdk');
+const express    = require('express');
+const Anthropic  = require('@anthropic-ai/sdk');
 const deepseekService = require('../../../services/deepseekService');
+const db         = require('./db');
 
 const router = express.Router();
 
-// ── System prompt for the Cantonese transcription assistant ─────────────────
+const VALID_TASKS = ['clean_transcript', 'meeting_minutes', 'summary_zh', 'summary_en', 'action_items'];
+
+// ── System prompt ────────────────────────────────────────────────────────────
 const CANTONESE_SYSTEM_PROMPT = `You are an expert Cantonese speech transcription and analysis assistant.
 
 Context:
@@ -50,17 +53,10 @@ Output style:
 - When the user works in Cantonese, respond mainly in written Chinese (Traditional) and keep some Cantonese flavour when appropriate.
 - When the user requests English, respond in clear, professional English.
 
-You will receive inputs in the following form:
-- "transcript": full ASR text (string)
-- "segments": optional list of segments with text and timestamps
-- "task": what the user wants (clean_transcript, meeting_minutes, summary_zh, summary_en, action_items, custom)
-- "extra_instructions": free-form user instructions
-
 You must:
 - First, restate briefly what you will do in one sentence (in the user's language).
 - Then perform exactly the requested task, nothing more.`;
 
-// ── Task label map ────────────────────────────────────────────────────────────
 const TASK_PROMPTS = {
   clean_transcript: '請幫我清理以下粵語逐字稿，修正明顯的ASR錯誤，保留粵語口語風格。',
   meeting_minutes:  '請根據以下逐字稿，整理成正式會議紀要，包括討論重點和決定事項。',
@@ -69,11 +65,21 @@ const TASK_PROMPTS = {
   action_items:     '請從以下逐字稿中提取所有待辦事項和行動項目，列出負責人（如有提及）和截止日期（如有提及）。',
 };
 
+// ── Helper: format seconds → MM:SS ───────────────────────────────────────────
+function formatTime(seconds) {
+  if (typeof seconds !== 'number') return '?';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/cantonese-transcription/analyze
-// Body: { transcript, segments?, task, extra_instructions?, model? }
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/analyze', async (req, res) => {
+  const startTime = Date.now();
+  let job = null;
+
   const {
     transcript,
     segments = [],
@@ -82,32 +88,108 @@ router.post('/analyze', async (req, res) => {
     model = 'haiku',
   } = req.body;
 
-  if (!transcript || transcript.trim().length === 0) {
-    return res.status(400).json({ error: 'transcript is required' });
+  // ── Input validation ────────────────────────────────────────────────────
+  if (!transcript || typeof transcript !== 'string' || transcript.trim().length === 0) {
+    await db.logError({
+      errorCode: db.ERROR_CODES.CT_001,
+      errorMessage: db.ERROR_MESSAGES['CT-001'],
+      context: { task, model },
+    });
+    return res.status(400).json({
+      ok: false,
+      error_code: 'CT-001',
+      error: db.ERROR_MESSAGES['CT-001'],
+    });
   }
 
-  // Build user message
-  const taskInstruction = TASK_PROMPTS[task] || extra_instructions || '請處理以下逐字稿。';
-
-  let userContent = `${taskInstruction}\n\n`;
-
-  if (extra_instructions) {
-    userContent += `Additional instructions: ${extra_instructions}\n\n`;
+  if (transcript.trim().length < 10) {
+    await db.logError({
+      errorCode: db.ERROR_CODES.CT_002,
+      errorMessage: db.ERROR_MESSAGES['CT-002'],
+      context: { char_count: transcript.length },
+    });
+    return res.status(400).json({
+      ok: false,
+      error_code: 'CT-002',
+      error: db.ERROR_MESSAGES['CT-002'],
+    });
   }
 
-  userContent += `**Transcript:**\n${transcript}`;
+  if (!VALID_TASKS.includes(task)) {
+    await db.logError({
+      errorCode: db.ERROR_CODES.CT_003,
+      errorMessage: db.ERROR_MESSAGES['CT-003'],
+      context: { task },
+    });
+    return res.status(400).json({
+      ok: false,
+      error_code: 'CT-003',
+      error: db.ERROR_MESSAGES['CT-003'],
+    });
+  }
 
+  // Validate segments if provided
+  let parsedSegments = [];
   if (segments && segments.length > 0) {
-    const segText = segments
+    try {
+      parsedSegments = Array.isArray(segments) ? segments : JSON.parse(segments);
+    } catch {
+      await db.logError({
+        errorCode: db.ERROR_CODES.CT_009,
+        errorMessage: db.ERROR_MESSAGES['CT-009'],
+        context: { segments_type: typeof segments },
+      });
+      return res.status(400).json({
+        ok: false,
+        error_code: 'CT-009',
+        error: db.ERROR_MESSAGES['CT-009'],
+      });
+    }
+  }
+
+  // ── Create job record ───────────────────────────────────────────────────
+  try {
+    job = await db.createJob({
+      transcript: transcript.trim(),
+      segments: parsedSegments.length > 0 ? parsedSegments : null,
+      task,
+      model,
+      extra_instructions: extra_instructions.trim() || null,
+    });
+  } catch (err) {
+    console.error('[ct-routes] DB createJob error:', err.message);
+    await db.logError({
+      errorCode: db.ERROR_CODES.CT_006,
+      errorMessage: db.ERROR_MESSAGES['CT-006'],
+      context: { detail: err.message },
+    });
+    return res.status(500).json({
+      ok: false,
+      error_code: 'CT-006',
+      error: db.ERROR_MESSAGES['CT-006'],
+    });
+  }
+
+  // ── Build AI prompt ─────────────────────────────────────────────────────
+  const taskInstruction = TASK_PROMPTS[task] || extra_instructions || '請處理以下逐字稿。';
+  let userContent = `${taskInstruction}\n\n`;
+  if (extra_instructions.trim()) {
+    userContent += `Additional instructions: ${extra_instructions.trim()}\n\n`;
+  }
+  userContent += `**Transcript:**\n${transcript.trim()}`;
+
+  if (parsedSegments.length > 0) {
+    const segText = parsedSegments
       .map(s => `[${formatTime(s.start)} → ${formatTime(s.end)}] ${s.text}`)
       .join('\n');
     userContent += `\n\n**Segments with timestamps:**\n${segText}`;
   }
 
-  try {
-    let resultText;
-    let modelUsed;
+  // ── Call AI model ───────────────────────────────────────────────────────
+  let resultText;
+  let modelUsed;
 
+  try {
     if (model === 'deepseek' && deepseekService.isAvailable()) {
       const result = await deepseekService.analyze(CANTONESE_SYSTEM_PROMPT, userContent, {
         model: 'deepseek-chat',
@@ -117,6 +199,9 @@ router.post('/analyze', async (req, res) => {
       resultText = result.content;
       modelUsed = 'deepseek-chat';
     } else {
+      if (!process.env.ANTHROPIC_API_KEY) {
+        throw Object.assign(new Error(db.ERROR_MESSAGES['CT-004']), { code: 'CT-004' });
+      }
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
       const claudeModel = model === 'sonnet'
         ? 'claude-sonnet-4-6'
@@ -131,27 +216,141 @@ router.post('/analyze', async (req, res) => {
       resultText = message.content[0].text;
       modelUsed = claudeModel;
     }
-
-    return res.json({
-      ok: true,
-      task,
-      result: resultText,
-      model: modelUsed,
-    });
   } catch (err) {
-    console.error('[cantonese-transcription] analyze error:', err.message);
-    return res.status(500).json({ error: err.message });
+    const isRateLimit = err.status === 429 || err.message?.includes('rate');
+    const errorCode = err.code === 'CT-004' ? 'CT-004' : isRateLimit ? 'CT-010' : 'CT-005';
+
+    console.error(`[ct-routes] AI error (${errorCode}):`, err.message);
+    await db.updateJobStatus(job.job_id, 'error');
+    await db.logError({
+      jobId: job.job_id,
+      errorCode,
+      errorMessage: db.ERROR_MESSAGES[errorCode] || err.message,
+      context: { model, task, http_status: err.status, detail: err.message },
+    });
+
+    return res.status(err.status === 429 ? 429 : 502).json({
+      ok: false,
+      job_id: job.job_id,
+      error_code: errorCode,
+      error: db.ERROR_MESSAGES[errorCode] || err.message,
+    });
+  }
+
+  // ── Save result ─────────────────────────────────────────────────────────
+  const durationMs = Date.now() - startTime;
+  try {
+    await db.saveResult({
+      jobId: job.job_id,
+      resultText,
+      modelUsed,
+      durationMs,
+    });
+    await db.updateJobStatus(job.job_id, 'done');
+  } catch (err) {
+    console.error('[ct-routes] DB saveResult error:', err.message);
+    await db.logError({
+      jobId: job.job_id,
+      errorCode: db.ERROR_CODES.CT_006,
+      errorMessage: db.ERROR_MESSAGES['CT-006'],
+      context: { detail: err.message, phase: 'save_result' },
+    });
+    // Still return the result even if DB save fails
+  }
+
+  return res.json({
+    ok: true,
+    job_id: job.job_id,
+    task,
+    result: resultText,
+    model: modelUsed,
+    duration_ms: durationMs,
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/cantonese-transcription/jobs
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/jobs', async (req, res) => {
+  try {
+    const limit  = Math.min(parseInt(req.query.limit  || '50', 10), 200);
+    const offset = parseInt(req.query.offset || '0', 10);
+    const jobs   = await db.listJobs({ limit, offset });
+    return res.json({ ok: true, jobs });
+  } catch (err) {
+    console.error('[ct-routes] listJobs error:', err.message);
+    return res.status(500).json({
+      ok: false,
+      error_code: 'CT-007',
+      error: db.ERROR_MESSAGES['CT-007'],
+    });
   }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper: format seconds → MM:SS
+// GET /api/cantonese-transcription/jobs/:jobId
 // ─────────────────────────────────────────────────────────────────────────────
-function formatTime(seconds) {
-  if (typeof seconds !== 'number') return '?';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
+router.get('/jobs/:jobId', async (req, res) => {
+  try {
+    const job = await db.getJob(req.params.jobId);
+    if (!job) return res.status(404).json({ ok: false, error: 'Job not found' });
+    return res.json({ ok: true, job });
+  } catch (err) {
+    console.error('[ct-routes] getJob error:', err.message);
+    return res.status(500).json({
+      ok: false,
+      error_code: 'CT-007',
+      error: db.ERROR_MESSAGES['CT-007'],
+    });
+  }
+});
 
-module.exports = router;
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/cantonese-transcription/errors
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/errors', async (req, res) => {
+  try {
+    const limit  = Math.min(parseInt(req.query.limit  || '100', 10), 500);
+    const offset = parseInt(req.query.offset || '0', 10);
+    const logs   = await db.listErrorLogs({ limit, offset });
+    return res.json({ ok: true, logs });
+  } catch (err) {
+    console.error('[ct-routes] listErrors error:', err.message);
+    return res.status(500).json({
+      ok: false,
+      error_code: 'CT-007',
+      error: db.ERROR_MESSAGES['CT-007'],
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/cantonese-transcription/stats
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/stats', async (req, res) => {
+  try {
+    const stats = await db.getStats();
+    return res.json({ ok: true, stats });
+  } catch (err) {
+    console.error('[ct-routes] stats error:', err.message);
+    return res.status(500).json({
+      ok: false,
+      error_code: 'CT-007',
+      error: db.ERROR_MESSAGES['CT-007'],
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/cantonese-transcription/error-codes
+// Returns the full error code reference table
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/error-codes', (_req, res) => {
+  const table = Object.entries(db.ERROR_MESSAGES).map(([code, message]) => ({
+    code,
+    message,
+  }));
+  return res.json({ ok: true, error_codes: table });
+});
+
+module.exports = { router, initDb: db.init };

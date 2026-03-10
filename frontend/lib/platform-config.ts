@@ -499,9 +499,9 @@ export const USE_CASES: UseCaseConfig[] = [
     status: 'in_progress',
     progress: 0.6,
     priority: 'medium',
-    path: '/dashboard?tab=transcription',
+    path: '/use-cases/cantonese-transcription',
     agentCount: 4,
-    features: ['Whisper v3 Cantonese ASR', 'Clean Transcript', 'Meeting Minutes', 'ZH/EN Summary', 'Action Items', 'Code-switching Support'],
+    features: ['Whisper v3 Cantonese ASR', 'Clean Transcript', 'Meeting Minutes', 'ZH/EN Summary', 'Action Items', 'Code-switching Support', 'Fly Postgres History', 'Error Log + Codes'],
   },
 
   // ========================================================================
