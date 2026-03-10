@@ -654,27 +654,45 @@ async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
 
     // Run QuestionAgent on each block
     for (const block of rawBlocks) {
+      // Store full OCR metadata (options, page_number, image_description, question_number)
+      // in rawOcrText as JSON — no schema migration needed
+      const ocrMeta = JSON.stringify({
+        text:             block.raw_text,
+        options:          block.options          || [],
+        image_description: block.image_description || '',
+        page_number:      block.page_number      || null,
+        question_number:  block.question_number  || null,
+      });
+
+      const imageDesc = block.has_image
+        ? (block.image_description
+            ? `Question contains a diagram: ${block.image_description}`
+            : 'Question contains a diagram or figure')
+        : null;
+
       let draft = {
         paperId,
-        rawOcrText:  block.raw_text,
-        hasImage:    block.has_image,
-        stemEn:      block.raw_text,
-        suggestedDifficulty: 2,
+        rawOcrText:          ocrMeta,
+        hasImage:            block.has_image,
+        stemEn:              block.stem_en || block.raw_text,
+        stemZh:              block.stem_zh || null,
+        suggestedType:       block.suggested_type || 'MCQ',
+        suggestedDifficulty: block.difficulty_hint || 2,
         candidateObjectives,
       };
 
-      if (process.env.ANTHROPIC_API_KEY && block.raw_text.length > 20) {
+      if (process.env.ANTHROPIC_API_KEY && (block.stem_en || block.raw_text).length > 20) {
         try {
           const result = await getAgent().question.authorQuestion({
-            rawTextEn:            block.raw_text,
-            imageDescription:     block.has_image ? 'Question contains a diagram or figure' : null,
+            rawTextEn:        block.stem_en || block.raw_text,
+            imageDescription: imageDesc,
             candidateObjectives,
             gradeBand,
           });
-          draft.stemEn               = result.clean_stem_en  || block.raw_text;
-          draft.stemZh               = result.clean_stem_zh  || null;
-          draft.suggestedType        = result.question_type  || 'MCQ';
-          draft.suggestedDifficulty  = result.difficulty_estimate || 2;
+          draft.stemEn               = result.clean_stem_en  || draft.stemEn;
+          draft.stemZh               = result.clean_stem_zh  || draft.stemZh;
+          draft.suggestedType        = result.question_type  || draft.suggestedType;
+          draft.suggestedDifficulty  = result.difficulty_estimate || draft.suggestedDifficulty;
           draft.candidateObjectives  = result.selected_objective_codes?.map(code =>
             candidateObjectives.find(lo => lo.code === code)
           ).filter(Boolean) || candidateObjectives;
@@ -1386,6 +1404,56 @@ Rules:
 
   } catch (err) {
     console.error('[visual-extract] Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: OCR AI assistant ────────────────────────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/teachers/ocr-assistant
+ * Body: { paper_id, context: string, messages: [{role, content}] }
+ *
+ * Chat assistant that understands the OCR extraction context and can help
+ * the teacher identify issues, explain gaps, and suggest corrections.
+ */
+router.post('/teachers/ocr-assistant', async (req, res) => {
+  const { context, messages = [] } = req.body || {};
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(503).json({ success: false, error: 'ANTHROPIC_API_KEY not configured' });
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client    = new Anthropic.default({ apiKey });
+
+    const systemPrompt = `You are an OCR review assistant for a Hong Kong Secondary School mathematics teacher portal.
+The teacher has uploaded a past paper and an AI (Gemini) extracted questions from it.
+You help the teacher understand and fix OCR extraction issues.
+
+Current extraction context:
+${context || '(no context provided)'}
+
+Your role:
+- Explain why questions might be missing (token limits, complex layouts, bilingual text)
+- Help identify which questions have missing MCQ options or diagram descriptions
+- Suggest what the teacher should manually correct
+- Answer questions about the extraction quality
+- Be concise and practical — teachers are busy
+
+Keep responses short (2-4 sentences max unless detail is needed).`;
+
+    const response = await client.messages.create({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system:     systemPrompt,
+      messages:   messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+    });
+
+    const reply = response.content[0]?.text || 'I could not generate a response.';
+    res.json({ success: true, reply });
+  } catch (err) {
+    console.error('[ocr-assistant]', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

@@ -11,7 +11,15 @@ const nextConfig = {
   turbopack: {
     root: __dirname,
   },
-  // Static export - API calls will go to same domain
+  transpilePackages: ['pdfjs-dist'],
+  webpack: (config) => {
+    // pdfjs-dist v5 uses ES modules; tell webpack to handle .mjs files
+    config.resolve.extensionAlias = {
+      ...config.resolve.extensionAlias,
+      '.js': ['.js', '.mjs'],
+    };
+    return config;
+  },
 };
 
 module.exports = nextConfig;
