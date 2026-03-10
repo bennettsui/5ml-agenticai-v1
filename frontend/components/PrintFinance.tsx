@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   LayoutDashboard, Layers, DollarSign, Package, TrendingUp,
   FlaskConical, FileText, ArrowUpRight, ArrowDownRight,
@@ -655,6 +655,7 @@ function Revenue() {
   const [saving, setSaving] = useState(false);
   const [filterPeriod, setFilterPeriod] = useState('');
   const [filterChannel, setFilterChannel] = useState('');
+  const [showSummary, setShowSummary] = useState(false);
 
   const periods = Array.from(new Set((entries || []).map(r => r.period).filter(Boolean))).sort().reverse();
   const channels = Array.from(new Set((entries || []).map(r => r.channel).filter(Boolean))).sort();
@@ -735,10 +736,20 @@ function Revenue() {
             </select>
           )}
         </div>
-        <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
-          <Plus className="w-3.5 h-3.5" /> Add Entry
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowSummary(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs rounded-lg transition-colors ${showSummary ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' : 'border-slate-700/50 text-slate-400 hover:text-slate-200'}`}>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showSummary ? 'rotate-180' : ''}`} /> Summary
+          </button>
+          <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add Entry
+          </button>
+        </div>
       </div>
+
+      {showSummary && !loading && entries && entries.length > 0 && (
+        <RevenueSummary entries={entries} />
+      )}
 
       {adding && (
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
@@ -850,6 +861,91 @@ function Revenue() {
 }
 
 // ---------------------------------------------------------------------------
+// Revenue summary helper — used inside Revenue()
+// ---------------------------------------------------------------------------
+
+function RevenueSummary({ entries }: { entries: RevenueEntry[] }) {
+  const [groupBy, setGroupBy] = useState<'period' | 'channel' | 'both'>('period');
+
+  type SumRow = { key: string; revenue: number; cogs: number; gp: number; jobs: number };
+
+  const rows: SumRow[] = useMemo(() => {
+    const map = new Map<string, SumRow>();
+    for (const e of entries) {
+      const key = groupBy === 'period' ? (e.period || '—')
+        : groupBy === 'channel' ? (e.channel || '—')
+        : `${e.period || '—'} / ${e.channel || '—'}`;
+      const existing = map.get(key) || { key, revenue: 0, cogs: 0, gp: 0, jobs: 0 };
+      existing.revenue += Number(e.revenue);
+      existing.cogs += Number(e.cogs);
+      existing.gp += Number(e.revenue) - Number(e.cogs);
+      existing.jobs += Number(e.job_count || 0);
+      map.set(key, existing);
+    }
+    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+  }, [entries, groupBy]);
+
+  const total = rows.reduce((s, r) => ({ revenue: s.revenue + r.revenue, cogs: s.cogs + r.cogs, gp: s.gp + r.gp, jobs: s.jobs + r.jobs }), { revenue: 0, cogs: 0, gp: 0, jobs: 0 });
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-500">Group by</span>
+        {(['period', 'channel', 'both'] as const).map(g => (
+          <button key={g} onClick={() => setGroupBy(g)}
+            className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${groupBy === g ? 'bg-blue-500/20 border-blue-500/40 text-blue-300' : 'border-slate-700/50 text-slate-500 hover:text-slate-300'}`}>
+            {g === 'both' ? 'Period + Channel' : g.charAt(0).toUpperCase() + g.slice(1)}
+          </button>
+        ))}
+      </div>
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-white/[0.03] border-b border-slate-700/50">
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">{groupBy === 'period' ? 'Period' : groupBy === 'channel' ? 'Channel' : 'Period / Channel'}</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Revenue</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">COGS</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Gross Profit</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Margin</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Jobs</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const margin = r.revenue > 0 ? (r.gp / r.revenue) * 100 : 0;
+              return (
+                <tr key={r.key} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
+                  <td className="px-3 py-2.5 text-slate-200 font-medium">{r.key}</td>
+                  <td className="px-3 py-2.5 text-right text-white tabular-nums">{money(r.revenue)}</td>
+                  <td className="px-3 py-2.5 text-right text-rose-300 tabular-nums">{money(r.cogs)}</td>
+                  <td className="px-3 py-2.5 text-right text-emerald-300 tabular-nums">{money(r.gp)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <span className={margin > 70 ? 'text-emerald-400' : margin > 50 ? 'text-blue-400' : 'text-amber-400'}>{fmt(margin, 1)}%</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{r.jobs}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-slate-700/50 bg-white/[0.03]">
+              <td className="px-3 py-2.5 text-slate-400 font-semibold">Total</td>
+              <td className="px-3 py-2.5 text-right text-white font-semibold tabular-nums">{money(total.revenue)}</td>
+              <td className="px-3 py-2.5 text-right text-rose-300 font-semibold tabular-nums">{money(total.cogs)}</td>
+              <td className="px-3 py-2.5 text-right text-emerald-300 font-semibold tabular-nums">{money(total.gp)}</td>
+              <td className="px-3 py-2.5 text-right tabular-nums">
+                <span className={total.revenue > 0 && (total.gp / total.revenue * 100) > 50 ? 'text-emerald-400' : 'text-amber-400'}>{total.revenue > 0 ? fmt(total.gp / total.revenue * 100, 1) : '0.0'}%</span>
+              </td>
+              <td className="px-3 py-2.5 text-right text-slate-400 font-semibold tabular-nums">{total.jobs}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Sub-tab: Costs (with CSV/XLSX upload)
 // ---------------------------------------------------------------------------
 
@@ -866,6 +962,7 @@ function Costs() {
   const [filterPeriod, setFilterPeriod] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  const [showCostSummary, setShowCostSummary] = useState(false);
   const costPeriods = Array.from(new Set((entries || []).map(c => c.period).filter((p): p is string => !!p))).sort().reverse();
   const visibleEntries = (entries || []).filter(c =>
     (!filterPeriod || c.period === filterPeriod) &&
@@ -1015,10 +1112,20 @@ function Costs() {
       {/* Manual Add + Table */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-white">Cost Entries</h3>
-        <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
-          <Plus className="w-3.5 h-3.5" /> Add Entry
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowCostSummary(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs rounded-lg transition-colors ${showCostSummary ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' : 'border-slate-700/50 text-slate-400 hover:text-slate-200'}`}>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCostSummary ? 'rotate-180' : ''}`} /> Summary
+          </button>
+          <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add Entry
+          </button>
+        </div>
       </div>
+
+      {showCostSummary && !loading && entries && entries.length > 0 && (
+        <CostSummary entries={entries} />
+      )}
 
       {adding && (
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
@@ -1426,6 +1533,89 @@ function LabourLogTable() {
               );
             })}
           </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cost summary — pivot by category or period or type
+// ---------------------------------------------------------------------------
+
+function CostSummary({ entries }: { entries: CostEntry[] }) {
+  const [groupBy, setGroupBy] = useState<'category' | 'period' | 'type'>('category');
+
+  type SumRow = { key: string; amount: number; count: number };
+
+  const rows: SumRow[] = useMemo(() => {
+    const map = new Map<string, SumRow>();
+    for (const e of entries) {
+      const key = groupBy === 'category' ? (e.category || '—')
+        : groupBy === 'period' ? (e.period || '—')
+        : (e.type || '—');
+      const existing = map.get(key) || { key, amount: 0, count: 0 };
+      existing.amount += Number(e.amount);
+      existing.count += 1;
+      map.set(key, existing);
+    }
+    return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+  }, [entries, groupBy]);
+
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+
+  const typeColor = (key: string) =>
+    key === 'direct' ? 'text-rose-400' : key === 'overhead' ? 'text-amber-400' : key === 'fixed' ? 'text-blue-400' : 'text-slate-300';
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-500">Group by</span>
+        {(['category', 'period', 'type'] as const).map(g => (
+          <button key={g} onClick={() => setGroupBy(g)}
+            className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${groupBy === g ? 'bg-blue-500/20 border-blue-500/40 text-blue-300' : 'border-slate-700/50 text-slate-500 hover:text-slate-300'}`}>
+            {g.charAt(0).toUpperCase() + g.slice(1)}
+          </button>
+        ))}
+      </div>
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-white/[0.03] border-b border-slate-700/50">
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">{groupBy.charAt(0).toUpperCase() + groupBy.slice(1)}</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Amount</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">% of Total</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Entries</th>
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium pl-4">Share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const pct = total > 0 ? (r.amount / total) * 100 : 0;
+              return (
+                <tr key={r.key} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
+                  <td className={`px-3 py-2.5 font-medium ${groupBy === 'type' ? typeColor(r.key) : 'text-slate-200'}`}>{r.key}</td>
+                  <td className="px-3 py-2.5 text-right text-white tabular-nums">{money(r.amount)}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{fmt(pct, 1)}%</td>
+                  <td className="px-3 py-2.5 text-right text-slate-500 tabular-nums">{r.count}</td>
+                  <td className="px-3 py-2.5 pl-4">
+                    <div className="h-1.5 rounded-full bg-slate-700/50 w-32">
+                      <div className="h-full rounded-full bg-blue-500/60" style={{ width: `${pct}%` }} />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-slate-700/50 bg-white/[0.03]">
+              <td className="px-3 py-2.5 text-slate-400 font-semibold">Total</td>
+              <td className="px-3 py-2.5 text-right text-white font-semibold tabular-nums">{money(total)}</td>
+              <td className="px-3 py-2.5 text-right text-slate-500">100%</td>
+              <td className="px-3 py-2.5 text-right text-slate-500 tabular-nums">{rows.reduce((s, r) => s + r.count, 0)}</td>
+              <td />
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
