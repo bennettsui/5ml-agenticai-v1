@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {
   FileText, Upload, RefreshCw, CheckCircle, Clock, AlertCircle,
   Loader2, ArrowRight, Cloud, Cpu, PackageCheck, ChevronRight,
-  Pencil, Trash2, X, Save, RotateCcw, Coins,
+  Pencil, Trash2, X, Save, RotateCcw, Coins, Wand2,
 } from 'lucide-react';
 import { useTeacherAuth } from '@/components/adaptive/useTeacherAuth';
 
@@ -497,6 +497,7 @@ export default function PapersPage() {
   const [editPaper, setEditPaper]       = useState<Paper | null>(null);
   const [deletingId, setDeletingId]     = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [reprocessingId, setReprocessingId]   = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -546,6 +547,19 @@ export default function PapersPage() {
       });
       load();
     } catch {}
+  };
+
+  const handleReprocess = async (paperId: string) => {
+    setReprocessingId(paperId);
+    try {
+      const res  = await fetch(`/api/adaptive-learning/teachers/papers/${paperId}/reprocess`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        // paper is now back in OCR_RUNNING — refresh list so status updates
+        await load();
+      }
+    } catch {}
+    finally { setReprocessingId(null); }
   };
 
   const now = Date.now();
@@ -758,6 +772,18 @@ export default function PapersPage() {
                       {p.draft_count > 0 && (
                         <CostBadge draftCount={p.draft_count} />
                       )}
+                      {/* Re-run OCR — useful for papers extracted with old pipeline */}
+                      <button
+                        onClick={() => handleReprocess(p.id)}
+                        disabled={reprocessingId === p.id}
+                        title="Re-extract questions with latest OCR pipeline"
+                        className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-purple-400 transition-colors disabled:opacity-40"
+                      >
+                        {reprocessingId === p.id
+                          ? <Loader2 className="w-3 h-3 animate-spin" />
+                          : <Wand2 className="w-3 h-3" />}
+                        {reprocessingId === p.id ? 'Re-extracting…' : 'Re-run OCR'}
+                      </button>
                     </div>
                   )}
                 </div>

@@ -1335,6 +1335,52 @@ router.get('/teachers/papers', async (req, res) => {
   }
 });
 
+// ─── Teacher: reprocess OCR ───────────────────────────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/teachers/papers/:id/reprocess
+ * Re-runs the full OCR + QuestionAgent pipeline on an existing paper.
+ * Deletes current draft questions and re-extracts from the stored PDF.
+ * Fetches PDF from local filesystem first, falls back to CDN.
+ */
+router.post('/teachers/papers/:id/reprocess', async (req, res) => {
+  try {
+    const paper = await db.getPaper(req.params.id);
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
+
+    const fs   = require('fs');
+    const path = require('path');
+
+    // Resolve PDF buffer — local first, then CDN
+    let pdfBuffer;
+    const localPath = paper.file_url ? path.join('/app', paper.file_url) : null;
+
+    if (localPath && fs.existsSync(localPath)) {
+      pdfBuffer = fs.readFileSync(localPath);
+    } else if (paper.cdn_url) {
+      const response = await fetch(paper.cdn_url);
+      if (!response.ok) throw new Error(`CDN fetch failed: ${response.status}`);
+      const buf = await response.arrayBuffer();
+      pdfBuffer = Buffer.from(buf);
+    } else {
+      return res.status(404).json({ success: false, error: 'PDF not available locally or on CDN. Re-upload to restore.' });
+    }
+
+    // Delete existing draft questions for this paper
+    const { pool } = require('../../../db');
+    await pool.query(`DELETE FROM draft_questions WHERE paper_id = $1`, [paper.id]);
+
+    // Fire new pipeline async
+    _runOcrPipeline(paper.id, pdfBuffer, paper.grade_band || 'S1-S2').catch(err =>
+      console.error(`[reprocess] OCR pipeline failed for paper ${paper.id}:`, err.message)
+    );
+
+    res.json({ success: true, message: 'Re-extraction started. Refresh in ~30–60 s.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── Teacher: update paper metadata ───────────────────────────────────────────
 
 /**

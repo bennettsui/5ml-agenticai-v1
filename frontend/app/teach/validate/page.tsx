@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Loader2, AlertCircle, CheckCircle,
   Edit2, Check, X, ZoomIn, ZoomOut, RefreshCw, FileText, Eye,
-  MessageSquare, Send, Bot, User,
+  MessageSquare, Send, Bot, User, Wand2,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -249,6 +249,7 @@ function ValidateInner() {
 
   // Paper info
   const [paperName, setPaperName]       = useState('');
+  const [reprocessing, setReprocessing] = useState(false);
 
   // Draft questions
   const [drafts, setDrafts]             = useState<DraftQuestion[]>([]);
@@ -371,6 +372,31 @@ function ValidateInner() {
 
   const diffLabel = (n: number) => ['', 'Easy', 'Med-Low', 'Medium', 'Hard', 'Very Hard'][n] ?? '';
 
+  const reprocessOcr = async () => {
+    setReprocessing(true);
+    try {
+      const res  = await fetch(`/api/adaptive-learning/teachers/papers/${id}/reprocess`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setDrafts([]);
+        setDraftsLoading(true);
+        // Poll until DRAFT_READY
+        const poll = setInterval(async () => {
+          const r = await fetch(`/api/adaptive-learning/teachers/papers/${id}/draft-questions`);
+          const d = await r.json();
+          if (d.success && (d.status === 'DRAFT_READY' || d.status === 'CONFIRMED' || d.status === 'NEEDS_REVIEW')) {
+            clearInterval(poll);
+            const questions = (d.draft_questions || []).map((q: DraftQuestion) => ({ ...q, _meta: parseMeta(q.raw_ocr_text) }));
+            setDrafts(questions);
+            setDraftsLoading(false);
+          }
+        }, 5000);
+        setTimeout(() => { clearInterval(poll); setDraftsLoading(false); }, 5 * 60 * 1000);
+      }
+    } catch {}
+    finally { setReprocessing(false); }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
@@ -386,6 +412,16 @@ function ValidateInner() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-500">{drafts.length} questions extracted</span>
+          <button
+            onClick={reprocessOcr}
+            disabled={reprocessing || draftsLoading}
+            title="Re-run OCR with latest pipeline (fixes missing questions, MCQ options, images)"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-700/60 hover:bg-slate-700 border border-slate-600/50 text-slate-300 rounded-xl text-sm transition-colors disabled:opacity-40"
+          >
+            {reprocessing
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Re-extracting…</>
+              : <><Wand2 className="w-3.5 h-3.5" />Re-run OCR</>}
+          </button>
           <Link href={`/teach/questions/pending?paper_id=${id}`}
             className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-semibold transition-colors">
             Review Questions →
