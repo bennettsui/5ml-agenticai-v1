@@ -1079,7 +1079,7 @@ export default function CantoneseTranscriptionPage() {
                       >
                         {sttLoading
                           ? <><Loader2 className={`w-6 h-6 animate-spin ${sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400'}`} /><span className="text-xs text-slate-400">轉錄中，請稍候…</span></>
-                          : <><Upload className="w-6 h-6 text-slate-500" /><span className="text-xs text-slate-400">上傳音訊檔案</span><span className="text-[10px] text-slate-600">WAV · MP3 · OGG · FLAC · M4A · WebM · 最大 25MB</span></>}
+                          : <><Upload className="w-6 h-6 text-slate-500" /><span className="text-xs text-slate-400">上傳音訊檔案</span><span className="text-[10px] text-slate-600">WAV · MP3 · OGG · FLAC · M4A · WebM · 最大 100MB</span></>}
                       </button>
                       {sttError && (
                         <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">

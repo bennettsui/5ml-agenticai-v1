@@ -11,7 +11,7 @@ const db         = require('./db');
 const sttService = require('./stt-service');
 
 // multer: memory storage so we can forward audio bytes to Google STT
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 const router = express.Router();
 
