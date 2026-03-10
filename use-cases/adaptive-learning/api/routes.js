@@ -495,19 +495,25 @@ router.post('/teachers/papers/upload', upload.single('file'), async (req, res) =
       fileSizeBytes: req.file.size || req.file.buffer.length,
     });
 
-    // Fire CDN push async — captures buffer reference before it goes out of scope
     const bufferCopy = Buffer.from(req.file.buffer);
-    _uploadPdfToCdn(bufferCopy, path.basename(fileKey))
-      .then(cdnUrl => db.updatePaperCdnUrl(paper.id, cdnUrl)
-        .then(() => console.log(`[AdaptiveLearning] Paper ${paper.id} → CDN: ${cdnUrl}`)))
-      .catch(err  => console.warn(`[AdaptiveLearning] CDN push failed for ${paper.id}:`, err.message));
+
+    // CDN push is synchronous so cdn_url is always saved before we respond.
+    // On Fly.io the local file is ephemeral; CDN is the only durable copy.
+    let cdnUrl = null;
+    try {
+      cdnUrl = await _uploadPdfToCdn(bufferCopy, path.basename(fileKey));
+      await db.updatePaperCdnUrl(paper.id, cdnUrl);
+      console.log(`[AdaptiveLearning] Paper ${paper.id} → CDN: ${cdnUrl}`);
+    } catch (cdnErr) {
+      console.warn(`[AdaptiveLearning] CDN push failed for ${paper.id}:`, cdnErr.message);
+    }
 
     // Fire OCR + QuestionAgent pipeline async (non-blocking)
     _runOcrPipeline(paper.id, bufferCopy, req.body.grade_band || 'S1-S2').catch(err =>
       console.error(`OCR pipeline failed for paper ${paper.id}:`, err.message)
     );
 
-    res.json({ success: true, paper_id: paper.id, status: 'UPLOADED', message: 'PDF uploaded. Draft questions will be ready shortly.' });
+    res.json({ success: true, paper_id: paper.id, status: 'UPLOADED', cdn_backed: !!cdnUrl, message: 'PDF uploaded. Draft questions will be ready shortly.' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1195,7 +1201,7 @@ router.get('/teachers/papers/:id/file', async (req, res) => {
       return;
     }
 
-    res.status(404).json({ success: false, error: 'PDF not available locally or on CDN. Re-upload to restore.' });
+    res.status(404).json({ success: false, error: 'PDF not available locally or on CDN. Re-upload to restore.', reason: 'pdf_lost' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
