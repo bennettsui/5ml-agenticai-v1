@@ -494,14 +494,14 @@ export const USE_CASES: UseCaseConfig[] = [
   {
     id: 'audio-to-transcript',
     name: 'Audio to Transcript',
-    description: 'Agentic transcription pipeline: audio → Whisper STT → speaker diarisation → formatted transcript with timestamps and summary',
+    description: 'Cantonese ASR analysis pipeline: Whisper v3 STT output → clean transcript, meeting minutes, summaries, and action items in Cantonese / English',
     solutionLine: 'ExpLab',
-    status: 'planned',
-    progress: 0,
+    status: 'in_progress',
+    progress: 0.6,
     priority: 'medium',
-    path: '#',
+    path: '/dashboard?tab=transcription',
     agentCount: 4,
-    features: ['Whisper STT', 'Speaker Diarisation', 'Timestamped Transcript', 'AI Summary', 'Export (TXT/SRT/DOCX)'],
+    features: ['Whisper v3 Cantonese ASR', 'Clean Transcript', 'Meeting Minutes', 'ZH/EN Summary', 'Action Items', 'Code-switching Support'],
   },
 
   // ========================================================================
