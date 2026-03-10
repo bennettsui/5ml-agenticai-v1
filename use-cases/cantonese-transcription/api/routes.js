@@ -164,15 +164,77 @@ router.post('/analyze', async (req, res) => {
   }
 
   // ── Step 3: call AI model (streaming) ─────────────────────────────────
-  const modelLabel = model === 'deepseek' ? 'DeepSeek Chat' : model === 'sonnet' ? 'Claude Sonnet 4.6' : 'Claude Haiku 4.5';
+  const MODEL_LABELS = {
+    deepseek: 'DeepSeek Chat',
+    sonnet:   'Claude Sonnet 4.6',
+    haiku:    'Claude Haiku 4.5',
+    gemini:   'Gemini 2.0 Flash',
+  };
+  const modelLabel = MODEL_LABELS[model] || model;
   emit(res, { type: 'step', step: 'calling_ai', label: `呼叫 ${modelLabel}…`, model: modelLabel });
 
   let fullText = '';
   let modelUsed = '';
 
   try {
-    if (model === 'deepseek' && deepseekService.isAvailable()) {
-      // DeepSeek: no streaming SDK — emit progress, then single call
+    if (model === 'gemini') {
+      // ── Gemini 2.0 Flash — SSE streaming via REST ─────────────────────
+      const geminiKey = process.env.GEMINI_API_KEY;
+      if (!geminiKey) throw Object.assign(new Error('GEMINI_API_KEY 未設定'), { code: 'CT-004' });
+
+      const geminiModel = 'gemini-2.0-flash';
+      modelUsed = geminiModel;
+      emit(res, { type: 'step', step: 'streaming', label: `串流生成中 (${geminiModel})…` });
+
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse&key=${geminiKey}`;
+      const geminiBody = {
+        system_instruction: { parts: [{ text: CANTONESE_SYSTEM_PROMPT }] },
+        contents: [{ role: 'user', parts: [{ text: userContent }] }],
+        generationConfig: { maxOutputTokens: 4000, temperature: 0.3 },
+      };
+
+      const geminiResp = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(geminiBody),
+      });
+
+      if (!geminiResp.ok) {
+        const errText = await geminiResp.text();
+        throw new Error(`Gemini API error ${geminiResp.status}: ${errText}`);
+      }
+
+      // Gemini SSE: each chunk is `data: {...}\n\n`
+      const reader  = geminiResp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer    = '';
+      let tokenCount = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+          try {
+            const chunk = JSON.parse(jsonStr);
+            const text  = chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+            if (text) {
+              fullText += text;
+              tokenCount++;
+              emit(res, { type: 'token', text, token_count: tokenCount });
+            }
+          } catch { /* malformed chunk, skip */ }
+        }
+      }
+
+    } else if (model === 'deepseek' && deepseekService.isAvailable()) {
+      // ── DeepSeek: no streaming SDK — emit progress, then single call ──
       emit(res, { type: 'step', step: 'streaming', label: 'DeepSeek 生成中…' });
       const result = await deepseekService.analyze(CANTONESE_SYSTEM_PROMPT, userContent, {
         model: 'deepseek-chat',
@@ -181,9 +243,10 @@ router.post('/analyze', async (req, res) => {
       });
       fullText = result.content;
       modelUsed = 'deepseek-chat';
-      // Emit the whole text as a single token event (no native streaming)
       emit(res, { type: 'token', text: fullText });
+
     } else {
+      // ── Claude (Haiku or Sonnet) — Anthropic streaming SDK ────────────
       if (!process.env.ANTHROPIC_API_KEY) {
         throw Object.assign(new Error(db.ERROR_MESSAGES['CT-004']), { code: 'CT-004' });
       }
@@ -193,7 +256,6 @@ router.post('/analyze', async (req, res) => {
 
       emit(res, { type: 'step', step: 'streaming', label: `串流生成中 (${claudeModel})…` });
 
-      // Token-by-token streaming
       const stream = anthropic.messages.stream({
         model: claudeModel,
         max_tokens: 4000,

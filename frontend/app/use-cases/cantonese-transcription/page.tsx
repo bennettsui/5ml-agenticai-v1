@@ -16,7 +16,7 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Task     = 'clean_transcript' | 'meeting_minutes' | 'summary_zh' | 'summary_en' | 'action_items';
-type Model    = 'haiku' | 'sonnet' | 'deepseek';
+type Model    = 'haiku' | 'sonnet' | 'deepseek' | 'gemini';
 type PageTab  = 'analyze' | 'visualizer' | 'history' | 'errors' | 'error-codes';
 
 type StepStatus = 'pending' | 'active' | 'done' | 'error';
@@ -99,11 +99,35 @@ const TASKS: {
   },
 ];
 
-const MODEL_OPTIONS: { value: Model; label: string; note: string; color: string }[] = [
-  { value: 'haiku',    label: 'Claude Haiku 4.5',  note: 'Fast · $0.25/1M',    color: 'text-blue-400'   },
-  { value: 'sonnet',   label: 'Claude Sonnet 4.6', note: 'Best · $3/1M',       color: 'text-purple-400' },
-  { value: 'deepseek', label: 'DeepSeek Chat',     note: 'Economy · $0.14/1M', color: 'text-teal-400'   },
+const MODEL_OPTIONS: {
+  value: Model; label: string; note: string; color: string;
+  inputPer1M: number; outputPer1M: number;
+}[] = [
+  { value: 'deepseek', label: 'DeepSeek Chat',     note: 'Economy',  color: 'text-teal-400',   inputPer1M: 0.14, outputPer1M: 0.28  },
+  { value: 'gemini',   label: 'Gemini 2.0 Flash',  note: 'Fast',     color: 'text-green-400',  inputPer1M: 0.075, outputPer1M: 0.30 },
+  { value: 'haiku',    label: 'Claude Haiku 4.5',  note: 'Balanced', color: 'text-blue-400',   inputPer1M: 0.25, outputPer1M: 1.25  },
+  { value: 'sonnet',   label: 'Claude Sonnet 4.6', note: 'Best',     color: 'text-purple-400', inputPer1M: 3.00, outputPer1M: 15.00 },
 ];
+
+// Rough token estimate: ~4 chars per token
+function estimateCost(model: Model, inputChars: number, outputChars = 600): string {
+  const opt = MODEL_OPTIONS.find(m => m.value === model);
+  if (!opt) return '—';
+  const inputTokens  = inputChars  / 4;
+  const outputTokens = outputChars / 4;
+  const cost = (inputTokens * opt.inputPer1M + outputTokens * opt.outputPer1M) / 1_000_000;
+  if (cost < 0.001) return '<$0.001';
+  return `~$${cost.toFixed(4)}`;
+}
+
+// Recommended model per task
+const TASK_DEFAULT_MODEL: Record<string, Model> = {
+  clean_transcript: 'deepseek',
+  meeting_minutes:  'deepseek',
+  summary_zh:       'deepseek',
+  summary_en:       'deepseek',
+  action_items:     'deepseek',
+};
 
 const INITIAL_STEPS: ProgressStep[] = [
   { id: 'validating',   label: '驗證輸入',   status: 'pending' },
@@ -553,7 +577,8 @@ export default function CantoneseTranscriptionPage() {
   const [extraInstructions, setExtra]   = useState('');
   const [segments, setSegments]         = useState<Segment[]>([]);
   const [selectedTask, setTask]         = useState<Task>('clean_transcript');
-  const [model, setModel]               = useState<Model>('haiku');
+  const [model, setModel]               = useState<Model>('deepseek');
+  const [modelManuallySet, setModelManuallySet] = useState(false);
 
   // Streaming state
   const [loading, setLoading]           = useState(false);
@@ -561,7 +586,7 @@ export default function CantoneseTranscriptionPage() {
   const [streamText, setStreamText]     = useState('');
   const [tokenCount, setTokenCount]     = useState(0);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-  const [finalMeta, setFinalMeta]       = useState<{ model: string; duration_ms: number } | null>(null);
+  const [finalMeta, setFinalMeta]       = useState<{ model: string; duration_ms: number; char_count?: number } | null>(null);
   const [analyzeError, setAnalyzeError] = useState<{ code: string; message: string } | null>(null);
   const [copied, setCopied]             = useState(false);
   const streamRef                       = useRef<HTMLPreElement>(null);
@@ -665,7 +690,7 @@ export default function CantoneseTranscriptionPage() {
             }
             case 'done':
               setSteps(prev => prev.map(s => ({ ...s, status: s.status !== 'error' ? 'done' : 'error' })));
-              setFinalMeta({ model: ev.model as string, duration_ms: ev.duration_ms as number });
+              setFinalMeta({ model: ev.model as string, duration_ms: ev.duration_ms as number, char_count: ev.char_count as number });
               setCurrentJobId(ev.job_id as string);
               break;
             case 'error':
@@ -952,7 +977,10 @@ export default function CantoneseTranscriptionPage() {
                       return (
                         <button
                           key={task.value}
-                          onClick={() => setTask(task.value)}
+                          onClick={() => {
+                            setTask(task.value);
+                            if (!modelManuallySet) setModel(TASK_DEFAULT_MODEL[task.value] ?? 'deepseek');
+                          }}
                           disabled={loading}
                           className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-all disabled:cursor-not-allowed ${
                             active ? task.ring : 'border-slate-700/50 hover:bg-white/[0.02]'
@@ -976,24 +1004,46 @@ export default function CantoneseTranscriptionPage() {
                   <div className="px-4 py-2.5 border-b border-slate-700/50">
                     <span className="text-xs font-medium text-slate-300">AI 模型</span>
                   </div>
-                  <div className="p-3 grid grid-cols-3 gap-2">
-                    {MODEL_OPTIONS.map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setModel(opt.value)}
-                        disabled={loading}
-                        className={`p-2.5 rounded-lg border text-center transition-all disabled:cursor-not-allowed ${
-                          model === opt.value
-                            ? 'border-indigo-500/40 bg-indigo-500/[0.07] ring-1 ring-indigo-500/30'
-                            : 'border-slate-700/50 hover:bg-white/[0.02]'
-                        }`}
-                      >
-                        <div className={`text-[11px] font-medium ${model === opt.value ? opt.color : 'text-slate-300'}`}>{opt.label}</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">{opt.note}</div>
-                      </button>
-                    ))}
+                  <div className="p-3 grid grid-cols-2 gap-2">
+                    {MODEL_OPTIONS.map(opt => {
+                      const isDefault = TASK_DEFAULT_MODEL[selectedTask] === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => { setModel(opt.value); setModelManuallySet(true); }}
+                          disabled={loading}
+                          className={`p-2.5 rounded-lg border text-center transition-all disabled:cursor-not-allowed relative ${
+                            model === opt.value
+                              ? 'border-indigo-500/40 bg-indigo-500/[0.07] ring-1 ring-indigo-500/30'
+                              : 'border-slate-700/50 hover:bg-white/[0.02]'
+                          }`}
+                        >
+                          {isDefault && (
+                            <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 text-[8px] bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-full px-1.5 leading-4">推薦</span>
+                          )}
+                          <div className={`text-[11px] font-medium mt-1 ${model === opt.value ? opt.color : 'text-slate-300'}`}>{opt.label}</div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">{opt.note}</div>
+                          <div className="text-[9px] text-slate-600 mt-0.5">${opt.inputPer1M}/${opt.outputPer1M} /1M</div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
+
+                {/* Cost estimate */}
+                {transcript.trim() && !loading && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-slate-700/30 text-[11px]">
+                    <span className="text-slate-500">預計費用：</span>
+                    <span className={`font-medium ${MODEL_OPTIONS.find(m => m.value === model)?.color ?? 'text-slate-300'}`}>
+                      {estimateCost(model, transcript.length)}
+                    </span>
+                    <span className="text-slate-600">·</span>
+                    <span className={`${MODEL_OPTIONS.find(m => m.value === model)?.color ?? 'text-slate-300'}`}>
+                      {MODEL_OPTIONS.find(m => m.value === model)?.label}
+                    </span>
+                    <span className="text-slate-600 ml-auto">≈{Math.round(transcript.length / 4).toLocaleString()} input tokens</span>
+                  </div>
+                )}
 
                 <div className="flex gap-2">
                   <button
@@ -1033,7 +1083,19 @@ export default function CantoneseTranscriptionPage() {
                       <span>{tokenCount.toLocaleString()} tokens</span>
                     )}
                     {finalMeta && (
-                      <span>{(finalMeta.duration_ms / 1000).toFixed(1)}s · {finalMeta.model.replace('claude-', '').replace('-20251001', '')}</span>
+                      <>
+                        <span>{(finalMeta.duration_ms / 1000).toFixed(1)}s</span>
+                        <span className="text-slate-600">·</span>
+                        <span>{finalMeta.model.replace('claude-', '').replace('-20251001', '').replace('gemini-', 'Gemini ')}</span>
+                        {finalMeta.char_count && (
+                          <>
+                            <span className="text-slate-600">·</span>
+                            <span className="text-green-400">
+                              實際≈{estimateCost(model, transcript.length, finalMeta.char_count)}
+                            </span>
+                          </>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
