@@ -521,7 +521,7 @@ router.get('/teachers/papers/:id/draft-questions', async (req, res) => {
     const paper  = await db.getPaper(req.params.id);
     if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
     const drafts = await db.getDraftQuestions(req.params.id);
-    res.json({ success: true, paper_id: paper.id, status: paper.status, exam_name: paper.exam_name, draft_questions: drafts });
+    res.json({ success: true, paper_id: paper.id, status: paper.status, exam_name: paper.exam_name, paper_file_url: paper.file_url || null, draft_questions: drafts });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
