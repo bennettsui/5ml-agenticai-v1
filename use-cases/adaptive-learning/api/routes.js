@@ -628,7 +628,20 @@ router.get('/teacher/classes/:className/mastery', async (req, res) => {
 
 // ─── OCR pipeline (async) ─────────────────────────────────────────────────────
 
+// In-memory progress store: paperId → { stage, detail, questions_found, questions_analysed }
+const _pipelineProgress = new Map();
+
+/**
+ * GET /api/adaptive-learning/teachers/papers/:id/progress
+ * Returns live pipeline progress while OCR is running.
+ */
+router.get('/teachers/papers/:id/progress', (req, res) => {
+  const p = _pipelineProgress.get(req.params.id);
+  res.json({ progress: p || null });
+});
+
 async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
+  _pipelineProgress.set(paperId, { stage: 'reading', detail: 'Sending PDF to Gemini…', questions_found: 0, questions_analysed: 0 });
   try {
     await db.updatePaperStatus(paperId, 'OCR_RUNNING');
 
@@ -646,6 +659,7 @@ async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
       return;
     }
 
+    _pipelineProgress.set(paperId, { stage: 'analysing', detail: `Gemini found ${rawBlocks.length} question${rawBlocks.length !== 1 ? 's' : ''}. Analysing with Claude…`, questions_found: rawBlocks.length, questions_analysed: 0 });
     await db.updatePaperStatus(paperId, 'DRAFT_READY');
 
     // Get candidate LOs for this grade
@@ -653,7 +667,10 @@ async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
     const candidateObjectives = los.slice(0, 20).map(lo => ({ code: lo.code, name_en: lo.name_en, name_zh: lo.name_zh }));
 
     // Run QuestionAgent on each block
-    for (const block of rawBlocks) {
+    for (let i = 0; i < rawBlocks.length; i++) {
+      const block = rawBlocks[i];
+      _pipelineProgress.set(paperId, { stage: 'analysing', detail: `Analysing question ${i + 1} of ${rawBlocks.length}…`, questions_found: rawBlocks.length, questions_analysed: i });
+
       let draft = {
         paperId,
         rawOcrText:  block.raw_text,
@@ -689,6 +706,8 @@ async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
     console.error(`[OCR] Pipeline failed for paper ${paperId}:`, err.message);
     await db.updatePaperStatus(paperId, 'NEEDS_REVIEW').catch(() => {});
   }
+
+  _pipelineProgress.delete(paperId);
 }
 
 // ─── Additional routes appended below ──────────────────────────────────────

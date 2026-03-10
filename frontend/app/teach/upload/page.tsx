@@ -1,10 +1,17 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { Upload, FileText, CheckCircle, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, ArrowRight, Eye, Layers } from 'lucide-react';
 import { useTeacherAuth } from '@/components/adaptive/useTeacherAuth';
 
 type UploadStatus = 'IDLE' | 'UPLOADING' | 'PROCESSING' | 'READY' | 'ERROR';
+
+interface PipelineProgress {
+  stage: 'reading' | 'analysing';
+  detail: string;
+  questions_found: number;
+  questions_analysed: number;
+}
 
 export default function UploadPage() {
   const { teacher } = useTeacherAuth();
@@ -20,6 +27,7 @@ export default function UploadPage() {
   const [paperId, setPaperId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [progress, setProgress] = useState<PipelineProgress | null>(null);
 
   const handleFile = (f: File) => {
     if (f.type !== 'application/pdf') { setError('Only PDF files are accepted.'); return; }
@@ -94,7 +102,7 @@ export default function UploadPage() {
 
   const handleUpload = async () => {
     if (!file) return;
-    setStatus('UPLOADING'); setError('');
+    setStatus('UPLOADING'); setError(''); setProgress(null);
     const form = new FormData();
     form.append('file', file);
     form.append('exam_name', examName || file.name);
@@ -114,11 +122,11 @@ export default function UploadPage() {
       setMessage(data.message || 'Uploaded! Gemini is extracting questions…');
       setStatus('PROCESSING');
 
-      // Poll until DRAFT_READY
+      // Poll draft status every 5s
       let tries = 0;
       const poll = setInterval(async () => {
         tries++;
-        if (tries > 24) { clearInterval(poll); setStatus('READY'); return; } // stop after ~2 min
+        if (tries > 36) { clearInterval(poll); setStatus('READY'); return; }
         try {
           const r = await fetch(`/api/adaptive-learning/teachers/papers/${data.paper_id}/draft-questions`);
           const d = await r.json();
@@ -130,10 +138,26 @@ export default function UploadPage() {
           }
         } catch {}
       }, 5000);
+
+      // Poll pipeline progress every 2s for live updates
+      const progressPoll = setInterval(async () => {
+        try {
+          const r = await fetch(`/api/adaptive-learning/teachers/papers/${data.paper_id}/progress`);
+          const d = await r.json();
+          setProgress(d.progress);
+          // Stop progress polling once pipeline is done (progress is null)
+          if (!d.progress) clearInterval(progressPoll);
+        } catch {}
+      }, 2000);
+
     } catch (err: any) {
       setError(err.message); setStatus('ERROR');
     }
   };
+
+  const pct = progress?.questions_found
+    ? Math.round((progress.questions_analysed / progress.questions_found) * 100)
+    : 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -244,12 +268,64 @@ export default function UploadPage() {
           </button>
         </div>
       ) : status === 'PROCESSING' ? (
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-8 text-center space-y-4">
-          <div className="w-12 h-12 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <div>
-            <p className="text-white font-medium">Gemini is reading your paper…</p>
-            <p className="text-slate-400 text-sm mt-1">{message}</p>
-            <p className="text-slate-500 text-xs mt-2">This usually takes 15–60 seconds.</p>
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin shrink-0" />
+            <div>
+              <p className="text-white font-medium">
+                {progress?.stage === 'analysing' ? 'Analysing questions with Claude…' : 'Gemini reading your paper…'}
+              </p>
+              <p className="text-slate-400 text-xs mt-0.5">This usually takes 15–60 seconds</p>
+            </div>
+          </div>
+
+          {/* Live detail */}
+          <div className="bg-slate-900/50 border border-slate-700/40 rounded-xl px-4 py-3 space-y-3">
+            {/* Stage pills */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
+                progress?.stage === 'reading' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-slate-700/50 text-slate-500'
+              }`}>
+                <Eye className="w-3 h-3" />
+                Gemini reading PDF
+              </span>
+              <div className="w-4 h-px bg-slate-700" />
+              <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
+                progress?.stage === 'analysing' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-slate-700/50 text-slate-500'
+              }`}>
+                <Layers className="w-3 h-3" />
+                Claude analysing
+              </span>
+            </div>
+
+            {/* Detail text */}
+            <p className="text-sm text-slate-300 font-mono">
+              {progress?.detail ?? 'Waiting for Gemini response…'}
+            </p>
+
+            {/* Progress bar — only when analysing questions */}
+            {progress?.stage === 'analysing' && progress.questions_found > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>{progress.questions_analysed} of {progress.questions_found} questions</span>
+                  <span>{pct}%</span>
+                </div>
+                <div className="h-1.5 bg-slate-700/60 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-500"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Questions found badge */}
+            {progress?.questions_found ? (
+              <p className="text-xs text-emerald-400">
+                ✓ {progress.questions_found} questions detected
+              </p>
+            ) : null}
           </div>
         </div>
       ) : status === 'READY' ? (
