@@ -7547,6 +7547,9 @@ function pfDbCheck(res) {
     `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS vendor TEXT`,
     `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS job_ref TEXT`,
     `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
+    `ALTER TABLE pf_revenue_entries ADD COLUMN IF NOT EXISTS date TEXT`,
+    `ALTER TABLE pf_revenue_entries ADD COLUMN IF NOT EXISTS source TEXT`,
+    `ALTER TABLE pf_revenue_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
   ];
   for (const sql of alterCols) {
     await pool.query(sql).catch(() => {}); // silently skip if already exists
@@ -7654,12 +7657,12 @@ app.get('/api/print-finance/revenue', async (req, res) => {
 app.post('/api/print-finance/revenue', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
-    const { channel, period, jobs, units_grams, revenue, cogs, notes } = req.body;
+    const { channel, period, date, source, job_count, units_grams, revenue, cogs, notes } = req.body;
     if (!channel || !period) return res.status(400).json({ error: 'channel and period are required' });
     const { rows } = await pool.query(
-      `INSERT INTO pf_revenue_entries (channel, period, jobs, units_grams, revenue, cogs, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [channel, period, jobs||0, units_grams||0, revenue||0, cogs||0, notes||null]
+      `INSERT INTO pf_revenue_entries (channel, period, date, source, job_count, units_grams, revenue, cogs, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [channel, period, date||null, source||null, job_count||0, units_grams||0, revenue||0, cogs||0, notes||null]
     );
     res.status(201).json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -7668,11 +7671,11 @@ app.post('/api/print-finance/revenue', async (req, res) => {
 app.put('/api/print-finance/revenue/:id', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
-    const { channel, period, jobs, units_grams, revenue, cogs, notes } = req.body;
+    const { channel, period, date, source, job_count, units_grams, revenue, cogs, notes } = req.body;
     const { rows } = await pool.query(
-      `UPDATE pf_revenue_entries SET channel=$1, period=$2, jobs=$3, units_grams=$4, revenue=$5, cogs=$6, notes=$7, updated_at=NOW()
-       WHERE id=$8 RETURNING *`,
-      [channel, period, jobs||0, units_grams||0, revenue||0, cogs||0, notes||null, req.params.id]
+      `UPDATE pf_revenue_entries SET channel=$1, period=$2, date=$3, source=$4, job_count=$5, units_grams=$6, revenue=$7, cogs=$8, notes=$9, updated_at=NOW()
+       WHERE id=$10 RETURNING *`,
+      [channel, period, date||null, source||null, job_count||0, units_grams||0, revenue||0, cogs||0, notes||null, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
@@ -7700,11 +7703,11 @@ app.get('/api/print-finance/costs', async (req, res) => {
 app.post('/api/print-finance/costs', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
-    const { category, type, amount, period, notes } = req.body;
+    const { category, type, sub_category, amount, quantity, unit, unit_cost, vendor, job_ref, period, notes } = req.body;
     if (!category || !type) return res.status(400).json({ error: 'category and type are required' });
     const { rows } = await pool.query(
-      `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [category, type, amount||0, period||null, notes||null]
+      `INSERT INTO pf_cost_entries (category, type, sub_category, amount, quantity, unit, unit_cost, vendor, job_ref, period, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [category, type, sub_category||null, amount||0, quantity||null, unit||null, unit_cost||null, vendor||null, job_ref||null, period||null, notes||null]
     );
     res.status(201).json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -7713,11 +7716,11 @@ app.post('/api/print-finance/costs', async (req, res) => {
 app.put('/api/print-finance/costs/:id', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
-    const { category, type, amount, period, notes } = req.body;
+    const { category, type, sub_category, amount, quantity, unit, unit_cost, vendor, job_ref, period, notes } = req.body;
     const { rows } = await pool.query(
-      `UPDATE pf_cost_entries SET category=$1, type=$2, amount=$3, period=$4, notes=$5, updated_at=NOW()
-       WHERE id=$6 RETURNING *`,
-      [category, type, amount, period, notes, req.params.id]
+      `UPDATE pf_cost_entries SET category=$1, type=$2, sub_category=$3, amount=$4, quantity=$5, unit=$6, unit_cost=$7, vendor=$8, job_ref=$9, period=$10, notes=$11, updated_at=NOW()
+       WHERE id=$12 RETURNING *`,
+      [category, type, sub_category||null, amount, quantity||null, unit||null, unit_cost||null, vendor||null, job_ref||null, period, notes, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
@@ -8382,6 +8385,29 @@ app.get('/api/print-finance/material-log', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.delete('/api/print-finance/material-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_material_usage WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/material-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { material, brand, color, quantity_g, cost_per_g, job_id, supplier, period, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_material_usage SET material=$1, brand=$2, color=$3, quantity_g=$4, cost_per_g=$5, job_id=$6, supplier=$7, period=$8, notes=$9
+       WHERE id=$10 RETURNING *`,
+      [material, brand||null, color||null, quantity_g||0, cost_per_g||0, job_id||null, supplier||null, period||null, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET /api/print-finance/machine-log
 app.get('/api/print-finance/machine-log', async (req, res) => {
   if (!pfDbCheck(res)) return;
@@ -8391,12 +8417,58 @@ app.get('/api/print-finance/machine-log', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.delete('/api/print-finance/machine-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_machine_log WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/machine-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { printer_id, printer_name, job_id, print_hours, electricity_cost, maintenance_cost, depreciation_cost, period, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_machine_log SET printer_id=$1, printer_name=$2, job_id=$3, print_hours=$4, electricity_cost=$5, maintenance_cost=$6, depreciation_cost=$7, period=$8, notes=$9
+       WHERE id=$10 RETURNING *`,
+      [printer_id||null, printer_name||null, job_id||null, print_hours||0, electricity_cost||0, maintenance_cost||0, depreciation_cost||0, period||null, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET /api/print-finance/labour-log
 app.get('/api/print-finance/labour-log', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
     const { rows } = await pool.query('SELECT * FROM pf_labour_log ORDER BY created_at DESC');
     res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/labour-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_labour_log WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/labour-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { job_id, person, role, hours, hourly_rate, period, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_labour_log SET job_id=$1, person=$2, role=$3, hours=$4, hourly_rate=$5, period=$6, notes=$7
+       WHERE id=$8 RETURNING *`,
+      [job_id||null, person||null, role||null, hours||0, hourly_rate||0, period||null, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

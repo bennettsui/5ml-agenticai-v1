@@ -38,19 +38,30 @@ interface RevenueEntry {
   id: number;
   channel: string;
   period: string;
-  jobs: number;
+  date?: string;
+  source?: string;
+  job_count: number;
   units_grams: number;
   revenue: number;
   cogs: number;
+  notes?: string;
+  created_at: string;
 }
 
 interface CostEntry {
   id: number;
   category: string;
   type: 'direct' | 'overhead' | 'fixed';
+  sub_category?: string;
   amount: number;
+  quantity?: number;
+  unit?: string;
+  unit_cost?: number;
+  vendor?: string;
+  job_ref?: string;
   period?: string;
   notes?: string;
+  created_at: string;
 }
 
 interface SavedScenario {
@@ -637,24 +648,35 @@ function WorkUnits() {
 function Revenue() {
   const { data: entries, loading, error, reload } = useApi<RevenueEntry[]>('/api/print-finance/revenue');
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ channel: '', period: '', jobs: '', units_grams: '', revenue: '', cogs: '' });
+  const [form, setForm] = useState({ channel: '', period: '', date: '', source: '', job_count: '', units_grams: '', revenue: '', cogs: '', notes: '' });
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<RevenueEntry>>({});
   const [saving, setSaving] = useState(false);
   const [filterPeriod, setFilterPeriod] = useState('');
+  const [filterChannel, setFilterChannel] = useState('');
 
   const periods = Array.from(new Set((entries || []).map(r => r.period).filter(Boolean))).sort().reverse();
-  const visible = filterPeriod ? (entries || []).filter(r => r.period === filterPeriod) : (entries || []);
+  const channels = Array.from(new Set((entries || []).map(r => r.channel).filter(Boolean))).sort();
+  const visible = (entries || []).filter(r =>
+    (!filterPeriod || r.period === filterPeriod) &&
+    (!filterChannel || r.channel === filterChannel)
+  );
 
   const save = async () => {
     if (!form.channel || !form.period) return;
     setSaving(true);
     await fetch('/api/print-finance/revenue', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, jobs: parseInt(form.jobs)||0, units_grams: parseFloat(form.units_grams)||0, revenue: parseFloat(form.revenue)||0, cogs: parseFloat(form.cogs)||0 }),
+      body: JSON.stringify({
+        channel: form.channel, period: form.period, date: form.date || null,
+        source: form.source || null, job_count: parseInt(form.job_count) || 0,
+        units_grams: parseFloat(form.units_grams) || 0,
+        revenue: parseFloat(form.revenue) || 0, cogs: parseFloat(form.cogs) || 0,
+        notes: form.notes || null,
+      }),
     });
     setSaving(false); setAdding(false);
-    setForm({ channel: '', period: '', jobs: '', units_grams: '', revenue: '', cogs: '' });
+    setForm({ channel: '', period: '', date: '', source: '', job_count: '', units_grams: '', revenue: '', cogs: '', notes: '' });
     reload();
   };
 
@@ -672,7 +694,7 @@ function Revenue() {
 
   const del = async (id: number) => { await fetch(`/api/print-finance/revenue/${id}`, { method: 'DELETE' }); if (editId === id) cancelEdit(); reload(); };
 
-  const totals = (filterPeriod ? visible : (entries || [])).reduce((acc, r) => ({ revenue: acc.revenue + Number(r.revenue), cogs: acc.cogs + Number(r.cogs) }), { revenue: 0, cogs: 0 });
+  const totals = visible.reduce((acc, r) => ({ revenue: acc.revenue + Number(r.revenue), cogs: acc.cogs + Number(r.cogs) }), { revenue: 0, cogs: 0 });
 
   return (
     <div className="space-y-4">
@@ -694,17 +716,24 @@ function Revenue() {
 
       {error && <ErrorBanner msg={error} onRetry={reload} />}
 
-      <div className="flex items-center justify-between gap-3">
-        {periods.length > 0 ? (
-          <div className="flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-slate-500" />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter className="w-3.5 h-3.5 text-slate-500" />
+          {periods.length > 0 && (
             <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
               className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
               <option value="">All periods</option>
               {periods.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
-          </div>
-        ) : <div />}
+          )}
+          {channels.length > 0 && (
+            <select value={filterChannel} onChange={e => setFilterChannel(e.target.value)}
+              className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
+              <option value="">All channels</option>
+              {channels.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+        </div>
         <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
           <Plus className="w-3.5 h-3.5" /> Add Entry
         </button>
@@ -716,10 +745,13 @@ function Revenue() {
             {[
               { key: 'channel', label: 'Channel' },
               { key: 'period', label: 'Period (e.g. Mar 2026)' },
-              { key: 'jobs', label: 'Jobs', type: 'number' },
+              { key: 'date', label: 'Date' },
+              { key: 'source', label: 'Source' },
+              { key: 'job_count', label: 'Jobs', type: 'number' },
               { key: 'units_grams', label: 'Units (g)', type: 'number' },
               { key: 'revenue', label: 'Revenue ($)', type: 'number' },
               { key: 'cogs', label: 'COGS ($)', type: 'number' },
+              { key: 'notes', label: 'Notes' },
             ].map(f => (
               <div key={f.key}>
                 <label className="text-xs text-slate-400 block mb-1">{f.label}</label>
@@ -736,18 +768,18 @@ function Revenue() {
         </div>
       )}
 
-      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-700/50">
-              {['Channel', 'Period', 'Jobs', 'Grams', 'Revenue', 'COGS', 'Gross Profit', 'Margin', ''].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-medium text-slate-400">{h}</th>
+              {['Channel', 'Source', 'Period', 'Date', 'Jobs', 'Grams', 'Revenue', 'COGS', 'Gross Profit', 'Margin', 'Notes', ''].map(h => (
+                <th key={h} className="text-left px-4 py-3 text-xs font-medium text-slate-400 whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {loading ? <LoadingRow cols={9} /> : visible.length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-500">{filterPeriod ? `No entries for ${filterPeriod}.` : 'No entries yet.'}</td></tr>
+            {loading ? <LoadingRow cols={12} /> : visible.length === 0 ? (
+              <tr><td colSpan={12} className="px-4 py-8 text-center text-sm text-slate-500">{filterPeriod || filterChannel ? 'No entries match filters.' : 'No entries yet.'}</td></tr>
             ) : visible.map(r => {
               const isEditing = editId === r.id;
               const gp = Number(r.revenue) - Number(r.cogs);
@@ -756,13 +788,16 @@ function Revenue() {
               if (isEditing) return (
                 <tr key={r.id} className="border-b border-blue-500/20 bg-blue-500/5">
                   <td className="px-3 py-2"><input className="w-28 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.channel||'')} onChange={e => setEditForm(p => ({...p, channel: e.target.value}))} /></td>
+                  <td className="px-3 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.source||'')} onChange={e => setEditForm(p => ({...p, source: e.target.value}))} /></td>
                   <td className="px-3 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
-                  <td className="px-3 py-2"><input type="number" className="w-14 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.jobs||'')} onChange={e => setEditForm(p => ({...p, jobs: Number(e.target.value)}))} /></td>
+                  <td className="px-3 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.date||'')} onChange={e => setEditForm(p => ({...p, date: e.target.value}))} /></td>
+                  <td className="px-3 py-2"><input type="number" className="w-14 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.job_count||'')} onChange={e => setEditForm(p => ({...p, job_count: Number(e.target.value)}))} /></td>
                   <td className="px-3 py-2"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.units_grams||'')} onChange={e => setEditForm(p => ({...p, units_grams: Number(e.target.value)}))} /></td>
                   <td className="px-3 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.revenue||'')} onChange={e => setEditForm(p => ({...p, revenue: Number(e.target.value)}))} /></td>
                   <td className="px-3 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.cogs||'')} onChange={e => setEditForm(p => ({...p, cogs: Number(e.target.value)}))} /></td>
                   <td className="px-3 py-2 text-slate-500">—</td>
                   <td className="px-3 py-2 text-slate-500">—</td>
+                  <td className="px-3 py-2"><input className="w-32 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
                   <td className="px-3 py-2">
                     <div className="flex gap-1">
                       <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300"><Save className="w-3.5 h-3.5" /></button>
@@ -774,14 +809,17 @@ function Revenue() {
 
               return (
                 <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] transition-colors group">
-                  <td className="px-4 py-3 text-slate-200 font-medium">{r.channel}</td>
-                  <td className="px-4 py-3 text-slate-400">{r.period}</td>
-                  <td className="px-4 py-3 text-slate-300">{r.jobs}</td>
+                  <td className="px-4 py-3 text-slate-200 font-medium whitespace-nowrap">{r.channel}</td>
+                  <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{r.source || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{r.period}</td>
+                  <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{r.date || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-4 py-3 text-slate-300">{r.job_count}</td>
                   <td className="px-4 py-3 text-slate-300">{fmt(Number(r.units_grams))}</td>
                   <td className="px-4 py-3 text-white font-medium">{money(Number(r.revenue))}</td>
                   <td className="px-4 py-3 text-rose-300">{money(Number(r.cogs))}</td>
                   <td className="px-4 py-3 text-emerald-300">{money(gp)}</td>
                   <td className="px-4 py-3"><span className={`font-medium ${margin > 70 ? 'text-emerald-400' : margin > 50 ? 'text-blue-400' : 'text-amber-400'}`}>{fmt(margin, 1)}%</span></td>
+                  <td className="px-4 py-3 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => startEdit(r)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
@@ -795,12 +833,12 @@ function Revenue() {
           {(entries || []).length > 0 && (
             <tfoot>
               <tr className="border-t border-slate-600/50 bg-white/[0.02]">
-                <td colSpan={4} className="px-4 py-3 text-xs font-semibold text-slate-300">TOTAL</td>
+                <td colSpan={6} className="px-4 py-3 text-xs font-semibold text-slate-300">TOTAL</td>
                 <td className="px-4 py-3 text-white font-bold">{money(totals.revenue)}</td>
                 <td className="px-4 py-3 text-rose-300 font-bold">{money(totals.cogs)}</td>
                 <td className="px-4 py-3 text-emerald-300 font-bold">{money(totals.revenue - totals.cogs)}</td>
                 <td className="px-4 py-3 text-blue-400 font-bold">{totals.revenue > 0 ? fmt(((totals.revenue - totals.cogs) / totals.revenue) * 100, 1) : '—'}%</td>
-                <td />
+                <td colSpan={2} />
               </tr>
             </tfoot>
           )}
@@ -817,7 +855,7 @@ function Revenue() {
 function Costs() {
   const { data: entries, loading, error, reload } = useApi<CostEntry[]>('/api/print-finance/costs');
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ category: '', type: 'direct' as CostEntry['type'], amount: '', period: '', notes: '' });
+  const [form, setForm] = useState({ category: '', type: 'direct' as CostEntry['type'], sub_category: '', amount: '', quantity: '', unit: '', unit_cost: '', vendor: '', job_ref: '', period: '', notes: '' });
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<CostEntry>>({});
   const [saving, setSaving] = useState(false);
@@ -825,8 +863,14 @@ function Costs() {
   const [uploadResult, setUploadResult] = useState<{ inserted: number; errors: { row: Record<string, string>; reason: string }[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [filterPeriod, setFilterPeriod] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
   const costPeriods = Array.from(new Set((entries || []).map(c => c.period).filter((p): p is string => !!p))).sort().reverse();
-  const visibleEntries = filterPeriod ? (entries || []).filter(c => c.period === filterPeriod) : (entries || []);
+  const visibleEntries = (entries || []).filter(c =>
+    (!filterPeriod || c.period === filterPeriod) &&
+    (!filterType || c.type === filterType) &&
+    (!filterCategory || c.category.toLowerCase().includes(filterCategory.toLowerCase()))
+  );
 
   const direct = visibleEntries.filter(c => c.type === 'direct').reduce((s, c) => s + Number(c.amount), 0);
   const overhead = visibleEntries.filter(c => c.type === 'overhead').reduce((s, c) => s + Number(c.amount), 0);
@@ -837,10 +881,16 @@ function Costs() {
     setSaving(true);
     await fetch('/api/print-finance/costs', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, amount: parseFloat(form.amount) || 0 }),
+      body: JSON.stringify({
+        category: form.category, type: form.type, sub_category: form.sub_category || null,
+        amount: parseFloat(form.amount) || 0, quantity: parseFloat(form.quantity) || null,
+        unit: form.unit || null, unit_cost: parseFloat(form.unit_cost) || null,
+        vendor: form.vendor || null, job_ref: form.job_ref || null,
+        period: form.period || null, notes: form.notes || null,
+      }),
     });
     setSaving(false); setAdding(false);
-    setForm({ category: '', type: 'direct', amount: '', period: '', notes: '' });
+    setForm({ category: '', type: 'direct', sub_category: '', amount: '', quantity: '', unit: '', unit_cost: '', vendor: '', job_ref: '', period: '', notes: '' });
     reload();
   };
 
@@ -880,8 +930,8 @@ function Costs() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="grid grid-cols-4 gap-3 flex-1">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="grid grid-cols-4 gap-3 flex-1 min-w-0">
           {[
             { label: 'Direct Costs', value: money(direct), color: 'text-rose-400' },
             { label: 'Overhead', value: money(overhead), color: 'text-amber-400' },
@@ -894,16 +944,30 @@ function Costs() {
             </div>
           ))}
         </div>
-        {costPeriods.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <Filter className="w-3.5 h-3.5 text-slate-500" />
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          <Filter className="w-3.5 h-3.5 text-slate-500" />
+          {costPeriods.length > 0 && (
             <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
               className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
               <option value="">All periods</option>
               {costPeriods.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
-          </div>
-        )}
+          )}
+          <select value={filterType} onChange={e => setFilterType(e.target.value)}
+            className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
+            <option value="">All types</option>
+            <option value="direct">Direct</option>
+            <option value="overhead">Overhead</option>
+            <option value="fixed">Fixed</option>
+          </select>
+          <input
+            type="text"
+            placeholder="Search category…"
+            value={filterCategory}
+            onChange={e => setFilterCategory(e.target.value)}
+            className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 w-36"
+          />
+        </div>
       </div>
 
       {error && <ErrorBanner msg={error} onRetry={reload} />}
@@ -960,7 +1024,13 @@ function Costs() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
             {[
               { key: 'category', label: 'Category' },
+              { key: 'sub_category', label: 'Sub-category' },
               { key: 'amount', label: 'Amount ($)', type: 'number' },
+              { key: 'quantity', label: 'Quantity', type: 'number' },
+              { key: 'unit', label: 'Unit' },
+              { key: 'unit_cost', label: 'Unit Cost ($)', type: 'number' },
+              { key: 'vendor', label: 'Vendor' },
+              { key: 'job_ref', label: 'Job Ref' },
               { key: 'period', label: 'Period' },
               { key: 'notes', label: 'Notes' },
             ].map(f => (
@@ -988,24 +1058,21 @@ function Costs() {
         </div>
       )}
 
-      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-slate-700/50 bg-white/[0.03]">
-              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Category</th>
-              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Type</th>
-              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Period</th>
-              <th className="px-3 py-2.5 text-right text-slate-400 font-medium">Amount</th>
-              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Notes</th>
-              <th className="px-3 py-2.5 w-16" />
+              {['Category','Sub-cat','Type','Qty','Unit','Unit Cost','Amount','Vendor','Job Ref','Period','Notes',''].map(h => (
+                <th key={h} className={`px-3 py-2.5 text-slate-400 font-medium whitespace-nowrap ${['Qty','Unit Cost','Amount'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>
+              <tr><td colSpan={12} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>
             )}
             {!loading && visibleEntries.length === 0 && (
-              <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">No cost entries yet.</td></tr>
+              <tr><td colSpan={12} className="px-3 py-6 text-center text-slate-500">No cost entries yet.</td></tr>
             )}
             {visibleEntries.map(c => {
               const typeColor = c.type === 'direct' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20'
@@ -1013,42 +1080,46 @@ function Costs() {
                 : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
               if (editId === c.id) return (
                 <tr key={c.id} className="border-b border-slate-700/30 bg-blue-500/5">
-                  <td className="px-3 py-2">
-                    <input className="w-full bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.category||'')} onChange={e => setEditForm(p => ({...p, category: e.target.value}))} />
-                  </td>
-                  <td className="px-3 py-2">
+                  <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.category||'')} onChange={e => setEditForm(p => ({...p, category: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.sub_category||'')} onChange={e => setEditForm(p => ({...p, sub_category: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5">
                     <select className="bg-slate-700 border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.type||c.type)} onChange={e => setEditForm(p => ({...p, type: e.target.value as CostEntry['type']}))}>
                       <option value="direct">Direct</option>
                       <option value="overhead">Overhead</option>
                       <option value="fixed">Fixed</option>
                     </select>
                   </td>
-                  <td className="px-3 py-2">
-                    <input className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input type="number" className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.amount||'')} onChange={e => setEditForm(p => ({...p, amount: Number(e.target.value)}))} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className="w-full bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={saveEdit} disabled={saving} className="flex items-center gap-0.5 px-1.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded transition-colors disabled:opacity-50"><Save className="w-3 h-3" /></button>
-                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300 transition-colors px-1"><X className="w-3 h-3" /></button>
+                  <td className="px-2 py-1.5"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.quantity||'')} onChange={e => setEditForm(p => ({...p, quantity: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.unit||'')} onChange={e => setEditForm(p => ({...p, unit: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.unit_cost||'')} onChange={e => setEditForm(p => ({...p, unit_cost: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.amount||'')} onChange={e => setEditForm(p => ({...p, amount: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.vendor||'')} onChange={e => setEditForm(p => ({...p, vendor: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.job_ref||'')} onChange={e => setEditForm(p => ({...p, job_ref: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex items-center gap-1">
+                      <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"><Save className="w-3 h-3" /></button>
+                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3 h-3" /></button>
                     </div>
                   </td>
                 </tr>
               );
               return (
                 <tr key={c.id} className="border-b border-slate-700/30 last:border-0 group hover:bg-white/[0.02]">
-                  <td className="px-3 py-2.5 text-slate-200 font-medium">{c.category}</td>
+                  <td className="px-3 py-2.5 text-slate-200 font-medium whitespace-nowrap">{c.category}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{c.sub_category || <span className="text-slate-600">—</span>}</td>
                   <td className="px-3 py-2.5">
                     <span className={`px-1.5 py-0.5 rounded border text-xs font-medium ${typeColor}`}>{c.type}</span>
                   </td>
-                  <td className="px-3 py-2.5 text-slate-400">{c.period || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{c.quantity != null ? fmt(Number(c.quantity), 2) : <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{c.unit || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{c.unit_cost != null ? money(Number(c.unit_cost)) : <span className="text-slate-600">—</span>}</td>
                   <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(c.amount))}</td>
-                  <td className="px-3 py-2.5 text-slate-400 max-w-[200px] truncate">{c.notes || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{c.vendor || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 font-mono">{c.job_ref || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{c.period || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{c.notes || <span className="text-slate-600">—</span>}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => startEdit(c)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3 h-3" /></button>
@@ -1079,7 +1150,31 @@ function Costs() {
 
 function MaterialUsageTable() {
   const { data, loading, reload } = useApi<MaterialUsageEntry[]>('/api/print-finance/material-log');
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Partial<MaterialUsageEntry>>({});
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const total = (data || []).reduce((s, r) => s + Number(r.total_cost), 0);
+
+  const startEdit = (r: MaterialUsageEntry) => { setEditId(r.id); setEditForm({ ...r }); };
+  const cancelEdit = () => { setEditId(null); setEditForm({}); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    setSaving(true);
+    await fetch(`/api/print-finance/material-log/${editId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    setSaving(false); cancelEdit(); reload();
+  };
+  const del = async (id: number) => {
+    setDeletingId(id);
+    await fetch(`/api/print-finance/material-log/${id}`, { method: 'DELETE' });
+    setDeletingId(null);
+    if (editId === id) cancelEdit();
+    reload();
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -1089,32 +1184,60 @@ function MaterialUsageTable() {
           <button onClick={reload} className="text-slate-500 hover:text-slate-300 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
         </div>
       </div>
-      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-slate-700/50 bg-white/[0.03]">
-              {['Material','Brand','Color','Job','Qty (g)','$/g','Total','Supplier','Period','Notes'].map(h => (
+              {['Material','Brand','Color','Job','Qty (g)','$/g','Total','Supplier','Period','Notes',''].map(h => (
                 <th key={h} className={`px-3 py-2.5 text-slate-400 font-medium ${['Qty (g)','$/g','Total'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={10} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>}
-            {!loading && (data||[]).length === 0 && <tr><td colSpan={10} className="px-3 py-6 text-center text-slate-500">No material usage records.</td></tr>}
-            {(data||[]).map(r => (
-              <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
-                <td className="px-3 py-2.5 text-slate-200 font-medium">{r.material}</td>
-                <td className="px-3 py-2.5 text-slate-400">{r.brand || <span className="text-slate-600">—</span>}</td>
-                <td className="px-3 py-2.5 text-slate-400">{r.color || <span className="text-slate-600">—</span>}</td>
-                <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{r.job_id || <span className="text-slate-600">—</span>}</td>
-                <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.quantity_g), 1)}</td>
-                <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{Number(r.cost_per_g).toFixed(4)}</td>
-                <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(r.total_cost))}</td>
-                <td className="px-3 py-2.5 text-slate-400">{r.supplier || <span className="text-slate-600">—</span>}</td>
-                <td className="px-3 py-2.5 text-slate-400">{r.period || <span className="text-slate-600">—</span>}</td>
-                <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
-              </tr>
-            ))}
+            {loading && <tr><td colSpan={11} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>}
+            {!loading && (data||[]).length === 0 && <tr><td colSpan={11} className="px-3 py-6 text-center text-slate-500">No material usage records.</td></tr>}
+            {(data||[]).map(r => {
+              if (editId === r.id) return (
+                <tr key={r.id} className="border-b border-slate-700/30 bg-blue-500/5">
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.material||'')} onChange={e => setEditForm(p => ({...p, material: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.brand||'')} onChange={e => setEditForm(p => ({...p, brand: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.color||'')} onChange={e => setEditForm(p => ({...p, color: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white font-mono" value={String(editForm.job_id||'')} onChange={e => setEditForm(p => ({...p, job_id: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.quantity_g||'')} onChange={e => setEditForm(p => ({...p, quantity_g: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" step="0.0001" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.cost_per_g||'')} onChange={e => setEditForm(p => ({...p, cost_per_g: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5 text-right text-slate-400 tabular-nums">{money(Number(editForm.quantity_g||0) * Number(editForm.cost_per_g||0))}</td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.supplier||'')} onChange={e => setEditForm(p => ({...p, supplier: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex gap-1">
+                      <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"><Save className="w-3 h-3" /></button>
+                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+              return (
+                <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] group">
+                  <td className="px-3 py-2.5 text-slate-200 font-medium">{r.material}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.brand || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.color || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{r.job_id || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.quantity_g), 1)}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{Number(r.cost_per_g).toFixed(4)}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(r.total_cost))}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.supplier || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.period || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => startEdit(r)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3 h-3" /></button>
+                      <button onClick={() => del(r.id)} disabled={deletingId === r.id} className="text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1124,7 +1247,31 @@ function MaterialUsageTable() {
 
 function MachineLogTable() {
   const { data, loading, reload } = useApi<MachineLogEntry[]>('/api/print-finance/machine-log');
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Partial<MachineLogEntry>>({});
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const totalCost = (data || []).reduce((s, r) => s + Number(r.electricity_cost) + Number(r.maintenance_cost) + Number(r.depreciation_cost), 0);
+
+  const startEdit = (r: MachineLogEntry) => { setEditId(r.id); setEditForm({ ...r }); };
+  const cancelEdit = () => { setEditId(null); setEditForm({}); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    setSaving(true);
+    await fetch(`/api/print-finance/machine-log/${editId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    setSaving(false); cancelEdit(); reload();
+  };
+  const del = async (id: number) => {
+    setDeletingId(id);
+    await fetch(`/api/print-finance/machine-log/${id}`, { method: 'DELETE' });
+    setDeletingId(null);
+    if (editId === id) cancelEdit();
+    reload();
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -1134,30 +1281,56 @@ function MachineLogTable() {
           <button onClick={reload} className="text-slate-500 hover:text-slate-300 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
         </div>
       </div>
-      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-slate-700/50 bg-white/[0.03]">
-              {['Printer','Job','Hours','Electricity','Maintenance','Depreciation','Period','Notes'].map(h => (
+              {['Printer','Job','Hours','Electricity','Maintenance','Depreciation','Period','Notes',''].map(h => (
                 <th key={h} className={`px-3 py-2.5 text-slate-400 font-medium ${['Hours','Electricity','Maintenance','Depreciation'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>}
-            {!loading && (data||[]).length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">No machine log entries.</td></tr>}
-            {(data||[]).map(r => (
-              <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
-                <td className="px-3 py-2.5 text-slate-200 font-medium">{r.printer_name || r.printer_id || <span className="text-slate-600">—</span>}</td>
-                <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{r.job_id || <span className="text-slate-600">—</span>}</td>
-                <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.print_hours), 1)}h</td>
-                <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{money(Number(r.electricity_cost))}</td>
-                <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{money(Number(r.maintenance_cost))}</td>
-                <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{money(Number(r.depreciation_cost))}</td>
-                <td className="px-3 py-2.5 text-slate-400">{r.period || <span className="text-slate-600">—</span>}</td>
-                <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
-              </tr>
-            ))}
+            {loading && <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>}
+            {!loading && (data||[]).length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">No machine log entries.</td></tr>}
+            {(data||[]).map(r => {
+              if (editId === r.id) return (
+                <tr key={r.id} className="border-b border-slate-700/30 bg-blue-500/5">
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.printer_name||editForm.printer_id||'')} onChange={e => setEditForm(p => ({...p, printer_name: e.target.value, printer_id: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white font-mono" value={String(editForm.job_id||'')} onChange={e => setEditForm(p => ({...p, job_id: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.print_hours||'')} onChange={e => setEditForm(p => ({...p, print_hours: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.electricity_cost||'')} onChange={e => setEditForm(p => ({...p, electricity_cost: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.maintenance_cost||'')} onChange={e => setEditForm(p => ({...p, maintenance_cost: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.depreciation_cost||'')} onChange={e => setEditForm(p => ({...p, depreciation_cost: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex gap-1">
+                      <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"><Save className="w-3 h-3" /></button>
+                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+              return (
+                <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] group">
+                  <td className="px-3 py-2.5 text-slate-200 font-medium">{r.printer_name || r.printer_id || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{r.job_id || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.print_hours), 1)}h</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{money(Number(r.electricity_cost))}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{money(Number(r.maintenance_cost))}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{money(Number(r.depreciation_cost))}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.period || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => startEdit(r)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3 h-3" /></button>
+                      <button onClick={() => del(r.id)} disabled={deletingId === r.id} className="text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1167,7 +1340,31 @@ function MachineLogTable() {
 
 function LabourLogTable() {
   const { data, loading, reload } = useApi<LabourLogEntry[]>('/api/print-finance/labour-log');
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Partial<LabourLogEntry>>({});
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const total = (data || []).reduce((s, r) => s + Number(r.total_cost), 0);
+
+  const startEdit = (r: LabourLogEntry) => { setEditId(r.id); setEditForm({ ...r }); };
+  const cancelEdit = () => { setEditId(null); setEditForm({}); };
+  const saveEdit = async () => {
+    if (!editId) return;
+    setSaving(true);
+    await fetch(`/api/print-finance/labour-log/${editId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    setSaving(false); cancelEdit(); reload();
+  };
+  const del = async (id: number) => {
+    setDeletingId(id);
+    await fetch(`/api/print-finance/labour-log/${id}`, { method: 'DELETE' });
+    setDeletingId(null);
+    if (editId === id) cancelEdit();
+    reload();
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -1177,30 +1374,56 @@ function LabourLogTable() {
           <button onClick={reload} className="text-slate-500 hover:text-slate-300 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
         </div>
       </div>
-      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-slate-700/50 bg-white/[0.03]">
-              {['Person','Role','Job','Hours','Hourly Rate','Total','Period','Notes'].map(h => (
+              {['Person','Role','Job','Hours','Hourly Rate','Total','Period','Notes',''].map(h => (
                 <th key={h} className={`px-3 py-2.5 text-slate-400 font-medium ${['Hours','Hourly Rate','Total'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>}
-            {!loading && (data||[]).length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">No labour log entries.</td></tr>}
-            {(data||[]).map(r => (
-              <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
-                <td className="px-3 py-2.5 text-slate-200 font-medium">{r.person || <span className="text-slate-600">—</span>}</td>
-                <td className="px-3 py-2.5 text-slate-400">{r.role || <span className="text-slate-600">—</span>}</td>
-                <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{r.job_id || <span className="text-slate-600">—</span>}</td>
-                <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.hours), 1)}h</td>
-                <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{money(Number(r.hourly_rate))}/h</td>
-                <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(r.total_cost))}</td>
-                <td className="px-3 py-2.5 text-slate-400">{r.period || <span className="text-slate-600">—</span>}</td>
-                <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
-              </tr>
-            ))}
+            {loading && <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>}
+            {!loading && (data||[]).length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">No labour log entries.</td></tr>}
+            {(data||[]).map(r => {
+              if (editId === r.id) return (
+                <tr key={r.id} className="border-b border-slate-700/30 bg-blue-500/5">
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.person||'')} onChange={e => setEditForm(p => ({...p, person: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.role||'')} onChange={e => setEditForm(p => ({...p, role: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white font-mono" value={String(editForm.job_id||'')} onChange={e => setEditForm(p => ({...p, job_id: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.hours||'')} onChange={e => setEditForm(p => ({...p, hours: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.hourly_rate||'')} onChange={e => setEditForm(p => ({...p, hourly_rate: Number(e.target.value)}))} /></td>
+                  <td className="px-2 py-1.5 text-right text-slate-400 tabular-nums">{money(Number(editForm.hours||0) * Number(editForm.hourly_rate||0))}</td>
+                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex gap-1">
+                      <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"><Save className="w-3 h-3" /></button>
+                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+              return (
+                <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] group">
+                  <td className="px-3 py-2.5 text-slate-200 font-medium">{r.person || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.role || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{r.job_id || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.hours), 1)}h</td>
+                  <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{money(Number(r.hourly_rate))}/h</td>
+                  <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(r.total_cost))}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{r.period || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => startEdit(r)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3 h-3" /></button>
+                      <button onClick={() => del(r.id)} disabled={deletingId === r.id} className="text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50"><Trash2 className="w-3 h-3" /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
