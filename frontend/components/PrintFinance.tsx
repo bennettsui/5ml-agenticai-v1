@@ -3928,18 +3928,51 @@ function UploadTab() {
             </div>
           )}
 
-          {/* Row Review — summary only */}
+          {/* Row Review — summary + warnings detail */}
           {(dryRunning || dryRunResult) && (
-            <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl">
-              {dryRunning && <><Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" /><span className="text-xs text-slate-500">Scanning rows…</span></>}
-              {dryRunResult && (
-                <>
-                  <span className="text-xs font-semibold text-slate-400">Row scan:</span>
-                  <span className="text-xs text-emerald-400 font-medium">{dryRunResult.ok} ok</span>
-                  {dryRunResult.warn > 0 && <span className="text-xs text-amber-400 font-medium">{dryRunResult.warn} warnings</span>}
-                  {dryRunResult.skip > 0 && <span className="text-xs text-rose-400 font-medium">{dryRunResult.skip} will skip</span>}
-                  <span className="text-xs text-slate-600">/ {dryRunResult.total} total</span>
-                </>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl">
+                {dryRunning && <><Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" /><span className="text-xs text-slate-500">Scanning rows…</span></>}
+                {dryRunResult && (
+                  <>
+                    <span className="text-xs font-semibold text-slate-400">Row scan:</span>
+                    <span className="text-xs text-emerald-400 font-medium">{dryRunResult.ok} ok</span>
+                    {dryRunResult.warn > 0 && <span className="text-xs text-amber-400 font-medium">{dryRunResult.warn} warnings</span>}
+                    {dryRunResult.skip > 0 && <span className="text-xs text-rose-400 font-medium">{dryRunResult.skip} will skip</span>}
+                    <span className="text-xs text-slate-600">/ {dryRunResult.total} total</span>
+                  </>
+                )}
+              </div>
+              {/* Show only rows with issues (warn + skip) */}
+              {dryRunResult && dryRunResult.rows.filter(r => r.status !== 'ok').length > 0 && (
+                <div className="border border-slate-700/50 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+                  {dryRunResult.rows.filter(r => r.status !== 'ok').map((row, i) => (
+                    <div key={i} className={`flex gap-3 px-3 py-2 border-b border-slate-700/20 last:border-0 text-xs ${
+                      row.status === 'warn' ? 'bg-amber-500/5' : 'bg-rose-500/5'
+                    }`}>
+                      <div className="flex-shrink-0 w-4 mt-0.5">
+                        {row.status === 'warn' ? <AlertCircle className="w-3.5 h-3.5 text-amber-400" /> : <X className="w-3.5 h-3.5 text-rose-400" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                          <span className="text-slate-600 text-[10px]">row {row.row_num}</span>
+                          {Object.entries(row.data).filter(([, v]) => v !== '' && v !== null && v !== 0).slice(0, 4).map(([k, v]) => (
+                            <span key={k} className="text-[10px] text-slate-500"><span className="text-slate-600">{k}:</span> {String(v)}</span>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {row.issues.map((iss, j) => (
+                            <span key={j} className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                              iss.type === 'missing' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                            }`}>
+                              {iss.field}: {iss.message}{iss.suggestion ? ` → ${iss.suggestion}` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}
