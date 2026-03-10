@@ -441,6 +441,26 @@ router.get('/student/concepts/overview', async (req, res) => {
   }
 });
 
+// ─── CDN helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Upload a PDF buffer to mmdbfiles CDN.
+ * Returns the public_url string.
+ */
+async function _uploadPdfToCdn(pdfBuffer, filename) {
+  const base64   = pdfBuffer.toString('base64');
+  const fileData = `data:application/pdf;base64,${base64}`;
+  const response = await fetch('http://5ml.mmdbfiles.com/api/upload', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ file_data: fileData, filename }),
+  });
+  if (!response.ok) throw new Error(`mmdbfiles upload failed (${response.status})`);
+  const data = await response.json();
+  if (!data.success) throw new Error('mmdbfiles returned success:false');
+  return data.public_url;
+}
+
 // ─── Teacher: paper upload ────────────────────────────────────────────────────
 
 /**
@@ -454,29 +474,36 @@ router.post('/teachers/papers/upload', upload.single('file'), async (req, res) =
   if (req.file.mimetype !== 'application/pdf') return res.status(400).json({ success: false, error: 'Only PDF files are accepted' });
 
   try {
-    // Store on Fly persistent volume if available, else keep in-memory reference
-    const fileKey  = `papers/${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const fileUrl  = `/uploads/${fileKey}`; // will be served from Fly volume
-
-    // Write to volume
     const fs   = require('fs');
     const path = require('path');
-    const dir  = path.join('/app/uploads/papers');
+    const fileKey  = `papers/${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const fileUrl  = `/uploads/${fileKey}`;
+
+    // Write to local volume (ephemeral on Fly)
+    const dir = path.join('/app/uploads/papers');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join('/app/uploads', fileKey), req.file.buffer);
 
     const paper = await db.createPaper({
-      teacherId: teacherId || null,
-      subject:   req.body.subject   || 'MATH',
-      gradeBand: req.body.grade_band || 'S1-S2',
-      examName:  req.body.exam_name  || req.file.originalname,
-      year:      req.body.year       || new Date().getFullYear(),
+      teacherId:     teacherId || null,
+      subject:       req.body.subject    || 'MATH',
+      gradeBand:     req.body.grade_band || 'S1-S2',
+      examName:      req.body.exam_name  || req.file.originalname,
+      year:          req.body.year       || new Date().getFullYear(),
       fileUrl,
       fileKey,
+      fileSizeBytes: req.file.size || req.file.buffer.length,
     });
 
+    // Fire CDN push async — captures buffer reference before it goes out of scope
+    const bufferCopy = Buffer.from(req.file.buffer);
+    _uploadPdfToCdn(bufferCopy, path.basename(fileKey))
+      .then(cdnUrl => db.updatePaperCdnUrl(paper.id, cdnUrl)
+        .then(() => console.log(`[AdaptiveLearning] Paper ${paper.id} → CDN: ${cdnUrl}`)))
+      .catch(err  => console.warn(`[AdaptiveLearning] CDN push failed for ${paper.id}:`, err.message));
+
     // Fire OCR + QuestionAgent pipeline async (non-blocking)
-    _runOcrPipeline(paper.id, req.file.buffer, req.body.grade_band || 'S1-S2').catch(err =>
+    _runOcrPipeline(paper.id, bufferCopy, req.body.grade_band || 'S1-S2').catch(err =>
       console.error(`OCR pipeline failed for paper ${paper.id}:`, err.message)
     );
 
@@ -602,60 +629,65 @@ router.get('/teacher/classes/:className/mastery', async (req, res) => {
 // ─── OCR pipeline (async) ─────────────────────────────────────────────────────
 
 async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
-  await db.updatePaperStatus(paperId, 'OCR_RUNNING');
+  try {
+    await db.updatePaperStatus(paperId, 'OCR_RUNNING');
 
-  let rawBlocks = [];
-  if (await ocrService.isAvailable()) {
-    rawBlocks = await ocrService.extractFromPdf(pdfBuffer);
-  } else {
-    console.warn(`Paper ${paperId}: Google Document AI not configured, skipping OCR`);
-    await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
-    return;
-  }
-
-  if (rawBlocks.length === 0) {
-    await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
-    return;
-  }
-
-  await db.updatePaperStatus(paperId, 'DRAFT_READY');
-
-  // Get candidate LOs for this grade
-  const los = await db.getLearningObjectives({ grade: gradeBand.split('-')[0] || 'S1' });
-  const candidateObjectives = los.slice(0, 20).map(lo => ({ code: lo.code, name_en: lo.name_en, name_zh: lo.name_zh }));
-
-  // Run QuestionAgent on each block
-  for (const block of rawBlocks) {
-    let draft = {
-      paperId,
-      rawOcrText:  block.raw_text,
-      hasImage:    block.has_image,
-      stemEn:      block.raw_text,
-      suggestedDifficulty: 2,
-      candidateObjectives,
-    };
-
-    if (process.env.ANTHROPIC_API_KEY && block.raw_text.length > 20) {
-      try {
-        const result = await getAgent().question.authorQuestion({
-          rawTextEn:            block.raw_text,
-          imageDescription:     block.has_image ? 'Question contains a diagram or figure' : null,
-          candidateObjectives,
-          gradeBand,
-        });
-        draft.stemEn               = result.clean_stem_en  || block.raw_text;
-        draft.stemZh               = result.clean_stem_zh  || null;
-        draft.suggestedType        = result.question_type  || 'MCQ';
-        draft.suggestedDifficulty  = result.difficulty_estimate || 2;
-        draft.candidateObjectives  = result.selected_objective_codes?.map(code =>
-          candidateObjectives.find(lo => lo.code === code)
-        ).filter(Boolean) || candidateObjectives;
-      } catch (err) {
-        console.warn(`QuestionAgent failed for block (non-fatal):`, err.message);
-      }
+    let rawBlocks = [];
+    if (await ocrService.isAvailable()) {
+      rawBlocks = await ocrService.extractFromPdf(pdfBuffer);
+    } else {
+      console.warn(`Paper ${paperId}: GEMINI_API_KEY not set — skipping OCR`);
+      await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
+      return;
     }
 
-    await db.createDraftQuestion(draft);
+    if (rawBlocks.length === 0) {
+      await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
+      return;
+    }
+
+    await db.updatePaperStatus(paperId, 'DRAFT_READY');
+
+    // Get candidate LOs for this grade
+    const los = await db.getLearningObjectives({ grade: gradeBand.split('-')[0] || 'S1' });
+    const candidateObjectives = los.slice(0, 20).map(lo => ({ code: lo.code, name_en: lo.name_en, name_zh: lo.name_zh }));
+
+    // Run QuestionAgent on each block
+    for (const block of rawBlocks) {
+      let draft = {
+        paperId,
+        rawOcrText:  block.raw_text,
+        hasImage:    block.has_image,
+        stemEn:      block.raw_text,
+        suggestedDifficulty: 2,
+        candidateObjectives,
+      };
+
+      if (process.env.ANTHROPIC_API_KEY && block.raw_text.length > 20) {
+        try {
+          const result = await getAgent().question.authorQuestion({
+            rawTextEn:            block.raw_text,
+            imageDescription:     block.has_image ? 'Question contains a diagram or figure' : null,
+            candidateObjectives,
+            gradeBand,
+          });
+          draft.stemEn               = result.clean_stem_en  || block.raw_text;
+          draft.stemZh               = result.clean_stem_zh  || null;
+          draft.suggestedType        = result.question_type  || 'MCQ';
+          draft.suggestedDifficulty  = result.difficulty_estimate || 2;
+          draft.candidateObjectives  = result.selected_objective_codes?.map(code =>
+            candidateObjectives.find(lo => lo.code === code)
+          ).filter(Boolean) || candidateObjectives;
+        } catch (err) {
+          console.warn(`QuestionAgent failed for block (non-fatal):`, err.message);
+        }
+      }
+
+      await db.createDraftQuestion(draft);
+    }
+  } catch (err) {
+    console.error(`[OCR] Pipeline failed for paper ${paperId}:`, err.message);
+    await db.updatePaperStatus(paperId, 'NEEDS_REVIEW').catch(() => {});
   }
 }
 
@@ -1101,6 +1133,66 @@ router.get('/student/sessions', async (req, res) => {
   }
 });
 
+// ─── Teacher: serve paper PDF ──────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/teachers/papers/:id/file
+ * Streams the local PDF or 302-redirects to CDN if the local file is gone.
+ */
+router.get('/teachers/papers/:id/file', async (req, res) => {
+  try {
+    const paper = await db.getPaper(req.params.id);
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
+
+    const fs   = require('fs');
+    const path = require('path');
+    // file_url is stored as a path like /uploads/papers/xxx.pdf
+    const localPath = paper.file_url ? path.join('/app', paper.file_url) : null;
+
+    if (localPath && fs.existsSync(localPath)) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(paper.exam_name)}.pdf"`);
+      return fs.createReadStream(localPath).pipe(res);
+    }
+    if (paper.cdn_url) return res.redirect(302, paper.cdn_url);
+    res.status(404).json({ success: false, error: 'PDF not available locally or on CDN. Re-upload to restore.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: storage overview ─────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/teachers/papers/storage
+ * Returns all papers with local file existence flag and CDN status.
+ * NOTE: must be defined before /teachers/papers/:id routes to avoid param collision.
+ */
+router.get('/teachers/papers/storage', async (req, res) => {
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const { pool } = require('../../../db');
+    const { rows } = await pool.query(
+      `SELECT id, exam_name, grade_band, year, status,
+              file_url, cdn_url, file_size_bytes, created_at
+       FROM papers
+       ORDER BY created_at DESC`
+    );
+    const papers = rows.map(p => {
+      const localPath        = p.file_url ? path.join('/app', p.file_url) : null;
+      const fileExistsLocally = localPath ? fs.existsSync(localPath) : false;
+      const serveUrl         = fileExistsLocally
+        ? `/api/adaptive-learning/teachers/papers/${p.id}/file`
+        : (p.cdn_url || null);
+      return { ...p, file_exists_locally: fileExistsLocally, serve_url: serveUrl };
+    });
+    res.json({ success: true, papers });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── Teacher: list papers ──────────────────────────────────────────────────────
 
 /**
@@ -1113,7 +1205,7 @@ router.get('/teachers/papers', async (req, res) => {
     const { pool } = require('../../../db');
     const { rows } = await pool.query(
       `SELECT p.id, p.exam_name, p.grade_band, p.year, p.status,
-              p.file_url, p.created_at,
+              p.file_url, p.cdn_url, p.file_size_bytes, p.created_at,
               COUNT(dq.id)::int AS draft_count,
               COUNT(dq.id) FILTER (WHERE dq.status = 'CONFIRMED')::int AS confirmed_count
        FROM papers p
@@ -1124,6 +1216,57 @@ router.get('/teachers/papers', async (req, res) => {
       [parseInt(limit), parseInt(offset)]
     );
     res.json({ success: true, papers: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: update paper metadata ───────────────────────────────────────────
+
+/**
+ * PATCH /api/adaptive-learning/teachers/papers/:id
+ * Body: { exam_name?, grade_band?, year?, status? }
+ * Allows editing metadata and manually resetting a stuck paper to NEEDS_REVIEW.
+ */
+router.patch('/teachers/papers/:id', async (req, res) => {
+  try {
+    const { pool } = require('../../../db');
+    const { exam_name, grade_band, year, status } = req.body || {};
+    const allowed = ['UPLOADED', 'OCR_RUNNING', 'DRAFT_READY', 'CONFIRMED', 'NEEDS_REVIEW'];
+    if (status && !allowed.includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid status' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE papers
+       SET exam_name  = COALESCE($1, exam_name),
+           grade_band = COALESCE($2, grade_band),
+           year       = COALESCE($3, year),
+           status     = COALESCE($4, status),
+           updated_at = NOW()
+       WHERE id = $5
+       RETURNING *`,
+      [exam_name || null, grade_band || null, year ? parseInt(year) : null, status || null, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ success: false, error: 'Paper not found' });
+    res.json({ success: true, paper: rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: delete paper ─────────────────────────────────────────────────────
+
+/**
+ * DELETE /api/adaptive-learning/teachers/papers/:id
+ * Removes paper and all associated draft questions.
+ */
+router.delete('/teachers/papers/:id', async (req, res) => {
+  try {
+    const { pool } = require('../../../db');
+    await pool.query('DELETE FROM draft_questions WHERE paper_id = $1', [req.params.id]);
+    const { rowCount } = await pool.query('DELETE FROM papers WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ success: false, error: 'Paper not found' });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

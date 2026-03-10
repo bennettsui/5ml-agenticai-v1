@@ -17,7 +17,7 @@ import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
   ChevronRight, Map, Zap, Send, Loader2, Sparkles, History,
-  Plus, Trash2, Clock, Monitor, TrendingUp, Shield,
+  Plus, Trash2, Clock, Monitor, TrendingUp, Shield, Printer,
 } from 'lucide-react';
 import Link from 'next/link';
 import {

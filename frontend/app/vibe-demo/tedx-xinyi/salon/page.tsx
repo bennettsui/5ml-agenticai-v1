@@ -162,42 +162,107 @@ const PROGRAM_BLOCKS = [
   },
 ];
 
+const SALE_WINDOW = '2026.02.25（三）12:00 – 03.30（一）17:00';
+const USE_DATE    = '2026.03.31（二）10:00 – 17:00';
+
 const TICKET_TYPES = [
   {
-    name: 'Early Bird 早鳥票',
-    price: 'NT$2,000',
-    desc: '限時、限量釋出。以最早的行動，換最好的位置感受。',
-    note: '票種不得更換。',
-    accent: WARM_AMBER,
-  },
-  {
-    name: 'Regular 一般票',
-    price: 'NT$2,500',
-    desc: '標準入場，完整體驗整日沙龍、Talks、工作坊與互動專區。',
+    name: 'Observer｜線上觀察者',
+    nameEn: 'Live Stream Pass',
+    price: 'NT$1,200',
+    priceNote: null,
+    desc: '看見趨勢如何發生\n3/31 線上直播 × 趨勢策展內容精華',
+    for: '想參與思考、但此刻身體不在現場的人',
     note: null,
-    accent: TED_RED,
+    badge: '線上',
+    badgeColor: '#0EA5E9',
+    accent: '#0EA5E9',
+    saleWindow: SALE_WINDOW,
+    useDate: USE_DATE,
   },
   {
-    name: 'Student / Youth 學生／青年票',
-    price: 'NT$1,750',
-    desc: '讓好奇心不被預算擋住。我們相信年輕的視角，是這場對話最需要的。',
-    note: '需出示有效學生證或青年證明，否則需補差額至一般票。',
+    name: 'Early Believer Pass｜早鳥品味相信者',
+    nameEn: 'Early Bird Pass',
+    price: 'NT$2,000',
+    priceNote: null,
+    desc: '在趨勢被命名之前就已到場\n3/31 實體活動 × 趨勢策展白皮書（電子版）',
+    for: '總是比多數人早一步行動的人',
+    note: '限量 50 名，即日起至 3/6 售票',
+    badge: '限量 50',
+    badgeColor: '#10B981',
     accent: '#10B981',
+    saleWindow: '即日起至 2026.03.06',
+    useDate: USE_DATE,
+  },
+  {
+    name: 'Participant Standard Pass｜現場參與者',
+    nameEn: 'Standard Pass',
+    price: 'NT$2,640',
+    priceNote: null,
+    desc: '走進趨勢現場\n標準入場，完整體驗整日沙龍、Talks、工作坊與互動專區\n3/31 實體活動 × 趨勢策展白皮書（電子版本）',
+    for: '願意花一個下午，與不同領域的人一起思考未來',
+    note: null,
+    badge: null,
+    badgeColor: null,
+    accent: TED_RED,
+    saleWindow: SALE_WINDOW,
+    useDate: USE_DATE,
+  },
+  {
+    name: 'Contributor Pass｜深度共創者',
+    nameEn: 'Contributor Pass',
+    price: 'NT$3,360',
+    priceNote: null,
+    desc: '把趨勢帶回你的世界\n3/31 實體活動 × 趨勢策展白皮書（電子版本）× 趨勢筆記本（無酸紙 Moleskine 支持贊助）',
+    for: '會延伸、會分享、會轉化的人',
+    note: null,
+    badge: null,
+    badgeColor: null,
+    accent: WARM_AMBER,
+    saleWindow: SALE_WINDOW,
+    useDate: USE_DATE,
+  },
+  {
+    name: 'VIP 票種',
+    nameEn: 'VIP Pass',
+    price: 'NT$888',
+    priceNote: null,
+    desc: '3/31 活動 × 趨勢策展電子版本 × 趨勢筆記本 × 3/30 藍盒子舞台後場巡迴',
+    for: null,
+    note: null,
+    badge: 'VIP',
+    badgeColor: '#8B5CF6',
+    accent: '#8B5CF6',
+    saleWindow: SALE_WINDOW,
+    useDate: USE_DATE,
+  },
+  {
+    name: 'Student / Youth｜學生／青年票',
+    nameEn: 'AI Literacy Pass',
+    price: 'NT$1,400',
+    priceNote: null,
+    desc: '社區教育推廣票\n適用對象：在老師帶領下參與活動之高中生與大學生',
+    for: null,
+    note: '需出示有效學生證或青年身分相關證明文件；若無法出示，須於現場補足差額至一般票價。本票種為教育推廣用途，恕不適用於一般社會人士或企業團體。',
+    badge: '學生',
+    badgeColor: '#10B981',
+    accent: '#10B981',
+    saleWindow: SALE_WINDOW,
+    useDate: USE_DATE,
   },
   {
     name: 'Group 4 人套票',
-    price: 'NT$8,000／套',
+    nameEn: 'Group Pass',
+    price: 'NT$8,000',
     priceNote: '平均 NT$2,000／人',
     desc: '和朋友、同事或家人一起來。四個人，四種觀點，一起 becoming。',
+    for: null,
     note: '單一訂單一次購買 4 名入場資格，不可拆單部分退票或改票種；4 位可分開報到，座位以現場安排為準。',
+    badge: '4人',
+    badgeColor: '#6366F1',
     accent: '#6366F1',
-  },
-  {
-    name: 'Door / Walk-in 現場票',
-    price: 'NT$2,750–3,000',
-    desc: '臨時決定也沒關係——但座位有限，建議提早預購。',
-    note: '僅於活動當日、仍有座位時開放，數量有限，票價高於預售，且不保證與同行者相鄰。',
-    accent: '#737373',
+    saleWindow: SALE_WINDOW,
+    useDate: USE_DATE,
   },
 ];
 
@@ -605,7 +670,6 @@ export default function SalonPage() {
           </p>
         </FadeIn>
 
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_200px] gap-10 md:gap-14 items-start">
         <div className="space-y-0">
           {PROGRAM_BLOCKS.map((block, i) => (
             <FadeIn key={i} delay={i * 60}>
@@ -655,22 +719,6 @@ export default function SalonPage() {
             </FadeIn>
           ))}
         </div>
-
-        {/* Curiosity zones visual — sticky sidebar on desktop */}
-        <FadeIn delay={120}>
-          <div className="hidden md:block sticky top-28">
-            <img
-              src="/tedx-xinyi/salon-curiosity.webp"
-              alt=""
-              decoding="async"
-              className="w-full rounded-2xl object-cover opacity-0 transition-opacity duration-500 shadow-sm"
-              style={{ aspectRatio: '3/4' }}
-              onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-          </div>
-        </FadeIn>
-        </div>
       </Section>
 
       {/* ==================== BLOCK D2 — TICKETS & PRICING ==================== */}
@@ -680,27 +728,68 @@ export default function SalonPage() {
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-4" lang="zh-TW">
             票種與售價
           </h2>
-          <p className="text-neutral-500 text-base mb-12" lang="zh-TW">
+          <p className="text-neutral-500 text-base mb-3" lang="zh-TW">
             每一張票，都是一張走進未來的入場券。選擇最適合你的方式加入。
           </p>
+          <div className="flex flex-wrap gap-4 mb-10 text-xs text-neutral-400">
+            <span lang="zh-TW">🗓 售票時間：2026.02.25（三）12:00 – 03.30（一）17:00</span>
+            <span lang="zh-TW">⏰ 使用時間：2026.03.31（二）10:00 – 17:00</span>
+          </div>
         </FadeIn>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 mb-10">
           {TICKET_TYPES.map((ticket, i) => (
-            <FadeIn key={i} delay={i * 80}>
+            <FadeIn key={i} delay={i * 60}>
               <div className="bg-white rounded-xl border border-neutral-100 hover:border-neutral-200 hover:shadow-md transition-all h-full flex flex-col overflow-hidden">
-                <div className="h-1.5" style={{ backgroundColor: ticket.accent }} />
-                <div className="p-6 flex-1 flex flex-col">
-                  <h3 className="text-base font-black mb-1" lang="zh-TW">{ticket.name}</h3>
-                  <p className="text-2xl font-black mb-1" style={{ color: ticket.accent }}>{ticket.price}</p>
-                  {'priceNote' in ticket && ticket.priceNote && (
-                    <p className="text-xs text-neutral-400 mb-3">{ticket.priceNote}</p>
-                  )}
-                  <p className="text-neutral-500 text-sm leading-relaxed mb-4 flex-1" lang="zh-TW">
+                {/* Accent bar */}
+                <div className="h-1" style={{ backgroundColor: ticket.accent }} />
+                <div className="p-5 flex-1 flex flex-col gap-3">
+                  {/* Header row: badge + name */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold tracking-wider uppercase text-neutral-400 mb-0.5">{ticket.nameEn}</p>
+                      <h3 className="text-sm font-black leading-snug" lang="zh-TW">{ticket.name}</h3>
+                    </div>
+                    {ticket.badge && (
+                      <span
+                        className="flex-shrink-0 text-[9px] font-black px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: `${ticket.badgeColor}18`, color: ticket.badgeColor }}
+                      >
+                        {ticket.badge}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Price */}
+                  <div>
+                    <p className="text-xl font-black" style={{ color: ticket.accent }}>{ticket.price}</p>
+                    {ticket.priceNote && (
+                      <p className="text-[11px] text-neutral-400 mt-0.5">{ticket.priceNote}</p>
+                    )}
+                  </div>
+
+                  {/* Description */}
+                  <p className="text-neutral-500 text-xs leading-relaxed flex-1 whitespace-pre-line" lang="zh-TW">
                     {ticket.desc}
                   </p>
+
+                  {/* Target audience */}
+                  {ticket.for && (
+                    <p className="text-[11px] text-neutral-400 leading-relaxed" lang="zh-TW">
+                      📌 給：{ticket.for}
+                    </p>
+                  )}
+
+                  {/* Sale window (only if different from default) */}
+                  {ticket.saleWindow !== SALE_WINDOW && (
+                    <p className="text-[10px] font-bold text-amber-600 bg-amber-50 rounded px-2 py-1" lang="zh-TW">
+                      🕐 售票：{ticket.saleWindow}
+                    </p>
+                  )}
+
+                  {/* Note */}
                   {ticket.note && (
-                    <p className="text-neutral-400 text-xs leading-relaxed border-t border-neutral-100 pt-3" lang="zh-TW">
+                    <p className="text-neutral-400 text-[10px] leading-relaxed border-t border-neutral-100 pt-2.5" lang="zh-TW">
                       {ticket.note}
                     </p>
                   )}

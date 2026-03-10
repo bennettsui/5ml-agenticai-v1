@@ -235,7 +235,7 @@ export default function TEDxXinyiAdmin() {
       const a = downloadRef.current;
       if (a) {
         a.href = url;
-        a.download = `tedx-xinyi-${new Date().toISOString().slice(0, 10)}.zip`;
+        a.download = `tedx-xinyi-${new Date().toISOString().slice(0, 10)}.tar.gz`;
         a.click();
       }
       setPublishMsg(`Pack downloaded (${(blob.size / 1024).toFixed(0)} KB)`);
@@ -1740,8 +1740,8 @@ export default function TEDxXinyiAdmin() {
             <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 mb-6">
               <h3 className="text-sm font-bold text-neutral-300 mb-4">Package Contents</h3>
               <ul className="text-sm text-neutral-400 space-y-1.5 mb-6">
-                <li>&#x2022; <span className="text-neutral-300 font-bold">vibe-demo/tedx-xinyi/</span> — homepage + all sub-pages (about, blog, community, report, salon, speakers, sustainability)</li>
-                <li>&#x2022; <span className="text-neutral-300 font-bold">index.php</span> — PHP router handling <code className="text-xs bg-neutral-800 px-1 rounded">/vibe-demo/tedx-xinyi/...</code> URLs</li>
+                <li>&#x2022; <span className="text-neutral-300 font-bold">index.html</span> + all sub-pages — URLs rewritten for <code className="text-xs bg-neutral-800 px-1 rounded">tedxxinyi.brandpromo.today</code></li>
+                <li>&#x2022; <span className="text-neutral-300 font-bold">index.php</span> — PHP router for clean URLs (<code className="text-xs bg-neutral-800 px-1 rounded">/about</code>, <code className="text-xs bg-neutral-800 px-1 rounded">/salon</code>, etc.)</li>
                 <li>&#x2022; <span className="text-neutral-300 font-bold">.htaccess</span> — Apache rewrite rules</li>
                 <li>&#x2022; _next/ static assets (JS &amp; CSS chunks)</li>
                 <li>&#x2022; tedx-xinyi/ images folder</li>
@@ -1773,7 +1773,7 @@ export default function TEDxXinyiAdmin() {
                 <div>
                   <p className="text-xs text-neutral-300 font-bold mb-1">PHP built-in server (local preview)</p>
                   <p className="text-xs text-neutral-500 font-mono bg-neutral-800/50 px-2 py-1 rounded inline-block">php -S localhost:8000 index.php</p>
-                  <p className="text-xs text-neutral-600 mt-1">Then open: http://localhost:8000/vibe-demo/tedx-xinyi/</p>
+                  <p className="text-xs text-neutral-600 mt-1">Then open: http://localhost:8000/</p>
                 </div>
                 <div>
                   <p className="text-xs text-neutral-300 font-bold mb-1">Static hosting (Netlify, Vercel, S3)</p>

@@ -75,7 +75,7 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Upload Past Paper</h1>
         <p className="text-slate-400 text-sm mt-1">Gemini AI will extract and clean all questions automatically.</p>

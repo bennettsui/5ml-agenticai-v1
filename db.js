@@ -1127,6 +1127,60 @@ async function initDatabase() {
         user_agent TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS pf_work_units (
+        id SERIAL PRIMARY KEY,
+        job_id TEXT UNIQUE DEFAULT ('WU-' || to_char(NOW(), 'YYYYMMDD') || '-' || substr(md5(random()::text), 1, 4)),
+        name TEXT NOT NULL,
+        material TEXT,
+        grams NUMERIC(10,2) DEFAULT 0,
+        hours NUMERIC(10,2) DEFAULT 0,
+        status TEXT DEFAULT 'queued',
+        revenue NUMERIC(12,2) DEFAULT 0,
+        direct_cost NUMERIC(12,2) DEFAULT 0,
+        overhead_alloc NUMERIC(12,2) DEFAULT 0,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS pf_revenue_entries (
+        id SERIAL PRIMARY KEY,
+        channel TEXT NOT NULL,
+        period TEXT NOT NULL,
+        jobs INTEGER DEFAULT 0,
+        units_grams NUMERIC(12,2) DEFAULT 0,
+        revenue NUMERIC(12,2) DEFAULT 0,
+        cogs NUMERIC(12,2) DEFAULT 0,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS pf_cost_entries (
+        id SERIAL PRIMARY KEY,
+        category TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('direct','overhead')),
+        amount NUMERIC(12,2) DEFAULT 0,
+        period TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS pf_inventory_items (
+        id SERIAL PRIMARY KEY,
+        sku TEXT UNIQUE DEFAULT ('INV-' || to_char(NOW(), 'YYYYMMDD') || '-' || substr(md5(random()::text), 1, 4)),
+        name TEXT NOT NULL,
+        type TEXT DEFAULT 'filament',
+        unit TEXT DEFAULT 'kg',
+        stock_qty NUMERIC(10,3) DEFAULT 0,
+        reorder_point NUMERIC(10,3) DEFAULT 0,
+        unit_cost NUMERIC(12,4) DEFAULT 0,
+        supplier TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');
@@ -2098,19 +2152,18 @@ async function seedZiweiPalacesAndStars() {
       if (existing.rows.length === 0) {
         await pool.query(
           `INSERT INTO ziwei_stars
-           (id, number, chinese, english, meaning, element, archetype, general_nature, key_traits, palace_meanings)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+           (id, number, chinese, english, star_type, nature, attributes, meanings, interpretation)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
             star.id,
             star.number,
             star.chinese,
             star.english,
-            star.meaning,
-            star.element,
-            star.archetype,
-            star.general_nature,
-            JSON.stringify(star.key_traits),
-            JSON.stringify(star.palace_meanings)
+            star.element || null,
+            JSON.stringify(star.key_traits || []),
+            JSON.stringify({ archetype: star.archetype, palace_meanings: star.palace_meanings }),
+            star.meaning || null,
+            star.general_nature || null,
           ]
         );
         starCount++;

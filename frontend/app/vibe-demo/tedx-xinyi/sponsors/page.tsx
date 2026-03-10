@@ -1,22 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_AMBER } from '../components';
 
 const CURRENT_PATH = '/vibe-demo/tedx-xinyi/sponsors';
-
-const API_BASE = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_URL || '')
-  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080');
-
-interface SponsorLogo {
-  key: string;
-  name: string;
-  category: string;
-  filename: string | null;
-  publicUrl?: string;
-  localExists: boolean;
-}
 
 const TIER_COLORS: Record<string, string> = {
   patron:     TED_RED,
@@ -92,41 +78,8 @@ const TABLE_ROWS: [string, boolean, boolean, boolean, boolean][] = [
 ];
 
 
-function LogoSlot() {
-  return (
-    <div className="border-2 border-dashed border-neutral-200 bg-neutral-50 rounded-xl h-20 flex items-center justify-center text-xs font-bold text-neutral-300 tracking-widest uppercase cursor-pointer hover:border-neutral-400 hover:bg-white transition-colors select-none">
-      Logo
-    </div>
-  );
-}
-
-function LogoImage({ logo }: { logo: SponsorLogo }) {
-  const [errored, setErrored] = useState(false);
-  const src = logo.publicUrl || (logo.localExists && logo.filename ? `${API_BASE}/tedx-xinyi/sponsors/${logo.filename}` : null);
-  if (!src || errored) return <LogoSlot />;
-  return (
-    <div className="bg-white rounded-xl h-24 flex items-center justify-center overflow-hidden px-6 py-3 border border-neutral-100">
-      <img
-        src={src}
-        alt={logo.name}
-        className="w-full h-full object-contain"
-        onError={() => setErrored(true)}
-      />
-    </div>
-  );
-}
 
 export default function SponsorsPage() {
-  const [logos, setLogos] = useState<Record<string, SponsorLogo>>({});
-
-  useEffect(() => {
-    fetch(`${API_BASE}/api/tedx-xinyi/sponsors/logos`)
-      .then(r => r.json())
-      .then(d => setLogos(d.logos || {}))
-      .catch(() => {});
-  }, []);
-
-  const byCategory = (cat: string) => Object.values(logos).filter(l => l.category === cat);
 
   return (
     <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
@@ -197,47 +150,6 @@ export default function SponsorsPage() {
             </FadeIn>
           ))}
         </div>
-      </Section>
-
-      {/* ── STRATEGIC PARTNERS ───────────────────────── */}
-      <Section bg="white" id="strategic-partners">
-        <FadeIn>
-          <SectionLabel>Strategic</SectionLabel>
-          <h2 className="text-3xl md:text-4xl font-black mb-3" lang="zh-TW">策略影響夥伴</h2>
-          <p className="text-neutral-500 text-sm leading-relaxed max-w-xl mb-12" lang="zh-TW">
-            這些夥伴不只提供資源，而是與 TEDxXinyi 一起為城市策劃長期對話與實驗。
-          </p>
-        </FadeIn>
-
-        {/* Logo cards — dynamic from admin */}
-        {(() => {
-          const strategic = byCategory('strategic');
-          const cards = strategic.length > 0 ? strategic : null;
-          if (!cards) {
-            return (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                {[0, 1].map(i => (
-                  <div key={i} className="border border-neutral-100 rounded-2xl p-6">
-                    <LogoSlot />
-                    <p className="font-black text-base mt-4 text-neutral-300" lang="zh-TW">策略夥伴名稱</p>
-                  </div>
-                ))}
-              </div>
-            );
-          }
-          return (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-              {cards.map((logo) => (
-                <FadeIn key={logo.key}>
-                  <div className="border border-neutral-100 rounded-2xl p-6 hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                    <LogoImage logo={logo} />
-                    <p className="font-black text-base mt-4" lang="zh-TW">{logo.name}</p>
-                  </div>
-                </FadeIn>
-              ))}
-            </div>
-          );
-        })()}
       </Section>
 
       {/* ── SPONSORSHIP PLANS ────────────────────────── */}
@@ -339,14 +251,9 @@ export default function SponsorsPage() {
           <FadeIn delay={200}>
             <div className="flex flex-wrap gap-3 justify-center">
               <a
-                href="#"
-                className="px-6 py-3 rounded-full text-sm font-bold bg-white hover:bg-neutral-100 transition-colors"
-                style={{ color: TED_RED }}
-              >
-                下載完整贊助簡介
-              </a>
-              <a
-                href="#"
+                href="https://www.facebook.com/TEDxXinyi-107091491148122"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="px-6 py-3 rounded-full text-sm font-bold border-2 border-white/40 text-white hover:bg-white/10 hover:border-white/60 transition-colors"
               >
                 與我們聊聊合作
