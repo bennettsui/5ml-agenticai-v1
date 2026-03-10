@@ -1180,6 +1180,80 @@ router.get('/teachers/papers/:id/file', async (req, res) => {
   }
 });
 
+// ─── Teacher: visual page extraction (validate page) ─────────────────────────
+
+/**
+ * POST /api/adaptive-learning/teachers/papers/:id/visual-extract
+ * Body: { page_image_base64: string, page_number: number, mime_type?: string }
+ * Sends a rendered page image to Gemini Vision and returns detected elements
+ * with bounding boxes (x/y/w/h as % of image dimensions).
+ */
+router.post('/teachers/papers/:id/visual-extract', async (req, res) => {
+  const { page_image_base64, page_number = 1, mime_type = 'image/png' } = req.body || {};
+  if (!page_image_base64) return res.status(400).json({ success: false, error: 'page_image_base64 required' });
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
+
+  const GEMINI_MODEL = 'gemini-1.5-flash';
+  const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+
+  const prompt = `You are analyzing a page from a Hong Kong secondary school math exam paper.
+
+Detect every element visible on this page. For each element output a JSON array where each item is:
+{
+  "id": <sequential integer starting from 1>,
+  "type": "question_number" | "question_stem" | "sub_part" | "math_expression" | "diagram" | "graph" | "table" | "option" | "answer_line" | "instruction",
+  "content": "<full text content in English or romanized form>",
+  "content_zh": "<text in Traditional Chinese if present, else empty string>",
+  "bbox": { "x": <left edge as % of image width 0-100>, "y": <top edge as % of image height 0-100>, "w": <width as % 0-100>, "h": <height as % 0-100> },
+  "confidence": <float 0.0-1.0, your certainty>,
+  "needs_review": <true if text is unclear, illegible, or you are uncertain>
+}
+
+Rules:
+- bbox coordinates MUST be percentages relative to the full image (0 to 100).
+- Include every question number, question stem, sub-part, math expression, diagram/graph region, MCQ option, blank answer line, and instruction block.
+- For diagrams or graphs with no text, set content to a brief description like "geometry diagram" or "bar chart".
+- Output ONLY the JSON array. No markdown fences, no explanation.`;
+
+  try {
+    const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type, data: page_image_base64 } },
+            { text: prompt },
+          ],
+        }],
+        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(502).json({ success: false, error: `Gemini error ${response.status}: ${errText.slice(0, 300)}` });
+    }
+
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+
+    let elements = [];
+    try {
+      const parsed = JSON.parse(text);
+      elements = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      console.warn('[visual-extract] Gemini non-JSON response:', text.slice(0, 200));
+    }
+
+    res.json({ success: true, page_number, elements });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── Teacher: storage overview ─────────────────────────────────────────────────
 
 /**
