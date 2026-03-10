@@ -268,35 +268,28 @@ function ValidateInner() {
   // ─── Load draft questions ─────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!id) return;
-    fetch(`/api/adaptive-learning/teachers/papers/${id}/draft-questions`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.success) {
-          const questions = (d.draft_questions || []).map((q: DraftQuestion) => ({
-            ...q,
-            _meta: parseMeta(q.raw_ocr_text),
-          }));
-          setDrafts(questions);
-          setPaperName(d.exam_name || '');
-        }
-      })
-      .catch(() => {})
-      .finally(() => setDraftsLoading(false));
-  }, [id]);
-
-  // ─── Load PDF ─────────────────────────────────────────────────────────────
+    if ((window as any).pdfjsLib) return;
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.onload = () => {
+      (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    };
+    script.onerror = () => setPdfError('pdf.js failed to load from CDN. Check your internet connection and refresh.');
+    document.head.appendChild(script);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     setPdfLoading(true); setPdfError('');
 
-    getPdfJs()
-      .then(async (lib) => {
-        if (cancelled) return;
-        const url = `/api/adaptive-learning/teachers/papers/${id}/file`;
-        const doc = await lib.getDocument(url).promise;
+    async function load() {
+      setPdfLoading(true); setPdfError('');
+      try {
+        const lib = (window as any).pdfjsLib;
+        if (!lib) { setPdfError('PDF viewer not loaded yet. Refresh the page.'); return; }
+        const doc = await lib.getDocument({ url: pdfUrl, withCredentials: false }).promise;
         if (cancelled) return;
         setPdfDoc(doc);
         setTotalPages(doc.numPages);
@@ -307,7 +300,19 @@ function ValidateInner() {
       })
       .finally(() => { if (!cancelled) setPdfLoading(false); });
 
-    return () => { cancelled = true; };
+    // Wait for pdfjsLib to be available
+    const interval = setInterval(() => {
+      if ((window as any).pdfjsLib) { clearInterval(interval); load(); }
+    }, 300);
+    // If still not available after 10s, show an error
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+      if (!(window as any).pdfjsLib && !cancelled) {
+        setPdfError('pdf.js viewer timed out. Refresh the page or check your internet connection.');
+      }
+    }, 10000);
+
+    return () => { cancelled = true; clearInterval(interval); clearTimeout(timeout); };
   }, [id]);
 
   // ─── Render page ──────────────────────────────────────────────────────────
@@ -436,14 +441,23 @@ function ValidateInner() {
               </div>
             )}
             {pdfError && (
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm">
-                <p className="text-amber-300 font-medium flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />PDF viewer error
-                </p>
-                <p className="text-amber-400/80 text-xs mt-1">{pdfError}</p>
-                <p className="text-slate-500 text-xs mt-2">
-                  Check <Link href="/teach/storage" className="text-purple-400 underline">Storage</Link> to push to CDN or re-upload.
-                </p>
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium">PDF viewer error — showing fallback below</p>
+                    <p className="text-xs text-amber-400/80 mt-1">{pdfError}</p>
+                    <p className="text-xs text-slate-500 mt-2">
+                      Visual annotation requires pdf.js. If the fallback loads, you can still read the paper but cannot use Analyze Page.
+                    </p>
+                  </div>
+                </div>
+                <iframe
+                  src={`/api/adaptive-learning/teachers/papers/${id}/file`}
+                  className="w-full rounded-xl border border-slate-700/50"
+                  style={{ height: '75vh' }}
+                  title="PDF fallback viewer"
+                />
               </div>
             )}
             <div className="relative inline-block">

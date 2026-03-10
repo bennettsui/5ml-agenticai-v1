@@ -2649,17 +2649,32 @@ async function generateVisual(client, prompt) {
 
 // ==================== PUBLISH HTML PACK ====================
 
-// Rewrite Next.js baked-in paths so the site works at root (https://tedxxinyi.brandpromo.today/)
-function rewriteTedxHtml(html) {
-  return html
-    // Canonical/OG absolute URLs
+// Rewrite Next.js baked-in paths and strip JS hydration for pure static HTML deployment
+function rewriteTedxHtml(html, cdnMap = {}) {
+  const visibilityCss = `<style>
+/* Static deployment fix: reveal elements hidden by JS-driven animations */
+*{animation:none!important;transition:none!important}
+[style*="opacity:0"],[style*="opacity: 0"]{opacity:1!important}
+[style*="transform:translateY"],[style*="transform: translateY"]{transform:none!important}
+</style>`;
+
+  let out = html
+    .replace('</head>', visibilityCss + '</head>')
     .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi\//g, 'https://tedxxinyi.brandpromo.today/')
     .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi/g,  'https://tedxxinyi.brandpromo.today')
-    // Internal nav links: /vibe-demo/tedx-xinyi/about → /about
     .replace(/\/vibe-demo\/tedx-xinyi\//g, '/')
-    // Home link: /vibe-demo/tedx-xinyi" or /vibe-demo/tedx-xinyi'
     .replace(/\/vibe-demo\/tedx-xinyi"/g, '/"')
-    .replace(/\/vibe-demo\/tedx-xinyi'/g, "/'");
+    .replace(/\/vibe-demo\/tedx-xinyi'/g, "/'")
+    // Strip ALL <script> tags — Next.js hydration JS crashes on non-Next hosts.
+    // HTML is fully server-rendered; CSS keeps all styling; links work without JS.
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+  // Rewrite local image paths to CDN URLs
+  out = out.replace(/src="\/tedx-xinyi\/([^"]+)"/g, (match, key) => {
+    const cdnUrl = cdnMap[key];
+    return cdnUrl ? `src="${cdnUrl}"` : match;
+  });
+  return out;
 }
 
 router.post('/publish-html-pack', async (req, res) => {
@@ -2683,22 +2698,39 @@ router.post('/publish-html-pack', async (req, res) => {
       return res.status(500).json({ error: 'Build output not found' });
     }
 
+    // 1b. Fetch CDN URL map from DB
+    const cdnMap = {};
+    try {
+      const pool = getDbPool();
+      if (pool) {
+        const { rows } = await pool.query('SELECT key, public_url FROM tedx_media_assets WHERE public_url IS NOT NULL');
+        for (const r of rows) cdnMap[r.key] = r.public_url;
+      }
+    } catch (_) {}
+
     // 2. Collect sub-pages (exclude admin)
     const EXCLUDE = new Set(['admin']);
     const htmlFiles = fs.readdirSync(TEDX_OUT)
       .filter(f => f.endsWith('.html') && !EXCLUDE.has(f.replace('.html', '')));
     const pageNames = htmlFiles.map(f => f.replace('.html', ''));
 
-    // 3. Write rewritten HTML files into tmpDir (root-level, not under vibe-demo/tedx-xinyi/)
+    // 3. Write rewritten HTML files into tmpDir (root-level, scripts stripped)
     if (fs.existsSync(TEDX_HOME)) {
-      fs.writeFileSync(path.join(tmpDir, 'index.html'), rewriteTedxHtml(fs.readFileSync(TEDX_HOME, 'utf8')));
+      fs.writeFileSync(path.join(tmpDir, 'index.html'), rewriteTedxHtml(fs.readFileSync(TEDX_HOME, 'utf8'), cdnMap));
     }
     for (const f of htmlFiles) {
-      fs.writeFileSync(path.join(tmpDir, f), rewriteTedxHtml(fs.readFileSync(path.join(TEDX_OUT, f), 'utf8')));
+      fs.writeFileSync(path.join(tmpDir, f), rewriteTedxHtml(fs.readFileSync(path.join(TEDX_OUT, f), 'utf8'), cdnMap));
     }
 
-    // 4. Copy _next/ and tedx-xinyi/ images
-    if (fs.existsSync(NEXT_DIR))    execSync(`cp -r "${NEXT_DIR}" "${tmpDir}/_next"`);
+    // 4. Only copy CSS (JS chunks stripped — no hydration needed)
+    const cssDir = path.join(NEXT_DIR, 'static', 'css');
+    if (fs.existsSync(cssDir)) {
+      fs.mkdirSync(path.join(tmpDir, '_next', 'static', 'css'), { recursive: true });
+      for (const f of fs.readdirSync(cssDir)) {
+        fs.copyFileSync(path.join(cssDir, f), path.join(tmpDir, '_next', 'static', 'css', f));
+      }
+    }
+    // Copy images (binary)
     if (fs.existsSync(PUBLIC_IMGS)) execSync(`cp -r "${PUBLIC_IMGS}" "${tmpDir}/tedx-xinyi"`);
 
     // 5. PHP router (root-level clean URLs)
