@@ -7521,10 +7521,115 @@ function pfDbCheck(res) {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )`,
+    // 3D printing factory specialized cost tables
+    `CREATE TABLE IF NOT EXISTS pf_cost_categories (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      parent TEXT NOT NULL DEFAULT 'overhead',
+      cost_type TEXT NOT NULL DEFAULT 'overhead',
+      description TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pf_material_usage (
+      id SERIAL PRIMARY KEY,
+      job_id TEXT,
+      material TEXT NOT NULL,
+      brand TEXT,
+      color TEXT,
+      quantity_g NUMERIC(10,3) DEFAULT 0,
+      cost_per_g NUMERIC(10,6) DEFAULT 0,
+      total_cost NUMERIC(12,2) GENERATED ALWAYS AS (ROUND((quantity_g * cost_per_g)::numeric, 2)) STORED,
+      supplier TEXT,
+      period TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pf_machine_log (
+      id SERIAL PRIMARY KEY,
+      printer_id TEXT,
+      printer_name TEXT,
+      job_id TEXT,
+      print_hours NUMERIC(10,2) DEFAULT 0,
+      electricity_kwh NUMERIC(10,3) DEFAULT 0,
+      electricity_cost NUMERIC(12,2) DEFAULT 0,
+      maintenance_cost NUMERIC(12,2) DEFAULT 0,
+      depreciation_cost NUMERIC(12,2) DEFAULT 0,
+      period TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pf_labour_log (
+      id SERIAL PRIMARY KEY,
+      job_id TEXT,
+      person TEXT,
+      role TEXT,
+      hours NUMERIC(10,2) DEFAULT 0,
+      hourly_rate NUMERIC(10,2) DEFAULT 0,
+      total_cost NUMERIC(12,2) GENERATED ALWAYS AS (ROUND((hours * hourly_rate)::numeric, 2)) STORED,
+      period TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    // Extend pf_cost_entries with richer fields (ADD COLUMN IF NOT EXISTS via separate queries)
   ];
   for (const sql of tables) {
     await pool.query(sql).catch(err => console.warn('[print-finance] table init:', err.message));
   }
+  // Add new columns to pf_cost_entries if they don't exist yet
+  const alterCols = [
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS sub_category TEXT`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS quantity NUMERIC(10,3)`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS unit TEXT`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(12,4)`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS vendor TEXT`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS job_ref TEXT`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
+  ];
+  for (const sql of alterCols) {
+    await pool.query(sql).catch(() => {}); // silently skip if already exists
+  }
+  // Seed default 3D printing cost categories
+  const defaultCategories = [
+    { name: 'Filament / Resin',   parent: 'materials', cost_type: 'direct',   desc: 'Raw material consumption per job' },
+    { name: 'Electricity',        parent: 'machine',   cost_type: 'overhead', desc: 'Power used by printers and equipment' },
+    { name: 'Machine Depreciation', parent: 'machine', cost_type: 'fixed',    desc: 'Printer depreciation over lifespan' },
+    { name: 'Machine Maintenance',  parent: 'machine', cost_type: 'direct',   desc: 'Repairs, nozzles, belts, lubricant' },
+    { name: 'Operator Labour',    parent: 'labour',    cost_type: 'direct',   desc: 'Operator and technician hours' },
+    { name: 'Post-Processing',    parent: 'labour',    cost_type: 'direct',   desc: 'Sanding, painting, support removal' },
+    { name: 'Rent',               parent: 'overhead',  cost_type: 'fixed',    desc: 'Workshop / factory floor space' },
+    { name: 'Software & Licences',parent: 'overhead',  cost_type: 'fixed',    desc: 'Slicer, CAD, ERP software' },
+    { name: 'Packaging',          parent: 'direct',    cost_type: 'direct',   desc: 'Boxes, foam, labels per shipment' },
+    { name: 'Shipping',           parent: 'direct',    cost_type: 'direct',   desc: 'Courier / freight costs' },
+    { name: 'Quality Control',    parent: 'labour',    cost_type: 'direct',   desc: 'Inspection and testing time' },
+    { name: 'Admin & Finance',    parent: 'overhead',  cost_type: 'fixed',    desc: 'Accounting, insurance, admin staff' },
+  ];
+  for (const c of defaultCategories) {
+    await pool.query(
+      `INSERT INTO pf_cost_categories (name, parent, cost_type, description) VALUES ($1,$2,$3,$4) ON CONFLICT (name) DO NOTHING`,
+      [c.name, c.parent, c.cost_type, c.desc]
+    ).catch(() => {});
+  }
+  // Job-level cost rollup view
+  await pool.query(`
+    CREATE OR REPLACE VIEW pf_job_cost_summary AS
+    SELECT
+      wu.job_id, wu.name, wu.status, wu.revenue,
+      COALESCE(m.material_total, 0)   AS material_cost,
+      COALESCE(mc.machine_total, 0)   AS machine_cost,
+      COALESCE(l.labour_total, 0)     AS labour_cost,
+      COALESCE(o.overhead_total, 0)   AS overhead_cost,
+      wu.revenue
+        - COALESCE(m.material_total, 0)
+        - COALESCE(mc.machine_total, 0)
+        - COALESCE(l.labour_total, 0)
+        - COALESCE(o.overhead_total, 0) AS gross_profit,
+      wu.created_at
+    FROM pf_work_units wu
+    LEFT JOIN (SELECT job_id, SUM(total_cost) AS material_total FROM pf_material_usage GROUP BY job_id) m ON m.job_id = wu.job_id
+    LEFT JOIN (SELECT job_id, SUM(electricity_cost + maintenance_cost + depreciation_cost) AS machine_total FROM pf_machine_log GROUP BY job_id) mc ON mc.job_id = wu.job_id
+    LEFT JOIN (SELECT job_id, SUM(total_cost) AS labour_total FROM pf_labour_log GROUP BY job_id) l ON l.job_id = wu.job_id
+    LEFT JOIN (SELECT job_ref, SUM(amount) AS overhead_total FROM pf_cost_entries WHERE job_ref IS NOT NULL GROUP BY job_ref) o ON o.job_ref = wu.job_id
+  `).catch(err => console.warn('[print-finance] view init:', err.message));
 })();
 
 // --- Work Units ---
@@ -8017,6 +8122,14 @@ app.put('/api/print-finance/settings', async (req, res) => {
 function detectImportType(headers) {
   const h = headers.map(x => String(x).toLowerCase().replace(/[\s_-]+/g, ''));
   const has = (...keys) => keys.some(k => h.some(x => x.includes(k.replace(/[\s_-]+/g, ''))));
+  // Specialized 3D printing tables — check before generic ones
+  if ((has('weightg','quantityg','costperg') && has('material','filament','resin')) ||
+      (has('克數','重量') && has('材料','耗材','樹脂'))) return 'material_usage';
+  if (has('printerid','printername','machineid') ||
+      (has('printhours','electricitycost','maintenancecost') && has('printer','machine','設備'))) return 'machine_log';
+  if ((has('hourlyrate','labourhours','workhours') && has('person','employee','operator','員工','操作員')) ||
+      has('時薪') && has('工時')) return 'labour_log';
+  // Generic tables
   if (has('jobid', 'job_id') || (has('grams', 'hours') && has('material'))) return 'work-units';
   if ((has('stockkg', 'priceperkg', 'stockg', 'quantity') && has('material')) || (has('spool', 'filament') && has('stock'))) return 'inventory';
   if (has('channel', 'source') && has('revenue', 'amount')) return 'revenue';
@@ -8082,19 +8195,40 @@ async function parseUploadedFile(file) {
 
 // Chinese → English column name aliases for flexible matching
 const ZH_ALIASES = {
+  // Amounts
   '合計': 'amount', '金額': 'amount', '費用': 'amount', '總計': 'amount', '總金額': 'amount', '小計': 'amount',
-  '單價': 'unit_price', '數量': 'quantity',
+  '租金': 'amount', '保險': 'amount', '行政費': 'amount', '軟件費': 'amount',
+  '單價': 'unit_cost', '數量': 'quantity',
+  // Time / period
   '日期': 'date', '月份': 'period', '年月': 'period',
+  // Notes
   '備註': 'notes', '備注': 'notes', '說明': 'notes', '描述': 'notes',
+  // Names / categories
   '名稱': 'name', '品名': 'name', '項目': 'name', '項目名稱': 'name', '工作名稱': 'name',
   '類別': 'category', '類型': 'type',
+  // Revenue / channel
   '渠道': 'channel', '來源': 'source', '平台': 'channel',
   '收入': 'revenue', '營業額': 'revenue',
-  '材料': 'material', '耗材': 'material', '品牌': 'brand', '顏色': 'color',
+  // Inventory / materials
+  '材料': 'material', '耗材': 'material', '打印材料': 'material', '樹脂': 'material', '絲料': 'material',
+  '品牌': 'brand', '顏色': 'color',
   '庫存': 'stock_kg', '庫存量': 'stock_kg',
+  // Material usage (3D printing)
+  '重量': 'weight_g', '克數': 'weight_g', '用料重量': 'weight_g',
+  '每克成本': 'cost_per_g', '成本每克': 'cost_per_g',
+  // Machine log
+  '打印機': 'printer', '機器': 'printer', '設備': 'printer', '打印機編號': 'printer',
+  '打印時數': 'hours', '機器時數': 'hours', '運行時數': 'hours',
+  '電費': 'electricity_cost', '維修費': 'maintenance_cost', '折舊': 'depreciation_cost',
+  // Labour log
+  '員工': 'person', '操作員': 'person', '人員': 'person', '姓名': 'person',
+  '工時': 'hours', '時薪': 'hourly_rate', '職位': 'role', '崗位': 'role',
+  // Job reference
+  '工單': 'job_ref', '訂單': 'job_ref', '工作編號': 'job_ref', '工作號': 'job_ref',
 };
 
-async function importRows(type, rows) {
+// importRows: type = target table, rows = parsed rows, aiMapping = optional AI field_mapping
+async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCostType = null) {
   const results = []; // { sheet, row_num, status, label, reason? }
   for (const r of rows) {
     const sheet = r._sheet || '?';
@@ -8105,8 +8239,16 @@ async function importRows(type, rows) {
     for (const rk of Object.keys(r)) {
       if (rk.startsWith('_')) continue;
       const v = r[rk];
-      lookup[norm(rk)] = v;                                      // original key
-      if (ZH_ALIASES[rk]) lookup[norm(ZH_ALIASES[rk])] = v;    // Chinese alias → English key
+      lookup[norm(rk)] = v;
+      if (ZH_ALIASES[rk]) lookup[norm(ZH_ALIASES[rk])] = v;
+    }
+    // If AI provided field mappings, also add those as aliases
+    if (aiMapping) {
+      for (const [field, colName] of Object.entries(aiMapping)) {
+        if (colName && r[colName] !== undefined) {
+          lookup[norm(field)] = r[colName];
+        }
+      }
     }
     const get = (...keys) => {
       for (const k of keys) {
@@ -8181,6 +8323,43 @@ async function importRows(type, rows) {
           ]
         );
         results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${stock}kg · $${price}/kg` });
+      } else if (type === 'material_usage') {
+        const material = get('material', 'filament', 'name', 'resin');
+        if (!material) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing material name' }); continue; }
+        const qty_g = parseFloat(get('weight_g', 'quantity', 'grams', 'weight')) || 0;
+        const cost_per_g = parseFloat(get('unit_cost', 'cost_per_g', 'cost_per_gram', 'price')) || 0;
+        await pool.query(
+          `INSERT INTO pf_material_usage (job_id, material, brand, color, quantity_g, cost_per_g, supplier, period, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [get('job_ref','job_id','job')||null, material, get('brand')||null, get('color')||null,
+           qty_g, cost_per_g, get('vendor','supplier')||null, get('period','date')||null, get('notes')||null]
+        );
+        results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${qty_g}g · $${(qty_g*cost_per_g).toFixed(2)}` });
+      } else if (type === 'machine_log') {
+        const printer = get('printer', 'machine', 'printer_id', 'printer_name');
+        const hours = parseFloat(get('hours', 'print_hours', 'runtime')) || 0;
+        const elec = parseFloat(get('electricity_cost', 'electricity', 'power_cost')) || 0;
+        const maint = parseFloat(get('maintenance_cost', 'maintenance', 'repair')) || 0;
+        const dep = parseFloat(get('depreciation_cost', 'depreciation')) || 0;
+        if (!printer && !hours) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing printer and hours' }); continue; }
+        await pool.query(
+          `INSERT INTO pf_machine_log (printer_id, printer_name, job_id, print_hours, electricity_cost, maintenance_cost, depreciation_cost, period, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [printer||null, printer||null, get('job_ref','job_id')||null, hours, elec, maint, dep, get('period','date')||null, get('notes')||null]
+        );
+        results.push({ sheet, row_num, status: 'accepted', label: `${printer||'Machine'} · ${hours}h · $${(elec+maint+dep).toFixed(2)}` });
+      } else if (type === 'labour_log') {
+        const person = get('person', 'employee', 'name', 'operator');
+        const hours = parseFloat(get('hours', 'labour_hours', 'work_hours')) || 0;
+        const rate = parseFloat(get('hourly_rate', 'rate', 'unit_cost')) || 0;
+        if (!person && !hours) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing person and hours' }); continue; }
+        await pool.query(
+          `INSERT INTO pf_labour_log (job_id, person, role, hours, hourly_rate, period, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [get('job_ref','job_id')||null, person||null, get('role','position','title')||aiCategory||null,
+           hours, rate, get('period','date')||null, get('notes')||null]
+        );
+        results.push({ sheet, row_num, status: 'accepted', label: `${person||'Staff'} · ${hours}h · $${(hours*rate).toFixed(2)}` });
       } else {
         results.push({ sheet, row_num, status: 'skipped', reason: `Unknown type: ${type}` });
       }
@@ -8190,6 +8369,162 @@ async function importRows(type, rows) {
   }
   return { inserted: results.filter(r => r.status === 'accepted').length, skipped: results.filter(r => r.status === 'skipped').length, results };
 }
+
+// GET /api/print-finance/cost-categories — list all categories
+app.get('/api/print-finance/cost-categories', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_cost_categories ORDER BY parent, name');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/cost-categories — create or return existing category
+app.post('/api/print-finance/cost-categories', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  const { name, parent, cost_type, description } = req.body;
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO pf_cost_categories (name, parent, cost_type, description)
+       VALUES ($1,$2,$3,$4) ON CONFLICT (name) DO UPDATE SET parent=EXCLUDED.parent, cost_type=EXCLUDED.cost_type RETURNING *`,
+      [name, parent||'overhead', cost_type||'overhead', description||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/job-cost-summary
+app.get('/api/print-finance/job-cost-summary', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_job_cost_summary ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/material-log
+app.get('/api/print-finance/material-log', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_material_usage ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/machine-log
+app.get('/api/print-finance/machine-log', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_machine_log ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/labour-log
+app.get('/api/print-finance/labour-log', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_labour_log ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/import/analyze — AI-powered column analysis
+// Returns: { table, category, cost_type, sub_category, field_mapping, is_new_category, confidence, reasoning }
+async function analyzeWithAI(columns, sampleRows, existingCategories) {
+  const colStr = columns.join(', ');
+  const sampleStr = sampleRows.slice(0, 3).map((r, i) =>
+    `Row ${i + 1}: ${Object.entries(r).filter(([k]) => !k.startsWith('_')).map(([k, v]) => `${k}=${v}`).join(', ')}`
+  ).join('\n');
+  const catStr = existingCategories.map(c => `${c.name} (${c.parent}/${c.cost_type})`).join(', ');
+
+  const systemPrompt = `You are a financial data analyst for a 3D printing factory.
+The factory tracks these cost layers: materials (filament/resin), machine (electricity/maintenance/depreciation), labour (operators, post-processing, QC), overhead (rent, admin, software), and revenue.
+
+Existing cost categories: ${catStr}
+
+Respond ONLY with valid JSON, no markdown, no explanation outside the JSON.`;
+
+  const userPrompt = `Analyze this Excel/CSV data and map it to the correct cost table and fields.
+
+Columns: ${colStr}
+${sampleStr}
+
+Return a JSON object with exactly these fields:
+{
+  "table": one of "costs" | "material_usage" | "machine_log" | "labour_log" | "revenue" | "inventory",
+  "category": "best matching existing category name, or new name if none fits",
+  "cost_type": "direct" | "overhead" | "fixed" | "revenue",
+  "sub_category": "optional further classification, or null",
+  "field_mapping": {
+    "amount": "column name for total cost/amount, or null",
+    "period": "column name for date/period, or null",
+    "notes": "column name for notes/remarks, or null",
+    "name": "column name for item name/description, or null",
+    "quantity": "column name for quantity, or null",
+    "unit_cost": "column name for unit price, or null",
+    "unit": "column name for unit of measure, or null",
+    "vendor": "column name for supplier/vendor, or null",
+    "job_ref": "column name for job/order reference, or null",
+    "material": "column name for material type (for material_usage), or null",
+    "weight_g": "column name for weight in grams (for material_usage), or null",
+    "printer": "column name for printer/machine ID (for machine_log), or null",
+    "hours": "column name for hours worked or print hours, or null",
+    "person": "column name for person/employee name (for labour_log), or null",
+    "role": "column name for job role (for labour_log), or null"
+  },
+  "is_new_category": true or false,
+  "confidence": 0.0 to 1.0,
+  "reasoning": "one sentence explanation"
+}`;
+
+  const result = await deepseekService.analyze(systemPrompt, userPrompt, {
+    maxTokens: 800,
+    temperature: 0.1,
+    model: 'deepseek-chat', // use chat for structured JSON extraction (faster + cheaper)
+  });
+
+  // Parse JSON from response
+  let text = result.content.trim();
+  // Strip markdown code fences if present
+  text = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+  return JSON.parse(text);
+}
+
+app.post('/api/print-finance/import/analyze', pfUpload.single('file'), async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const { headers, rows, sheet_count, sheets } = await parseUploadedFile(req.file);
+    const cleanRows = rows.map(r => { const o = {...r}; delete o._sheet; delete o._row; return o; });
+    const heuristicType = detectImportType(headers);
+    const { rows: cats } = await pool.query('SELECT * FROM pf_cost_categories ORDER BY parent, name');
+
+    let aiAnalysis = null;
+    let aiError = null;
+    if (deepseekService.isAvailable()) {
+      try {
+        aiAnalysis = await analyzeWithAI(headers, cleanRows, cats);
+      } catch (e) {
+        aiError = e.message;
+        console.warn('[import/analyze] AI failed, using heuristic:', e.message);
+      }
+    }
+
+    res.json({
+      columns: headers,
+      sample_rows: cleanRows.slice(0, 5),
+      row_count: rows.length,
+      sheet_count,
+      sheets,
+      heuristic_type: heuristicType,
+      ai: aiAnalysis,
+      ai_error: aiError,
+      categories: cats,
+    });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
 
 // POST /api/print-finance/import/preview — parse file, detect type, return preview
 app.post('/api/print-finance/import/preview', pfUpload.single('file'), async (req, res) => {
@@ -8215,12 +8550,20 @@ app.post('/api/print-finance/import/confirm', pfUpload.single('file'), async (re
   if (!pfDbCheck(res)) return;
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const type = req.body.type;
-  if (!['revenue', 'costs', 'work-units', 'inventory'].includes(type)) {
+  const validTypes = ['revenue', 'costs', 'work-units', 'inventory', 'material_usage', 'machine_log', 'labour_log'];
+  if (!validTypes.includes(type)) {
     return res.status(400).json({ error: `Invalid type: ${type}` });
   }
+  // Accept AI field_mapping, category, cost_type from request body (sent by frontend after analyze step)
+  let aiMapping = null;
+  let aiCategory = null;
+  let aiCostType = null;
+  try { aiMapping = req.body.field_mapping ? JSON.parse(req.body.field_mapping) : null; } catch {}
+  try { aiCategory = req.body.category || null; } catch {}
+  try { aiCostType = req.body.cost_type || null; } catch {}
   try {
     const { rows } = await parseUploadedFile(req.file);
-    const result = await importRows(type, rows);
+    const result = await importRows(type, rows, aiMapping, aiCategory, aiCostType);
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
