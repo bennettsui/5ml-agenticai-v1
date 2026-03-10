@@ -318,6 +318,357 @@ router.post('/analyze', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Orchestrator: type-specific prompts + fast classifier
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ORCH_TYPES = {
+  meeting: {
+    label: '會議',
+    emoji: '📋',
+    prompt: `請根據以下粵語會議逐字稿，整理成完整會議紀要。
+
+輸出格式：
+## 📋 會議紀要
+
+**日期／時間**：（如有提及）
+**出席人士**：（如有提及，列出姓名或稱謂）
+
+---
+
+### 議題與討論
+（分項列出各討論事項，每項包括背景、要點、結論）
+
+### 決定事項
+（所有已確認的決定，每項一條）
+
+### 行動項目
+| 事項 | 負責人 | 期限 |
+|------|--------|------|
+
+### 備註
+（其他重要資訊，如有）
+
+要求：
+- 保留所有決定事項，不要遺漏
+- 如有講者資訊請在適當位置標注
+- 如有日期或截止日期被提及，必須列出
+- 書面中文輸出`,
+  },
+  tutorial: {
+    label: '教學影片',
+    emoji: '📚',
+    prompt: `請根據以下粵語教學影片逐字稿，整理成結構清晰的課程筆記。
+
+輸出格式：
+## 📚 課程筆記
+
+**主題**：（一句概括）
+**適合對象**：（如可判斷）
+
+---
+
+### 核心概念
+（3–7 個重要概念，每個附簡短解釋）
+
+### 重點說明
+（按邏輯順序列出教學要點，可分小節）
+
+### 示例／案例
+（具體例子及其意義）
+
+### 重要金句
+> （逐字稿中的精彩或關鍵語句）
+
+### 課後行動
+（建議學員的跟進步驟或練習）
+
+要求：
+- 保留技術術語（英文原文可保留）
+- 突出「為什麼」而非只有「是什麼」
+- 書面中文輸出`,
+  },
+  interview: {
+    label: '訪談',
+    emoji: '🎙️',
+    prompt: `請根據以下粵語訪談逐字稿，整理成專業訪談摘要。
+
+輸出格式：
+## 🎙️ 訪談摘要
+
+**受訪者**：（如可判斷）
+**訪問者**：（如可判斷）
+**主題**：（一句概括）
+
+---
+
+### 主要觀點
+（受訪者的 3–6 個核心見解或立場）
+
+### 精選問答
+**Q：**（問題）
+**A：**（回答要點）
+
+（列出最有價值的 3–5 組問答）
+
+### 精彩引述
+> （受訪者最有分量的原話，盡量保留粵語風格）
+
+### 核心洞察
+（整體訪談的核心洞察，100 字以內）
+
+要求：
+- 保留受訪者的個人觀點和獨特視角
+- 金句保留粵語原汁原味
+- 書面中文輸出`,
+  },
+};
+
+const CLASSIFY_SYSTEM = `You are a content-type classifier for Cantonese audio transcripts.
+Classify into exactly one of:
+- "meeting": business meetings, team syncs, planning sessions, stand-ups, project calls
+- "tutorial": lessons, how-to guides, workshops, courses, training sessions, educational content
+- "interview": podcasts, press interviews, Q&A sessions, one-on-one conversations with host/guest dynamic
+
+Reply ONLY with valid JSON (no markdown): {"type":"meeting"|"tutorial"|"interview","confidence":0.0-1.0,"reason":"one sentence in Traditional Chinese"}`;
+
+async function classifyTranscript(transcript) {
+  const sample = transcript.slice(0, 900);
+
+  // Try Gemini first (cheapest + fast JSON output)
+  if (process.env.GEMINI_API_KEY) {
+    const url  = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    const body = {
+      system_instruction: { parts: [{ text: CLASSIFY_SYSTEM }] },
+      contents: [{ role: 'user', parts: [{ text: `分類以下粵語逐字稿（首 900 字）：\n\n${sample}` }] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            type:       { type: 'string', enum: ['meeting', 'tutorial', 'interview'] },
+            confidence: { type: 'number' },
+            reason:     { type: 'string' },
+          },
+          required: ['type', 'confidence', 'reason'],
+        },
+        temperature: 0,
+        maxOutputTokens: 120,
+      },
+    };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) return JSON.parse(text);
+    }
+  }
+
+  // Fallback: Claude Haiku
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('No API key available for classification');
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const msg = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 120,
+    system: CLASSIFY_SYSTEM,
+    messages: [{ role: 'user', content: `分類以下粵語逐字稿（首 900 字）：\n\n${sample}` }],
+  });
+  return JSON.parse(msg.content[0].text);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/cantonese-transcription/orchestrate  (SSE streaming)
+// Classifies transcript → routes to type-specific prompt → streams result
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/orchestrate', async (req, res) => {
+  const startTime = Date.now();
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const { transcript, segments = [], model = 'deepseek', extra_instructions = '' } = req.body;
+
+  // ── Validate ────────────────────────────────────────────────────────────
+  emit(res, { type: 'step', step: 'validating', label: '驗證輸入中…' });
+
+  if (!transcript || typeof transcript !== 'string' || transcript.trim().length < 10) {
+    emit(res, { type: 'error', error_code: 'CT-001', error: db.ERROR_MESSAGES['CT-001'] });
+    return res.end();
+  }
+
+  // ── Create DB job ────────────────────────────────────────────────────────
+  emit(res, { type: 'step', step: 'creating_job', label: '建立分析任務…' });
+
+  let job;
+  try {
+    job = await db.createJob({
+      transcript: transcript.trim(),
+      segments: null,
+      task: 'orchestrate',
+      model,
+      extra_instructions: extra_instructions.trim() || null,
+    });
+    emit(res, { type: 'job_created', job_id: job.job_id });
+  } catch (err) {
+    console.error('[orchestrate] createJob:', err.message);
+    emit(res, { type: 'error', error_code: 'CT-006', error: db.ERROR_MESSAGES['CT-006'] });
+    return res.end();
+  }
+
+  // ── Classify ─────────────────────────────────────────────────────────────
+  emit(res, { type: 'step', step: 'classifying', label: 'Gemini 分析影片類型…' });
+
+  let videoType = 'meeting';
+  try {
+    const cls = await classifyTranscript(transcript.trim());
+    videoType  = ORCH_TYPES[cls.type] ? cls.type : 'meeting';
+    emit(res, {
+      type:       'classified',
+      video_type: videoType,
+      label:      ORCH_TYPES[videoType].label,
+      emoji:      ORCH_TYPES[videoType].emoji,
+      confidence: cls.confidence,
+      reason:     cls.reason,
+    });
+  } catch (err) {
+    console.error('[orchestrate] classify error:', err.message);
+    emit(res, {
+      type:       'classified',
+      video_type: 'meeting',
+      label:      '會議',
+      emoji:      '📋',
+      confidence: 0,
+      reason:     '自動分類失敗，預設使用「會議」格式',
+    });
+  }
+
+  // ── Build prompt ──────────────────────────────────────────────────────────
+  const typeConfig = ORCH_TYPES[videoType];
+  let userContent  = typeConfig.prompt + '\n\n';
+  if (extra_instructions.trim()) userContent += `Additional instructions: ${extra_instructions.trim()}\n\n`;
+  userContent += `**Transcript:**\n${transcript.trim()}`;
+
+  const parsedSegments = Array.isArray(segments) ? segments : [];
+  if (parsedSegments.length > 0) {
+    const segText = parsedSegments
+      .map(s => `[${formatTime(s.start)} → ${formatTime(s.end)}] ${s.text}`)
+      .join('\n');
+    userContent += `\n\n**Segments with timestamps:**\n${segText}`;
+  }
+
+  // ── Stream result ─────────────────────────────────────────────────────────
+  const MODEL_LABELS = { deepseek: 'DeepSeek Chat', gemini: 'Gemini 2.0 Flash', sonnet: 'Claude Sonnet 4.6', haiku: 'Claude Haiku 4.5' };
+  emit(res, { type: 'step', step: 'calling_ai', label: `呼叫 ${MODEL_LABELS[model] || model}…`, model: MODEL_LABELS[model] || model });
+
+  let fullText  = '';
+  let modelUsed = '';
+
+  try {
+    if (model === 'gemini') {
+      const geminiKey = process.env.GEMINI_API_KEY;
+      if (!geminiKey) throw Object.assign(new Error('GEMINI_API_KEY 未設定'), { code: 'CT-004' });
+
+      const geminiModel = 'gemini-2.0-flash';
+      modelUsed = geminiModel;
+      emit(res, { type: 'step', step: 'streaming', label: `串流生成中 (${geminiModel})…` });
+
+      const geminiResp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse&key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: CANTONESE_SYSTEM_PROMPT }] },
+            contents: [{ role: 'user', parts: [{ text: userContent }] }],
+            generationConfig: { maxOutputTokens: 4000, temperature: 0.3 },
+          }),
+        }
+      );
+      if (!geminiResp.ok) throw new Error(`Gemini API error ${geminiResp.status}`);
+
+      const reader   = geminiResp.body.getReader();
+      const decoder  = new TextDecoder();
+      let buffer     = '';
+      let tokenCount = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+          try {
+            const chunk = JSON.parse(jsonStr);
+            const text  = chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+            if (text) { fullText += text; emit(res, { type: 'token', text, token_count: ++tokenCount }); }
+          } catch { /* skip malformed */ }
+        }
+      }
+
+    } else if (model === 'deepseek' && deepseekService.isAvailable()) {
+      emit(res, { type: 'step', step: 'streaming', label: 'DeepSeek 生成中…' });
+      const result = await deepseekService.analyze(CANTONESE_SYSTEM_PROMPT, userContent, { model: 'deepseek-chat', maxTokens: 4000, temperature: 0.3 });
+      fullText  = result.content;
+      modelUsed = 'deepseek-chat';
+      emit(res, { type: 'token', text: fullText });
+
+    } else {
+      if (!process.env.ANTHROPIC_API_KEY) throw Object.assign(new Error(db.ERROR_MESSAGES['CT-004']), { code: 'CT-004' });
+      const anthropic   = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const claudeModel = model === 'sonnet' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001';
+      modelUsed = claudeModel;
+      emit(res, { type: 'step', step: 'streaming', label: `串流生成中 (${claudeModel})…` });
+
+      let tokenCount = 0;
+      const stream = anthropic.messages.stream({
+        model: claudeModel,
+        max_tokens: 4000,
+        system: CANTONESE_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userContent }],
+      });
+      for await (const chunk of stream) {
+        if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
+          const token = chunk.delta.text;
+          fullText += token;
+          emit(res, { type: 'token', text: token, token_count: ++tokenCount });
+        }
+      }
+    }
+  } catch (err) {
+    const isRateLimit = err.status === 429 || err.message?.includes('rate');
+    const errorCode   = err.code === 'CT-004' ? 'CT-004' : isRateLimit ? 'CT-010' : 'CT-005';
+    console.error(`[orchestrate] AI error (${errorCode}):`, err.message);
+    await db.updateJobStatus(job.job_id, 'error');
+    await db.logError({ jobId: job.job_id, errorCode, errorMessage: db.ERROR_MESSAGES[errorCode] || err.message, context: { model, http_status: err.status, detail: err.message } });
+    emit(res, { type: 'error', job_id: job.job_id, error_code: errorCode, error: db.ERROR_MESSAGES[errorCode] || err.message });
+    return res.end();
+  }
+
+  // ── Save ──────────────────────────────────────────────────────────────────
+  const durationMs = Date.now() - startTime;
+  emit(res, { type: 'step', step: 'saving', label: '儲存至資料庫…' });
+  try {
+    await db.saveResult({ jobId: job.job_id, resultText: fullText, modelUsed, durationMs });
+    await db.updateJobStatus(job.job_id, 'done');
+  } catch (err) {
+    console.error('[orchestrate] saveResult:', err.message);
+  }
+
+  emit(res, { type: 'done', job_id: job.job_id, model: modelUsed, duration_ms: durationMs, char_count: fullText.length, video_type: videoType });
+  res.end();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/cantonese-transcription/jobs
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/jobs', async (req, res) => {

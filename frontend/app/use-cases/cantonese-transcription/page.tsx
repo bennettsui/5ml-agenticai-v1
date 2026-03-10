@@ -17,7 +17,11 @@ import {
 
 type Task     = 'clean_transcript' | 'meeting_minutes' | 'summary_zh' | 'summary_en' | 'action_items';
 type Model    = 'haiku' | 'sonnet' | 'deepseek' | 'gemini';
-type PageTab  = 'analyze' | 'visualizer' | 'history' | 'errors' | 'error-codes';
+type PageTab  = 'analyze' | 'orchestrate' | 'visualizer' | 'history' | 'errors' | 'error-codes';
+
+interface VideoType {
+  type: string; label: string; emoji: string; confidence: number; reason: string;
+}
 
 type StepStatus = 'pending' | 'active' | 'done' | 'error';
 
@@ -136,6 +140,21 @@ const INITIAL_STEPS: ProgressStep[] = [
   { id: 'streaming',    label: '串流生成',   status: 'pending' },
   { id: 'saving',       label: '儲存記錄',   status: 'pending' },
 ];
+
+const ORCH_STEPS: ProgressStep[] = [
+  { id: 'validating',   label: '驗證輸入',     status: 'pending' },
+  { id: 'creating_job', label: '建立任務',     status: 'pending' },
+  { id: 'classifying',  label: '判斷影片類型', status: 'pending' },
+  { id: 'calling_ai',   label: '呼叫模型',     status: 'pending' },
+  { id: 'streaming',    label: '串流生成',     status: 'pending' },
+  { id: 'saving',       label: '儲存記錄',     status: 'pending' },
+];
+
+const ORCH_TYPE_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  meeting:  { bg: 'bg-purple-500/[0.07]', border: 'border-purple-500/30', text: 'text-purple-300' },
+  tutorial: { bg: 'bg-teal-500/[0.07]',   border: 'border-teal-500/30',   text: 'text-teal-300'   },
+  interview:{ bg: 'bg-amber-500/[0.07]',  border: 'border-amber-500/30',  text: 'text-amber-300'  },
+};
 
 const ERROR_CODE_COLORS: Record<string, string> = {
   'CT-001': 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
@@ -592,6 +611,19 @@ export default function CantoneseTranscriptionPage() {
   const streamRef                       = useRef<HTMLPreElement>(null);
   const abortRef                        = useRef<AbortController | null>(null);
 
+  // Orchestrate state
+  const [orchLoading, setOrchLoading]   = useState(false);
+  const [orchSteps, setOrchSteps]       = useState<ProgressStep[]>(ORCH_STEPS.map(s => ({ ...s })));
+  const [orchStream, setOrchStream]     = useState('');
+  const [orchTokens, setOrchTokens]     = useState(0);
+  const [orchJobId, setOrchJobId]       = useState<string | null>(null);
+  const [orchMeta, setOrchMeta]         = useState<{ model: string; duration_ms: number; char_count?: number } | null>(null);
+  const [orchError, setOrchError]       = useState<{ code: string; message: string } | null>(null);
+  const [orchType, setOrchType]         = useState<VideoType | null>(null);
+  const [orchCopied, setOrchCopied]     = useState(false);
+  const orchAbortRef                    = useRef<AbortController | null>(null);
+  const orchStreamRef                   = useRef<HTMLDivElement>(null);
+
   // History state
   const [jobs, setJobs]                 = useState<JobRecord[]>([]);
   const [jobsLoading, setJobsLoading]   = useState(false);
@@ -715,6 +747,111 @@ export default function CantoneseTranscriptionPage() {
     setLoading(false);
   }
 
+  // ── Orchestrate (classify + stream type-specific output) ────────────────
+  async function handleOrchestrate() {
+    if (!transcript.trim() || orchLoading) return;
+
+    setOrchLoading(true);
+    setOrchStream('');
+    setOrchTokens(0);
+    setOrchError(null);
+    setOrchJobId(null);
+    setOrchMeta(null);
+    setOrchType(null);
+    setOrchSteps(ORCH_STEPS.map(s => ({ ...s, status: 'pending' })));
+
+    orchAbortRef.current = new AbortController();
+
+    function setStep(id: string, status: StepStatus, label?: string) {
+      setOrchSteps(prev => prev.map(s =>
+        s.id === id ? { ...s, status, ...(label ? { label } : {}) } : s
+      ));
+    }
+    function completePrev(upToId: string) {
+      const idx = ORCH_STEPS.findIndex(s => s.id === upToId);
+      setOrchSteps(prev => prev.map((s, i) =>
+        i < idx && s.status !== 'error' ? { ...s, status: 'done' } : s
+      ));
+    }
+
+    try {
+      const resp = await fetch('/api/cantonese-transcription/orchestrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript: transcript.trim(), model, extra_instructions: extraInstructions.trim() || undefined }),
+        signal: orchAbortRef.current.signal,
+      });
+      if (!resp.body) throw new Error('No streaming body');
+
+      const reader  = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer    = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith('data: ')) continue;
+          let ev: Record<string, unknown>;
+          try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+
+          switch (ev.type) {
+            case 'step':
+              completePrev(ev.step as string);
+              setStep(ev.step as string, 'active', ev.label as string);
+              break;
+            case 'job_created':
+              setOrchJobId(ev.job_id as string);
+              setStep('creating_job', 'done');
+              break;
+            case 'classified':
+              setOrchType({
+                type: ev.video_type as string,
+                label: ev.label as string,
+                emoji: ev.emoji as string,
+                confidence: ev.confidence as number,
+                reason: ev.reason as string,
+              });
+              setStep('classifying', 'done');
+              break;
+            case 'token': {
+              const txt = ev.text as string;
+              setOrchStream(prev => prev + txt);
+              setOrchTokens(ev.token_count as number ?? 0);
+              setTimeout(() => orchStreamRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 30);
+              break;
+            }
+            case 'done':
+              setOrchSteps(prev => prev.map(s => ({ ...s, status: s.status !== 'error' ? 'done' : 'error' })));
+              setOrchMeta({ model: ev.model as string, duration_ms: ev.duration_ms as number, char_count: ev.char_count as number });
+              setOrchJobId(ev.job_id as string);
+              break;
+            case 'error':
+              setStep(orchSteps.find(s => s.status === 'active')?.id ?? 'validating', 'error');
+              setOrchError({ code: ev.error_code as string ?? 'ERR', message: ev.error as string ?? '分析失敗' });
+              break;
+          }
+        }
+      }
+    } catch (err: unknown) {
+      if ((err as Error).name !== 'AbortError') {
+        setOrchError({ code: 'ERR', message: (err as Error).message ?? '請求失敗' });
+      }
+    } finally {
+      setOrchLoading(false);
+    }
+  }
+
+  function handleOrchStop() {
+    orchAbortRef.current?.abort();
+    setOrchLoading(false);
+  }
+
   async function handleSttUpload(file: File) {
     setSttLoading(true);
     setSttError(null);
@@ -819,6 +956,7 @@ export default function CantoneseTranscriptionPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex gap-0 border-t border-slate-800/40">
           {([
             { id: 'analyze',     label: '分析',     icon: Zap },
+            { id: 'orchestrate', label: '智能分析', icon: Wand2 },
             { id: 'visualizer',  label: '視覺化',   icon: Mic },
             { id: 'history',     label: '歷史記錄', icon: History },
             { id: 'errors',      label: '錯誤日誌', icon: AlertTriangle },
@@ -1161,6 +1299,227 @@ export default function CantoneseTranscriptionPage() {
                   此工具處理來自 <span className="text-slate-400">khleeloo/whisper-large-v3-cantonese</span> 嘅 ASR 輸出。
                   結果以 SSE 串流即時顯示，每個 token 實時渲染。所有記錄保存至 Fly Postgres。
                 </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================================================================ */}
+        {/* ORCHESTRATE TAB                                                   */}
+        {/* ================================================================ */}
+        {pageTab === 'orchestrate' && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+              {/* ── Left: transcript input (shared state) ───────────────── */}
+              <div className="space-y-4">
+                <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-slate-700/50 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-3.5 h-3.5 text-slate-400" />
+                      <span className="text-xs font-medium text-slate-300">粵語逐字稿</span>
+                    </div>
+                    {transcript && (
+                      <span className="text-[10px] text-slate-500">{transcript.length.toLocaleString()} chars</span>
+                    )}
+                  </div>
+                  <textarea
+                    value={transcript}
+                    onChange={e => setTranscript(e.target.value)}
+                    disabled={orchLoading}
+                    placeholder="貼上粵語逐字稿…（Orchestrator 會自動判斷係會議、教學影片定訪談，然後出對應格式輸出）"
+                    className="w-full h-64 px-4 py-3 bg-transparent text-sm text-slate-200 placeholder-slate-600 resize-none focus:outline-none"
+                  />
+                </div>
+
+                {/* Extra instructions */}
+                <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-slate-700/50">
+                    <span className="text-xs font-medium text-slate-300">補充說明（可選）</span>
+                  </div>
+                  <textarea
+                    value={extraInstructions}
+                    onChange={e => setExtra(e.target.value)}
+                    disabled={orchLoading}
+                    placeholder="e.g. 出席者包括 Alice (PM), Bob (Dev)…"
+                    className="w-full h-20 px-4 py-3 bg-transparent text-sm text-slate-200 placeholder-slate-600 resize-none focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* ── Right: model + controls ──────────────────────────────── */}
+              <div className="space-y-4">
+
+                {/* How it works card */}
+                <div className="bg-indigo-500/[0.05] rounded-xl border border-indigo-500/20 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Wand2 className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="text-xs font-semibold text-indigo-300">智能 Orchestrator</span>
+                  </div>
+                  <div className="space-y-2">
+                    {[
+                      { step: '01', icon: '🔍', label: 'Gemini 快速分類', desc: '判斷係會議 / 教學影片 / 訪談' },
+                      { step: '02', icon: '📐', label: '選擇對應 Prompt', desc: '紀要 / 課程筆記 / 訪談摘要' },
+                      { step: '03', icon: '⚡', label: '串流輸出', desc: '用你選擇嘅 AI 模型生成' },
+                    ].map(({ step, icon, label, desc }) => (
+                      <div key={step} className="flex items-start gap-3">
+                        <span className="text-[10px] font-mono text-indigo-500 mt-0.5 w-4 shrink-0">{step}</span>
+                        <span className="text-base leading-none shrink-0">{icon}</span>
+                        <div>
+                          <div className="text-[11px] font-medium text-slate-300">{label}</div>
+                          <div className="text-[10px] text-slate-500">{desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Model picker */}
+                <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-slate-700/50 flex items-center gap-2">
+                    <Cpu className="w-3 h-3 text-slate-400" />
+                    <span className="text-xs font-medium text-slate-300">生成模型（分類固定用 Gemini）</span>
+                  </div>
+                  <div className="p-3 grid grid-cols-2 gap-2">
+                    {MODEL_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { setModel(opt.value); setModelManuallySet(true); }}
+                        disabled={orchLoading}
+                        className={`p-2.5 rounded-lg border text-center transition-all disabled:cursor-not-allowed ${
+                          model === opt.value
+                            ? 'border-indigo-500/40 bg-indigo-500/[0.07] ring-1 ring-indigo-500/30'
+                            : 'border-slate-700/50 hover:bg-white/[0.02]'
+                        }`}
+                      >
+                        <div className={`text-[11px] font-medium ${model === opt.value ? opt.color : 'text-slate-300'}`}>{opt.label}</div>
+                        <div className="text-[9px] text-slate-600 mt-0.5">${opt.inputPer1M}/${opt.outputPer1M} /1M</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Detected type badge (after classification) */}
+                {orchType && (
+                  <div className={`flex items-start gap-3 p-3.5 rounded-xl border ${ORCH_TYPE_COLORS[orchType.type]?.bg ?? 'bg-white/[0.03]'} ${ORCH_TYPE_COLORS[orchType.type]?.border ?? 'border-slate-700/50'}`}>
+                    <span className="text-2xl leading-none">{orchType.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-semibold ${ORCH_TYPE_COLORS[orchType.type]?.text ?? 'text-slate-300'}`}>{orchType.label}</span>
+                        <span className="text-[10px] text-slate-500 border border-slate-700/50 rounded px-1.5 py-0.5">
+                          {Math.round((orchType.confidence ?? 0) * 100)}% 信心
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">{orchType.reason}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Cost estimate */}
+                {transcript.trim() && !orchLoading && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-slate-700/30 text-[11px]">
+                    <span className="text-slate-500">預計費用：</span>
+                    <span className={`font-medium ${MODEL_OPTIONS.find(m => m.value === model)?.color ?? 'text-slate-300'}`}>
+                      {estimateCost(model, transcript.length)}
+                    </span>
+                    <span className="text-slate-600 ml-auto">+分類≈$0.000</span>
+                  </div>
+                )}
+
+                {/* Action button */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleOrchestrate}
+                    disabled={orchLoading || !transcript.trim()}
+                    className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+                  >
+                    {orchLoading
+                      ? <><Loader2 className="w-4 h-4 animate-spin" />分析緊…</>
+                      : <><Wand2 className="w-4 h-4" />智能分析</>}
+                  </button>
+                  {orchLoading && (
+                    <button
+                      onClick={handleOrchStop}
+                      className="px-4 py-3 rounded-xl border border-red-500/40 text-red-400 text-sm hover:bg-red-500/10 transition-colors"
+                    >
+                      停止
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Progress steps ──────────────────────────────────────────── */}
+            {(orchLoading || orchStream || orchError) && (
+              <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 px-5 py-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="text-xs font-medium text-slate-300">處理進度</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] text-slate-500">
+                    {orchJobId && <span className="font-mono">#{orchJobId.slice(0, 8)}</span>}
+                    {orchTokens > 0 && <span>{orchTokens.toLocaleString()} tokens</span>}
+                    {orchMeta && (
+                      <>
+                        <span>{(orchMeta.duration_ms / 1000).toFixed(1)}s</span>
+                        <span className="text-slate-600">·</span>
+                        <span>{orchMeta.model.replace('claude-', '').replace('-20251001', '').replace('gemini-', 'Gemini ')}</span>
+                        {orchMeta.char_count && (
+                          <>
+                            <span className="text-slate-600">·</span>
+                            <span className="text-green-400">實際≈{estimateCost(model, transcript.length, orchMeta.char_count)}</span>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+                <StepIndicator steps={orchSteps} />
+              </div>
+            )}
+
+            {/* ── Error ──────────────────────────────────────────────────── */}
+            {orchError && (
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/[0.07] border border-red-500/20">
+                <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${ERROR_CODE_COLORS[orchError.code] ?? 'text-red-400 bg-red-500/10 border-red-500/30'}`}>{orchError.code}</span>
+                    <span className="text-sm text-red-300">{orchError.message}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Streaming result ────────────────────────────────────────── */}
+            {orchStream && (
+              <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
+                  <div className="flex items-center gap-2">
+                    {orchLoading
+                      ? <><CircleDot className="w-3 h-3 text-indigo-400 animate-pulse" /><span className="text-xs font-medium text-indigo-300">生成中…</span></>
+                      : <><CheckCircle2 className="w-3.5 h-3.5 text-green-400" /><span className="text-xs font-medium text-slate-300">{orchType ? `${orchType.emoji} ${orchType.label}` : '智能分析'} — 完成</span></>}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] text-slate-500">{orchStream.length.toLocaleString()} chars</span>
+                    {!orchLoading && (
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(orchStream); setOrchCopied(true); setTimeout(() => setOrchCopied(false), 2000); }}
+                        className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-white transition-colors"
+                      >
+                        {orchCopied ? <><CheckCircle2 className="w-3 h-3 text-green-400" />已複製</> : <><Copy className="w-3 h-3" />複製</>}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="p-5 max-h-[600px] overflow-y-auto">
+                  <pre className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed font-sans">
+                    {orchStream}
+                    {orchLoading && <span className="inline-block w-0.5 h-4 bg-indigo-400 animate-pulse ml-0.5 align-text-bottom" />}
+                  </pre>
+                  <div ref={orchStreamRef} />
+                </div>
               </div>
             )}
           </div>
