@@ -8716,11 +8716,13 @@ app.post('/api/print-finance/import/confirm', pfUpload.single('file'), async (re
       });
     }
     const result = await importRows(type, rows, aiMapping, aiCategory, aiCostType);
+    // Decode filename from latin1 → utf-8 (multer reads it as latin1 by default)
+    const originalFilename = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
     // Save file to DB for later download/reference
     await pool.query(
       `INSERT INTO pf_uploaded_files (filename, mimetype, size_bytes, imported_as, rows_inserted, data)
        VALUES ($1,$2,$3,$4,$5,$6)`,
-      [req.file.originalname, req.file.mimetype, req.file.size, type, result.inserted, req.file.buffer]
+      [originalFilename, req.file.mimetype, req.file.size, type, result.inserted, req.file.buffer]
     ).catch(err => console.warn('[print-finance] file save:', err.message));
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -8733,7 +8735,18 @@ app.get('/api/print-finance/uploads', async (req, res) => {
     const { rows } = await pool.query(
       'SELECT id, filename, mimetype, size_bytes, imported_as, rows_inserted, uploaded_at FROM pf_uploaded_files ORDER BY uploaded_at DESC'
     );
-    res.json(rows);
+    // Attempt to recover mojibaked filenames (latin1-encoded UTF-8) stored before this fix
+    const fixed = rows.map(r => {
+      try {
+        const recovered = Buffer.from(r.filename, 'latin1').toString('utf8');
+        // Only use recovered version if it looks better (contains valid non-ASCII)
+        if (recovered !== r.filename && /[\u0080-\uffff]/.test(recovered)) {
+          return { ...r, filename: recovered };
+        }
+      } catch {}
+      return r;
+    });
+    res.json(fixed);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
