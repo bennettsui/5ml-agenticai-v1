@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Loader2, AlertCircle, CheckCircle,
   Edit2, Check, X, ZoomIn, ZoomOut, RefreshCw, FileText, Eye,
-  MessageSquare, Send, Bot, User,
+  MessageSquare, Send, Bot, User, Wand2,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -249,6 +249,7 @@ function ValidateInner() {
 
   // Paper info
   const [paperName, setPaperName]       = useState('');
+  const [reprocessing, setReprocessing] = useState(false);
 
   // Draft questions
   const [drafts, setDrafts]             = useState<DraftQuestion[]>([]);
@@ -265,54 +266,50 @@ function ValidateInner() {
   // Right panel tab
   const [rightTab, setRightTab]         = useState<'ocr' | 'visual' | 'ai'>('ocr');
 
-  // ─── Load draft questions ─────────────────────────────────────────────────
+  // ─── Load paper info + draft questions ────────────────────────────────────
 
   useEffect(() => {
-    if ((window as any).pdfjsLib) return;
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    script.onload = () => {
-      (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    };
-    script.onerror = () => setPdfError('pdf.js failed to load from CDN. Check your internet connection and refresh.');
-    document.head.appendChild(script);
-  }, []);
+    if (!id) return;
+    fetch(`/api/adaptive-learning/teachers/papers/${id}/draft-questions`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          setPaperName(d.exam_name || d.paper_name || '');
+          const questions = (d.draft_questions || []).map((q: DraftQuestion) => ({
+            ...q, _meta: parseMeta(q.raw_ocr_text),
+          }));
+          setDrafts(questions);
+        }
+        setDraftsLoading(false);
+      })
+      .catch(() => setDraftsLoading(false));
+  }, [id]);
+
+  // ─── Load PDF (local pdf.js — no CDN dependency) ──────────────────────────
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    setPdfLoading(true); setPdfError('');
+    const pdfUrl = `/api/adaptive-learning/teachers/papers/${id}/file`;
 
     async function load() {
       setPdfLoading(true); setPdfError('');
       try {
-        const lib = (window as any).pdfjsLib;
-        if (!lib) { setPdfError('PDF viewer not loaded yet. Refresh the page.'); return; }
+        const lib = await getPdfJs();
         const doc = await lib.getDocument({ url: pdfUrl, withCredentials: false }).promise;
         if (cancelled) return;
         setPdfDoc(doc);
         setTotalPages(doc.numPages);
         setPage(1);
-      })
-      .catch((e: Error) => {
+      } catch (e: any) {
         if (!cancelled) setPdfError(e.message);
-      })
-      .finally(() => { if (!cancelled) setPdfLoading(false); });
-
-    // Wait for pdfjsLib to be available
-    const interval = setInterval(() => {
-      if ((window as any).pdfjsLib) { clearInterval(interval); load(); }
-    }, 300);
-    // If still not available after 10s, show an error
-    const timeout = setTimeout(() => {
-      clearInterval(interval);
-      if (!(window as any).pdfjsLib && !cancelled) {
-        setPdfError('pdf.js viewer timed out. Refresh the page or check your internet connection.');
+      } finally {
+        if (!cancelled) setPdfLoading(false);
       }
-    }, 10000);
+    }
+    load();
 
-    return () => { cancelled = true; clearInterval(interval); clearTimeout(timeout); };
+    return () => { cancelled = true; };
   }, [id]);
 
   // ─── Render page ──────────────────────────────────────────────────────────
@@ -371,6 +368,31 @@ function ValidateInner() {
 
   const diffLabel = (n: number) => ['', 'Easy', 'Med-Low', 'Medium', 'Hard', 'Very Hard'][n] ?? '';
 
+  const reprocessOcr = async () => {
+    setReprocessing(true);
+    try {
+      const res  = await fetch(`/api/adaptive-learning/teachers/papers/${id}/reprocess`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setDrafts([]);
+        setDraftsLoading(true);
+        // Poll until DRAFT_READY
+        const poll = setInterval(async () => {
+          const r = await fetch(`/api/adaptive-learning/teachers/papers/${id}/draft-questions`);
+          const d = await r.json();
+          if (d.success && (d.status === 'DRAFT_READY' || d.status === 'CONFIRMED' || d.status === 'NEEDS_REVIEW')) {
+            clearInterval(poll);
+            const questions = (d.draft_questions || []).map((q: DraftQuestion) => ({ ...q, _meta: parseMeta(q.raw_ocr_text) }));
+            setDrafts(questions);
+            setDraftsLoading(false);
+          }
+        }, 5000);
+        setTimeout(() => { clearInterval(poll); setDraftsLoading(false); }, 5 * 60 * 1000);
+      }
+    } catch {}
+    finally { setReprocessing(false); }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
@@ -386,6 +408,16 @@ function ValidateInner() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-500">{drafts.length} questions extracted</span>
+          <button
+            onClick={reprocessOcr}
+            disabled={reprocessing || draftsLoading}
+            title="Re-run OCR with latest pipeline (fixes missing questions, MCQ options, images)"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-700/60 hover:bg-slate-700 border border-slate-600/50 text-slate-300 rounded-xl text-sm transition-colors disabled:opacity-40"
+          >
+            {reprocessing
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Re-extracting…</>
+              : <><Wand2 className="w-3.5 h-3.5" />Re-run OCR</>}
+          </button>
           <Link href={`/teach/questions/pending?paper_id=${id}`}
             className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-semibold transition-colors">
             Review Questions →
