@@ -2613,6 +2613,22 @@ function FieldMappingRow({ field, column, allColumns, sampleRow, onChange }: {
   );
 }
 
+interface SavedFile {
+  id: number;
+  filename: string;
+  mimetype: string;
+  size_bytes: number;
+  imported_as: string | null;
+  rows_inserted: number;
+  uploaded_at: string;
+}
+
+function fmtBytes(b: number) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function UploadTab() {
   const [file, setFile] = useState<File | null>(null);
   const [analysing, setAnalysing] = useState(false);
@@ -2623,6 +2639,34 @@ function UploadTab() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [dragging, setDragging] = useState(false);
   const [showMapping, setShowMapping] = useState(false);
+  const [savedFiles, setSavedFiles] = useState<SavedFile[]>([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const loadSavedFiles = async () => {
+    setLoadingFiles(true);
+    try {
+      const res = await fetch('/api/print-finance/uploads');
+      if (res.ok) setSavedFiles(await res.json());
+    } finally { setLoadingFiles(false); }
+  };
+
+  useEffect(() => { loadSavedFiles(); }, []);
+
+  const downloadFile = (id: number, filename: string) => {
+    const a = document.createElement('a');
+    a.href = `/api/print-finance/uploads/${id}/download`;
+    a.download = filename;
+    a.click();
+  };
+
+  const deleteFile = async (id: number) => {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/print-finance/uploads/${id}`, { method: 'DELETE' });
+      if (res.ok) setSavedFiles(prev => prev.filter(f => f.id !== id));
+    } finally { setDeletingId(null); }
+  };
 
   const doAnalyse = async (f: File) => {
     setAnalysing(true);
@@ -2658,6 +2702,7 @@ function UploadTab() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setResult(data);
+      loadSavedFiles();
     } catch (e: unknown) {
       alert((e as Error).message);
     } finally { setImporting(false); }
@@ -2912,6 +2957,69 @@ function UploadTab() {
           </button>
         </div>
       )}
+
+      {/* Saved files library */}
+      <div className="border-t border-slate-700/40 pt-5 mt-2">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-semibold text-slate-300">Uploaded Files</span>
+          <button onClick={loadSavedFiles} disabled={loadingFiles}
+            className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors">
+            <RefreshCw className={`w-3 h-3 ${loadingFiles ? 'animate-spin' : ''}`} /> Refresh
+          </button>
+        </div>
+        {savedFiles.length === 0 ? (
+          <p className="text-xs text-slate-600 italic">{loadingFiles ? 'Loading…' : 'No files saved yet — imported files will appear here.'}</p>
+        ) : (
+          <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-white/[0.03] border-b border-slate-700/50">
+                  <th className="text-left px-3 py-2 text-slate-500 font-medium">File</th>
+                  <th className="text-left px-3 py-2 text-slate-500 font-medium">Imported as</th>
+                  <th className="text-right px-3 py-2 text-slate-500 font-medium">Rows</th>
+                  <th className="text-right px-3 py-2 text-slate-500 font-medium">Size</th>
+                  <th className="text-right px-3 py-2 text-slate-500 font-medium">Date</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {savedFiles.map(f => (
+                  <tr key={f.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                        <span className="text-slate-300 truncate max-w-[180px]" title={f.filename}>{f.filename}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className="px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-300 font-mono">{f.imported_as || '—'}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{f.rows_inserted}</td>
+                    <td className="px-3 py-2.5 text-right text-slate-500 tabular-nums">{fmtBytes(f.size_bytes)}</td>
+                    <td className="px-3 py-2.5 text-right text-slate-600 tabular-nums whitespace-nowrap">
+                      {new Date(f.uploaded_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2 justify-end">
+                        <button onClick={() => downloadFile(f.id, f.filename)}
+                          className="p-1 text-slate-500 hover:text-blue-400 transition-colors" title="Download">
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => deleteFile(f.id)} disabled={deletingId === f.id}
+                          className="p-1 text-slate-500 hover:text-rose-400 transition-colors" title="Delete">
+                          {deletingId === f.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Trash2 className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

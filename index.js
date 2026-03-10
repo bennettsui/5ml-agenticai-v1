@@ -7524,6 +7524,16 @@ function pfDbCheck(res) {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
     // Extend pf_cost_entries with richer fields (ADD COLUMN IF NOT EXISTS via separate queries)
+    `CREATE TABLE IF NOT EXISTS pf_uploaded_files (
+      id SERIAL PRIMARY KEY,
+      filename TEXT NOT NULL,
+      mimetype TEXT NOT NULL DEFAULT 'application/octet-stream',
+      size_bytes INTEGER NOT NULL DEFAULT 0,
+      imported_as TEXT,
+      rows_inserted INTEGER DEFAULT 0,
+      data BYTEA NOT NULL,
+      uploaded_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
   ];
   for (const sql of tables) {
     await pool.query(sql).catch(err => console.warn('[print-finance] table init:', err.message));
@@ -8517,7 +8527,47 @@ app.post('/api/print-finance/import/confirm', pfUpload.single('file'), async (re
   try {
     const { rows } = await parseUploadedFile(req.file);
     const result = await importRows(type, rows, aiMapping, aiCategory, aiCostType);
+    // Save file to DB for later download/reference
+    await pool.query(
+      `INSERT INTO pf_uploaded_files (filename, mimetype, size_bytes, imported_as, rows_inserted, data)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [req.file.originalname, req.file.mimetype, req.file.size, type, result.inserted, req.file.buffer]
+    ).catch(err => console.warn('[print-finance] file save:', err.message));
     res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/uploads — list saved files (no binary data)
+app.get('/api/print-finance/uploads', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, filename, mimetype, size_bytes, imported_as, rows_inserted, uploaded_at FROM pf_uploaded_files ORDER BY uploaded_at DESC'
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/uploads/:id/download — download a saved file
+app.get('/api/print-finance/uploads/:id/download', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT filename, mimetype, data FROM pf_uploaded_files WHERE id=$1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'File not found' });
+    const file = rows[0];
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('Content-Type', file.mimetype);
+    res.send(file.data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/print-finance/uploads/:id — delete a saved file
+app.delete('/api/print-finance/uploads/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM pf_uploaded_files WHERE id=$1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'File not found' });
+    res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
