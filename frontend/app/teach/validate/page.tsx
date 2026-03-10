@@ -266,54 +266,50 @@ function ValidateInner() {
   // Right panel tab
   const [rightTab, setRightTab]         = useState<'ocr' | 'visual' | 'ai'>('ocr');
 
-  // ─── Load draft questions ─────────────────────────────────────────────────
+  // ─── Load paper info + draft questions ────────────────────────────────────
 
   useEffect(() => {
-    if ((window as any).pdfjsLib) return;
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    script.onload = () => {
-      (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    };
-    script.onerror = () => setPdfError('pdf.js failed to load from CDN. Check your internet connection and refresh.');
-    document.head.appendChild(script);
-  }, []);
+    if (!id) return;
+    fetch(`/api/adaptive-learning/teachers/papers/${id}/draft-questions`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          setPaperName(d.exam_name || d.paper_name || '');
+          const questions = (d.draft_questions || []).map((q: DraftQuestion) => ({
+            ...q, _meta: parseMeta(q.raw_ocr_text),
+          }));
+          setDrafts(questions);
+        }
+        setDraftsLoading(false);
+      })
+      .catch(() => setDraftsLoading(false));
+  }, [id]);
+
+  // ─── Load PDF (local pdf.js — no CDN dependency) ──────────────────────────
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    setPdfLoading(true); setPdfError('');
+    const pdfUrl = `/api/adaptive-learning/teachers/papers/${id}/file`;
 
     async function load() {
       setPdfLoading(true); setPdfError('');
       try {
-        const lib = (window as any).pdfjsLib;
-        if (!lib) { setPdfError('PDF viewer not loaded yet. Refresh the page.'); return; }
+        const lib = await getPdfJs();
         const doc = await lib.getDocument({ url: pdfUrl, withCredentials: false }).promise;
         if (cancelled) return;
         setPdfDoc(doc);
         setTotalPages(doc.numPages);
         setPage(1);
-      })
-      .catch((e: Error) => {
+      } catch (e: any) {
         if (!cancelled) setPdfError(e.message);
-      })
-      .finally(() => { if (!cancelled) setPdfLoading(false); });
-
-    // Wait for pdfjsLib to be available
-    const interval = setInterval(() => {
-      if ((window as any).pdfjsLib) { clearInterval(interval); load(); }
-    }, 300);
-    // If still not available after 10s, show an error
-    const timeout = setTimeout(() => {
-      clearInterval(interval);
-      if (!(window as any).pdfjsLib && !cancelled) {
-        setPdfError('pdf.js viewer timed out. Refresh the page or check your internet connection.');
+      } finally {
+        if (!cancelled) setPdfLoading(false);
       }
-    }, 10000);
+    }
+    load();
 
-    return () => { cancelled = true; clearInterval(interval); clearTimeout(timeout); };
+    return () => { cancelled = true; };
   }, [id]);
 
   // ─── Render page ──────────────────────────────────────────────────────────
