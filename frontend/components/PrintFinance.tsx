@@ -7,7 +7,7 @@ import {
   AlertCircle, CheckCircle2, Clock, Zap, Plus, Trash2,
   Upload, Download, X, Loader2, RefreshCw, Pencil, Save,
   Calculator, Filter, Receipt, ChevronDown, ChevronUp, Settings as SettingsIcon,
-  Eye, FolderOpen,
+  Eye, FolderOpen, CalendarDays, ChevronRight, ArrowUpDown,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -163,6 +163,22 @@ interface ImportRowResult {
   label?: string;
   reason?: string;
   data?: Record<string, string | number>;
+}
+
+interface DryRunRow {
+  sheet: string;
+  row_num: number | string;
+  data: Record<string, string | number>;
+  issues: { field: string; type: string; message: string; suggestion: string }[];
+  status: 'ok' | 'warn' | 'skip';
+}
+
+interface DryRunResult {
+  total: number;
+  ok: number;
+  warn: number;
+  skip: number;
+  rows: DryRunRow[];
 }
 
 interface MaterialUsageEntry {
@@ -946,7 +962,7 @@ function RevenueSummary({ entries }: { entries: RevenueEntry[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-tab: Costs (with CSV/XLSX upload)
+// Sub-tab: Costs
 // ---------------------------------------------------------------------------
 
 function Costs() {
@@ -956,23 +972,113 @@ function Costs() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<CostEntry>>({});
   const [saving, setSaving] = useState(false);
-  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
-  const [uploadResult, setUploadResult] = useState<{ inserted: number; errors: { row: Record<string, string>; reason: string }[] } | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [filterPeriod, setFilterPeriod] = useState('');
+  // Sidebar selection
+  const [sidebarType, setSidebarType] = useState<string>('');
+  const [sidebarCategory, setSidebarCategory] = useState<string>('');
+  // Filters
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
-  const [showCostSummary, setShowCostSummary] = useState(false);
-  const costPeriods = Array.from(new Set((entries || []).map(c => c.period).filter((p): p is string => !!p))).sort().reverse();
-  const visibleEntries = (entries || []).filter(c =>
-    (!filterPeriod || c.period === filterPeriod) &&
-    (!filterType || c.type === filterType) &&
-    (!filterCategory || c.category.toLowerCase().includes(filterCategory.toLowerCase()))
-  );
+  const [filterSearch, setFilterSearch] = useState('');
+  // Group by / sort
+  const [groupBy, setGroupBy] = useState<'none' | 'category' | 'type' | 'period' | 'vendor'>('none');
+  const [sortField, setSortField] = useState<string>('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [showSummary, setShowSummary] = useState(false);
 
-  const direct = visibleEntries.filter(c => c.type === 'direct').reduce((s, c) => s + Number(c.amount), 0);
-  const overhead = visibleEntries.filter(c => c.type === 'overhead').reduce((s, c) => s + Number(c.amount), 0);
-  const fixed = visibleEntries.filter(c => c.type === 'fixed').reduce((s, c) => s + Number(c.amount), 0);
+  // Aggregate sidebar data
+  const allEntries = entries || [];
+  const typeGroups = useMemo(() => {
+    const m: Record<string, { count: number; amount: number }> = {};
+    for (const e of allEntries) {
+      const t = e.type || 'direct';
+      if (!m[t]) m[t] = { count: 0, amount: 0 };
+      m[t].count++; m[t].amount += Number(e.amount);
+    }
+    return m;
+  }, [allEntries]);
+  const topCategories = useMemo(() => {
+    const m: Record<string, { count: number; amount: number }> = {};
+    for (const e of allEntries) {
+      const c = e.category || '—';
+      if (!m[c]) m[c] = { count: 0, amount: 0 };
+      m[c].count++; m[c].amount += Number(e.amount);
+    }
+    return Object.entries(m).sort((a, b) => b[1].amount - a[1].amount).slice(0, 12);
+  }, [allEntries]);
+
+  // Active type/category from sidebar
+  const activeType = sidebarType || filterType;
+  const activeCategory = sidebarCategory || filterCategory;
+
+  const visibleEntries = useMemo(() => {
+    let list = allEntries;
+    if (activeType) list = list.filter(c => c.type === activeType);
+    if (activeCategory) list = list.filter(c => c.category === activeCategory || c.category.toLowerCase().includes(activeCategory.toLowerCase()));
+    if (filterSearch) list = list.filter(c =>
+      c.category.toLowerCase().includes(filterSearch.toLowerCase()) ||
+      (c.vendor || '').toLowerCase().includes(filterSearch.toLowerCase()) ||
+      (c.notes || '').toLowerCase().includes(filterSearch.toLowerCase())
+    );
+    if (dateFrom) list = list.filter(c => new Date(c.created_at) >= new Date(dateFrom));
+    if (dateTo) list = list.filter(c => new Date(c.created_at) <= new Date(dateTo + 'T23:59:59'));
+    // Sort
+    if (sortField) {
+      list = [...list].sort((a, b) => {
+        const av = (a as Record<string, unknown>)[sortField];
+        const bv = (b as Record<string, unknown>)[sortField];
+        const an = typeof av === 'number' ? av : parseFloat(String(av || 0));
+        const bn = typeof bv === 'number' ? bv : parseFloat(String(bv || 0));
+        if (!isNaN(an) && !isNaN(bn)) return sortDir === 'asc' ? an - bn : bn - an;
+        return sortDir === 'asc'
+          ? String(av || '').localeCompare(String(bv || ''))
+          : String(bv || '').localeCompare(String(av || ''));
+      });
+    }
+    return list;
+  }, [allEntries, activeType, activeCategory, filterSearch, dateFrom, dateTo, sortField, sortDir]);
+
+  const totals = useMemo(() => ({
+    direct: visibleEntries.filter(c => c.type === 'direct').reduce((s, c) => s + Number(c.amount), 0),
+    overhead: visibleEntries.filter(c => c.type === 'overhead').reduce((s, c) => s + Number(c.amount), 0),
+    fixed: visibleEntries.filter(c => c.type === 'fixed').reduce((s, c) => s + Number(c.amount), 0),
+  }), [visibleEntries]);
+  const grandTotal = totals.direct + totals.overhead + totals.fixed;
+
+  // Group the visible entries if groupBy is active
+  const groupedEntries = useMemo(() => {
+    if (groupBy === 'none') return null;
+    const m = new Map<string, CostEntry[]>();
+    for (const e of visibleEntries) {
+      const key = groupBy === 'category' ? (e.category || '—')
+        : groupBy === 'type' ? e.type
+        : groupBy === 'period' ? (e.period || '—')
+        : (e.vendor || '—');
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(e);
+    }
+    return Array.from(m.entries()).sort((a, b) => {
+      const sa = a[1].reduce((s, c) => s + Number(c.amount), 0);
+      const sb = b[1].reduce((s, c) => s + Number(c.amount), 0);
+      return sb - sa;
+    });
+  }, [visibleEntries, groupBy]);
+
+  const toggleSort = (field: string) => {
+    if (sortField === field) {
+      if (sortDir === 'asc') setSortDir('desc');
+      else { setSortField(''); setSortDir('asc'); }
+    } else {
+      setSortField(field); setSortDir('asc');
+    }
+  };
+  const SortIcon = ({ field }: { field: string }) => {
+    if (sortField !== field) return <ArrowUpDown className="w-3 h-3 text-slate-600 inline ml-0.5" />;
+    return sortDir === 'asc'
+      ? <ChevronUp className="w-3 h-3 text-blue-400 inline ml-0.5" />
+      : <ChevronDown className="w-3 h-3 text-blue-400 inline ml-0.5" />;
+  };
 
   const save = async () => {
     if (!form.category) return;
@@ -1003,38 +1109,157 @@ function Costs() {
     });
     setSaving(false); cancelEdit(); reload();
   };
-
   const del = async (id: number) => { await fetch(`/api/print-finance/costs/${id}`, { method: 'DELETE' }); if (editId === id) cancelEdit(); reload(); };
 
-  const handleUpload = async (file: File) => {
-    setUploadState('uploading');
-    setUploadResult(null);
-    const fd = new FormData();
-    fd.append('file', file);
-    try {
-      const res = await fetch('/api/print-finance/costs/upload', { method: 'POST', body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Upload failed');
-      setUploadResult(json);
-      setUploadState('done');
-      reload();
-    } catch (e: unknown) {
-      setUploadResult({ inserted: 0, errors: [{ row: {}, reason: e instanceof Error ? e.message : 'Unknown error' }] });
-      setUploadState('error');
-    }
-  };
+  const TYPE_META = {
+    direct:   { label: 'Direct',   color: 'text-rose-400',  dot: 'bg-rose-400',  badge: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
+    overhead: { label: 'Overhead', color: 'text-amber-400', dot: 'bg-amber-400', badge: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+    fixed:    { label: 'Fixed',    color: 'text-blue-400',  dot: 'bg-blue-400',  badge: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  } as const;
 
-  const downloadTemplate = () => { window.open('/api/print-finance/costs/template', '_blank'); };
+  const clearSidebar = () => { setSidebarType(''); setSidebarCategory(''); };
+  const hasFilters = !!(activeType || activeCategory || filterSearch || dateFrom || dateTo);
+
+  const renderTable = (rows: CostEntry[]) => (
+    <table className="w-full text-xs">
+      <thead>
+        <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+          {[
+            { label: 'Category', field: 'category' },
+            { label: 'Sub-cat', field: 'sub_category' },
+            { label: 'Type', field: 'type' },
+            { label: 'Qty', field: 'quantity' },
+            { label: 'Unit', field: 'unit' },
+            { label: 'Unit Cost', field: 'unit_cost' },
+            { label: 'Amount', field: 'amount' },
+            { label: 'Vendor', field: 'vendor' },
+            { label: 'Job Ref', field: 'job_ref' },
+            { label: 'Period', field: 'period' },
+            { label: 'Notes', field: 'notes' },
+          ].map(h => (
+            <th key={h.field}
+              onClick={() => toggleSort(h.field)}
+              className={`px-3 py-2.5 text-slate-400 font-medium whitespace-nowrap cursor-pointer select-none hover:text-slate-200 transition-colors ${['quantity','unit_cost','amount'].includes(h.field) ? 'text-right' : 'text-left'}`}>
+              {h.label}<SortIcon field={h.field} />
+            </th>
+          ))}
+          <th className="px-3 py-2.5 w-12" />
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 && (
+          <tr><td colSpan={12} className="px-3 py-6 text-center text-slate-500">No entries match the current filters.</td></tr>
+        )}
+        {rows.map(c => {
+          const tm = TYPE_META[c.type] || TYPE_META.direct;
+          if (editId === c.id) return (
+            <tr key={c.id} className="border-b border-slate-700/30 bg-blue-500/5">
+              <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.category||'')} onChange={e => setEditForm(p => ({...p, category: e.target.value}))} /></td>
+              <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.sub_category||'')} onChange={e => setEditForm(p => ({...p, sub_category: e.target.value}))} /></td>
+              <td className="px-2 py-1.5">
+                <select className="bg-slate-700 border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.type||c.type)} onChange={e => setEditForm(p => ({...p, type: e.target.value as CostEntry['type']}))}>
+                  <option value="direct">Direct</option><option value="overhead">Overhead</option><option value="fixed">Fixed</option>
+                </select>
+              </td>
+              <td className="px-2 py-1.5"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.quantity||'')} onChange={e => setEditForm(p => ({...p, quantity: Number(e.target.value)}))} /></td>
+              <td className="px-2 py-1.5"><input className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.unit||'')} onChange={e => setEditForm(p => ({...p, unit: e.target.value}))} /></td>
+              <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.unit_cost||'')} onChange={e => setEditForm(p => ({...p, unit_cost: Number(e.target.value)}))} /></td>
+              <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.amount||'')} onChange={e => setEditForm(p => ({...p, amount: Number(e.target.value)}))} /></td>
+              <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.vendor||'')} onChange={e => setEditForm(p => ({...p, vendor: e.target.value}))} /></td>
+              <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.job_ref||'')} onChange={e => setEditForm(p => ({...p, job_ref: e.target.value}))} /></td>
+              <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
+              <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
+              <td className="px-2 py-1.5">
+                <div className="flex items-center gap-1">
+                  <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"><Save className="w-3 h-3" /></button>
+                  <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3 h-3" /></button>
+                </div>
+              </td>
+            </tr>
+          );
+          return (
+            <tr key={c.id} className="border-b border-slate-700/30 last:border-0 group hover:bg-white/[0.02]">
+              <td className="px-3 py-2.5 text-slate-200 font-medium whitespace-nowrap max-w-[180px] truncate">{c.category}</td>
+              <td className="px-3 py-2.5 text-slate-400">{c.sub_category || <span className="text-slate-600">—</span>}</td>
+              <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded border text-xs font-medium ${tm.badge}`}>{c.type}</span></td>
+              <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{c.quantity != null ? fmt(Number(c.quantity), 2) : <span className="text-slate-600">—</span>}</td>
+              <td className="px-3 py-2.5 text-slate-400">{c.unit || <span className="text-slate-600">—</span>}</td>
+              <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{c.unit_cost != null ? money(Number(c.unit_cost)) : <span className="text-slate-600">—</span>}</td>
+              <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(c.amount))}</td>
+              <td className="px-3 py-2.5 text-slate-400">{c.vendor || <span className="text-slate-600">—</span>}</td>
+              <td className="px-3 py-2.5 text-slate-400 font-mono">{c.job_ref || <span className="text-slate-600">—</span>}</td>
+              <td className="px-3 py-2.5 text-slate-400">{c.period || <span className="text-slate-600">—</span>}</td>
+              <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{c.notes || <span className="text-slate-600">—</span>}</td>
+              <td className="px-3 py-2.5">
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => startEdit(c)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3 h-3" /></button>
+                  <button onClick={() => del(c.id)} className="text-slate-500 hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="grid grid-cols-4 gap-3 flex-1 min-w-0">
+    <div className="flex gap-4 min-h-0">
+      {/* ── Left Sidebar ── */}
+      <div className="w-48 flex-shrink-0 space-y-1 pt-1">
+        {/* All */}
+        <button
+          onClick={clearSidebar}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${!sidebarType && !sidebarCategory ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'}`}>
+          <span className="font-medium">All Entries</span>
+          <span className="tabular-nums text-slate-500">{allEntries.length}</span>
+        </button>
+
+        {/* By Type */}
+        <div className="pt-2 pb-1 px-3 text-[10px] font-semibold text-slate-600 uppercase tracking-wider">By Type</div>
+        {(['direct', 'overhead', 'fixed'] as const).map(t => {
+          const meta = TYPE_META[t];
+          const tg = typeGroups[t] || { count: 0, amount: 0 };
+          const isActive = sidebarType === t && !sidebarCategory;
+          return (
+            <button key={t}
+              onClick={() => { setSidebarType(t); setSidebarCategory(''); }}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${isActive ? 'bg-white/[0.06] border border-slate-600/50' : 'hover:bg-white/[0.03]'}`}>
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.dot}`} />
+              <span className={`flex-1 text-left font-medium ${isActive ? meta.color : 'text-slate-400'}`}>{meta.label}</span>
+              <span className="tabular-nums text-slate-600">{tg.count}</span>
+            </button>
+          );
+        })}
+
+        {/* By Category */}
+        {topCategories.length > 0 && (
+          <>
+            <div className="pt-3 pb-1 px-3 text-[10px] font-semibold text-slate-600 uppercase tracking-wider">Categories</div>
+            {topCategories.map(([cat]) => {
+              const isActive = sidebarCategory === cat;
+              return (
+                <button key={cat}
+                  onClick={() => { setSidebarCategory(cat); setSidebarType(''); }}
+                  className={`w-full flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors text-left ${isActive ? 'bg-white/[0.06] text-slate-200 border border-slate-600/50' : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.03]'}`}>
+                  <ChevronRight className="w-3 h-3 flex-shrink-0" />
+                  <span className="truncate">{cat}</span>
+                </button>
+              );
+            })}
+          </>
+        )}
+      </div>
+
+      {/* ── Main Content ── */}
+      <div className="flex-1 min-w-0 space-y-4">
+        {/* Stats strip */}
+        <div className="grid grid-cols-4 gap-3">
           {[
-            { label: 'Direct Costs', value: money(direct), color: 'text-rose-400' },
-            { label: 'Overhead', value: money(overhead), color: 'text-amber-400' },
-            { label: 'Fixed Costs', value: money(fixed), color: 'text-blue-400' },
-            { label: 'Total', value: money(direct + overhead + fixed), color: 'text-slate-200' },
+            { label: 'Direct Costs', value: money(totals.direct), color: 'text-rose-400' },
+            { label: 'Overhead', value: money(totals.overhead), color: 'text-amber-400' },
+            { label: 'Fixed Costs', value: money(totals.fixed), color: 'text-blue-400' },
+            { label: 'Total', value: money(grandTotal), color: 'text-slate-200' },
           ].map(k => (
             <div key={k.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
               <div className="text-xs text-slate-400 mb-2">{k.label}</div>
@@ -1042,212 +1267,144 @@ function Costs() {
             </div>
           ))}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-          <Filter className="w-3.5 h-3.5 text-slate-500" />
-          {costPeriods.length > 0 && (
-            <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
-              className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
-              <option value="">All periods</option>
-              {costPeriods.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          )}
-          <select value={filterType} onChange={e => setFilterType(e.target.value)}
-            className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
-            <option value="">All types</option>
-            <option value="direct">Direct</option>
-            <option value="overhead">Overhead</option>
-            <option value="fixed">Fixed</option>
-          </select>
-          <input
-            type="text"
-            placeholder="Search category…"
-            value={filterCategory}
-            onChange={e => setFilterCategory(e.target.value)}
-            className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 w-36"
-          />
-        </div>
-      </div>
 
-      {error && <ErrorBanner msg={error} onRetry={reload} />}
+        {error && <ErrorBanner msg={error} onRetry={reload} />}
 
-      {/* Upload Zone */}
-      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-sm font-semibold text-white">Import Cost Data</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Upload a <span className="text-slate-300 font-medium">.csv</span> or <span className="text-slate-300 font-medium">.xlsx</span> file with columns: <code className="text-blue-300 bg-blue-900/20 px-1 rounded text-xs">category, type, amount, period, notes</code></p>
+        {/* Filter + actions bar */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Date range */}
+          <div className="flex items-center gap-1.5">
+            <CalendarDays className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+              className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50" />
+            <span className="text-slate-600 text-xs">–</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+              className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50" />
           </div>
-          <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 rounded-lg transition-colors whitespace-nowrap">
-            <Download className="w-3.5 h-3.5" /> CSV Template
-          </button>
-        </div>
 
-        <div
-          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${uploadState === 'uploading' ? 'border-blue-500/40 bg-blue-500/5' : 'border-slate-600/40 hover:border-slate-500/60 hover:bg-white/[0.02]'}`}
-          onClick={() => fileRef.current?.click()}
-          onDragOver={e => e.preventDefault()}
-          onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleUpload(f); }}
-        >
-          <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ''; }} />
-          {uploadState === 'uploading' ? (
-            <><Loader2 className="w-6 h-6 text-blue-400 animate-spin mx-auto mb-2" /><p className="text-sm text-blue-300">Uploading…</p></>
-          ) : (
-            <><Upload className="w-6 h-6 text-slate-500 mx-auto mb-2" /><p className="text-sm text-slate-400">Drag & drop or <span className="text-blue-400">click to browse</span></p><p className="text-xs text-slate-600 mt-1">Accepts .csv · .xlsx · .xls · max 5 MB</p></>
-          )}
-        </div>
+          {/* Search */}
+          <input type="text" placeholder="Search…" value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
+            className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 w-36" />
 
-        {uploadResult && (
-          <div className={`mt-3 rounded-lg p-3 text-xs ${uploadState === 'done' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300' : 'bg-red-500/10 border border-red-500/20 text-red-300'}`}>
-            {uploadState === 'done' && <p className="font-medium">✓ {uploadResult.inserted} row{uploadResult.inserted !== 1 ? 's' : ''} imported successfully.</p>}
-            {uploadResult.errors.length > 0 && (
-              <ul className="mt-1 space-y-0.5">
-                {uploadResult.errors.map((e, i) => <li key={i}>✗ {e.reason}</li>)}
-              </ul>
-            )}
+          {/* Group by */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">Group</span>
+            {(['none', 'category', 'type', 'period', 'vendor'] as const).map(g => (
+              <button key={g} onClick={() => setGroupBy(g)}
+                className={`px-2 py-1 text-xs rounded-lg border transition-colors ${groupBy === g ? 'bg-blue-500/20 border-blue-500/40 text-blue-300' : 'border-slate-700/50 text-slate-500 hover:text-slate-300'}`}>
+                {g === 'none' ? 'None' : g.charAt(0).toUpperCase() + g.slice(1)}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
 
-      {/* Manual Add + Table */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-white">Cost Entries</h3>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowCostSummary(v => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs rounded-lg transition-colors ${showCostSummary ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' : 'border-slate-700/50 text-slate-400 hover:text-slate-200'}`}>
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCostSummary ? 'rotate-180' : ''}`} /> Summary
+          <div className="flex-1" />
+
+          {hasFilters && (
+            <button onClick={() => { clearSidebar(); setFilterSearch(''); setDateFrom(''); setDateTo(''); setFilterType(''); setFilterCategory(''); }}
+              className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1">
+              <X className="w-3 h-3" /> Clear filters
+            </button>
+          )}
+
+          <button onClick={() => setShowSummary(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs rounded-lg transition-colors ${showSummary ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' : 'border-slate-700/50 text-slate-400 hover:text-slate-200'}`}>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showSummary ? 'rotate-180' : ''}`} /> Summary
           </button>
-          <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
+
+          <button onClick={() => setAdding(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
             <Plus className="w-3.5 h-3.5" /> Add Entry
           </button>
         </div>
-      </div>
 
-      {showCostSummary && !loading && entries && entries.length > 0 && (
-        <CostSummary entries={entries} />
-      )}
+        {/* Active filter chips */}
+        {(sidebarType || sidebarCategory) && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-500">Filtered:</span>
+            {sidebarType && <span className="flex items-center gap-1 px-2 py-0.5 bg-white/[0.05] border border-slate-600/50 rounded-full text-slate-300">
+              Type: {sidebarType} <button onClick={() => setSidebarType('')}><X className="w-3 h-3" /></button>
+            </span>}
+            {sidebarCategory && <span className="flex items-center gap-1 px-2 py-0.5 bg-white/[0.05] border border-slate-600/50 rounded-full text-slate-300">
+              {sidebarCategory} <button onClick={() => setSidebarCategory('')}><X className="w-3 h-3" /></button>
+            </span>}
+          </div>
+        )}
 
-      {adding && (
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
-            {[
-              { key: 'category', label: 'Category' },
-              { key: 'sub_category', label: 'Sub-category' },
-              { key: 'amount', label: 'Amount ($)', type: 'number' },
-              { key: 'quantity', label: 'Quantity', type: 'number' },
-              { key: 'unit', label: 'Unit' },
-              { key: 'unit_cost', label: 'Unit Cost ($)', type: 'number' },
-              { key: 'vendor', label: 'Vendor' },
-              { key: 'job_ref', label: 'Job Ref' },
-              { key: 'period', label: 'Period' },
-              { key: 'notes', label: 'Notes' },
-            ].map(f => (
-              <div key={f.key}>
-                <label className="text-xs text-slate-400 block mb-1">{f.label}</label>
-                <input type={f.type || 'text'} value={(form as Record<string, string>)[f.key]}
-                  onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                  className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500/50" />
+        {showSummary && !loading && allEntries.length > 0 && (
+          <CostSummary entries={visibleEntries} />
+        )}
+
+        {adding && (
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+              {[
+                { key: 'category', label: 'Category' },
+                { key: 'sub_category', label: 'Sub-category' },
+                { key: 'amount', label: 'Amount ($)', type: 'number' },
+                { key: 'quantity', label: 'Quantity', type: 'number' },
+                { key: 'unit', label: 'Unit' },
+                { key: 'unit_cost', label: 'Unit Cost ($)', type: 'number' },
+                { key: 'vendor', label: 'Vendor' },
+                { key: 'job_ref', label: 'Job Ref' },
+                { key: 'period', label: 'Period' },
+                { key: 'notes', label: 'Notes' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="text-xs text-slate-400 block mb-1">{f.label}</label>
+                  <input type={f.type || 'text'} value={(form as Record<string, string>)[f.key]}
+                    onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                </div>
+              ))}
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Type</label>
+                <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value as CostEntry['type'] }))}
+                  className="w-full bg-slate-700 border border-slate-600/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none">
+                  <option value="direct">Direct</option>
+                  <option value="overhead">Overhead</option>
+                  <option value="fixed">Fixed</option>
+                </select>
               </div>
-            ))}
-            <div>
-              <label className="text-xs text-slate-400 block mb-1">Type</label>
-              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value as CostEntry['type'] }))}
-                className="w-full bg-slate-700 border border-slate-600/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none">
-                <option value="direct">Direct</option>
-                <option value="overhead">Overhead</option>
-                <option value="fixed">Fixed</option>
-              </select>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={save} disabled={saving || !form.category} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs rounded-lg transition-colors">{saving ? 'Saving…' : 'Save'}</button>
+              <button onClick={() => setAdding(false)} className="px-4 py-1.5 bg-slate-700 text-slate-300 text-xs rounded-lg hover:bg-slate-600 transition-colors">Cancel</button>
             </div>
           </div>
-          <div className="flex gap-2">
-            <button onClick={save} disabled={saving || !form.category} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs rounded-lg transition-colors">{saving ? 'Saving…' : 'Save'}</button>
-            <button onClick={() => setAdding(false)} className="px-4 py-1.5 bg-slate-700 text-slate-300 text-xs rounded-lg hover:bg-slate-600 transition-colors">Cancel</button>
-          </div>
-        </div>
-      )}
+        )}
 
-      <div className="border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-slate-700/50 bg-white/[0.03]">
-              {['Category','Sub-cat','Type','Qty','Unit','Unit Cost','Amount','Vendor','Job Ref','Period','Notes',''].map(h => (
-                <th key={h} className={`px-3 py-2.5 text-slate-400 font-medium whitespace-nowrap ${['Qty','Unit Cost','Amount'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={12} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>
-            )}
-            {!loading && visibleEntries.length === 0 && (
-              <tr><td colSpan={12} className="px-3 py-6 text-center text-slate-500">No cost entries yet.</td></tr>
-            )}
-            {visibleEntries.map(c => {
-              const typeColor = c.type === 'direct' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20'
-                : c.type === 'overhead' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
-                : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-              if (editId === c.id) return (
-                <tr key={c.id} className="border-b border-slate-700/30 bg-blue-500/5">
-                  <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.category||'')} onChange={e => setEditForm(p => ({...p, category: e.target.value}))} /></td>
-                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.sub_category||'')} onChange={e => setEditForm(p => ({...p, sub_category: e.target.value}))} /></td>
-                  <td className="px-2 py-1.5">
-                    <select className="bg-slate-700 border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.type||c.type)} onChange={e => setEditForm(p => ({...p, type: e.target.value as CostEntry['type']}))}>
-                      <option value="direct">Direct</option>
-                      <option value="overhead">Overhead</option>
-                      <option value="fixed">Fixed</option>
-                    </select>
-                  </td>
-                  <td className="px-2 py-1.5"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.quantity||'')} onChange={e => setEditForm(p => ({...p, quantity: Number(e.target.value)}))} /></td>
-                  <td className="px-2 py-1.5"><input className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.unit||'')} onChange={e => setEditForm(p => ({...p, unit: e.target.value}))} /></td>
-                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.unit_cost||'')} onChange={e => setEditForm(p => ({...p, unit_cost: Number(e.target.value)}))} /></td>
-                  <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.amount||'')} onChange={e => setEditForm(p => ({...p, amount: Number(e.target.value)}))} /></td>
-                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.vendor||'')} onChange={e => setEditForm(p => ({...p, vendor: e.target.value}))} /></td>
-                  <td className="px-2 py-1.5"><input className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.job_ref||'')} onChange={e => setEditForm(p => ({...p, job_ref: e.target.value}))} /></td>
-                  <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
-                  <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
-                  <td className="px-2 py-1.5">
-                    <div className="flex items-center gap-1">
-                      <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"><Save className="w-3 h-3" /></button>
-                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3 h-3" /></button>
-                    </div>
-                  </td>
-                </tr>
-              );
+        {/* Table — grouped or flat */}
+        {loading ? (
+          <div className="flex items-center justify-center py-12 text-slate-500 text-sm gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+        ) : groupedEntries ? (
+          <div className="space-y-3">
+            {groupedEntries.map(([key, rows]) => {
+              const groupTotal = rows.reduce((s, c) => s + Number(c.amount), 0);
               return (
-                <tr key={c.id} className="border-b border-slate-700/30 last:border-0 group hover:bg-white/[0.02]">
-                  <td className="px-3 py-2.5 text-slate-200 font-medium whitespace-nowrap">{c.category}</td>
-                  <td className="px-3 py-2.5 text-slate-400">{c.sub_category || <span className="text-slate-600">—</span>}</td>
-                  <td className="px-3 py-2.5">
-                    <span className={`px-1.5 py-0.5 rounded border text-xs font-medium ${typeColor}`}>{c.type}</span>
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{c.quantity != null ? fmt(Number(c.quantity), 2) : <span className="text-slate-600">—</span>}</td>
-                  <td className="px-3 py-2.5 text-slate-400">{c.unit || <span className="text-slate-600">—</span>}</td>
-                  <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{c.unit_cost != null ? money(Number(c.unit_cost)) : <span className="text-slate-600">—</span>}</td>
-                  <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(c.amount))}</td>
-                  <td className="px-3 py-2.5 text-slate-400">{c.vendor || <span className="text-slate-600">—</span>}</td>
-                  <td className="px-3 py-2.5 text-slate-400 font-mono">{c.job_ref || <span className="text-slate-600">—</span>}</td>
-                  <td className="px-3 py-2.5 text-slate-400">{c.period || <span className="text-slate-600">—</span>}</td>
-                  <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{c.notes || <span className="text-slate-600">—</span>}</td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => startEdit(c)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3 h-3" /></button>
-                      <button onClick={() => del(c.id)} className="text-slate-500 hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
-                    </div>
-                  </td>
-                </tr>
+                <div key={key} className="border border-slate-700/50 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-white/[0.03] border-b border-slate-700/40">
+                    <span className="text-xs font-semibold text-slate-300">{key}</span>
+                    <span className="text-xs text-slate-400">{rows.length} entries · {money(groupTotal)}</span>
+                  </div>
+                  <div className="overflow-x-auto">{renderTable(rows)}</div>
+                </div>
               );
             })}
-          </tbody>
-        </table>
+          </div>
+        ) : (
+          <div className="border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
+            {renderTable(visibleEntries)}
+          </div>
+        )}
+
+        {/* Overhead Allocation Engine */}
+        <OverheadAllocator />
+
+        {/* Specialised cost layer tables */}
+        <MaterialUsageTable />
+        <MachineLogTable />
+        <LabourLogTable />
       </div>
-
-      {/* Overhead Allocation Engine */}
-      <OverheadAllocator />
-
-      {/* Specialised cost layer tables */}
-      <MaterialUsageTable />
-      <MachineLogTable />
-      <LabourLogTable />
     </div>
   );
 }
@@ -3219,6 +3376,9 @@ function UploadTab() {
   const [preview, setPreview] = useState<{ headers: string[]; rows: Record<string, string>[]; sheet_count: number } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [activeSection, setActiveSection] = useState<'library' | 'import'>('library');
+  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
+  const [dryRunning, setDryRunning] = useState(false);
+  const [showDryRun, setShowDryRun] = useState(false);
 
   const loadSavedFiles = async () => {
     setLoadingFiles(true);
@@ -3258,11 +3418,25 @@ function UploadTab() {
     } finally { setLoadingPreview(false); }
   };
 
+  const doDryRun = async (f: File, type: string, mapping: Record<string, string | null>) => {
+    setDryRunning(true);
+    setDryRunResult(null);
+    const fd = new FormData();
+    fd.append('file', f);
+    fd.append('type', type);
+    if (Object.keys(mapping).length) fd.append('field_mapping', JSON.stringify(mapping));
+    try {
+      const res = await fetch('/api/print-finance/import/dry-run', { method: 'POST', body: fd });
+      if (res.ok) setDryRunResult(await res.json());
+    } finally { setDryRunning(false); }
+  };
+
   const doAnalyse = async (f: File) => {
     setAnalysing(true);
     setAnalysis(null);
     setResult(null);
     setFieldMapping({});
+    setDryRunResult(null);
     const fd = new FormData();
     fd.append('file', f);
     try {
@@ -3272,7 +3446,20 @@ function UploadTab() {
       setAnalysis(data);
       const suggested = data.ai?.table || (data.heuristic_type !== 'unknown' ? data.heuristic_type : '');
       setImportType(suggested);
+      const mapping = data.ai?.field_mapping || {};
       if (data.ai?.field_mapping) setFieldMapping(data.ai.field_mapping);
+      // Immediately run dry-run to get per-row review
+      if (suggested) {
+        setDryRunning(true);
+        const fd2 = new FormData();
+        fd2.append('file', f);
+        fd2.append('type', suggested);
+        if (Object.keys(mapping).length) fd2.append('field_mapping', JSON.stringify(mapping));
+        fetch('/api/print-finance/import/dry-run', { method: 'POST', body: fd2 })
+          .then(r => r.ok ? r.json() : null)
+          .then(d => { if (d) setDryRunResult(d); })
+          .finally(() => setDryRunning(false));
+      }
     } catch (e: unknown) {
       alert((e as Error).message);
     } finally { setAnalysing(false); }
@@ -3298,7 +3485,7 @@ function UploadTab() {
     } finally { setImporting(false); }
   };
 
-  const reset = () => { setFile(null); setAnalysis(null); setResult(null); setImportType(''); setShowMapping(false); setFieldMapping({}); };
+  const reset = () => { setFile(null); setAnalysis(null); setResult(null); setImportType(''); setShowMapping(false); setFieldMapping({}); setDryRunResult(null); setShowDryRun(false); };
   const handleFile = (f: File) => { setFile(f); doAnalyse(f); };
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragging(false);
@@ -3648,6 +3835,72 @@ function UploadTab() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Row Review */}
+          {(dryRunning || dryRunResult) && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Row Review</span>
+                  {dryRunResult && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-emerald-400">{dryRunResult.ok} ok</span>
+                      {dryRunResult.warn > 0 && <span className="text-amber-400">{dryRunResult.warn} warnings</span>}
+                      {dryRunResult.skip > 0 && <span className="text-rose-400">{dryRunResult.skip} will skip</span>}
+                      <span className="text-slate-600">/ {dryRunResult.total} total</span>
+                    </div>
+                  )}
+                  {dryRunning && <span className="flex items-center gap-1 text-xs text-slate-500"><Loader2 className="w-3 h-3 animate-spin" /> scanning rows…</span>}
+                </div>
+                {dryRunResult && (
+                  <button onClick={() => setShowDryRun(v => !v)} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                    {showDryRun ? 'Hide rows' : `Show ${dryRunResult.total} rows`}
+                  </button>
+                )}
+              </div>
+              {showDryRun && dryRunResult && (
+                <div className="border border-slate-700/50 rounded-xl overflow-hidden max-h-80 overflow-y-auto">
+                  {dryRunResult.rows.map((row, i) => (
+                    <div key={i} className={`flex gap-3 px-3 py-2 border-b border-slate-700/20 last:border-0 text-xs ${
+                      row.status === 'ok' ? 'hover:bg-white/[0.01]' :
+                      row.status === 'warn' ? 'bg-amber-500/5 hover:bg-amber-500/[0.08]' :
+                      'bg-rose-500/5 hover:bg-rose-500/[0.08]'
+                    }`}>
+                      <div className="flex-shrink-0 w-5 mt-0.5">
+                        {row.status === 'ok' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
+                        {row.status === 'warn' && <AlertCircle className="w-3.5 h-3.5 text-amber-400" />}
+                        {row.status === 'skip' && <X className="w-3.5 h-3.5 text-rose-400" />}
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-400 font-mono text-[10px]">{row.sheet}</span>
+                          <span className="text-slate-600 text-[10px]">row {row.row_num}</span>
+                          {Object.entries(row.data).filter(([, v]) => v !== '' && v !== null && v !== 0).slice(0, 6).map(([k, v]) => (
+                            <span key={k} className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-slate-700/30 text-[10px]">
+                              <span className="text-slate-600">{k}:</span> <span className="text-slate-300">{String(v)}</span>
+                            </span>
+                          ))}
+                        </div>
+                        {row.issues.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-0.5">
+                            {row.issues.map((iss, j) => (
+                              <span key={j} className={`flex items-start gap-1 px-1.5 py-0.5 rounded border text-[10px] ${
+                                iss.type === 'missing' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
+                                'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                              }`}>
+                                <span className="font-medium">{iss.field}:</span> {iss.message}
+                                {iss.suggestion && <span className="text-slate-500 ml-0.5">→ {iss.suggestion}</span>}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

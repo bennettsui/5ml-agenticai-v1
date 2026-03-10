@@ -8634,6 +8634,79 @@ app.post('/api/print-finance/import/preview', pfUpload.single('file'), async (re
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+// POST /api/print-finance/import/dry-run — parse all rows + detect issues, NO DB writes
+app.post('/api/print-finance/import/dry-run', pfUpload.single('file'), async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const type = req.body.type || 'costs';
+  let aiMapping = null;
+  try { aiMapping = req.body.field_mapping ? JSON.parse(req.body.field_mapping) : null; } catch {}
+  try {
+    const { rows } = await parseUploadedFile(req.file);
+    const norm = s => String(s).toLowerCase().replace(/[\s_-]/g, '');
+    const annotated = rows.map(r => {
+      const sheet = r._sheet || '?';
+      const row_num = r._row || '?';
+      const issues = [];
+      // Build clean data map
+      const data = {};
+      for (const [k, v] of Object.entries(r)) {
+        if (!k.startsWith('_')) data[k] = v;
+      }
+      if (aiMapping) {
+        for (const [field, colName] of Object.entries(aiMapping)) {
+          if (colName && r[colName] !== undefined) data[field] = r[colName];
+        }
+      }
+      // Date format detection on any date-like column
+      const DATE_PATTERNS = [
+        { re: /^\d{8}$/, fmt: 'YYYYMMDD', suggest: 'YYYY-MM-DD e.g. 2026-03-01' },
+        { re: /^\d{4}\/\d{1,2}\/\d{1,2}$/, fmt: 'YYYY/MM/DD', suggest: 'Use - instead of /' },
+        { re: /^\d{1,2}\/\d{1,2}\/\d{4}$/, fmt: 'MM/DD/YYYY or DD/MM/YYYY', suggest: 'Reformat to YYYY-MM-DD' },
+        { re: /^\d{6}$/, fmt: 'YYYYMM', suggest: 'Acceptable as period, e.g. 202603' },
+      ];
+      for (const [k, v] of Object.entries(data)) {
+        if (!v) continue;
+        const sv = String(v).trim();
+        if (/date|period|month|日期|年月/.test(k.toLowerCase())) {
+          for (const p of DATE_PATTERNS) {
+            if (p.re.test(sv) && p.fmt !== 'YYYYMM') {
+              issues.push({ field: k, type: 'date_format', message: `"${sv}" looks like ${p.fmt}`, suggestion: p.suggest });
+              break;
+            }
+          }
+        }
+      }
+      // Type-specific checks
+      if (type === 'costs') {
+        const cat = String(data.category || data['類別'] || data['Category'] || '').trim();
+        if (!cat) issues.push({ field: 'category', type: 'missing', message: 'Missing category', suggestion: 'Row will be skipped without a category' });
+        const amt = parseFloat(String(data.amount || data['金額'] || data['Amount'] || '0'));
+        if (amt === 0) issues.push({ field: 'amount', type: 'zero', message: 'Amount is 0 or missing', suggestion: 'Check if this row has an actual cost value' });
+        const tv = String(data.type || data['類型'] || '').toLowerCase().trim();
+        if (tv && !['direct','overhead','fixed'].includes(tv)) {
+          issues.push({ field: 'type', type: 'invalid_value', message: `Type "${tv}" not recognized`, suggestion: 'Expected: direct, overhead, or fixed' });
+        }
+      } else if (type === 'revenue') {
+        const ch = String(data.channel || data['渠道'] || '').trim();
+        const rev = parseFloat(String(data.revenue || data['收入'] || '0'));
+        if (!ch) issues.push({ field: 'channel', type: 'missing', message: 'Missing channel', suggestion: 'Defaults to "Import" if blank' });
+        if (rev === 0) issues.push({ field: 'revenue', type: 'zero', message: 'Revenue is 0 or missing', suggestion: 'Check if this row has revenue' });
+      }
+      const isSkip = issues.some(i => i.message.includes('will be skipped'));
+      const status = isSkip ? 'skip' : issues.length > 0 ? 'warn' : 'ok';
+      return { sheet, row_num, data, issues, status };
+    });
+    res.json({
+      total: annotated.length,
+      ok: annotated.filter(r => r.status === 'ok').length,
+      warn: annotated.filter(r => r.status === 'warn').length,
+      skip: annotated.filter(r => r.status === 'skip').length,
+      rows: annotated,
+    });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 // POST /api/print-finance/import/confirm — re-upload + type → actually import
 app.post('/api/print-finance/import/confirm', pfUpload.single('file'), async (req, res) => {
   if (!pfDbCheck(res)) return;
