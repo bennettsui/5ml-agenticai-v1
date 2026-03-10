@@ -672,6 +672,8 @@ function Revenue() {
   const [filterPeriod, setFilterPeriod] = useState('');
   const [filterChannel, setFilterChannel] = useState('');
   const [showSummary, setShowSummary] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const periods = Array.from(new Set((entries || []).map(r => r.period).filter(Boolean))).sort().reverse();
   const channels = Array.from(new Set((entries || []).map(r => r.channel).filter(Boolean))).sort();
@@ -710,7 +712,18 @@ function Revenue() {
     setSaving(false); cancelEdit(); reload();
   };
 
-  const del = async (id: number) => { await fetch(`/api/print-finance/revenue/${id}`, { method: 'DELETE' }); if (editId === id) cancelEdit(); reload(); };
+  const del = async (id: number) => { await fetch(`/api/print-finance/revenue/${id}`, { method: 'DELETE' }); if (editId === id) cancelEdit(); setSelectedIds(p => { const s = new Set(p); s.delete(id); return s; }); reload(); };
+
+  const toggleSelect = (id: number) => setSelectedIds(p => { const s = new Set(p); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  const allVisibleSelected = visible.length > 0 && visible.every(r => selectedIds.has(r.id));
+  const someSelected = selectedIds.size > 0;
+  const toggleSelectAll = () => setSelectedIds(allVisibleSelected ? new Set() : new Set(visible.map(r => r.id)));
+  const bulkDelete = async () => {
+    if (!selectedIds.size || !confirm(`Delete ${selectedIds.size} selected entr${selectedIds.size === 1 ? 'y' : 'ies'}?`)) return;
+    setBulkDeleting(true);
+    await Promise.all([...selectedIds].map(id => fetch(`/api/print-finance/revenue/${id}`, { method: 'DELETE' })));
+    setSelectedIds(new Set()); setBulkDeleting(false); reload();
+  };
 
   const totals = visible.reduce((acc, r) => ({ revenue: acc.revenue + Number(r.revenue), cogs: acc.cogs + Number(r.cogs) }), { revenue: 0, cogs: 0 });
 
@@ -736,20 +749,33 @@ function Revenue() {
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
-          <Filter className="w-3.5 h-3.5 text-slate-500" />
-          {periods.length > 0 && (
-            <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
-              className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
-              <option value="">All periods</option>
-              {periods.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          )}
-          {channels.length > 0 && (
-            <select value={filterChannel} onChange={e => setFilterChannel(e.target.value)}
-              className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
-              <option value="">All channels</option>
-              {channels.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+          {someSelected ? (
+            <>
+              <span className="text-xs font-medium text-blue-300">{selectedIds.size} selected</span>
+              <button onClick={bulkDelete} disabled={bulkDeleting}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 text-xs rounded-lg transition-colors disabled:opacity-50">
+                <Trash2 className="w-3.5 h-3.5" />{bulkDeleting ? 'Deleting…' : `Delete ${selectedIds.size}`}
+              </button>
+              <button onClick={() => setSelectedIds(new Set())} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Deselect all</button>
+            </>
+          ) : (
+            <>
+              <Filter className="w-3.5 h-3.5 text-slate-500" />
+              {periods.length > 0 && (
+                <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
+                  className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
+                  <option value="">All periods</option>
+                  {periods.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              )}
+              {channels.length > 0 && (
+                <select value={filterChannel} onChange={e => setFilterChannel(e.target.value)}
+                  className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
+                  <option value="">All channels</option>
+                  {channels.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
+            </>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -800,21 +826,27 @@ function Revenue() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-700/50">
+              <th className="px-3 py-3 w-8">
+                <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll}
+                  className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 accent-blue-500 cursor-pointer" />
+              </th>
               {['Channel', 'Source', 'Period', 'Date', 'Jobs', 'Grams', 'Revenue', 'COGS', 'Gross Profit', 'Margin', 'Notes', ''].map(h => (
                 <th key={h} className="text-left px-4 py-3 text-xs font-medium text-slate-400 whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {loading ? <LoadingRow cols={12} /> : visible.length === 0 ? (
-              <tr><td colSpan={12} className="px-4 py-8 text-center text-sm text-slate-500">{filterPeriod || filterChannel ? 'No entries match filters.' : 'No entries yet.'}</td></tr>
+            {loading ? <LoadingRow cols={13} /> : visible.length === 0 ? (
+              <tr><td colSpan={13} className="px-4 py-8 text-center text-sm text-slate-500">{filterPeriod || filterChannel ? 'No entries match filters.' : 'No entries yet.'}</td></tr>
             ) : visible.map(r => {
               const isEditing = editId === r.id;
+              const isSelected = selectedIds.has(r.id);
               const gp = Number(r.revenue) - Number(r.cogs);
               const margin = Number(r.revenue) > 0 ? (gp / Number(r.revenue)) * 100 : 0;
 
               if (isEditing) return (
                 <tr key={r.id} className="border-b border-blue-500/20 bg-blue-500/5">
+                  <td className="px-3 py-2" />
                   <td className="px-3 py-2"><input className="w-28 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.channel||'')} onChange={e => setEditForm(p => ({...p, channel: e.target.value}))} /></td>
                   <td className="px-3 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.source||'')} onChange={e => setEditForm(p => ({...p, source: e.target.value}))} /></td>
                   <td className="px-3 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
@@ -836,7 +868,11 @@ function Revenue() {
               );
 
               return (
-                <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] transition-colors group">
+                <tr key={r.id} className={`border-b border-slate-700/30 last:border-0 transition-colors group ${isSelected ? 'bg-blue-500/[0.07]' : 'hover:bg-white/[0.02]'}`}>
+                  <td className="px-3 py-3">
+                    <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(r.id)}
+                      className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 accent-blue-500 cursor-pointer" />
+                  </td>
                   <td className="px-4 py-3 text-slate-200 font-medium whitespace-nowrap">{r.channel}</td>
                   <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{r.source || <span className="text-slate-600">—</span>}</td>
                   <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{r.period}</td>
@@ -861,6 +897,7 @@ function Revenue() {
           {(entries || []).length > 0 && (
             <tfoot>
               <tr className="border-t border-slate-600/50 bg-white/[0.02]">
+                <td />
                 <td colSpan={6} className="px-4 py-3 text-xs font-semibold text-slate-300">TOTAL</td>
                 <td className="px-4 py-3 text-white font-bold">{money(totals.revenue)}</td>
                 <td className="px-4 py-3 text-rose-300 font-bold">{money(totals.cogs)}</td>
@@ -986,6 +1023,9 @@ function Costs() {
   const [sortField, setSortField] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showSummary, setShowSummary] = useState(false);
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Aggregate sidebar data
   const allEntries = entries || [];
@@ -1109,7 +1149,18 @@ function Costs() {
     });
     setSaving(false); cancelEdit(); reload();
   };
-  const del = async (id: number) => { await fetch(`/api/print-finance/costs/${id}`, { method: 'DELETE' }); if (editId === id) cancelEdit(); reload(); };
+  const del = async (id: number) => { await fetch(`/api/print-finance/costs/${id}`, { method: 'DELETE' }); if (editId === id) cancelEdit(); setSelectedIds(p => { const s = new Set(p); s.delete(id); return s; }); reload(); };
+
+  const toggleSelect = (id: number) => setSelectedIds(p => { const s = new Set(p); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  const allVisibleSelected = visibleEntries.length > 0 && visibleEntries.every(c => selectedIds.has(c.id));
+  const someSelected = selectedIds.size > 0;
+  const toggleSelectAll = () => setSelectedIds(allVisibleSelected ? new Set() : new Set(visibleEntries.map(c => c.id)));
+  const bulkDelete = async () => {
+    if (!selectedIds.size || !confirm(`Delete ${selectedIds.size} selected entr${selectedIds.size === 1 ? 'y' : 'ies'}?`)) return;
+    setBulkDeleting(true);
+    await Promise.all([...selectedIds].map(id => fetch(`/api/print-finance/costs/${id}`, { method: 'DELETE' })));
+    setSelectedIds(new Set()); setBulkDeleting(false); reload();
+  };
 
   const TYPE_META = {
     direct:   { label: 'Direct',   color: 'text-rose-400',  dot: 'bg-rose-400',  badge: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
@@ -1120,10 +1171,24 @@ function Costs() {
   const clearSidebar = () => { setSidebarType(''); setSidebarCategory(''); };
   const hasFilters = !!(activeType || activeCategory || filterSearch || dateFrom || dateTo);
 
-  const renderTable = (rows: CostEntry[]) => (
+  const renderTable = (rows: CostEntry[], showSelectAll = false) => (
     <table className="w-full text-xs">
       <thead>
         <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+          <th className="px-3 py-2.5 w-8">
+            {showSelectAll && (
+              <input type="checkbox" checked={rows.length > 0 && rows.every(c => selectedIds.has(c.id))}
+                onChange={() => {
+                  const allSel = rows.every(c => selectedIds.has(c.id));
+                  setSelectedIds(p => {
+                    const s = new Set(p);
+                    rows.forEach(c => allSel ? s.delete(c.id) : s.add(c.id));
+                    return s;
+                  });
+                }}
+                className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 accent-blue-500 cursor-pointer" />
+            )}
+          </th>
           {[
             { label: 'Category', field: 'category' },
             { label: 'Sub-cat', field: 'sub_category' },
@@ -1148,12 +1213,14 @@ function Costs() {
       </thead>
       <tbody>
         {rows.length === 0 && (
-          <tr><td colSpan={12} className="px-3 py-6 text-center text-slate-500">No entries match the current filters.</td></tr>
+          <tr><td colSpan={13} className="px-3 py-6 text-center text-slate-500">No entries match the current filters.</td></tr>
         )}
         {rows.map(c => {
           const tm = TYPE_META[c.type] || TYPE_META.direct;
+          const isSelected = selectedIds.has(c.id);
           if (editId === c.id) return (
             <tr key={c.id} className="border-b border-slate-700/30 bg-blue-500/5">
+              <td className="px-2 py-1.5" />
               <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.category||'')} onChange={e => setEditForm(p => ({...p, category: e.target.value}))} /></td>
               <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.sub_category||'')} onChange={e => setEditForm(p => ({...p, sub_category: e.target.value}))} /></td>
               <td className="px-2 py-1.5">
@@ -1178,7 +1245,11 @@ function Costs() {
             </tr>
           );
           return (
-            <tr key={c.id} className="border-b border-slate-700/30 last:border-0 group hover:bg-white/[0.02]">
+            <tr key={c.id} className={`border-b border-slate-700/30 last:border-0 group transition-colors ${isSelected ? 'bg-blue-500/[0.07]' : 'hover:bg-white/[0.02]'}`}>
+              <td className="px-3 py-2.5">
+                <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(c.id)}
+                  className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 accent-blue-500 cursor-pointer" />
+              </td>
               <td className="px-3 py-2.5 text-slate-200 font-medium whitespace-nowrap max-w-[180px] truncate">{c.category}</td>
               <td className="px-3 py-2.5 text-slate-400">{c.sub_category || <span className="text-slate-600">—</span>}</td>
               <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded border text-xs font-medium ${tm.badge}`}>{c.type}</span></td>
@@ -1269,6 +1340,18 @@ function Costs() {
         </div>
 
         {error && <ErrorBanner msg={error} onRetry={reload} />}
+
+        {/* Bulk action bar (shows when rows selected) */}
+        {someSelected && (
+          <div className="flex items-center gap-3 px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+            <span className="text-xs font-medium text-blue-300">{selectedIds.size} selected</span>
+            <button onClick={bulkDelete} disabled={bulkDeleting}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 text-xs rounded-lg transition-colors disabled:opacity-50">
+              <Trash2 className="w-3.5 h-3.5" />{bulkDeleting ? 'Deleting…' : `Delete ${selectedIds.size}`}
+            </button>
+            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Deselect all</button>
+          </div>
+        )}
 
         {/* Filter + actions bar */}
         <div className="flex flex-wrap items-center gap-2">
@@ -1380,10 +1463,16 @@ function Costs() {
           <div className="space-y-3">
             {groupedEntries.map(([key, rows]) => {
               const groupTotal = rows.reduce((s, c) => s + Number(c.amount), 0);
+              const groupAllSel = rows.every(c => selectedIds.has(c.id));
               return (
                 <div key={key} className="border border-slate-700/50 rounded-xl overflow-hidden">
                   <div className="flex items-center justify-between px-3 py-2 bg-white/[0.03] border-b border-slate-700/40">
-                    <span className="text-xs font-semibold text-slate-300">{key}</span>
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" checked={groupAllSel} onChange={() => {
+                        setSelectedIds(p => { const s = new Set(p); rows.forEach(c => groupAllSel ? s.delete(c.id) : s.add(c.id)); return s; });
+                      }} className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 accent-blue-500 cursor-pointer" />
+                      <span className="text-xs font-semibold text-slate-300">{key}</span>
+                    </div>
                     <span className="text-xs text-slate-400">{rows.length} entries · {money(groupTotal)}</span>
                   </div>
                   <div className="overflow-x-auto">{renderTable(rows)}</div>
@@ -1393,7 +1482,7 @@ function Costs() {
           </div>
         ) : (
           <div className="border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
-            {renderTable(visibleEntries)}
+            {renderTable(visibleEntries, true)}
           </div>
         )}
 
@@ -3465,12 +3554,13 @@ function UploadTab() {
     } finally { setAnalysing(false); }
   };
 
-  const doImport = async () => {
+  const doImport = async (skipWarnings = false) => {
     if (!file || !importType || !analysis) return;
     setImporting(true);
     const fd = new FormData();
     fd.append('file', file);
     fd.append('type', importType);
+    if (skipWarnings) fd.append('skip_warnings', 'true');
     if (Object.keys(fieldMapping).length) fd.append('field_mapping', JSON.stringify(fieldMapping));
     if (analysis.ai?.category) fd.append('category', analysis.ai.category);
     if (analysis.ai?.cost_type) fd.append('cost_type', analysis.ai.cost_type);
@@ -3838,79 +3928,36 @@ function UploadTab() {
             </div>
           )}
 
-          {/* Row Review */}
+          {/* Row Review — summary only */}
           {(dryRunning || dryRunResult) && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Row Review</span>
-                  {dryRunResult && (
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-emerald-400">{dryRunResult.ok} ok</span>
-                      {dryRunResult.warn > 0 && <span className="text-amber-400">{dryRunResult.warn} warnings</span>}
-                      {dryRunResult.skip > 0 && <span className="text-rose-400">{dryRunResult.skip} will skip</span>}
-                      <span className="text-slate-600">/ {dryRunResult.total} total</span>
-                    </div>
-                  )}
-                  {dryRunning && <span className="flex items-center gap-1 text-xs text-slate-500"><Loader2 className="w-3 h-3 animate-spin" /> scanning rows…</span>}
-                </div>
-                {dryRunResult && (
-                  <button onClick={() => setShowDryRun(v => !v)} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
-                    {showDryRun ? 'Hide rows' : `Show ${dryRunResult.total} rows`}
-                  </button>
-                )}
-              </div>
-              {showDryRun && dryRunResult && (
-                <div className="border border-slate-700/50 rounded-xl overflow-hidden max-h-80 overflow-y-auto">
-                  {dryRunResult.rows.map((row, i) => (
-                    <div key={i} className={`flex gap-3 px-3 py-2 border-b border-slate-700/20 last:border-0 text-xs ${
-                      row.status === 'ok' ? 'hover:bg-white/[0.01]' :
-                      row.status === 'warn' ? 'bg-amber-500/5 hover:bg-amber-500/[0.08]' :
-                      'bg-rose-500/5 hover:bg-rose-500/[0.08]'
-                    }`}>
-                      <div className="flex-shrink-0 w-5 mt-0.5">
-                        {row.status === 'ok' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
-                        {row.status === 'warn' && <AlertCircle className="w-3.5 h-3.5 text-amber-400" />}
-                        {row.status === 'skip' && <X className="w-3.5 h-3.5 text-rose-400" />}
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-400 font-mono text-[10px]">{row.sheet}</span>
-                          <span className="text-slate-600 text-[10px]">row {row.row_num}</span>
-                          {Object.entries(row.data).filter(([, v]) => v !== '' && v !== null && v !== 0).slice(0, 6).map(([k, v]) => (
-                            <span key={k} className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-slate-700/30 text-[10px]">
-                              <span className="text-slate-600">{k}:</span> <span className="text-slate-300">{String(v)}</span>
-                            </span>
-                          ))}
-                        </div>
-                        {row.issues.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mt-0.5">
-                            {row.issues.map((iss, j) => (
-                              <span key={j} className={`flex items-start gap-1 px-1.5 py-0.5 rounded border text-[10px] ${
-                                iss.type === 'missing' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
-                                'text-amber-400 bg-amber-500/10 border-amber-500/20'
-                              }`}>
-                                <span className="font-medium">{iss.field}:</span> {iss.message}
-                                {iss.suggestion && <span className="text-slate-500 ml-0.5">→ {iss.suggestion}</span>}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl">
+              {dryRunning && <><Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" /><span className="text-xs text-slate-500">Scanning rows…</span></>}
+              {dryRunResult && (
+                <>
+                  <span className="text-xs font-semibold text-slate-400">Row scan:</span>
+                  <span className="text-xs text-emerald-400 font-medium">{dryRunResult.ok} ok</span>
+                  {dryRunResult.warn > 0 && <span className="text-xs text-amber-400 font-medium">{dryRunResult.warn} warnings</span>}
+                  {dryRunResult.skip > 0 && <span className="text-xs text-rose-400 font-medium">{dryRunResult.skip} will skip</span>}
+                  <span className="text-xs text-slate-600">/ {dryRunResult.total} total</span>
+                </>
               )}
             </div>
           )}
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <button onClick={doImport} disabled={!importType || importing}
               className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-colors">
               {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {importing ? 'Importing…' : `Import ${analysis.row_count} rows → ${selectedType?.label || '…'}`}
+              {importing ? 'Importing…' : `Import all ${analysis.row_count} rows`}
             </button>
-            <button onClick={reset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Upload different file</button>
+            {dryRunResult && dryRunResult.ok < dryRunResult.total && (
+              <button onClick={() => doImport(true)} disabled={!importType || importing || dryRunResult.ok === 0}
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-700/30 hover:bg-emerald-700/50 disabled:opacity-40 border border-emerald-600/40 text-emerald-300 text-sm font-medium rounded-xl transition-colors">
+                <CheckCircle2 className="w-4 h-4" />
+                Import {dryRunResult.ok} ok only
+              </button>
+            )}
+            <button onClick={reset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors ml-auto">Upload different file</button>
           </div>
         </div>
       )}
