@@ -7,7 +7,7 @@ import {
   AlertCircle, CheckCircle2, Clock, Zap, Plus, Trash2,
   Upload, Download, X, Loader2, RefreshCw, Pencil, Save,
   Calculator, Filter, Receipt, ChevronDown, ChevronUp, Settings as SettingsIcon,
-  Eye, FolderOpen,
+  Eye, FolderOpen, CalendarDays, ChevronRight, ArrowUpDown,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -163,6 +163,22 @@ interface ImportRowResult {
   label?: string;
   reason?: string;
   data?: Record<string, string | number>;
+}
+
+interface DryRunRow {
+  sheet: string;
+  row_num: number | string;
+  data: Record<string, string | number>;
+  issues: { field: string; type: string; message: string; suggestion: string }[];
+  status: 'ok' | 'warn' | 'skip';
+}
+
+interface DryRunResult {
+  total: number;
+  ok: number;
+  warn: number;
+  skip: number;
+  rows: DryRunRow[];
 }
 
 interface MaterialUsageEntry {
