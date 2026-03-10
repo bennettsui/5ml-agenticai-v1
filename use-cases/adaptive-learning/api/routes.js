@@ -673,25 +673,27 @@ async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
 
       let draft = {
         paperId,
-        rawOcrText:  block.raw_text,
-        hasImage:    block.has_image,
-        stemEn:      block.raw_text,
-        suggestedDifficulty: 2,
+        rawOcrText:          ocrMeta,
+        hasImage:            block.has_image,
+        stemEn:              block.stem_en || block.raw_text,
+        stemZh:              block.stem_zh || null,
+        suggestedType:       block.suggested_type || 'MCQ',
+        suggestedDifficulty: block.difficulty_hint || 2,
         candidateObjectives,
       };
 
-      if (process.env.ANTHROPIC_API_KEY && block.raw_text.length > 20) {
+      if (process.env.ANTHROPIC_API_KEY && (block.stem_en || block.raw_text).length > 20) {
         try {
           const result = await getAgent().question.authorQuestion({
-            rawTextEn:            block.raw_text,
-            imageDescription:     block.has_image ? 'Question contains a diagram or figure' : null,
+            rawTextEn:        block.stem_en || block.raw_text,
+            imageDescription: imageDesc,
             candidateObjectives,
             gradeBand,
           });
-          draft.stemEn               = result.clean_stem_en  || block.raw_text;
-          draft.stemZh               = result.clean_stem_zh  || null;
-          draft.suggestedType        = result.question_type  || 'MCQ';
-          draft.suggestedDifficulty  = result.difficulty_estimate || 2;
+          draft.stemEn               = result.clean_stem_en  || draft.stemEn;
+          draft.stemZh               = result.clean_stem_zh  || draft.stemZh;
+          draft.suggestedType        = result.question_type  || draft.suggestedType;
+          draft.suggestedDifficulty  = result.difficulty_estimate || draft.suggestedDifficulty;
           draft.candidateObjectives  = result.selected_objective_codes?.map(code =>
             candidateObjectives.find(lo => lo.code === code)
           ).filter(Boolean) || candidateObjectives;
@@ -1380,6 +1382,174 @@ router.delete('/teachers/papers/:id', async (req, res) => {
     if (!rowCount) return res.status(404).json({ success: false, error: 'Paper not found' });
     res.json({ success: true });
   } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: visual element extraction (per-page) ─────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/teachers/papers/:id/visual-extract
+ * Body: { page_image_base64: string, page_number: number, mime_type?: string }
+ *
+ * Sends the rendered page image to Gemini 2.0 and asks it to locate every
+ * question/element with a normalised bounding box (0–100 %).
+ *
+ * Returns: { success, elements: [{ id, type, content, content_zh, bbox, confidence, needs_review }] }
+ */
+router.post('/teachers/papers/:id/visual-extract', async (req, res) => {
+  const { page_image_base64, page_number = 1, mime_type = 'image/png' } = req.body || {};
+  if (!page_image_base64) return res.status(400).json({ success: false, error: 'page_image_base64 required' });
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
+
+  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
+
+  const prompt = `You are analysing page ${page_number} of a Hong Kong Secondary School mathematics exam paper.
+
+Identify every distinct element on this page. For each element return a JSON object with:
+{
+  "type": "question_stem" | "sub_part" | "math_expression" | "diagram" | "graph" | "table" | "option" | "answer_line" | "instruction" | "question_number",
+  "content": "<English text / math / description of the element>",
+  "content_zh": "<Traditional Chinese text if present, else empty string>",
+  "bbox": [ymin, xmin, ymax, xmax],   // integers 0–1000, as fraction of page dimensions × 1000
+  "confidence": <0.0–1.0>,
+  "needs_review": <true if the text is ambiguous, partially cut off, or the bounding box is uncertain>
+}
+
+Rules:
+- Number each question stem — even if it spans multiple lines, treat as one element.
+- Include MCQ options (A B C D) as separate "option" elements.
+- If a diagram or graph has no readable text, set content to a brief description in English.
+- For bilingual text, put English in "content" and Chinese in "content_zh".
+- bbox MUST be tight around the actual content, not the whole page.
+- Output ONLY a JSON array. No markdown, no explanation.`;
+
+  try {
+    const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type, data: page_image_base64 } },
+            { text: prompt },
+          ],
+        }],
+        generationConfig: {
+          temperature:      0.1,
+          responseMimeType: 'application/json',
+          maxOutputTokens:  4096,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      return res.status(502).json({ success: false, error: `Gemini ${response.status}: ${errText.slice(0, 300)}` });
+    }
+
+    const data      = await response.json();
+    const candidate = data?.candidates?.[0];
+    const rawText   = candidate?.content?.parts?.[0]?.text || '';
+
+    if (!rawText) {
+      console.warn('[visual-extract] Empty Gemini response:', JSON.stringify(data).slice(0, 400));
+      return res.json({ success: true, elements: [] });
+    }
+
+    // Strip markdown fences
+    const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+
+    let parsed = [];
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      const match = cleaned.match(/\[[\s\S]*\]/);
+      if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
+    }
+
+    if (!Array.isArray(parsed)) parsed = [];
+
+    // Normalise bbox from [ymin, xmin, ymax, xmax] 0-1000 → { x, y, w, h } as percentages
+    const elements = parsed.map((el, i) => {
+      let bbox = { x: 0, y: 0, w: 100, h: 5 };
+      if (Array.isArray(el.bbox) && el.bbox.length === 4) {
+        const [ymin, xmin, ymax, xmax] = el.bbox.map(Number);
+        bbox = {
+          x: xmin / 10,
+          y: ymin / 10,
+          w: (xmax - xmin) / 10,
+          h: (ymax - ymin) / 10,
+        };
+      }
+      return {
+        id:           i + 1,
+        type:         el.type         || 'question_stem',
+        content:      el.content      || '',
+        content_zh:   el.content_zh   || '',
+        bbox,
+        confidence:   typeof el.confidence === 'number' ? el.confidence : 0.8,
+        needs_review: !!el.needs_review,
+      };
+    });
+
+    console.log(`[visual-extract] Paper ${req.params.id} page ${page_number}: ${elements.length} elements`);
+    res.json({ success: true, elements });
+
+  } catch (err) {
+    console.error('[visual-extract] Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: OCR AI assistant ────────────────────────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/teachers/ocr-assistant
+ * Body: { paper_id, context: string, messages: [{role, content}] }
+ *
+ * Chat assistant that understands the OCR extraction context and can help
+ * the teacher identify issues, explain gaps, and suggest corrections.
+ */
+router.post('/teachers/ocr-assistant', async (req, res) => {
+  const { context, messages = [] } = req.body || {};
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(503).json({ success: false, error: 'ANTHROPIC_API_KEY not configured' });
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client    = new Anthropic.default({ apiKey });
+
+    const systemPrompt = `You are an OCR review assistant for a Hong Kong Secondary School mathematics teacher portal.
+The teacher has uploaded a past paper and an AI (Gemini) extracted questions from it.
+You help the teacher understand and fix OCR extraction issues.
+
+Current extraction context:
+${context || '(no context provided)'}
+
+Your role:
+- Explain why questions might be missing (token limits, complex layouts, bilingual text)
+- Help identify which questions have missing MCQ options or diagram descriptions
+- Suggest what the teacher should manually correct
+- Answer questions about the extraction quality
+- Be concise and practical — teachers are busy
+
+Keep responses short (2-4 sentences max unless detail is needed).`;
+
+    const response = await client.messages.create({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system:     systemPrompt,
+      messages:   messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+    });
+
+    const reply = response.content[0]?.text || 'I could not generate a response.';
+    res.json({ success: true, reply });
+  } catch (err) {
+    console.error('[ocr-assistant]', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

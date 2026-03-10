@@ -1,18 +1,19 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Loader2, AlertCircle, CheckCircle,
-  Edit2, Check, X, ZoomIn, ZoomOut, RefreshCw, ArrowRight,
+  Edit2, Check, X, ZoomIn, ZoomOut, RefreshCw, FileText, Eye,
+  MessageSquare, Send, Bot, User,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface BBox { x: number; y: number; w: number; h: number }
 
-interface Element {
+interface VisualElement {
   id: number;
   type: string;
   content: string;
@@ -20,74 +21,252 @@ interface Element {
   bbox: BBox;
   confidence: number;
   needs_review: boolean;
-  // teacher corrections
   corrected_content?: string;
   corrected_zh?: string;
 }
 
-// ─── Color map by element type ────────────────────────────────────────────────
+interface OcrMeta {
+  text?: string;
+  options?: string[];
+  image_description?: string;
+  page_number?: number | null;
+  question_number?: number | null;
+}
+
+interface DraftQuestion {
+  id: string;
+  stem_en: string;
+  stem_zh: string;
+  has_image: boolean;
+  suggested_type: string;
+  suggested_difficulty: number;
+  status: string;
+  raw_ocr_text?: string;
+  _meta?: OcrMeta;
+}
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+// ─── Colour map ───────────────────────────────────────────────────────────────
 
 const TYPE_COLORS: Record<string, { border: string; bg: string; label: string; dot: string }> = {
-  question_number: { border: '#f87171', bg: 'rgba(248,113,113,0.12)', label: 'Q#',      dot: 'bg-red-400' },
-  question_stem:   { border: '#a78bfa', bg: 'rgba(167,139,250,0.12)', label: 'Stem',    dot: 'bg-violet-400' },
-  sub_part:        { border: '#818cf8', bg: 'rgba(129,140,248,0.12)', label: 'Sub',     dot: 'bg-indigo-400' },
-  math_expression: { border: '#f472b6', bg: 'rgba(244,114,182,0.12)', label: 'Math',    dot: 'bg-pink-400' },
-  diagram:         { border: '#fb923c', bg: 'rgba(251,146,60,0.12)',  label: 'Diagram', dot: 'bg-orange-400' },
-  graph:           { border: '#fbbf24', bg: 'rgba(251,191,36,0.12)', label: 'Graph',   dot: 'bg-amber-400' },
-  table:           { border: '#34d399', bg: 'rgba(52,211,153,0.12)', label: 'Table',   dot: 'bg-emerald-400' },
-  option:          { border: '#60a5fa', bg: 'rgba(96,165,250,0.12)', label: 'Option',  dot: 'bg-blue-400' },
+  question_number: { border: '#f87171', bg: 'rgba(248,113,113,0.15)', label: 'Q#',      dot: 'bg-red-400' },
+  question_stem:   { border: '#a78bfa', bg: 'rgba(167,139,250,0.15)', label: 'Stem',    dot: 'bg-violet-400' },
+  sub_part:        { border: '#818cf8', bg: 'rgba(129,140,248,0.15)', label: 'Sub',     dot: 'bg-indigo-400' },
+  math_expression: { border: '#f472b6', bg: 'rgba(244,114,182,0.15)', label: 'Math',    dot: 'bg-pink-400' },
+  diagram:         { border: '#fb923c', bg: 'rgba(251,146,60,0.15)',  label: 'Diagram', dot: 'bg-orange-400' },
+  graph:           { border: '#fbbf24', bg: 'rgba(251,191,36,0.15)', label: 'Graph',   dot: 'bg-amber-400' },
+  table:           { border: '#34d399', bg: 'rgba(52,211,153,0.15)', label: 'Table',   dot: 'bg-emerald-400' },
+  option:          { border: '#60a5fa', bg: 'rgba(96,165,250,0.15)', label: 'Option',  dot: 'bg-blue-400' },
   answer_line:     { border: '#94a3b8', bg: 'rgba(148,163,184,0.08)', label: 'Ans',    dot: 'bg-slate-400' },
   instruction:     { border: '#64748b', bg: 'rgba(100,116,139,0.08)', label: 'Instr',  dot: 'bg-slate-500' },
 };
 
-function typeColor(type: string) {
-  return TYPE_COLORS[type] ?? { border: '#94a3b8', bg: 'rgba(148,163,184,0.08)', label: type, dot: 'bg-slate-400' };
+function typeColor(t: string) {
+  return TYPE_COLORS[t] ?? { border: '#a78bfa', bg: 'rgba(167,139,250,0.15)', label: t, dot: 'bg-violet-400' };
 }
 
-// ─── Legend ───────────────────────────────────────────────────────────────────
+function parseMeta(raw?: string): OcrMeta {
+  if (!raw) return {};
+  try { return JSON.parse(raw); } catch { return { text: raw }; }
+}
 
-function Legend() {
-  const types = ['question_number','question_stem','sub_part','math_expression','diagram','graph','table','option','answer_line'];
+// ─── Load pdf.js from local /pdfjs/ (served via public/) ─────────────────────
+
+let pdfjsLibCache: any = null;
+
+async function getPdfJs(): Promise<any> {
+  if (pdfjsLibCache) return pdfjsLibCache;
+  return new Promise((resolve, reject) => {
+    if ((window as any).pdfjsLib) {
+      pdfjsLibCache = (window as any).pdfjsLib;
+      return resolve(pdfjsLibCache);
+    }
+    const script = document.createElement('script');
+    // Use our locally-served pdf.js (avoids CDN dependency)
+    script.src  = '/pdfjs/pdf.min.js';
+    script.type = 'module'; // pdfjs v5 is ES module
+    script.onload = () => {
+      // pdfjs v5 exports via globalThis.pdfjsLib when loaded as module
+      // Give it a tick to register
+      setTimeout(() => {
+        const lib = (window as any).pdfjsLib;
+        if (lib) {
+          lib.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.js';
+          pdfjsLibCache = lib;
+          resolve(lib);
+        } else {
+          reject(new Error('pdf.js loaded but window.pdfjsLib not available'));
+        }
+      }, 100);
+    };
+    script.onerror = () => reject(new Error('Failed to load /pdfjs/pdf.min.js'));
+    document.head.appendChild(script);
+  });
+}
+
+// ─── AI Assistant panel ───────────────────────────────────────────────────────
+
+function AiAssistant({
+  paperId, paperName, drafts, currentPage, totalPages,
+}: {
+  paperId: string; paperName: string; drafts: DraftQuestion[];
+  currentPage: number; totalPages: number;
+}) {
+  const [messages, setMessages] = useState<ChatMessage[]>([{
+    role: 'assistant',
+    content: `Hi! I can help you review the OCR extraction for **${paperName || 'this paper'}**.\n\nI can see ${drafts.length} questions were extracted. Ask me things like:\n- "Why are there only ${drafts.length} questions? The paper has 24."\n- "Question 5 is missing its MCQ options"\n- "The image description for Q3 is wrong"\n- "Summarise what was extracted so far"`,
+  }]);
+  const [input, setInput]   = useState('');
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || loading) return;
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: text }]);
+    setLoading(true);
+
+    try {
+      // Build context for the AI
+      const context = [
+        `Paper: ${paperName}`,
+        `Total pages: ${totalPages}, currently viewing page ${currentPage}`,
+        `Questions extracted by OCR: ${drafts.length}`,
+        '',
+        'Extracted questions:',
+        ...drafts.slice(0, 20).map((d, i) => {
+          const meta = parseMeta(d.raw_ocr_text);
+          return `Q${i + 1} (${d.suggested_type}, difficulty ${d.suggested_difficulty}): ${d.stem_en?.slice(0, 80)}${d.stem_en?.length > 80 ? '…' : ''}${meta.options?.length ? ` | Options: ${meta.options.join(' / ')}` : ''}${d.has_image ? ` | [Has diagram: ${meta.image_description || 'see paper'}]` : ''}`;
+        }),
+      ].join('\n');
+
+      const res = await fetch('/api/adaptive-learning/teachers/ocr-assistant', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          paper_id: paperId,
+          context,
+          messages: [...messages, { role: 'user', content: text }],
+        }),
+      });
+      const data = await res.json();
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: data.reply || 'Sorry, I could not process that.',
+      }]);
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Error — please try again.' }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="flex flex-wrap gap-2 text-[10px]">
-      {types.map(t => {
-        const c = typeColor(t);
-        return (
-          <span key={t} className="flex items-center gap-1 text-slate-400">
-            <span className={`w-2 h-2 rounded-sm shrink-0 ${c.dot}`} />
-            {c.label}
-          </span>
-        );
-      })}
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-700/50 shrink-0">
+        <Bot className="w-4 h-4 text-purple-400" />
+        <span className="text-xs font-medium text-slate-300">OCR Assistant</span>
+        <span className="text-[10px] text-slate-600 ml-auto">Powered by Claude</span>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 text-xs">
+        {messages.map((m, i) => (
+          <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+            <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+              m.role === 'assistant' ? 'bg-purple-500/20' : 'bg-slate-700'
+            }`}>
+              {m.role === 'assistant'
+                ? <Bot className="w-3 h-3 text-purple-400" />
+                : <User className="w-3 h-3 text-slate-400" />}
+            </div>
+            <div className={`rounded-xl px-3 py-2 max-w-[85%] leading-relaxed whitespace-pre-wrap ${
+              m.role === 'assistant'
+                ? 'bg-slate-800/60 border border-slate-700/50 text-slate-200'
+                : 'bg-purple-600/20 border border-purple-500/20 text-purple-100'
+            }`}>
+              {m.content}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className="flex gap-2">
+            <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0">
+              <Bot className="w-3 h-3 text-purple-400" />
+            </div>
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-2">
+              <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="px-3 py-2.5 border-t border-slate-700/50 shrink-0">
+        <div className="flex gap-2">
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
+            placeholder="Ask about the extraction…"
+            className="flex-1 bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500 placeholder-slate-600"
+          />
+          <button onClick={send} disabled={!input.trim() || loading}
+            className="p-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white rounded-xl transition-colors">
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 function ValidateInner() {
   const searchParams = useSearchParams();
-  const id           = searchParams.get('paper_id') || '';
-  const router       = useRouter();
+  const id = searchParams.get('paper_id') || '';
 
-  // PDF state
-  const canvasRef     = useRef<HTMLCanvasElement>(null);
-  const [pdfDoc, setPdfDoc]         = useState<any>(null);
-  const [totalPages, setTotalPages] = useState(0);
-  const [page, setPage]             = useState(1);
-  const [scale, setScale]           = useState(1.4);
-  const [pdfError, setPdfError]     = useState('');
-  const [pdfLoading, setPdfLoading] = useState(false);
+  // PDF
+  const canvasRef                       = useRef<HTMLCanvasElement>(null);
+  const [pdfDoc, setPdfDoc]             = useState<any>(null);
+  const [totalPages, setTotalPages]     = useState(0);
+  const [page, setPage]                 = useState(1);
+  const [scale, setScale]               = useState(1.5);
+  const [pdfError, setPdfError]         = useState('');
+  const [pdfLoading, setPdfLoading]     = useState(false);
 
-  // Recognition state
-  const [elements, setElements]     = useState<Element[]>([]);
-  const [analyzing, setAnalyzing]   = useState(false);
-  const [analyzed, setAnalyzed]     = useState<Set<number>>(new Set());
-  const [hoveredId, setHoveredId]   = useState<number | null>(null);
-  const [editingId, setEditingId]   = useState<number | null>(null);
-  const [editDraft, setEditDraft]   = useState({ content: '', content_zh: '' });
+  // Paper info
+  const [paperName, setPaperName]       = useState('');
 
-  // Load pdfjs from CDN (avoids bundler complexity)
+  // Draft questions
+  const [drafts, setDrafts]             = useState<DraftQuestion[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(true);
+
+  // Visual analysis
+  const [elements, setElements]         = useState<VisualElement[]>([]);
+  const [analyzing, setAnalyzing]       = useState(false);
+  const [analyzedPages, setAnalyzedPages] = useState<Set<number>>(new Set());
+  const [hoveredId, setHoveredId]       = useState<number | null>(null);
+  const [editingId, setEditingId]       = useState<number | null>(null);
+  const [editDraft, setEditDraft]       = useState({ content: '', content_zh: '' });
+
+  // Right panel tab
+  const [rightTab, setRightTab]         = useState<'ocr' | 'visual' | 'ai'>('ocr');
+
+  // ─── Load draft questions ─────────────────────────────────────────────────
+
   useEffect(() => {
     if ((window as any).pdfjsLib) return;
     const script = document.createElement('script');
@@ -100,10 +279,10 @@ function ValidateInner() {
     document.head.appendChild(script);
   }, []);
 
-  // Load PDF
   useEffect(() => {
-    const pdfUrl = `/api/adaptive-learning/teachers/papers/${id}/file`;
+    if (!id) return;
     let cancelled = false;
+    setPdfLoading(true); setPdfError('');
 
     async function load() {
       setPdfLoading(true); setPdfError('');
@@ -115,12 +294,11 @@ function ValidateInner() {
         setPdfDoc(doc);
         setTotalPages(doc.numPages);
         setPage(1);
-      } catch (e: any) {
-        if (!cancelled) setPdfError(e.message || 'Failed to load PDF');
-      } finally {
-        if (!cancelled) setPdfLoading(false);
-      }
-    }
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setPdfError(e.message);
+      })
+      .finally(() => { if (!cancelled) setPdfLoading(false); });
 
     // Wait for pdfjsLib to be available
     const interval = setInterval(() => {
@@ -137,7 +315,8 @@ function ValidateInner() {
     return () => { cancelled = true; clearInterval(interval); clearTimeout(timeout); };
   }, [id]);
 
-  // Render page to canvas
+  // ─── Render page ──────────────────────────────────────────────────────────
+
   const renderPage = useCallback(async (doc: any, pageNum: number, sc: number) => {
     if (!doc || !canvasRef.current) return;
     const pdfPage  = await doc.getPage(pageNum);
@@ -151,44 +330,35 @@ function ValidateInner() {
 
   useEffect(() => {
     if (pdfDoc) renderPage(pdfDoc, page, scale);
-    // Clear elements when page changes
     setElements([]);
-    setAnalyzed(prev => { const n = new Set(prev); n.delete(page); return n; });
+    setEditingId(null);
   }, [pdfDoc, page, scale, renderPage]);
 
-  // ─── Run visual analysis on current page ────────────────────────────────────
+  // ─── Visual analysis ──────────────────────────────────────────────────────
 
   const analyzeCurrentPage = async () => {
     if (!canvasRef.current) return;
-    setAnalyzing(true);
+    setAnalyzing(true); setRightTab('visual');
     try {
-      const canvas  = canvasRef.current;
-      const b64     = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
-      const res     = await fetch(`/api/adaptive-learning/teachers/papers/${id}/visual-extract`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ page_image_base64: b64, page_number: page, mime_type: 'image/png' }),
+      const b64 = canvasRef.current.toDataURL('image/png').replace('data:image/png;base64,', '');
+      const res = await fetch(`/api/adaptive-learning/teachers/papers/${id}/visual-extract`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ page_image_base64: b64, page_number: page }),
       });
       const data = await res.json();
       if (data.success) {
         setElements(data.elements || []);
-        setAnalyzed(prev => new Set([...prev, page]));
+        setAnalyzedPages(prev => new Set([...prev, page]));
       }
-    } catch (e: any) {
-      console.error('Visual extract failed:', e.message);
-    } finally {
-      setAnalyzing(false);
-    }
+    } catch (e: any) { console.error(e.message); }
+    finally { setAnalyzing(false); }
   };
 
-  // ─── Inline editing ─────────────────────────────────────────────────────────
+  // ─── Editing ──────────────────────────────────────────────────────────────
 
-  const startEdit = (el: Element) => {
+  const startEdit = (el: VisualElement) => {
     setEditingId(el.id);
-    setEditDraft({
-      content:    el.corrected_content ?? el.content,
-      content_zh: el.corrected_zh     ?? el.content_zh,
-    });
+    setEditDraft({ content: el.corrected_content ?? el.content, content_zh: el.corrected_zh ?? el.content_zh });
   };
 
   const saveEdit = (elId: number) => {
@@ -199,18 +369,7 @@ function ValidateInner() {
     setEditingId(null);
   };
 
-  const cancelEdit = () => setEditingId(null);
-
-  // ─── Proceed to review ───────────────────────────────────────────────────────
-
-  const proceedToReview = () => {
-    router.push(`/teach/questions/pending?paper_id=${id}`);
-  };
-
-  // ─── Canvas overlay ──────────────────────────────────────────────────────────
-
-  const canvasWidth  = canvasRef.current?.width  || 0;
-  const canvasHeight = canvasRef.current?.height || 0;
+  const diffLabel = (n: number) => ['', 'Easy', 'Med-Low', 'Medium', 'Hard', 'Very Hard'][n] ?? '';
 
   return (
     <div className="flex flex-col gap-4">
@@ -221,78 +380,61 @@ function ValidateInner() {
             <ChevronLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-white">Visual Validation</h1>
-            <p className="text-slate-400 text-xs mt-0.5">Verify AI reading · correct errors · then proceed to review</p>
+            <h1 className="text-xl font-bold text-white">Validate Paper</h1>
+            <p className="text-slate-400 text-xs mt-0.5">{paperName || 'PDF + AI reading · verify extraction'}</p>
           </div>
         </div>
-        <button
-          onClick={proceedToReview}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-semibold transition-colors"
-        >
-          Review Questions
-          <ArrowRight className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-500">{drafts.length} questions extracted</span>
+          <Link href={`/teach/questions/pending?paper_id=${id}`}
+            className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-semibold transition-colors">
+            Review Questions →
+          </Link>
+        </div>
       </div>
 
-      <Legend />
+      {/* Body: PDF | Right panel */}
+      <div className="flex gap-5" style={{ minHeight: '78vh' }}>
 
-      {/* Main split layout */}
-      <div className="flex gap-4" style={{ minHeight: '70vh' }}>
-
-        {/* LEFT: PDF canvas */}
+        {/* LEFT: PDF + overlays */}
         <div className="flex-1 min-w-0 flex flex-col gap-3">
           {/* Controls */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Page nav */}
-            <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700/50 rounded-xl px-2 py-1">
+            <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700/50 rounded-xl px-2 py-1.5">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-                className="text-slate-400 hover:text-white disabled:opacity-30 transition-colors p-1">
+                className="text-slate-400 hover:text-white disabled:opacity-30 p-1">
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
-              <span className="text-xs text-slate-300 px-2">Page {page} / {totalPages || '?'}</span>
+              <span className="text-xs text-slate-300 px-2 tabular-nums">Page {page} / {totalPages || '?'}</span>
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-                className="text-slate-400 hover:text-white disabled:opacity-30 transition-colors p-1">
+                className="text-slate-400 hover:text-white disabled:opacity-30 p-1">
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
-
-            {/* Zoom */}
-            <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700/50 rounded-xl px-2 py-1">
-              <button onClick={() => setScale(s => Math.max(0.6, s - 0.2))}
-                className="text-slate-400 hover:text-white transition-colors p-1">
-                <ZoomOut className="w-3.5 h-3.5" />
-              </button>
-              <span className="text-xs text-slate-400 px-1">{Math.round(scale * 100)}%</span>
-              <button onClick={() => setScale(s => Math.min(3, s + 0.2))}
-                className="text-slate-400 hover:text-white transition-colors p-1">
-                <ZoomIn className="w-3.5 h-3.5" />
-              </button>
+            <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700/50 rounded-xl px-2 py-1.5">
+              <button onClick={() => setScale(s => Math.max(0.6, +(s - 0.2).toFixed(1)))}
+                className="text-slate-400 hover:text-white p-1"><ZoomOut className="w-3.5 h-3.5" /></button>
+              <span className="text-xs text-slate-400 px-1 tabular-nums">{Math.round(scale * 100)}%</span>
+              <button onClick={() => setScale(s => Math.min(3, +(s + 0.2).toFixed(1)))}
+                className="text-slate-400 hover:text-white p-1"><ZoomIn className="w-3.5 h-3.5" /></button>
             </div>
-
-            {/* Analyze button */}
-            <button
-              onClick={analyzeCurrentPage}
-              disabled={analyzing || !pdfDoc}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 rounded-xl text-xs font-medium transition-colors disabled:opacity-40"
-            >
+            <button onClick={analyzeCurrentPage} disabled={analyzing || !pdfDoc}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 rounded-xl text-xs font-medium transition-colors disabled:opacity-40">
               {analyzing
-                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analyzing…</>
-                : analyzed.has(page)
-                  ? <><RefreshCw className="w-3.5 h-3.5" /> Re-analyze</>
-                  : <><ZoomIn className="w-3.5 h-3.5" /> Analyze Page</>
-              }
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Analysing…</>
+                : analyzedPages.has(page)
+                  ? <><RefreshCw className="w-3.5 h-3.5" />Re-analyse</>
+                  : <><Eye className="w-3.5 h-3.5" />Analyse page</>}
             </button>
-
-            {analyzed.has(page) && (
+            {analyzedPages.has(page) && elements.length > 0 && (
               <span className="text-xs text-emerald-400 flex items-center gap-1">
-                <CheckCircle className="w-3 h-3" />
-                {elements.length} elements detected
+                <CheckCircle className="w-3 h-3" />{elements.length} elements
               </span>
             )}
           </div>
 
-          {/* Canvas + overlay container */}
-          <div className="overflow-auto bg-slate-900/60 border border-slate-700/50 rounded-2xl p-3">
+          {/* Canvas */}
+          <div className="overflow-auto bg-slate-900/40 border border-slate-700/50 rounded-2xl p-4 flex-1">
             {pdfLoading && (
               <div className="flex items-center justify-center h-64">
                 <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
@@ -318,52 +460,34 @@ function ValidateInner() {
                 />
               </div>
             )}
-
-            {/* Relative container for canvas + overlay boxes */}
             <div className="relative inline-block">
-              <canvas ref={canvasRef} className="block max-w-full" />
-
-              {/* Bounding box overlays */}
-              {elements.map(el => {
+              <canvas ref={canvasRef} className="block max-w-full rounded-lg" />
+              {/* Bounding boxes */}
+              {analyzedPages.has(page) && elements.map(el => {
                 const c = typeColor(el.type);
-                const isHovered  = hoveredId === el.id;
-                const isEditing  = editingId === el.id;
-                const needsFlag  = el.needs_review && !el.corrected_content;
+                const isHov = hoveredId === el.id;
+                const needsFlag = el.needs_review && !el.corrected_content;
                 return (
-                  <div
-                    key={el.id}
+                  <div key={el.id}
                     onMouseEnter={() => setHoveredId(el.id)}
                     onMouseLeave={() => setHoveredId(null)}
-                    onClick={() => !isEditing && startEdit(el)}
+                    onClick={() => { setRightTab('visual'); startEdit(el); }}
                     style={{
-                      position:  'absolute',
-                      left:      `${el.bbox.x}%`,
-                      top:       `${el.bbox.y}%`,
-                      width:     `${el.bbox.w}%`,
-                      height:    `${el.bbox.h}%`,
-                      border:    `2px solid ${isHovered || isEditing ? c.border : (needsFlag ? '#f59e0b' : c.border)}`,
-                      background: isHovered || isEditing ? c.bg : 'transparent',
-                      opacity:   isHovered || isEditing ? 1 : 0.7,
-                      cursor:    'pointer',
-                      boxSizing: 'border-box',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {/* Type label tag */}
-                    <span style={{
-                      position:  'absolute',
-                      top:       '-18px',
-                      left:      0,
-                      background: c.border,
-                      color:     '#fff',
-                      fontSize:  '9px',
-                      fontWeight: 700,
-                      padding:   '1px 5px',
-                      borderRadius: '3px 3px 3px 0',
-                      whiteSpace: 'nowrap',
-                      lineHeight: '16px',
+                      position: 'absolute',
+                      left: `${el.bbox.x}%`, top: `${el.bbox.y}%`,
+                      width: `${el.bbox.w}%`, height: `${el.bbox.h}%`,
+                      border: `2px solid ${needsFlag ? '#f59e0b' : c.border}`,
+                      background: isHov ? c.bg : 'transparent',
+                      cursor: 'pointer', boxSizing: 'border-box', transition: 'background 0.12s',
                     }}>
-                      {c.label}{needsFlag ? ' ⚠' : ''}{el.corrected_content ? ' ✓' : ''}
+                    <span style={{
+                      position: 'absolute', top: '-18px', left: 0,
+                      background: needsFlag ? '#f59e0b' : c.border,
+                      color: '#fff', fontSize: '9px', fontWeight: 700,
+                      padding: '1px 5px', borderRadius: '3px 3px 3px 0',
+                      whiteSpace: 'nowrap', lineHeight: '16px',
+                    }}>
+                      {c.label}{el.corrected_content ? ' ✓' : needsFlag ? ' ⚠' : ''}
                     </span>
                   </div>
                 );
@@ -372,117 +496,174 @@ function ValidateInner() {
           </div>
         </div>
 
-        {/* RIGHT: Element list + editing panel */}
-        <div className="w-80 shrink-0 flex flex-col gap-3 overflow-y-auto" style={{ maxHeight: '80vh' }}>
-          {elements.length === 0 && !analyzing && (
-            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 text-center">
-              <ZoomIn className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p className="text-slate-500 text-sm">Click <strong className="text-slate-400">Analyze Page</strong> to run visual recognition on this page.</p>
-            </div>
-          )}
+        {/* RIGHT: tabs */}
+        <div className="w-96 shrink-0 flex flex-col bg-slate-900/30 border border-slate-700/50 rounded-2xl overflow-hidden" style={{ maxHeight: '84vh' }}>
+          {/* Tab bar */}
+          <div className="flex border-b border-slate-700/50 shrink-0">
+            {([
+              ['ocr',    <FileText key="f" className="w-3.5 h-3.5" />, `OCR (${drafts.length})`],
+              ['visual', <Eye key="e" className="w-3.5 h-3.5" />,      `Visual (${elements.length})`],
+              ['ai',     <MessageSquare key="m" className="w-3.5 h-3.5" />, 'AI'],
+            ] as [string, React.ReactNode, string][]).map(([tab, icon, label]) => (
+              <button key={tab} onClick={() => setRightTab(tab as any)}
+                className={`flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 transition-colors flex-1 justify-center ${
+                  rightTab === tab
+                    ? 'border-purple-500 text-purple-300'
+                    : 'border-transparent text-slate-500 hover:text-slate-300'
+                }`}>
+                {icon}{label}
+              </button>
+            ))}
+          </div>
 
-          {analyzing && (
-            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 text-center">
-              <Loader2 className="w-8 h-8 text-purple-400 animate-spin mx-auto mb-2" />
-              <p className="text-slate-400 text-sm">Gemini is reading the page…</p>
-              <p className="text-slate-600 text-xs mt-1">Detecting questions, math, diagrams</p>
-            </div>
-          )}
-
-          {elements.map(el => {
-            const c         = typeColor(el.type);
-            const isHov     = hoveredId === el.id;
-            const isEditing = editingId === el.id;
-            const display   = el.corrected_content ?? el.content;
-            const displayZh = el.corrected_zh     ?? el.content_zh;
-            const corrected = !!el.corrected_content;
-            const needsFlag = el.needs_review && !corrected;
-
-            return (
-              <div
-                key={el.id}
-                onMouseEnter={() => setHoveredId(el.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                className={`bg-slate-800/60 border rounded-xl overflow-hidden transition-all ${
-                  isHov || isEditing ? 'border-slate-500/60' : needsFlag ? 'border-amber-500/30' : 'border-slate-700/50'
-                }`}
-              >
-                {/* Header row */}
-                <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700/30">
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
-                  <span className="text-[10px] text-slate-400 font-medium flex-1">{c.label}</span>
-                  {needsFlag && <span className="text-[10px] text-amber-400 flex items-center gap-0.5"><AlertCircle className="w-3 h-3" />Review</span>}
-                  {corrected  && <span className="text-[10px] text-emerald-400 flex items-center gap-0.5"><CheckCircle className="w-3 h-3" />Corrected</span>}
-                  <span className="text-[10px] text-slate-600">{Math.round(el.confidence * 100)}%</span>
-
-                  {!isEditing && (
-                    <button onClick={() => startEdit(el)} className="text-slate-500 hover:text-white transition-colors">
-                      <Edit2 className="w-3 h-3" />
-                    </button>
-                  )}
+          {/* OCR tab */}
+          {rightTab === 'ocr' && (
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {draftsLoading && (
+                <div className="flex justify-center pt-8"><Loader2 className="w-5 h-5 animate-spin text-purple-400" /></div>
+              )}
+              {!draftsLoading && drafts.length === 0 && (
+                <div className="text-center pt-8 text-slate-600">
+                  <FileText className="w-7 h-7 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">No questions extracted yet.</p>
                 </div>
+              )}
+              {drafts.map((dq, i) => {
+                const meta = dq._meta || {};
+                return (
+                  <div key={dq.id} className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700/30 bg-white/[0.02]">
+                      <span className="text-[10px] font-bold text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded">
+                        Q{meta.question_number ?? i + 1}
+                      </span>
+                      {meta.page_number && (
+                        <span className="text-[10px] text-slate-600">p.{meta.page_number}</span>
+                      )}
+                      <span className="text-[10px] text-slate-500 flex-1">{dq.suggested_type}</span>
+                      <span className="text-[10px] text-slate-600">{diffLabel(dq.suggested_difficulty)}</span>
+                      {dq.has_image && (
+                        <span className="text-[10px] text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded">img</span>
+                      )}
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        dq.status === 'CONFIRMED' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-700/50 text-slate-500'
+                      }`}>{dq.status}</span>
+                    </div>
+                    <div className="px-3 py-2.5 space-y-1.5">
+                      <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                        {dq.stem_en || <span className="text-slate-600 italic">(no text)</span>}
+                      </p>
+                      {dq.stem_zh && <p className="text-xs text-slate-500 leading-relaxed">{dq.stem_zh}</p>}
+                      {/* MCQ options */}
+                      {meta.options && meta.options.length > 0 && (
+                        <div className="mt-2 space-y-0.5 border-t border-slate-700/30 pt-2">
+                          {meta.options.map((opt, j) => (
+                            <p key={j} className="text-[11px] text-slate-400 leading-relaxed">{opt}</p>
+                          ))}
+                        </div>
+                      )}
+                      {/* Image description */}
+                      {meta.image_description && (
+                        <p className="text-[11px] text-amber-400/80 italic border-t border-slate-700/30 pt-1.5">
+                          📊 {meta.image_description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-                {/* Content */}
-                {!isEditing ? (
-                  <div className="px-3 py-2">
-                    <p className={`text-xs leading-relaxed ${needsFlag ? 'text-amber-200' : 'text-slate-200'}`}>
-                      {display || <span className="text-slate-600 italic">(empty)</span>}
-                    </p>
-                    {displayZh && (
-                      <p className="text-xs text-slate-500 mt-1 leading-relaxed">{displayZh}</p>
+          {/* Visual tab */}
+          {rightTab === 'visual' && (
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {!analyzedPages.has(page) && !analyzing && (
+                <div className="text-center pt-8 text-slate-600">
+                  <Eye className="w-7 h-7 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">Click <strong className="text-slate-400">Analyse page</strong> to detect elements with bounding boxes.</p>
+                </div>
+              )}
+              {analyzing && (
+                <div className="text-center pt-8">
+                  <Loader2 className="w-7 h-7 text-purple-400 animate-spin mx-auto mb-2" />
+                  <p className="text-slate-400 text-sm">Gemini reading page {page}…</p>
+                </div>
+              )}
+              {elements.map(el => {
+                const c = typeColor(el.type);
+                const isHov = hoveredId === el.id;
+                const isEdit = editingId === el.id;
+                const display = el.corrected_content ?? el.content;
+                const displayZh = el.corrected_zh ?? el.content_zh;
+                return (
+                  <div key={el.id}
+                    onMouseEnter={() => setHoveredId(el.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    className={`bg-slate-800/60 border rounded-xl overflow-hidden transition-all ${
+                      isHov || isEdit ? 'border-slate-500/60' : el.needs_review && !el.corrected_content ? 'border-amber-500/30' : 'border-slate-700/50'
+                    }`}>
+                    <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700/30 bg-white/[0.02]">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
+                      <span className="text-[10px] text-slate-400 font-medium flex-1">{c.label}</span>
+                      {el.needs_review && !el.corrected_content && (
+                        <span className="text-[10px] text-amber-400 flex items-center gap-0.5"><AlertCircle className="w-3 h-3" />Review</span>
+                      )}
+                      {el.corrected_content && (
+                        <span className="text-[10px] text-emerald-400 flex items-center gap-0.5"><CheckCircle className="w-3 h-3" />OK</span>
+                      )}
+                      <span className="text-[10px] text-slate-600">{Math.round(el.confidence * 100)}%</span>
+                      {!isEdit && (
+                        <button onClick={() => startEdit(el)} className="text-slate-500 hover:text-white transition-colors ml-1">
+                          <Edit2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    {!isEdit ? (
+                      <div className="px-3 py-2.5 cursor-pointer" onClick={() => startEdit(el)}>
+                        <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                          {display || <span className="text-slate-600 italic">(empty)</span>}
+                        </p>
+                        {displayZh && <p className="text-xs text-slate-500 mt-1 leading-relaxed">{displayZh}</p>}
+                      </div>
+                    ) : (
+                      <div className="px-3 py-2.5 space-y-2">
+                        <textarea rows={3} value={editDraft.content}
+                          onChange={e => setEditDraft(d => ({ ...d, content: e.target.value }))}
+                          autoFocus
+                          className="w-full bg-slate-900/60 border border-slate-600/50 rounded-lg px-2 py-1.5 text-white text-xs resize-none focus:outline-none focus:border-purple-500" />
+                        <textarea rows={2} value={editDraft.content_zh}
+                          onChange={e => setEditDraft(d => ({ ...d, content_zh: e.target.value }))}
+                          placeholder="Chinese (optional)"
+                          className="w-full bg-slate-900/60 border border-slate-600/50 rounded-lg px-2 py-1.5 text-white text-xs resize-none focus:outline-none focus:border-purple-500" />
+                        <div className="flex gap-2">
+                          <button onClick={() => saveEdit(el.id)}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 rounded-lg text-[10px] font-medium transition-colors">
+                            <Check className="w-3 h-3" />Save
+                          </button>
+                          <button onClick={() => setEditingId(null)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-slate-500 hover:text-slate-300 text-[10px] transition-colors">
+                            <X className="w-3 h-3" />Cancel
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
-                ) : (
-                  /* Inline edit form */
-                  <div className="px-3 py-2 space-y-2">
-                    <div>
-                      <label className="text-[10px] text-slate-500 block mb-1">English / Reading</label>
-                      <textarea
-                        rows={3}
-                        value={editDraft.content}
-                        onChange={e => setEditDraft(d => ({ ...d, content: e.target.value }))}
-                        autoFocus
-                        className="w-full bg-slate-900/60 border border-slate-600/50 rounded-lg px-2 py-1.5 text-white text-xs resize-none focus:outline-none focus:border-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-500 block mb-1">Chinese (optional)</label>
-                      <textarea
-                        rows={2}
-                        value={editDraft.content_zh}
-                        onChange={e => setEditDraft(d => ({ ...d, content_zh: e.target.value }))}
-                        className="w-full bg-slate-900/60 border border-slate-600/50 rounded-lg px-2 py-1.5 text-white text-xs resize-none focus:outline-none focus:border-purple-500"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => saveEdit(el.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 rounded-lg text-[10px] font-medium transition-colors"
-                      >
-                        <Check className="w-3 h-3" />Save
-                      </button>
-                      <button
-                        onClick={cancelEdit}
-                        className="flex items-center gap-1 px-3 py-1.5 text-slate-500 hover:text-slate-300 text-[10px] transition-colors"
-                      >
-                        <X className="w-3 h-3" />Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
 
-          {/* Proceed button at bottom of list */}
-          {elements.length > 0 && (
-            <button
-              onClick={proceedToReview}
-              className="flex items-center justify-center gap-2 w-full py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-semibold transition-colors mt-2"
-            >
-              Proceed to Review Questions
-              <ArrowRight className="w-4 h-4" />
-            </button>
+          {/* AI tab */}
+          {rightTab === 'ai' && (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <AiAssistant
+                paperId={id}
+                paperName={paperName}
+                drafts={drafts}
+                currentPage={page}
+                totalPages={totalPages}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -492,7 +673,11 @@ function ValidateInner() {
 
 export default function ValidatePage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" /></div>}>
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-64">
+        <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
       <ValidateInner />
     </Suspense>
   );
