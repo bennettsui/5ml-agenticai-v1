@@ -26,6 +26,12 @@ const ERROR_CODES = {
   CT_008: 'CT-008', // Request timeout
   CT_009: 'CT-009', // Invalid segments JSON
   CT_010: 'CT-010', // Model rate-limited
+  CT_011: 'CT-011', // No audio file in request
+  CT_012: 'CT-012', // GEMINI_API_KEY not set
+  CT_013: 'CT-013', // Google STT call failed
+  CT_014: 'CT-014', // WHISPER_SERVICE_URL not set
+  CT_015: 'CT-015', // Whisper service unreachable
+  CT_016: 'CT-016', // No STT provider configured
 };
 
 const ERROR_MESSAGES = {
@@ -39,6 +45,12 @@ const ERROR_MESSAGES = {
   'CT-008': '請求逾時，請重試',
   'CT-009': 'Segments JSON 格式無效',
   'CT-010': 'AI 模型速率限制，請稍後再試',
+  'CT-011': '未收到音訊檔案',
+  'CT-012': 'GEMINI_API_KEY 未設定，請聯絡管理員',
+  'CT-013': 'Google STT 調用失敗',
+  'CT-014': 'WHISPER_SERVICE_URL 未設定，請聯絡管理員',
+  'CT-015': 'Whisper 服務無法連接，請確認服務正在運行',
+  'CT-016': '未有設定任何 STT provider，請聯絡管理員',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

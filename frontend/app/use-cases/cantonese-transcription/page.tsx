@@ -588,7 +588,10 @@ export default function CantoneseTranscriptionPage() {
   // Transcription engine state
   const [sttLoading, setSttLoading]         = useState(false);
   const [sttError, setSttError]             = useState<string | null>(null);
-  const [sttEngine, setSttEngine]           = useState<'paste' | 'google-stt'>('paste');
+  const [sttEngine, setSttEngine]           = useState<'paste' | 'google-stt' | 'whisper'>('paste');
+  const [sttProviders, setSttProviders]     = useState<string[]>([]);
+  const [sttLastProvider, setSttLastProvider] = useState<string | null>(null);
+  const [sttFallbackFrom, setSttFallbackFrom] = useState<string | null>(null);
   const audioInputRef                        = useRef<HTMLInputElement>(null);
 
   // Analyze state
@@ -855,9 +858,13 @@ export default function CantoneseTranscriptionPage() {
   async function handleSttUpload(file: File) {
     setSttLoading(true);
     setSttError(null);
+    setSttFallbackFrom(null);
     const form = new FormData();
     form.append('audio', file);
     form.append('language', 'yue-Hant-HK');
+    // Map UI engine name → API provider param
+    const providerParam = sttEngine === 'whisper' ? 'whisper' : sttEngine === 'google-stt' ? 'google-stt' : 'auto';
+    form.append('provider', providerParam);
     try {
       const res  = await fetch('/api/cantonese-transcription/transcribe', { method: 'POST', body: form });
       const data = await res.json();
@@ -866,6 +873,8 @@ export default function CantoneseTranscriptionPage() {
       } else {
         setTranscript(data.transcript ?? '');
         if (data.segments?.length) setSegments(data.segments);
+        setSttLastProvider(data.provider ?? null);
+        setSttFallbackFrom(data.fallbackFrom ?? null);
         setSttEngine('paste'); // switch back to paste view to show filled textarea
       }
     } catch (err: unknown) {
@@ -922,6 +931,14 @@ export default function CantoneseTranscriptionPage() {
     if (pageTab === 'errors')      { loadErrors(); }
     if (pageTab === 'error-codes') { loadErrorCodes(); }
   }, [pageTab, loadJobs, loadErrors, loadStats, loadErrorCodes]);
+
+  // Fetch available STT providers once on mount
+  useEffect(() => {
+    fetch('/api/cantonese-transcription/providers')
+      .then(r => r.json())
+      .then(d => { if (d.ok) setSttProviders(d.available ?? []); })
+      .catch(() => {});
+  }, []);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -1004,24 +1021,44 @@ export default function CantoneseTranscriptionPage() {
                     <Clipboard className="w-3 h-3" />貼上逐字稿
                   </button>
                   <button
+                    onClick={() => setSttEngine('whisper')}
+                    disabled={!sttProviders.includes('whisper')}
+                    title={!sttProviders.includes('whisper') ? 'WHISPER_SERVICE_URL 未設定' : 'Whisper large-v3 Cantonese'}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                      sttEngine === 'whisper'
+                        ? 'bg-violet-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Cpu className="w-3 h-3" />Whisper
+                  </button>
+                  <button
                     onClick={() => setSttEngine('google-stt')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    disabled={!sttProviders.includes('google-stt')}
+                    title={!sttProviders.includes('google-stt') ? 'GEMINI_API_KEY 未設定' : 'Google Cloud Speech-to-Text'}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                       sttEngine === 'google-stt'
                         ? 'bg-blue-600 text-white shadow-sm'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    <Volume2 className="w-3 h-3" />Google STT V2
+                    <Volume2 className="w-3 h-3" />Google STT
                   </button>
                 </div>
 
-                {/* Google STT upload panel */}
-                {sttEngine === 'google-stt' && (
+                {/* STT upload panel — shown for whisper or google-stt engines */}
+                {(sttEngine === 'whisper' || sttEngine === 'google-stt') && (
                   <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
                     <div className="px-4 py-2.5 border-b border-slate-700/50 flex items-center gap-2">
-                      <Volume2 className="w-3.5 h-3.5 text-blue-400" />
-                      <span className="text-xs font-medium text-slate-300">Google Cloud Speech-to-Text V2</span>
-                      <span className="text-[10px] text-slate-600 ml-auto">yue-Hant-HK · Cantonese</span>
+                      {sttEngine === 'whisper'
+                        ? <Cpu className="w-3.5 h-3.5 text-violet-400" />
+                        : <Volume2 className="w-3.5 h-3.5 text-blue-400" />}
+                      <span className="text-xs font-medium text-slate-300">
+                        {sttEngine === 'whisper' ? 'Whisper large-v3 Cantonese' : 'Google Cloud Speech-to-Text V2'}
+                      </span>
+                      <span className="text-[10px] text-slate-600 ml-auto">
+                        {sttEngine === 'whisper' ? 'yue · khleeloo fine-tune' : 'yue-Hant-HK · Cantonese'}
+                      </span>
                     </div>
                     <div className="p-4 space-y-3">
                       <input
@@ -1034,16 +1071,26 @@ export default function CantoneseTranscriptionPage() {
                       <button
                         onClick={() => audioInputRef.current?.click()}
                         disabled={sttLoading}
-                        className="w-full py-8 rounded-xl border-2 border-dashed border-slate-600/60 hover:border-blue-500/50 hover:bg-blue-500/[0.03] transition-all flex flex-col items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={`w-full py-8 rounded-xl border-2 border-dashed transition-all flex flex-col items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                          sttEngine === 'whisper'
+                            ? 'border-slate-600/60 hover:border-violet-500/50 hover:bg-violet-500/[0.03]'
+                            : 'border-slate-600/60 hover:border-blue-500/50 hover:bg-blue-500/[0.03]'
+                        }`}
                       >
                         {sttLoading
-                          ? <><Loader2 className="w-6 h-6 text-blue-400 animate-spin" /><span className="text-xs text-slate-400">轉錄中，請稍候…</span></>
-                          : <><Upload className="w-6 h-6 text-slate-500" /><span className="text-xs text-slate-400">上傳音訊檔案</span><span className="text-[10px] text-slate-600">WAV · MP3 · OGG · FLAC · M4A · WebM · 最大 25MB</span></>}
+                          ? <><Loader2 className={`w-6 h-6 animate-spin ${sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400'}`} /><span className="text-xs text-slate-400">轉錄中，請稍候…</span></>
+                          : <><Upload className="w-6 h-6 text-slate-500" /><span className="text-xs text-slate-400">上傳音訊檔案</span><span className="text-[10px] text-slate-600">WAV · MP3 · OGG · FLAC · M4A · WebM · 最大 100MB</span></>}
                       </button>
                       {sttError && (
                         <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
                           <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
                           <span className="text-xs text-red-300">{sttError}</span>
+                        </div>
+                      )}
+                      {sttFallbackFrom && (
+                        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span className="text-xs text-amber-300">Whisper 失敗，自動切換至 Google STT</span>
                         </div>
                       )}
                       {transcript && (
@@ -1053,9 +1100,9 @@ export default function CantoneseTranscriptionPage() {
                         </div>
                       )}
                       <p className="text-[10px] text-slate-600 leading-relaxed">
-                        使用 Google Cloud Speech-to-Text V2 (<code className="text-slate-500">latest_long</code> model)，
-                        支援粵語（<code className="text-slate-500">yue-Hant-HK</code>）及中英混合識別，
-                        自動生成帶時間戳嘅 segments。需要設定 <code className="text-slate-500">GOOGLE_CLOUD_API_KEY</code> 及 <code className="text-slate-500">GCP_PROJECT_ID</code>。
+                        {sttEngine === 'whisper'
+                          ? <>自家部署 Whisper large-v3 粵語模型，需設定 <code className="text-slate-500">WHISPER_SERVICE_URL</code>。若 Whisper 失敗會自動 fallback 至 Google STT。</>
+                          : <>使用 Google Cloud Speech-to-Text V1 (<code className="text-slate-500">latest_long</code> model)，支援粵語（<code className="text-slate-500">yue-Hant-HK</code>）及中英混合識別，需設定 <code className="text-slate-500">GEMINI_API_KEY</code>。</>}
                       </p>
                     </div>
                   </div>
@@ -1069,10 +1116,16 @@ export default function CantoneseTranscriptionPage() {
                     <div className="flex items-center gap-2">
                       <Clipboard className="w-3.5 h-3.5 text-slate-400" />
                       <span className="text-xs font-medium text-slate-300">
-                        {sttEngine === 'google-stt' ? 'STT 結果 / 手動編輯' : 'ASR 逐字稿'}
+                        {sttEngine === 'paste' ? 'ASR 逐字稿' : 'STT 結果 / 手動編輯'}
                       </span>
-                      {sttEngine === 'google-stt' && transcript && (
+                      {sttLastProvider === 'whisper' && transcript && (
+                        <span className="text-[9px] text-violet-400 bg-violet-500/10 border border-violet-500/20 px-1.5 py-0.5 rounded-full">Whisper</span>
+                      )}
+                      {sttLastProvider === 'google-stt' && transcript && !sttFallbackFrom && (
                         <span className="text-[9px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded-full">Google STT</span>
+                      )}
+                      {sttFallbackFrom && transcript && (
+                        <span className="text-[9px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">Google STT (fallback)</span>
                       )}
                     </div>
                     <span className="text-[10px] text-slate-500">{transcript.length.toLocaleString()} 字元</span>
@@ -1081,8 +1134,8 @@ export default function CantoneseTranscriptionPage() {
                     value={transcript}
                     onChange={e => setTranscript(e.target.value)}
                     disabled={loading}
-                    placeholder={'貼上 Whisper ASR 輸出嘅粵語逐字稿…\n\n例：佢哋噉講嘅，我冇聽錯喎，嗰個 project 要喺下個月 deliver 㗎。'}
-                    rows={sttEngine === 'google-stt' ? 5 : 13}
+                    placeholder={sttEngine !== 'paste' ? 'STT 轉錄結果將顯示喺度，可直接編輯…' : '貼上 Whisper ASR 輸出嘅粵語逐字稿…\n\n例：佢哋噉講嘅，我冇聽錯喎，嗰個 project 要喺下個月 deliver 㗎。'}
+                    rows={sttEngine !== 'paste' ? 5 : 13}
                     className="w-full bg-transparent px-4 py-3 text-sm text-slate-200 placeholder-slate-600 resize-none focus:outline-none font-mono leading-relaxed disabled:opacity-50"
                   />
                 </div>
