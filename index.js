@@ -4103,6 +4103,16 @@ try {
   console.warn('⚠️ Image Compression routes not loaded:', error.message);
 }
 
+// Cantonese Transcription Analysis
+try {
+  const { router: cantoneseTranscriptionRoutes, initDb: initCantoneseDb } = require('./use-cases/cantonese-transcription/api/routes');
+  app.use('/api/cantonese-transcription', cantoneseTranscriptionRoutes);
+  initCantoneseDb().catch(err => console.error('[cantonese-transcription] DB init error:', err.message));
+  console.log('✅ Cantonese Transcription routes loaded: /api/cantonese-transcription');
+} catch (error) {
+  console.warn('⚠️ Cantonese Transcription routes not loaded:', error.message);
+}
+
 // Event Check-in System
 try {
   const eventCheckinRoutes = require('./use-cases/event-checkin/api/routes');
