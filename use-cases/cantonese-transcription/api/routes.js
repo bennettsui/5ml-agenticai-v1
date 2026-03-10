@@ -756,7 +756,7 @@ router.get('/providers', (_req, res) => {
 //
 // Required env (at least one):
 //   WHISPER_SERVICE_URL   — Whisper HTTP service base URL
-//   GOOGLE_CLOUD_API_KEY  — Google Cloud API key
+//   GEMINI_API_KEY        — Google Gemini / Cloud API key
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/transcribe', upload.single('audio'), async (req, res) => {
   if (!req.file) {

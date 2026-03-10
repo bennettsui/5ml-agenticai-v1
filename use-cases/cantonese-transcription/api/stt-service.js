@@ -14,7 +14,7 @@
 //   3. Auto: whisper if WHISPER_SERVICE_URL set, else google-stt
 //
 // Fallback:
-//   If Whisper fails AND GOOGLE_CLOUD_API_KEY is set, falls back to Google STT.
+//   If Whisper fails AND GEMINI_API_KEY is set, falls back to Google STT.
 //   Adds `fallbackFrom: 'whisper'` to the result in that case.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -80,11 +80,10 @@ function parseV1Response(data) {
 
 // ── Google STT provider ───────────────────────────────────────────────────────
 async function transcribeWithGoogle({ fileBuffer, mimeType, language }) {
-  const apiKey    = process.env.GOOGLE_CLOUD_API_KEY;
-  const projectId = process.env.GCP_PROJECT_ID;
+  const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    const err = new Error('GOOGLE_CLOUD_API_KEY 未設定');
+    const err = new Error('GEMINI_API_KEY 未設定');
     err.code = 'CT-012';
     throw err;
   }
@@ -92,57 +91,30 @@ async function transcribeWithGoogle({ fileBuffer, mimeType, language }) {
   const audioB64 = fileBuffer.toString('base64');
   const encoding = ENCODING_MAP[mimeType] || 'ENCODING_UNSPECIFIED';
 
-  if (projectId) {
-    // V2 API
-    const url  = `https://speech.googleapis.com/v2/projects/${projectId}/locations/global/recognizers/_:recognize?key=${apiKey}`;
-    const body = {
-      config: {
-        autoDecodingConfig: {},
-        languageCodes: [language],
-        model: 'long',
-        features: { enableWordTimeOffsets: true, enableAutomaticPunctuation: true },
-      },
-      audio: { content: audioB64 },
-    };
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`Google STT V2 error ${resp.status}: ${text}`);
-    }
-    const data = await resp.json();
-    const parsed = parseV2Response(data);
-    return { provider: 'google-stt', language, ...parsed };
-  } else {
-    // V1p1beta1 fallback
-    const url  = `https://speech.googleapis.com/v1p1beta1/speech:recognize?key=${apiKey}`;
-    const body = {
-      config: {
-        encoding,
-        languageCode: language,
-        alternativeLanguageCodes: ['zh-HK', 'en-US'],
-        enableWordTimeOffsets: true,
-        enableAutomaticPunctuation: true,
-        model: 'latest_long',
-      },
-      audio: { content: audioB64 },
-    };
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`Google STT V1 error ${resp.status}: ${text}`);
-    }
-    const data = await resp.json();
-    const parsed = parseV1Response(data);
-    return { provider: 'google-stt', language, ...parsed };
+  const url  = `https://speech.googleapis.com/v1p1beta1/speech:recognize?key=${apiKey}`;
+  const body = {
+    config: {
+      encoding,
+      languageCode: language,
+      alternativeLanguageCodes: ['zh-HK', 'en-US'],
+      enableWordTimeOffsets: true,
+      enableAutomaticPunctuation: true,
+      model: 'latest_long',
+    },
+    audio: { content: audioB64 },
+  };
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Google STT V1 error ${resp.status}: ${text}`);
   }
+  const data = await resp.json();
+  const parsed = parseV1Response(data);
+  return { provider: 'google-stt', language, ...parsed };
 }
 
 // ── Whisper provider ──────────────────────────────────────────────────────────
@@ -233,7 +205,7 @@ async function transcribeAudio({ fileBuffer, mimeType, language, filename, provi
       return await transcribeWithWhisper({ fileBuffer, mimeType, language, filename });
     } catch (err) {
       // If Google STT is available, fall back silently
-      if (process.env.GOOGLE_CLOUD_API_KEY && resolved !== 'whisper') {
+      if (process.env.GEMINI_API_KEY && resolved !== 'whisper') {
         console.warn('[stt-service] Whisper failed, falling back to Google STT:', err.message);
         const result = await transcribeWithGoogle({ fileBuffer, mimeType, language });
         return { ...result, fallbackFrom: 'whisper' };
@@ -250,14 +222,14 @@ async function transcribeAudio({ fileBuffer, mimeType, language, filename, provi
 function availableProviders() {
   const providers = [];
   if (process.env.WHISPER_SERVICE_URL) providers.push('whisper');
-  if (process.env.GOOGLE_CLOUD_API_KEY) providers.push('google-stt');
+  if (process.env.GEMINI_API_KEY) providers.push('google-stt');
   return providers;
 }
 
 function defaultProvider() {
   if (process.env.STT_PROVIDER) return process.env.STT_PROVIDER;
   if (process.env.WHISPER_SERVICE_URL) return 'whisper';
-  if (process.env.GOOGLE_CLOUD_API_KEY) return 'google-stt';
+  if (process.env.GEMINI_API_KEY) return 'google-stt';
   return null;
 }
 

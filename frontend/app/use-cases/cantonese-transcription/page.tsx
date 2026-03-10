@@ -1035,7 +1035,7 @@ export default function CantoneseTranscriptionPage() {
                   <button
                     onClick={() => setSttEngine('google-stt')}
                     disabled={!sttProviders.includes('google-stt')}
-                    title={!sttProviders.includes('google-stt') ? 'GOOGLE_CLOUD_API_KEY 未設定' : 'Google Cloud Speech-to-Text V2'}
+                    title={!sttProviders.includes('google-stt') ? 'GEMINI_API_KEY 未設定' : 'Google Cloud Speech-to-Text'}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                       sttEngine === 'google-stt'
                         ? 'bg-blue-600 text-white shadow-sm'
@@ -1102,7 +1102,7 @@ export default function CantoneseTranscriptionPage() {
                       <p className="text-[10px] text-slate-600 leading-relaxed">
                         {sttEngine === 'whisper'
                           ? <>自家部署 Whisper large-v3 粵語模型，需設定 <code className="text-slate-500">WHISPER_SERVICE_URL</code>。若 Whisper 失敗會自動 fallback 至 Google STT。</>
-                          : <>使用 Google Cloud Speech-to-Text V2 (<code className="text-slate-500">latest_long</code> model)，支援粵語（<code className="text-slate-500">yue-Hant-HK</code>）及中英混合識別，需設定 <code className="text-slate-500">GOOGLE_CLOUD_API_KEY</code>。</>}
+                          : <>使用 Google Cloud Speech-to-Text V1 (<code className="text-slate-500">latest_long</code> model)，支援粵語（<code className="text-slate-500">yue-Hant-HK</code>）及中英混合識別，需設定 <code className="text-slate-500">GEMINI_API_KEY</code>。</>}
                       </p>
                     </div>
                   </div>
