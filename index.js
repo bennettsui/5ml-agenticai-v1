@@ -143,6 +143,9 @@ app.use('/uploads/crm', express.static(path.join(__dirname, 'uploads', 'crm')));
 app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
 app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
 
+// Serve uploaded exam papers (for visual validation in teacher review)
+app.use('/uploads/papers', express.static(path.join(__dirname, 'uploads', 'papers')));
+
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
 app.use(express.static(nextJsPath));

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { CheckCircle, SkipForward, RefreshCw, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, SkipForward, RefreshCw, Edit2, ChevronDown, ChevronUp, FileText, ExternalLink } from 'lucide-react';
 import { useTeacherAuth } from '@/components/adaptive/useTeacherAuth';
 
 interface DraftQuestion {
@@ -8,6 +8,7 @@ interface DraftQuestion {
   stem_en: string | null;
   stem_zh: string | null;
   has_image: boolean;
+  image_url: string | null;
   suggested_type: string;
   suggested_difficulty: number;
   candidate_objectives: Array<{ code: string; name_en: string }> | null;
@@ -23,6 +24,8 @@ const DIFF_LABELS = ['', 'Easy', 'Medium-Low', 'Medium', 'Medium-High', 'Hard'];
 export default function PendingQuestionsPage() {
   const { teacher } = useTeacherAuth();
   const [questions, setQuestions] = useState<DraftQuestion[]>([]);
+  const [paperFileUrl, setPaperFileUrl] = useState<string | null>(null);
+  const [examName, setExamName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<Record<string, Partial<DraftQuestion>>>({});
@@ -40,6 +43,8 @@ export default function PendingQuestionsPage() {
       const data = await res.json();
       if (data.success || data.draft_questions) {
         setQuestions(data.draft_questions || data.questions || []);
+        if (data.paper_file_url) setPaperFileUrl(data.paper_file_url);
+        if (data.exam_name) setExamName(data.exam_name);
       } else setError(data.error || 'Failed to load');
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
@@ -135,6 +140,42 @@ export default function PendingQuestionsPage() {
               {/* Expanded edit */}
               {isOpen && (
                 <div className="px-5 pb-4 space-y-3 border-t border-slate-700/30 pt-3">
+                  {/* Original PDF visual validation */}
+                  {(q.has_image && q.image_url) ? (
+                    <div>
+                      <label className="text-xs text-slate-400 block mb-1.5">Original question image</label>
+                      <img
+                        src={q.image_url}
+                        alt="Original question diagram"
+                        className="rounded-lg max-w-full border border-slate-700/50"
+                      />
+                    </div>
+                  ) : paperFileUrl ? (
+                    <div>
+                      <label className="text-xs text-slate-400 block mb-1.5">Original PDF</label>
+                      <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl overflow-hidden">
+                        <object
+                          data={paperFileUrl}
+                          type="application/pdf"
+                          className="w-full h-64"
+                        >
+                          <div className="flex items-center justify-center h-64 text-xs text-slate-500">
+                            PDF preview unavailable —{' '}
+                            <a href={paperFileUrl} target="_blank" rel="noopener noreferrer"
+                              className="text-purple-400 hover:text-purple-300 ml-1 flex items-center gap-1">
+                              open in new tab <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        </object>
+                      </div>
+                      <a href={paperFileUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 mt-1.5">
+                        <FileText className="w-3 h-3" />
+                        Open {examName || 'original PDF'} <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  ) : null}
+
                   <div>
                     <label className="text-xs text-slate-400 block mb-1">English stem (editable)</label>
                     <textarea
