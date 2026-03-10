@@ -5,8 +5,12 @@
 
 const express    = require('express');
 const Anthropic  = require('@anthropic-ai/sdk');
+const multer     = require('multer');
 const deepseekService = require('../../../services/deepseekService');
 const db         = require('./db');
+
+// multer: memory storage so we can forward audio bytes to Google STT
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 const router = express.Router();
 
@@ -315,5 +319,167 @@ router.get('/error-codes', (_req, res) => {
   const table = Object.entries(db.ERROR_MESSAGES).map(([code, message]) => ({ code, message }));
   return res.json({ ok: true, error_codes: table });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/cantonese-transcription/transcribe
+// Audio file → Google Cloud Speech-to-Text V2 → transcript + segments
+//
+// Required Fly secrets:
+//   GOOGLE_CLOUD_API_KEY  — Google Cloud API key
+//   GCP_PROJECT_ID        — GCP project ID (needed for V2 URL)
+//
+// Falls back to V1p1beta1 if GCP_PROJECT_ID is not set.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/transcribe', upload.single('audio'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ ok: false, error_code: 'CT-011', error: '未收到音訊檔案' });
+  }
+
+  const apiKey    = process.env.GOOGLE_CLOUD_API_KEY;
+  const projectId = process.env.GCP_PROJECT_ID;
+
+  if (!apiKey) {
+    return res.status(503).json({
+      ok: false,
+      error_code: 'CT-012',
+      error: 'GOOGLE_CLOUD_API_KEY 未設定，請聯絡管理員',
+    });
+  }
+
+  const audioB64   = req.file.buffer.toString('base64');
+  const mimeType   = req.file.mimetype || 'audio/webm';
+  const language   = req.body.language || 'yue-Hant-HK'; // Cantonese (HK)
+
+  // Detect encoding from MIME
+  const ENCODING_MAP = {
+    'audio/wav':   'LINEAR16',
+    'audio/mp3':   'MP3',
+    'audio/mpeg':  'MP3',
+    'audio/ogg':   'OGG_OPUS',
+    'audio/webm':  'WEBM_OPUS',
+    'audio/flac':  'FLAC',
+    'audio/m4a':   'MP4',
+  };
+  const encoding = ENCODING_MAP[mimeType] || 'ENCODING_UNSPECIFIED';
+
+  try {
+    let sttResult;
+
+    if (projectId) {
+      // ── V2 API ───────────────────────────────────────────────────────────
+      const url = `https://speech.googleapis.com/v2/projects/${projectId}/locations/global/recognizers/_:recognize?key=${apiKey}`;
+      const body = {
+        config: {
+          autoDecodingConfig: {},
+          languageCodes: [language],
+          model: 'long',
+          features: {
+            enableWordTimeOffsets: true,
+            enableAutomaticPunctuation: true,
+          },
+        },
+        audio: { content: audioB64 },
+      };
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Google STT V2 error ${resp.status}: ${errText}`);
+      }
+      const data = await resp.json();
+      sttResult = parseV2Response(data);
+    } else {
+      // ── V1p1beta1 fallback ───────────────────────────────────────────────
+      const url = `https://speech.googleapis.com/v1p1beta1/speech:recognize?key=${apiKey}`;
+      const body = {
+        config: {
+          encoding,
+          languageCode: language,
+          alternativeLanguageCodes: ['zh-HK', 'en-US'],
+          enableWordTimeOffsets: true,
+          enableAutomaticPunctuation: true,
+          model: 'latest_long',
+        },
+        audio: { content: audioB64 },
+      };
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Google STT V1 error ${resp.status}: ${errText}`);
+      }
+      const data = await resp.json();
+      sttResult = parseV1Response(data);
+    }
+
+    return res.json({ ok: true, ...sttResult });
+  } catch (err) {
+    console.error('[ct-transcribe] Google STT error:', err.message);
+    await db.logError({
+      errorCode: 'CT-013',
+      errorMessage: 'Google STT 調用失敗',
+      context: { detail: err.message, language, mime: mimeType },
+    });
+    return res.status(502).json({
+      ok: false,
+      error_code: 'CT-013',
+      error: `Google STT 調用失敗：${err.message}`,
+    });
+  }
+});
+
+// ── Parse Google STT V2 response → { transcript, segments } ──────────────────
+function parseV2Response(data) {
+  let transcript = '';
+  const segments = [];
+  for (const result of (data.results || [])) {
+    const alt = result.alternatives?.[0];
+    if (!alt) continue;
+    transcript += (transcript ? ' ' : '') + alt.transcript;
+    // Build segments from word timings if available
+    if (alt.words?.length) {
+      const start = nanos(alt.words[0].startOffset);
+      const end   = nanos(alt.words[alt.words.length - 1].endOffset);
+      segments.push({ start, end, text: alt.transcript });
+    }
+  }
+  return { transcript, segments };
+}
+
+// ── Parse Google STT V1 response → { transcript, segments } ──────────────────
+function parseV1Response(data) {
+  let transcript = '';
+  const segments = [];
+  for (const result of (data.results || [])) {
+    const alt = result.alternatives?.[0];
+    if (!alt) continue;
+    transcript += (transcript ? ' ' : '') + alt.transcript;
+    if (alt.words?.length) {
+      const start = secs(alt.words[0].startTime);
+      const end   = secs(alt.words[alt.words.length - 1].endTime);
+      segments.push({ start, end, text: alt.transcript });
+    }
+  }
+  return { transcript, segments };
+}
+
+// ── Duration string helpers ───────────────────────────────────────────────────
+function nanos(offset) {
+  if (!offset) return 0;
+  // V2 uses "1.5s" string or { seconds, nanos }
+  if (typeof offset === 'string') return parseFloat(offset.replace('s', ''));
+  return (offset.seconds || 0) + (offset.nanos || 0) / 1e9;
+}
+function secs(s) {
+  if (!s) return 0;
+  // V1 uses "1.500s" string
+  return typeof s === 'string' ? parseFloat(s.replace('s', '')) : s;
+}
 
 module.exports = { router, initDb: db.init };

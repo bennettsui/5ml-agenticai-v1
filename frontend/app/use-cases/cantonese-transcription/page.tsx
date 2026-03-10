@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Mic, FileText, Clipboard, Loader2, CheckCircle2, AlertCircle,
   ChevronLeft, Copy, RefreshCw, History, AlertTriangle,
   Languages, List, AlignLeft, BookOpen, Sparkles, Hash,
   ChevronDown, ChevronUp, Database, Info, Zap,
-  CircleDot, Circle, CheckCircle, Cpu,
+  CircleDot, Circle, CheckCircle, Cpu, Play, Pause, RotateCcw,
+  Upload, Volume2, Wand2,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -16,7 +17,7 @@ import {
 
 type Task     = 'clean_transcript' | 'meeting_minutes' | 'summary_zh' | 'summary_en' | 'action_items';
 type Model    = 'haiku' | 'sonnet' | 'deepseek';
-type PageTab  = 'analyze' | 'history' | 'errors' | 'error-codes';
+type PageTab  = 'analyze' | 'visualizer' | 'history' | 'errors' | 'error-codes';
 
 type StepStatus = 'pending' | 'active' | 'done' | 'error';
 
@@ -253,15 +254,304 @@ function ErrorRow({ log }: { log: ErrorLog }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Cassette Visualizer
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface Segment { start: number; end: number; text: string; }
+
+function CassetteVisualizer({ transcript, segments }: { transcript: string; segments: Segment[] }) {
+  const [playing, setPlaying]         = useState(false);
+  const [progress, setProgress]       = useState(0); // 0–1
+  const [activeWordIdx, setActiveWord] = useState(-1);
+  const tickRef                        = useRef<ReturnType<typeof setInterval> | null>(null);
+  const trackRef                       = useRef<HTMLDivElement>(null);
+
+  // Split transcript into words for the track
+  const words = useMemo(() => transcript.trim().split(/\s+/).filter(Boolean), [transcript]);
+
+  // Derive total "duration": if segments available use real time, else 1s per 5 chars
+  const totalDuration = useMemo(() => {
+    if (segments.length > 0) return segments[segments.length - 1].end;
+    return Math.max(words.length * 0.35, 5);
+  }, [segments, words]);
+
+  // Which word is active at a given progress
+  function wordAtProgress(p: number): number {
+    const t = p * totalDuration;
+    if (segments.length > 0) {
+      // find segment whose time window contains t, then estimate word within
+      let charOffset = 0;
+      for (const seg of segments) {
+        if (t >= seg.start && t <= seg.end) {
+          const segWords = seg.text.trim().split(/\s+/);
+          const frac = (t - seg.start) / Math.max(seg.end - seg.start, 0.01);
+          const wIdx = Math.floor(frac * segWords.length);
+          // map back to global word index
+          const globalStart = transcript.slice(0, charOffset).trim().split(/\s+/).filter(Boolean).length;
+          return globalStart + wIdx;
+        }
+        charOffset += seg.text.length + 1;
+      }
+      return -1;
+    }
+    return Math.min(Math.floor(p * words.length), words.length - 1);
+  }
+
+  function startPlay() {
+    if (tickRef.current) clearInterval(tickRef.current);
+    const step = 0.016; // ~60fps
+    const inc  = step / totalDuration;
+    tickRef.current = setInterval(() => {
+      setProgress(prev => {
+        const next = prev + inc;
+        if (next >= 1) {
+          clearInterval(tickRef.current!);
+          setPlaying(false);
+          setActiveWord(words.length - 1);
+          return 1;
+        }
+        setActiveWord(wordAtProgress(next));
+        return next;
+      });
+    }, step * 1000);
+  }
+
+  function handlePlayPause() {
+    if (playing) {
+      clearInterval(tickRef.current!);
+      setPlaying(false);
+    } else {
+      if (progress >= 1) { setProgress(0); setActiveWord(-1); }
+      setPlaying(true);
+      startPlay();
+    }
+  }
+
+  function handleReset() {
+    clearInterval(tickRef.current!);
+    setPlaying(false);
+    setProgress(0);
+    setActiveWord(-1);
+  }
+
+  // Scroll active word into view
+  useEffect(() => {
+    if (activeWordIdx < 0 || !trackRef.current) return;
+    const el = trackRef.current.querySelector(`[data-widx="${activeWordIdx}"]`) as HTMLElement | null;
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [activeWordIdx]);
+
+  useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
+
+  const reelAngle = progress * 360 * 8; // 8 full rotations over whole tape
+  const leftFill  = Math.max(0.15, 1 - progress * 0.7);  // left reel shrinks
+  const rightFill = Math.max(0.15, 0.15 + progress * 0.7); // right reel grows
+
+  // Waveform bars: pseudo-random heights seeded from word chars
+  const waveformBars = useMemo(() => {
+    const bars: number[] = [];
+    for (let i = 0; i < 80; i++) {
+      const seed = (i * 1337 + 7919) % 100;
+      bars.push(20 + (seed % 60));
+    }
+    return bars;
+  }, []);
+
+  const playheadX = progress * 100; // %
+
+  return (
+    <div className="space-y-6">
+      {/* Cassette body */}
+      <div className="relative mx-auto max-w-lg">
+        <div
+          className="relative bg-slate-800 rounded-2xl border border-slate-600/60 p-6 shadow-2xl"
+          style={{ background: 'linear-gradient(145deg, #1e293b, #0f172a)' }}
+        >
+          {/* Label strip */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 w-36 h-7 rounded-sm bg-indigo-900/70 border border-indigo-500/30 flex items-center justify-center">
+            <span className="text-[9px] font-bold tracking-widest text-indigo-300 uppercase">Cantonese ASR</span>
+          </div>
+
+          {/* Reels */}
+          <div className="flex items-center justify-between pt-6 pb-2 px-4">
+            {/* Left reel */}
+            <div className="relative flex items-center justify-center">
+              <div
+                className="rounded-full border-2 border-slate-500/70 bg-slate-700 flex items-center justify-center"
+                style={{
+                  width: 80, height: 80,
+                  transform: `rotate(${reelAngle}deg)`,
+                  transition: playing ? 'none' : 'transform 0.3s ease',
+                }}
+              >
+                {/* Spokes */}
+                {[0, 60, 120, 180, 240, 300].map(angle => (
+                  <div key={angle} className="absolute w-0.5 bg-slate-400/50 rounded-full"
+                    style={{ height: `${leftFill * 28}px`, transform: `rotate(${angle}deg)`, transformOrigin: 'center' }} />
+                ))}
+                {/* Hub */}
+                <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-600/50 flex items-center justify-center z-10">
+                  <div className="w-3 h-3 rounded-full bg-slate-700 border border-slate-500/50" />
+                </div>
+                {/* Tape mass ring */}
+                <div className="absolute inset-0 rounded-full border-4 border-slate-600/30"
+                  style={{ inset: `${(1 - leftFill) * 14}px`, background: 'rgba(99,102,241,0.08)' }} />
+              </div>
+            </div>
+
+            {/* Tape window */}
+            <div className="flex-1 mx-3 h-12 rounded bg-black/50 border border-slate-700/50 overflow-hidden relative flex items-center">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div
+                  className="h-0.5 bg-slate-500/40 rounded-full"
+                  style={{ width: `${leftFill * 100}%`, marginRight: 4 }}
+                />
+                <div className="w-2.5 h-5 bg-slate-600 rounded-sm border border-slate-500/50 mx-1 flex-shrink-0" />
+                <div
+                  className="h-0.5 bg-slate-500/40 rounded-full"
+                  style={{ width: `${rightFill * 100}%`, marginLeft: 4 }}
+                />
+              </div>
+            </div>
+
+            {/* Right reel */}
+            <div className="relative flex items-center justify-center">
+              <div
+                className="rounded-full border-2 border-slate-500/70 bg-slate-700 flex items-center justify-center"
+                style={{
+                  width: 80, height: 80,
+                  transform: `rotate(${reelAngle}deg)`,
+                  transition: playing ? 'none' : 'transform 0.3s ease',
+                }}
+              >
+                {[0, 60, 120, 180, 240, 300].map(angle => (
+                  <div key={angle} className="absolute w-0.5 bg-slate-400/50 rounded-full"
+                    style={{ height: `${rightFill * 28}px`, transform: `rotate(${angle}deg)`, transformOrigin: 'center' }} />
+                ))}
+                <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-600/50 flex items-center justify-center z-10">
+                  <div className="w-3 h-3 rounded-full bg-slate-700 border border-slate-500/50" />
+                </div>
+                <div className="absolute inset-0 rounded-full border-4 border-slate-600/30"
+                  style={{ inset: `${(1 - rightFill) * 14}px`, background: 'rgba(99,102,241,0.08)' }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center justify-center gap-3 mt-3">
+            <button
+              onClick={handleReset}
+              className="w-8 h-8 rounded-full bg-slate-700 border border-slate-600/50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-600 transition-all"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handlePlayPause}
+              disabled={!transcript.trim()}
+              className="w-12 h-12 rounded-full bg-indigo-600 hover:bg-indigo-500 border border-indigo-400/30 flex items-center justify-center text-white disabled:opacity-40 transition-all shadow-lg shadow-indigo-900/40"
+            >
+              {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+            </button>
+            <div className="text-[10px] font-mono text-slate-500 w-16 text-right">
+              {Math.floor(progress * totalDuration / 60).toString().padStart(2,'0')}:{Math.floor(progress * totalDuration % 60).toString().padStart(2,'0')} /&nbsp;
+              {Math.floor(totalDuration / 60).toString().padStart(2,'0')}:{Math.floor(totalDuration % 60).toString().padStart(2,'0')}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Waveform track */}
+      <div className="bg-slate-900/80 rounded-xl border border-slate-700/50 overflow-hidden">
+        <div className="px-4 py-2 border-b border-slate-700/30 flex items-center gap-2">
+          <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Audio Track</span>
+          {segments.length > 0 && (
+            <span className="text-[9px] text-slate-600">{segments.length} segments</span>
+          )}
+        </div>
+        {/* Waveform bars with playhead */}
+        <div className="relative h-20 px-3 flex items-center">
+          <div className="absolute inset-x-3 inset-y-0 flex items-center gap-px">
+            {waveformBars.map((h, i) => {
+              const barX   = (i / waveformBars.length) * 100;
+              const isPast = barX <= playheadX;
+              return (
+                <div
+                  key={i}
+                  className={`flex-1 rounded-sm transition-colors ${isPast ? 'bg-indigo-500/70' : 'bg-slate-700/60'}`}
+                  style={{ height: `${h}%` }}
+                />
+              );
+            })}
+          </div>
+          {/* Playhead line */}
+          <div
+            className="absolute top-0 bottom-0 w-px bg-indigo-400/80 pointer-events-none z-10"
+            style={{ left: `calc(${playheadX}% + 12px)` }}
+          >
+            <div className="w-2 h-2 bg-indigo-400 rounded-full -translate-x-[3px] -translate-y-[1px]" />
+          </div>
+        </div>
+      </div>
+
+      {/* Scrolling word track */}
+      {words.length > 0 && (
+        <div className="bg-slate-900/60 rounded-xl border border-slate-700/50 overflow-hidden">
+          <div className="px-4 py-2 border-b border-slate-700/30">
+            <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Transcript</span>
+          </div>
+          <div
+            ref={trackRef}
+            className="px-4 py-4 overflow-x-auto flex flex-wrap gap-1.5 max-h-40 overflow-y-auto"
+          >
+            {words.map((word, i) => {
+              const isActive = i === activeWordIdx;
+              const isPast   = i < activeWordIdx;
+              return (
+                <span
+                  key={i}
+                  data-widx={i}
+                  className={`px-1.5 py-0.5 rounded text-sm leading-relaxed transition-all duration-100 ${
+                    isActive
+                      ? 'bg-indigo-500/30 text-indigo-200 ring-1 ring-indigo-400/60 scale-105'
+                      : isPast
+                      ? 'text-slate-400'
+                      : 'text-slate-600'
+                  }`}
+                >
+                  {word}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {!transcript.trim() && (
+        <div className="text-center py-8 text-slate-600 text-sm">
+          喺「分析」頁面貼上逐字稿先可以用視覺化模式
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main page
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function CantoneseTranscriptionPage() {
   const [pageTab, setPageTab]           = useState<PageTab>('analyze');
 
+  // Transcription engine state
+  const [sttLoading, setSttLoading]         = useState(false);
+  const [sttError, setSttError]             = useState<string | null>(null);
+  const [sttEngine, setSttEngine]           = useState<'paste' | 'google-stt'>('paste');
+  const audioInputRef                        = useRef<HTMLInputElement>(null);
+
   // Analyze state
   const [transcript, setTranscript]     = useState('');
   const [extraInstructions, setExtra]   = useState('');
+  const [segments, setSegments]         = useState<Segment[]>([]);
   const [selectedTask, setTask]         = useState<Task>('clean_transcript');
   const [model, setModel]               = useState<Model>('haiku');
 
@@ -400,6 +690,29 @@ export default function CantoneseTranscriptionPage() {
     setLoading(false);
   }
 
+  async function handleSttUpload(file: File) {
+    setSttLoading(true);
+    setSttError(null);
+    const form = new FormData();
+    form.append('audio', file);
+    form.append('language', 'yue-Hant-HK');
+    try {
+      const res  = await fetch('/api/cantonese-transcription/transcribe', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setSttError(data.error ?? '轉錄失敗');
+      } else {
+        setTranscript(data.transcript ?? '');
+        if (data.segments?.length) setSegments(data.segments);
+        setSttEngine('paste'); // switch back to paste view to show filled textarea
+      }
+    } catch (err: unknown) {
+      setSttError(err instanceof Error ? err.message : '網絡錯誤');
+    } finally {
+      setSttLoading(false);
+    }
+  }
+
   async function handleCopy() {
     if (!streamText) return;
     await navigator.clipboard.writeText(streamText);
@@ -481,6 +794,7 @@ export default function CantoneseTranscriptionPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex gap-0 border-t border-slate-800/40">
           {([
             { id: 'analyze',     label: '分析',     icon: Zap },
+            { id: 'visualizer',  label: '視覺化',   icon: Mic },
             { id: 'history',     label: '歷史記錄', icon: History },
             { id: 'errors',      label: '錯誤日誌', icon: AlertTriangle },
             { id: 'error-codes', label: '錯誤代碼', icon: Info },
@@ -513,11 +827,90 @@ export default function CantoneseTranscriptionPage() {
 
               {/* ── Left: input ─────────────────────────────────────── */}
               <div className="space-y-4">
-                <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
+
+                {/* Transcription engine toggle */}
+                <div className="flex items-center gap-1 bg-slate-800/60 rounded-lg border border-slate-700/50 p-1">
+                  <button
+                    onClick={() => setSttEngine('paste')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      sttEngine === 'paste'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Clipboard className="w-3 h-3" />貼上逐字稿
+                  </button>
+                  <button
+                    onClick={() => setSttEngine('google-stt')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      sttEngine === 'google-stt'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Volume2 className="w-3 h-3" />Google STT V2
+                  </button>
+                </div>
+
+                {/* Google STT upload panel */}
+                {sttEngine === 'google-stt' && (
+                  <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-slate-700/50 flex items-center gap-2">
+                      <Volume2 className="w-3.5 h-3.5 text-blue-400" />
+                      <span className="text-xs font-medium text-slate-300">Google Cloud Speech-to-Text V2</span>
+                      <span className="text-[10px] text-slate-600 ml-auto">yue-Hant-HK · Cantonese</span>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <input
+                        ref={audioInputRef}
+                        type="file"
+                        accept="audio/*,.wav,.mp3,.ogg,.flac,.m4a,.webm"
+                        className="hidden"
+                        onChange={e => { if (e.target.files?.[0]) handleSttUpload(e.target.files[0]); }}
+                      />
+                      <button
+                        onClick={() => audioInputRef.current?.click()}
+                        disabled={sttLoading}
+                        className="w-full py-8 rounded-xl border-2 border-dashed border-slate-600/60 hover:border-blue-500/50 hover:bg-blue-500/[0.03] transition-all flex flex-col items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {sttLoading
+                          ? <><Loader2 className="w-6 h-6 text-blue-400 animate-spin" /><span className="text-xs text-slate-400">轉錄中，請稍候…</span></>
+                          : <><Upload className="w-6 h-6 text-slate-500" /><span className="text-xs text-slate-400">上傳音訊檔案</span><span className="text-[10px] text-slate-600">WAV · MP3 · OGG · FLAC · M4A · WebM · 最大 25MB</span></>}
+                      </button>
+                      {sttError && (
+                        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
+                          <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                          <span className="text-xs text-red-300">{sttError}</span>
+                        </div>
+                      )}
+                      {transcript && (
+                        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-green-500/10 border border-green-500/20">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0" />
+                          <span className="text-xs text-green-300">已轉錄 {transcript.length} 字元{segments.length > 0 ? `，${segments.length} 個 segments` : ''} — 切換到貼上模式查看</span>
+                        </div>
+                      )}
+                      <p className="text-[10px] text-slate-600 leading-relaxed">
+                        使用 Google Cloud Speech-to-Text V2 (<code className="text-slate-500">latest_long</code> model)，
+                        支援粵語（<code className="text-slate-500">yue-Hant-HK</code>）及中英混合識別，
+                        自動生成帶時間戳嘅 segments。需要設定 <code className="text-slate-500">GOOGLE_CLOUD_API_KEY</code> 及 <code className="text-slate-500">GCP_PROJECT_ID</code>。
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Transcript textarea (always shown, highlighted when auto-filled) */}
+                <div className={`bg-slate-800/60 rounded-xl border overflow-hidden transition-colors ${
+                  sttEngine === 'paste' ? 'border-slate-700/50' : 'border-slate-700/30'
+                }`}>
                   <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50">
                     <div className="flex items-center gap-2">
                       <Clipboard className="w-3.5 h-3.5 text-slate-400" />
-                      <span className="text-xs font-medium text-slate-300">ASR 逐字稿</span>
+                      <span className="text-xs font-medium text-slate-300">
+                        {sttEngine === 'google-stt' ? 'STT 結果 / 手動編輯' : 'ASR 逐字稿'}
+                      </span>
+                      {sttEngine === 'google-stt' && transcript && (
+                        <span className="text-[9px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded-full">Google STT</span>
+                      )}
                     </div>
                     <span className="text-[10px] text-slate-500">{transcript.length.toLocaleString()} 字元</span>
                   </div>
@@ -526,7 +919,7 @@ export default function CantoneseTranscriptionPage() {
                     onChange={e => setTranscript(e.target.value)}
                     disabled={loading}
                     placeholder={'貼上 Whisper ASR 輸出嘅粵語逐字稿…\n\n例：佢哋噉講嘅，我冇聽錯喎，嗰個 project 要喺下個月 deliver 㗎。'}
-                    rows={13}
+                    rows={sttEngine === 'google-stt' ? 5 : 13}
                     className="w-full bg-transparent px-4 py-3 text-sm text-slate-200 placeholder-slate-600 resize-none focus:outline-none font-mono leading-relaxed disabled:opacity-50"
                   />
                 </div>
@@ -708,6 +1101,34 @@ export default function CantoneseTranscriptionPage() {
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ================================================================ */}
+        {/* VISUALIZER TAB                                                    */}
+        {/* ================================================================ */}
+        {pageTab === 'visualizer' && (
+          <div className="space-y-4">
+            {/* Segments JSON paste */}
+            <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-slate-700/50 flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-300">Whisper Segments JSON（可選）</span>
+                <span className="text-[10px] text-slate-500">{segments.length} segments loaded</span>
+              </div>
+              <textarea
+                defaultValue=""
+                onChange={e => {
+                  try {
+                    const parsed = JSON.parse(e.target.value);
+                    if (Array.isArray(parsed)) setSegments(parsed);
+                  } catch { /* wait for valid JSON */ }
+                }}
+                placeholder={'[{"start":0.0,"end":3.2,"text":"佢哋噉講嘅"},{"start":3.2,"end":6.5,"text":"我冇聽錯喎"}]'}
+                rows={3}
+                className="w-full bg-transparent px-4 py-3 text-xs text-slate-300 placeholder-slate-600 resize-none focus:outline-none font-mono"
+              />
+            </div>
+            <CassetteVisualizer transcript={transcript} segments={segments} />
           </div>
         )}
 
