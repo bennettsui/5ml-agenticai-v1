@@ -1173,7 +1173,26 @@ router.get('/teachers/papers/:id/file', async (req, res) => {
       res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(paper.exam_name)}.pdf"`);
       return fs.createReadStream(localPath).pipe(res);
     }
-    if (paper.cdn_url) return res.redirect(302, paper.cdn_url);
+
+    // Local file gone (ephemeral FS) — proxy from CDN so pdf.js can load it
+    if (paper.cdn_url) {
+      const https = require('https');
+      const http  = require('http');
+      const cdnModule = paper.cdn_url.startsWith('https') ? https : http;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(paper.exam_name)}.pdf"`);
+      cdnModule.get(paper.cdn_url, cdnRes => {
+        if (cdnRes.statusCode >= 400) {
+          res.status(502).json({ success: false, error: `CDN returned ${cdnRes.statusCode}` });
+        } else {
+          cdnRes.pipe(res);
+        }
+      }).on('error', err => {
+        if (!res.headersSent) res.status(502).json({ success: false, error: err.message });
+      });
+      return;
+    }
+
     res.status(404).json({ success: false, error: 'PDF not available locally or on CDN. Re-upload to restore.' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

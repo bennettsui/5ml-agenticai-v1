@@ -89,13 +89,14 @@ function ValidateInner() {
 
   // Load pdfjs from CDN (avoids bundler complexity)
   useEffect(() => {
-    if ((window as any).__pdfjsLib) return;
+    if ((window as any).pdfjsLib) return;
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
     script.onload = () => {
       (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc =
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     };
+    script.onerror = () => setPdfError('pdf.js failed to load from CDN. Check your internet connection and refresh.');
     document.head.appendChild(script);
   }, []);
 
@@ -109,7 +110,7 @@ function ValidateInner() {
       try {
         const lib = (window as any).pdfjsLib;
         if (!lib) { setPdfError('PDF viewer not loaded yet. Refresh the page.'); return; }
-        const doc = await lib.getDocument(pdfUrl).promise;
+        const doc = await lib.getDocument({ url: pdfUrl, withCredentials: false }).promise;
         if (cancelled) return;
         setPdfDoc(doc);
         setTotalPages(doc.numPages);
@@ -125,9 +126,15 @@ function ValidateInner() {
     const interval = setInterval(() => {
       if ((window as any).pdfjsLib) { clearInterval(interval); load(); }
     }, 300);
-    setTimeout(() => clearInterval(interval), 10000);
+    // If still not available after 10s, show an error
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+      if (!(window as any).pdfjsLib && !cancelled) {
+        setPdfError('pdf.js viewer timed out. Refresh the page or check your internet connection.');
+      }
+    }, 10000);
 
-    return () => { cancelled = true; clearInterval(interval); };
+    return () => { cancelled = true; clearInterval(interval); clearTimeout(timeout); };
   }, [id]);
 
   // Render page to canvas
@@ -292,17 +299,23 @@ function ValidateInner() {
               </div>
             )}
             {pdfError && (
-              <div className="flex items-start gap-2 text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium">Could not load PDF</p>
-                  <p className="text-xs text-amber-400/80 mt-1">{pdfError}</p>
-                  <p className="text-xs text-slate-500 mt-2">
-                    The local file may have been wiped (Fly.dev ephemeral FS). Check the{' '}
-                    <Link href="/teach/storage" className="text-purple-400 underline">Storage page</Link>{' '}
-                    to push to CDN or re-upload.
-                  </p>
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium">PDF viewer error — showing fallback below</p>
+                    <p className="text-xs text-amber-400/80 mt-1">{pdfError}</p>
+                    <p className="text-xs text-slate-500 mt-2">
+                      Visual annotation requires pdf.js. If the fallback loads, you can still read the paper but cannot use Analyze Page.
+                    </p>
+                  </div>
                 </div>
+                <iframe
+                  src={`/api/adaptive-learning/teachers/papers/${id}/file`}
+                  className="w-full rounded-xl border border-slate-700/50"
+                  style={{ height: '75vh' }}
+                  title="PDF fallback viewer"
+                />
               </div>
             )}
 

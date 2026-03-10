@@ -8726,6 +8726,7 @@ app.post('/api/print-finance/import/confirm', pfUpload.single('file'), async (re
   if (!validTypes.includes(type)) {
     return res.status(400).json({ error: `Invalid type: ${type}` });
   }
+  const skipWarnings = req.body.skip_warnings === 'true';
   // Accept AI field_mapping, category, cost_type from request body (sent by frontend after analyze step)
   let aiMapping = null;
   let aiCategory = null;
@@ -8734,7 +8735,43 @@ app.post('/api/print-finance/import/confirm', pfUpload.single('file'), async (re
   try { aiCategory = req.body.category || null; } catch {}
   try { aiCostType = req.body.cost_type || null; } catch {}
   try {
-    const { rows } = await parseUploadedFile(req.file);
+    let { rows } = await parseUploadedFile(req.file);
+    // If skip_warnings, annotate rows with dry-run logic and keep only 'ok' ones
+    if (skipWarnings) {
+      const norm = s => String(s).toLowerCase().replace(/[\s_-]/g, '');
+      const DATE_PATTERNS = [
+        { re: /^\d{8}$/, fmt: 'YYYYMMDD' }, { re: /^\d{4}\/\d{1,2}\/\d{1,2}$/, fmt: 'YYYY/MM/DD' },
+        { re: /^\d{1,2}\/\d{1,2}\/\d{4}$/, fmt: 'MM/DD/YYYY' },
+      ];
+      rows = rows.filter(r => {
+        const data = {};
+        for (const [k, v] of Object.entries(r)) { if (!k.startsWith('_')) data[k] = v; }
+        if (aiMapping) { for (const [f, col] of Object.entries(aiMapping)) { if (col && r[col] !== undefined) data[f] = r[col]; } }
+        const issues = [];
+        for (const [k, v] of Object.entries(data)) {
+          if (!v) continue;
+          const sv = String(v).trim();
+          if (/date|period|month|日期|年月/.test(k.toLowerCase())) {
+            for (const p of DATE_PATTERNS) { if (p.re.test(sv)) { issues.push('date_format'); break; } }
+          }
+        }
+        if (type === 'costs') {
+          const cat = String(data.category || data['類別'] || data['Category'] || '').trim();
+          if (!cat) issues.push('missing_category');
+          const amt = parseFloat(String(data.amount || data['金額'] || data['Amount'] || '0'));
+          if (amt === 0) issues.push('zero_amount');
+          const tv = String(data.type || data['類型'] || '').toLowerCase().trim();
+          if (tv && !['direct','overhead','fixed'].includes(tv)) issues.push('invalid_type');
+        } else if (type === 'revenue') {
+          const ch = String(data.channel || data['渠道'] || '').trim();
+          const rev = parseFloat(String(data.revenue || data['收入'] || '0'));
+          if (!ch) issues.push('missing_channel');
+          if (rev === 0) issues.push('zero_revenue');
+        }
+        const isSkip = issues.includes('missing_category');
+        return !isSkip && issues.length === 0; // keep only ok rows
+      });
+    }
     const result = await importRows(type, rows, aiMapping, aiCategory, aiCostType);
     // Save file to DB for later download/reference
     await pool.query(
