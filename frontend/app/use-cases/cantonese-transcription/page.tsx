@@ -592,6 +592,7 @@ export default function CantoneseTranscriptionPage() {
   const [sttProviders, setSttProviders]     = useState<string[]>([]);
   const [sttLastProvider, setSttLastProvider] = useState<string | null>(null);
   const [sttFallbackFrom, setSttFallbackFrom] = useState<string | null>(null);
+  const [sttDragging, setSttDragging]        = useState(false);
   const audioInputRef                        = useRef<HTMLInputElement>(null);
 
   // Analyze state
@@ -867,9 +868,10 @@ export default function CantoneseTranscriptionPage() {
     form.append('provider', providerParam);
     try {
       const res  = await fetch('/api/cantonese-transcription/transcribe', { method: 'POST', body: form });
-      const data = await res.json();
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { /* empty or non-JSON body */ }
       if (!res.ok || !data.ok) {
-        setSttError(data.error ?? '轉錄失敗');
+        setSttError((data.error as string) ?? `轉錄失敗 (HTTP ${res.status})`);
       } else {
         setTranscript(data.transcript ?? '');
         if (data.segments?.length) setSegments(data.segments);
@@ -1071,15 +1073,27 @@ export default function CantoneseTranscriptionPage() {
                       <button
                         onClick={() => audioInputRef.current?.click()}
                         disabled={sttLoading}
+                        onDragOver={e => { e.preventDefault(); if (!sttLoading) setSttDragging(true); }}
+                        onDragLeave={() => setSttDragging(false)}
+                        onDrop={e => {
+                          e.preventDefault();
+                          setSttDragging(false);
+                          const file = e.dataTransfer.files?.[0];
+                          if (file && !sttLoading) handleSttUpload(file);
+                        }}
                         className={`w-full py-8 rounded-xl border-2 border-dashed transition-all flex flex-col items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                          sttEngine === 'whisper'
-                            ? 'border-slate-600/60 hover:border-violet-500/50 hover:bg-violet-500/[0.03]'
-                            : 'border-slate-600/60 hover:border-blue-500/50 hover:bg-blue-500/[0.03]'
+                          sttDragging
+                            ? sttEngine === 'whisper'
+                              ? 'border-violet-500/70 bg-violet-500/[0.06]'
+                              : 'border-blue-500/70 bg-blue-500/[0.06]'
+                            : sttEngine === 'whisper'
+                              ? 'border-slate-600/60 hover:border-violet-500/50 hover:bg-violet-500/[0.03]'
+                              : 'border-slate-600/60 hover:border-blue-500/50 hover:bg-blue-500/[0.03]'
                         }`}
                       >
                         {sttLoading
                           ? <><Loader2 className={`w-6 h-6 animate-spin ${sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400'}`} /><span className="text-xs text-slate-400">轉錄中，請稍候…</span></>
-                          : <><Upload className="w-6 h-6 text-slate-500" /><span className="text-xs text-slate-400">上傳音訊檔案</span><span className="text-[10px] text-slate-600">WAV · MP3 · OGG · FLAC · M4A · WebM · 最大 100MB</span></>}
+                          : <><Upload className={`w-6 h-6 ${sttDragging ? (sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400') : 'text-slate-500'}`} /><span className="text-xs text-slate-400">{sttDragging ? '放開以上傳' : '拖放或點擊上傳音訊檔案'}</span><span className="text-[10px] text-slate-600">WAV · MP3 · OGG · FLAC · M4A · WebM · 最大 100MB</span></>}
                       </button>
                       {sttError && (
                         <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
