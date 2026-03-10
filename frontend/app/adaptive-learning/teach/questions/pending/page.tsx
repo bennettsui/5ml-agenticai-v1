@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { CheckCircle, SkipForward, RefreshCw, Edit2, ChevronDown, ChevronUp, FileText, ExternalLink } from 'lucide-react';
+import { CheckCircle, SkipForward, RefreshCw, Edit2, ChevronDown, ChevronUp, FileText, ExternalLink, Download } from 'lucide-react';
 import { useTeacherAuth } from '@/components/adaptive/useTeacherAuth';
 
 interface DraftQuestion {
@@ -168,11 +168,18 @@ export default function PendingQuestionsPage() {
                           </div>
                         </object>
                       </div>
-                      <a href={paperFileUrl} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 mt-1.5">
-                        <FileText className="w-3 h-3" />
-                        Open {examName || 'original PDF'} <ExternalLink className="w-3 h-3" />
-                      </a>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <a href={paperFileUrl} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300">
+                          <FileText className="w-3 h-3" />
+                          Open <ExternalLink className="w-3 h-3" />
+                        </a>
+                        <a href={paperFileUrl} download={examName || 'paper.pdf'}
+                          className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white">
+                          <Download className="w-3 h-3" />
+                          Download PDF
+                        </a>
+                      </div>
                     </div>
                   ) : null}
 
