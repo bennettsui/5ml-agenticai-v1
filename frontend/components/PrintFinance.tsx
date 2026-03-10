@@ -7,6 +7,7 @@ import {
   AlertCircle, CheckCircle2, Clock, Zap, Plus, Trash2,
   Upload, Download, X, Loader2, RefreshCw, Pencil, Save,
   Calculator, Filter, Receipt, ChevronDown, ChevronUp, Settings as SettingsIcon,
+  Eye, FolderOpen,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -3024,6 +3025,10 @@ function UploadTab() {
   const [savedFiles, setSavedFiles] = useState<SavedFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [viewingFile, setViewingFile] = useState<SavedFile | null>(null);
+  const [preview, setPreview] = useState<{ headers: string[]; rows: Record<string, string>[]; sheet_count: number } | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [activeSection, setActiveSection] = useState<'library' | 'import'>('library');
 
   const loadSavedFiles = async () => {
     setLoadingFiles(true);
@@ -3046,8 +3051,21 @@ function UploadTab() {
     setDeletingId(id);
     try {
       const res = await fetch(`/api/print-finance/uploads/${id}`, { method: 'DELETE' });
-      if (res.ok) setSavedFiles(prev => prev.filter(f => f.id !== id));
+      if (res.ok) {
+        setSavedFiles(prev => prev.filter(f => f.id !== id));
+        if (viewingFile?.id === id) setViewingFile(null);
+      }
     } finally { setDeletingId(null); }
+  };
+
+  const openPreview = async (f: SavedFile) => {
+    setViewingFile(f);
+    setPreview(null);
+    setLoadingPreview(true);
+    try {
+      const res = await fetch(`/api/print-finance/uploads/${f.id}/preview`);
+      if (res.ok) setPreview(await res.json());
+    } finally { setLoadingPreview(false); }
   };
 
   const doAnalyse = async (f: File) => {
@@ -3102,14 +3120,173 @@ function UploadTab() {
   const confidence = ai ? Math.round(ai.confidence * 100) : null;
 
   return (
-    <div className="space-y-5 max-w-3xl">
-      <div>
-        <h3 className="text-base font-semibold text-white">Smart Import</h3>
-        <p className="text-sm text-slate-400 mt-1">
-          Drop any CSV or Excel file. An AI agent analyses the columns and sample data to determine
-          the cost layer, field mappings, and whether a new category is needed — before anything is saved.
-        </p>
+    <div className="space-y-5">
+
+      {/* File preview modal */}
+      {viewingFile && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 bg-black/60 backdrop-blur-sm"
+          onClick={e => { if (e.target === e.currentTarget) setViewingFile(null); }}>
+          <div className="bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[80vh] flex flex-col">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/50 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <FileText className="w-4 h-4 text-blue-400" />
+                <div>
+                  <div className="text-sm font-semibold text-white">{viewingFile.filename}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    {fmtBytes(viewingFile.size_bytes)} · {viewingFile.rows_inserted} rows imported
+                    {viewingFile.imported_as && <> · <span className="text-blue-300 font-mono">{viewingFile.imported_as}</span></>}
+                    · {new Date(viewingFile.uploaded_at).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => downloadFile(viewingFile.id, viewingFile.filename)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 rounded-lg transition-colors">
+                  <Download className="w-3.5 h-3.5" /> Download
+                </button>
+                <button onClick={() => setViewingFile(null)} className="p-1.5 text-slate-500 hover:text-white transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            {/* Modal body */}
+            <div className="flex-1 overflow-auto">
+              {loadingPreview && (
+                <div className="flex items-center justify-center gap-2 py-16 text-slate-500 text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Parsing file…
+                </div>
+              )}
+              {preview && !loadingPreview && (
+                <table className="w-full text-xs border-collapse">
+                  <thead className="sticky top-0 z-10 bg-slate-900">
+                    <tr className="border-b border-slate-700/50">
+                      <th className="px-3 py-2.5 text-left text-slate-500 font-medium whitespace-nowrap w-20">Sheet</th>
+                      <th className="px-3 py-2.5 text-left text-slate-500 font-medium whitespace-nowrap w-12">Row</th>
+                      {preview.headers.map(h => (
+                        <th key={h} className="px-3 py-2.5 text-left text-slate-400 font-medium whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.rows.map((row, i) => (
+                      <tr key={i} className="border-b border-slate-700/20 hover:bg-white/[0.02]">
+                        <td className="px-3 py-2 text-slate-600 font-mono truncate max-w-[80px]">{row._sheet}</td>
+                        <td className="px-3 py-2 text-slate-600 tabular-nums">{row._row}</td>
+                        {preview.headers.map(h => (
+                          <td key={h} className="px-3 py-2 text-slate-300 max-w-[200px] truncate" title={String(row[h] ?? '')}>
+                            {row[h] !== undefined && row[h] !== '' ? String(row[h]) : <span className="text-slate-700">—</span>}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-slate-700/50 flex-shrink-0 text-xs text-slate-600">
+              {preview ? `${preview.rows.length} rows · ${preview.headers.length} columns · ${preview.sheet_count} sheet${preview.sheet_count !== 1 ? 's' : ''}` : ''}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Section toggle */}
+      <div className="flex items-center gap-1 p-1 bg-slate-800/60 border border-slate-700/50 rounded-xl w-fit">
+        <button onClick={() => setActiveSection('library')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${activeSection === 'library' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          <FolderOpen className="w-3.5 h-3.5" /> File Library
+          {savedFiles.length > 0 && <span className={`ml-0.5 px-1.5 rounded-full text-xs ${activeSection === 'library' ? 'bg-blue-500' : 'bg-slate-700 text-slate-400'}`}>{savedFiles.length}</span>}
+        </button>
+        <button onClick={() => setActiveSection('import')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${activeSection === 'import' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          <Upload className="w-3.5 h-3.5" /> Import File
+        </button>
       </div>
+
+      {/* ── FILE LIBRARY ── */}
+      {activeSection === 'library' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-400">All files that have been uploaded and processed. Click <Eye className="inline w-3.5 h-3.5 mx-0.5 text-slate-300" /> to view the raw rows.</p>
+            <button onClick={loadSavedFiles} disabled={loadingFiles}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors">
+              <RefreshCw className={`w-3 h-3 ${loadingFiles ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+          </div>
+
+          {savedFiles.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 border-2 border-dashed border-slate-700/40 rounded-2xl">
+              <FolderOpen className="w-8 h-8 text-slate-700" />
+              <div className="text-center">
+                <div className="text-sm text-slate-500">{loadingFiles ? 'Loading…' : 'No files yet'}</div>
+                <div className="text-xs text-slate-600 mt-0.5">Switch to <span className="text-slate-400">Import File</span> to upload your first file</div>
+              </div>
+            </div>
+          ) : (
+            <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-white/[0.03] border-b border-slate-700/50">
+                    <th className="text-left px-3 py-2.5 text-slate-500 font-medium">File</th>
+                    <th className="text-left px-3 py-2.5 text-slate-500 font-medium">Imported as</th>
+                    <th className="text-right px-3 py-2.5 text-slate-500 font-medium">Rows</th>
+                    <th className="text-right px-3 py-2.5 text-slate-500 font-medium">Size</th>
+                    <th className="text-right px-3 py-2.5 text-slate-500 font-medium">Uploaded</th>
+                    <th className="px-3 py-2.5 text-slate-500 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {savedFiles.map(f => (
+                    <tr key={f.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02] group">
+                      <td className="px-3 py-3">
+                        <button onClick={() => openPreview(f)} className="flex items-center gap-2 text-left hover:text-blue-300 transition-colors">
+                          <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0 group-hover:text-blue-400 transition-colors" />
+                          <span className="text-slate-300 truncate max-w-[220px] group-hover:text-blue-300" title={f.filename}>{f.filename}</span>
+                        </button>
+                      </td>
+                      <td className="px-3 py-3">
+                        {f.imported_as
+                          ? <span className="px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-300 font-mono">{f.imported_as}</span>
+                          : <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="px-3 py-3 text-right text-slate-400 tabular-nums">{f.rows_inserted}</td>
+                      <td className="px-3 py-3 text-right text-slate-500 tabular-nums">{fmtBytes(f.size_bytes)}</td>
+                      <td className="px-3 py-3 text-right text-slate-600 whitespace-nowrap">
+                        {new Date(f.uploaded_at).toLocaleDateString()} {new Date(f.uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-1 justify-end">
+                          <button onClick={() => openPreview(f)}
+                            className="p-1.5 text-slate-500 hover:text-blue-400 transition-colors rounded-lg hover:bg-blue-500/10" title="View rows">
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => downloadFile(f.id, f.filename)}
+                            className="p-1.5 text-slate-500 hover:text-emerald-400 transition-colors rounded-lg hover:bg-emerald-500/10" title="Download">
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => deleteFile(f.id)} disabled={deletingId === f.id}
+                            className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors rounded-lg hover:bg-rose-500/10" title="Delete">
+                            {deletingId === f.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── IMPORT SECTION ── */}
+      {activeSection === 'import' && (
+        <div className="space-y-5 max-w-3xl">
+          <p className="text-sm text-slate-400">
+            Drop any CSV or Excel file. An AI agent analyses the columns and sample data to determine
+            the cost layer, field mappings, and whether a new category is needed — before anything is saved.
+          </p>
 
       {/* Drop zone */}
       {!result && (
@@ -3346,74 +3523,14 @@ function UploadTab() {
             </div>
           </div>
 
-          <button onClick={reset} className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors">
-            <Upload className="w-3.5 h-3.5" /> Import another file
+          <button onClick={() => { reset(); loadSavedFiles(); setActiveSection('library'); }}
+            className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors">
+            <FolderOpen className="w-3.5 h-3.5" /> Back to File Library
           </button>
         </div>
       )}
-
-      {/* Saved files library */}
-      <div className="border-t border-slate-700/40 pt-5 mt-2">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-semibold text-slate-300">Uploaded Files</span>
-          <button onClick={loadSavedFiles} disabled={loadingFiles}
-            className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors">
-            <RefreshCw className={`w-3 h-3 ${loadingFiles ? 'animate-spin' : ''}`} /> Refresh
-          </button>
         </div>
-        {savedFiles.length === 0 ? (
-          <p className="text-xs text-slate-600 italic">{loadingFiles ? 'Loading…' : 'No files saved yet — imported files will appear here.'}</p>
-        ) : (
-          <div className="border border-slate-700/50 rounded-xl overflow-hidden">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-white/[0.03] border-b border-slate-700/50">
-                  <th className="text-left px-3 py-2 text-slate-500 font-medium">File</th>
-                  <th className="text-left px-3 py-2 text-slate-500 font-medium">Imported as</th>
-                  <th className="text-right px-3 py-2 text-slate-500 font-medium">Rows</th>
-                  <th className="text-right px-3 py-2 text-slate-500 font-medium">Size</th>
-                  <th className="text-right px-3 py-2 text-slate-500 font-medium">Date</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {savedFiles.map(f => (
-                  <tr key={f.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-                        <span className="text-slate-300 truncate max-w-[180px]" title={f.filename}>{f.filename}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className="px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-300 font-mono">{f.imported_as || '—'}</span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{f.rows_inserted}</td>
-                    <td className="px-3 py-2.5 text-right text-slate-500 tabular-nums">{fmtBytes(f.size_bytes)}</td>
-                    <td className="px-3 py-2.5 text-right text-slate-600 tabular-nums whitespace-nowrap">
-                      {new Date(f.uploaded_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2 justify-end">
-                        <button onClick={() => downloadFile(f.id, f.filename)}
-                          className="p-1 text-slate-500 hover:text-blue-400 transition-colors" title="Download">
-                          <Download className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => deleteFile(f.id)} disabled={deletingId === f.id}
-                          className="p-1 text-slate-500 hover:text-rose-400 transition-colors" title="Delete">
-                          {deletingId === f.id
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            : <Trash2 className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

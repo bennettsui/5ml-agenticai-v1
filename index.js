@@ -8650,6 +8650,24 @@ app.delete('/api/print-finance/uploads/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET /api/print-finance/uploads/:id/preview — re-parse stored file, return rows + headers
+app.get('/api/print-finance/uploads/:id/preview', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT filename, mimetype, data FROM pf_uploaded_files WHERE id=$1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'File not found' });
+    const file = rows[0];
+    const fakeFile = { originalname: file.filename, mimetype: file.mimetype, buffer: file.data };
+    const { headers, rows, sheet_count, sheets } = await parseUploadedFile(fakeFile);
+    const cleanRows = rows.map(r => {
+      const out = { _sheet: r._sheet, _row: r._row };
+      for (const [k, v] of Object.entries(r)) { if (!k.startsWith('_')) out[k] = v; }
+      return out;
+    });
+    res.json({ filename: file.filename, headers, rows: cleanRows, sheet_count, sheets });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ============================================================
 // INVOICES
 // ============================================================
