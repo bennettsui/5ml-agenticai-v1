@@ -8654,9 +8654,9 @@ app.delete('/api/print-finance/uploads/:id', async (req, res) => {
 app.get('/api/print-finance/uploads/:id/preview', async (req, res) => {
   if (!pfDbCheck(res)) return;
   try {
-    const { rows } = await pool.query('SELECT filename, mimetype, data FROM pf_uploaded_files WHERE id=$1', [req.params.id]);
-    if (!rows.length) return res.status(404).json({ error: 'File not found' });
-    const file = rows[0];
+    const { rows: fileRows } = await pool.query('SELECT filename, mimetype, data FROM pf_uploaded_files WHERE id=$1', [req.params.id]);
+    if (!fileRows.length) return res.status(404).json({ error: 'File not found' });
+    const file = fileRows[0];
     const fakeFile = { originalname: file.filename, mimetype: file.mimetype, buffer: file.data };
     const { headers, rows, sheet_count, sheets } = await parseUploadedFile(fakeFile);
     const cleanRows = rows.map(r => {
