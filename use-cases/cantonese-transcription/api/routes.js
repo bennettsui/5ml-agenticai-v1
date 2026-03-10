@@ -73,12 +73,23 @@ function formatTime(seconds) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+// ── Helper: emit SSE event ────────────────────────────────────────────────────
+function emit(res, data) {
+  try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch (_) {}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/cantonese-transcription/analyze
+// POST /api/cantonese-transcription/analyze  (SSE streaming)
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/analyze', async (req, res) => {
   const startTime = Date.now();
-  let job = null;
+
+  // ── Set up SSE ─────────────────────────────────────────────────────────
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
 
   const {
     transcript,
@@ -88,66 +99,40 @@ router.post('/analyze', async (req, res) => {
     model = 'haiku',
   } = req.body;
 
-  // ── Input validation ────────────────────────────────────────────────────
+  // ── Step 1: validate input ─────────────────────────────────────────────
+  emit(res, { type: 'step', step: 'validating', label: '驗證輸入中…' });
+
   if (!transcript || typeof transcript !== 'string' || transcript.trim().length === 0) {
-    await db.logError({
-      errorCode: db.ERROR_CODES.CT_001,
-      errorMessage: db.ERROR_MESSAGES['CT-001'],
-      context: { task, model },
-    });
-    return res.status(400).json({
-      ok: false,
-      error_code: 'CT-001',
-      error: db.ERROR_MESSAGES['CT-001'],
-    });
+    await db.logError({ errorCode: db.ERROR_CODES.CT_001, errorMessage: db.ERROR_MESSAGES['CT-001'], context: { task, model } });
+    emit(res, { type: 'error', error_code: 'CT-001', error: db.ERROR_MESSAGES['CT-001'] });
+    return res.end();
   }
-
   if (transcript.trim().length < 10) {
-    await db.logError({
-      errorCode: db.ERROR_CODES.CT_002,
-      errorMessage: db.ERROR_MESSAGES['CT-002'],
-      context: { char_count: transcript.length },
-    });
-    return res.status(400).json({
-      ok: false,
-      error_code: 'CT-002',
-      error: db.ERROR_MESSAGES['CT-002'],
-    });
+    await db.logError({ errorCode: db.ERROR_CODES.CT_002, errorMessage: db.ERROR_MESSAGES['CT-002'], context: { char_count: transcript.length } });
+    emit(res, { type: 'error', error_code: 'CT-002', error: db.ERROR_MESSAGES['CT-002'] });
+    return res.end();
   }
-
   if (!VALID_TASKS.includes(task)) {
-    await db.logError({
-      errorCode: db.ERROR_CODES.CT_003,
-      errorMessage: db.ERROR_MESSAGES['CT-003'],
-      context: { task },
-    });
-    return res.status(400).json({
-      ok: false,
-      error_code: 'CT-003',
-      error: db.ERROR_MESSAGES['CT-003'],
-    });
+    await db.logError({ errorCode: db.ERROR_CODES.CT_003, errorMessage: db.ERROR_MESSAGES['CT-003'], context: { task } });
+    emit(res, { type: 'error', error_code: 'CT-003', error: db.ERROR_MESSAGES['CT-003'] });
+    return res.end();
   }
 
-  // Validate segments if provided
   let parsedSegments = [];
   if (segments && segments.length > 0) {
     try {
       parsedSegments = Array.isArray(segments) ? segments : JSON.parse(segments);
     } catch {
-      await db.logError({
-        errorCode: db.ERROR_CODES.CT_009,
-        errorMessage: db.ERROR_MESSAGES['CT-009'],
-        context: { segments_type: typeof segments },
-      });
-      return res.status(400).json({
-        ok: false,
-        error_code: 'CT-009',
-        error: db.ERROR_MESSAGES['CT-009'],
-      });
+      await db.logError({ errorCode: db.ERROR_CODES.CT_009, errorMessage: db.ERROR_MESSAGES['CT-009'], context: { segments_type: typeof segments } });
+      emit(res, { type: 'error', error_code: 'CT-009', error: db.ERROR_MESSAGES['CT-009'] });
+      return res.end();
     }
   }
 
-  // ── Create job record ───────────────────────────────────────────────────
+  // ── Step 2: create DB job ──────────────────────────────────────────────
+  emit(res, { type: 'step', step: 'creating_job', label: '建立分析任務…' });
+
+  let job;
   try {
     job = await db.createJob({
       transcript: transcript.trim(),
@@ -156,65 +141,71 @@ router.post('/analyze', async (req, res) => {
       model,
       extra_instructions: extra_instructions.trim() || null,
     });
+    emit(res, { type: 'job_created', job_id: job.job_id });
   } catch (err) {
     console.error('[ct-routes] DB createJob error:', err.message);
-    await db.logError({
-      errorCode: db.ERROR_CODES.CT_006,
-      errorMessage: db.ERROR_MESSAGES['CT-006'],
-      context: { detail: err.message },
-    });
-    return res.status(500).json({
-      ok: false,
-      error_code: 'CT-006',
-      error: db.ERROR_MESSAGES['CT-006'],
-    });
+    await db.logError({ errorCode: db.ERROR_CODES.CT_006, errorMessage: db.ERROR_MESSAGES['CT-006'], context: { detail: err.message } });
+    emit(res, { type: 'error', error_code: 'CT-006', error: db.ERROR_MESSAGES['CT-006'] });
+    return res.end();
   }
 
-  // ── Build AI prompt ─────────────────────────────────────────────────────
+  // ── Build prompt ───────────────────────────────────────────────────────
   const taskInstruction = TASK_PROMPTS[task] || extra_instructions || '請處理以下逐字稿。';
   let userContent = `${taskInstruction}\n\n`;
-  if (extra_instructions.trim()) {
-    userContent += `Additional instructions: ${extra_instructions.trim()}\n\n`;
-  }
+  if (extra_instructions.trim()) userContent += `Additional instructions: ${extra_instructions.trim()}\n\n`;
   userContent += `**Transcript:**\n${transcript.trim()}`;
-
   if (parsedSegments.length > 0) {
-    const segText = parsedSegments
-      .map(s => `[${formatTime(s.start)} → ${formatTime(s.end)}] ${s.text}`)
-      .join('\n');
+    const segText = parsedSegments.map(s => `[${formatTime(s.start)} → ${formatTime(s.end)}] ${s.text}`).join('\n');
     userContent += `\n\n**Segments with timestamps:**\n${segText}`;
   }
 
-  // ── Call AI model ───────────────────────────────────────────────────────
-  let resultText;
-  let modelUsed;
+  // ── Step 3: call AI model (streaming) ─────────────────────────────────
+  const modelLabel = model === 'deepseek' ? 'DeepSeek Chat' : model === 'sonnet' ? 'Claude Sonnet 4.6' : 'Claude Haiku 4.5';
+  emit(res, { type: 'step', step: 'calling_ai', label: `呼叫 ${modelLabel}…`, model: modelLabel });
+
+  let fullText = '';
+  let modelUsed = '';
 
   try {
     if (model === 'deepseek' && deepseekService.isAvailable()) {
+      // DeepSeek: no streaming SDK — emit progress, then single call
+      emit(res, { type: 'step', step: 'streaming', label: 'DeepSeek 生成中…' });
       const result = await deepseekService.analyze(CANTONESE_SYSTEM_PROMPT, userContent, {
         model: 'deepseek-chat',
         maxTokens: 4000,
         temperature: 0.3,
       });
-      resultText = result.content;
+      fullText = result.content;
       modelUsed = 'deepseek-chat';
+      // Emit the whole text as a single token event (no native streaming)
+      emit(res, { type: 'token', text: fullText });
     } else {
       if (!process.env.ANTHROPIC_API_KEY) {
         throw Object.assign(new Error(db.ERROR_MESSAGES['CT-004']), { code: 'CT-004' });
       }
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-      const claudeModel = model === 'sonnet'
-        ? 'claude-sonnet-4-6'
-        : 'claude-haiku-4-5-20251001';
+      const claudeModel = model === 'sonnet' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001';
+      modelUsed = claudeModel;
 
-      const message = await anthropic.messages.create({
+      emit(res, { type: 'step', step: 'streaming', label: `串流生成中 (${claudeModel})…` });
+
+      // Token-by-token streaming
+      const stream = anthropic.messages.stream({
         model: claudeModel,
         max_tokens: 4000,
         system: CANTONESE_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userContent }],
       });
-      resultText = message.content[0].text;
-      modelUsed = claudeModel;
+
+      let tokenCount = 0;
+      for await (const chunk of stream) {
+        if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
+          const token = chunk.delta.text;
+          fullText += token;
+          tokenCount++;
+          emit(res, { type: 'token', text: token, token_count: tokenCount });
+        }
+      }
     }
   } catch (err) {
     const isRateLimit = err.status === 429 || err.message?.includes('rate');
@@ -228,24 +219,16 @@ router.post('/analyze', async (req, res) => {
       errorMessage: db.ERROR_MESSAGES[errorCode] || err.message,
       context: { model, task, http_status: err.status, detail: err.message },
     });
-
-    return res.status(err.status === 429 ? 429 : 502).json({
-      ok: false,
-      job_id: job.job_id,
-      error_code: errorCode,
-      error: db.ERROR_MESSAGES[errorCode] || err.message,
-    });
+    emit(res, { type: 'error', job_id: job.job_id, error_code: errorCode, error: db.ERROR_MESSAGES[errorCode] || err.message });
+    return res.end();
   }
 
-  // ── Save result ─────────────────────────────────────────────────────────
+  // ── Step 4: save result ────────────────────────────────────────────────
   const durationMs = Date.now() - startTime;
+  emit(res, { type: 'step', step: 'saving', label: '儲存至資料庫…' });
+
   try {
-    await db.saveResult({
-      jobId: job.job_id,
-      resultText,
-      modelUsed,
-      durationMs,
-    });
+    await db.saveResult({ jobId: job.job_id, resultText: fullText, modelUsed, durationMs });
     await db.updateJobStatus(job.job_id, 'done');
   } catch (err) {
     console.error('[ct-routes] DB saveResult error:', err.message);
@@ -255,17 +238,17 @@ router.post('/analyze', async (req, res) => {
       errorMessage: db.ERROR_MESSAGES['CT-006'],
       context: { detail: err.message, phase: 'save_result' },
     });
-    // Still return the result even if DB save fails
+    // Continue — result already streamed to client
   }
 
-  return res.json({
-    ok: true,
+  emit(res, {
+    type: 'done',
     job_id: job.job_id,
-    task,
-    result: resultText,
     model: modelUsed,
     duration_ms: durationMs,
+    char_count: fullText.length,
   });
+  res.end();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -279,11 +262,7 @@ router.get('/jobs', async (req, res) => {
     return res.json({ ok: true, jobs });
   } catch (err) {
     console.error('[ct-routes] listJobs error:', err.message);
-    return res.status(500).json({
-      ok: false,
-      error_code: 'CT-007',
-      error: db.ERROR_MESSAGES['CT-007'],
-    });
+    return res.status(500).json({ ok: false, error_code: 'CT-007', error: db.ERROR_MESSAGES['CT-007'] });
   }
 });
 
@@ -297,11 +276,7 @@ router.get('/jobs/:jobId', async (req, res) => {
     return res.json({ ok: true, job });
   } catch (err) {
     console.error('[ct-routes] getJob error:', err.message);
-    return res.status(500).json({
-      ok: false,
-      error_code: 'CT-007',
-      error: db.ERROR_MESSAGES['CT-007'],
-    });
+    return res.status(500).json({ ok: false, error_code: 'CT-007', error: db.ERROR_MESSAGES['CT-007'] });
   }
 });
 
@@ -316,11 +291,7 @@ router.get('/errors', async (req, res) => {
     return res.json({ ok: true, logs });
   } catch (err) {
     console.error('[ct-routes] listErrors error:', err.message);
-    return res.status(500).json({
-      ok: false,
-      error_code: 'CT-007',
-      error: db.ERROR_MESSAGES['CT-007'],
-    });
+    return res.status(500).json({ ok: false, error_code: 'CT-007', error: db.ERROR_MESSAGES['CT-007'] });
   }
 });
 
@@ -333,23 +304,15 @@ router.get('/stats', async (req, res) => {
     return res.json({ ok: true, stats });
   } catch (err) {
     console.error('[ct-routes] stats error:', err.message);
-    return res.status(500).json({
-      ok: false,
-      error_code: 'CT-007',
-      error: db.ERROR_MESSAGES['CT-007'],
-    });
+    return res.status(500).json({ ok: false, error_code: 'CT-007', error: db.ERROR_MESSAGES['CT-007'] });
   }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/cantonese-transcription/error-codes
-// Returns the full error code reference table
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/error-codes', (_req, res) => {
-  const table = Object.entries(db.ERROR_MESSAGES).map(([code, message]) => ({
-    code,
-    message,
-  }));
+  const table = Object.entries(db.ERROR_MESSAGES).map(([code, message]) => ({ code, message }));
   return res.json({ ok: true, error_codes: table });
 });
 
