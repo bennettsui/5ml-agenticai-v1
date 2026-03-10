@@ -8237,7 +8237,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
           `INSERT INTO pf_revenue_entries (period, channel, revenue, job_count, notes) VALUES ($1,$2,$3,$4,$5)`,
           [period||null, channel||name||'Import', revenue, parseInt(get('jobs', 'job_count', 'count'))||0, get('notes','description')||null]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${channel||name||'Import'} · ${period||'—'} · $${revenue}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${channel||name||'Import'} · ${period||'—'} · $${revenue}`,
+          data: { channel: channel||name||'Import', period: period||'—', revenue, notes: get('notes')||'' } });
       } else if (type === 'costs') {
         const category = get('category', 'name');
         const costType = (get('type')||'').toLowerCase();
@@ -8254,7 +8255,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
           `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5)`,
           [category, validType, amount, get('period','date')||null, get('notes','description')||null]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${category} · ${validType} · $${amount}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${category} · ${validType} · $${amount}`,
+          data: { category, type: validType, amount, period: get('period','date')||'—', notes: get('notes')||'' } });
       } else if (type === 'work-units') {
         const name = get('name', 'job_name');
         if (!name) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing name' }); continue; }
@@ -8271,7 +8273,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
             get('status')||'pending', get('notes')||null,
           ]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${name} · ${get('material')||'?'}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${name} · ${get('material')||'?'}`,
+          data: { name, job_id: get('job_id','jobid')||'', material: get('material')||'', grams: parseFloat(get('grams','weight_g','weight'))||0, hours: parseFloat(get('hours','print_hours'))||0, revenue: parseFloat(get('revenue','price','amount'))||0 } });
       } else if (type === 'inventory') {
         const material = get('material', 'filament', 'name');
         if (!material) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing material' }); continue; }
@@ -8285,7 +8288,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
             get('supplier')||null, get('notes')||null,
           ]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${stock}kg · $${price}/kg` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${stock}kg · $${price}/kg`,
+          data: { material, brand: get('brand')||'', color: get('color')||'', stock_kg: stock, price_per_kg: price, supplier: get('supplier')||'', notes: get('notes')||'' } });
       } else if (type === 'material_usage') {
         const material = get('material', 'filament', 'name', 'resin');
         if (!material) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing material name' }); continue; }
@@ -8297,7 +8301,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
           [get('job_ref','job_id','job')||null, material, get('brand')||null, get('color')||null,
            qty_g, cost_per_g, get('vendor','supplier')||null, get('period','date')||null, get('notes')||null]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${qty_g}g · $${(qty_g*cost_per_g).toFixed(2)}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${qty_g}g · $${(qty_g*cost_per_g).toFixed(2)}`,
+          data: { material, quantity_g: qty_g, cost_per_g, total_cost: +(qty_g*cost_per_g).toFixed(2), brand: get('brand')||'', color: get('color')||'', job_id: get('job_ref','job_id')||'', supplier: get('vendor','supplier')||'', period: get('period','date')||'', notes: get('notes')||'' } });
       } else if (type === 'machine_log') {
         const printer = get('printer', 'machine', 'printer_id', 'printer_name');
         const hours = parseFloat(get('hours', 'print_hours', 'runtime')) || 0;
@@ -8310,7 +8315,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [printer||null, printer||null, get('job_ref','job_id')||null, hours, elec, maint, dep, get('period','date')||null, get('notes')||null]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${printer||'Machine'} · ${hours}h · $${(elec+maint+dep).toFixed(2)}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${printer||'Machine'} · ${hours}h · $${(elec+maint+dep).toFixed(2)}`,
+          data: { printer: printer||'', print_hours: hours, electricity_cost: elec, maintenance_cost: maint, depreciation_cost: dep, total: +(elec+maint+dep).toFixed(2), job_id: get('job_ref','job_id')||'', period: get('period','date')||'', notes: get('notes')||'' } });
       } else if (type === 'labour_log') {
         const person = get('person', 'employee', 'name', 'operator');
         const hours = parseFloat(get('hours', 'labour_hours', 'work_hours')) || 0;
@@ -8322,7 +8328,8 @@ async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCos
           [get('job_ref','job_id')||null, person||null, get('role','position','title')||aiCategory||null,
            hours, rate, get('period','date')||null, get('notes')||null]
         );
-        results.push({ sheet, row_num, status: 'accepted', label: `${person||'Staff'} · ${hours}h · $${(hours*rate).toFixed(2)}` });
+        results.push({ sheet, row_num, status: 'accepted', label: `${person||'Staff'} · ${hours}h · $${(hours*rate).toFixed(2)}`,
+          data: { person: person||'', role: get('role','position','title')||'', hours, hourly_rate: rate, total_cost: +(hours*rate).toFixed(2), job_id: get('job_ref','job_id')||'', period: get('period','date')||'', notes: get('notes')||'' } });
       } else {
         results.push({ sheet, row_num, status: 'skipped', reason: `Unknown type: ${type}` });
       }

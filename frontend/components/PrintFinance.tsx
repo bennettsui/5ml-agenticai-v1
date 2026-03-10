@@ -150,6 +150,25 @@ interface ImportRowResult {
   status: 'accepted' | 'skipped';
   label?: string;
   reason?: string;
+  data?: Record<string, string | number>;
+}
+
+interface MaterialUsageEntry {
+  id: number; job_id: string | null; material: string; brand: string | null; color: string | null;
+  quantity_g: number; cost_per_g: number; total_cost: number;
+  supplier: string | null; period: string | null; notes: string | null; created_at: string;
+}
+
+interface MachineLogEntry {
+  id: number; printer_id: string | null; printer_name: string | null; job_id: string | null;
+  print_hours: number; electricity_cost: number; maintenance_cost: number; depreciation_cost: number;
+  period: string | null; notes: string | null; created_at: string;
+}
+
+interface LabourLogEntry {
+  id: number; job_id: string | null; person: string | null; role: string | null;
+  hours: number; hourly_rate: number; total_cost: number;
+  period: string | null; notes: string | null; created_at: string;
 }
 
 interface ImportResult {
@@ -1045,6 +1064,146 @@ function Costs() {
 
       {/* Overhead Allocation Engine */}
       <OverheadAllocator />
+
+      {/* Specialised cost layer tables */}
+      <MaterialUsageTable />
+      <MachineLogTable />
+      <LabourLogTable />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Specialised cost layer tables
+// ---------------------------------------------------------------------------
+
+function MaterialUsageTable() {
+  const { data, loading, reload } = useApi<MaterialUsageEntry[]>('/api/print-finance/material-log');
+  const total = (data || []).reduce((s, r) => s + Number(r.total_cost), 0);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-white">Material Usage</h3>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-400">Total <span className="text-white font-medium tabular-nums">{money(total)}</span></span>
+          <button onClick={reload} className="text-slate-500 hover:text-slate-300 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
+        </div>
+      </div>
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+              {['Material','Brand','Color','Job','Qty (g)','$/g','Total','Supplier','Period','Notes'].map(h => (
+                <th key={h} className={`px-3 py-2.5 text-slate-400 font-medium ${['Qty (g)','$/g','Total'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={10} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>}
+            {!loading && (data||[]).length === 0 && <tr><td colSpan={10} className="px-3 py-6 text-center text-slate-500">No material usage records.</td></tr>}
+            {(data||[]).map(r => (
+              <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
+                <td className="px-3 py-2.5 text-slate-200 font-medium">{r.material}</td>
+                <td className="px-3 py-2.5 text-slate-400">{r.brand || <span className="text-slate-600">—</span>}</td>
+                <td className="px-3 py-2.5 text-slate-400">{r.color || <span className="text-slate-600">—</span>}</td>
+                <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{r.job_id || <span className="text-slate-600">—</span>}</td>
+                <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.quantity_g), 1)}</td>
+                <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{Number(r.cost_per_g).toFixed(4)}</td>
+                <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(r.total_cost))}</td>
+                <td className="px-3 py-2.5 text-slate-400">{r.supplier || <span className="text-slate-600">—</span>}</td>
+                <td className="px-3 py-2.5 text-slate-400">{r.period || <span className="text-slate-600">—</span>}</td>
+                <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MachineLogTable() {
+  const { data, loading, reload } = useApi<MachineLogEntry[]>('/api/print-finance/machine-log');
+  const totalCost = (data || []).reduce((s, r) => s + Number(r.electricity_cost) + Number(r.maintenance_cost) + Number(r.depreciation_cost), 0);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-white">Machine Log</h3>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-400">Total <span className="text-white font-medium tabular-nums">{money(totalCost)}</span></span>
+          <button onClick={reload} className="text-slate-500 hover:text-slate-300 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
+        </div>
+      </div>
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+              {['Printer','Job','Hours','Electricity','Maintenance','Depreciation','Period','Notes'].map(h => (
+                <th key={h} className={`px-3 py-2.5 text-slate-400 font-medium ${['Hours','Electricity','Maintenance','Depreciation'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>}
+            {!loading && (data||[]).length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">No machine log entries.</td></tr>}
+            {(data||[]).map(r => (
+              <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
+                <td className="px-3 py-2.5 text-slate-200 font-medium">{r.printer_name || r.printer_id || <span className="text-slate-600">—</span>}</td>
+                <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{r.job_id || <span className="text-slate-600">—</span>}</td>
+                <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.print_hours), 1)}h</td>
+                <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{money(Number(r.electricity_cost))}</td>
+                <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{money(Number(r.maintenance_cost))}</td>
+                <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{money(Number(r.depreciation_cost))}</td>
+                <td className="px-3 py-2.5 text-slate-400">{r.period || <span className="text-slate-600">—</span>}</td>
+                <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function LabourLogTable() {
+  const { data, loading, reload } = useApi<LabourLogEntry[]>('/api/print-finance/labour-log');
+  const total = (data || []).reduce((s, r) => s + Number(r.total_cost), 0);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-white">Labour / HR</h3>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-400">Total <span className="text-white font-medium tabular-nums">{money(total)}</span></span>
+          <button onClick={reload} className="text-slate-500 hover:text-slate-300 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
+        </div>
+      </div>
+      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+              {['Person','Role','Job','Hours','Hourly Rate','Total','Period','Notes'].map(h => (
+                <th key={h} className={`px-3 py-2.5 text-slate-400 font-medium ${['Hours','Hourly Rate','Total'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>}
+            {!loading && (data||[]).length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">No labour log entries.</td></tr>}
+            {(data||[]).map(r => (
+              <tr key={r.id} className="border-b border-slate-700/30 last:border-0 hover:bg-white/[0.02]">
+                <td className="px-3 py-2.5 text-slate-200 font-medium">{r.person || <span className="text-slate-600">—</span>}</td>
+                <td className="px-3 py-2.5 text-slate-400">{r.role || <span className="text-slate-600">—</span>}</td>
+                <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{r.job_id || <span className="text-slate-600">—</span>}</td>
+                <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.hours), 1)}h</td>
+                <td className="px-3 py-2.5 text-right text-slate-400 tabular-nums">{money(Number(r.hourly_rate))}/h</td>
+                <td className="px-3 py-2.5 text-right text-slate-200 font-medium tabular-nums">{money(Number(r.total_cost))}</td>
+                <td className="px-3 py-2.5 text-slate-400">{r.period || <span className="text-slate-600">—</span>}</td>
+                <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -2937,16 +3096,28 @@ function UploadTab() {
             </div>
             <div className="max-h-80 overflow-y-auto">
               {result.results.map((r, i) => (
-                <div key={i} className={`flex items-start gap-3 px-3 py-2 border-b border-slate-700/30 last:border-0 text-xs ${r.status === 'accepted' ? 'hover:bg-emerald-500/5' : 'hover:bg-amber-500/5'}`}>
-                  {r.status === 'accepted'
-                    ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    : <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />}
-                  <div className="flex-1 min-w-0">
+                <div key={i} className={`px-3 py-2 border-b border-slate-700/30 last:border-0 text-xs ${r.status === 'accepted' ? 'hover:bg-emerald-500/5' : 'hover:bg-amber-500/5'}`}>
+                  <div className="flex items-start gap-3">
                     {r.status === 'accepted'
-                      ? <span className="text-slate-300">{r.label}</span>
-                      : <span className="text-amber-300/80">Skipped: {r.reason}</span>}
+                      ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      : <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />}
+                    <div className="flex-1 min-w-0">
+                      {r.status === 'accepted'
+                        ? <span className="text-slate-300 font-medium">{r.label}</span>
+                        : <span className="text-amber-300/80">Skipped: {r.reason}</span>}
+                      {r.data && r.status === 'accepted' && (
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {Object.entries(r.data).filter(([, v]) => v !== '' && v !== 0 && v !== null).map(([k, v]) => (
+                            <span key={k} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/[0.04] border border-slate-700/40 text-slate-500">
+                              <span className="text-slate-600">{k}</span>
+                              <span className="text-slate-300">{typeof v === 'number' ? (String(v).includes('.') ? Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : v) : v}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-shrink-0 text-slate-600 tabular-nums">{r.sheet} · row {r.row_num}</div>
                   </div>
-                  <div className="flex-shrink-0 text-slate-600 tabular-nums">{r.sheet} · row {r.row_num}</div>
                 </div>
               ))}
             </div>
