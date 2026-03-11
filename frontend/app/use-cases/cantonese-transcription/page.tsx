@@ -597,6 +597,7 @@ export default function CantoneseTranscriptionPage() {
   const [sttFileName, setSttFileName]       = useState<string | null>(null);
   const [sttFileSize, setSttFileSize]       = useState<number | null>(null);
   const audioInputRef                        = useRef<HTMLInputElement>(null);
+  const sttXhrRef                            = useRef<XMLHttpRequest | null>(null);
 
   // Analyze state
   const [transcript, setTranscript]     = useState('');
@@ -859,7 +860,16 @@ export default function CantoneseTranscriptionPage() {
     setOrchLoading(false);
   }
 
+  function cancelSttUpload() {
+    sttXhrRef.current?.abort();
+    sttXhrRef.current = null;
+    setSttLoading(false);
+    setSttProgress(null);
+    setSttError(null);
+  }
+
   function handleSttUpload(file: File) {
+    cancelSttUpload();
     setSttLoading(true);
     setSttError(null);
     setSttFallbackFrom(null);
@@ -874,11 +884,13 @@ export default function CantoneseTranscriptionPage() {
     form.append('provider', providerParam);
 
     const xhr = new XMLHttpRequest();
+    sttXhrRef.current = xhr;
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) setSttProgress(Math.round((e.loaded / e.total) * 100));
     };
     xhr.upload.onload = () => setSttProgress(100);
     xhr.onload = () => {
+      sttXhrRef.current = null;
       let data: Record<string, unknown> = {};
       try { data = JSON.parse(xhr.responseText); } catch { /* ignore */ }
       if (xhr.status < 200 || xhr.status >= 300 || !data.ok) {
@@ -894,7 +906,13 @@ export default function CantoneseTranscriptionPage() {
       setSttProgress(null);
     };
     xhr.onerror = () => {
+      sttXhrRef.current = null;
       setSttError('網絡錯誤，請重試');
+      setSttLoading(false);
+      setSttProgress(null);
+    };
+    xhr.onabort = () => {
+      sttXhrRef.current = null;
       setSttLoading(false);
       setSttProgress(null);
     };
@@ -1029,7 +1047,7 @@ export default function CantoneseTranscriptionPage() {
                 {/* Transcription engine toggle */}
                 <div className="flex items-center gap-1 bg-slate-800/60 rounded-lg border border-slate-700/50 p-1">
                   <button
-                    onClick={() => setSttEngine('paste')}
+                    onClick={() => { cancelSttUpload(); setSttEngine('paste'); }}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
                       sttEngine === 'paste'
                         ? 'bg-indigo-600 text-white shadow-sm'
@@ -1110,14 +1128,22 @@ export default function CantoneseTranscriptionPage() {
                         {sttProgress !== null && sttProgress < 100 ? (
                           <>
                             <Upload className={`w-5 h-5 ${sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400'}`} />
-                            <span className="text-xs text-slate-300">{sttFileName}</span>
-                            <div className="w-48 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all duration-150 ${sttEngine === 'whisper' ? 'bg-violet-500' : 'bg-blue-500'}`}
-                                style={{ width: `${sttProgress}%` }}
-                              />
+                            <span className="text-xs text-slate-300 max-w-xs truncate">{sttFileName}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-40 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-150 ${sttEngine === 'whisper' ? 'bg-violet-500' : 'bg-blue-500'}`}
+                                  style={{ width: `${sttProgress}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-slate-500 w-14">{sttProgress}% 上傳中</span>
+                              <button
+                                onMouseDown={e => e.stopPropagation()}
+                                onClick={e => { e.stopPropagation(); cancelSttUpload(); }}
+                                className="text-slate-500 hover:text-slate-300 transition-colors"
+                                title="取消上傳"
+                              >✕</button>
                             </div>
-                            <span className="text-[10px] text-slate-500">{sttProgress}% 上傳中…</span>
                           </>
                         ) : sttLoading ? (
                           <>
