@@ -31,6 +31,7 @@ const ENCODING_MAP = {
   'audio/webm': 'WEBM_OPUS',
   'audio/flac': 'FLAC',
   'audio/m4a':  'MP4',
+  'audio/mp4':  'MP4',  // browsers report M4A files as audio/mp4
 };
 
 // ── Time helpers ──────────────────────────────────────────────────────────────
@@ -107,10 +108,17 @@ async function transcribeWithGoogle({ fileBuffer, mimeType, language }) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(55_000), // abort before Fly.io's 60s proxy timeout
   });
   if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Google STT V1 error ${resp.status}: ${text}`);
+    let errDetail = `HTTP ${resp.status}`;
+    try {
+      const errBody = await resp.json();
+      errDetail = errBody?.error?.message || errBody?.error || errDetail;
+    } catch { /* ignore */ }
+    const err = new Error(`Google STT: ${errDetail}`);
+    err.code = resp.status === 400 ? 'CT-017' : 'CT-013';
+    throw err;
   }
   const data = await resp.json();
   const parsed = parseV1Response(data);

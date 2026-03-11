@@ -8,7 +8,7 @@ import {
   Languages, List, AlignLeft, BookOpen, Sparkles, Hash,
   ChevronDown, ChevronUp, Database, Info, Zap,
   CircleDot, Circle, CheckCircle, Cpu, Play, Pause, RotateCcw,
-  Upload, Volume2, Wand2,
+  Upload, Volume2, Wand2, Scissors, Download, SplitSquareHorizontal,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17,7 +17,7 @@ import {
 
 type Task     = 'clean_transcript' | 'meeting_minutes' | 'summary_zh' | 'summary_en' | 'action_items';
 type Model    = 'haiku' | 'sonnet' | 'deepseek' | 'gemini';
-type PageTab  = 'analyze' | 'orchestrate' | 'visualizer' | 'history' | 'errors' | 'error-codes';
+type PageTab  = 'analyze' | 'orchestrate' | 'visualizer' | 'history' | 'errors' | 'error-codes' | 'convert';
 
 interface VideoType {
   type: string; label: string; emoji: string; confidence: number; reason: string;
@@ -599,6 +599,29 @@ export default function CantoneseTranscriptionPage() {
   const audioInputRef                        = useRef<HTMLInputElement>(null);
   const sttXhrRef                            = useRef<XMLHttpRequest | null>(null);
 
+  // ── Convert tab state ────────────────────────────────────────────────────
+  type ConvFormat = 'mp3' | 'wav' | 'm4a';
+  type ConvStatus = 'idle' | 'uploading' | 'converting' | 'done' | 'error';
+  interface ConvChunk { index: number; filename: string; start: number; end: number; dataUrl: string }
+  interface ConvJob {
+    id: string; filename: string; size: number; format: ConvFormat;
+    startTime: number; endTime: number; splitChunks: boolean; chunkLen: number;
+    status: ConvStatus; error?: string; progress?: number;
+    result?: { single?: { dataUrl: string; filename: string }; chunks?: ConvChunk[] };
+    createdAt: number;
+  }
+  const [convFile, setConvFile]             = useState<File | null>(null);
+  const [convFormat, setConvFormat]         = useState<ConvFormat>('mp3');
+  const [convStartTime, setConvStartTime]   = useState('');
+  const [convEndTime, setConvEndTime]       = useState('');
+  const [convSplit, setConvSplit]           = useState(false);
+  const [convChunkLen, setConvChunkLen]     = useState('60');
+  const [convDragging, setConvDragging]     = useState(false);
+  const [convJobs, setConvJobs]             = useState<ConvJob[]>([]);
+  const [convActiveJob, setConvActiveJob]   = useState<string | null>(null);
+  const convFileRef                         = useRef<HTMLInputElement>(null);
+  const convXhrRef                          = useRef<XMLHttpRequest | null>(null);
+
   // Analyze state
   const [transcript, setTranscript]     = useState('');
   const [extraInstructions, setExtra]   = useState('');
@@ -860,6 +883,110 @@ export default function CantoneseTranscriptionPage() {
     setOrchLoading(false);
   }
 
+  // ── Convert helpers ──────────────────────────────────────────────────────
+  function handleConvert() {
+    if (!convFile) return;
+    const jobId = crypto.randomUUID();
+    const job: ConvJob = {
+      id: jobId, filename: convFile.name, size: convFile.size,
+      format: convFormat,
+      startTime: parseFloat(convStartTime) || 0,
+      endTime:   parseFloat(convEndTime)   || 0,
+      splitChunks: convSplit,
+      chunkLen:  parseInt(convChunkLen, 10) || 60,
+      status: 'uploading', progress: 0, createdAt: Date.now(),
+    };
+    setConvJobs(prev => [job, ...prev]);
+    setConvActiveJob(jobId);
+
+    const form = new FormData();
+    form.append('file',        convFile);
+    form.append('format',      convFormat);
+    form.append('startTime',   String(job.startTime));
+    form.append('endTime',     String(job.endTime));
+    form.append('splitChunks', String(convSplit));
+    form.append('chunkLen',    String(job.chunkLen));
+
+    const xhr = new XMLHttpRequest();
+    convXhrRef.current = xhr;
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 50); // upload = 0-50%
+        setConvJobs(prev => prev.map(j => j.id === jobId ? { ...j, progress: pct } : j));
+      }
+    };
+    xhr.upload.onload = () => {
+      setConvJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'converting', progress: 60 } : j));
+    };
+    xhr.onload = () => {
+      convXhrRef.current = null;
+      const contentType = xhr.getResponseHeader('Content-Type') || '';
+      const buf = xhr.response as ArrayBuffer;
+      const text = new TextDecoder().decode(buf);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (contentType.startsWith('audio/') || contentType.startsWith('video/')) {
+          // Single file — create object URL for download
+          const blob = new Blob([buf], { type: contentType });
+          const dataUrl = URL.createObjectURL(blob);
+          const filename = `converted.${convFormat}`;
+          setConvJobs(prev => prev.map(j => j.id === jobId
+            ? { ...j, status: 'done', progress: 100, result: { single: { dataUrl, filename } } }
+            : j));
+        } else {
+          // JSON response (chunks mode or error)
+          try {
+            const data = JSON.parse(text);
+            if (data.ok) {
+              setConvJobs(prev => prev.map(j => j.id === jobId
+                ? { ...j, status: 'done', progress: 100, result: { chunks: data.chunks } }
+                : j));
+            } else {
+              setConvJobs(prev => prev.map(j => j.id === jobId
+                ? { ...j, status: 'error', error: data.error || '轉換失敗' }
+                : j));
+            }
+          } catch {
+            setConvJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'error', error: '無效回應' } : j));
+          }
+        }
+      } else {
+        let msg = `HTTP ${xhr.status}`;
+        try { msg = JSON.parse(text)?.error || msg; } catch { /* ignore */ }
+        setConvJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'error', error: msg } : j));
+      }
+    };
+    xhr.onerror = () => {
+      convXhrRef.current = null;
+      setConvJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'error', error: '網絡錯誤' } : j));
+    };
+    xhr.onabort = () => {
+      convXhrRef.current = null;
+      setConvJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'error', error: '已取消' } : j));
+    };
+    xhr.open('POST', '/api/cantonese-transcription/convert');
+    xhr.responseType = 'arraybuffer';
+    xhr.send(form);
+  }
+
+  function cancelConvert() {
+    convXhrRef.current?.abort();
+    convXhrRef.current = null;
+    setConvActiveJob(null);
+  }
+
+  function convSendToTranscribe(dataUrl: string, filename: string) {
+    // Convert data URL back to File and send to STT
+    fetch(dataUrl)
+      .then(r => r.blob())
+      .then(blob => {
+        const file = new File([blob], filename, { type: blob.type });
+        setSttEngine('google-stt');
+        setPageTab('analyze');
+        setTimeout(() => handleSttUpload(file), 100);
+      });
+  }
+
   function cancelSttUpload() {
     sttXhrRef.current?.abort();
     sttXhrRef.current = null;
@@ -907,7 +1034,19 @@ export default function CantoneseTranscriptionPage() {
     };
     xhr.onerror = () => {
       sttXhrRef.current = null;
-      setSttError('網絡錯誤，請重試');
+      // Try to extract a message from the response body if present
+      let msg = '網絡錯誤，請重試';
+      try {
+        const d = JSON.parse(xhr.responseText);
+        if (d?.error) msg = d.error;
+      } catch { /* ignore */ }
+      setSttError(msg);
+      setSttLoading(false);
+      setSttProgress(null);
+    };
+    xhr.ontimeout = () => {
+      sttXhrRef.current = null;
+      setSttError('請求逾時，音訊檔案太長或網絡緩慢，請重試');
       setSttLoading(false);
       setSttProgress(null);
     };
@@ -1014,6 +1153,7 @@ export default function CantoneseTranscriptionPage() {
             { id: 'history',     label: '歷史記錄', icon: History },
             { id: 'errors',      label: '錯誤日誌', icon: AlertTriangle },
             { id: 'error-codes', label: '錯誤代碼', icon: Info },
+            { id: 'convert',     label: '格式轉換', icon: Scissors },
           ] as { id: PageTab; label: string; icon: typeof Zap }[]).map(tab => {
             const Icon   = tab.icon;
             const active = pageTab === tab.id;
@@ -1857,6 +1997,238 @@ export default function CantoneseTranscriptionPage() {
             </div>
           </div>
         )}
+        {/* ================================================================ */}
+        {/* CONVERT TAB                                                       */}
+        {/* ================================================================ */}
+        {pageTab === 'convert' && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+              {/* ── Left: upload + options ─────────────────────────────── */}
+              <div className="space-y-4">
+
+                {/* File dropzone */}
+                <div
+                  onDragOver={e => { e.preventDefault(); setConvDragging(true); }}
+                  onDragLeave={() => setConvDragging(false)}
+                  onDrop={e => {
+                    e.preventDefault(); setConvDragging(false);
+                    const f = e.dataTransfer.files[0];
+                    if (f) setConvFile(f);
+                  }}
+                  onClick={() => convFileRef.current?.click()}
+                  className={`cursor-pointer rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors ${
+                    convDragging ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-600/50 hover:border-slate-500/70 bg-white/[0.02]'
+                  }`}
+                >
+                  <input ref={convFileRef} type="file" className="hidden"
+                    accept="audio/*,video/*,.m4a,.mp4,.mov,.mkv,.avi,.webm,.mp3,.wav,.flac,.ogg"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) setConvFile(f); e.target.value = ''; }}
+                  />
+                  <Upload className="w-6 h-6 text-slate-400 mx-auto mb-2" />
+                  {convFile ? (
+                    <div>
+                      <p className="text-sm text-slate-200 truncate max-w-full">{convFile.name}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{(convFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm text-slate-300">拖放或點擊上傳音訊 / 影片</p>
+                      <p className="text-xs text-slate-500 mt-1">MP4 · MOV · M4A · MP3 · WAV · FLAC · WebM · OGG · 最大 500MB</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Options */}
+                <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4 space-y-4">
+                  {/* Output format */}
+                  <div>
+                    <label className="text-xs text-slate-400 mb-2 block">輸出格式</label>
+                    <div className="flex gap-1">
+                      {(['mp3', 'wav', 'm4a'] as const).map(f => (
+                        <button key={f} onClick={() => setConvFormat(f)}
+                          className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            convFormat === f ? 'bg-indigo-600 text-white' : 'bg-white/[0.04] text-slate-400 hover:text-slate-200'
+                          }`}
+                        >.{f.toUpperCase()}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Trim times */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">開始時間（秒）</label>
+                      <input value={convStartTime} onChange={e => setConvStartTime(e.target.value)}
+                        placeholder="0" type="number" min="0"
+                        className="w-full bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">結束時間（秒）</label>
+                      <input value={convEndTime} onChange={e => setConvEndTime(e.target.value)}
+                        placeholder="不限" type="number" min="0"
+                        className="w-full bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Split chunks toggle */}
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setConvSplit(v => !v)}
+                      className={`flex items-center gap-2 text-xs transition-colors ${convSplit ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-300'}`}
+                    >
+                      <div className={`w-8 h-4 rounded-full transition-colors relative ${convSplit ? 'bg-indigo-600' : 'bg-slate-600'}`}>
+                        <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${convSplit ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                      </div>
+                      <SplitSquareHorizontal className="w-3.5 h-3.5" />
+                      分割成 60 秒片段（用於 STT）
+                    </button>
+                    {convSplit && (
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <span className="text-xs text-slate-500">每段</span>
+                        <input value={convChunkLen} onChange={e => setConvChunkLen(e.target.value)}
+                          type="number" min="10" max="300"
+                          className="w-14 bg-white/[0.04] border border-slate-700/50 rounded-md px-2 py-0.5 text-xs text-slate-200 text-center focus:outline-none focus:border-indigo-500/50"
+                        />
+                        <span className="text-xs text-slate-500">秒</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleConvert}
+                    disabled={!convFile || convJobs.some(j => j.id === convActiveJob && (j.status === 'uploading' || j.status === 'converting'))}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium text-white transition-colors"
+                  >
+                    {convJobs.some(j => j.id === convActiveJob && (j.status === 'uploading' || j.status === 'converting'))
+                      ? <><Loader2 className="w-4 h-4 animate-spin" />轉換中…</>
+                      : <><Scissors className="w-4 h-4" />開始轉換</>
+                    }
+                  </button>
+                  {convJobs.some(j => j.id === convActiveJob && (j.status === 'uploading' || j.status === 'converting')) && (
+                    <button onClick={cancelConvert}
+                      className="px-3 py-2.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.07] text-slate-400 hover:text-slate-200 text-xs transition-colors border border-slate-700/50"
+                    >取消</button>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Right: conversion history ──────────────────────────── */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-400">轉換記錄</span>
+                  {convJobs.length > 0 && (
+                    <button onClick={() => setConvJobs([])} className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors">清除記錄</button>
+                  )}
+                </div>
+
+                {convJobs.length === 0 ? (
+                  <div className="bg-white/[0.02] rounded-xl border border-slate-700/30 p-8 text-center">
+                    <Scissors className="w-8 h-8 text-slate-700 mx-auto mb-2" />
+                    <p className="text-xs text-slate-600">尚無轉換記錄</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                    {convJobs.map(job => (
+                      <div key={job.id} className={`bg-slate-800/60 rounded-xl border p-4 space-y-3 ${
+                        job.status === 'error' ? 'border-red-500/30' :
+                        job.status === 'done'  ? 'border-green-500/20' :
+                        'border-slate-700/50'
+                      }`}>
+                        {/* Job header */}
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-slate-200 truncate">{job.filename}</p>
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              {(job.size / 1024 / 1024).toFixed(1)} MB · .{job.format.toUpperCase()}
+                              {job.startTime > 0 && ` · 從 ${job.startTime}s`}
+                              {job.endTime   > 0 && ` 至 ${job.endTime}s`}
+                              {job.splitChunks && ` · 每 ${job.chunkLen}s 分割`}
+                            </p>
+                          </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full shrink-0 ${
+                            job.status === 'done'       ? 'bg-green-500/20 text-green-400' :
+                            job.status === 'error'      ? 'bg-red-500/20 text-red-400' :
+                            job.status === 'uploading'  ? 'bg-blue-500/20 text-blue-400' :
+                            job.status === 'converting' ? 'bg-amber-500/20 text-amber-400' :
+                            'bg-slate-700/50 text-slate-500'
+                          }`}>
+                            {job.status === 'done'       ? '完成' :
+                             job.status === 'error'      ? '失敗' :
+                             job.status === 'uploading'  ? '上傳中' :
+                             job.status === 'converting' ? '轉換中' : '待機'}
+                          </span>
+                        </div>
+
+                        {/* Progress bar */}
+                        {(job.status === 'uploading' || job.status === 'converting') && (
+                          <div className="space-y-1">
+                            <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full transition-all duration-300 ${
+                                job.status === 'converting' ? 'bg-amber-500 animate-pulse' : 'bg-indigo-500'
+                              }`} style={{ width: `${job.progress ?? 0}%` }} />
+                            </div>
+                            <p className="text-[10px] text-slate-500">
+                              {job.status === 'converting' ? 'ffmpeg 轉換中…' : `${job.progress ?? 0}% 上傳中`}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Error */}
+                        {job.status === 'error' && (
+                          <p className="text-xs text-red-400">{job.error}</p>
+                        )}
+
+                        {/* Done — single file */}
+                        {job.status === 'done' && job.result?.single && (
+                          <div className="flex gap-2">
+                            <a href={job.result.single.dataUrl} download={job.result.single.filename}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600/20 hover:bg-green-600/30 text-green-400 text-xs transition-colors border border-green-600/20"
+                            ><Download className="w-3.5 h-3.5" />下載 .{job.format.toUpperCase()}</a>
+                            <button
+                              onClick={() => convSendToTranscribe(job.result!.single!.dataUrl, job.result!.single!.filename)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 text-xs transition-colors border border-indigo-600/20"
+                            ><Mic className="w-3.5 h-3.5" />轉錄</button>
+                          </div>
+                        )}
+
+                        {/* Done — chunks */}
+                        {job.status === 'done' && job.result?.chunks && (
+                          <div className="space-y-1.5">
+                            <p className="text-[10px] text-slate-500">{job.result.chunks.length} 個片段</p>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {job.result.chunks.map(chunk => (
+                                <div key={chunk.index} className="bg-white/[0.03] rounded-lg p-2 space-y-1.5">
+                                  <p className="text-[10px] text-slate-400">
+                                    #{chunk.index} · {Math.round(chunk.start)}s–{Math.round(chunk.end)}s
+                                  </p>
+                                  <div className="flex gap-1">
+                                    <a href={chunk.dataUrl} download={chunk.filename}
+                                      className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-green-600/20 hover:bg-green-600/30 text-green-400 text-[10px] transition-colors"
+                                    ><Download className="w-3 h-3" />下載</a>
+                                    <button
+                                      onClick={() => convSendToTranscribe(chunk.dataUrl, chunk.filename)}
+                                      className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 text-[10px] transition-colors"
+                                    ><Mic className="w-3 h-3" />轉錄</button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );
