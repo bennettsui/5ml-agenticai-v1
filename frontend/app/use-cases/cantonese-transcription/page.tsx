@@ -907,7 +907,19 @@ export default function CantoneseTranscriptionPage() {
     };
     xhr.onerror = () => {
       sttXhrRef.current = null;
-      setSttError('網絡錯誤，請重試');
+      // Try to extract a message from the response body if present
+      let msg = '網絡錯誤，請重試';
+      try {
+        const d = JSON.parse(xhr.responseText);
+        if (d?.error) msg = d.error;
+      } catch { /* ignore */ }
+      setSttError(msg);
+      setSttLoading(false);
+      setSttProgress(null);
+    };
+    xhr.ontimeout = () => {
+      sttXhrRef.current = null;
+      setSttError('請求逾時，音訊檔案太長或網絡緩慢，請重試');
       setSttLoading(false);
       setSttProgress(null);
     };

@@ -786,6 +786,11 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
 
     return res.json({ ok: true, ...result });
   } catch (err) {
+    // Timeout from AbortSignal → give a clear message
+    if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+      console.error('[ct-transcribe] Google STT timed out (>55s)');
+      return res.status(504).json({ ok: false, error_code: 'CT-018', error: '轉錄超時：音訊檔案太長，請裁短至 60 秒以下後重試' });
+    }
     // Map known error codes from stt-service; default to CT-013
     const errorCode = err.code || 'CT-013';
     const errorMsg  = db.ERROR_MESSAGES[errorCode] || err.message;
