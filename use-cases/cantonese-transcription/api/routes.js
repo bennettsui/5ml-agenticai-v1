@@ -804,4 +804,98 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /convert  — convert / trim / split audio or video file
+// ─────────────────────────────────────────────────────────────────────────────
+const ffmpeg    = require('fluent-ffmpeg');
+const os        = require('os');
+const path      = require('path');
+const fs        = require('fs');
+const { Readable } = require('stream');
+
+// Larger limit for video files (500 MB)
+const uploadConvert = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
+
+const FORMAT_MIME = { wav: 'audio/wav', mp3: 'audio/mpeg', m4a: 'audio/mp4' };
+
+router.post('/convert', uploadConvert.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ ok: false, error: '未提供檔案' });
+
+  const format     = ['wav', 'mp3', 'm4a'].includes(req.body.format) ? req.body.format : 'mp3';
+  const startTime  = parseFloat(req.body.startTime) || 0;
+  const endTime    = parseFloat(req.body.endTime)   || 0;
+  const splitChunks = req.body.splitChunks === 'true';
+  const chunkLen   = parseInt(req.body.chunkLen, 10) || 60;
+
+  const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-convert-'));
+  const inPath  = path.join(tmpDir, 'input' + path.extname(req.file.originalname || '.tmp'));
+  fs.writeFileSync(inPath, req.file.buffer);
+
+  try {
+    if (!splitChunks) {
+      // ── Single-file conversion ─────────────────────────────────────────
+      const outPath = path.join(tmpDir, `output.${format}`);
+      await new Promise((resolve, reject) => {
+        let cmd = ffmpeg(inPath).noVideo().audioFrequency(16000).toFormat(format);
+        if (startTime > 0) cmd = cmd.seekInput(startTime);
+        if (endTime   > 0) cmd = cmd.duration(endTime - startTime);
+        cmd.on('error', reject).on('end', resolve).save(outPath);
+      });
+      const buf = fs.readFileSync(outPath);
+      res.setHeader('Content-Type', FORMAT_MIME[format]);
+      res.setHeader('Content-Disposition', `attachment; filename="converted.${format}"`);
+      res.setHeader('Content-Length', buf.length);
+      return res.end(buf);
+    }
+
+    // ── Chunk splitting ────────────────────────────────────────────────
+    // Probe duration first
+    const duration = await new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(inPath, (err, meta) => {
+        if (err) return reject(err);
+        resolve(meta.format.duration || 0);
+      });
+    });
+
+    const effectiveStart = startTime > 0 ? startTime : 0;
+    const effectiveEnd   = endTime > 0 && endTime < duration ? endTime : duration;
+    const totalLen       = effectiveEnd - effectiveStart;
+    const numChunks      = Math.ceil(totalLen / chunkLen);
+
+    // Build each chunk
+    const chunks = [];
+    for (let i = 0; i < numChunks; i++) {
+      const cStart  = effectiveStart + i * chunkLen;
+      const cLen    = Math.min(chunkLen, effectiveEnd - cStart);
+      const outPath = path.join(tmpDir, `chunk${i + 1}.${format}`);
+      await new Promise((resolve, reject) => {
+        ffmpeg(inPath)
+          .noVideo()
+          .seekInput(cStart)
+          .duration(cLen)
+          .audioFrequency(16000)
+          .toFormat(format)
+          .on('error', reject)
+          .on('end', resolve)
+          .save(outPath);
+      });
+      const buf = fs.readFileSync(outPath);
+      chunks.push({
+        index:    i + 1,
+        filename: `chunk${i + 1}.${format}`,
+        start:    cStart,
+        end:      cStart + cLen,
+        dataUrl:  `data:${FORMAT_MIME[format]};base64,${buf.toString('base64')}`,
+      });
+    }
+
+    return res.json({ ok: true, format, chunks });
+  } catch (err) {
+    console.error('[ct-convert] ffmpeg error:', err.message);
+    return res.status(500).json({ ok: false, error: `轉換失敗：${err.message}` });
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 module.exports = { router, initDb: db.init };
