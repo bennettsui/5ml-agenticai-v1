@@ -669,18 +669,100 @@ function Revenue() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<RevenueEntry>>({});
   const [saving, setSaving] = useState(false);
-  const [filterPeriod, setFilterPeriod] = useState('');
-  const [filterChannel, setFilterChannel] = useState('');
+  // Sidebar
+  const [sidebarPeriod, setSidebarPeriod] = useState('');
+  const [sidebarChannel, setSidebarChannel] = useState('');
+  // Filters
+  const [filterSearch, setFilterSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  // Sort + group
+  const [sortField, setSortField] = useState('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [groupBy, setGroupBy] = useState<'none' | 'channel' | 'period'>('none');
   const [showSummary, setShowSummary] = useState(false);
+  // Bulk
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const periods = Array.from(new Set((entries || []).map(r => r.period).filter(Boolean))).sort().reverse();
-  const channels = Array.from(new Set((entries || []).map(r => r.channel).filter(Boolean))).sort();
-  const visible = (entries || []).filter(r =>
-    (!filterPeriod || r.period === filterPeriod) &&
-    (!filterChannel || r.channel === filterChannel)
-  );
+  const allEntries = entries || [];
+
+  const topPeriods = useMemo(() => {
+    const m: Record<string, { count: number; revenue: number }> = {};
+    for (const e of allEntries) {
+      const p = e.period || '—';
+      if (!m[p]) m[p] = { count: 0, revenue: 0 };
+      m[p].count++; m[p].revenue += Number(e.revenue);
+    }
+    return Object.entries(m).sort((a, b) => b[1].revenue - a[1].revenue).slice(0, 12);
+  }, [allEntries]);
+
+  const topChannels = useMemo(() => {
+    const m: Record<string, { count: number; revenue: number }> = {};
+    for (const e of allEntries) {
+      const c = e.channel || '—';
+      if (!m[c]) m[c] = { count: 0, revenue: 0 };
+      m[c].count++; m[c].revenue += Number(e.revenue);
+    }
+    return Object.entries(m).sort((a, b) => b[1].revenue - a[1].revenue).slice(0, 12);
+  }, [allEntries]);
+
+  const clearSidebar = () => { setSidebarPeriod(''); setSidebarChannel(''); };
+
+  const visibleEntries = useMemo(() => {
+    let list = allEntries;
+    if (sidebarPeriod) list = list.filter(r => r.period === sidebarPeriod);
+    if (sidebarChannel) list = list.filter(r => r.channel === sidebarChannel);
+    if (filterSearch) list = list.filter(r =>
+      (r.channel || '').toLowerCase().includes(filterSearch.toLowerCase()) ||
+      (r.source || '').toLowerCase().includes(filterSearch.toLowerCase()) ||
+      (r.notes || '').toLowerCase().includes(filterSearch.toLowerCase())
+    );
+    if (dateFrom) list = list.filter(r => new Date(r.created_at) >= new Date(dateFrom));
+    if (dateTo) list = list.filter(r => new Date(r.created_at) <= new Date(dateTo + 'T23:59:59'));
+    if (sortField) {
+      list = [...list].sort((a, b) => {
+        const av = (a as Record<string, unknown>)[sortField];
+        const bv = (b as Record<string, unknown>)[sortField];
+        const an = parseFloat(String(av || 0));
+        const bn = parseFloat(String(bv || 0));
+        if (!isNaN(an) && !isNaN(bn)) return sortDir === 'asc' ? an - bn : bn - an;
+        return sortDir === 'asc' ? String(av || '').localeCompare(String(bv || '')) : String(bv || '').localeCompare(String(av || ''));
+      });
+    }
+    return list;
+  }, [allEntries, sidebarPeriod, sidebarChannel, filterSearch, dateFrom, dateTo, sortField, sortDir]);
+
+  const totals = useMemo(() => visibleEntries.reduce(
+    (acc, r) => ({ revenue: acc.revenue + Number(r.revenue), cogs: acc.cogs + Number(r.cogs) }),
+    { revenue: 0, cogs: 0 }
+  ), [visibleEntries]);
+
+  const groupedEntries = useMemo(() => {
+    if (groupBy === 'none') return null;
+    const m = new Map<string, RevenueEntry[]>();
+    for (const e of visibleEntries) {
+      const key = groupBy === 'channel' ? (e.channel || '—') : (e.period || '—');
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(e);
+    }
+    return Array.from(m.entries()).sort((a, b) => {
+      const sa = a[1].reduce((s, r) => s + Number(r.revenue), 0);
+      const sb = b[1].reduce((s, r) => s + Number(r.revenue), 0);
+      return sb - sa;
+    });
+  }, [visibleEntries, groupBy]);
+
+  const toggleSort = (field: string) => {
+    if (sortField === field) {
+      if (sortDir === 'asc') setSortDir('desc');
+      else { setSortField(''); setSortDir('asc'); }
+    } else { setSortField(field); setSortDir('asc'); }
+  };
+  const SortIcon = ({ field }: { field: string }) => {
+    if (sortField !== field) return <ArrowUpDown className="w-3 h-3 text-slate-600 inline ml-0.5" />;
+    return sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-blue-400 inline ml-0.5" /> : <ChevronDown className="w-3 h-3 text-blue-400 inline ml-0.5" />;
+  };
 
   const save = async () => {
     if (!form.channel || !form.period) return;
@@ -711,13 +793,12 @@ function Revenue() {
     });
     setSaving(false); cancelEdit(); reload();
   };
-
   const del = async (id: number) => { await fetch(`/api/print-finance/revenue/${id}`, { method: 'DELETE' }); if (editId === id) cancelEdit(); setSelectedIds(p => { const s = new Set(p); s.delete(id); return s; }); reload(); };
 
   const toggleSelect = (id: number) => setSelectedIds(p => { const s = new Set(p); s.has(id) ? s.delete(id) : s.add(id); return s; });
-  const allVisibleSelected = visible.length > 0 && visible.every(r => selectedIds.has(r.id));
+  const allVisibleSelected = visibleEntries.length > 0 && visibleEntries.every(r => selectedIds.has(r.id));
   const someSelected = selectedIds.size > 0;
-  const toggleSelectAll = () => setSelectedIds(allVisibleSelected ? new Set() : new Set(visible.map(r => r.id)));
+  const toggleSelectAll = () => setSelectedIds(allVisibleSelected ? new Set() : new Set(visibleEntries.map(r => r.id)));
   const bulkDelete = async () => {
     if (!selectedIds.size || !confirm(`Delete ${selectedIds.size} selected entr${selectedIds.size === 1 ? 'y' : 'ies'}?`)) return;
     setBulkDeleting(true);
@@ -725,189 +806,288 @@ function Revenue() {
     setSelectedIds(new Set()); setBulkDeleting(false); reload();
   };
 
-  const totals = visible.reduce((acc, r) => ({ revenue: acc.revenue + Number(r.revenue), cogs: acc.cogs + Number(r.cogs) }), { revenue: 0, cogs: 0 });
+  const hasFilters = !!(sidebarPeriod || sidebarChannel || filterSearch || dateFrom || dateTo);
 
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Total Revenue', value: money(totals.revenue), icon: TrendingUp, color: 'text-emerald-400' },
-          { label: 'Total COGS', value: money(totals.cogs), icon: DollarSign, color: 'text-rose-400' },
-          { label: 'Gross Profit', value: money(totals.revenue - totals.cogs), icon: Zap, color: 'text-blue-400' },
-        ].map(k => {
-          const Icon = k.icon;
+  const renderTable = (rows: RevenueEntry[], showSelectAll = false) => (
+    <table className="w-full text-xs">
+      <thead>
+        <tr className="border-b border-slate-700/50 bg-white/[0.03]">
+          <th className="px-3 py-2.5 w-8">
+            {showSelectAll && (
+              <input type="checkbox" checked={rows.length > 0 && rows.every(r => selectedIds.has(r.id))}
+                onChange={() => {
+                  const allSel = rows.every(r => selectedIds.has(r.id));
+                  setSelectedIds(p => { const s = new Set(p); rows.forEach(r => allSel ? s.delete(r.id) : s.add(r.id)); return s; });
+                }}
+                className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 accent-blue-500 cursor-pointer" />
+            )}
+          </th>
+          {[
+            { label: 'Channel', field: 'channel' },
+            { label: 'Source', field: 'source' },
+            { label: 'Period', field: 'period' },
+            { label: 'Date', field: 'date' },
+            { label: 'Jobs', field: 'job_count' },
+            { label: 'Grams', field: 'units_grams' },
+            { label: 'Revenue', field: 'revenue' },
+            { label: 'COGS', field: 'cogs' },
+            { label: 'Gross Profit', field: '_gp' },
+            { label: 'Margin', field: '_margin' },
+            { label: 'Notes', field: 'notes' },
+          ].map(h => (
+            <th key={h.field} onClick={() => !h.field.startsWith('_') && toggleSort(h.field)}
+              className={`px-3 py-2.5 text-slate-400 font-medium whitespace-nowrap select-none transition-colors ${!h.field.startsWith('_') ? 'cursor-pointer hover:text-slate-200' : ''} ${['job_count','units_grams','revenue','cogs','_gp','_margin'].includes(h.field) ? 'text-right' : 'text-left'}`}>
+              {h.label}{!h.field.startsWith('_') && <SortIcon field={h.field} />}
+            </th>
+          ))}
+          <th className="px-3 py-2.5 w-12" />
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 && <tr><td colSpan={13} className="px-3 py-6 text-center text-slate-500">No entries match the current filters.</td></tr>}
+        {rows.map(r => {
+          const isSelected = selectedIds.has(r.id);
+          const gp = Number(r.revenue) - Number(r.cogs);
+          const margin = Number(r.revenue) > 0 ? (gp / Number(r.revenue)) * 100 : 0;
+          if (editId === r.id) return (
+            <tr key={r.id} className="border-b border-slate-700/30 bg-blue-500/5">
+              <td className="px-2 py-1.5" />
+              <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.channel||'')} onChange={e => setEditForm(p => ({...p, channel: e.target.value}))} /></td>
+              <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.source||'')} onChange={e => setEditForm(p => ({...p, source: e.target.value}))} /></td>
+              <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
+              <td className="px-2 py-1.5"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.date||'')} onChange={e => setEditForm(p => ({...p, date: e.target.value}))} /></td>
+              <td className="px-2 py-1.5"><input type="number" className="w-14 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.job_count||'')} onChange={e => setEditForm(p => ({...p, job_count: Number(e.target.value)}))} /></td>
+              <td className="px-2 py-1.5"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.units_grams||'')} onChange={e => setEditForm(p => ({...p, units_grams: Number(e.target.value)}))} /></td>
+              <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.revenue||'')} onChange={e => setEditForm(p => ({...p, revenue: Number(e.target.value)}))} /></td>
+              <td className="px-2 py-1.5"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white text-right" value={String(editForm.cogs||'')} onChange={e => setEditForm(p => ({...p, cogs: Number(e.target.value)}))} /></td>
+              <td className="px-2 py-1.5 text-slate-600 text-right">—</td>
+              <td className="px-2 py-1.5 text-slate-600 text-right">—</td>
+              <td className="px-2 py-1.5"><input className="w-28 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
+              <td className="px-2 py-1.5">
+                <div className="flex items-center gap-1">
+                  <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"><Save className="w-3 h-3" /></button>
+                  <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3 h-3" /></button>
+                </div>
+              </td>
+            </tr>
+          );
           return (
-            <div key={k.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2"><span className="text-xs text-slate-400">{k.label}</span><Icon className={`w-4 h-4 ${k.color}`} /></div>
-              <div className={`text-2xl font-bold ${k.color}`}>{loading ? '—' : k.value}</div>
-            </div>
+            <tr key={r.id} className={`border-b border-slate-700/30 last:border-0 group transition-colors ${isSelected ? 'bg-blue-500/[0.07]' : 'hover:bg-white/[0.02]'}`}>
+              <td className="px-3 py-2.5">
+                <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(r.id)}
+                  className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 accent-blue-500 cursor-pointer" />
+              </td>
+              <td className="px-3 py-2.5 text-slate-200 font-medium whitespace-nowrap">{r.channel}</td>
+              <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{r.source || <span className="text-slate-600">—</span>}</td>
+              <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{r.period}</td>
+              <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{r.date || <span className="text-slate-600">—</span>}</td>
+              <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{r.job_count}</td>
+              <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums">{fmt(Number(r.units_grams))}</td>
+              <td className="px-3 py-2.5 text-right text-white font-medium tabular-nums">{money(Number(r.revenue))}</td>
+              <td className="px-3 py-2.5 text-right text-rose-300 tabular-nums">{money(Number(r.cogs))}</td>
+              <td className="px-3 py-2.5 text-right text-emerald-300 tabular-nums">{money(gp)}</td>
+              <td className="px-3 py-2.5 text-right"><span className={`font-medium ${margin > 70 ? 'text-emerald-400' : margin > 50 ? 'text-blue-400' : 'text-amber-400'}`}>{fmt(margin, 1)}%</span></td>
+              <td className="px-3 py-2.5 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
+              <td className="px-3 py-2.5">
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => startEdit(r)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3 h-3" /></button>
+                  <button onClick={() => del(r.id)} className="text-slate-500 hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
+                </div>
+              </td>
+            </tr>
           );
         })}
+      </tbody>
+    </table>
+  );
+
+  return (
+    <div className="flex gap-4 min-h-0">
+      {/* ── Left Sidebar ── */}
+      <div className="w-48 flex-shrink-0 space-y-1 pt-1">
+        <button onClick={clearSidebar}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${!sidebarPeriod && !sidebarChannel ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'}`}>
+          <span className="font-medium">All Entries</span>
+          <span className="tabular-nums text-slate-500">{allEntries.length}</span>
+        </button>
+
+        {topPeriods.length > 0 && (
+          <>
+            <div className="pt-2 pb-1 px-3 text-[10px] font-semibold text-slate-600 uppercase tracking-wider">By Period</div>
+            {topPeriods.map(([p, { count, revenue }]) => {
+              const isActive = sidebarPeriod === p;
+              return (
+                <button key={p} onClick={() => { setSidebarPeriod(p); setSidebarChannel(''); }}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors text-left ${isActive ? 'bg-white/[0.06] text-slate-200 border border-slate-600/50' : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.03]'}`}>
+                  <ChevronRight className="w-3 h-3 flex-shrink-0" />
+                  <span className="flex-1 truncate">{p}</span>
+                  <span className="tabular-nums text-slate-600 text-[10px]">{count}</span>
+                </button>
+              );
+            })}
+          </>
+        )}
+
+        {topChannels.length > 0 && (
+          <>
+            <div className="pt-3 pb-1 px-3 text-[10px] font-semibold text-slate-600 uppercase tracking-wider">By Channel</div>
+            {topChannels.map(([ch, { count }]) => {
+              const isActive = sidebarChannel === ch;
+              return (
+                <button key={ch} onClick={() => { setSidebarChannel(ch); setSidebarPeriod(''); }}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors text-left ${isActive ? 'bg-white/[0.06] text-slate-200 border border-slate-600/50' : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.03]'}`}>
+                  <ChevronRight className="w-3 h-3 flex-shrink-0" />
+                  <span className="flex-1 truncate">{ch}</span>
+                  <span className="tabular-nums text-slate-600 text-[10px]">{count}</span>
+                </button>
+              );
+            })}
+          </>
+        )}
       </div>
 
-      {error && <ErrorBanner msg={error} onRetry={reload} />}
-
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          {someSelected ? (
-            <>
-              <span className="text-xs font-medium text-blue-300">{selectedIds.size} selected</span>
-              <button onClick={bulkDelete} disabled={bulkDeleting}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 text-xs rounded-lg transition-colors disabled:opacity-50">
-                <Trash2 className="w-3.5 h-3.5" />{bulkDeleting ? 'Deleting…' : `Delete ${selectedIds.size}`}
-              </button>
-              <button onClick={() => setSelectedIds(new Set())} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Deselect all</button>
-            </>
-          ) : (
-            <>
-              <Filter className="w-3.5 h-3.5 text-slate-500" />
-              {periods.length > 0 && (
-                <select value={filterPeriod} onChange={e => setFilterPeriod(e.target.value)}
-                  className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
-                  <option value="">All periods</option>
-                  {periods.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              )}
-              {channels.length > 0 && (
-                <select value={filterChannel} onChange={e => setFilterChannel(e.target.value)}
-                  className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50">
-                  <option value="">All channels</option>
-                  {channels.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              )}
-            </>
-          )}
+      {/* ── Main Content ── */}
+      <div className="flex-1 min-w-0 space-y-4">
+        {/* Stats strip */}
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { label: 'Revenue', value: money(totals.revenue), color: 'text-emerald-400' },
+            { label: 'COGS', value: money(totals.cogs), color: 'text-rose-400' },
+            { label: 'Gross Profit', value: money(totals.revenue - totals.cogs), color: 'text-blue-400' },
+            { label: 'Margin', value: totals.revenue > 0 ? `${fmt(((totals.revenue - totals.cogs) / totals.revenue) * 100, 1)}%` : '—', color: 'text-slate-200' },
+          ].map(k => (
+            <div key={k.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+              <div className="text-xs text-slate-400 mb-2">{k.label}</div>
+              <div className={`text-xl font-bold ${k.color}`}>{loading ? '—' : k.value}</div>
+            </div>
+          ))}
         </div>
-        <div className="flex items-center gap-2">
+
+        {error && <ErrorBanner msg={error} onRetry={reload} />}
+
+        {/* Bulk action bar */}
+        {someSelected && (
+          <div className="flex items-center gap-3 px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+            <span className="text-xs font-medium text-blue-300">{selectedIds.size} selected</span>
+            <button onClick={bulkDelete} disabled={bulkDeleting}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 text-xs rounded-lg transition-colors disabled:opacity-50">
+              <Trash2 className="w-3.5 h-3.5" />{bulkDeleting ? 'Deleting…' : `Delete ${selectedIds.size}`}
+            </button>
+            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Deselect all</button>
+          </div>
+        )}
+
+        {/* Filter + actions bar */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <CalendarDays className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+              className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50" />
+            <span className="text-slate-600 text-xs">–</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+              className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50" />
+          </div>
+          <input type="text" placeholder="Search…" value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
+            className="bg-slate-700/80 border border-slate-600/50 rounded-lg px-2 py-1 text-xs text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 w-36" />
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">Group</span>
+            {(['none', 'channel', 'period'] as const).map(g => (
+              <button key={g} onClick={() => setGroupBy(g)}
+                className={`px-2 py-1 text-xs rounded-lg border transition-colors ${groupBy === g ? 'bg-blue-500/20 border-blue-500/40 text-blue-300' : 'border-slate-700/50 text-slate-500 hover:text-slate-300'}`}>
+                {g === 'none' ? 'None' : g.charAt(0).toUpperCase() + g.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1" />
+          {hasFilters && (
+            <button onClick={() => { clearSidebar(); setFilterSearch(''); setDateFrom(''); setDateTo(''); }}
+              className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1">
+              <X className="w-3 h-3" /> Clear filters
+            </button>
+          )}
           <button onClick={() => setShowSummary(v => !v)}
             className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs rounded-lg transition-colors ${showSummary ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' : 'border-slate-700/50 text-slate-400 hover:text-slate-200'}`}>
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showSummary ? 'rotate-180' : ''}`} /> Summary
           </button>
-          <button onClick={() => setAdding(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
+          <button onClick={() => setAdding(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors">
             <Plus className="w-3.5 h-3.5" /> Add Entry
           </button>
         </div>
-      </div>
 
-      {showSummary && !loading && entries && entries.length > 0 && (
-        <RevenueSummary entries={entries} />
-      )}
-
-      {adding && (
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
-            {[
-              { key: 'channel', label: 'Channel' },
-              { key: 'period', label: 'Period (e.g. Mar 2026)' },
-              { key: 'date', label: 'Date' },
-              { key: 'source', label: 'Source' },
-              { key: 'job_count', label: 'Jobs', type: 'number' },
-              { key: 'units_grams', label: 'Units (g)', type: 'number' },
-              { key: 'revenue', label: 'Revenue ($)', type: 'number' },
-              { key: 'cogs', label: 'COGS ($)', type: 'number' },
-              { key: 'notes', label: 'Notes' },
-            ].map(f => (
-              <div key={f.key}>
-                <label className="text-xs text-slate-400 block mb-1">{f.label}</label>
-                <input type={f.type || 'text'} value={(form as Record<string, string>)[f.key]}
-                  onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                  className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500/50" />
-              </div>
-            ))}
+        {/* Active filter chips */}
+        {(sidebarPeriod || sidebarChannel) && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-500">Filtered:</span>
+            {sidebarPeriod && <span className="flex items-center gap-1 px-2 py-0.5 bg-white/[0.05] border border-slate-600/50 rounded-full text-slate-300">
+              Period: {sidebarPeriod} <button onClick={() => setSidebarPeriod('')}><X className="w-3 h-3" /></button>
+            </span>}
+            {sidebarChannel && <span className="flex items-center gap-1 px-2 py-0.5 bg-white/[0.05] border border-slate-600/50 rounded-full text-slate-300">
+              {sidebarChannel} <button onClick={() => setSidebarChannel('')}><X className="w-3 h-3" /></button>
+            </span>}
           </div>
-          <div className="flex gap-2">
-            <button onClick={save} disabled={saving} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs rounded-lg transition-colors">{saving ? 'Saving…' : 'Save'}</button>
-            <button onClick={() => setAdding(false)} className="px-4 py-1.5 bg-slate-700 text-slate-300 text-xs rounded-lg hover:bg-slate-600 transition-colors">Cancel</button>
-          </div>
-        </div>
-      )}
+        )}
 
-      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-700/50">
-              <th className="px-3 py-3 w-8">
-                <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll}
-                  className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 accent-blue-500 cursor-pointer" />
-              </th>
-              {['Channel', 'Source', 'Period', 'Date', 'Jobs', 'Grams', 'Revenue', 'COGS', 'Gross Profit', 'Margin', 'Notes', ''].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-medium text-slate-400 whitespace-nowrap">{h}</th>
+        {showSummary && !loading && allEntries.length > 0 && <RevenueSummary entries={visibleEntries} />}
+
+        {adding && (
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+              {[
+                { key: 'channel', label: 'Channel' },
+                { key: 'period', label: 'Period (e.g. Mar 2026)' },
+                { key: 'date', label: 'Date' },
+                { key: 'source', label: 'Source' },
+                { key: 'job_count', label: 'Jobs', type: 'number' },
+                { key: 'units_grams', label: 'Units (g)', type: 'number' },
+                { key: 'revenue', label: 'Revenue ($)', type: 'number' },
+                { key: 'cogs', label: 'COGS ($)', type: 'number' },
+                { key: 'notes', label: 'Notes' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="text-xs text-slate-400 block mb-1">{f.label}</label>
+                  <input type={f.type || 'text'} value={(form as Record<string, string>)[f.key]}
+                    onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-slate-600/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                </div>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? <LoadingRow cols={13} /> : visible.length === 0 ? (
-              <tr><td colSpan={13} className="px-4 py-8 text-center text-sm text-slate-500">{filterPeriod || filterChannel ? 'No entries match filters.' : 'No entries yet.'}</td></tr>
-            ) : visible.map(r => {
-              const isEditing = editId === r.id;
-              const isSelected = selectedIds.has(r.id);
-              const gp = Number(r.revenue) - Number(r.cogs);
-              const margin = Number(r.revenue) > 0 ? (gp / Number(r.revenue)) * 100 : 0;
+            </div>
+            <div className="flex gap-2">
+              <button onClick={save} disabled={saving} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs rounded-lg transition-colors">{saving ? 'Saving…' : 'Save'}</button>
+              <button onClick={() => setAdding(false)} className="px-4 py-1.5 bg-slate-700 text-slate-300 text-xs rounded-lg hover:bg-slate-600 transition-colors">Cancel</button>
+            </div>
+          </div>
+        )}
 
-              if (isEditing) return (
-                <tr key={r.id} className="border-b border-blue-500/20 bg-blue-500/5">
-                  <td className="px-3 py-2" />
-                  <td className="px-3 py-2"><input className="w-28 bg-white/[0.07] border border-blue-500/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.channel||'')} onChange={e => setEditForm(p => ({...p, channel: e.target.value}))} /></td>
-                  <td className="px-3 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.source||'')} onChange={e => setEditForm(p => ({...p, source: e.target.value}))} /></td>
-                  <td className="px-3 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.period||'')} onChange={e => setEditForm(p => ({...p, period: e.target.value}))} /></td>
-                  <td className="px-3 py-2"><input className="w-24 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.date||'')} onChange={e => setEditForm(p => ({...p, date: e.target.value}))} /></td>
-                  <td className="px-3 py-2"><input type="number" className="w-14 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.job_count||'')} onChange={e => setEditForm(p => ({...p, job_count: Number(e.target.value)}))} /></td>
-                  <td className="px-3 py-2"><input type="number" className="w-16 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.units_grams||'')} onChange={e => setEditForm(p => ({...p, units_grams: Number(e.target.value)}))} /></td>
-                  <td className="px-3 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.revenue||'')} onChange={e => setEditForm(p => ({...p, revenue: Number(e.target.value)}))} /></td>
-                  <td className="px-3 py-2"><input type="number" className="w-20 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.cogs||'')} onChange={e => setEditForm(p => ({...p, cogs: Number(e.target.value)}))} /></td>
-                  <td className="px-3 py-2 text-slate-500">—</td>
-                  <td className="px-3 py-2 text-slate-500">—</td>
-                  <td className="px-3 py-2"><input className="w-32 bg-white/[0.07] border border-slate-600/40 rounded px-2 py-1 text-xs text-white" value={String(editForm.notes||'')} onChange={e => setEditForm(p => ({...p, notes: e.target.value}))} /></td>
-                  <td className="px-3 py-2">
-                    <div className="flex gap-1">
-                      <button onClick={saveEdit} disabled={saving} className="text-emerald-400 hover:text-emerald-300"><Save className="w-3.5 h-3.5" /></button>
-                      <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </td>
-                </tr>
-              );
-
+        {/* Table — grouped or flat */}
+        {loading ? (
+          <div className="flex items-center justify-center py-12 text-slate-500 text-sm gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+        ) : groupedEntries ? (
+          <div className="space-y-3">
+            {groupedEntries.map(([key, rows]) => {
+              const groupRev = rows.reduce((s, r) => s + Number(r.revenue), 0);
+              const groupAllSel = rows.every(r => selectedIds.has(r.id));
               return (
-                <tr key={r.id} className={`border-b border-slate-700/30 last:border-0 transition-colors group ${isSelected ? 'bg-blue-500/[0.07]' : 'hover:bg-white/[0.02]'}`}>
-                  <td className="px-3 py-3">
-                    <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(r.id)}
-                      className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 accent-blue-500 cursor-pointer" />
-                  </td>
-                  <td className="px-4 py-3 text-slate-200 font-medium whitespace-nowrap">{r.channel}</td>
-                  <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{r.source || <span className="text-slate-600">—</span>}</td>
-                  <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{r.period}</td>
-                  <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{r.date || <span className="text-slate-600">—</span>}</td>
-                  <td className="px-4 py-3 text-slate-300">{r.job_count}</td>
-                  <td className="px-4 py-3 text-slate-300">{fmt(Number(r.units_grams))}</td>
-                  <td className="px-4 py-3 text-white font-medium">{money(Number(r.revenue))}</td>
-                  <td className="px-4 py-3 text-rose-300">{money(Number(r.cogs))}</td>
-                  <td className="px-4 py-3 text-emerald-300">{money(gp)}</td>
-                  <td className="px-4 py-3"><span className={`font-medium ${margin > 70 ? 'text-emerald-400' : margin > 50 ? 'text-blue-400' : 'text-amber-400'}`}>{fmt(margin, 1)}%</span></td>
-                  <td className="px-4 py-3 text-slate-400 max-w-[140px] truncate">{r.notes || <span className="text-slate-600">—</span>}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => startEdit(r)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => del(r.id)} className="text-slate-500 hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                <div key={key} className="border border-slate-700/50 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-white/[0.03] border-b border-slate-700/40">
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" checked={groupAllSel} onChange={() => {
+                        setSelectedIds(p => { const s = new Set(p); rows.forEach(r => groupAllSel ? s.delete(r.id) : s.add(r.id)); return s; });
+                      }} className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 accent-blue-500 cursor-pointer" />
+                      <span className="text-xs font-semibold text-slate-300">{key}</span>
                     </div>
-                  </td>
-                </tr>
+                    <span className="text-xs text-slate-400">{rows.length} entries · {money(groupRev)}</span>
+                  </div>
+                  <div className="overflow-x-auto">{renderTable(rows)}</div>
+                </div>
               );
             })}
-          </tbody>
-          {(entries || []).length > 0 && (
-            <tfoot>
-              <tr className="border-t border-slate-600/50 bg-white/[0.02]">
-                <td />
-                <td colSpan={6} className="px-4 py-3 text-xs font-semibold text-slate-300">TOTAL</td>
-                <td className="px-4 py-3 text-white font-bold">{money(totals.revenue)}</td>
-                <td className="px-4 py-3 text-rose-300 font-bold">{money(totals.cogs)}</td>
-                <td className="px-4 py-3 text-emerald-300 font-bold">{money(totals.revenue - totals.cogs)}</td>
-                <td className="px-4 py-3 text-blue-400 font-bold">{totals.revenue > 0 ? fmt(((totals.revenue - totals.cogs) / totals.revenue) * 100, 1) : '—'}%</td>
-                <td colSpan={2} />
-              </tr>
-            </tfoot>
-          )}
-        </table>
+          </div>
+        ) : (
+          <div className="border border-slate-700/50 rounded-xl overflow-hidden overflow-x-auto">
+            {renderTable(visibleEntries, true)}
+          </div>
+        )}
       </div>
     </div>
   );
