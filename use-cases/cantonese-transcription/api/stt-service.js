@@ -123,11 +123,10 @@ async function transcribeWithGoogle({ fileBuffer, mimeType, language }) {
 // or any FastAPI wrapper exposing the same multipart endpoint).
 //
 // Required env:
-//   WHISPER_SERVICE_URL — base URL of the Whisper service
-//                         e.g. http://localhost:9000 or https://whisper.internal
+//   WHISPER_SERVICE_URL — base URL of the Whisper service (e.g. https://whisper.internal)
 //
 // Optional env:
-//   WHISPER_MODEL — model name to request (default: 'large-v3')
+//   WHISPER_MODEL — model name to request (default: 'khleeloo/whisper-large-v3-cantonese')
 //
 // The service must accept POST /v1/audio/transcriptions with:
 //   file        — audio file (multipart)
@@ -146,7 +145,7 @@ async function transcribeWithWhisper({ fileBuffer, mimeType, language, filename 
     throw err;
   }
 
-  const model = process.env.WHISPER_MODEL || 'large-v3';
+  const model = process.env.WHISPER_MODEL || 'khleeloo/whisper-large-v3-cantonese';
 
   // Map yue-Hant-HK → 'yue' for Whisper (BCP-47 short code)
   const whisperLang = language === 'yue-Hant-HK' ? 'yue' : language;

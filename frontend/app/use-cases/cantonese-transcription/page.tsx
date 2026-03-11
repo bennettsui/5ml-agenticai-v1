@@ -593,6 +593,9 @@ export default function CantoneseTranscriptionPage() {
   const [sttLastProvider, setSttLastProvider] = useState<string | null>(null);
   const [sttFallbackFrom, setSttFallbackFrom] = useState<string | null>(null);
   const [sttDragging, setSttDragging]        = useState(false);
+  const [sttProgress, setSttProgress]       = useState<number | null>(null);
+  const [sttFileName, setSttFileName]       = useState<string | null>(null);
+  const [sttFileSize, setSttFileSize]       = useState<number | null>(null);
   const audioInputRef                        = useRef<HTMLInputElement>(null);
 
   // Analyze state
@@ -856,34 +859,47 @@ export default function CantoneseTranscriptionPage() {
     setOrchLoading(false);
   }
 
-  async function handleSttUpload(file: File) {
+  function handleSttUpload(file: File) {
     setSttLoading(true);
     setSttError(null);
     setSttFallbackFrom(null);
+    setSttProgress(0);
+    setSttFileName(file.name);
+    setSttFileSize(file.size);
+
     const form = new FormData();
     form.append('audio', file);
     form.append('language', 'yue-Hant-HK');
-    // Map UI engine name → API provider param
     const providerParam = sttEngine === 'whisper' ? 'whisper' : sttEngine === 'google-stt' ? 'google-stt' : 'auto';
     form.append('provider', providerParam);
-    try {
-      const res  = await fetch('/api/cantonese-transcription/transcribe', { method: 'POST', body: form });
+
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) setSttProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.upload.onload = () => setSttProgress(100);
+    xhr.onload = () => {
       let data: Record<string, unknown> = {};
-      try { data = await res.json(); } catch { /* empty or non-JSON body */ }
-      if (!res.ok || !data.ok) {
-        setSttError((data.error as string) ?? `轉錄失敗 (HTTP ${res.status})`);
+      try { data = JSON.parse(xhr.responseText); } catch { /* ignore */ }
+      if (xhr.status < 200 || xhr.status >= 300 || !data.ok) {
+        setSttError((data.error as string) ?? `轉錄失敗 (HTTP ${xhr.status})`);
       } else {
-        setTranscript(data.transcript ?? '');
-        if (data.segments?.length) setSegments(data.segments);
-        setSttLastProvider(data.provider ?? null);
-        setSttFallbackFrom(data.fallbackFrom ?? null);
-        setSttEngine('paste'); // switch back to paste view to show filled textarea
+        setTranscript((data.transcript as string) ?? '');
+        if ((data.segments as unknown[])?.length) setSegments(data.segments as Segment[]);
+        setSttLastProvider((data.provider as string) ?? null);
+        setSttFallbackFrom((data.fallbackFrom as string) ?? null);
+        setSttEngine('paste');
       }
-    } catch (err: unknown) {
-      setSttError(err instanceof Error ? err.message : '網絡錯誤');
-    } finally {
       setSttLoading(false);
-    }
+      setSttProgress(null);
+    };
+    xhr.onerror = () => {
+      setSttError('網絡錯誤，請重試');
+      setSttLoading(false);
+      setSttProgress(null);
+    };
+    xhr.open('POST', '/api/cantonese-transcription/transcribe');
+    xhr.send(form);
   }
 
   async function handleCopy() {
@@ -1091,9 +1107,30 @@ export default function CantoneseTranscriptionPage() {
                               : 'border-slate-600/60 hover:border-blue-500/50 hover:bg-blue-500/[0.03]'
                         }`}
                       >
-                        {sttLoading
-                          ? <><Loader2 className={`w-6 h-6 animate-spin ${sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400'}`} /><span className="text-xs text-slate-400">轉錄中，請稍候…</span></>
-                          : <><Upload className={`w-6 h-6 ${sttDragging ? (sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400') : 'text-slate-500'}`} /><span className="text-xs text-slate-400">{sttDragging ? '放開以上傳' : '拖放或點擊上傳音訊檔案'}</span><span className="text-[10px] text-slate-600">WAV · MP3 · OGG · FLAC · M4A · WebM · 最大 100MB</span></>}
+                        {sttProgress !== null && sttProgress < 100 ? (
+                          <>
+                            <Upload className={`w-5 h-5 ${sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400'}`} />
+                            <span className="text-xs text-slate-300">{sttFileName}</span>
+                            <div className="w-48 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-150 ${sttEngine === 'whisper' ? 'bg-violet-500' : 'bg-blue-500'}`}
+                                style={{ width: `${sttProgress}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-slate-500">{sttProgress}% 上傳中…</span>
+                          </>
+                        ) : sttLoading ? (
+                          <>
+                            <Loader2 className={`w-6 h-6 animate-spin ${sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400'}`} />
+                            <span className="text-xs text-slate-400">轉錄中，請稍候…</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className={`w-6 h-6 ${sttDragging ? (sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400') : 'text-slate-500'}`} />
+                            <span className="text-xs text-slate-400">{sttDragging ? '放開以上傳' : '上傳音訊檔案'}</span>
+                            <span className="text-[10px] text-slate-600">WAV · MP3 · OGG · FLAC · M4A · WebM · 最大 100MB</span>
+                          </>
+                        )}
                       </button>
                       {sttError && (
                         <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
@@ -1107,16 +1144,19 @@ export default function CantoneseTranscriptionPage() {
                           <span className="text-xs text-amber-300">Whisper 失敗，自動切換至 Google STT</span>
                         </div>
                       )}
-                      {transcript && (
+                      {transcript && !sttLoading && (
                         <div className="flex items-center gap-2 p-2.5 rounded-lg bg-green-500/10 border border-green-500/20">
                           <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0" />
-                          <span className="text-xs text-green-300">已轉錄 {transcript.length} 字元{segments.length > 0 ? `，${segments.length} 個 segments` : ''} — 切換到貼上模式查看</span>
+                          <div className="min-w-0">
+                            <span className="text-xs text-green-300">轉錄完成 · {transcript.length} 字元{segments.length > 0 ? ` · ${segments.length} segments` : ''}</span>
+                            {sttFileName && <p className="text-[10px] text-green-500/70 truncate">{sttFileName}{sttFileSize ? ` · ${(sttFileSize / 1024 / 1024).toFixed(1)} MB` : ''}</p>}
+                          </div>
                         </div>
                       )}
                       <p className="text-[10px] text-slate-600 leading-relaxed">
                         {sttEngine === 'whisper'
-                          ? <>自家部署 Whisper large-v3 粵語模型，需設定 <code className="text-slate-500">WHISPER_SERVICE_URL</code>。若 Whisper 失敗會自動 fallback 至 Google STT。</>
-                          : <>使用 Google Cloud Speech-to-Text V1 (<code className="text-slate-500">latest_long</code> model)，支援粵語（<code className="text-slate-500">yue-Hant-HK</code>）及中英混合識別，需設定 <code className="text-slate-500">GEMINI_API_KEY</code>。</>}
+                          ? <>自家部署 Whisper large-v3 粵語模型（<code className="text-slate-500">khleeloo/whisper-large-v3-cantonese</code>）。若 Whisper 失敗會自動 fallback 至 Google STT。</>
+                          : <>使用 Google Cloud Speech-to-Text V1（<code className="text-slate-500">latest_long</code> model），支援粵語（<code className="text-slate-500">yue-Hant-HK</code>）及中英混合識別。</>}
                       </p>
                     </div>
                   </div>
