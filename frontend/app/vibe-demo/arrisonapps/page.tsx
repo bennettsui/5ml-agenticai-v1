@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, ShoppingBag, X, Search, SlidersHorizontal,
+  ShoppingBag, X, Search, SlidersHorizontal,
   MapPin, ChevronDown, Flame, Star, Package, ArrowUpRight,
   Send, Globe, Shield
 } from 'lucide-react';
@@ -541,15 +541,8 @@ export default function ArrisonappsPage() {
         }}
       >
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          {/* Back */}
-          <Link
-            href="/vibe-demo"
-            className="flex items-center gap-2 text-sm transition-colors"
-            style={{ color: '#9b8c72', fontFamily: 'sans-serif' }}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back</span>
-          </Link>
+          {/* Spacer */}
+          <div className="w-20" />
 
           {/* Logo */}
           <div className="text-center">
