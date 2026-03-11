@@ -17,4 +17,5 @@ frontend/public/tedx/.manifest.json
 
 # Generated media files (keep directory, ignore contents)
 uploads/media/*
-!uploads/media/.gitkeep.claude/
+!uploads/media/.gitkeep
+.claude/
