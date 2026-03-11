@@ -662,6 +662,23 @@ function ProductsPanel({ products: initialProducts, token, isDemo, onProductsCha
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            setUploadingForId(p.id);
+                            if (!isExpanded) toggleExpand(p.id);
+                            setTimeout(() => fileInputRef.current?.click(), 50);
+                          }}
+                          onMouseDown={e => e.stopPropagation()}
+                          disabled={uploading === p.id}
+                          className="w-7 h-7 rounded flex items-center justify-center transition-all"
+                          style={{ color: C.muted, background: 'transparent' }}
+                          title="Upload photo"
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.1)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          {uploading === p.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
                           onClick={e => { e.stopPropagation(); handleDeleteProduct(p); }}
                           onMouseDown={e => e.stopPropagation()}
                           disabled={deletingProductId === p.id}
@@ -1525,38 +1542,142 @@ function OrdersPanel({ token, isDemo }: { token: string; isDemo: boolean }) {
 }
 
 // ─── Reports Panel ────────────────────────────────────────────────────────────────
+// ─── SVG Chart Helpers ───────────────────────────────────────────────────────────
+function DonutChart({ slices, size = 140 }: { slices: { value: number; color: string; label: string }[]; size?: number }) {
+  const total = slices.reduce((a, s) => a + s.value, 0);
+  if (total === 0) return <div className="flex items-center justify-center" style={{ width: size, height: size, color: '#5c5040', fontSize: 11, fontFamily: 'sans-serif' }}>No data</div>;
+  const r = 48; const cx = size / 2; const cy = size / 2;
+  let startAngle = -Math.PI / 2;
+  const paths = slices.filter(s => s.value > 0).map(s => {
+    const angle = (s.value / total) * 2 * Math.PI;
+    const endAngle = startAngle + angle;
+    const x1 = cx + r * Math.cos(startAngle); const y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle);   const y2 = cy + r * Math.sin(endAngle);
+    const largeArc = angle > Math.PI ? 1 : 0;
+    const d = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+    const result = { d, color: s.color, label: s.label, value: s.value };
+    startAngle = endAngle;
+    return result;
+  });
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {paths.map((p, i) => (
+        <path key={i} d={p.d} fill={p.color} opacity={0.75} stroke="#0a0807" strokeWidth={1.5}>
+          <title>{p.label}: {p.value}</title>
+        </path>
+      ))}
+      <circle cx={cx} cy={cy} r={r * 0.52} fill="#0a0807" />
+      <text x={cx} y={cy - 5} textAnchor="middle" fill="#e8dcc8" fontSize={18} fontFamily="Georgia,serif" fontWeight={300}>{total}</text>
+      <text x={cx} y={cy + 12} textAnchor="middle" fill="#9b8c72" fontSize={8} fontFamily="sans-serif" letterSpacing={1}>LEADS</text>
+    </svg>
+  );
+}
+
+function HBarChart({ bars, maxVal }: { bars: { label: string; value: number; color: string; sub?: string }[]; maxVal: number }) {
+  return (
+    <div className="space-y-3">
+      {bars.map((b, i) => (
+        <div key={i}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs" style={{ color: b.color, fontFamily: 'sans-serif' }}>{b.label}</span>
+            <span className="text-xs font-mono" style={{ color: '#e8dcc8', fontFamily: 'sans-serif' }}>{b.sub || b.value}</span>
+          </div>
+          <div className="rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', height: 8 }}>
+            <div className="h-full rounded-full transition-all duration-500"
+              style={{ width: maxVal > 0 ? `${(b.value / maxVal) * 100}%` : '0%', background: b.color, opacity: 0.75 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StockBarChart({ items }: { items: StockRow[] }) {
+  if (items.length === 0) return <div className="py-4 text-center text-xs" style={{ color: '#5c5040', fontFamily: 'sans-serif' }}>No stock data</div>;
+  const maxQ = Math.max(...items.map(s => s.quantity), 1);
+  return (
+    <div className="space-y-2">
+      {items.slice(0, 8).map((s, i) => {
+        const availPct = (s.available_qty / maxQ) * 100;
+        const resPct   = (s.reserved_qty  / maxQ) * 100;
+        const isLow    = s.is_low_stock;
+        return (
+          <div key={i} className="flex items-center gap-3">
+            <div className="w-24 text-right">
+              <span className="text-xs font-mono" style={{ color: isLow ? '#fbbf24' : '#D4AF37', fontFamily: 'sans-serif' }}>{s.sku.split('-').slice(0,2).join('-')}</span>
+            </div>
+            <div className="flex-1 flex rounded overflow-hidden" style={{ height: 12, background: 'rgba(255,255,255,0.04)' }}>
+              <div style={{ width: `${availPct}%`, background: isLow ? '#f59e0b' : '#4ade80', opacity: 0.7 }} />
+              <div style={{ width: `${resPct}%`, background: '#94a3b8', opacity: 0.5 }} />
+            </div>
+            <div className="w-10 text-xs font-mono text-right" style={{ color: isLow ? '#fbbf24' : '#9b8c72', fontFamily: 'sans-serif' }}>{s.available_qty}</div>
+          </div>
+        );
+      })}
+      <div className="flex items-center gap-4 pt-1">
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm" style={{ background: '#4ade80', opacity: 0.7 }} /><span className="text-xs" style={{ color: '#5c5040', fontFamily: 'sans-serif' }}>Available</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm" style={{ background: '#94a3b8', opacity: 0.5 }} /><span className="text-xs" style={{ color: '#5c5040', fontFamily: 'sans-serif' }}>Reserved</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm" style={{ background: '#f59e0b', opacity: 0.7 }} /><span className="text-xs" style={{ color: '#5c5040', fontFamily: 'sans-serif' }}>Low stock</span></div>
+      </div>
+    </div>
+  );
+}
+
 function ReportsPanel({ leads, stock, token, isDemo }: { leads: Lead[]; stock: StockRow[]; token: string; isDemo: boolean }) {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [appliedFrom, setAppliedFrom] = useState('');
+  const [appliedTo, setAppliedTo]   = useState('');
   const [apiSummary, setApiSummary] = useState<{ status: string; region_code: string; lead_count: number; total_value: number | null }[]>([]);
   const [loadingSummary, setLoadingSummary] = useState(false);
 
-  const fetchSummary = async () => {
+  const applyFilter = async () => {
+    setAppliedFrom(fromDate);
+    setAppliedTo(toDate);
     if (isDemo) return;
     setLoadingSummary(true);
     try {
       const params = new URLSearchParams();
       if (fromDate) params.set('from', fromDate);
-      if (toDate) params.set('to', toDate);
+      if (toDate)   params.set('to', toDate);
       const res = await fetch(`/api/arrisonapps/v1/admin/reports/leads-summary?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = await res.json();
-        setApiSummary(data.summary || []);
-      }
+      if (res.ok) { const data = await res.json(); setApiSummary(data.summary || []); }
     } catch { /* ignore */ }
     finally { setLoadingSummary(false); }
   };
 
+  // Filter leads by applied date range (uses created_at)
+  const filteredLeads = leads.filter(l => {
+    if (appliedFrom && l.created_at.slice(0, 10) < appliedFrom) return false;
+    if (appliedTo   && l.created_at.slice(0, 10) > appliedTo)   return false;
+    return true;
+  });
+
   const byStatus = LEAD_COLUMNS.map(s => ({
     status: s,
-    count: leads.filter(l => l.status === s).length,
-    value: leads.filter(l => l.status === s).reduce((a, l) => a + (l.estimated_value || 0), 0),
+    count: filteredLeads.filter(l => l.status === s).length,
+    value: filteredLeads.filter(l => l.status === s).reduce((a, l) => a + (l.estimated_value || 0), 0),
   }));
   const maxCount = Math.max(...byStatus.map(s => s.count), 1);
 
+  const byRegion = ['HK', 'SG', 'EU'].map(r => ({
+    label: r,
+    color: r === 'HK' ? C.gold : r === 'SG' ? '#60a5fa' : '#a78bfa',
+    value: filteredLeads.filter(l => l.region_code === r && !['won','lost'].includes(l.status)).length,
+    sub: String(filteredLeads.filter(l => l.region_code === r).length) + ' total',
+  }));
+
+  const pipelineByRegion = ['HK', 'SG', 'EU'].map(r => {
+    const v = filteredLeads.filter(l => l.region_code === r && !['won','lost'].includes(l.status))
+                           .reduce((a, l) => a + (l.estimated_value || 0), 0);
+    return { label: r, color: r === 'HK' ? C.gold : r === 'SG' ? '#60a5fa' : '#a78bfa', value: v, sub: v > 0 ? `${r === 'EU' ? '€' : r === 'SG' ? 'S$' : 'HK$'}${(v/1000).toFixed(0)}k` : '—' };
+  });
+  const maxPipeline = Math.max(...pipelineByRegion.map(r => r.value), 1);
+
   const lowStockItems = stock.filter(s => s.is_low_stock);
+  const isFiltered = appliedFrom || appliedTo;
 
   return (
     <div className="space-y-6">
@@ -1575,45 +1696,76 @@ function ReportsPanel({ leads, stock, token, isDemo }: { leads: Lead[]; stock: S
             className="px-3 py-1.5 rounded text-xs outline-none"
             style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif', colorScheme: 'dark' }} />
         </div>
-        <button onClick={fetchSummary} disabled={loadingSummary || isDemo}
+        <button onClick={applyFilter} disabled={loadingSummary}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs"
-          style={{ background: 'rgba(212,175,55,0.1)', color: isDemo ? C.dim : C.gold, border: `1px solid rgba(212,175,55,0.2)`, fontFamily: 'sans-serif', opacity: loadingSummary ? 0.6 : 1 }}>
+          style={{ background: 'rgba(212,175,55,0.1)', color: C.gold, border: `1px solid rgba(212,175,55,0.2)`, fontFamily: 'sans-serif', opacity: loadingSummary ? 0.6 : 1 }}>
           <RefreshCw className={`w-3 h-3 ${loadingSummary ? 'animate-spin' : ''}`} />
-          {isDemo ? 'Demo mode' : 'Apply Filter'}
+          Apply Filter
         </button>
+        {isFiltered && (
+          <button onClick={() => { setFromDate(''); setToDate(''); setAppliedFrom(''); setAppliedTo(''); setApiSummary([]); }}
+            className="text-xs px-2 py-1 rounded"
+            style={{ color: C.dim, border: `1px solid ${C.borderSub}`, fontFamily: 'sans-serif' }}>
+            Clear
+          </button>
+        )}
+        {isFiltered && (
+          <span className="text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>
+            Showing {filteredLeads.length} of {leads.length} leads
+          </span>
+        )}
       </div>
 
-      {/* API Summary (if loaded) */}
-      {apiSummary.length > 0 && (
-        <div className="rounded-lg border overflow-hidden" style={{ borderColor: C.borderSub }}>
-          <div className="px-5 py-4 border-b" style={{ borderColor: C.borderSub, background: 'rgba(255,255,255,0.02)' }}>
-            <span className="text-xs tracking-widest uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>API Leads Summary</span>
-          </div>
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b" style={{ borderColor: C.borderSub }}>
-                {['Region','Status','Count','Total Value'].map(h => (
-                  <th key={h} className="px-4 py-2 text-left tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y" style={{ borderColor: C.borderSub }}>
-              {apiSummary.map((row, i) => (
-                <tr key={i}>
-                  <td className="px-4 py-2" style={{ color: C.gold }}>{row.region_code}</td>
-                  <td className="px-4 py-2" style={{ color: C.text }}>{row.status}</td>
-                  <td className="px-4 py-2 font-mono" style={{ color: C.text }}>{row.lead_count}</td>
-                  <td className="px-4 py-2 font-mono" style={{ color: C.gold }}>{row.total_value ? `HK$${Number(row.total_value).toLocaleString()}` : '—'}</td>
-                </tr>
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Donut — Lead Status */}
+        <div className="rounded-lg border p-5" style={{ borderColor: C.borderSub, background: C.card }}>
+          <div className="text-xs tracking-widest uppercase mb-4" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Lead Status</div>
+          <div className="flex items-center gap-4">
+            <DonutChart size={130}
+              slices={byStatus.map(s => ({ value: s.count, color: STATUS_META[s.status].color, label: STATUS_META[s.status].label }))} />
+            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+              {byStatus.filter(s => s.count > 0).map(s => (
+                <div key={s.status} className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: STATUS_META[s.status].color }} />
+                  <span className="text-xs truncate" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{STATUS_META[s.status].label}</span>
+                  <span className="text-xs ml-auto" style={{ color: C.text, fontFamily: 'sans-serif' }}>{s.count}</span>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </div>
         </div>
-      )}
 
-      {/* Lead Funnel */}
+        {/* Bar — Active Leads by Region */}
+        <div className="rounded-lg border p-5" style={{ borderColor: C.borderSub, background: C.card }}>
+          <div className="text-xs tracking-widest uppercase mb-4" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Active Leads by Region</div>
+          <HBarChart bars={byRegion} maxVal={Math.max(...byRegion.map(r => r.value), 1)} />
+          <div className="mt-4 pt-3 border-t" style={{ borderColor: C.borderSub }}>
+            <div className="text-xs tracking-widest uppercase mb-3" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Pipeline Value</div>
+            <HBarChart bars={pipelineByRegion} maxVal={maxPipeline} />
+          </div>
+        </div>
+
+        {/* Bar — Stock Levels */}
+        <div className="rounded-lg border p-5" style={{ borderColor: C.borderSub, background: C.card }}>
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs tracking-widest uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Stock Levels</span>
+            {lowStockItems.length > 0 && (
+              <span className="text-xs px-1.5 py-0.5 rounded flex items-center gap-1"
+                style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24', fontFamily: 'sans-serif' }}>
+                <AlertTriangle className="w-3 h-3" />{lowStockItems.length} low
+              </span>
+            )}
+          </div>
+          <StockBarChart items={stock} />
+        </div>
+      </div>
+
+      {/* Lead Funnel — horizontal bars */}
       <div className="rounded-lg border p-6" style={{ borderColor: C.borderSub, background: C.card }}>
-        <div className="text-xs tracking-widest uppercase mb-5" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Lead Funnel — Current State</div>
+        <div className="text-xs tracking-widest uppercase mb-5" style={{ color: C.muted, fontFamily: 'sans-serif' }}>
+          Lead Funnel{isFiltered ? ' — Filtered Period' : ' — All Time'}
+        </div>
         <div className="space-y-3">
           {byStatus.map(({ status, count, value }) => {
             const meta = STATUS_META[status];
@@ -1622,7 +1774,7 @@ function ReportsPanel({ leads, stock, token, isDemo }: { leads: Lead[]; stock: S
               <div key={status} className="flex items-center gap-4">
                 <div className="w-24 text-xs text-right" style={{ color: meta.color, fontFamily: 'sans-serif' }}>{meta.label}</div>
                 <div className="flex-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', height: '10px' }}>
-                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: meta.color, opacity: 0.7 }} />
+                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: meta.color, opacity: 0.7 }} />
                 </div>
                 <div className="w-6 text-xs text-center" style={{ color: C.text, fontFamily: 'sans-serif' }}>{count}</div>
                 <div className="w-28 text-xs text-right" style={{ color: C.muted, fontFamily: 'sans-serif' }}>
@@ -1656,19 +1808,47 @@ function ReportsPanel({ leads, stock, token, isDemo }: { leads: Lead[]; stock: S
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 <td className="px-4 py-3 text-sm" style={{ color: C.gold, fontFamily: 'sans-serif' }}>{region}</td>
                 {LEAD_COLUMNS.map(s => {
-                  const n = leads.filter(l => l.region_code === region && l.status === s).length;
+                  const n = filteredLeads.filter(l => l.region_code === region && l.status === s).length;
                   return (
                     <td key={s} className="px-4 py-3 text-center text-sm" style={{ color: n > 0 ? STATUS_META[s].color : C.dim, fontFamily: 'sans-serif' }}>{n || '—'}</td>
                   );
                 })}
                 <td className="px-4 py-3 text-right text-sm font-medium" style={{ color: C.text, fontFamily: 'sans-serif' }}>
-                  {leads.filter(l => l.region_code === region).length}
+                  {filteredLeads.filter(l => l.region_code === region).length}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* API Summary (if loaded) */}
+      {apiSummary.length > 0 && (
+        <div className="rounded-lg border overflow-hidden" style={{ borderColor: C.borderSub }}>
+          <div className="px-5 py-4 border-b" style={{ borderColor: C.borderSub, background: 'rgba(255,255,255,0.02)' }}>
+            <span className="text-xs tracking-widest uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>API Leads Summary (Live)</span>
+          </div>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b" style={{ borderColor: C.borderSub }}>
+                {['Region','Status','Count','Total Value'].map(h => (
+                  <th key={h} className="px-4 py-2 text-left tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y" style={{ borderColor: C.borderSub }}>
+              {apiSummary.map((row, i) => (
+                <tr key={i}>
+                  <td className="px-4 py-2" style={{ color: C.gold }}>{row.region_code}</td>
+                  <td className="px-4 py-2" style={{ color: C.text }}>{row.status}</td>
+                  <td className="px-4 py-2 font-mono" style={{ color: C.text }}>{row.lead_count}</td>
+                  <td className="px-4 py-2 font-mono" style={{ color: C.gold }}>{row.total_value ? `HK$${Number(row.total_value).toLocaleString()}` : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Inventory Reorder Alerts */}
       <div className="rounded-lg border overflow-hidden" style={{ borderColor: lowStockItems.length ? 'rgba(251,191,36,0.2)' : C.borderSub }}>
@@ -1704,46 +1884,16 @@ function ReportsPanel({ leads, stock, token, isDemo }: { leads: Lead[]; stock: S
           </table>
         )}
       </div>
-
-      {/* Sample Sales Report */}
-      <div className="rounded-lg border p-6" style={{ borderColor: C.border, background: 'rgba(212,175,55,0.02)' }}>
-        <div className="flex items-center gap-2 mb-5">
-          <FileText className="w-4 h-4" style={{ color: C.gold }} />
-          <span className="text-xs tracking-widest uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Sample Sales Report — Q1 2026</span>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
-          {[
-            { label: 'Revenue by Region', items: [{ k: 'Hong Kong', v: 'HK$328,400' }, { k: 'Singapore', v: 'SGD 70,000' }, { k: 'Europe', v: '€100,500' }] },
-            { label: 'Top SKUs by Volume', items: [{ k: 'COH-S6-25', v: '43 boxes' }, { k: 'MON-NO2-25', v: '38 boxes' }, { k: 'PAR-LUS-25', v: '21 boxes' }] },
-            { label: 'Pipeline Metrics', items: [{ k: 'Win Rate', v: '34%' }, { k: 'Avg Deal Size', v: 'HK$62,300' }, { k: 'Avg Close Time', v: '18 days' }] },
-          ].map(section => (
-            <div key={section.label} className="rounded-lg border p-4" style={{ borderColor: C.borderSub, background: 'rgba(255,255,255,0.02)' }}>
-              <div className="text-xs tracking-widest uppercase mb-3" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{section.label}</div>
-              <div className="space-y-2">
-                {section.items.map(item => (
-                  <div key={item.k} className="flex items-center justify-between">
-                    <span className="text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{item.k}</span>
-                    <span className="text-sm font-light" style={{ color: C.gold, fontFamily: "'Georgia', serif" }}>{item.v}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(255,255,255,0.02)', color: C.dim, fontFamily: 'sans-serif', border: `1px solid ${C.borderSub}` }}>
-          Sample data for illustration. Connect backend and apply date filters above for live data.
-        </div>
-      </div>
     </div>
   );
 }
 
 // ─── AI Assistant Panel ───────────────────────────────────────────────────────────
-function AIChatPanel({ token, isDemo, activeTab, quickStats, onClose }: {
+function AIChatPanel({ token, activeTab, quickStats, pageData, onClose }: {
   token: string;
-  isDemo: boolean;
   activeTab: TabId;
   quickStats: { products: number; leads: number; lowStock: number };
+  pageData: { products: ProductRow[]; leads: Lead[]; stock: StockRow[] };
   onClose: () => void;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1763,21 +1913,23 @@ function AIChatPanel({ token, isDemo, activeTab, quickStats, onClose }: {
     setInput('');
     setThinking(true);
 
-    if (isDemo) {
-      await new Promise(r => setTimeout(r, 1000));
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Demo mode — connect backend for AI responses.' }]);
-      setThinking(false);
-      return;
-    }
-
     try {
-      const context = `Active tab: ${activeTab}. Products: ${quickStats.products}. Active leads: ${quickStats.leads}. Low stock alerts: ${quickStats.lowStock}.`;
+      const context = `Active tab: ${activeTab}. Total products: ${quickStats.products}. Active leads: ${quickStats.leads}. Low stock alerts: ${quickStats.lowStock}.`;
+      // Send page state as fallback data so AI can answer even without DB access
+      const compactData = {
+        products: pageData.products.map(p => ({ sku: p.sku, brand: p.brand_name, series: p.series, strength: p.strength, active: p.is_active })),
+        leads: pageData.leads.map(l => ({ no: l.lead_no, status: l.status, customer: l.customer_name, region: l.region_code, value: l.estimated_value, currency: l.currency_code })),
+        stock: pageData.stock.map(s => ({ sku: s.sku, brand: s.brand_name, location: s.location_name, region: s.region_code, available: s.available_qty, low: s.is_low_stock })),
+      };
       const res = await fetch('/api/arrisonapps/v1/admin/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ messages: newMessages, context }),
+        body: JSON.stringify({ messages: newMessages, context, pageData: compactData }),
       });
-      if (!res.ok) throw new Error('AI request failed');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'AI request failed');
+      }
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply || 'No response.' }]);
     } catch (err: unknown) {
@@ -1808,7 +1960,18 @@ function AIChatPanel({ token, isDemo, activeTab, quickStats, onClose }: {
         {messages.length === 0 && (
           <div className="text-center py-8">
             <Bot className="w-8 h-8 mx-auto mb-2" style={{ color: C.dim }} />
-            <p className="text-xs" style={{ color: C.dim, fontFamily: 'sans-serif' }}>Ask about products, inventory, leads, or business insights.</p>
+            <p className="text-xs" style={{ color: C.dim, fontFamily: 'sans-serif' }}>Ask about products, stock levels, leads, or business insights.</p>
+            <div className="mt-3 space-y-1.5 text-left w-full px-2">
+              {['How many products are active?','Which SKUs are low stock?','Summarise the lead pipeline'].map(s => (
+                <button key={s} onClick={() => { setInput(s); }}
+                  className="w-full text-left text-xs px-2.5 py-1.5 rounded transition-all"
+                  style={{ background: 'rgba(212,175,55,0.05)', color: C.muted, border: `1px solid ${C.borderSub}`, fontFamily: 'sans-serif' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = C.gold)}
+                  onMouseLeave={e => (e.currentTarget.style.color = C.muted)}>
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((m, i) => (
@@ -2185,9 +2348,9 @@ export default function ArrisonappsAdmin() {
       {aiOpen && (
         <AIChatPanel
           token={token!}
-          isDemo={isDemo}
           activeTab={activeTab}
           quickStats={{ products: products.length, leads: leads.filter(l => !['won','lost'].includes(l.status)).length, lowStock: lowStockCount }}
+          pageData={{ products, leads, stock }}
           onClose={() => setAiOpen(false)}
         />
       )}
