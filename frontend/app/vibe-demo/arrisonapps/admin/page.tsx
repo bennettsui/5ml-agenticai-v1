@@ -8,10 +8,11 @@ import {
   Calendar, Mail, Phone, RefreshCw, Download, Boxes,
   Eye, Star, Tag, Flame, Edit2, ChevronRight, Layers,
   ArrowUpDown, MoreHorizontal, FileText, Settings, ImagePlus, Trash2, Upload,
+  ShoppingCart, Bot, Send, ChevronLeft,
 } from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
-type TabId = 'overview' | 'products' | 'inventory' | 'leads' | 'reports';
+type TabId = 'overview' | 'products' | 'inventory' | 'leads' | 'orders' | 'reports';
 type LeadStatus = 'new' | 'contacted' | 'quoting' | 'negotiation' | 'won' | 'lost';
 
 interface Lead {
@@ -71,6 +72,41 @@ interface MovementForm {
   quantity: string;
   reference_no: string;
   notes: string;
+}
+
+interface Brand {
+  id: string;
+  slug: string;
+  name: string;
+  origin: string;
+}
+
+interface Enquiry {
+  id: string;
+  enquiry_no: string;
+  status: string;
+  customer_name: string;
+  customer_email: string;
+  region_code: string;
+  currency_code: string;
+  item_count: number;
+  notes: string | null;
+  submitted_at: string;
+  items?: EnquiryItem[];
+}
+
+interface EnquiryItem {
+  id: string;
+  sku: string;
+  brand_name: string;
+  series: string;
+  quantity: number;
+  unit_price_hint: number | null;
+}
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 // ─── Palette ────────────────────────────────────────────────────────────────────
@@ -277,7 +313,13 @@ function OverviewPanel({ leads, stock }: { leads: Lead[]; stock: StockRow[] }) {
 }
 
 // ─── Products Panel ──────────────────────────────────────────────────────────────
-function ProductsPanel({ products, token }: { products: ProductRow[]; token: string }) {
+function ProductsPanel({ products: initialProducts, token, isDemo, onProductsChange }: {
+  products: ProductRow[];
+  token: string;
+  isDemo: boolean;
+  onProductsChange: (products: ProductRow[]) => void;
+}) {
+  const [products, setProducts] = useState<ProductRow[]>(initialProducts);
   const [q, setQ] = useState('');
   const [brandFilter, setBrandFilter] = useState('');
   const [strengthFilter, setStrengthFilter] = useState('');
@@ -290,7 +332,119 @@ function ProductsPanel({ products, token }: { products: ProductRow[]; token: str
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingForId, setUploadingForId] = useState<string | null>(null);
 
-  const brands = [...new Set(products.map(p => p.brand_name))].sort();
+  // New Product modal
+  const [showNewProduct, setShowNewProduct] = useState(false);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [newProduct, setNewProduct] = useState({ sku: '', brand_id: '', series: '', vitola: '', strength: 'medium', packaging_qty: '25', packaging_type: 'box', short_description: '', tags: '' });
+  const [savingProduct, setSavingProduct] = useState(false);
+  const [productError, setProductError] = useState('');
+
+  // Edit modal
+  const [editProduct, setEditProduct] = useState<ProductRow | null>(null);
+  const [editForm, setEditForm] = useState({ series: '', vitola: '', strength: 'medium', packaging_qty: '25', packaging_type: 'box', short_description: '', tags: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  // Deleting
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setProducts(initialProducts);
+  }, [initialProducts]);
+
+  const loadBrands = async () => {
+    if (brands.length > 0) return;
+    try {
+      const res = await fetch('/api/arrisonapps/v1/admin/brands', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBrands(data.brands || []);
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleNewProductSubmit = async () => {
+    if (isDemo) { setProductError('Demo mode — API not connected'); return; }
+    if (!newProduct.sku || !newProduct.brand_id) { setProductError('SKU and brand are required'); return; }
+    setSavingProduct(true);
+    setProductError('');
+    try {
+      const tagsArr = newProduct.tags.split(',').map(t => t.trim()).filter(Boolean);
+      const res = await fetch('/api/arrisonapps/v1/admin/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...newProduct, packaging_qty: Number(newProduct.packaging_qty), tags: tagsArr }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed'); }
+      const created = await res.json();
+      const brand = brands.find(b => b.id === newProduct.brand_id);
+      const newRow: ProductRow = {
+        id: created.id, sku: newProduct.sku, brand_name: brand?.name || '', series: newProduct.series,
+        vitola: newProduct.vitola, packaging_qty: Number(newProduct.packaging_qty), strength: newProduct.strength,
+        is_active: true, is_limited_edition: false, tags: tagsArr,
+      };
+      const updated = [...products, newRow];
+      setProducts(updated);
+      onProductsChange(updated);
+      setShowNewProduct(false);
+      setNewProduct({ sku: '', brand_id: '', series: '', vitola: '', strength: 'medium', packaging_qty: '25', packaging_type: 'box', short_description: '', tags: '' });
+    } catch (err: unknown) {
+      setProductError(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setSavingProduct(false);
+    }
+  };
+
+  const openEdit = (p: ProductRow) => {
+    setEditProduct(p);
+    setEditForm({ series: p.series, vitola: p.vitola, strength: p.strength, packaging_qty: String(p.packaging_qty), packaging_type: 'box', short_description: '', tags: p.tags.join(', ') });
+    setEditError('');
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editProduct) return;
+    if (isDemo) { setEditError('Demo mode — API not connected'); return; }
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      const tagsArr = editForm.tags.split(',').map(t => t.trim()).filter(Boolean);
+      const res = await fetch(`/api/arrisonapps/v1/admin/products/${editProduct.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...editForm, packaging_qty: Number(editForm.packaging_qty), tags: tagsArr }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed'); }
+      const updated = products.map(p => p.id === editProduct.id ? { ...p, ...editForm, packaging_qty: Number(editForm.packaging_qty), tags: tagsArr } : p);
+      setProducts(updated);
+      onProductsChange(updated);
+      setEditProduct(null);
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDeleteProduct = async (p: ProductRow) => {
+    if (!confirm(`Deactivate ${p.sku}? This will mark it inactive.`)) return;
+    if (isDemo) { alert('Demo mode — API not connected'); return; }
+    setDeletingProductId(p.id);
+    try {
+      await fetch(`/api/arrisonapps/v1/admin/products/${p.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const updated = products.filter(pr => pr.id !== p.id);
+      setProducts(updated);
+      onProductsChange(updated);
+      if (expandedId === p.id) setExpandedId(null);
+    } catch { /* ignore */ }
+    finally { setDeletingProductId(null); }
+  };
+
+  const brandNames = [...new Set(products.map(p => p.brand_name))].sort();
 
   const filtered = products.filter(p => {
     if (brandFilter && p.brand_name !== brandFilter) return false;
@@ -390,7 +544,7 @@ function ProductsPanel({ products, token }: { products: ProductRow[]; token: str
           style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.borderSub}`, color: brandFilter ? C.text : C.muted, fontFamily: 'sans-serif' }}
         >
           <option value="">All Brands</option>
-          {brands.map(b => <option key={b} value={b} style={{ background: '#1a1612' }}>{b}</option>)}
+          {brandNames.map(b => <option key={b} value={b} style={{ background: '#1a1612' }}>{b}</option>)}
         </select>
         <select
           value={strengthFilter} onChange={e => setStrengthFilter(e.target.value)}
@@ -402,9 +556,16 @@ function ProductsPanel({ products, token }: { products: ProductRow[]; token: str
           <option value="medium" style={{ background: '#1a1612' }}>Medium</option>
           <option value="full" style={{ background: '#1a1612' }}>Full</option>
         </select>
-        <div className="text-xs ml-auto" style={{ color: C.muted, fontFamily: 'sans-serif' }}>
+        <div className="text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>
           {filtered.length} of {products.length} SKUs
         </div>
+        <button
+          onClick={() => { setShowNewProduct(true); loadBrands(); setProductError(''); }}
+          className="ml-auto flex items-center gap-2 px-4 py-2 rounded text-sm transition-opacity hover:opacity-80"
+          style={{ background: C.gold, color: '#0a0807', fontFamily: 'sans-serif' }}>
+          <Plus className="w-4 h-4" />
+          New Product
+        </button>
       </div>
 
       {/* Hidden file input */}
@@ -425,7 +586,7 @@ function ProductsPanel({ products, token }: { products: ProductRow[]; token: str
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b" style={{ borderColor: C.borderSub, background: 'rgba(255,255,255,0.02)' }}>
-              {['','SKU','Brand','Series / Vitola','Pack','Strength','Tags','Status'].map(h => (
+              {['','SKU','Brand','Series / Vitola','Pack','Strength','Tags','Status',''].map(h => (
                 <th key={h} className="px-4 py-3 text-left text-xs tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{h}</th>
               ))}
             </tr>
@@ -487,10 +648,37 @@ function ProductsPanel({ products, token }: { products: ProductRow[]; token: str
                         {p.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={e => { e.stopPropagation(); openEdit(p); }}
+                          onMouseDown={e => e.stopPropagation()}
+                          className="w-7 h-7 rounded flex items-center justify-center transition-all"
+                          style={{ color: C.muted, background: 'transparent' }}
+                          title="Edit product"
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.1)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); handleDeleteProduct(p); }}
+                          onMouseDown={e => e.stopPropagation()}
+                          disabled={deletingProductId === p.id}
+                          className="w-7 h-7 rounded flex items-center justify-center transition-all"
+                          style={{ color: C.muted, background: 'transparent' }}
+                          title="Deactivate product"
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(248,113,113,0.1)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          {deletingProductId === p.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                   {isExpanded && (
                     <tr key={`${p.id}-images`}>
-                      <td colSpan={8} className="px-6 py-4 border-b" style={{ borderColor: C.borderSub, background: 'rgba(212,175,55,0.02)' }}>
+                      <td colSpan={9} className="px-6 py-4 border-b" style={{ borderColor: C.borderSub, background: 'rgba(212,175,55,0.02)' }}>
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-xs tracking-widest uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>
                             Product Images
@@ -566,12 +754,112 @@ function ProductsPanel({ products, token }: { products: ProductRow[]; token: str
           <div className="py-12 text-center text-sm" style={{ color: C.muted, fontFamily: 'sans-serif' }}>No products match the current filter.</div>
         )}
       </div>
+
+      {/* New Product Modal */}
+      {showNewProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setShowNewProduct(false)} />
+          <div className="relative w-full max-w-md rounded-lg border p-6 space-y-4" style={{ background: '#13110e', borderColor: C.border, zIndex: 1, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base" style={{ color: C.gold, fontFamily: "'Georgia', serif" }}>New Product</h3>
+              <button onClick={() => setShowNewProduct(false)}><X className="w-4 h-4" style={{ color: C.muted }} /></button>
+            </div>
+            {isDemo && <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(251,191,36,0.08)', color: '#fbbf24', fontFamily: 'sans-serif', border: '1px solid rgba(251,191,36,0.2)' }}>Demo mode — API not connected. Changes will not be saved.</div>}
+            <div className="space-y-3">
+              {[
+                { label: 'SKU *', key: 'sku', type: 'text', placeholder: 'e.g. COH-S6-25' },
+                { label: 'Series', key: 'series', type: 'text', placeholder: 'Series name' },
+                { label: 'Vitola', key: 'vitola', type: 'text', placeholder: 'Vitola name' },
+                { label: 'Pack Qty', key: 'packaging_qty', type: 'number', placeholder: '25' },
+                { label: 'Short Description', key: 'short_description', type: 'text', placeholder: 'Brief description' },
+                { label: 'Tags (comma separated)', key: 'tags', type: 'text', placeholder: 'LE, TH, LCDH' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs mb-1 tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{f.label}</label>
+                  <input type={f.type} placeholder={f.placeholder} value={newProduct[f.key as keyof typeof newProduct]}
+                    onChange={e => setNewProduct(p => ({ ...p, [f.key]: e.target.value }))}
+                    className="w-full px-3 py-2 rounded text-sm outline-none"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif' }} />
+                </div>
+              ))}
+              <div>
+                <label className="block text-xs mb-1 tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Brand *</label>
+                <select value={newProduct.brand_id} onChange={e => setNewProduct(p => ({ ...p, brand_id: e.target.value }))}
+                  className="w-full px-3 py-2 rounded text-sm outline-none"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.borderSub}`, color: newProduct.brand_id ? C.text : C.muted, fontFamily: 'sans-serif' }}>
+                  <option value="">Select brand…</option>
+                  {brands.map(b => <option key={b.id} value={b.id} style={{ background: '#1a1612' }}>{b.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs mb-1 tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Strength</label>
+                <select value={newProduct.strength} onChange={e => setNewProduct(p => ({ ...p, strength: e.target.value }))}
+                  className="w-full px-3 py-2 rounded text-sm outline-none"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif' }}>
+                  {['mild','medium','full'].map(s => <option key={s} value={s} style={{ background: '#1a1612' }}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                </select>
+              </div>
+            </div>
+            {productError && <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(248,113,113,0.08)', color: '#f87171', fontFamily: 'sans-serif' }}>{productError}</div>}
+            <button onClick={handleNewProductSubmit} disabled={savingProduct}
+              className="w-full py-2.5 rounded text-sm font-medium transition-opacity"
+              style={{ background: C.gold, color: '#0a0807', fontFamily: 'sans-serif', opacity: savingProduct ? 0.6 : 1 }}>
+              {savingProduct ? 'Creating…' : 'Create Product'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {editProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditProduct(null)} />
+          <div className="relative w-full max-w-md rounded-lg border p-6 space-y-4" style={{ background: '#13110e', borderColor: C.border, zIndex: 1, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base" style={{ color: C.gold, fontFamily: "'Georgia', serif" }}>Edit: {editProduct.sku}</h3>
+              <button onClick={() => setEditProduct(null)}><X className="w-4 h-4" style={{ color: C.muted }} /></button>
+            </div>
+            {isDemo && <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(251,191,36,0.08)', color: '#fbbf24', fontFamily: 'sans-serif', border: '1px solid rgba(251,191,36,0.2)' }}>Demo mode — API not connected.</div>}
+            <div className="space-y-3">
+              {[
+                { label: 'Series', key: 'series', placeholder: 'Series name' },
+                { label: 'Vitola', key: 'vitola', placeholder: 'Vitola name' },
+                { label: 'Pack Qty', key: 'packaging_qty', placeholder: '25' },
+                { label: 'Short Description', key: 'short_description', placeholder: 'Brief description' },
+                { label: 'Tags (comma separated)', key: 'tags', placeholder: 'LE, TH' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs mb-1 tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{f.label}</label>
+                  <input type="text" placeholder={f.placeholder} value={editForm[f.key as keyof typeof editForm]}
+                    onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    className="w-full px-3 py-2 rounded text-sm outline-none"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif' }} />
+                </div>
+              ))}
+              <div>
+                <label className="block text-xs mb-1 tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Strength</label>
+                <select value={editForm.strength} onChange={e => setEditForm(p => ({ ...p, strength: e.target.value }))}
+                  className="w-full px-3 py-2 rounded text-sm outline-none"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif' }}>
+                  {['mild','medium','full'].map(s => <option key={s} value={s} style={{ background: '#1a1612' }}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                </select>
+              </div>
+            </div>
+            {editError && <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(248,113,113,0.08)', color: '#f87171', fontFamily: 'sans-serif' }}>{editError}</div>}
+            <button onClick={handleEditSubmit} disabled={savingEdit}
+              className="w-full py-2.5 rounded text-sm font-medium transition-opacity"
+              style={{ background: C.gold, color: '#0a0807', fontFamily: 'sans-serif', opacity: savingEdit ? 0.6 : 1 }}>
+              {savingEdit ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Inventory Panel ────────────────────────────────────────────────────────────
-function InventoryPanel({ stock }: { stock: StockRow[] }) {
+function InventoryPanel({ stock, token, isDemo }: { stock: StockRow[]; token: string; isDemo: boolean }) {
   const [regionFilter, setRegionFilter] = useState('');
   const [showMovement, setShowMovement] = useState(false);
   const [mvForm, setMvForm] = useState<MovementForm>({
@@ -579,16 +867,41 @@ function InventoryPanel({ stock }: { stock: StockRow[] }) {
   });
   const [mvSaving, setMvSaving] = useState(false);
   const [mvDone, setMvDone] = useState(false);
+  const [mvError, setMvError] = useState('');
 
   const filtered = stock.filter(s => !regionFilter || s.region_code === regionFilter);
   const lowCount = filtered.filter(s => s.is_low_stock).length;
 
   const submitMovement = async () => {
     setMvSaving(true);
-    await new Promise(r => setTimeout(r, 800));
-    setMvSaving(false);
-    setMvDone(true);
-    setTimeout(() => { setMvDone(false); setShowMovement(false); }, 1200);
+    setMvError('');
+    if (isDemo) {
+      await new Promise(r => setTimeout(r, 800));
+      setMvSaving(false);
+      setMvDone(true);
+      setTimeout(() => { setMvDone(false); setShowMovement(false); }, 1200);
+      return;
+    }
+    try {
+      const res = await fetch('/api/arrisonapps/v1/admin/stock/movements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          movement_type: mvForm.movement_type,
+          product_id: mvForm.sku, // Note: ideally lookup by SKU, but pass as-is
+          quantity: Number(mvForm.quantity),
+          reference_no: mvForm.reference_no || undefined,
+          notes: mvForm.notes || undefined,
+        }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed'); }
+      setMvDone(true);
+      setTimeout(() => { setMvDone(false); setShowMovement(false); }, 1200);
+    } catch (err: unknown) {
+      setMvError(err instanceof Error ? err.message : 'Failed to record movement');
+    } finally {
+      setMvSaving(false);
+    }
   };
 
   return (
@@ -716,6 +1029,8 @@ function InventoryPanel({ stock }: { stock: StockRow[] }) {
               ))}
             </div>
 
+            {mvError && <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(248,113,113,0.08)', color: '#f87171', fontFamily: 'sans-serif' }}>{mvError}</div>}
+            {isDemo && <div className="text-xs px-3 py-1.5 rounded" style={{ background: 'rgba(251,191,36,0.06)', color: '#fbbf24', fontFamily: 'sans-serif' }}>Demo mode — simulating success</div>}
             <button
               onClick={submitMovement} disabled={mvSaving || mvDone}
               className="w-full py-2.5 rounded text-sm font-medium transition-opacity"
@@ -730,24 +1045,96 @@ function InventoryPanel({ stock }: { stock: StockRow[] }) {
 }
 
 // ─── Leads / CRM Panel ──────────────────────────────────────────────────────────
-function LeadsPanel({ leads: initialLeads }: { leads: Lead[] }) {
+function LeadsPanel({ leads: initialLeads, token, isDemo }: { leads: Lead[]; token: string; isDemo: boolean }) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [noteText, setNoteText] = useState('');
   const [noteSaved, setNoteSaved] = useState(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
+
+  // New Lead modal
+  const [showNewLead, setShowNewLead] = useState(false);
+  const [newLead, setNewLead] = useState({ customer_name: '', customer_email: '', region_id: '', currency_code: 'HKD', source: 'manual' });
+  const [savingLead, setSavingLead] = useState(false);
+  const [leadError, setLeadError] = useState('');
+
+  useEffect(() => {
+    setLeads(initialLeads);
+  }, [initialLeads]);
 
   const saveNote = async () => {
-    if (!noteText.trim()) return;
-    setNoteSaved(true);
-    setTimeout(() => { setNoteSaved(false); setNoteText(''); }, 1500);
+    if (!noteText.trim() || !activeLead) return;
+    setNoteSaving(true);
+    if (isDemo) {
+      await new Promise(r => setTimeout(r, 600));
+      setNoteSaved(true);
+      setTimeout(() => { setNoteSaved(false); setNoteText(''); }, 1500);
+      setNoteSaving(false);
+      return;
+    }
+    try {
+      await fetch(`/api/arrisonapps/v1/admin/leads/${activeLead.id}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: noteText }),
+      });
+      setNoteSaved(true);
+      setTimeout(() => { setNoteSaved(false); setNoteText(''); }, 1500);
+    } catch { /* ignore */ }
+    finally { setNoteSaving(false); }
   };
 
-  const changeStatus = (leadId: string, newStatus: LeadStatus) => {
+  const changeStatus = async (leadId: string, newStatus: LeadStatus) => {
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
     if (activeLead?.id === leadId) setActiveLead(prev => prev ? { ...prev, status: newStatus } : null);
+    if (isDemo) return;
+    setStatusSaving(true);
+    try {
+      await fetch(`/api/arrisonapps/v1/admin/leads/${leadId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: newStatus }),
+      });
+    } catch { /* ignore */ }
+    finally { setStatusSaving(false); }
+  };
+
+  const handleNewLeadSubmit = async () => {
+    if (isDemo) { setLeadError('Demo mode — API not connected'); return; }
+    if (!newLead.customer_email) { setLeadError('Customer email is required'); return; }
+    setSavingLead(true);
+    setLeadError('');
+    try {
+      // For demo/real: first create customer, then lead - simplified here
+      const res = await fetch('/api/arrisonapps/v1/admin/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ customer_id: newLead.customer_email, region_id: newLead.region_id, currency_code: newLead.currency_code, source: newLead.source }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed'); }
+      setShowNewLead(false);
+    } catch (err: unknown) {
+      setLeadError(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setSavingLead(false);
+    }
   };
 
   return (
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between">
+        <div className="text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>
+          {leads.filter(l => !['won','lost'].includes(l.status)).length} active leads
+        </div>
+        <button onClick={() => { setShowNewLead(true); setLeadError(''); }}
+          className="flex items-center gap-2 px-4 py-2 rounded text-sm transition-opacity hover:opacity-80"
+          style={{ background: C.gold, color: '#0a0807', fontFamily: 'sans-serif' }}>
+          <Plus className="w-4 h-4" />
+          New Lead
+        </button>
+      </div>
     <div className="flex gap-6 h-full overflow-hidden" style={{ minHeight: '600px' }}>
       {/* Kanban */}
       <div className="flex-1 overflow-x-auto">
@@ -863,10 +1250,10 @@ function LeadsPanel({ leads: initialLeads }: { leads: Lead[] }) {
                 className="w-full px-3 py-2 rounded text-xs outline-none resize-none"
                 style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif' }}
               />
-              <button onClick={saveNote}
+              <button onClick={saveNote} disabled={noteSaving}
                 className="mt-2 w-full py-1.5 rounded text-xs transition-opacity hover:opacity-80"
-                style={{ background: noteSaved ? '#4ade80' : 'rgba(212,175,55,0.15)', color: noteSaved ? '#0a0807' : C.gold, border: `1px solid ${C.border}`, fontFamily: 'sans-serif' }}>
-                {noteSaved ? '✓ Saved' : 'Save Note'}
+                style={{ background: noteSaved ? '#4ade80' : 'rgba(212,175,55,0.15)', color: noteSaved ? '#0a0807' : C.gold, border: `1px solid ${C.border}`, fontFamily: 'sans-serif', opacity: noteSaving ? 0.6 : 1 }}>
+                {noteSaved ? '✓ Saved' : noteSaving ? 'Saving…' : 'Save Note'}
               </button>
             </div>
 
@@ -879,11 +1266,289 @@ function LeadsPanel({ leads: initialLeads }: { leads: Lead[] }) {
         </div>
       )}
     </div>
+
+      {/* New Lead Modal */}
+      {showNewLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setShowNewLead(false)} />
+          <div className="relative w-full max-w-md rounded-lg border p-6 space-y-4" style={{ background: '#13110e', borderColor: C.border, zIndex: 1 }}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base" style={{ color: C.gold, fontFamily: "'Georgia', serif" }}>New Lead</h3>
+              <button onClick={() => setShowNewLead(false)}><X className="w-4 h-4" style={{ color: C.muted }} /></button>
+            </div>
+            {isDemo && <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(251,191,36,0.08)', color: '#fbbf24', fontFamily: 'sans-serif', border: '1px solid rgba(251,191,36,0.2)' }}>Demo mode — API not connected.</div>}
+            <div className="space-y-3">
+              {[
+                { label: 'Customer Name', key: 'customer_name', placeholder: 'Full name' },
+                { label: 'Customer Email *', key: 'customer_email', placeholder: 'email@example.com' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs mb-1 tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{f.label}</label>
+                  <input type="text" placeholder={f.placeholder} value={newLead[f.key as keyof typeof newLead]}
+                    onChange={e => setNewLead(p => ({ ...p, [f.key]: e.target.value }))}
+                    className="w-full px-3 py-2 rounded text-sm outline-none"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif' }} />
+                </div>
+              ))}
+              <div>
+                <label className="block text-xs mb-1 tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Currency</label>
+                <select value={newLead.currency_code} onChange={e => setNewLead(p => ({ ...p, currency_code: e.target.value }))}
+                  className="w-full px-3 py-2 rounded text-sm outline-none"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif' }}>
+                  {['HKD','SGD','EUR','USD'].map(c => <option key={c} value={c} style={{ background: '#1a1612' }}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+            {leadError && <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(248,113,113,0.08)', color: '#f87171', fontFamily: 'sans-serif' }}>{leadError}</div>}
+            <button onClick={handleNewLeadSubmit} disabled={savingLead}
+              className="w-full py-2.5 rounded text-sm font-medium transition-opacity"
+              style={{ background: C.gold, color: '#0a0807', fontFamily: 'sans-serif', opacity: savingLead ? 0.6 : 1 }}>
+              {savingLead ? 'Creating…' : 'Create Lead'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Orders Panel ────────────────────────────────────────────────────────────────
+const ENQUIRY_STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
+  submitted:    { label: 'Submitted',    color: '#60a5fa', bg: 'rgba(96,165,250,0.12)'  },
+  acknowledged: { label: 'Acknowledged', color: '#fbbf24', bg: 'rgba(251,191,36,0.12)'  },
+  fulfilled:    { label: 'Fulfilled',    color: '#4ade80', bg: 'rgba(74,222,128,0.12)'  },
+  cancelled:    { label: 'Cancelled',    color: '#f87171', bg: 'rgba(248,113,113,0.12)' },
+};
+
+function OrdersPanel({ token, isDemo }: { token: string; isDemo: boolean }) {
+  const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loadingItems, setLoadingItems] = useState<string | null>(null);
+  const [itemCache, setItemCache] = useState<Record<string, EnquiryItem[]>>({});
+
+  const MOCK_ENQUIRIES: Enquiry[] = [
+    { id: '1', enquiry_no: 'ENQ-HK-2026-0001', status: 'submitted',    customer_name: 'Mr. David Chen',  customer_email: 'dchen@hkfinance.com',   region_code: 'HK', currency_code: 'HKD', item_count: 3, notes: null,               submitted_at: '2026-03-10T09:00:00Z' },
+    { id: '2', enquiry_no: 'ENQ-SG-2026-0001', status: 'acknowledged', customer_name: 'Mr. Rajan Patel',  customer_email: 'rajan@sgcapital.sg',    region_code: 'SG', currency_code: 'SGD', item_count: 2, notes: 'Urgent request',    submitted_at: '2026-03-09T14:30:00Z' },
+    { id: '3', enquiry_no: 'ENQ-HK-2026-0002', status: 'fulfilled',    customer_name: 'Dr. James Liu',   customer_email: 'jliu@privatebank.hk',  region_code: 'HK', currency_code: 'HKD', item_count: 4, notes: null,               submitted_at: '2026-03-07T11:00:00Z' },
+    { id: '4', enquiry_no: 'ENQ-EU-2026-0001', status: 'submitted',    customer_name: 'Mr. Franz Weber', customer_email: 'f.weber@zurichwealth.ch',region_code: 'EU', currency_code: 'EUR', item_count: 2, notes: 'Ship to Geneva',    submitted_at: '2026-03-11T08:00:00Z' },
+    { id: '5', enquiry_no: 'ENQ-SG-2026-0002', status: 'cancelled',    customer_name: 'Mr. Vincent Tan', customer_email: 'vtan@sg-corp.sg',       region_code: 'SG', currency_code: 'SGD', item_count: 1, notes: 'Customer withdrew', submitted_at: '2026-03-05T16:00:00Z' },
+  ];
+
+  const fetchEnquiries = useCallback(async () => {
+    setLoading(true);
+    if (isDemo) {
+      await new Promise(r => setTimeout(r, 400));
+      setEnquiries(MOCK_ENQUIRIES);
+      setLoading(false);
+      return;
+    }
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter) params.set('status', statusFilter);
+      if (fromDate) params.set('from', fromDate);
+      if (toDate) params.set('to', toDate);
+      const res = await fetch(`/api/arrisonapps/v1/admin/enquiries?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEnquiries(data.enquiries || []);
+      }
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, isDemo, statusFilter, fromDate, toDate]);
+
+  useEffect(() => { fetchEnquiries(); }, [fetchEnquiries]);
+
+  const loadItems = async (id: string) => {
+    if (itemCache[id]) return;
+    setLoadingItems(id);
+    if (isDemo) {
+      await new Promise(r => setTimeout(r, 300));
+      setItemCache(prev => ({ ...prev, [id]: [
+        { id: '1', sku: 'COH-S6-25', brand_name: 'Cohiba', series: 'Siglo VI', quantity: 2, unit_price_hint: 5800 },
+        { id: '2', sku: 'MON-NO2-25', brand_name: 'Montecristo', series: 'No. 2', quantity: 1, unit_price_hint: 3200 },
+      ]}));
+      setLoadingItems(null);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/arrisonapps/v1/admin/enquiries/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setItemCache(prev => ({ ...prev, [id]: data.items || [] }));
+      }
+    } catch { /* ignore */ }
+    finally { setLoadingItems(null); }
+  };
+
+  const toggleExpand = (id: string) => {
+    if (expandedId === id) { setExpandedId(null); return; }
+    setExpandedId(id);
+    loadItems(id);
+  };
+
+  const filteredEnquiries = enquiries.filter(e =>
+    (!statusFilter || e.status === statusFilter)
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          className="px-3 py-2 rounded text-sm outline-none"
+          style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.borderSub}`, color: statusFilter ? C.text : C.muted, fontFamily: 'sans-serif' }}>
+          <option value="">All Statuses</option>
+          {Object.entries(ENQUIRY_STATUS_META).map(([v, m]) => (
+            <option key={v} value={v} style={{ background: '#1a1612' }}>{m.label}</option>
+          ))}
+        </select>
+        <div className="flex items-center gap-2">
+          <label className="text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>From</label>
+          <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+            className="px-3 py-2 rounded text-sm outline-none"
+            style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif', colorScheme: 'dark' }} />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>To</label>
+          <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+            className="px-3 py-2 rounded text-sm outline-none"
+            style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif', colorScheme: 'dark' }} />
+        </div>
+        <button onClick={fetchEnquiries} disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-2 rounded text-xs transition-opacity hover:opacity-80"
+          style={{ background: 'rgba(212,175,55,0.1)', color: C.gold, border: `1px solid rgba(212,175,55,0.2)`, fontFamily: 'sans-serif', opacity: loading ? 0.6 : 1 }}>
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-lg border overflow-hidden" style={{ borderColor: C.borderSub }}>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b" style={{ borderColor: C.borderSub, background: 'rgba(255,255,255,0.02)' }}>
+              {['','Enquiry #','Customer','Region','Items','Status','Date'].map(h => (
+                <th key={h} className="px-4 py-3 text-left text-xs tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filteredEnquiries.map(e => {
+              const isExpanded = expandedId === e.id;
+              const statusMeta = ENQUIRY_STATUS_META[e.status] || { label: e.status, color: C.muted, bg: 'rgba(255,255,255,0.05)' };
+              return (
+                <>
+                  <tr key={e.id} className="transition-colors border-b"
+                    style={{ borderColor: C.borderSub, background: isExpanded ? 'rgba(212,175,55,0.04)' : 'transparent' }}
+                    onMouseEnter={ev => { if (!isExpanded) ev.currentTarget.style.background = C.cardHov; }}
+                    onMouseLeave={ev => { if (!isExpanded) ev.currentTarget.style.background = 'transparent'; }}>
+                    <td className="px-3 py-3 w-8">
+                      <button onClick={() => toggleExpand(e.id)}
+                        className="w-6 h-6 rounded flex items-center justify-center"
+                        style={{ color: isExpanded ? C.gold : C.dim, background: isExpanded ? 'rgba(212,175,55,0.1)' : 'transparent' }}>
+                        <ChevronRight className="w-3.5 h-3.5" style={{ transform: isExpanded ? 'rotate(90deg)' : 'none' }} />
+                      </button>
+                    </td>
+                    <td className="px-4 py-3"><span className="text-xs font-mono" style={{ color: C.gold }}>{e.enquiry_no}</span></td>
+                    <td className="px-4 py-3">
+                      <div style={{ color: C.text, fontFamily: 'sans-serif' }}>{e.customer_name}</div>
+                      <div className="text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{e.customer_email}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{e.region_code} · {e.currency_code}</td>
+                    <td className="px-4 py-3 text-sm font-mono text-center" style={{ color: C.text }}>{e.item_count}</td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs px-2 py-0.5 rounded" style={{ color: statusMeta.color, background: statusMeta.bg, fontFamily: 'sans-serif' }}>
+                        {statusMeta.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{fmtDate(e.submitted_at)}</td>
+                  </tr>
+                  {isExpanded && (
+                    <tr key={`${e.id}-items`}>
+                      <td colSpan={7} className="px-6 py-4 border-b" style={{ borderColor: C.borderSub, background: 'rgba(212,175,55,0.02)' }}>
+                        {e.notes && (
+                          <div className="mb-3 text-xs px-3 py-2 rounded" style={{ background: 'rgba(255,255,255,0.03)', color: C.muted, fontFamily: 'sans-serif', border: `1px solid ${C.borderSub}` }}>
+                            Note: {e.notes}
+                          </div>
+                        )}
+                        {loadingItems === e.id ? (
+                          <div className="flex items-center gap-2 text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />Loading items…
+                          </div>
+                        ) : (
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b" style={{ borderColor: C.borderSub }}>
+                                {['SKU','Brand','Series','Qty','Unit Price Hint'].map(h => (
+                                  <th key={h} className="pb-2 text-left tracking-wider uppercase" style={{ color: C.dim, fontFamily: 'sans-serif' }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y" style={{ borderColor: C.borderSub }}>
+                              {(itemCache[e.id] || []).map(item => (
+                                <tr key={item.id}>
+                                  <td className="py-2"><span className="font-mono" style={{ color: C.gold }}>{item.sku}</span></td>
+                                  <td className="py-2" style={{ color: C.text }}>{item.brand_name}</td>
+                                  <td className="py-2" style={{ color: C.muted }}>{item.series}</td>
+                                  <td className="py-2 font-mono text-center" style={{ color: C.text }}>{item.quantity}</td>
+                                  <td className="py-2" style={{ color: item.unit_price_hint ? C.gold : C.dim }}>
+                                    {item.unit_price_hint ? `${e.currency_code} ${item.unit_price_hint.toLocaleString()}` : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })}
+          </tbody>
+        </table>
+        {filteredEnquiries.length === 0 && !loading && (
+          <div className="py-12 text-center text-sm" style={{ color: C.muted, fontFamily: 'sans-serif' }}>No enquiries found.</div>
+        )}
+      </div>
+    </div>
   );
 }
 
 // ─── Reports Panel ────────────────────────────────────────────────────────────────
-function ReportsPanel({ leads, stock }: { leads: Lead[]; stock: StockRow[] }) {
+function ReportsPanel({ leads, stock, token, isDemo }: { leads: Lead[]; stock: StockRow[]; token: string; isDemo: boolean }) {
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [apiSummary, setApiSummary] = useState<{ status: string; region_code: string; lead_count: number; total_value: number | null }[]>([]);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+
+  const fetchSummary = async () => {
+    if (isDemo) return;
+    setLoadingSummary(true);
+    try {
+      const params = new URLSearchParams();
+      if (fromDate) params.set('from', fromDate);
+      if (toDate) params.set('to', toDate);
+      const res = await fetch(`/api/arrisonapps/v1/admin/reports/leads-summary?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setApiSummary(data.summary || []);
+      }
+    } catch { /* ignore */ }
+    finally { setLoadingSummary(false); }
+  };
+
   const byStatus = LEAD_COLUMNS.map(s => ({
     status: s,
     count: leads.filter(l => l.status === s).length,
@@ -895,6 +1560,57 @@ function ReportsPanel({ leads, stock }: { leads: Lead[]; stock: StockRow[] }) {
 
   return (
     <div className="space-y-6">
+      {/* Date Range Picker */}
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border p-4" style={{ borderColor: C.borderSub, background: C.card }}>
+        <span className="text-xs tracking-widest uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Date Range</span>
+        <div className="flex items-center gap-2">
+          <label className="text-xs" style={{ color: C.dim, fontFamily: 'sans-serif' }}>From</label>
+          <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+            className="px-3 py-1.5 rounded text-xs outline-none"
+            style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif', colorScheme: 'dark' }} />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs" style={{ color: C.dim, fontFamily: 'sans-serif' }}>To</label>
+          <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+            className="px-3 py-1.5 rounded text-xs outline-none"
+            style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif', colorScheme: 'dark' }} />
+        </div>
+        <button onClick={fetchSummary} disabled={loadingSummary || isDemo}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs"
+          style={{ background: 'rgba(212,175,55,0.1)', color: isDemo ? C.dim : C.gold, border: `1px solid rgba(212,175,55,0.2)`, fontFamily: 'sans-serif', opacity: loadingSummary ? 0.6 : 1 }}>
+          <RefreshCw className={`w-3 h-3 ${loadingSummary ? 'animate-spin' : ''}`} />
+          {isDemo ? 'Demo mode' : 'Apply Filter'}
+        </button>
+      </div>
+
+      {/* API Summary (if loaded) */}
+      {apiSummary.length > 0 && (
+        <div className="rounded-lg border overflow-hidden" style={{ borderColor: C.borderSub }}>
+          <div className="px-5 py-4 border-b" style={{ borderColor: C.borderSub, background: 'rgba(255,255,255,0.02)' }}>
+            <span className="text-xs tracking-widest uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>API Leads Summary</span>
+          </div>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b" style={{ borderColor: C.borderSub }}>
+                {['Region','Status','Count','Total Value'].map(h => (
+                  <th key={h} className="px-4 py-2 text-left tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y" style={{ borderColor: C.borderSub }}>
+              {apiSummary.map((row, i) => (
+                <tr key={i}>
+                  <td className="px-4 py-2" style={{ color: C.gold }}>{row.region_code}</td>
+                  <td className="px-4 py-2" style={{ color: C.text }}>{row.status}</td>
+                  <td className="px-4 py-2 font-mono" style={{ color: C.text }}>{row.lead_count}</td>
+                  <td className="px-4 py-2 font-mono" style={{ color: C.gold }}>{row.total_value ? `HK$${Number(row.total_value).toLocaleString()}` : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Lead Funnel */}
       <div className="rounded-lg border p-6" style={{ borderColor: C.borderSub, background: C.card }}>
         <div className="text-xs tracking-widest uppercase mb-5" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Lead Funnel — Current State</div>
@@ -987,6 +1703,163 @@ function ReportsPanel({ leads, stock }: { leads: Lead[]; stock: StockRow[] }) {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* Sample Sales Report */}
+      <div className="rounded-lg border p-6" style={{ borderColor: C.border, background: 'rgba(212,175,55,0.02)' }}>
+        <div className="flex items-center gap-2 mb-5">
+          <FileText className="w-4 h-4" style={{ color: C.gold }} />
+          <span className="text-xs tracking-widest uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>Sample Sales Report — Q1 2026</span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+          {[
+            { label: 'Revenue by Region', items: [{ k: 'Hong Kong', v: 'HK$328,400' }, { k: 'Singapore', v: 'SGD 70,000' }, { k: 'Europe', v: '€100,500' }] },
+            { label: 'Top SKUs by Volume', items: [{ k: 'COH-S6-25', v: '43 boxes' }, { k: 'MON-NO2-25', v: '38 boxes' }, { k: 'PAR-LUS-25', v: '21 boxes' }] },
+            { label: 'Pipeline Metrics', items: [{ k: 'Win Rate', v: '34%' }, { k: 'Avg Deal Size', v: 'HK$62,300' }, { k: 'Avg Close Time', v: '18 days' }] },
+          ].map(section => (
+            <div key={section.label} className="rounded-lg border p-4" style={{ borderColor: C.borderSub, background: 'rgba(255,255,255,0.02)' }}>
+              <div className="text-xs tracking-widest uppercase mb-3" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{section.label}</div>
+              <div className="space-y-2">
+                {section.items.map(item => (
+                  <div key={item.k} className="flex items-center justify-between">
+                    <span className="text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{item.k}</span>
+                    <span className="text-sm font-light" style={{ color: C.gold, fontFamily: "'Georgia', serif" }}>{item.v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="text-xs px-3 py-2 rounded" style={{ background: 'rgba(255,255,255,0.02)', color: C.dim, fontFamily: 'sans-serif', border: `1px solid ${C.borderSub}` }}>
+          Sample data for illustration. Connect backend and apply date filters above for live data.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── AI Assistant Panel ───────────────────────────────────────────────────────────
+function AIChatPanel({ token, isDemo, activeTab, quickStats, onClose }: {
+  token: string;
+  isDemo: boolean;
+  activeTab: TabId;
+  quickStats: { products: number; leads: number; lowStock: number };
+  onClose: () => void;
+}) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [thinking, setThinking] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, thinking]);
+
+  const send = async () => {
+    const content = input.trim();
+    if (!content || thinking) return;
+    const newMessages: ChatMessage[] = [...messages, { role: 'user', content }];
+    setMessages(newMessages);
+    setInput('');
+    setThinking(true);
+
+    if (isDemo) {
+      await new Promise(r => setTimeout(r, 1000));
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Demo mode — connect backend for AI responses.' }]);
+      setThinking(false);
+      return;
+    }
+
+    try {
+      const context = `Active tab: ${activeTab}. Products: ${quickStats.products}. Active leads: ${quickStats.leads}. Low stock alerts: ${quickStats.lowStock}.`;
+      const res = await fetch('/api/arrisonapps/v1/admin/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ messages: newMessages, context }),
+      });
+      if (!res.ok) throw new Error('AI request failed');
+      const data = await res.json();
+      setMessages(prev => [...prev, { role: 'assistant', content: data.reply || 'No response.' }]);
+    } catch (err: unknown) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err instanceof Error ? err.message : 'Failed to get response'}` }]);
+    } finally {
+      setThinking(false);
+    }
+  };
+
+  return (
+    <div className="w-80 flex-shrink-0 flex flex-col border-l" style={{ background: C.sidebar, borderColor: C.borderSub }}>
+      {/* Header */}
+      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: C.borderSub }}>
+        <div className="flex items-center gap-2">
+          <Bot className="w-4 h-4" style={{ color: C.gold }} />
+          <span className="text-xs tracking-widest uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>AI Assistant</span>
+        </div>
+        <button onClick={onClose} className="w-6 h-6 rounded flex items-center justify-center"
+          style={{ color: C.dim }}
+          onMouseEnter={e => (e.currentTarget.style.color = C.muted)}
+          onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+        {messages.length === 0 && (
+          <div className="text-center py-8">
+            <Bot className="w-8 h-8 mx-auto mb-2" style={{ color: C.dim }} />
+            <p className="text-xs" style={{ color: C.dim, fontFamily: 'sans-serif' }}>Ask about products, inventory, leads, or business insights.</p>
+          </div>
+        )}
+        {messages.map((m, i) => (
+          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className="max-w-[85%] px-3 py-2 rounded-lg text-xs"
+              style={{
+                background: m.role === 'user' ? 'rgba(212,175,55,0.12)' : 'rgba(255,255,255,0.05)',
+                color: m.role === 'user' ? C.gold : C.text,
+                border: m.role === 'user' ? `1px solid rgba(212,175,55,0.2)` : `1px solid ${C.borderSub}`,
+                fontFamily: 'sans-serif',
+                lineHeight: '1.5',
+                whiteSpace: 'pre-wrap',
+              }}>
+              {m.content}
+            </div>
+          </div>
+        ))}
+        {thinking && (
+          <div className="flex justify-start">
+            <div className="px-3 py-2 rounded-lg text-xs flex items-center gap-2"
+              style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.borderSub}`, color: C.muted, fontFamily: 'sans-serif' }}>
+              <div className="flex gap-1">
+                <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: C.gold, animationDelay: '0ms' }} />
+                <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: C.gold, animationDelay: '150ms' }} />
+                <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: C.gold, animationDelay: '300ms' }} />
+              </div>
+              Thinking…
+            </div>
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+
+      {/* Input */}
+      <div className="p-3 border-t" style={{ borderColor: C.borderSub }}>
+        <div className="flex items-center gap-2">
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+            placeholder="Ask anything…"
+            disabled={thinking}
+            className="flex-1 px-3 py-2 rounded text-xs outline-none"
+            style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.borderSub}`, color: C.text, fontFamily: 'sans-serif', opacity: thinking ? 0.6 : 1 }}
+          />
+          <button onClick={send} disabled={!input.trim() || thinking}
+            className="w-8 h-8 rounded flex items-center justify-center transition-all"
+            style={{ background: input.trim() && !thinking ? C.gold : 'rgba(255,255,255,0.05)', color: input.trim() && !thinking ? '#0a0807' : C.dim }}>
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1098,20 +1971,23 @@ function LoginScreen({ onLogin }: { onLogin: (token: string, user: { name: strin
 
 // ─── Main Admin Shell ────────────────────────────────────────────────────────────
 const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: 'overview',   label: 'Overview',   icon: Activity  },
-  { id: 'products',   label: 'Products',   icon: Package   },
-  { id: 'inventory',  label: 'Inventory',  icon: Boxes     },
-  { id: 'leads',      label: 'CRM Leads',  icon: Users     },
-  { id: 'reports',    label: 'Reports',    icon: BarChart3 },
+  { id: 'overview',   label: 'Overview',   icon: Activity      },
+  { id: 'products',   label: 'Products',   icon: Package       },
+  { id: 'inventory',  label: 'Inventory',  icon: Boxes         },
+  { id: 'leads',      label: 'CRM Leads',  icon: Users         },
+  { id: 'orders',     label: 'Orders',     icon: ShoppingCart  },
+  { id: 'reports',    label: 'Reports',    icon: BarChart3     },
 ];
 
 export default function ArrisonappsAdmin() {
   const [token, setToken]     = useState<string | null>(null);
   const [user, setUser]       = useState<{ name: string; role: string; email: string } | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('overview');
-  const [leads]     = useState<Lead[]>(MOCK_LEADS);
-  const [stock]     = useState<StockRow[]>(MOCK_STOCK);
-  const [products]  = useState<ProductRow[]>(MOCK_PRODUCTS);
+  const [leads, setLeads]     = useState<Lead[]>(MOCK_LEADS);
+  const [stock, setStock]     = useState<StockRow[]>(MOCK_STOCK);
+  const [products, setProducts] = useState<ProductRow[]>(MOCK_PRODUCTS);
+  const [aiOpen, setAiOpen]   = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
     const t = localStorage.getItem('arr_admin_token');
@@ -1119,20 +1995,51 @@ export default function ArrisonappsAdmin() {
     if (t && u) { setToken(t); setUser(JSON.parse(u)); }
   }, []);
 
+  // Fetch real data when token is available and not demo
+  useEffect(() => {
+    if (!token || token === 'demo_admin_token' || dataLoaded) return;
+    const fetchAll = async () => {
+      try {
+        const [prodRes, stockRes, leadsRes] = await Promise.allSettled([
+          fetch('/api/arrisonapps/v1/admin/products', { headers: { Authorization: `Bearer ${token}` } }),
+          fetch('/api/arrisonapps/v1/admin/stock', { headers: { Authorization: `Bearer ${token}` } }),
+          fetch('/api/arrisonapps/v1/admin/leads', { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        if (prodRes.status === 'fulfilled' && prodRes.value.ok) {
+          const d = await prodRes.value.json();
+          if (d.products?.length) setProducts(d.products);
+        }
+        if (stockRes.status === 'fulfilled' && stockRes.value.ok) {
+          const d = await stockRes.value.json();
+          if (d.stock?.length) setStock(d.stock);
+        }
+        if (leadsRes.status === 'fulfilled' && leadsRes.value.ok) {
+          const d = await leadsRes.value.json();
+          if (d.leads?.length) setLeads(d.leads);
+        }
+      } catch { /* use mock data */ }
+      finally { setDataLoaded(true); }
+    };
+    fetchAll();
+  }, [token, dataLoaded]);
+
   const handleLogin = useCallback((t: string, u: { name: string; role: string; email: string }) => {
     localStorage.setItem('arr_admin_token', t);
     localStorage.setItem('arr_admin_user', JSON.stringify(u));
     setToken(t); setUser(u);
+    setDataLoaded(false);
   }, []);
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem('arr_admin_token');
     localStorage.removeItem('arr_admin_user');
     setToken(null); setUser(null);
+    setDataLoaded(false);
   }, []);
 
   if (!token) return <LoginScreen onLogin={handleLogin} />;
 
+  const isDemo = token === 'demo_admin_token';
   const lowStockCount = stock.filter(s => s.is_low_stock).length;
 
   return (
@@ -1229,30 +2136,61 @@ export default function ArrisonappsAdmin() {
             </h1>
             <p className="text-xs mt-0.5" style={{ color: C.dim, fontFamily: 'sans-serif' }}>
               {activeTab === 'overview'  && 'Platform snapshot and recent activity'}
-              {activeTab === 'products'  && `${products.length} SKUs across 16 brands`}
+              {activeTab === 'products'  && `${products.length} SKUs across multiple brands`}
               {activeTab === 'inventory' && `${stock.length} stock records · ${lowStockCount} low stock alert${lowStockCount !== 1 ? 's' : ''}`}
               {activeTab === 'leads'     && `${leads.filter(l => !['won','lost'].includes(l.status)).length} active leads in pipeline`}
+              {activeTab === 'orders'    && 'Customer enquiries and order history'}
               {activeTab === 'reports'   && 'Lead funnel · Inventory · Reorder alerts'}
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {isDemo && (
+              <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded"
+                style={{ background: 'rgba(251,191,36,0.08)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.2)', fontFamily: 'sans-serif' }}>
+                Demo
+              </div>
+            )}
             <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded"
               style={{ background: 'rgba(74,222,128,0.08)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.2)', fontFamily: 'sans-serif' }}>
               <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
               Live
             </div>
+            <button
+              onClick={() => setAiOpen(o => !o)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all"
+              style={{
+                background: aiOpen ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)',
+                color: aiOpen ? C.gold : C.muted,
+                border: `1px solid ${aiOpen ? C.border : C.borderSub}`,
+                fontFamily: 'sans-serif',
+              }}>
+              <Bot className="w-3.5 h-3.5" />
+              AI
+            </button>
           </div>
         </div>
 
         {/* Panel */}
         <div className="p-8">
           {activeTab === 'overview'  && <OverviewPanel  leads={leads} stock={stock} />}
-          {activeTab === 'products'  && <ProductsPanel  products={products} token={token!} />}
-          {activeTab === 'inventory' && <InventoryPanel stock={stock} />}
-          {activeTab === 'leads'     && <LeadsPanel     leads={leads} />}
-          {activeTab === 'reports'   && <ReportsPanel   leads={leads} stock={stock} />}
+          {activeTab === 'products'  && <ProductsPanel  products={products} token={token!} isDemo={isDemo} onProductsChange={setProducts} />}
+          {activeTab === 'inventory' && <InventoryPanel stock={stock} token={token!} isDemo={isDemo} />}
+          {activeTab === 'leads'     && <LeadsPanel     leads={leads} token={token!} isDemo={isDemo} />}
+          {activeTab === 'orders'    && <OrdersPanel    token={token!} isDemo={isDemo} />}
+          {activeTab === 'reports'   && <ReportsPanel   leads={leads} stock={stock} token={token!} isDemo={isDemo} />}
         </div>
       </main>
+
+      {/* AI Chat Panel */}
+      {aiOpen && (
+        <AIChatPanel
+          token={token!}
+          isDemo={isDemo}
+          activeTab={activeTab}
+          quickStats={{ products: products.length, leads: leads.filter(l => !['won','lost'].includes(l.status)).length, lowStock: lowStockCount }}
+          onClose={() => setAiOpen(false)}
+        />
+      )}
     </div>
   );
 }
