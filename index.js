@@ -4048,7 +4048,7 @@ try {
   const tedxXinyiRoutes = require('./use-cases/tedx-xinyi/api/routes');
   app.use('/api/tedx-xinyi', tedxXinyiRoutes);
   // Admin media library — password-protected
-  const ADMIN_PASS = process.env.TEDX_ADMIN_PASS || '5milesLab01@';
+  const ADMIN_PASS = process.env.TEDX_ADMIN_PASS || '5mileslab';
   // Password check API
   app.post('/api/tedx-xinyi/auth', express.json(), (req, res) => {
     if (req.body?.password === ADMIN_PASS) return res.json({ ok: true, token: ADMIN_PASS });
@@ -4674,21 +4674,10 @@ const wsServer = require('./services/websocket-server');
 // Radiance PR Contact Form API
 // ==========================================
 
-// Multer config for Radiance media uploads (disk storage + proxied to external CDN)
+// Multer config for Radiance media uploads (memory storage → saved to Fly Postgres as BYTEA)
 const multer = require('multer');
-const radianceMediaStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, 'uploads', 'radiance');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
 const radianceUpload = multer({
-  storage: radianceMediaStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
@@ -4696,7 +4685,7 @@ const radianceUpload = multer({
   },
 });
 
-const RADIANCE_ADMIN_PW = '5milesLab01@';
+const RADIANCE_ADMIN_PW = '5mileslab';
 
 // Simple in-memory rate limiter: max 5 submissions per IP per 15 min
 const _radianceRateLimitMap = new Map();
@@ -4842,7 +4831,7 @@ app.post('/api/radiance/contact', async (req, res) => {
 app.get('/api/radiance/contact/submissions', async (req, res) => {
   try {
     const { password } = req.query;
-    if (password !== '5milesLab01@') {
+    if (password !== '5mileslab') {
       return res.status(401).json({ error: 'Unauthorised' });
     }
     const limit = Math.min(parseInt(req.query.limit || '50'), 200);
@@ -4855,33 +4844,40 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
   }
 });
 
-// POST /api/radiance/admin/media/upload — proxy upload to external CDN
+// POST /api/radiance/admin/media/upload — store image in Fly Postgres as BYTEA
 app.post('/api/radiance/admin/media/upload', radianceUpload.single('file'), async (req, res) => {
   try {
     if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    // Read file from disk (diskStorage saves to req.file.path) and convert to base64 for CDN
-    const fileBuffer = fs.readFileSync(req.file.path);
-    const base64 = `data:${req.file.mimetype};base64,${fileBuffer.toString('base64')}`;
-    const cdnRes = await fetch('http://5ml.mmdbfiles.com/api/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file_data: base64 }),
-    });
-    const cdnData = await cdnRes.json();
-    if (!cdnData.success) return res.status(502).json({ error: cdnData.error || 'CDN upload failed' });
+    const ext = path.extname(req.file.originalname);
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+    const publicUrl = `/api/radiance/media/${filename}`;
 
-    const { public_url, filename, mime, size } = cdnData;
     await pool.query(
-      `INSERT INTO radiance_media (filename, original_name, url, mime_type, size) VALUES ($1,$2,$3,$4,$5)`,
-      [filename, req.file.originalname, public_url, mime || req.file.mimetype, size || req.file.size]
+      `INSERT INTO radiance_media (filename, original_name, url, mime_type, size, data) VALUES ($1,$2,$3,$4,$5,$6)`,
+      [filename, req.file.originalname, publicUrl, req.file.mimetype, req.file.size, req.file.buffer]
     );
-    console.log(`[Radiance] Uploaded: ${req.file.originalname} → ${public_url} (${((size || req.file.size) / 1024).toFixed(0)} KB)`);
-    res.json({ success: true, url: public_url, filename, originalName: req.file.originalname });
+    console.log(`[Radiance] Uploaded to Postgres: ${req.file.originalname} (${(req.file.size / 1024).toFixed(0)} KB)`);
+    res.json({ success: true, url: publicUrl, filename, originalName: req.file.originalname });
   } catch (err) {
     console.error('[Radiance] Media upload error:', err);
     res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// GET /api/radiance/media/:filename — serve image stored in Postgres
+app.get('/api/radiance/media/:filename', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT data, mime_type FROM radiance_media WHERE filename=$1', [req.params.filename]);
+    if (result.rows.length === 0) return res.status(404).send('Not found');
+    const { data, mime_type } = result.rows[0];
+    res.set('Content-Type', mime_type);
+    res.set('Cache-Control', 'public, max-age=31536000');
+    res.send(data);
+  } catch (err) {
+    console.error('[Radiance] Media serve error:', err);
+    res.status(500).send('Error');
   }
 });
 
@@ -4907,7 +4903,7 @@ app.post('/api/radiance/admin/media/register', async (req, res) => {
 app.get('/api/radiance/admin/media', async (req, res) => {
   if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
   try {
-    const result = await pool.query('SELECT * FROM radiance_media ORDER BY uploaded_at DESC LIMIT 200');
+    const result = await pool.query('SELECT id, filename, original_name, url, mime_type, size, uploaded_at FROM radiance_media ORDER BY uploaded_at DESC LIMIT 200');
     res.json({ success: true, media: result.rows });
   } catch (err) { res.status(500).json({ error: 'Failed to fetch media' }); }
 });
@@ -5437,7 +5433,7 @@ app.post('/api/recruitai/chat', async (req, res) => {
 // GET /api/recruitai/admin/leads — list all leads (password-protected)
 app.get('/api/recruitai/admin/leads', async (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') {
+  if (password !== '5mileslab') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
@@ -5456,7 +5452,7 @@ app.get('/api/recruitai/admin/leads', async (req, res) => {
 // PATCH /api/recruitai/admin/leads/:id — update editable fields
 app.patch('/api/recruitai/admin/leads/:id', async (req, res) => {
   const { password, ...fields } = req.body;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
   const EDITABLE = ['name', 'email', 'phone', 'company', 'industry', 'headcount', 'message'];
@@ -5483,7 +5479,7 @@ app.patch('/api/recruitai/admin/leads/:id', async (req, res) => {
 // DELETE /api/recruitai/admin/leads/:id — delete a lead
 app.delete('/api/recruitai/admin/leads/:id', async (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
   try {
@@ -5498,7 +5494,7 @@ app.delete('/api/recruitai/admin/leads/:id', async (req, res) => {
 // POST /api/recruitai/admin/leads/:id/analyze — AI analysis of a lead
 app.post('/api/recruitai/admin/leads/:id/analyze', async (req, res) => {
   const { password } = req.body;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
   try {
@@ -5548,7 +5544,7 @@ Return this exact JSON structure:
 // GET /api/admin/media-library — aggregate all managed images across all sites
 app.get('/api/admin/media-library', (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
 
   const fs = require('fs');
   const path = require('path');
@@ -5646,7 +5642,7 @@ app.get('/api/admin/media-library', (req, res) => {
 // POST /api/admin/media-library/generate — trigger Gemini generation for one image
 app.post('/api/admin/media-library/generate', async (req, res) => {
   const { password, site, id } = req.body;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
   if (!site || !id) return res.status(400).json({ error: 'site and id required' });
 
   const endpointMap = {
@@ -5690,7 +5686,7 @@ app.post('/api/admin/media-library/generate', async (req, res) => {
 // GET /api/recruitai/admin/sessions — list all chat sessions
 app.get('/api/recruitai/admin/sessions', async (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') {
+  if (password !== '5mileslab') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
@@ -5714,7 +5710,7 @@ app.get('/api/recruitai/admin/sessions', async (req, res) => {
 // GET /api/recruitai/admin/sessions/:sessionId/messages
 app.get('/api/recruitai/admin/sessions/:sessionId/messages', async (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') {
+  if (password !== '5mileslab') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
@@ -9384,9 +9380,12 @@ server.listen(port, '0.0.0.0', async () => {
         url TEXT NOT NULL,
         mime_type TEXT NOT NULL,
         size INTEGER NOT NULL,
+        data BYTEA,
         uploaded_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    // Add data column for Postgres BYTEA storage if not already present
+    await pool.query(`ALTER TABLE radiance_media ADD COLUMN IF NOT EXISTS data BYTEA`);
     console.log('✅ radiance_media table ready');
   } catch (err) {
     console.error('⚠️  radiance_media table init failed:', err.message);
