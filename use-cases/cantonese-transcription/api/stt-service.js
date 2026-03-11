@@ -79,7 +79,10 @@ function parseV1Response(data) {
   return { transcript, segments };
 }
 
-// ── Google STT provider ───────────────────────────────────────────────────────
+// ── Gemini audio transcription provider ──────────────────────────────────────
+// Uses Gemini 2.0 Flash via the Generative Language API (same key as GEMINI_API_KEY).
+// For files ≤ 15 MB: sends audio inline as base64.
+// For larger files: uploads via the Files API first, then references by URI.
 async function transcribeWithGoogle({ fileBuffer, mimeType, language }) {
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -89,27 +92,67 @@ async function transcribeWithGoogle({ fileBuffer, mimeType, language }) {
     throw err;
   }
 
-  const audioB64 = fileBuffer.toString('base64');
-  const encoding = ENCODING_MAP[mimeType] || 'ENCODING_UNSPECIFIED';
+  const INLINE_LIMIT = 15 * 1024 * 1024; // 15 MB raw → ~20 MB base64
+  const BASE = 'https://generativelanguage.googleapis.com';
+  const MODEL = 'gemini-2.0-flash';
 
-  const url  = `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`;
-  const body = {
-    config: {
-      encoding,
-      languageCode: language,
-      alternativeLanguageCodes: ['zh-HK', 'en-US'],
-      enableWordTimeOffsets: true,
-      enableAutomaticPunctuation: true,
-      model: 'latest_long',
-    },
-    audio: { content: audioB64 },
-  };
-  const resp = await fetch(url, {
+  const prompt = language === 'yue-Hant-HK'
+    ? '請逐字轉錄以下粵語音訊，使用繁體中文，英語詞彙保留原文。只輸出轉錄文字，不要加任何解釋或標題。'
+    : `Please transcribe the following audio accurately. Output only the transcription, no explanations.`;
+
+  let audioPart;
+
+  if (fileBuffer.length <= INLINE_LIMIT) {
+    // Inline base64
+    audioPart = { inline_data: { mime_type: mimeType, data: fileBuffer.toString('base64') } };
+  } else {
+    // Upload via Files API
+    const initResp = await fetch(`${BASE}/upload/v1beta/files?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'X-Goog-Upload-Protocol': 'resumable',
+        'X-Goog-Upload-Command': 'start',
+        'X-Goog-Upload-Header-Content-Length': String(fileBuffer.length),
+        'X-Goog-Upload-Header-Content-Type': mimeType,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ file: { display_name: 'audio' } }),
+    });
+    if (!initResp.ok) {
+      const err = new Error(`Google STT: Files API init failed (${initResp.status})`);
+      err.code = 'CT-013';
+      throw err;
+    }
+    const uploadUrl = initResp.headers.get('x-goog-upload-url');
+    const uploadResp = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Length': String(fileBuffer.length),
+        'X-Goog-Upload-Offset': '0',
+        'X-Goog-Upload-Command': 'upload, finalize',
+      },
+      body: fileBuffer,
+    });
+    if (!uploadResp.ok) {
+      const err = new Error(`Google STT: file upload failed (${uploadResp.status})`);
+      err.code = 'CT-013';
+      throw err;
+    }
+    const fileData = await uploadResp.json();
+    audioPart = { file_data: { mime_type: mimeType, file_uri: fileData.file.uri } };
+  }
+
+  const genUrl = `${BASE}/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
+  const resp = await fetch(genUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(55_000), // abort before Fly.io's 60s proxy timeout
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }, audioPart] }],
+      generationConfig: { temperature: 0 },
+    }),
+    signal: AbortSignal.timeout(55_000),
   });
+
   if (!resp.ok) {
     let errDetail = `HTTP ${resp.status}`;
     try {
@@ -120,9 +163,10 @@ async function transcribeWithGoogle({ fileBuffer, mimeType, language }) {
     err.code = resp.status === 400 ? 'CT-017' : 'CT-013';
     throw err;
   }
+
   const data = await resp.json();
-  const parsed = parseV1Response(data);
-  return { provider: 'google-stt', language, ...parsed };
+  const transcript = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+  return { provider: 'google-stt', language, transcript, segments: [] };
 }
 
 // ── Whisper provider ──────────────────────────────────────────────────────────
